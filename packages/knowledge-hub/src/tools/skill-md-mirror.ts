@@ -1,8 +1,9 @@
 /**
- * Mirror-equality helpers for per-skill `SKILL.md` files.
+ * Mirror-equality helpers for EVERY root skill artifact.
  *
- * Every root `.claude/skills/<prefixed>/SKILL.md` is GENERATED from its
- * canonical dataset source `packages/knowledge-hub/dataset/.skills/<cat>/<name>/SKILL.md`
+ * Every root `.claude/skills/**\/*.md` — each skill's `SKILL.md` and every
+ * sub-doc / `references/*` its directory contributes — is GENERATED from its
+ * canonical dataset source under `packages/knowledge-hub/dataset/.skills/`
  * by `pair update`. Rather than re-implement that transform, these helpers run
  * the REAL copy pipeline — `copyDirectoryWithTransforms` with the exact
  * `{ flatten: true, prefix: 'pair' }` options `apps/pair-cli/config.json`
@@ -15,27 +16,65 @@
  * bump that the depth-shifting bare `next` skill triggers), and the `/command`
  * skill-reference rewrite (`rewriteSkillReferencesInFiles`).
  *
- * Directional (dataset → root): the map is keyed by dataset skill dirs, so a
- * root-only skill with no dataset source (e.g. `agent-browser`) is never
- * asserted — it is not drift.
+ * Directional (dataset → root): the enumeration is keyed by DATASET artifacts,
+ * so a root-only file with no dataset source (e.g. the whole `agent-browser`
+ * skill) is never asserted — it is not drift.
  *
- * SCOPE (by design, per #352): the guard asserts equality for each skill's
- * `SKILL.md` ONLY. Other artifacts a skill dir contributes through the same
- * `pair update` transform — sub-docs (e.g. process-review's `merge-and-cascade.md`)
- * and `references/*` — are NOT asserted here; extending the invariant to all
- * root skill artifacts is tracked as follow-up tech-debt story #384.
+ * SCOPE (#384, widening #352): the guard asserts equality for every markdown
+ * artifact the dataset contributes, not only `SKILL.md`. The case list is
+ * derived from the dataset at collection time and is recursive, so a new
+ * sub-doc — or the first `references/` subdir — is covered with no test edit
+ * and no count anywhere. Caveat for that first `references/` subdir: today's
+ * pipeline INSTALLS it wrongly (flattened out of its skill, links broken) — a
+ * defect tracked in #407; this guard faithfully mirrors that behavior rather
+ * than endorsing it (see `installedArtifactPath`).
+ *
+ * ACCEPTED RESIDUAL — orphans (decided in #384's review): because the guard is
+ * directional and `pair update` copies with behavior 'overwrite' (no
+ * mirror-delete), a sub-doc DELETED from the dataset but left behind in
+ * `.claude/skills/<skill>/` is neither asserted nor cleaned, and agents keep
+ * reading it. Detecting it would need a non-directional check (root `.md` under
+ * `installedSkillDir(datasetDir)` with no dataset source) that must exempt
+ * root-only skills like `agent-browser`; that inversion is deliberately NOT in
+ * this guard, whose contract is "every dataset artifact is faithfully
+ * mirrored". Regenerating deletions belongs to `pair update`, not here.
  */
 import { readdirSync, readFileSync } from 'fs'
-import { join, relative, sep } from 'path'
+import { join, relative, sep, posix } from 'path'
+// Dataset/root artifact paths are ALWAYS posix (they are content identities, not
+// host paths), hence `posix.dirname`/`posix.basename`. The platform-native
+// `join`/`relative`/`sep` are used in exactly two places, both converting AT the
+// boundary: `readSkillsDatasetFromDisk` walks the real dataset on disk, and
+// `producedMarkdownPaths` normalises `walkMarkdownFiles`' platform-joined output
+// back to posix.
 import {
   InMemoryFileSystemService,
   copyDirectoryWithTransforms,
   transformPath,
   defaultSyncOptions,
+  walkMarkdownFiles,
 } from '@pair/content-ops'
 
 /** The exact naming-transform options the `skills` registry uses in config.json. */
 export const SKILL_COPY_OPTS = { flatten: true, prefix: 'pair' } as const
+
+/**
+ * The FULL `SyncOptions` the guard runs the pipeline with: content-ops' defaults
+ * (`defaultBehavior: 'overwrite'`) overlaid with the registry's flatten/prefix.
+ *
+ * Exported so the pin test can assert the RESOLVED behavior still equals the
+ * registry's declared `behavior`, not just flatten/prefix. Without that pin, a
+ * registry flip to 'mirror' would leave the guard silently simulating
+ * 'overwrite' — in an in-memory destination that starts empty the pipeline's
+ * stale-entry cleanup is a no-op, so no other assertion would notice — and the
+ * ACCEPTED RESIDUAL above, whose whole justification is "behavior 'overwrite',
+ * no mirror-delete", would become quietly false. That is the same silent-drift
+ * class this guard exists to close, one level up.
+ */
+export function skillCopySyncOptions(): ReturnType<typeof defaultSyncOptions> &
+  typeof SKILL_COPY_OPTS {
+  return { ...defaultSyncOptions(), ...SKILL_COPY_OPTS }
+}
 
 const SKILL_FILE = 'SKILL.md'
 
@@ -86,7 +125,7 @@ export function readSkillsDatasetFromDisk(skillsDir: string): DatasetTree {
  * The dataset skill directories — every posix dir that directly contains a
  * `SKILL.md` (`capability/<name>`, `process/<name>`, or the bare `next`),
  * sorted for stable `it.each` ordering. Data-driven: adding a skill to the
- * dataset extends this list with no test edit (AC5).
+ * dataset extends this list with no test edit (AC3).
  *
  * Deliberately NOT reusing `collectSkillDirs` from the sibling
  * `skills-guide-mirror.ts`: that one re-walks the disk and returns ANY dir
@@ -115,12 +154,68 @@ export function installedSkillDir(datasetSkillDir: string): string {
 }
 
 /**
- * Runs the REAL `pair update` copy pipeline over an in-memory clone of the
- * dataset and returns `installedPrefixedDir → transformed SKILL.md content`
- * for every dataset skill dir. No parallel transform logic — a bug in the
- * production pipeline surfaces here.
+ * Every markdown artifact the dataset contributes through the `pair update`
+ * transform — each skill's `SKILL.md` AND its sub-docs (today
+ * `process/review/merge-and-cascade.md` & siblings) — as sorted
+ * dataset-relative posix paths.
+ *
+ * The list is derived from the already-read `tree`, so it is recursive by
+ * construction: a future `references/` subdir is enumerated the day it lands,
+ * with no test edit. Nothing here encodes HOW MANY artifacts exist.
+ *
+ * Markdown-only, for two DIFFERENT reasons — kept apart on purpose:
+ * 1. junk (a stray `.DS_Store`, an editor backup): not content at all, so it
+ *    must NEVER be asserted — the pipeline copies it, the guard ignores it.
+ * 2. legitimate non-markdown assets (the `templates/*.sh` pattern the root-only
+ *    `agent-browser` skill already ships): real content whose equality is NOT
+ *    guarded — an ACCEPTED RESIDUAL, out of #384's scope by explicit story
+ *    decision (Edge Cases exclude non-markdown), not an oversight. Only
+ *    markdown goes through the content rewrites this guard exists to pin
+ *    (frontmatter sync, link-depth bump, `/command` rewrite); a byte-equality
+ *    check for opaque assets is a different, simpler guard.
  */
-export async function buildInstalledSkillMd(tree: DatasetTree): Promise<Map<string, string>> {
+export function datasetSkillArtifacts(tree: DatasetTree): string[] {
+  return Object.keys(tree)
+    .filter(rel => rel.endsWith('.md'))
+    .sort()
+}
+
+/**
+ * Root location of a dataset artifact, relative to `.claude/skills/`.
+ *
+ * Composes the REAL `transformPath` over the artifact's dataset directory with
+ * the registry's options — exactly what the copy pipeline's per-file transform
+ * does (`dirname(file)` → `transformPath` → join the untouched file name). This
+ * is why a NESTED sub-directory lands in its OWN flattened top-level dir
+ * (`process/review/references/deep.md` → `pair-process-review-references/deep.md`)
+ * rather than under a preserved `references/`: the pipeline flattens every
+ * directory segment, not just the skill's own.
+ *
+ * That nested-flatten mapping is CURRENT PIPELINE BEHAVIOR, mirrored here
+ * faithfully — and it is a DEFECT, tracked in #407 (a skill's `references/`
+ * sub-doc installs outside its skill dir with both links broken). Do NOT read it
+ * as a sanctioned layout for a new `references/` sub-doc. Nor does it self-correct:
+ * #407's fix changes the copy pipeline's per-file PLACEMENT (`copy-directory-transforms.ts`
+ * maps `dirname(file)` through `transformPath` and joins), not `transformPath` itself,
+ * so this derivation goes STALE — what actually happens is that the produced-paths
+ * cross-check (derivation vs. the pipeline's real output set) fails loudly, and
+ * this function plus its expectations must be updated in that PR.
+ *
+ * That correspondence is not taken on trust — a guard test asserts this
+ * derivation reproduces the pipeline's actual output paths set-for-set.
+ */
+export function installedArtifactPath(datasetArtifact: string): string {
+  const dir = posix.dirname(datasetArtifact)
+  const fileName = posix.basename(datasetArtifact)
+  return dir === '.' ? fileName : `${transformPath(dir, SKILL_COPY_OPTS)}/${fileName}`
+}
+
+/**
+ * Runs the REAL `pair update` copy pipeline over an in-memory clone of the
+ * dataset. No parallel transform logic — a bug in the production pipeline
+ * surfaces in the guard instead of being masked.
+ */
+async function runCopyPipeline(tree: DatasetTree): Promise<InMemoryFileSystemService> {
   const initial: Record<string, string> = {}
   for (const [rel, content] of Object.entries(tree)) {
     initial[`${VIRTUAL_SRC}/${rel}`] = content
@@ -138,16 +233,84 @@ export async function buildInstalledSkillMd(tree: DatasetTree): Promise<Map<stri
     target: VIRTUAL_TARGET_REL,
     datasetRoot: VIRTUAL_DATASET_ROOT,
     // Same SyncOptions the `skills` registry resolves to: default sync options
-    // (behavior 'overwrite') with the registry's flatten/prefix applied.
-    options: { ...defaultSyncOptions(), ...SKILL_COPY_OPTS },
+    // (behavior 'overwrite') with the registry's flatten/prefix applied — pinned
+    // to the registry, behavior included, by `skillCopySyncOptions`' test.
+    options: skillCopySyncOptions(),
   })
+  return fileService
+}
 
-  const installed = new Map<string, string>()
-  for (const datasetDir of datasetSkillDirs(tree)) {
-    const prefixed = installedSkillDir(datasetDir)
-    installed.set(prefixed, await fileService.readFile(`${VIRTUAL_DEST}/${prefixed}/${SKILL_FILE}`))
+/**
+ * Every markdown path currently in the pipeline's destination tree, relative to
+ * `.claude/skills/` and sorted. Reuses `content-ops`' own `walkMarkdownFiles`
+ * (no parallel traversal — the same principle this guard applies to the copy
+ * transform); it joins with the platform `sep`, so the result is normalised back
+ * to the posix identities the rest of this module speaks.
+ */
+async function producedMarkdownPaths(fileService: InMemoryFileSystemService): Promise<string[]> {
+  return (await walkMarkdownFiles(VIRTUAL_DEST, fileService))
+    .map(p =>
+      p
+        .split(sep)
+        .join('/')
+        .slice(VIRTUAL_DEST.length + 1),
+    )
+    .sort()
+}
+
+/**
+ * The expected root mirror, produced by ONE run of the real copy pipeline:
+ *
+ * - `byDatasetPath` — `datasetArtifactPath → transformed content` for every
+ *   markdown artifact the dataset contributes. Keyed by the DATASET path so a
+ *   drift failure is attributed to its canonical source (AC2), not to the
+ *   generated location.
+ * - `producedPaths` — every markdown path the pipeline actually wrote, relative
+ *   to `.claude/skills/`. Lets the guard cross-check `installedArtifactPath`'s
+ *   derivation against the pipeline's real output set, so a path-mapping
+ *   assumption (notably for nested sub-directories) can never silently exclude
+ *   an artifact from the assertion.
+ * - `root` — a handle on that destination tree, addressed in
+ *   `.claude/skills/`-relative terms. It exists so directionality (AC5) can be
+ *   proven against a REAL filesystem state instead of a tautology: `has` shows
+ *   what the pipeline genuinely wrote (including non-markdown it copies but the
+ *   guard ignores), and `write` + `markdownPaths` let a caller drop a root-only
+ *   file in after the run and re-derive the produced set.
+ */
+export type InstalledMirror = {
+  byDatasetPath: Map<string, string>
+  producedPaths: string[]
+  root: {
+    /** True iff the pipeline wrote this root-relative path (markdown or not). */
+    has: (rootRelPath: string) => boolean
+    /** Adds a root-only file to the destination, as a hand-edit would. */
+    write: (rootRelPath: string, content: string) => Promise<void>
+    /** Re-derives the destination's markdown paths (post-mutation included). */
+    markdownPaths: () => Promise<string[]>
   }
-  return installed
+}
+
+export async function buildInstalledArtifacts(tree: DatasetTree): Promise<InstalledMirror> {
+  const fileService = await runCopyPipeline(tree)
+
+  const byDatasetPath = new Map<string, string>()
+  for (const artifact of datasetSkillArtifacts(tree)) {
+    const content = fileService.getContent(`${VIRTUAL_DEST}/${installedArtifactPath(artifact)}`)
+    // Absent iff the pipeline wrote the artifact somewhere else than
+    // `installedArtifactPath` derives; the cross-check assertion names it.
+    if (content !== undefined) byDatasetPath.set(artifact, content)
+  }
+
+  return {
+    byDatasetPath,
+    producedPaths: await producedMarkdownPaths(fileService),
+    root: {
+      has: rootRelPath => fileService.existsSync(`${VIRTUAL_DEST}/${rootRelPath}`),
+      write: (rootRelPath, content) =>
+        fileService.writeFile(`${VIRTUAL_DEST}/${rootRelPath}`, content),
+      markdownPaths: () => producedMarkdownPaths(fileService),
+    },
+  }
 }
 
 type DiffEdit = { tag: ' ' | '-' | '+'; line: string }
@@ -227,34 +390,38 @@ export function diffSkillMd(expected: string, actual: string): string {
 }
 
 /**
- * Asserts the root mirror `SKILL.md` equals the real pipeline transform.
- * Throws LOUDLY — naming the skill and giving the `pair update` regenerate
- * hint — when the mirror is missing (AC4) or has drifted (AC2/AC3). This is
- * the guard's assertion helper, kept in a tested production module (per the
- * "gate & tooling code in tested modules" ADL) so both the real on-disk guard
- * and the drift-injection tests drive the same code path.
+ * Asserts one root mirror artifact — a `SKILL.md` or any sub-doc the same
+ * `pair update` transform generates — equals the real pipeline output.
+ * Throws LOUDLY, naming the offending artifact by its DATASET-relative path
+ * (its canonical identity), pointing at the generated root path, and giving the
+ * `pair update` regenerate hint, when the mirror is missing (AC4) or has
+ * drifted (AC2). This is the guard's assertion helper, kept in a tested
+ * production module (per the "gate & tooling code in tested modules" ADL) so
+ * both the real on-disk guard and the drift-injection tests drive the same
+ * code path.
  *
  * On drift the message carries a compact line-level diff (via `diffSkillMd`)
  * rather than a full dump of both files, so the expected-vs-actual view AC2
- * requires stays readable even for a large SKILL.md.
+ * requires stays readable even for a large artifact.
  *
  * `actual` is `undefined` iff the root mirror file does not exist.
  */
-export function assertRootSkillMdMatches(
-  prefixed: string,
+export function assertRootArtifactMatches(
+  datasetArtifact: string,
   expected: string,
   actual: string | undefined,
 ): void {
+  const rootPath = `.claude/skills/${installedArtifactPath(datasetArtifact)}`
   if (actual === undefined) {
     throw new Error(
-      `Root mirror SKILL.md missing for skill '${prefixed}': ` +
-        `.claude/skills/${prefixed}/SKILL.md does not exist. Run 'pair update' to regenerate it.`,
+      `Root mirror missing for dataset artifact '${datasetArtifact}': ` +
+        `${rootPath} does not exist. Run 'pair update' to regenerate it.`,
     )
   }
   if (actual !== expected) {
     throw new Error(
-      `Root mirror SKILL.md for skill '${prefixed}' has drifted from its dataset source ` +
-        `transform. Run 'pair update' to regenerate .claude/skills/${prefixed}/SKILL.md.\n` +
+      `Root mirror for dataset artifact '${datasetArtifact}' has drifted from its dataset ` +
+        `source transform. Run 'pair update' to regenerate ${rootPath}.\n` +
         `--- expected (dataset → real transform)\n` +
         `+++ actual (root mirror on disk)\n` +
         `${diffSkillMd(expected, actual)}`,
