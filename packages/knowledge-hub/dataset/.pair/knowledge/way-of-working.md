@@ -54,6 +54,10 @@ The process is designed to:
 
 ## Operational Flow
 
+### 🔍 Discovery (optional entry point, before any level)
+
+- **🤖🤝👨‍💻 Structured Discovery** (`/brainstorm`) → Turn a rough theme, or an existing epic/story `$root`, into an integrated **Draft** epic/story tree (interview → domain → triage). Human-initiated and optional: it feeds the levels below and never modifies the PRD. It is not one of the nine numbered steps and has no numbered how-to guide — see the ADL on `/brainstorm`'s catalog exceptions.
+
 ### 📘 Induction
 
 1. **🤖🤝👨‍💻 PRD Creation** (`/specify-prd`) → Generate Product Requirements Document from user needs & market insights
@@ -78,4 +82,4 @@ The process is designed to:
 2. **🤖🤝👨‍💻 Code Review** (`/review`) → Structured review with adoption compliance, merge flow, and parent cascade
 3. **🤖⚡ Status Update** → Automatic story/epic/initiative tracking update (handled by `/implement` and `/review`)
 
-> **Skill-enabled workflow**: Run `/next` at session start to determine the most relevant skill. See [skills-guide.md](skills-guide.md) for the full catalog of 40 skills.
+> **Skill-enabled workflow**: Run `/next` at session start to determine the most relevant skill. See [skills-guide.md](skills-guide.md) for the full catalog of 41 skills.

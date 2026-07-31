@@ -5,7 +5,9 @@ description: The four-level, nine-step development lifecycle that pair defines �
 
 pair defines a structured development lifecycle with **four levels** and **nine steps**. Each level builds on the previous, taking a project from initial idea to production-ready code.
 
-The lifecycle is not rigid — you enter at whatever level matches your project's current state. But every step has a specific how-to guide and a matching skill that the AI follows, ensuring consistency and completeness.
+The lifecycle is not rigid — you enter at whatever level matches your project's current state. But every one of the nine steps has a specific how-to guide and a matching skill that the AI follows, ensuring consistency and completeness.
+
+Ahead of the nine steps sits one **optional entry point**: `/pair-process-brainstorm` — structured discovery (interview → domain → triage) that turns a rough theme, or an existing epic/story, into an integrated Draft epic/story tree the levels below then plan and build. It is human-initiated, never modifies the PRD, and is deliberately the one process skill without a numbered how-to guide.
 
 ## Let /pair-next Guide You
 
@@ -20,6 +22,8 @@ You don't need to memorize this sequence. Run `/pair-next` at any point and pair
 ## The Four Levels
 
 ```text
+Discovery (optional, before Level 1) ─── /pair-process-brainstorm
+
 Level 1: Induction (one-time)
   Step 1  Create PRD ─────────────── /pair-process-specify-prd
   Step 2  Bootstrap Project ──────── /pair-process-bootstrap
@@ -40,7 +44,7 @@ Level 4: Execution (per story)
 
 You can follow this flow in two ways:
 
-1. **Process Skills (recommended)** — invoke a slash command and the AI handles the structured process for you. See the [Skills Catalog](/docs/reference/skills-catalog) for all 40 skills.
+1. **Process Skills (recommended)** — invoke a slash command and the AI handles the structured process for you. See the [Skills Catalog](/docs/reference/skills-catalog) for all 41 skills.
 2. **How-to Guides** — follow the manual step-by-step instructions from the Knowledge Base. See the [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) for all 9 how-to guides.
 
 Skills compose capability skills internally, enforce adoption compliance, and update your PM tool automatically. The how-to guides give you the same process with full manual control.
@@ -117,5 +121,5 @@ Feeling lost? Check the [FAQ](/docs/support/general-faq) — it answers common q
 
 ## Reference
 
-- [Skills Catalog](/docs/reference/skills-catalog) — all 40 skills with commands and composition
+- [Skills Catalog](/docs/reference/skills-catalog) — all 41 skills with commands and composition
 - [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) — all 9 guideline categories and 9 how-to guides

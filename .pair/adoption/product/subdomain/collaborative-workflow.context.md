@@ -22,6 +22,10 @@ Ubiquitous language scoped to this subdomain.
 | DoD (Definition of Done) | Criteria for a story to be Done: AC satisfied, PR approved for its risk tier, CI green, no critical bugs. Ref: [#241](https://github.com/foomakers/pair/issues/241), G1. |
 | Macro-fase (Macro-phase) | One of the two autonomous AI phases — **refinement** (Draft→Ready) and **implementation** — whose boundary is a checkpoint. Ref: G2/G5, D8. |
 | Supervisore (Supervisor) | The evolution from orchestrator to supervisor: autonomous phases advance via a declarative `pair-next` loop, guardrailed by classification tags, with explicit human-intervention points. Ref: G10, D9. |
+| Discovery level | Whether a brainstorm explores **broad** (a feature/initiative spanning several capabilities) or **punctual** (a single story) scope; deduced from the `$root` issue type, or asked as the first interview question. Ref: [#230](https://github.com/foomakers/pair/issues/230), Q7. |
+| Discovery orientation | Whether a brainstorm reads a scope as **functional** (business capability) or **technical** (contexts/integrations); deduced from the `$root` issue's tags (`tech`/`tech-debt`/`infra` ⇒ technical), which win over the type-derived default. Ref: [#230](https://github.com/foomakers/pair/issues/230), R3.2. |
+| Raw requirements blob | The unstructured output of a brainstorm's interview phase — findings per sub-question, open items, flagged assumptions — carried into the domain phase; never written to the PM tool as-is. Ref: [#230](https://github.com/foomakers/pair/issues/230), R3.7. |
+| Candidate tree | The set of proposed vertical slices a discovery or decomposition pass produces, triaged EXTEND-vs-CREATE against the existing backlog *before* any write. Ref: [to-issues triage](../../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md), [#230](https://github.com/foomakers/pair/issues/230), R3.1. |
 
 ## Entities
 
@@ -40,4 +44,5 @@ Business rules scoped to this subdomain. Domain-wide rules stay in `context-map.
 
 - **Skills never read board state names directly** — they resolve every state through the state mapping to a macrostato. Violation: a skill hardcodes a board label and breaks on any project that renamed it. Ref: [ADR canonical-states](../../tech/adr/adr-011-canonical-states-state-mapping.md), D3.
 - **The macro-phase boundary is a checkpoint.** A fresh, zero-context session or subagent resumes from the checkpoint rather than re-deriving state. Violation: lost context and duplicated work across the refinement→implementation handoff. Ref: D8.
+- **Discovery never touches the PRD.** A brainstorm writes to the backlog (Draft items) and to domain context files only; a finding that changes product vision is surfaced as a `/pair-process-specify-prd` recommendation. Violation: product vision mutated by an exploratory session, outside the PRD's own review path. Ref: [#230](https://github.com/foomakers/pair/issues/230), R3.4.
 - **Human gates are explicit and never auto-advanced.** 🔴 review approval and state promotions require a human; the supervisor holds no classification logic (grep-verifiable). Violation: the autonomous loop merges or promotes without the human gate. Ref: G10, D9.

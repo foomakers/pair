@@ -14,17 +14,18 @@ Run `/next` at the start of every session. It reads project adoption files and P
 
 | Type | Count | Purpose |
 |------|-------|---------|
-| **Process** | 9 | Lifecycle phases — orchestrate capability skills |
+| **Process** | 10 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 30 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 40 (9 process + 30 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 41 (10 process + 30 capability + 1 navigator).
 
 ## Full Catalog
 
-### Process Skills (9)
+### Process Skills (10)
 
 | Skill | How-To | Phase | Description |
 |-------|--------|-------|-------------|
+| `/brainstorm` | — | Discovery | Structured discovery (interview → domain → tree) into a Draft backlog tree |
 | `/specify-prd` | 01 | Induction | Create/update PRD |
 | `/bootstrap` | 02 | Induction | Full project setup |
 | `/plan-initiatives` | 03 | Strategic | Create and prioritize initiatives |
@@ -35,6 +36,8 @@ Process skills compose capability skills. Capability skills are independently in
 | `/implement` | 10 | Execution | Implement tasks with TDD |
 | `/review` | 11 | Review | Code review with merge flow |
 
+> `/brainstorm` carries no numbered how-to guide (`—` above): it is a discovery entry point that runs *before* guide 01, and its `SKILL.md` is the canonical reference for its three phases.
+>
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
 ### Capability Skills (30)
@@ -130,6 +133,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 ```text
 .skills/
 ├── process/              # Lifecycle phase skills
+│   ├── brainstorm/       # 3-phase structured discovery
 │   ├── specify-prd/
 │   ├── bootstrap/
 │   ├── plan-initiatives/
@@ -201,14 +205,14 @@ Every skill is held to an effectiveness standard, not just structural conformanc
 | `/map-subdomains` | `/refine-story` (planned — #242) | Functional/domain analysis | The story's capability area |
 | `/map-subdomains` | `/plan-initiatives` | Initiative creation | The initiative's capability area |
 | `/map-subdomains` | `/plan-epics` | Epic breakdown | The epic's capability area |
-| `/map-subdomains` | `/brainstorm` (planned — #230) | Broad brainstorm | All capabilities discussed |
+| `/map-subdomains` | `/brainstorm` | Broad/functional discovery (phase 2) | The capability areas discovered |
 | `/map-subdomains` | `/bootstrap` | Project setup | `all` (full catalog — bootstrap only) |
 | `/map-contexts` | `/refine-story` (planned — #242) | Technical analysis | The story's touched contexts/services |
 | `/map-contexts` | `/plan-tasks` | Task breakdown | The task's touched contexts/services |
-| `/map-contexts` | `/brainstorm` (planned — #230) | Punctual/technical brainstorm | The contexts discussed |
+| `/map-contexts` | `/brainstorm` | Punctual/technical discovery (phase 2) | The contexts discovered |
 | `/map-contexts` | `/bootstrap` | Project setup | `all` (full catalog — bootstrap only) |
 
-Every row above except the two `(planned — #242)`/`(planned — #230)` entries is a real composition, verified against each caller's `SKILL.md` — not an aspirational claim. No caller performs a full re-mapping outside `/bootstrap`. When no `subdomain/`/`boundedcontext/` artifacts exist yet, both capabilities fall back to "system areas" (services/modules) instead of requiring the DDD prerequisites — no HALT, no error.
+Every row above except the two `(planned — #242)` entries is a real composition, verified against each caller's `SKILL.md` — not an aspirational claim. No caller performs a full re-mapping outside `/bootstrap`. When no `subdomain/`/`boundedcontext/` artifacts exist yet, both capabilities fall back to "system areas" (services/modules) instead of requiring the DDD prerequisites — no HALT, no error.
 
 `/classify` is likewise a capability invoked by callers, keyed by `$context` (not `$scope`):
 
@@ -255,9 +259,10 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 | Way of working | `tech/way-of-working.md` | `/implement`, `/review`, `/estimate` | `/assess-methodology`, `/setup-pm` |
 | Decisions (ADR) | `tech/adr/*.md` | `/verify-adoption`, `/review` | `/record-decision` |
 | Decisions (ADL) | `decision-log/*.md` | `/verify-adoption` | `/record-decision` |
+| Domain (context map / subdomain contexts) | `product/context-map.md`, `product/subdomain/*.context.md` | `/brainstorm`, `/refine-story`, `/plan-initiatives`, `/plan-epics`, `/plan-stories`, `/plan-tasks` | `/record-decision` (decision-backed sections), `/brainstorm`, `/refine-story` (inline glossary/entity/rule maintenance) |
 
 ## Navigation
 
 - **Start here**: Run `/next` to determine what to do
-- **Process flow**: `/specify-prd` → `/bootstrap` → `/plan-initiatives` → ... → `/implement` → `/review`
+- **Process flow**: (`/brainstorm` — optional discovery) → `/specify-prd` → `/bootstrap` → `/plan-initiatives` → ... → `/implement` → `/review`
 - **Independent capability**: Any capability skill can be invoked directly (e.g., `/estimate`, `/analyze-debt`)

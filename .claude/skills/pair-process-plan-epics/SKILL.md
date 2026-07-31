@@ -18,9 +18,11 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 
 ## Arguments
 
-| Argument      | Required | Description                                                                                           |
-| ------------- | -------- | ----------------------------------------------------------------------------------------------------- |
-| `$initiative` | No       | Initiative identifier (e.g., `#10`). If omitted, selects highest-priority Todo initiative.            |
+| Argument       | Required | Description                                                                                                                                                                                        |
+| -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$initiative`  | No       | Initiative identifier (e.g., `#10`). If omitted, selects highest-priority Todo initiative.                                                                                                         |
+| `$candidates`  | No       | Caller-supplied candidate tree (epic name + user value + rationale each) — e.g. the tree `/pair-process-brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the initiative. |
+| `$domain-placed` | No     | Capability areas the **caller** has already placed **or confirmed** in the subdomain catalog for this run (e.g. `/pair-process-brainstorm` phase 2). When it covers the approved breakdown's areas, Step 3.5 confirms that placement instead of re-composing `/pair-capability-map-subdomains` — one subdomain-catalog delta per run, not two. Carried in-band precisely so the fact survives a fresh session, rather than depending on same-session context. |
 
 ## Algorithm
 
@@ -64,17 +66,19 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 
 ### Step 3: Epic Analysis & Triage Proposal
 
-1. **Act**: Analyze initiative components:
+1. **Check**: Is `$candidates` provided?
+2. **Skip**: If provided, that **is** this run's candidate tree — never re-derive it from the initiative (a caller like `/pair-process-brainstorm` already produced it from its own analysis, and re-deriving would discard it). Keep each candidate's rationale, apply only the sizing/sequencing checks of item 4, and go to item 5's triage.
+3. **Act**: If `$candidates` is absent, analyze initiative components:
    - Business objectives and success metrics.
    - User value propositions and journey stages.
    - Technical requirements from architecture and tech-stack.
    - Bounded context alignment for service boundaries.
-2. **Act**: Determine epic structure (the candidate tree for this run):
+4. **Act**: Determine epic structure (the candidate tree for this run; with `$candidates`, validate the supplied tree against these same criteria instead of building one):
    - **Epic 0 assessment**: for new projects, assess if bootstrap epic is needed.
    - **Value-driven grouping**: natural feature groupings following user workflows.
    - **Sequential dependencies**: foundation-first, user journey progression.
    - **Duration sizing**: 2-4 sprints per epic with clear completion criteria.
-3. **Act**: Triage each candidate epic against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected initiative. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** epic is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
+5. **Act**: Triage each candidate epic against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected initiative. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** epic is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
 
    > Epic breakdown for Initiative `#[ID]: [Title]`:
    >
@@ -85,13 +89,13 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    >
    > Approve or adjust?
 
-4. **Verify**: Developer approves the breakdown — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
+6. **Verify**: Developer approves the breakdown — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
 
 ### Step 3.5: Domain Mapping (scoped)
 
-1. **Check**: Is `/pair-capability-map-subdomains` installed?
-2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping.
-3. **Act**: Compose `/pair-capability-map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only).
+1. **Check**: Is `/pair-capability-map-subdomains` installed, and has the caller **already placed or confirmed this scope in this run** — declared in-band as `$domain-placed`?
+2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping. If `$domain-placed` names the **same capability areas** the approved breakdown covers — the caller's own domain step either composed `/pair-capability-map-subdomains` on them or confirmed a placement already recorded (e.g. `/pair-process-brainstorm` phase 2, **either** branch of its Check/Skip, so a fresh-session resume qualifies too) → **confirm that placement and proceed to Step 4; do not re-compose** `/pair-capability-map-subdomains`: the same scope is mapped once per run, and the developer approves **one** subdomain-catalog delta, not two.
+3. **Act**: Otherwise compose `/pair-capability-map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only).
 4. **Verify**: Subdomain catalog delta (if any) approved by developer. Epic creation always proceeds to Step 4 regardless of the domain-mapping outcome.
 
 ### Step 4: Epic Creation
@@ -151,5 +155,6 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - This skill **modifies PM tool state** — creates and extends epic issues linked to initiatives.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
+- **Caller-supplied tree** — with `$candidates` (e.g. `/pair-process-brainstorm` phase 3), Step 3 triages the supplied candidates and derives none: the caller owns the grouping, this skill owns triage, the epic template, and the writes. Without it, behaviour is unchanged. Step 3.5 is a **confirm-only pass** on that path when `$domain-placed` names the same capability areas the caller already placed **or confirmed** in this run — one placement, one catalog delta to approve. The fact travels in the arguments, not in same-session context, so it holds when the caller itself resumed a partially completed run.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
 - Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../../../.skills/capability/map-subdomains/SKILL.md).

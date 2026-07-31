@@ -1,6 +1,13 @@
 # `/record-decision` Invocation Contract
 
-`/record-decision` is the **sole generic writer of adoption files** (the one exception is `/setup-pm`, which writes the PM section of way-of-working.md itself and composes `/record-decision` only for the decision record). Every `assess-*` skill, and any orchestrator that accepts an `assess-*` proposal, follows the same contract — stated once here.
+`/record-decision` is the **sole generic writer of adoption files**. There are exactly **two exception classes**, and nothing else writes adoption generically (an `assess-*` skill never does):
+
+1. **Section owners** — a skill that owns one config-registry section end-to-end writes that section itself and composes `/record-decision` only for the decision record: `/setup-pm` (PM section of `way-of-working.md`), `/verify-quality` (Custom Gate Registry, same file), `/classify` (`## Tag Projection` in `tech/risk-matrix.md`).
+2. **Inline context-map maintenance** — `/brainstorm` (phase 2) and `/refine-story` write approved glossary terms, entities, and rules into `context-map.md` (or the owning `subdomain/<slug>.context.md`) inline, as part of their own domain step, per [context-map-maintenance.md](../../../architecture/design-patterns/context-map-maintenance.md). `/record-decision` remains the writer of the map's **decision-backed** (DDR-driven) sections and of every decision record.
+
+The authoritative list is `/record-decision`'s own SKILL.md — if this line and that list ever disagree, the skill wins and this line is the stale one. A writer-monopoly audit (`/verify-adoption`) applies the list, not the phrase "sole writer": both exception classes are conformant, not violations.
+
+Every `assess-*` skill, and any orchestrator that accepts an `assess-*` proposal, follows the same contract — stated once here.
 
 ## The tuple
 

@@ -1,6 +1,6 @@
 ---
 name: map-subdomains
-description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /refine-story, /plan-initiatives, /plan-epics, a future /brainstorm (planned — #230); full-scope re-mapping only via /bootstrap."
+description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /refine-story, /plan-initiatives, /plan-epics, /brainstorm; full-scope re-mapping only via /bootstrap."
 version: 0.4.1
 author: Foomakers
 ---
@@ -22,7 +22,7 @@ Classify business capabilities into Domain-Driven Design subdomains — core, su
 | `/refine-story`     | Functional/domain analysis phase — placement for the story's capability. |
 | `/plan-initiatives` | Domain placement for a new initiative's capability area.          |
 | `/plan-epics`       | Domain placement for an epic's capability area.                   |
-| `/brainstorm`       | Broad brainstorm touching multiple capabilities (planned — #230). |
+| `/brainstorm`       | Broad/functional discovery (phase 2) touching multiple capabilities. |
 | `/bootstrap`        | Initial full-catalog mapping — the only caller allowed `$scope: all`. |
 
 Invocable independently with an explicit `$scope` for ad hoc placement.

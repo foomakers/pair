@@ -17,9 +17,10 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 
 ## Arguments
 
-| Argument | Required | Description                                                                                  |
-| -------- | -------- | -------------------------------------------------------------------------------------------- |
-| `$epic`  | No       | Epic identifier (e.g., `#42`). If omitted, selects highest-priority Todo epic.               |
+| Argument       | Required | Description                                                                                                                                                                                 |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$epic`        | No       | Epic identifier (e.g., `#42`). If omitted, selects highest-priority Todo epic.                                                                                                              |
+| `$candidates`  | No       | Caller-supplied candidate tree (story name + user value + rationale each) — e.g. the tree `/brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the epic. |
 
 ## Algorithm
 
@@ -67,13 +68,15 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 
 ### Step 3: Story Identification & Triage Proposal
 
-1. **Act**: Analyze epic components for story candidates (the candidate tree for this run):
+1. **Check**: Is `$candidates` provided?
+2. **Skip**: If provided, that **is** this run's candidate tree — never re-derive it from the epic (a caller like `/brainstorm` already produced it from its own analysis, and re-deriving would discard it). Keep each candidate's rationale, apply only the vertical-slicing validation of item 4, and go to item 5's triage.
+3. **Act**: If `$candidates` is absent, analyze epic components for story candidates (the candidate tree for this run):
    - **Workflow steps**: distinct user journey phases.
    - **CRUD operations**: create, read, update, delete patterns.
    - **Business rules**: different scenarios and conditions.
    - **User roles**: admin, member, guest variations.
-2. **Act**: Apply vertical slicing — every story must deliver end-to-end user value with visible UI manifestation. This rule governs CREATE candidates only — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)'s per-skill-delta note.
-3. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** story is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
+4. **Act**: Apply vertical slicing — every story must deliver end-to-end user value with visible UI manifestation — to every candidate, supplied or derived. This rule governs CREATE candidates only — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)'s per-skill-delta note.
+5. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** story is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
 
    > Story candidates for Epic `#[ID]: [Title]`:
    >
@@ -83,7 +86,7 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
    >
    > Approve or adjust?
 
-4. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
+6. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
 
 ### Step 4: Story Definition & INVEST Validation
 
@@ -156,5 +159,6 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - This skill **modifies PM tool state** — creates and extends story issues linked to epics.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
+- **Caller-supplied tree** — with `$candidates` (e.g. `/brainstorm` phase 3), Step 3 triages the supplied candidates and derives none: the caller owns the slicing, this skill owns triage, INVEST validation, and the writes. Without it, behaviour is unchanged.
 - Stories at breakdown stage are rough planning units — detailed requirements are added during `/refine-story`.
 - INVEST validation is mandatory for CREATE candidates — stories failing INVEST must be reworked before creation. EXTEND candidates re-validate INVEST for the merged scope (Step 4).
