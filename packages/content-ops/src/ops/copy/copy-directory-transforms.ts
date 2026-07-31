@@ -3,7 +3,7 @@ import { logger, createError } from '../../observability'
 import { copyFileHelper } from '../../file-system'
 import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
-import { transformPath, detectCollisions } from '../naming-transforms'
+import { transformPath, detectCollisions, isRegistryEntryPath } from '../naming-transforms'
 import { rewriteLinksAfterTransform, PathMappingEntry } from '../link-rewriter'
 import { syncFrontmatter } from '../frontmatter-transform'
 import {
@@ -104,6 +104,7 @@ async function copyFileWithTransform(ctx: {
     targetFilePath,
     dirMappingFiles,
     topLevelFiles,
+    isEntryDir: isRegistryEntryPath(dir, transformOpts.flattenDepth),
   })
 }
 
@@ -112,6 +113,12 @@ async function copyFileWithTransform(ctx: {
  * when a subdirectory was renamed, and records the file in either
  * `dirMappingFiles` (files under a subdirectory) or `topLevelFiles` (root-level
  * source files) so link rewriting and mirror cleanup can see it.
+ *
+ * `isEntryDir` is false for a directory BELOW the registry's entry granularity
+ * (a skill's `references/` sub-dir under a bounded flatten, #407). Such a file is
+ * still tracked for link rewriting, but its frontmatter `name` is left alone:
+ * the dir it lives in was not renamed into a new entry, so syncing would write a
+ * PATH (`pair-process-review/references`) as the doc's name.
  */
 async function trackTransformedFile(ctx: {
   fileService: FileSystemService
@@ -121,6 +128,7 @@ async function trackTransformedFile(ctx: {
   targetFilePath: string
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
+  isEntryDir: boolean
 }): Promise<void> {
   const {
     fileService,
@@ -130,6 +138,7 @@ async function trackTransformedFile(ctx: {
     targetFilePath,
     dirMappingFiles,
     topLevelFiles,
+    isEntryDir,
   } = ctx
 
   if (dir === '.') {
@@ -142,7 +151,7 @@ async function trackTransformedFile(ctx: {
   if (!transformedDir) return
 
   const leafName = dir.split('/').pop()!
-  if (leafName !== transformedDir) {
+  if (isEntryDir && leafName !== transformedDir) {
     const content = await fileService.readFile(targetFilePath)
     const synced = syncFrontmatter(content, { from: leafName, to: transformedDir })
     if (synced !== content) {

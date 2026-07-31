@@ -10,10 +10,9 @@ export type CopyPathOpsResult = {
   skillLinkPathMap?: SkillLinkPathMap
 }
 
-/** Naming transform options (flatten and/or prefix) applied during a copy. */
 /**
- * `flattenDepth` bounds flattening to the registry's entry granularity, so a
- * deeper segment is preserved as a real sub-path instead of becoming a sibling
- * entry. Omitted ⇒ every separator is flattened, as before (#407).
+ * Naming transform options (flatten and/or prefix, optionally depth-bounded).
+ * Declared next to `transformPath`, which consumes it — re-exported here so the
+ * copy modules keep importing their types from one place.
  */
-export type TransformOpts = { flatten: boolean; prefix?: string; flattenDepth?: number }
+export type { TransformOpts } from '../naming-transforms'

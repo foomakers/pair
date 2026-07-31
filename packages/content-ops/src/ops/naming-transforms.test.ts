@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { flattenPath, prefixPath, transformPath, detectCollisions } from './naming-transforms'
+import {
+  flattenPath,
+  prefixPath,
+  transformPath,
+  detectCollisions,
+  isRegistryEntryPath,
+} from './naming-transforms'
 
 describe('flattenPath', () => {
   it('converts nested path separators to hyphens', () => {
@@ -134,6 +140,49 @@ describe('flattenPath with a bounded depth (#407)', () => {
 
   it('without a depth, flattens everything — unchanged for every other registry', () => {
     expect(flattenPath('process/review/references')).toBe('process-review-references')
+  })
+
+  // The value comes from JSON config, so a typo must fail loudly. Degrading
+  // silently would degrade in the direction that REINTRODUCES #407 (0 and -1
+  // used to full-flatten; a fractional depth used to flatten nothing).
+  it.each([0, -1, 1.5, NaN])('throws on the non-positive-integer depth %s', depth => {
+    expect(() => flattenPath('a/b/c/d', depth)).toThrow(/positive integer/)
+  })
+
+  // The unbounded form is traversal-safe by construction (every separator
+  // becomes a hyphen). A preserved tail is not: the copy pipeline joins it onto
+  // the destination root, so `process/review/../../../../etc` would resolve to
+  // `/etc`.
+  it('refuses to preserve a .. segment that would escape the destination root', () => {
+    expect(() => flattenPath('process/review/../../../../etc', 2)).toThrow(/refusing to preserve/)
+  })
+
+  it('refuses to preserve a . segment in the tail', () => {
+    expect(() => flattenPath('process/review/./deep', 2)).toThrow(/refusing to preserve/)
+  })
+
+  it('still flattens a .. into a hyphen when it sits within the entry segments', () => {
+    expect(flattenPath('process/../review', 3)).toBe('process-..-review')
+  })
+})
+
+describe('isRegistryEntryPath (#407)', () => {
+  it('treats every dir as an entry when the flatten is unbounded', () => {
+    expect(isRegistryEntryPath('process/review/references')).toBe(true)
+  })
+
+  it('treats a dir at or above the entry depth as an entry', () => {
+    expect(isRegistryEntryPath('process/review', 2)).toBe(true)
+    expect(isRegistryEntryPath('next', 2)).toBe(true)
+  })
+
+  it('treats a dir below the entry depth as content, not an entry', () => {
+    expect(isRegistryEntryPath('process/review/references', 2)).toBe(false)
+    expect(isRegistryEntryPath('process/review/references/deep', 2)).toBe(false)
+  })
+
+  it('rejects an invalid depth for the same reason flattenPath does', () => {
+    expect(() => isRegistryEntryPath('process/review', 0)).toThrow(/positive integer/)
   })
 })
 

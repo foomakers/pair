@@ -77,11 +77,12 @@ function reRootTarget(
  * which only knows about the *overall* content-root move and would otherwise
  * misplace a same-directory sibling link (see #313 T5 fixture regression).
  *
- * Known scope boundary: only rebases links resolving inside the SAME
- * directory the current file lives in. A link that escapes to a *different*
- * transformed sibling directory (e.g. one skill linking into another skill's
- * sibling file) still falls through to `reRootTarget` and is not corrected by
- * this function — not needed by any skill in the corpus today.
+ * Scope: this function alone only rebases links resolving inside the SAME
+ * directory the current file lives in. Resolution is two-stage (see
+ * `resolveAbsoluteTarget`): own-dir rebase first, then `rebaseWithinMovedDirs`
+ * for a target in ANY other directory the same copy moved — a sub-doc's
+ * `../SKILL.md`, or one skill linking into another (e.g. plan-epics →
+ * map-subdomains) — and only then the coarser `reRootTarget` fallback.
  */
 function rebaseWithinMovedDir(
   absoluteTarget: string,
@@ -137,26 +138,28 @@ function resolveAbsoluteTarget(params: {
 
 /**
  * Rebase a target through whichever moved directory contains it, preferring the
- * most specific match. Returns null when no moved directory covers it, so the
- * caller keeps its existing fallbacks.
+ * most specific match (longest `originalDir`), so a nested entry wins over its
+ * parent. Returns null when no moved directory covers it, so the caller keeps
+ * its existing fallbacks.
+ *
+ * Picks the longest match in a single pass instead of sorting: this runs once per
+ * link of every file, and a per-link `[...movedDirs].sort()` would be O(F·L·D
+ * log D) for a result that does not depend on the input order at all.
  */
 function rebaseWithinMovedDirs(
   absoluteTarget: string,
   movedDirs?: Array<{ originalDir: string; newDir: string }>,
 ): string | null {
   if (!movedDirs || movedDirs.length === 0) return null
-  const candidates = [...movedDirs].sort((a, b) => b.originalDir.length - a.originalDir.length)
-  for (const { originalDir, newDir } of candidates) {
+  let best: { length: number; rebased: string } | null = null
+  for (const { originalDir, newDir } of movedDirs) {
+    if (best !== null && originalDir.length <= best.length) continue
     const rebased = rebaseWithinMovedDir(absoluteTarget, originalDir, newDir)
-    if (rebased) return rebased
+    if (rebased) best = { length: originalDir.length, rebased }
   }
-  return null
+  return best?.rebased ?? null
 }
 
-/**
- * Computes the new href for a relative link after the file has moved.
- * Returns null if the link should not be rewritten (external, anchor, unchanged).
- */
 /**
  * Splits a rewritable href into its path and anchor halves, or null when the
  * link must be left alone: external, a pure anchor, or anchor-only after the
@@ -171,6 +174,10 @@ function splitRewritableHref(href: string): { pathPart: string; anchorPart: stri
   return { pathPart, anchorPart }
 }
 
+/**
+ * Computes the new href for a relative link after the file has moved.
+ * Returns null if the link should not be rewritten (external, anchor, unchanged).
+ */
 function computeNewHref(params: ComputeNewHrefParams): string | null {
   const { href, originalFileDir, newFileDir, datasetRoot, sourceContentRoot, movedDirs } = params
   const split = splitRewritableHref(href)

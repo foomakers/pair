@@ -449,6 +449,64 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
       expect(deep).toContain('[SKILL](../pair-process-review/SKILL.md)')
       expect(deep).not.toContain('source/process/review')
     })
+
+    // #407 review finding: with a bounded flatten, `process/review/references`
+    // is a real sub-path and so appears in the dir mapping next to the skill
+    // dirs. Treating it as a SKILL registered `references` as a skill name
+    // pointing at ONE arbitrary skill's sub-dir, and the `/references` token in
+    // an unrelated skill's body was rewritten to it — a cross-skill corruption
+    // decided by directory iteration order.
+    it('never rewrites a /references token across skills when both own a references/ dir (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nProgressive disclosure lives under /references.',
+        '/dataset/source/process/review/references/deep.md': '# Review deep dive',
+        '/dataset/source/capability/grill/SKILL.md': '---\nname: grill\n---\n# /grill',
+        '/dataset/source/capability/grill/references/deep.md': '# Grill deep dive',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      const skill = await fileService.readFile('/dataset/target/pair-process-review/SKILL.md')
+      expect(skill).toContain('under /references.')
+      expect(skill).not.toContain('pair-capability-grill/references')
+      // Both skills' own renames still happen — the fix scopes the map, it does
+      // not disable it.
+      expect(skill).toContain('# /pair-process-review')
+      const grill = await fileService.readFile('/dataset/target/pair-capability-grill/SKILL.md')
+      expect(grill).toContain('# /pair-capability-grill')
+    })
+
+    // Same root cause on the frontmatter side: the sub-doc's dir is not a
+    // renamed skill dir, so its `name:` must be left alone instead of being set
+    // to a PATH (`pair-process-review/references`).
+    it('does not rewrite a nested sub-doc frontmatter name to a path (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+        '/dataset/source/process/review/references/deep.md':
+          '---\nname: references\n---\n# Deep dive',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      const deep = await fileService.readFile(
+        '/dataset/target/pair-process-review/references/deep.md',
+      )
+      expect(deep).toContain('name: references')
+      expect(deep).not.toContain('pair-process-review/references')
+    })
   })
 
   describe('mirror behavior — idempotent updates (AC4)', () => {

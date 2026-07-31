@@ -246,8 +246,32 @@ describe('buildSkillNameMap', () => {
 
   it('skips entries where leaf equals transformed (no rename)', () => {
     const dirMappingFiles = new Map([['myskill', ['/target/myskill/SKILL.md']]])
-    const result = buildSkillNameMap(dirMappingFiles, {})
+    const result = buildSkillNameMap(dirMappingFiles, { flatten: false })
     expect(result.size).toBe(0)
+  })
+
+  // #407: a bounded flatten makes a skill's `references/` sub-dir a real
+  // sub-path, so it now shows up in dirMappingFiles alongside the skill dirs.
+  // It is CONTENT, not a skill: registering `references` as a skill name maps
+  // the `/references` token to ONE arbitrary skill's sub-dir (last writer wins
+  // on iteration order) and rewrites it inside every OTHER skill's body too.
+  it('does not register a content sub-dir as a skill name (#407)', () => {
+    const dirMappingFiles = new Map([
+      ['process/review', ['/t/pair-process-review/SKILL.md']],
+      ['process/review/references', ['/t/pair-process-review/references/deep.md']],
+      ['capability/grill', ['/t/pair-capability-grill/SKILL.md']],
+      ['capability/grill/references', ['/t/pair-capability-grill/references/deep.md']],
+    ])
+    const result = buildSkillNameMap(dirMappingFiles, {
+      flatten: true,
+      prefix: 'pair',
+      flattenDepth: 2,
+    })
+    expect(result.has('references')).toBe(false)
+    expect([...result.entries()].sort()).toEqual([
+      ['grill', 'pair-capability-grill'],
+      ['review', 'pair-process-review'],
+    ])
   })
 
   it('handles multiple entries', () => {
@@ -362,6 +386,18 @@ describe('buildSkillLinkPathMap', () => {
 
   it('returns an empty map for an empty input', () => {
     expect(buildSkillLinkPathMap(new Map(), opts).size).toBe(0)
+  })
+
+  // #407, same reason as buildSkillNameMap: a content sub-dir is not a skill, so
+  // it must not get a `.skills/<cat>/<name>/SKILL.md` link mapping of its own —
+  // no such SKILL.md exists inside a `references/` dir.
+  it('skips a content sub-dir below the entry depth (#407)', () => {
+    const dirMappingFiles = new Map<string, string[]>([
+      ['process/review', []],
+      ['process/review/references', []],
+    ])
+    const map = buildSkillLinkPathMap(dirMappingFiles, { ...opts, flattenDepth: 2 })
+    expect([...map.keys()]).toEqual(['../.skills/process/review/SKILL.md'])
   })
 })
 
