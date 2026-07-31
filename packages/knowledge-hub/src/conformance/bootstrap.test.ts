@@ -67,7 +67,10 @@ describe('prerequisite: the Guided/Quick Setup Convention exists (#276)', () => 
   // must name it — otherwise the convention documents a stale adopter set and
   // the next adopter reads a list that is missing the closest precedent.
   it('enumerates bootstrap among its shipped adopters, in both copies', () => {
-    for (const p of [join(__dirname, '../../dataset', CONVENTION_REL), join(ROOT, CONVENTION_REL)]) {
+    for (const p of [
+      join(__dirname, '../../dataset', CONVENTION_REL),
+      join(ROOT, CONVENTION_REL),
+    ]) {
       const c = read(p)
       expect(c).toMatch(/bootstrap/i)
       // the count of enumerated adopters must not still say "two"
