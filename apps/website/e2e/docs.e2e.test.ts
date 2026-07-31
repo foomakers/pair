@@ -160,6 +160,7 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
   const pages = [
     { url: '/docs/getting-started', title: 'What is pair?' },
     { url: '/docs/getting-started/quickstart', title: 'Quickstart' },
+    { url: '/docs/getting-started/bootstrap-quick-mode', title: 'Bootstrap Quick Mode' },
     { url: '/docs/getting-started/quickstart-solo', title: 'Quickstart: Solo' },
     { url: '/docs/getting-started/quickstart-team', title: 'Quickstart: Team' },
     { url: '/docs/getting-started/quickstart-org', title: 'Quickstart: Organization' },
@@ -909,6 +910,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs',
     '/docs/getting-started',
     '/docs/getting-started/quickstart',
+    '/docs/getting-started/bootstrap-quick-mode',
     '/docs/getting-started/quickstart-solo',
     '/docs/getting-started/quickstart-team',
     '/docs/getting-started/quickstart-org',
