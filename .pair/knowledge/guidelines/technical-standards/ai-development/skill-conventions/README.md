@@ -13,6 +13,7 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | Output Format shapes (Decision / Report) | [output-shapes.md](output-shapes.md) | 10 skills (documentation-only — no logic change) |
 | To-issues triage (extend vs create) | [to-issues-triage.md](to-issues-triage.md) | 2 composing skills (new convention — no prior duplication to extract) |
 | Guided / Quick setup duality (guided asks; quick accepts defaults) | [guided-quick-setup.md](guided-quick-setup.md) | 2 precedents (`pair package` `--interactive`; the `assess-*` cascade) — documented, not retrofitted |
+| Nested sub-documents / progressive disclosure (`references/` inside a skill dir) | [nested-sub-documents.md](nested-sub-documents.md) | 0 skills (authoring convention — describes the installed layout, not a skill step) |
 
 ## How a skill uses these files
 
