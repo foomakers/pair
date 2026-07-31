@@ -6,6 +6,8 @@ GitHub Issues workflow and configuration for comprehensive issue management inte
 
 This guide covers GitHub Issues setup and workflows for managing user stories, tasks, bugs, and feature requests within the pair development framework.
 
+> **The authoritative create recipe is the adapter's.** Every `gh issue create` below carries `--assignee` and `--project` because an issue without them is open, green — and invisible in the board and assignee-filtered views the team reads. The full mechanics (MCP has no project field, so the add-item step is mandatory after it; what to do when the assignee cannot be resolved) live in [github-implementation.md → Item Visibility: Membership and Assignee](../project-management-tool/github-implementation.md#item-visibility-membership-and-assignee). The snippets here are abbreviations of it, never an alternative to it.
+
 ## Issue Types and Labels
 
 ### Type Labels (Always Recommended)
@@ -51,7 +53,7 @@ pair "Create a new user story: 'As a user, I want to [functionality] so that [be
 #### Via GitHub CLI:
 
 ```bash
-gh issue create --title "User Story: [Title]" --body "[Description]" --label "user story,P1"
+gh issue create --title "User Story: [Title]" --body "[Description]" --label "user story,P1" --assignee "[login]" --project "[project title]"
 ```
 
 ### User Story Template
@@ -99,7 +101,7 @@ pair "Break down user story #[story_number] into development tasks and create Gi
 #### Manual Task Creation:
 
 ```bash
-gh issue create --title "Task: [Title]" --body "[Description]" --label "task,P1" --milestone "[Sprint]"
+gh issue create --title "Task: [Title]" --body "[Description]" --label "task,P1" --milestone "[Sprint]" --assignee "[login]" --project "[project title]"
 ```
 
 ### Task Template

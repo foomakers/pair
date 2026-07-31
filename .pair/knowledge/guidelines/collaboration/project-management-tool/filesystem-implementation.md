@@ -215,6 +215,8 @@ Status changes are reflected by moving files between directories:
 
 **Where the line goes**: the item templates carry **no `Assignee` field**, so copying a template does not leave a slot for it. Add it to the item's context block — for a user story, in **`## Epic Context`** immediately after `**Priority**`; for a task, in the same header block that carries the parent story. Writing it anywhere the grep below finds it is correct; leaving it out because the template lacked a field is not.
 
+**Why the slot is not in the shared templates** (a deliberate choice, not an oversight): on every other adapter the assignee is a **native tracker field** — GitHub's `assignees`, Azure's `--assigned-to`, Linear's `assigneeId` — so a template slot would be dead weight there, and a second source of truth competing with the field the board actually filters on. The templates therefore stay tool-neutral and this adapter owns the convention, which is why the placement rule is stated here and is looser than a template field would be. Recorded with the rest of the contract rationale in this repository's `.pair/adoption/decision-log/2026-07-31-pm-adapter-visibility-contract.md`.
+
 Grep is the filtered view: `grep -rl 'Assignee.*<name>' .pair/adoption/product/backlog/` — which is exactly why an item with the line missing is invisible. **If the assignee cannot be resolved**: **report it** — never drop it silently by writing the file with the line omitted or left as a placeholder.
 
 ## Working with Initiatives

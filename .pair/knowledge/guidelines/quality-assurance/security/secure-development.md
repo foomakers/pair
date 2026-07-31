@@ -367,10 +367,14 @@ case $SEVERITY in
         echo "⚠️  High priority security incident response..."
 
         # Create incident tracking issue
+        # --assignee is not optional: an unassigned incident issue is invisible
+        # in the assignee-filtered view the team reads (see the PM-tool adapter's
+        # "Item Visibility: Membership and Assignee" section).
         gh issue create \
             --title "🚨 Security Incident: $INCIDENT_TYPE" \
             --body "High priority security incident requiring immediate attention" \
-            --label "security,incident,high-priority"
+            --label "security,incident,high-priority" \
+            --assignee "$SECURITY_ONCALL"
         ;;
 esac
 

@@ -210,8 +210,8 @@ gh project list --owner [ORG]
 # Passing it at create time is what makes the item a board member —
 # see "Item Visibility: Membership and Assignee" below for why that matters
 # and for the Step 2b path when this flag is not used.
-gh issue create --project "[project title]"
-gh pr create --project "[project title]"
+gh issue create --assignee "[login]" --project "[project title]"
+gh pr create --assignee "[login]" --project "[project title]"
 ```
 
 ### API Integration
@@ -464,6 +464,16 @@ gh api graphql -f query='{
 }'
 ```
 
+**Branch on the discovery outcome — this is where "there is no board" is observed, before any item lookup:**
+
+| Discovery outcome                                    | Meaning                                                           | Next                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
+| A project id + status field id                       | The board exists                                                  | Step 2                                                    |
+| The query **succeeded** and returned **no project**  | No project is configured — there is no board field to write at all | The membership step **no-ops** (see Step 2b)              |
+| The query **failed** (error, 404, permission denied) | Unknown — not evidence of absence                                 | **Report it.** Never a no-op, never "board write skipped" |
+
+Keep the last two apart: "no project configured" is a **successful** query with an empty result; an error or a permission denial says nothing about whether the project exists, and treating it as absence is how a failed board write disappears into a green report.
+
 #### Step 2: Find the Item ID for the Issue
 
 ```bash
@@ -490,15 +500,16 @@ gh api graphql -f query='{
 | ---------------------------- | ------------------------------------------ | ------------------------------------------- |
 | An item id                   | The issue is already a project item        | Step 3                                      |
 | No match after the last page | The issue is **not a project item yet**    | **Step 2b**, then Step 3 on the returned id |
-| No project configured at all | Minimal board (D4) — nothing to write      | No-op, not a failure (see below)            |
+
+(The "no project configured at all" outcome is not reachable here — it is observed in **Step 1**, whose table above owns it.)
 
 Never carry an empty id into Step 3: `updateProjectV2ItemFieldValue` fails with `gh: Could not resolve to a node with the global id of ''`. **And never treat the empty id as "board write skipped" and report success** — a silently skipped board write is exactly how an item ends up open, assigned, green, and absent from the board. Paginate to the last page before concluding "not an item": a match on page 3 that was never fetched looks identical to no match.
 
 **When the issue belongs to more than one project**: target the project named in [way-of-working.md](../../../../adoption/tech/way-of-working.md). Never take the first project found.
 
-#### Step 2b: Add the Issue as a Project Item (when Step 2 found nothing)
+#### Step 2b: Add the Issue as a Project Item (idempotent — safe as an unconditional precondition)
 
-Membership must exist before the status field can be written — the field lives on the **item**, not on the issue.
+Reached whenever Step 2 found nothing, and safe to run even when it found something (see **Idempotent** below) — so the conditional shape is an optimisation, never a requirement. Membership must exist before the status field can be written — the field lives on the **item**, not on the issue.
 
 ```bash
 # Get the issue's node id, then add it to the project
@@ -508,18 +519,29 @@ ISSUE_NODE_ID=$(gh api graphql -f query='{
   }
 }' --jq '.data.repository.issue.id')
 
-# Returns the item id — feed it straight into Step 3
-gh api graphql -f query="mutation {
-  addProjectV2ItemById(input: {
-    projectId: \"[PROJECT_ID]\"
-    contentId: \"$ISSUE_NODE_ID\"
-  }) { item { id } }
-}" --jq '.data.addProjectV2ItemById.item.id'
+# Abort if the lookup yielded nothing — same empty-id discipline as Step 3.
+# An empty value would send contentId: "" and corrupt the mutation instead of failing.
+[ -n "$ISSUE_NODE_ID" ] || { echo "issue node id lookup failed — aborting" >&2; exit 1; }
+
+# Parameterised, never interpolated into the query document: values travel as
+# GraphQL variables (-F), so an unexpected value fails cleanly rather than
+# rewriting the query. Returns the item id — feed it straight into Step 3.
+gh api graphql \
+  -f query='mutation($project: ID!, $content: ID!) {
+    addProjectV2ItemById(input: { projectId: $project, contentId: $content }) {
+      item { id }
+    }
+  }' \
+  -F project="[PROJECT_ID]" \
+  -F content="$ISSUE_NODE_ID" \
+  --jq '.data.addProjectV2ItemById.item.id'
 ```
 
-**Idempotent**: `addProjectV2ItemById` on an issue that is already an item returns that existing item instead of duplicating it, so this step is safe to run unconditionally — including as a precondition of every status write, without a preceding existence check.
+**Idempotent**: `addProjectV2ItemById` on an issue that is already an item returns that existing item instead of duplicating it, so this step is safe to run unconditionally — including as a precondition of every status write, without a preceding existence check. Prefer that unconditional shape: a Step 2 that returned a stale or partially-paginated result otherwise reaches Step 3 with no membership.
 
-**No project configured (minimal board, D4)**: the membership step **no-ops**, consistent with the existing "no board state maps to this macrostate" degradation in [canonical-states.md](canonical-states.md). It is never a HALT for a project that legitimately has no board.
+**No project configured at all**: a project with **no board at all** has no field to write, so the membership step **no-ops** — it is **never a HALT** for a project that legitimately has no board. This is its own degradation, and it is **not** the one in [canonical-states.md](canonical-states.md): that document's write rule 5 **HALTs** when a board _exists_ but no board state maps to the target macrostate. Nor is it the D4 readiness fallback ([definition-of-ready-and-done.md](definition-of-ready-and-done.md)), which is a board that exists and lacks a _Ready column_.
+
+The no-op applies **only** to the Step 1 outcome "discovery succeeded and returned no project". A discovery that **failed** — error, 404, permission denied — is **reported**, never absorbed as a no-op; otherwise this branch launders an error into a success and reproduces the very defect the empty-id rule above forbids.
 
 #### Step 3: Update the Status Field
 

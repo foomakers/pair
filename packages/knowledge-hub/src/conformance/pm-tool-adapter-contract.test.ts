@@ -13,8 +13,8 @@ import { join } from 'path'
  *
  * The invariant: an item is only visible when it has BOTH board membership and
  * an assignee, and the two are independent. Membership semantics are per-tool
- * (explicit on GitHub Projects, implicit on Azure Boards and on a filesystem
- * backlog), so the mechanics live in the adapters and the skills stay
+ * (explicit on GitHub Projects; implicit on Azure Boards, on Linear, and on a
+ * filesystem backlog), so the mechanics live in the adapters and the skills stay
  * tool-agnostic. Observed 2026-07-30: #384 and #372 were open, assigned, green,
  * and absent from the board entirely — no gate caught it.
  *
@@ -22,10 +22,15 @@ import { join } from 'path'
  * from disk (`*-implementation.md`) in BOTH corpora — the dataset (authoring
  * source of truth) and the generated root mirror. A new adapter is enrolled in
  * the contract the moment its file lands; nothing here needs editing, and no
- * assertion breaks because the set grew. When `linear-implementation.md` arrives
- * (#389) it is enrolled automatically — supplying its two sections is #403's
- * job, and this guard going red is precisely how that omission stays visible
- * instead of shipping as another invisible-item bug.
+ * assertion breaks because the set grew.
+ *
+ * `linear-implementation.md` (#389, merged as 2da33a88) is enrolled and COVERED
+ * HERE: it landed in this same story, since #389 merging first put the obligation
+ * on #402 rather than on #403. Its semantics are implicit — `issueCreate`
+ * requires `teamId`, so an issue cannot exist without belonging to a team — and
+ * they are pinned by name in KNOWN_SEMANTICS below. #403 retains only the
+ * skill-contract half of the original split ($assignee in /write-issue's
+ * parameters, plus the tool-agnostic membership-precedes-state invariant).
  */
 
 const REL = '.pair/knowledge/guidelines/collaboration/project-management-tool'
@@ -125,6 +130,11 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
     { file: 'github-implementation.md', word: 'explicit' },
     { file: 'azure-devops-implementation.md', word: 'implicit' },
     { file: 'filesystem-implementation.md', word: 'implicit' },
+    // Linear is a known adapter with stated semantics as of this story: `issueCreate`
+    // requires `teamId`, so membership cannot be a separate call. Unpinned, a flip to
+    // "explicit" stays green and tells an agent to invent an `addProjectV2ItemById`
+    // equivalent Linear has no concept of — the precise AC4 failure.
+    { file: 'linear-implementation.md', word: 'implicit' },
   ]
   const knownCases = CORPORA.flatMap(({ label, dir }) =>
     KNOWN_SEMANTICS.filter(k => existsSync(join(dir, k.file))).map(k => ({
@@ -198,6 +208,25 @@ describe('PM-tool README — the adapter contract is a stated requirement (#402 
       expect(body).toContain('as part of the create, never as a follow-up step')
       expect(body).toContain('if the assignee cannot be resolved')
       expect(body).toContain('never drop it silently')
+      // Clause 4 — the one that encodes AC1+AC2 for every FUTURE adapter. It was
+      // unguarded while the test name already claimed it: deleting the whole clause
+      // from both corpora left the suite green.
+      expect(body).toContain('membership precedes the state write')
+      expect(body).toContain('never a silently skipped board write reported as success')
+    },
+  )
+
+  it.each(readmeCases)(
+    '$corpus: states the heading level and the pinned membership sentence form',
+    ({ content }) => {
+      const body = normalize(content)
+      // The prose used to be looser than the gate: `section()` matches `### <heading>`
+      // only, and KNOWN_SEMANTICS pins `board membership is <word>`. An author writing
+      // `## Item Visibility…` or `membership is implicit` without the `Board` prefix
+      // satisfied the contract as written and reddened CI with a non-obvious message.
+      expect(body).toContain(`level-3 section headed ### ${VISIBILITY_HEADING}`.toLowerCase())
+      expect(body).toContain('board membership is explicit')
+      expect(body).toContain('board membership is implicit')
     },
   )
 
@@ -343,6 +372,64 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
       // guard — the regression was reinstated and the suite stayed green.
       expect(content).not.toMatch(/gh (issue|pr) create --project \[PROJECT_ID\]/i)
       expect(normalize(content)).toContain("takes the project's title (or number), never its node")
+    },
+  )
+})
+
+/**
+ * The adapter is authoritative, but it is not the only place the KB teaches
+ * `gh issue create`. `issue-management/github-issues.md` carried two create
+ * recipes with neither `--assignee` nor `--project` — the exact item this story
+ * exists to forbid — and an agent reaching them by index or grep saw nothing
+ * pointing back at the adapter. Two contradictory recipes per tool is worse than
+ * one incomplete one, so the invariant is enforced KB-wide rather than per file.
+ *
+ * Whole-command discipline, same as the adapter assertions above: the flag must
+ * be on the `gh issue create` invocation itself, not merely somewhere in the file
+ * (a neighbouring `gh pr create --assignee` satisfied the naive form).
+ */
+const KB_ROOTS = [
+  { label: 'dataset', dir: join(__dirname, '../../dataset/.pair/knowledge') },
+  { label: 'generated root', dir: join(__dirname, '../../../../.pair/knowledge') },
+]
+
+function markdownFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) return markdownFiles(path)
+    return entry.name.endsWith('.md') ? [path] : []
+  })
+}
+
+/** Joins backslash continuations so a multi-line `gh issue create` reads as one command. */
+function logicalLines(markdown: string): string[] {
+  return markdown.replace(/\\\n\s*/g, ' ').split('\n')
+}
+
+const createRecipeCases = KB_ROOTS.flatMap(({ label, dir }) =>
+  markdownFiles(dir).flatMap(path =>
+    logicalLines(readFileSync(path, 'utf-8'))
+      .filter(line => line.includes('gh issue create '))
+      .map((command, index) => ({
+        corpus: label,
+        file: path.slice(dir.length + 1),
+        occurrence: index + 1,
+        command,
+      })),
+  ),
+)
+
+describe('KB-wide — no issue-create recipe omits the assignee (#402)', () => {
+  it('finds the create recipes it means to guard', () => {
+    // Non-empty guard, not a count: if the discovery breaks, the cases below would
+    // pass vacuously over an empty list.
+    expect(createRecipeCases.length).toBeGreaterThan(0)
+  })
+
+  it.each(createRecipeCases)(
+    '$corpus/$file recipe $occurrence sets --assignee on the create itself',
+    ({ command }) => {
+      expect(command).toMatch(/gh issue create\b[^\n]*--assignee\b/)
     },
   )
 })
