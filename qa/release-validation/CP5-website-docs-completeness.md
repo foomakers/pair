@@ -16,12 +16,13 @@
 
 1. For each URL below, issue an HTTP request and check status code
 
-**Getting Started** (6 pages):
+**Getting Started** (7 pages):
 - `$BASE_URL/docs/getting-started`
 - `$BASE_URL/docs/getting-started/quickstart`
 - `$BASE_URL/docs/getting-started/quickstart-solo`
 - `$BASE_URL/docs/getting-started/quickstart-team`
 - `$BASE_URL/docs/getting-started/quickstart-org`
+- `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
 - `$BASE_URL/docs/getting-started/checklist`
 
 **Concepts** (7 pages):
@@ -98,13 +99,13 @@
 
 ### Expected Result
 
-- All 60 URLs return HTTP 200
+- All 61 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 60 pages
+- Total: 61 pages
 
 ---
 
@@ -142,3 +143,9 @@
 
 - Title contains "Welcome" or equivalent
 - Has navigation or links to major doc sections
+
+---
+
+## Changelog
+
+- #278 (bootstrap quick mode): MT-CP501 page count 60 → 61, Getting Started 6 → 7 — added `/docs/getting-started/bootstrap-quick-mode`.
