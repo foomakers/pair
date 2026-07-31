@@ -159,6 +159,34 @@ assert_output_contains() {
   fi
 }
 
+# Assert a KNOWN-DEFECTIVE behavior is STILL present, naming the tracking issue on both
+# outcomes. Usage:
+#
+#   assert_pinned_bug "<issue-ref>" "<what is pinned>" <command...>
+#
+# <command...> must SUCCEED while the bug exists (wrap anything non-trivial in a scenario
+# function). A pinned assertion is meant to flip: when the fix lands, the failure reads
+# "the pinned bug appears FIXED — update this assertion" instead of looking like an
+# unexplained smoke regression, so nobody has to reverse-engineer the red run.
+#
+# Reach: this suite is NOT run by any GitHub workflow today — it fires only when someone
+# runs `pnpm smoke-tests` (or a single scenario) locally. A pinned assertion is therefore a
+# manual gate, not a CI guarantee; the gap is tracked in foomakers/pair#400.
+assert_pinned_bug() {
+  local issue="$1"
+  local description="$2"
+  shift 2
+
+  if "$@"; then
+    log_warn "Pinned bug still present ($issue): $description"
+    return 0
+  fi
+
+  log_fail "PINNED BUG APPEARS FIXED ($issue): $description"
+  log_fail "  -> good news: update this assertion (and its scenario comment) to the fixed behavior."
+  return 1
+}
+
 # Ensure a TMP_DIR is available when scenarios are run standalone
 ensure_tmp_dir() {
   if [ -z "${TMP_DIR:-}" ]; then

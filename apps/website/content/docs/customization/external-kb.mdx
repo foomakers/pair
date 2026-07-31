@@ -1,0 +1,193 @@
+---
+title: Scaffold an External KB
+description: Create a private, self-hosted, or forked Knowledge Base repository with pair-cli scaffold-kb, and release it with the generated script.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+`pair-cli scaffold-kb` creates an **external Knowledge Base repository**: a repo whose
+only job is to hold knowledge and skills, package them, and publish them. A project
+installs it through the normal `pair install --source <git-url-or-path>` path — no custom
+tooling, no special-casing in the CLI (see the ZIP caveat under
+[Install it in a project](#install-it-in-a-project)).
+
+Use it when you want your own KB (private, self-hosted, or a fork) instead of
+hand-assembling the structure described in [Publish a Knowledge Base](/docs/customization/organization).
+
+## Scaffold the repository
+
+```bash
+# in a new, empty directory
+pair-cli scaffold-kb
+
+# or target a directory explicitly
+pair-cli scaffold-kb ../acme-kb --name "Acme KB"
+```
+
+Result:
+
+```text
+acme-kb/
+├── .pair/knowledge/          # your guidelines and how-tos
+│   └── README.md             # seed (yours to replace)
+├── .skills/                  # your agent skills
+│   └── example-skill/SKILL.md
+├── .github/workflows/release.yml   # tag v* → packaged release (github host only)
+├── scripts/release.sh        # packages + publishes a version
+├── pair.config.json          # the registries this KB ships
+├── .gitignore                # excludes dist/, *.zip, credentials
+└── README.md                 # operational guide for maintainers
+```
+
+There is deliberately **no `.pair/adoption/`**: adoption files describe a configured
+project, while a KB is knowledge. Consuming projects keep their own adoption files.
+
+### Options
+
+`[path]`, `--name`, `--host` and `--force` — with the `--name` validation rules, why `--host` is
+never inferred from the target's remote, and what `--force` does *not* bypass — are documented once
+in the [CLI reference](/docs/reference/cli/commands#scaffold-kb). This page covers the lifecycle
+around the command, not its syntax.
+
+## What the KB declares
+
+`pair.config.json` declares exactly two registries — knowledge and skills (**abridged**
+below: the generated file also carries a `description` on each registry, and the `skills`
+registry lists the canonical `.claude/skills/` target plus five `symlink` targets —
+`.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/`,
+`.windsurf/skills/` — so every agent tool picks the skills up. Those extra targets are the
+scaffold's, not something you added):
+
+```json
+{
+  "asset_registries": {
+    "knowledge": {
+      "source": ".pair/knowledge",
+      "behavior": "mirror",
+      "targets": [{ "path": ".pair/knowledge", "mode": "canonical" }]
+    },
+    "skills": {
+      "source": ".skills",
+      "behavior": "overwrite",
+      "flatten": true,
+      "prefix": "acme-kb",
+      "targets": [{ "path": ".claude/skills/", "mode": "canonical" }]
+    }
+  }
+}
+```
+
+The `prefix` is meant to namespace this KB's skills once installed
+(`acme-kb-example-skill`), so two KBs never collide. Today it only takes effect if the
+consuming project adopts this config: `pair install --source` resolves the **consuming**
+project's `pair.config.json`, never the source KB's, so with a default project the
+skills install as `pair-example-skill`. Copy this file into the consuming project to get
+the declared prefix. Tracked in
+[foomakers/pair#397](https://github.com/foomakers/pair/issues/397).
+
+## Add content
+
+1. Write guidelines and how-tos under `.pair/knowledge/`.
+2. Add each skill as `.skills/<skill-name>/SKILL.md` with `name` and `description` frontmatter.
+3. Commit. Nothing else to wire up — the registries above already cover both paths.
+
+## Cut a release
+
+```bash
+bash scripts/release.sh 1.0.0
+```
+
+The script wraps the existing [`pair package`](/docs/reference/cli/commands#package)
+command — the same mechanism the official KB uses — and writes
+`dist/<kb-slug>-1.0.0.zip`. On the `github` host it then tags `v1.0.0` and creates a
+GitHub release with the ZIP attached. Pushing a `v*` tag runs the same script in CI via
+`.github/workflows/release.yml`.
+
+The generated script pins the pair-cli version it invokes (the version that scaffolded
+the repo), so a release cut today and one cut in six months package identically. Set
+`PAIR_CLI` to move deliberately:
+`PAIR_CLI="npx --yes @foomakers/pair-cli@latest" bash scripts/release.sh 1.0.0`.
+
+Tagging only ever happens in the KB repository itself. If you scaffolded inside another
+repository's working tree, the script detects that its directory is not that repo's root
+and takes the manual-publish path instead of tagging the enclosing repository; if the
+tag cannot be pushed, the local tag is removed again.
+
+### Hosts without automated release publishing
+
+Publishing never happens inside `pair-cli` — it lives entirely in the generated script,
+which keeps the CLI code-host agnostic. When the `gh` CLI is missing, the KB directory is
+not the root of its own git repository, or you scaffolded with `--host generic`, the
+script stops after packaging and tells you where the ZIP is:
+
+```text
+==> Packaged: dist/acme-kb-1.0.0.zip
+    Your KB package is ready at dist/acme-kb-1.0.0.zip — publish it however your org does:
+    attach it to a release, upload it to an artifact store, or serve it over HTTP.
+    Consumers install it with: pair-cli install --source <git-url-or-path-of-this-KB>
+```
+
+## Install it in a project
+
+```bash
+# from the repository (git)
+pair-cli install --source https://github.com/acme/acme-kb.git
+
+# from a local clone
+pair-cli install --source ../acme-kb --offline
+```
+
+<Callout type="warn">
+  **Installing straight from a release ZIP is not equivalent yet.** `pair install --source path-or-url-of-the-zip` extracts the
+  external KB into the version-keyed cache slot (`~/.pair/kb/` followed by the CLI
+  version) that is shared with the official KB, mixing the two and rewriting that
+  slot's `manifest.json` for every project on the machine. Publish the ZIP as your
+  release artifact, but point consumers at the repository (git URL) or a local clone
+  until [foomakers/pair#395](https://github.com/foomakers/pair/issues/395) is fixed.
+</Callout>
+
+Registries the external KB does not ship (for example `adoption`, `github`) are currently
+counted as **failed** in the install summary, so a successful install of an external KB
+ends with a line like:
+
+```text
+! Installation finished with errors (2 ok, 3 failed, 79ms)
+```
+
+The command still exits `0` and everything the KB ships is installed — the registries it
+does not ship simply have no source to copy from. Making them report as skipped is
+tracked in [foomakers/pair#396](https://github.com/foomakers/pair/issues/396). See
+[Install from URL or Path](/docs/customization/install-from-url) for every source form.
+
+A project consumes **one** distribution channel for a given skill set: an external KB
+like this one, or the marketplace — not both.
+
+## Re-run it safely
+
+`scaffold-kb` is idempotent: re-running it against its own output never corrupts or
+duplicates anything.
+
+| File                                                          | On re-run                                             |
+| ------------------------------------------------------------- | ----------------------------------------------------- |
+| `pair.config.json`, `README.md`, `.gitignore`, `scripts/release.sh`, workflow | regenerated only after confirmation (or `--force`) |
+| Anything under `.pair/knowledge/` or `.skills/`               | never touched                                          |
+| Unmodified files                                              | left as they are, reported as unchanged                |
+| Files of a **different** `--host` (e.g. the workflow after switching to `generic`) | left in place and named in the report as not managed by the current host |
+
+Without a terminal to ask (CI, scripts), a modified scaffold-owned file is **kept** and
+reported as skipped — nothing is silently overwritten. Use `--force` to regenerate
+deliberately.
+
+Switching `--host` does not delete the previous host's files, because `scaffold-kb` never
+destroys anything on disk. Re-running with `--host generic` in a repo scaffolded for GitHub
+therefore leaves `.github/workflows/release.yml` behind, where it keeps running on every
+`v*` tag push while the regenerated `scripts/release.sh` no longer publishes a release. The
+report names it — `.github/workflows/release.yml exists but is not managed by --host generic`
+— and deleting it is your call.
+
+## Related
+
+- [Publish a Knowledge Base](/docs/customization/organization) — authoring, packaging, and distribution in depth
+- [CLI Commands](/docs/reference/cli/commands#scaffold-kb) — `scaffold-kb` reference
+- [Install from URL or Path](/docs/customization/install-from-url) — every KB source form
+- [KB Structure](/docs/reference/kb-structure) — full directory layout

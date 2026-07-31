@@ -6,6 +6,7 @@ import chalk from 'chalk'
 
 import { commandRegistry } from './commands'
 import { dispatchCommand } from './commands/dispatcher'
+import { requiresKbBootstrap } from './commands/bootstrap-policy'
 import {
   fileSystemService,
   FileSystemService,
@@ -172,7 +173,18 @@ function registerCommandFromMetadata(
 ): void {
   const { fsService, httpClient, version } = deps
   const cmdConfig = commandRegistry[commandName]
-  const cmd = prog.command(cmdConfig.metadata.name).description(cmdConfig.metadata.description)
+  const cmd = prog
+    .command(cmdConfig.metadata.name)
+    .description(cmdConfig.metadata.description)
+    // CLI-WIDE RULE (deliberate, every command): Commander tolerates extra positionals
+    // by default, which silently swallows an unquoted option value (`--name Acme KB` →
+    // name "Acme") and hides each parser's positional-arity validation. Rejecting them
+    // is a behavior change for any command that used to ignore a stray argument, so it
+    // is documented once as a cross-command rule in reference/cli/commands.mdx
+    // ("Rules that apply to every command") and reference/specs/cli-contracts.mdx
+    // ("CLI-Wide Rules") — not as a scaffold-kb detail. Pinned by cli.test.ts
+    // ("CLI-wide rule: excess positional arguments are rejected").
+    .allowExcessArguments(false)
 
   addCommandOptions(cmd, cmdConfig.metadata.options)
   cmd.addHelpText(
@@ -236,9 +248,8 @@ function attachPreActionHook(
     // Skip bootstrap for root command (no subcommand matched)
     if (thisCommand === prog) return
 
-    // Skip bootstrap for package command - it doesn't need KB
-    const cmdName = actionCommand.name()
-    if (cmdName === 'package') return
+    // Skip bootstrap for KB-producing commands (package, scaffold-kb) — they don't need a KB
+    if (!requiresKbBootstrap(actionCommand.name())) return
 
     // Apply global log level or legacy --verbose alias if provided
     const globalOptions = prog.opts<{ logLevel?: string; verbose?: boolean }>()

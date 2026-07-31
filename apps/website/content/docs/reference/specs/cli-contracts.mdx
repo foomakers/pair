@@ -5,6 +5,20 @@ description: Technical specification for pair-cli command contracts, TypeScript 
 
 Technical specification for `pair-cli` command contracts including TypeScript types, validation rules, error handling, and exit codes.
 
+## CLI-Wide Rules
+
+These apply to **every** command below, not to a single one.
+
+- **Excess positionals are rejected.** Commander runs with `allowExcessArguments(false)` for all
+  registered commands, so a stray positional fails with `error: too many arguments for '<command>'`
+  and exit code 1 instead of being silently dropped. This makes each command's positional-arity
+  validation reachable, and catches the classic unquoted option value (`--name Acme KB` used to
+  bind `name` to `Acme` and discard `KB`). This is a behavior change — earlier releases ignored the
+  extra argument, so a wrapper or CI invocation carrying one (e.g. `pair install ./a ./b`) now
+  fails; drop the extra argument or quote the value.
+  [GitHub Releases](https://github.com/foomakers/pair/releases) names the release that introduced
+  it.
+
 ## Command Option Types
 
 ### Base Types
@@ -103,6 +117,35 @@ export interface ManifestMetadata {
   organization?: OrganizationMetadata
 }
 ```
+
+### Scaffold-KB Command
+
+```typescript
+export interface ScaffoldKbCommandConfig {
+  command: 'scaffold-kb'
+  path: string // target directory, default: '.'
+  host: 'github' | 'generic' // default: 'github'
+  force: boolean // default: false
+  name?: string // default: derived from the target directory basename
+}
+
+/** Ownership decides the re-scaffold policy */
+export type ScaffoldFileKind = 'scaffold-owned' | 'seed'
+
+export type FileAction = 'created' | 'overwritten' | 'unchanged' | 'skipped'
+```
+
+Validation: `--host` must be `github` or `generic`; `--name` must be non-empty, free of
+newlines/control characters and of `${{` (GitHub Actions would evaluate it as a live
+expression in the generated workflow), and at most 100 characters (it is embedded in
+generated YAML and bash); at most one positional argument (extra positionals are rejected — see
+[CLI-Wide Rules](#cli-wide-rules), which applies to every command).
+Refused targets: a path that exists and is not a directory, or a configured pair project
+(`.pair/adoption/` present) — not bypassable with `--force`.
+Re-scaffold policy: `seed` files (KB content) are never overwritten; `scaffold-owned`
+files are regenerated only when identical-check fails AND (`--force` OR interactive
+confirmation) — otherwise reported as `skipped`. The generated `scripts/release.sh` is
+written with mode `0755`.
 
 ### KB Verify Command
 

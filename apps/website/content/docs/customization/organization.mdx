@@ -45,7 +45,16 @@ A Knowledge Base follows the `.pair/` directory convention:
 
 ### Starting from scratch
 
-Create the directory structure manually:
+Fastest path — let the CLI scaffold the repository (structure, `pair.config.json`,
+README, `.gitignore`, and a release script):
+
+```bash
+pair-cli scaffold-kb ../acme-kb --name "Acme KB"
+```
+
+See [Scaffold an External KB](/docs/customization/external-kb).
+
+Or create the directory structure manually:
 
 ```bash
 mkdir -p .pair/knowledge/guidelines .pair/knowledge/how-to

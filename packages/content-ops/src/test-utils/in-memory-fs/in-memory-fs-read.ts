@@ -55,6 +55,11 @@ export function getContent(state: InMemoryFsState, path: string): string | undef
   return state.files.get(resolvedPath)
 }
 
+export function getMode(state: InMemoryFsState, path: string): number | undefined {
+  const resolvedPath = state.resolvePath(path)
+  return state.modes.get(resolvedPath)
+}
+
 export async function isFile(state: InMemoryFsState, path: string): Promise<boolean> {
   return stat(state, path).then(stats => stats.isFile())
 }

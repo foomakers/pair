@@ -263,6 +263,7 @@ if [ "$IS_CI" = "true" ]; then
     "kb-validate.sh"
     "source-resolution.sh"
     "install-preconditions.sh"
+    "scaffold-kb.sh"
     "default-resolution.sh"
     "tier-aware-gate.sh"
     "coverage-gate.sh"
