@@ -170,7 +170,8 @@ function isExcludedEntry(context: CopyDirContext, oldEntry: string): boolean {
  * source, so entry paths keep resolving against the same base at every depth.
  */
 function descendContext(context: CopyDirContext, oldEntry: string, newEntry: string) {
-  const { fileService, folderBehavior, defaultBehavior, datasetRoot, exclude, excludeRoot } = context
+  const { fileService, folderBehavior, defaultBehavior, datasetRoot, exclude, excludeRoot } =
+    context
   return {
     fileService,
     oldDir: oldEntry,
