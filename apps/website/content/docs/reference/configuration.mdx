@@ -176,7 +176,7 @@ pair validate-config --config ./custom-config.json
 - Required fields present (`behavior`, `source`, `description`)
 - Behavior values are valid (`mirror`, `add`, `overwrite`, `skip`)
 - Target paths are accessible
-- Transform config is valid (non-empty prefix, not combined with symlink mode)
+- Transform config is valid (non-empty prefix, not combined with symlink mode; `flattenDepth` a positive integer, and only alongside `flatten: true`)
 - Source paths exist (if specified)
 - Include patterns are valid arrays
 - No registry's `target` overlaps a reserved path — the working area (default or overridden `working_path`) — and `working_path` is project-relative; see [Working Area Override](#working-area-override)

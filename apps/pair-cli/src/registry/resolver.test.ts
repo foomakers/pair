@@ -33,6 +33,25 @@ describe('registry resolver', () => {
     expect(registries['knowledge']?.flattenDepth).toBeUndefined()
   })
 
+  // An explicit null is a config MISTAKE, not an omission: dropping it here would
+  // silently restore the unbounded flatten this story removed. Carried through so
+  // validateFlattenDepthField rejects it by name.
+  it('carries an explicit null flattenDepth through to validation instead of dropping it', () => {
+    const config = {
+      asset_registries: {
+        skills: {
+          source: '.skills',
+          flatten: true,
+          flattenDepth: null,
+          targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        },
+      },
+    }
+    const registries = extractRegistries(config)
+    expect('flattenDepth' in (registries['skills'] as object)).toBe(true)
+    expect(registries['skills']?.flattenDepth).toBeNull()
+  })
+
   it('resolveTarget correctly resolves relative and absolute targets', () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
     const config = {

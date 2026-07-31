@@ -80,7 +80,10 @@ function normalizeRegistryConfig(name: string, raw: Record<string, unknown>): Re
     // Carried through as-is (no coercion): validateFlattenDepthField rejects a
     // non-positive-integer loudly rather than letting a config typo degrade into
     // an unbounded flatten, which is exactly the #407 defect.
-    ...(raw['flattenDepth'] != null && { flattenDepth: raw['flattenDepth'] as number }),
+    // `!== undefined`, not `!= null`: an explicit `"flattenDepth": null` must reach
+    // validateFlattenDepthField and be rejected by name, not be silently dropped into
+    // the unbounded default — a null is a config mistake, not an omission.
+    ...(raw['flattenDepth'] !== undefined && { flattenDepth: raw['flattenDepth'] as number }),
     ...(raw['prefix'] != null && { prefix: String(raw['prefix']) }),
     targets,
   }

@@ -194,13 +194,9 @@ export function datasetSkillArtifacts(tree: DatasetTree): string[] {
  *
  * Composes the REAL `transformPath` over the artifact's dataset directory with
  * the registry's options — exactly what the copy pipeline's per-file transform
- * does (`dirname(file)` → `transformPath` → join the untouched file name). This
- * is why a NESTED sub-directory lands in its OWN flattened top-level dir
- * (`process/review/references/deep.md` → `pair-process-review-references/deep.md`)
- * rather than under a preserved `references/`: the pipeline flattens every
- * directory segment, not just the skill's own.
+ * does (`dirname(file)` → `transformPath` → join the untouched file name).
  *
- * Since #407 the mapping is BOUNDED: `SKILL_COPY_OPTS.flattenDepth` is the
+ * The mapping is BOUNDED: `SKILL_COPY_OPTS.flattenDepth` is the
  * registry's entry depth, so a third segment (`references/`) is preserved as a
  * real sub-path and a sub-doc installs INSIDE its skill
  * (`process/review/references/deep.md` → `pair-process-review/references/deep.md`),
