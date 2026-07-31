@@ -383,6 +383,45 @@ mcp__github__issue_write:
 # Step 3: Repeat for initiative (epic's parent)
 ```
 
+### Item Visibility: Membership and Assignee
+
+**Visibility takes two independent writes, and neither substitutes for the other.**
+
+| Missing            | Symptom                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| Assignee           | Open, on the board, green — and absent from the assignee-filtered view teams read   |
+| Project membership | Open, assigned, green — and absent from the board entirely                          |
+
+**Board membership is explicit on GitHub**: an issue and a project item are **distinct objects**, and `gh issue create` produces only the issue. Membership is a separate `addProjectV2ItemById` call (Step 2b below). This is tool-specific — on tools where membership is implicit, the guide says so; never assume the GitHub shape elsewhere.
+
+The assignee is required by the Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md): the board is read filtered by assignee. Set it **as part of the create**, never as a follow-up step.
+
+#### Create an Issue with its Assignee
+
+```text
+# MCP-first
+mcp__github__issue_write:
+  method: create
+  owner: [org]
+  repo: [repo]
+  title: "[item title]"
+  body: "[body — markdown per the item's template]"
+  labels: ["[type label]", "[classification labels]"]
+  assignees: ["[login]"]
+```
+
+```bash
+# CLI fallback
+gh issue create --title "[title]" --body-file [file] --assignee "[login]"
+
+# Existing issue — --add-assignee adds without replacing, so it is safe to run unconditionally
+gh issue edit [NUMBER] --add-assignee "[login]"
+```
+
+A pull request needs the same write: `gh pr create --assignee "[login]"`. A PR's `author` is **not** its `assignees`, so an author-only PR is invisible in an assignee-filtered view.
+
+**If the assignee cannot be resolved** (not a repository collaborator, org/SSO restriction): **report it** — never drop it silently, which reproduces the invisibility this recipe exists to prevent.
+
 ### Project Board Status Transitions
 
 Update the project board status field for intermediate transitions (Todo → Refined, Refined → In Progress) and final transitions (→ Done).
@@ -430,7 +469,46 @@ gh api graphql -f query='{
 # Use pageInfo.endCursor for pagination if needed
 ```
 
+**Branch on the result — an empty id is a state, not an error to ignore:**
+
+| Lookup result                | Meaning                                    | Next                                        |
+| ---------------------------- | ------------------------------------------ | ------------------------------------------- |
+| An item id                   | The issue is already a project item        | Step 3                                      |
+| No match after the last page | The issue is **not a project item yet**    | **Step 2b**, then Step 3 on the returned id |
+| No project configured at all | Minimal board (D4) — nothing to write      | No-op, not a failure (see below)            |
+
+Never carry an empty id into Step 3: `updateProjectV2ItemFieldValue` fails with `gh: Could not resolve to a node with the global id of ''`. **And never treat the empty id as "board write skipped" and report success** — a silently skipped board write is exactly how an item ends up open, assigned, green, and absent from the board. Paginate to the last page before concluding "not an item": a match on page 3 that was never fetched looks identical to no match.
+
+**When the issue belongs to more than one project**: target the project named in [way-of-working.md](../../../../adoption/tech/way-of-working.md). Never take the first project found.
+
+#### Step 2b: Add the Issue as a Project Item (when Step 2 found nothing)
+
+Membership must exist before the status field can be written — the field lives on the **item**, not on the issue.
+
+```bash
+# Get the issue's node id, then add it to the project
+ISSUE_NODE_ID=$(gh api graphql -f query='{
+  repository(owner: "[ORG]", name: "[REPO]") {
+    issue(number: [ISSUE_NUMBER]) { id }
+  }
+}' --jq '.data.repository.issue.id')
+
+# Returns the item id — feed it straight into Step 3
+gh api graphql -f query="mutation {
+  addProjectV2ItemById(input: {
+    projectId: \"[PROJECT_ID]\"
+    contentId: \"$ISSUE_NODE_ID\"
+  }) { item { id } }
+}" --jq '.data.addProjectV2ItemById.item.id'
+```
+
+**Idempotent**: `addProjectV2ItemById` on an issue that is already an item returns that existing item instead of duplicating it, so this step is safe to run unconditionally — including as a precondition of every status write, without a preceding existence check.
+
+**No project configured (minimal board, D4)**: the membership step **no-ops**, consistent with the existing "no board state maps to this macrostate" degradation in [canonical-states.md](canonical-states.md). It is never a HALT for a project that legitimately has no board.
+
 #### Step 3: Update the Status Field
+
+Requires an item id from Step 2 or Step 2b — the item exists by this point, by construction.
 
 ```bash
 # Transition to any status (e.g., Ready, In Progress, Done)

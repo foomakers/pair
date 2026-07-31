@@ -74,6 +74,21 @@ All implementation guides include:
 - ✅ Team collaboration patterns
 - ✅ Development workflow integration
 
+### Adapter Contract — Required Coverage
+
+Every implementation guide in this directory is an **adapter**: skills stay tool-agnostic and delegate tool-specific mechanics here. An adapter that omits one of the following is incomplete, and the omission surfaces as an item that exists, is open, is green — and is invisible to the team.
+
+**Membership and assignee are independent, and both are required for visibility** — assigned but not a member is invisible on the board; a member but unassigned is invisible in the assignee-filtered view the team reads. Fixing one does not fix the other.
+
+Every adapter therefore carries a section headed **`Item Visibility: Membership and Assignee`** documenting:
+
+1. **Board membership semantics** — whether membership in the tracked view is **explicit** (a separate call, e.g. GitHub Projects' `addProjectV2ItemById`, because an issue and a project item are distinct objects) or **implicit** (creating the item is its membership, e.g. Azure Boards' team project, or the file's location in a filesystem backlog). State it either way, in the words `membership is explicit` / `membership is implicit`: **silence is what makes an agent invent an add-item step that does not exist for that tool**, or skip one that does.
+2. **The assignee mechanic** — the concrete field/flag that sets the assignee `as part of the create, never as a follow-up step`, per the Assignment rule in the project's `way-of-working.md`.
+3. **The unresolvable-assignee behaviour** — `if the assignee cannot be resolved`, report it and `never drop it silently`. Dropping it reproduces the invisibility the section exists to remove.
+4. **The status-write precondition** — for explicit-membership tools, that membership precedes the state write, plus what happens when the item lookup returns nothing (an explicit branch, never an unhandled empty value and never a silently skipped board write reported as success).
+
+Conformance coverage is **data-driven over the `*-implementation.md` files present**, in both the dataset and the generated root mirror — see `packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts`. Adding an adapter therefore enrols it in the contract automatically; **no adapter count is asserted anywhere**, and an omission fails the gate instead of being discovered in production.
+
 ## Tool Selection Decision Framework
 
 ### Decision Matrix

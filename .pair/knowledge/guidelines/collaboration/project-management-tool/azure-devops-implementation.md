@@ -148,16 +148,28 @@ Azure Boards states differ per process and per team board columns. Skills resolv
 
 ## Working with Work Items
 
+### Item Visibility: Membership and Assignee
+
+**Board membership is implicit on Azure Boards.** A work item belongs to its team project the moment it is created (`--project`), and the board is a view over the project's work items — there is **no separate add-to-board call**. Do not invent one: unlike GitHub Projects, where an issue and a project item are distinct objects requiring an explicit `addProjectV2ItemById`, here creating the work item **is** its membership. Area path and iteration path refine _which_ board view shows it, they do not grant membership.
+
+**The assignee is not implicit** and is still required — the board is read filtered by assignee (Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md)). Set it via `--assigned-to` as part of the create, never as a follow-up step. **If the assignee cannot be resolved** (not a project member, AAD/licensing restriction): **report it** — never drop it silently, which leaves the item invisible in the filtered view.
+
 ### Create
 
 ```bash
-# Create a user story (PBI in Scrum process)
+# Create a user story (PBI in Scrum process) — assignee set as part of the create
 az boards work-item create \
   --type "Product Backlog Item" \
   --title "[Story title]" \
   --description "[Story body — markdown per user-story-template]" \
+  --assigned-to "[user@example.com]" \
   --project <project>
+
+# Existing work item: set or correct the assignee
+az boards work-item update --id [id] --assigned-to "[user@example.com]"
 ```
+
+Azure Repos pull requests carry a creator and reviewers, **not an assignee field** — so the assignee lives on the linked work item. Link the PR with `--work-items` (see the PR recipe below) so the assignee-filtered board view reaches the PR through its work item.
 
 ### Link Parent-Child
 

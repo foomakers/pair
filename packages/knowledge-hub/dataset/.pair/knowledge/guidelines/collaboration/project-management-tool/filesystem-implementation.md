@@ -203,6 +203,18 @@ Status changes are reflected by moving files between directories:
 - **under-review/**: Completed work awaiting review/validation
 - **completed/**: Finished and accepted items
 
+### Item Visibility: Membership and Assignee
+
+**Board membership is implicit here — the file's location _is_ its membership.** Writing the file under `03-user-stories/[status]/` puts the item in the tracked view; there is **no separate add-to-board step**. Do not invent one: unlike GitHub Projects, where an issue and a project item are distinct objects requiring an explicit `addProjectV2ItemById`, a file that exists in the backlog tree is already a member of it. Consequently a status write can never fail for "not a member yet" — the failure mode is a file in the _wrong_ directory, not a missing one.
+
+**The assignee is not implicit** and is still required — the backlog is read filtered by assignee (Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md)). There is no assignee field in a filesystem board, so it lives in the item file's header as an **`Assignee`** line, written as part of the create, never as a follow-up step:
+
+```markdown
+**Assignee**: [name or handle of the person the work is done for]
+```
+
+Grep is the filtered view: `grep -rl 'Assignee.*<name>' .pair/adoption/product/backlog/` — which is exactly why an item with the line missing is invisible. **If the assignee cannot be resolved**: **report it** — never drop it silently by writing the file with the line omitted or left as a placeholder.
+
 ## Working with Initiatives
 
 ### Creating Initiatives
@@ -333,6 +345,7 @@ Fill out all required sections:
 - **Parent Epic**: Link to parent epic file
 - **Acceptance Criteria**: Clear, testable conditions
 - **Priority and Sizing**: Business priority and development estimate
+- **Assignee**: the person the work is done for — required, see [Item Visibility](#item-visibility-membership-and-assignee)
 
 ### Refining User Stories
 
