@@ -16,7 +16,7 @@
 
 1. For each URL below, issue an HTTP request and check status code
 
-**Getting Started** (6 pages):
+**Getting Started** (7 pages):
 - `$BASE_URL/docs/getting-started`
 - `$BASE_URL/docs/getting-started/quickstart`
 - `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
@@ -99,13 +99,13 @@
 
 ### Expected Result
 
-- All 60 URLs return HTTP 200
+- All 61 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 60 pages
+- Total: 61 pages
 
 ---
 
