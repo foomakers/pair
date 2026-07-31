@@ -36,6 +36,7 @@ The **level sizes the discovery** — how wide the interview goes, how many slic
 ## The triple is a proposal
 
 The deduced triple (level, orientation, writer) is always **stated up-front** and is a proposal: the developer can override level or orientation in the same turn (equivalently, by passing `$level` / `$orientation`) — the writer follows from the root's type and the resolved level, never from an override of its own.
+
 ## `$domain-placed` — what phase 3 may claim, and when it must stay silent
 
 Phase 3 hands `/pair-process-plan-epics` the capability areas phase 2 already settled, so the writer's own domain step is a **confirm-only pass** and the developer approves **one** subdomain-catalog delta per run, not two. Two rules make that safe:

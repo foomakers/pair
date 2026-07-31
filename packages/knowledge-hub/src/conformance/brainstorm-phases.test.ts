@@ -829,9 +829,7 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     it(`${v.label} preamble admits the level is ASKED on the fallback row`, () => {
       // Review finding (round 3, Minor): the preamble claimed the level is deduced
       // "with $root", contradicting the matrix's own fallback row.
-      expect(preamble(v.content)).toMatch(
-        /or asked, on the fallback row/,
-      )
+      expect(preamble(v.content)).toMatch(/or asked, on the fallback row/)
     })
 
     it(`${v.label} states the $theme precedence when $root is also given`, () => {
