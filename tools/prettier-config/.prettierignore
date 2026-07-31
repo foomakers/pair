@@ -7,3 +7,10 @@ out/
 
 **/node_modules/
 **/.cache/
+
+# Generated build artifacts — never authored, so never formatted.
+# Before #394 the gate ran prettier in WRITE mode and silently rewrote these on
+# every push; in check mode they would BLOCK every push instead. A generated file
+# must be able to do neither.
+**/.source/
+**/test-results/

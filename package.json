@@ -28,9 +28,12 @@
     "docs:staleness": "pnpm --filter @pair/website docs:staleness",
     "skills:conformance": "pnpm --filter @pair/knowledge-hub skills:conformance",
     "dup:check": "jscpd apps packages",
-    "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md' && pnpm hygiene:check && pnpm docs:staleness && pnpm skills:conformance && pnpm dup:check",
+    "quality-gate": "turbo ts:check test lint && pnpm format:check && pnpm gate:composition && pnpm hygiene:check && pnpm docs:staleness && pnpm skills:conformance && pnpm dup:check",
     "e2e": "pnpm --filter @pair/website e2e",
-    "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup"
+    "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup",
+    "format": "turbo prettier:fix mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md'",
+    "format:check": "turbo prettier:check mdlint:check",
+    "gate:composition": "pnpm --filter @pair/dev-tools pre-push-gate:check"
   },
   "devDependencies": {
     "@changesets/cli": "catalog:",
