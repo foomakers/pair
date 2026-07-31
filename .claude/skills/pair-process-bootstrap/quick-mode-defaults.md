@@ -1,6 +1,6 @@
 # Bootstrap Quick Mode — Per-Decision Defaults
 
-Disclosed from [SKILL.md](SKILL.md) — the `$mode` selector and its two resolution depths. This file is bootstrap's **per-adopter delta** of the Guided / Quick Setup Convention (`.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md`): the convention owns the selector direction, the defaults cascade and the non-interactive safety rule. Bootstrap declares only which of its own decision points are defaultable, which cascade tier fills each, and which are still asked. There is **no bespoke** Quickstart resolution order — nothing below re-invents or re-orders the cascade.
+Disclosed from [SKILL.md](./SKILL.md) — the `$mode` selector and its two resolution depths. This file is bootstrap's **per-adopter delta** of the Guided / Quick Setup Convention (`.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md`): the convention owns the selector direction, the defaults cascade and the non-interactive safety rule. Bootstrap declares only which of its own decision points are defaultable, which cascade tier fills each, and which are still asked. There is **no bespoke** Quickstart resolution order — nothing below re-invents or re-orders the cascade.
 
 ## Selector
 
