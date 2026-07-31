@@ -22,10 +22,11 @@ Neither mode is universally "the default." Each adopter **declares its own defau
 - **Selector direction**: an explicit signal selects the *non-default* mode. A guided selector (a `--interactive` flag) opts into guided; a quick selector (an override argument) opts into quick. Absence of any signal → the adopter's declared default.
 - **Non-interactive safety**: guided needs a TTY. A detected non-interactive environment (no TTY, CI) can never run guided — the command must fail with a clear message or fall back to quick, and must never hang waiting for input it cannot receive.
 
-The two shipped adopters declare **opposite** defaults, which is precisely why "guided is always the default" is false:
+The shipped adopters declare **opposite** defaults, which is precisely why "guided is always the default" is false:
 
 - `pair package` declares **quick** as its default — a CLI/scripting-first command runs one-shot from resolved defaults, and guided is opt-in via `--interactive`.
 - the `assess-*` family declares **guided** as its default (Path C — Full Assessment), and quick is opt-in via an explicit `$choice` override (Path A).
+- `bootstrap` declares **guided** as its default — human-facing first-time setup asks rather than assumes — and quick is opt-in via `$mode: quick`. Its per-adopter delta (which decision points are defaultable, which tier fills each, which stay asked) lives beside the skill in `quick-mode-defaults.md`.
 
 Recommended default when adopting: a human-facing, first-time setup skill should lean **guided** (ask rather than silently assume); a scripting-first CLI command should lean **quick**. Whichever is chosen, declare it explicitly rather than leaving it implicit.
 
