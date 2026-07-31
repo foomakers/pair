@@ -152,4 +152,4 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - This skill **modifies PM tool state** — creates and extends epic issues linked to initiatives.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
-- Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../../../.skills/capability/map-subdomains/SKILL.md).
+- Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../pair-capability-map-subdomains/SKILL.md).

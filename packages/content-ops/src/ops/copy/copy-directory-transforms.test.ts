@@ -395,14 +395,60 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
       expect(skill).toContain('[deep dive](./references/deep.md)')
     })
 
-    // The remaining half of #407, deliberately NOT asserted as passing.
-    // `rebaseWithinMovedDir` only rebases targets INSIDE the file's own directory;
-    // `../SKILL.md` points at the PARENT, so it falls through to the source-root
-    // fallback and becomes `../../../source/process/review/SKILL.md` — a path back
-    // into the dataset layout. Fixing it means anchoring the rebase at the moved
-    // ENTRY (`process/review` → `pair-process-review`) rather than at the file's
-    // directory, which changes the rewriter's signature and its callers.
-    it.todo('rewrites a nested sub-doc back-link to stay ../SKILL.md (#407, link half)')
+    // The link half of #407. A sub-doc's link UP to its skill points at the
+    // PARENT directory, which the file's own dir-mapping cannot rebase — it only
+    // covers targets inside itself. Before the fix this fell through to the
+    // source-root fallback and became `../../../source/process/review/SKILL.md`:
+    // a path back into the dataset layout, dead in the install.
+    it('keeps a nested sub-doc back-link pointing at its own skill (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nDetail in [deep dive](./references/deep.md).',
+        '/dataset/source/process/review/references/deep.md':
+          '# Deep dive\nBack to [SKILL](../SKILL.md).',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      const deep = await fileService.readFile(
+        '/dataset/target/pair-process-review/references/deep.md',
+      )
+      // Both files moved together, so the relative path is still correct and the
+      // rewriter must leave it alone rather than re-root it.
+      expect(deep).toContain('[SKILL](../SKILL.md)')
+      expect(deep).not.toContain('source/process/review')
+    })
+
+    // The sibling case, which the same mechanism has to get right: when the
+    // nested dir does NOT move with its parent (unbounded flatten), the link up
+    // must be REWRITTEN to wherever the parent landed — not left alone.
+    it('rewrites the back-link when the nested dir becomes a sibling (unbounded)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+        '/dataset/source/process/review/references/deep.md':
+          '# Deep dive\nBack to [SKILL](../SKILL.md).',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', targets: [] },
+      })
+
+      const deep = await fileService.readFile(
+        '/dataset/target/pair-process-review-references/deep.md',
+      )
+      expect(deep).toContain('[SKILL](../pair-process-review/SKILL.md)')
+      expect(deep).not.toContain('source/process/review')
+    })
   })
 
   describe('mirror behavior — idempotent updates (AC4)', () => {

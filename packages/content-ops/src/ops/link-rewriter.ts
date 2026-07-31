@@ -18,6 +18,14 @@ export type RewriteLinksInFileParams = {
    *  `packages/kb/dataset`), links resolving under that subtree are re-rooted
    *  to datasetRoot so they point to the installed copy, not the source. */
   sourceContentRoot?: string
+  /**
+   * Every directory this copy moved, as absolute paths. A link can point OUTSIDE
+   * the file's own directory — a sub-doc's `../SKILL.md` points at its parent —
+   * and that parent may have moved too. Without this the target fell through to
+   * the source-root fallback and came out as a path back into the dataset layout,
+   * dead in the install (#407). Optional: absent, behaviour is unchanged.
+   */
+  movedDirs?: Array<{ originalDir: string; newDir: string }>
 }
 
 /**
@@ -93,6 +101,7 @@ type ComputeNewHrefParams = {
   newFileDir: string
   datasetRoot?: string
   sourceContentRoot?: string
+  movedDirs?: Array<{ originalDir: string; newDir: string }>
 }
 
 /**
@@ -106,12 +115,20 @@ function resolveAbsoluteTarget(params: {
   pathPart: string
   datasetRoot?: string
   sourceContentRoot?: string
+  movedDirs?: Array<{ originalDir: string; newDir: string }>
 }): string {
-  const { originalFileDir, newFileDir, pathPart, datasetRoot, sourceContentRoot } = params
+  const { originalFileDir, newFileDir, pathPart, datasetRoot, sourceContentRoot, movedDirs } =
+    params
   const absoluteTarget = posix.resolve(originalFileDir, pathPart)
 
   const rebased = rebaseWithinMovedDir(absoluteTarget, originalFileDir, newFileDir)
   if (rebased) return rebased
+  // The target is outside the file's own directory. It may still live in another
+  // directory this same copy moved — the commonest case being a sub-doc linking
+  // UP to its skill. Most specific (longest originalDir) wins, so a nested entry
+  // is preferred over its parent.
+  const viaSibling = rebaseWithinMovedDirs(absoluteTarget, movedDirs)
+  if (viaSibling) return viaSibling
   if (datasetRoot && sourceContentRoot) {
     return reRootTarget(absoluteTarget, datasetRoot, sourceContentRoot)
   }
@@ -119,18 +136,46 @@ function resolveAbsoluteTarget(params: {
 }
 
 /**
+ * Rebase a target through whichever moved directory contains it, preferring the
+ * most specific match. Returns null when no moved directory covers it, so the
+ * caller keeps its existing fallbacks.
+ */
+function rebaseWithinMovedDirs(
+  absoluteTarget: string,
+  movedDirs?: Array<{ originalDir: string; newDir: string }>,
+): string | null {
+  if (!movedDirs || movedDirs.length === 0) return null
+  const candidates = [...movedDirs].sort((a, b) => b.originalDir.length - a.originalDir.length)
+  for (const { originalDir, newDir } of candidates) {
+    const rebased = rebaseWithinMovedDir(absoluteTarget, originalDir, newDir)
+    if (rebased) return rebased
+  }
+  return null
+}
+
+/**
  * Computes the new href for a relative link after the file has moved.
  * Returns null if the link should not be rewritten (external, anchor, unchanged).
  */
-function computeNewHref(params: ComputeNewHrefParams): string | null {
-  const { href, originalFileDir, newFileDir, datasetRoot, sourceContentRoot } = params
+/**
+ * Splits a rewritable href into its path and anchor halves, or null when the
+ * link must be left alone: external, a pure anchor, or anchor-only after the
+ * split. Extracted from `computeNewHref` to keep it under the complexity ceiling.
+ */
+function splitRewritableHref(href: string): { pathPart: string; anchorPart: string } | null {
   if (isExternalLink(href) || href.startsWith('#')) return null
-
   const anchorIdx = href.indexOf('#')
   const pathPart = anchorIdx >= 0 ? href.slice(0, anchorIdx) : href
   const anchorPart = anchorIdx >= 0 ? href.slice(anchorIdx) : ''
-
   if (pathPart === '') return null // pure anchor link
+  return { pathPart, anchorPart }
+}
+
+function computeNewHref(params: ComputeNewHrefParams): string | null {
+  const { href, originalFileDir, newFileDir, datasetRoot, sourceContentRoot, movedDirs } = params
+  const split = splitRewritableHref(href)
+  if (!split) return null
+  const { pathPart, anchorPart } = split
 
   const absoluteTarget = resolveAbsoluteTarget({
     originalFileDir,
@@ -138,6 +183,7 @@ function computeNewHref(params: ComputeNewHrefParams): string | null {
     pathPart,
     ...(datasetRoot && { datasetRoot }),
     ...(sourceContentRoot && { sourceContentRoot }),
+    ...(movedDirs && { movedDirs }),
   })
 
   let newRelativePath = posix.relative(newFileDir, absoluteTarget)
@@ -205,7 +251,8 @@ function replaceHrefInNode(
  * Unresolvable links produce a warning but do not fail.
  */
 export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Promise<void> {
-  const { fileService, filePath, originalDir, newDir, datasetRoot, sourceContentRoot } = params
+  const { fileService, filePath, originalDir, newDir, datasetRoot, sourceContentRoot, movedDirs } =
+    params
 
   const content = await fileService.readFile(filePath)
   const links = await extractLinks(content)
@@ -230,6 +277,7 @@ export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Prom
       newFileDir,
       datasetRoot,
       ...(sourceContentRoot && { sourceContentRoot }),
+      ...(movedDirs && { movedDirs }),
     })
     if (!newHref) continue
 
@@ -254,6 +302,12 @@ export async function rewriteLinksAfterTransform(
 ): Promise<void> {
   const { fileService, pathMapping, datasetRoot, sourceContentRoot } = params
 
+  // Built once for the whole batch: every directory this copy moved, absolute.
+  const movedDirs = pathMapping.map(e => ({
+    originalDir: posix.join(datasetRoot, e.originalDir),
+    newDir: posix.join(datasetRoot, e.newDir),
+  }))
+
   for (const entry of pathMapping) {
     for (const filePath of entry.files) {
       if (!filePath.endsWith('.md')) continue
@@ -264,6 +318,7 @@ export async function rewriteLinksAfterTransform(
         newDir: entry.newDir,
         datasetRoot,
         ...(sourceContentRoot && { sourceContentRoot }),
+        movedDirs,
       })
     }
   }
