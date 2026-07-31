@@ -287,7 +287,7 @@ describe('diffSkillMd — compact line-level diff', () => {
  * Drift-injection: proves the guard FAILS on each drift class the copy
  * transform covers, then PASSES once reconciled. A synthetic mini dataset is
  * run through the SAME real pipeline; the transformed output is then corrupted
- * to simulate a stale root mirror, and `assertRootSkillMdMatches` must throw.
+ * to simulate a stale root mirror, and `assertRootArtifactMatches` must throw.
  *
  * The mini fixture is authored so the real transform performs all three
  * content rewrites: frontmatter `name:` sync, relative-link-depth bump
