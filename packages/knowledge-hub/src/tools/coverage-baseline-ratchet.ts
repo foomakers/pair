@@ -20,10 +20,14 @@
  *     fixpoint (`proposeBaseline` is idempotent on unchanged coverage), not
  *     `[skip ci]`.
  *   - AC6 — a refused write is classified and named (`classifyWriteRefusal`) and
- *     reported as a warning; the CLI exits 0.
- *   - Monotonic ratchet — `applyRaises` re-checks every proposal against the text
- *     currently on disk, so a higher value written by a concurrent run is never
- *     clobbered, and a value is never lowered.
+ *     reported as a warning; the CLI exits 0. That holds for an UNEXPECTED failure
+ *     too: `main` funnels everything except an argument-parsing bug (a
+ *     workflow-authoring error) into the same warning + exit 0.
+ *   - Monotonic ratchet — `applyRaises` re-checks every proposal against BOTH the
+ *     text currently on disk (the base-branch checkout) and the config as
+ *     committed on the open ratchet branch, so a higher value written by a
+ *     concurrent run is never clobbered on either ref, and a value is never
+ *     lowered.
  *
  * Per the gate-tooling ADL (2026-07-13) the logic lives HERE, white-box unit
  * tested, and the CI step + `coverage:ratchet` scripts are thin entrypoints; the
@@ -54,6 +58,17 @@ export const TOKEN_ENV = 'COVERAGE_RATCHET_TOKEN'
 
 /** Slug of the ADL that decided the PR-vs-push behaviour and the credential model. */
 export const ADL_SLUG = '2026-07-30-coverage-ratchet-pr-not-push'
+
+/**
+ * The git config key `actions/checkout` persists the (read-only) `GITHUB_TOKEN`
+ * into (its `persist-credentials` defaults to true). We need the SAME key for our
+ * own credential, and `extraHeader` is MULTI-valued: naively adding ours would
+ * make git send TWO `Authorization` headers and leave it to the server which one
+ * wins. The likely loser is ours — a refusal that AC6 turns into a warning on
+ * every base-branch push, i.e. a feature that never actually works and never says
+ * so. See `gitAuthConfig` for how that is made unambiguous.
+ */
+export const EXTRAHEADER_CONFIG_KEY = 'http.https://github.com/.extraheader'
 
 const DEFAULT_CONFIG_PATH = '.pair/adoption/tech/coverage-baseline.md'
 const DEFAULT_WOW_PATH = '.pair/adoption/tech/way-of-working.md'
@@ -92,26 +107,53 @@ export function readBaselineValue(configText: string, type: string): number | nu
   return /^\d+$/.test(raw) ? Number(raw) : null
 }
 
-/** Declared state of the `Coverage baseline commit-back` opt-in. */
-export type CommitBackFlag = 'enabled' | 'disabled' | 'absent'
+/** Declared state of a way-of-working quality flag. */
+export type FlagState = 'enabled' | 'disabled' | 'absent'
+
+/**
+ * A way-of-working flag is a LIST BULLET (`- **<Label>**: \`enabled\``), possibly
+ * nested. Anchoring to the bullet is not cosmetic: the KB documents these flags in
+ * prose (`... sets \`Coverage baseline commit-back: enabled\` ...`), and an adopter
+ * who quotes that sentence inside their own way-of-working must not thereby turn
+ * the flag on. An unanchored, first-match-wins search would do exactly that.
+ */
+const flagPattern = (label: string): RegExp =>
+  new RegExp(
+    `^[ \\t]*[-*][ \\t]*\\**[ \\t]*${label}[ \\t]*\\**[ \\t]*:[ \\t]*\`?[ \\t]*(enabled|disabled)`,
+    'im',
+  )
+
+const COMMIT_BACK_FLAG = flagPattern('coverage[ \\t]+baseline[ \\t]+commit-back')
+const GUARDRAIL_FLAG = flagPattern('coverage[ \\t]+guardrail')
+
+const readFlag = (text: string, pattern: RegExp): FlagState => {
+  const m = pattern.exec(text)
+  return m ? ((m[1] ?? '').toLowerCase() as FlagState) : 'absent'
+}
 
 /**
  * Read the opt-in from a way-of-working document. Absent => off: the framework
  * default ships `disabled`, so a project that never declares the flag behaves
  * exactly as before this story (AC1).
  */
-export function readCommitBackFlag(wayOfWorkingText: string): CommitBackFlag {
-  const m = /coverage\s+baseline\s+commit-back\**\s*:\s*`?\s*(enabled|disabled)/i.exec(
-    wayOfWorkingText,
-  )
-  return m ? ((m[1] ?? '').toLowerCase() as CommitBackFlag) : 'absent'
+export function readCommitBackFlag(wayOfWorkingText: string): FlagState {
+  return readFlag(wayOfWorkingText, COMMIT_BACK_FLAG)
+}
+
+/**
+ * Read the PARENT flag. The commit-back opt-in is nested under the coverage
+ * guardrail, and the nesting is enforced, not merely documented: ratcheting a
+ * baseline for a gate that never runs would raise a floor nothing checks.
+ */
+export function readGuardrailFlag(wayOfWorkingText: string): FlagState {
+  return readFlag(wayOfWorkingText, GUARDRAIL_FLAG)
 }
 
 // ---------------------------------------------------------------------------
 // Skip predicate (AC1 / AC4 / AC5)
 // ---------------------------------------------------------------------------
 
-export type SkipCode = 'flag-disabled' | 'not-base-push' | 'automated-commit'
+export type SkipCode = 'flag-disabled' | 'guardrail-disabled' | 'not-base-push' | 'automated-commit'
 
 export interface SkipDecision {
   skip: boolean
@@ -122,7 +164,9 @@ export interface SkipDecision {
 }
 
 export interface RunContext {
-  commitBackFlag: CommitBackFlag
+  commitBackFlag: FlagState
+  /** The PARENT `Coverage guardrail` flag — the ratchet is nested under it. */
+  guardrailFlag: FlagState
   /** `GITHUB_EVENT_NAME` — only `push` may write. */
   eventName: string
   /** `GITHUB_REF_NAME` — must equal `baseBranch`. */
@@ -132,23 +176,37 @@ export interface RunContext {
   headCommitMessage: string
 }
 
+/**
+ * The subject GitHub generates for a plain (non-squash) merge of the ratchet PR.
+ * Matched as a whole SUBJECT LINE, not as a substring: a message that merely
+ * mentions the branch name — a story commit, a revert, this very PR — is not the
+ * ratchet's own commit, and treating it as one silently swallows a legitimate
+ * raise.
+ */
+const RATCHET_MERGE_SUBJECT = new RegExp(
+  `^Merge pull request #\\d+ from \\S+/${esc(RATCHET_BRANCH)}[ \\t\\r]*$`,
+  'm',
+)
+
 /** True iff a commit message identifies itself as produced by the ratchet. */
 function isRatchetCommitMessage(message: string): boolean {
-  // The marker covers a direct commit and a squash merge (whose subject defaults
-  // to the ratchet PR title, which carries the marker). The branch name covers a
-  // plain merge commit ("Merge pull request #N from owner/<ratchet-branch>"),
-  // whose subject GitHub generates without the PR title.
-  return message.includes(RATCHET_MARKER) || message.includes(RATCHET_BRANCH)
+  // The marker is the general case: it covers a direct commit and a squash merge
+  // (whose subject defaults to the ratchet PR title, which carries the marker).
+  // The generated merge subject covers a plain merge commit, which GitHub writes
+  // without the PR title.
+  return message.includes(RATCHET_MARKER) || RATCHET_MERGE_SUBJECT.test(message)
 }
 
 /**
  * Whether this run must NOT attempt a commit-back. Evaluated in order so the
  * opt-in short-circuits everything else:
  *
- *   1. `flag-disabled`   — the flag is not `enabled` (default; AC1).
- *   2. `not-base-push`   — not a `push` to the base branch, i.e. every
- *                          `pull_request` run, fork or not (AC5).
- *   3. `automated-commit`— the head commit is the ratchet's own (AC4).
+ *   1. `flag-disabled`     — the flag is not `enabled` (default; AC1).
+ *   2. `guardrail-disabled`— the parent coverage guardrail is not `enabled`, so
+ *                            there is no gate whose floor a raise would move.
+ *   3. `not-base-push`     — not a `push` to the base branch, i.e. every
+ *                            `pull_request` run, fork or not (AC5).
+ *   4. `automated-commit`  — the head commit is the ratchet's own (AC4).
  */
 export function shouldSkipCommitBack(ctx: RunContext): SkipDecision {
   if (ctx.commitBackFlag !== 'enabled') {
@@ -156,6 +214,13 @@ export function shouldSkipCommitBack(ctx: RunContext): SkipDecision {
       skip: true,
       code: 'flag-disabled',
       reason: `Coverage baseline commit-back is '${ctx.commitBackFlag}' (default: off) — nothing is written`,
+    }
+  }
+  if (ctx.guardrailFlag !== 'enabled') {
+    return {
+      skip: true,
+      code: 'guardrail-disabled',
+      reason: `the parent Coverage guardrail is '${ctx.guardrailFlag}' — the commit-back opt-in is nested under it, and a baseline is not ratcheted for a gate that does not run`,
     }
   }
   if (ctx.eventName !== 'push' || ctx.refName !== ctx.baseBranch) {
@@ -254,8 +319,19 @@ export function planRatchet(
 export interface ApplyResult {
   text: string
   changedLines: number
-  /** Proposals refused at write time because the value on disk is already >=. */
+  /** Proposals refused at write time because a visible value is already >=. */
   dropped: RatchetProposal[]
+}
+
+export interface ApplyOptions {
+  /**
+   * The config as committed on the OPEN ratchet branch, when there is one. A
+   * concurrent run's raise is not on the base branch yet — it is a pending
+   * proposal on that branch — so this is the other half of "never clobber a
+   * higher value": without it, a run measuring less would force-push a LOWER
+   * value onto the ratchet branch and the open ratchet PR would propose it.
+   */
+  pendingText?: string | null
 }
 
 /**
@@ -263,11 +339,17 @@ export interface ApplyResult {
  * place — the surrounding markdown, line count, ordering and line endings are
  * untouched.
  *
- * Every proposal is re-checked against the text passed in (which the caller
- * re-reads from disk immediately before writing), so a higher value committed by
- * a concurrent run is never clobbered: such a proposal is `dropped`, not written.
+ * Every proposal is re-checked against `max(on disk, on the ratchet branch)`:
+ * the caller re-reads the config from disk immediately before writing and reads
+ * the ratchet branch's copy from the fetched remote-tracking ref, so a higher
+ * value written by a concurrent run is never clobbered on either ref — such a
+ * proposal is `dropped`, not written.
  */
-export function applyRaises(configText: string, raises: RatchetProposal[]): ApplyResult {
+export function applyRaises(
+  configText: string,
+  raises: RatchetProposal[],
+  { pendingText }: ApplyOptions = {},
+): ApplyResult {
   let text = configText
   let changedLines = 0
   const dropped: RatchetProposal[] = []
@@ -278,7 +360,13 @@ export function applyRaises(configText: string, raises: RatchetProposal[]): Appl
       continue
     }
     const onDisk = readBaselineValue(text, raise.type)
-    if (onDisk === null || raise.proposed <= onDisk) {
+    if (onDisk === null) {
+      dropped.push(raise)
+      continue
+    }
+    const pending = pendingText ? readBaselineValue(pendingText, raise.type) : null
+    const floor = pending === null ? onDisk : Math.max(onDisk, pending)
+    if (raise.proposed <= floor) {
       dropped.push(raise)
       continue
     }
@@ -352,6 +440,13 @@ export interface RatchetCommand {
 }
 
 export interface RatchetGitPlan {
+  /**
+   * Run BEFORE the config is written: it makes the ratchet branch's tip visible,
+   * so its PENDING baseline can be read and the lease can mean something. Nothing
+   * here touches a tracked file, and every step tolerates failure, so it is safe
+   * to run and then decide not to write.
+   */
+  prepare: RatchetCommand[]
   /** Ordered command sequence. Empty when there is nothing to raise. */
   commands: RatchetCommand[]
   /** Run only when `gh pr create` reports the PR already exists. */
@@ -362,7 +457,7 @@ export interface RatchetGitPlan {
    * (the local ratchet commit and the edited config are dropped; the pushed
    * ratchet branch is unaffected).
    */
-  restore: string[]
+  restore: RatchetCommand[]
   commitMessage: string
   prTitle: string
   prBody: string
@@ -394,24 +489,83 @@ function ratchetPrBody(raises: RatchetProposal[], configPath: string, baseBranch
   ].join('\n')
 }
 
+/** The remote-tracking refspec for the ratchet branch, passed transiently (`git -c`). */
+export function ratchetTrackingRefspec(remote: string): string {
+  return `+refs/heads/${RATCHET_BRANCH}:refs/remotes/${remote}/${RATCHET_BRANCH}`
+}
+
+/**
+ * The git config the write credential is supplied through — as DATA, so the one
+ * property the whole write path rests on is pinned by a unit test rather than by
+ * luck.
+ *
+ * `EXTRAHEADER_CONFIG_KEY` is multi-valued and `actions/checkout` has already
+ * persisted the read-only `GITHUB_TOKEN` under it in `.git/config`. Two values
+ * means two `Authorization` headers and a server-side coin toss. git documents the
+ * way out: for `http.extraHeader`, "an empty value will reset the extra headers to
+ * the empty list". So slot 0 is EMPTY (dropping whatever the checkout persisted)
+ * and slot 1 is ours — git therefore sends EXACTLY ONE credential, ours.
+ *
+ * Why two `GIT_CONFIG_*` slots and not `git -c`:
+ *   - the order must be `<persisted>, <empty>, <ours>`, and it is fixed here by
+ *     the slot indices. Probed on git 2.55: command-line `-c` is applied AFTER
+ *     `GIT_CONFIG_*`, so an empty reset passed via `-c` would clear OUR value too.
+ *   - the token stays out of `argv` (and so out of `ps`), unlike `-c <key>=<token>`.
+ *   - nothing is written to `.git/config`: no mutation to undo, and the persisted
+ *     credential still works for any later step of the same job.
+ */
+export function gitAuthConfig(token: string): Record<string, string> {
+  const basic = Buffer.from(`x-access-token:${token}`).toString('base64')
+  return {
+    GIT_CONFIG_COUNT: '2',
+    // Slot 0 — the reset. Discards the credential actions/checkout persisted.
+    GIT_CONFIG_KEY_0: EXTRAHEADER_CONFIG_KEY,
+    GIT_CONFIG_VALUE_0: '',
+    // Slot 1 — ours, and after the reset, therefore the only one sent.
+    GIT_CONFIG_KEY_1: EXTRAHEADER_CONFIG_KEY,
+    GIT_CONFIG_VALUE_1: `AUTHORIZATION: basic ${basic}`,
+    GH_TOKEN: token,
+  }
+}
+
+/**
+ * `git show` argv printing the config as committed on the fetched ratchet branch.
+ * Failure (no such ref / no such path) means "no pending proposal", never an error.
+ */
+export function ratchetBranchConfigCommand(remote: string, configPath: string): string[] {
+  return ['git', 'show', `refs/remotes/${remote}/${RATCHET_BRANCH}:${configPath}`]
+}
+
 /**
  * The exact command sequence that lands the raise. Deliberate properties, each
  * asserted by a unit test:
  *
+ *   - `prepare` runs FIRST, before anything is written: it fetches the ratchet
+ *     branch, which is what makes its pending baseline readable (the other half of
+ *     the monotonicity guarantee) and the lease meaningful. It touches no tracked
+ *     file and its every step tolerates failure, so running it and then deciding
+ *     not to write is safe. The credential is disambiguated separately and without
+ *     any command at all — see `gitAuthConfig`.
  *   - the ONLY push targets `RATCHET_BRANCH`, never the base branch, and no
  *     local branch is created or switched to: the commit is made on the checked-
  *     out HEAD and pushed by explicit refspec, then `restore` undoes it. Leaving
  *     the workspace on a bot branch would silently change what every later step
- *     in the job runs against.
+ *     in the job runs against. (On a `push` event the checkout does have the base
+ *     branch checked out, so the LOCAL base ref advances by one commit and is
+ *     rewound by `restore`; no REMOTE base ref is ever written.)
  *   - the push uses `--force-with-lease`, never a bare `--force`. The lease needs
  *     a remote-tracking ref for the destination, and a CI checkout has none for
- *     this branch (it fetches only the base ref) — without one git rejects EVERY
- *     non-fast-forward push as `stale info`, which would make the ratchet work
- *     exactly once and then warn forever. So the plan first teaches the remote a
- *     fetch refspec for the ratchet branch and fetches it (optional: absent on
- *     the first run). The lease then means what it says: if the ratchet branch
- *     moved between that fetch and the push, this run loses.
+ *     this branch (it fetches only the base ref, and the clone's fetch refspec
+ *     maps nothing else) — without one git rejects EVERY non-fast-forward push as
+ *     `stale info`, which would make the ratchet work exactly once and then warn
+ *     forever. So the refspec is supplied TRANSIENTLY, with `git -c`, to both the
+ *     fetch and the push: no `git config --add`, so the checkout's config is not
+ *     mutated, repeat invocations cannot accumulate duplicate refspecs, and
+ *     `restore` really does leave things as the later steps expect.
  *   - staging is an explicit path — never `git add -A`;
+ *   - `restore` is narrow: `reset --mixed` + `checkout -- <configPath>` reverts the
+ *     ratchet commit and the config edit ONLY. A `reset --hard` would also revert
+ *     any other tracked file an earlier step of the same job legitimately modified.
  *   - the commit subject AND the PR title carry `RATCHET_MARKER`, so the loop
  *     guard survives both a squash and a merge commit.
  *
@@ -420,40 +574,106 @@ function ratchetPrBody(raises: RatchetProposal[], configPath: string, baseBranch
  * (title/body refresh).
  *
  * Note what does NOT depend on the lease: never clobbering a higher baseline is
- * guaranteed at the data level by `applyRaises` re-reading the config and
- * re-checking every proposal, not by the push.
+ * guaranteed at the data level by `applyRaises` re-checking every proposal against
+ * both the config on disk and the ratchet branch's own copy, not by the push.
  */
+const EMPTY_GIT_PLAN: RatchetGitPlan = {
+  prepare: [],
+  commands: [],
+  prUpdate: [],
+  restore: [],
+  commitMessage: '',
+  prTitle: '',
+  prBody: '',
+}
+
+/**
+ * The write sequence itself, split out of `ratchetGitPlan` only to keep that
+ * function under the 50-line lint ceiling — the two are one unit conceptually.
+ */
+function ratchetWriteCommands(args: {
+  configPath: string
+  commitMessage: string
+  prTitle: string
+  prBody: string
+  baseBranch: string
+  remote: string
+  withRefspec: string[]
+}): RatchetGitPlan['commands'] {
+  const { configPath, commitMessage, prTitle, prBody, baseBranch, remote, withRefspec } = args
+  return [
+    { argv: ['git', 'config', 'user.name', BOT_NAME] },
+    { argv: ['git', 'config', 'user.email', BOT_EMAIL] },
+    // Commit on the checked-out HEAD — no branch is created or switched to.
+    { argv: ['git', 'add', '--', configPath] },
+    { argv: ['git', 'commit', '-m', commitMessage] },
+    {
+      argv: [
+        'git',
+        ...withRefspec,
+        'push',
+        '--force-with-lease',
+        remote,
+        `HEAD:refs/heads/${RATCHET_BRANCH}`,
+      ],
+    },
+    {
+      argv: [
+        'gh',
+        'pr',
+        'create',
+        '--base',
+        baseBranch,
+        '--head',
+        RATCHET_BRANCH,
+        '--title',
+        prTitle,
+        '--body',
+        prBody,
+      ],
+    },
+  ]
+}
+
 export function ratchetGitPlan(input: RatchetGitPlanInput): RatchetGitPlan {
   const { raises, configPath, baseBranch, remote, headCommit } = input
-  if (raises.length === 0) {
-    return { commands: [], prUpdate: [], restore: [], commitMessage: '', prTitle: '', prBody: '' }
-  }
+  if (raises.length === 0) return EMPTY_GIT_PLAN
 
   const summary = raises.map(r => `${r.type} ${r.current}->${r.proposed}`).join(', ')
   const commitMessage = `chore: ratchet coverage baseline (${summary}) ${RATCHET_MARKER}`
   const prTitle = `chore: ratchet coverage baseline ${RATCHET_MARKER}`
   const prBody = ratchetPrBody(raises, configPath, baseBranch)
-  const trackingRefspec = `+refs/heads/${RATCHET_BRANCH}:refs/remotes/${remote}/${RATCHET_BRANCH}`
-  const ghCreate = ['gh', 'pr', 'create', '--base', baseBranch, '--head', RATCHET_BRANCH]
+  const trackingRefspec = ratchetTrackingRefspec(remote)
+  // Transient (never persisted) fetch refspec, so `--force-with-lease` can resolve
+  // a remote-tracking ref for the ratchet branch.
+  const withRefspec = ['-c', `remote.${remote}.fetch=${trackingRefspec}`]
 
   return {
-    commands: [
-      { argv: ['git', 'config', 'user.name', BOT_NAME] },
-      { argv: ['git', 'config', 'user.email', BOT_EMAIL] },
-      // Commit on the checked-out HEAD — no branch is created or switched to.
-      { argv: ['git', 'add', '--', configPath] },
-      { argv: ['git', 'commit', '-m', commitMessage] },
-      // Make the destination leaseable: map it to a remote-tracking ref, then
-      // fetch it. Optional — on the first run the branch does not exist yet.
-      { argv: ['git', 'config', '--add', `remote.${remote}.fetch`, trackingRefspec] },
-      { argv: ['git', 'fetch', '--no-tags', remote, trackingRefspec], optional: true },
-      { argv: ['git', 'push', '--force-with-lease', remote, `HEAD:refs/heads/${RATCHET_BRANCH}`] },
-      { argv: [...ghCreate, '--title', prTitle, '--body', prBody] },
+    prepare: [
+      // Absent on the first ever run: the ratchet branch does not exist yet.
+      {
+        argv: ['git', ...withRefspec, 'fetch', '--no-tags', remote, trackingRefspec],
+        optional: true,
+      },
     ],
+    commands: ratchetWriteCommands({
+      configPath,
+      commitMessage,
+      prTitle,
+      prBody,
+      baseBranch,
+      remote,
+      withRefspec,
+    }),
     prUpdate: ['gh', 'pr', 'edit', RATCHET_BRANCH, '--title', prTitle, '--body', prBody],
     // An explicit SHA, never `HEAD~1`: a relative reset would destroy the base
     // branch's own tip if the sequence failed before the commit was created.
-    restore: ['git', 'reset', '--hard', headCommit],
+    // `--mixed` (not `--hard`) + an explicit checkout of the one edited path: the
+    // ratchet reverts what the ratchet did, nothing else in the workspace.
+    restore: [
+      { argv: ['git', 'reset', '--mixed', headCommit] },
+      { argv: ['git', 'checkout', '--', configPath] },
+    ],
     commitMessage,
     prTitle,
     prBody,
@@ -516,7 +736,19 @@ const CLI_FLAGS: Record<string, { takesValue: boolean; apply: FlagHandler }> = {
   },
   '--base-branch': { takesValue: true, apply: (o, v) => void (o.baseBranch = v as string) },
   '--remote': { takesValue: true, apply: (o, v) => void (o.remote = v as string) },
-  '--margin': { takesValue: true, apply: (o, v) => void (o.marginPp = Number(v)) },
+  '--margin': {
+    takesValue: true,
+    apply: (o, v) => {
+      // Unvalidated, `--margin abc` would be NaN, every `proposed > current`
+      // comparison false, and the ratchet would silently never raise. A bad value
+      // is a workflow-authoring bug like any other: fail loudly (`parseOrExit`).
+      const n = Number(v)
+      if (!Number.isFinite(n) || n < 0) {
+        throw new Error(`--margin expects a non-negative number, got '${v as string}'`)
+      }
+      o.marginPp = n
+    },
+  },
   '--dry-run': { takesValue: false, apply: o => void (o.dryRun = true) },
   // POSIX separator — `pnpm run <script> -- <args>` forwards it verbatim.
   '--': { takesValue: false, apply: () => undefined },
@@ -547,16 +779,9 @@ function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv): CliOptions {
   return opts
 }
 
-/** Auth for `git push` via the same config key actions/checkout uses — keeps the token off the command line. */
+/** The process env carrying the write credential (see `gitAuthConfig` for the shape). */
 function gitAuthEnv(token: string): NodeJS.ProcessEnv {
-  const basic = Buffer.from(`x-access-token:${token}`).toString('base64')
-  return {
-    ...process.env,
-    GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
-    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
-    GH_TOKEN: token,
-  }
+  return { ...process.env, ...gitAuthConfig(token) }
 }
 
 function warn(message: string): void {
@@ -589,23 +814,61 @@ function failureOutput(e: unknown): string {
 /** Print the plan instead of running it. */
 function printDryRun(gitPlan: RatchetGitPlan): void {
   console.log('coverage-ratchet: DRY RUN — would run:')
-  for (const { argv, optional } of gitPlan.commands) {
+  for (const { argv, optional } of [...gitPlan.prepare, ...gitPlan.commands]) {
     console.log(`  ${argv.join(' ')}${optional === true ? '   # failure tolerated' : ''}`)
   }
-  console.log(`  ${gitPlan.restore.join(' ')}   # always, restores the workspace`)
+  for (const { argv } of gitPlan.restore) {
+    console.log(`  ${argv.join(' ')}   # always, restores the workspace`)
+  }
+}
+
+/** Run the `prepare` steps. Every one is optional, so this can only warn. */
+function runPrepare(gitPlan: RatchetGitPlan, env: NodeJS.ProcessEnv): void {
+  for (const { argv } of gitPlan.prepare) {
+    const [bin, ...args] = argv
+    if (bin === undefined) continue
+    try {
+      execFileSync(bin, args, { env, stdio: 'pipe' })
+    } catch {
+      // Expected on the first ever run: the ratchet branch does not exist yet.
+    }
+  }
+}
+
+/**
+ * The config as committed on the OPEN ratchet branch, or null when there is no
+ * such branch/file. A failure here is a legitimate state ("no pending proposal"),
+ * never an error: the fetch in `prepare` is itself optional.
+ */
+function readPendingConfig(
+  remote: string,
+  configPath: string,
+  env: NodeJS.ProcessEnv,
+): string | null {
+  const [bin, ...args] = ratchetBranchConfigCommand(remote, configPath)
+  try {
+    return execFileSync(bin as string, args, { encoding: 'utf-8', env, stdio: 'pipe' })
+  } catch {
+    return null
+  }
 }
 
 /**
  * Apply the raises to the config on disk. Returns false (having warned) when
- * there is nothing left to write because a concurrent run already won the race.
+ * there is nothing left to write because a concurrent run already won the race —
+ * on the base branch OR on the ratchet branch (`pendingText`).
  */
-function writeRaises(configPath: string, raises: RatchetProposal[]): boolean {
+function writeRaises(
+  configPath: string,
+  raises: RatchetProposal[],
+  pendingText: string | null,
+): boolean {
   // Re-read immediately before writing so a concurrent, higher value wins.
-  const applied = applyRaises(readFileSync(configPath, 'utf-8'), raises)
+  const applied = applyRaises(readFileSync(configPath, 'utf-8'), raises, { pendingText })
   if (applied.changedLines === 0) {
     const types = applied.dropped.map(d => d.type).join(', ')
     warn(
-      `nothing written — the config on disk already holds a value at or above every proposal (${types}); a concurrent run won the race`,
+      `nothing written — the config already holds a value at or above every proposal (${types}), on the base branch or on the open ratchet branch; a concurrent run won the race`,
     )
     return false
   }
@@ -650,12 +913,15 @@ function runPlan(gitPlan: RatchetGitPlan, env: NodeJS.ProcessEnv): boolean {
 }
 
 /** Leave the checkout exactly as the job's later steps expect to find it. */
-function restoreWorkspace(restore: string[]): void {
-  const [bin, ...args] = restore
-  try {
-    execFileSync(bin as string, args, { stdio: 'pipe' })
-  } catch {
-    warn('could not restore the checkout after the ratchet attempt')
+function restoreWorkspace(restore: RatchetCommand[]): void {
+  for (const { argv } of restore) {
+    const [bin, ...args] = argv
+    if (bin === undefined) continue
+    try {
+      execFileSync(bin, args, { stdio: 'pipe' })
+    } catch {
+      warn(`could not restore the checkout after the ratchet attempt (${argv.join(' ')})`)
+    }
   }
 }
 
@@ -671,8 +937,10 @@ function parseOrExit(): CliOptions {
 
 /** The run context comes entirely from the environment the CI step exposes. */
 function resolveSkip(opts: CliOptions): SkipDecision {
+  const wow = readFileSync(opts.wowPath, 'utf-8')
   return shouldSkipCommitBack({
-    commitBackFlag: readCommitBackFlag(readFileSync(opts.wowPath, 'utf-8')),
+    commitBackFlag: readCommitBackFlag(wow),
+    guardrailFlag: readGuardrailFlag(wow),
     eventName: process.env['GITHUB_EVENT_NAME'] || '',
     refName: process.env['GITHUB_REF_NAME'] || '',
     baseBranch: opts.baseBranch,
@@ -690,9 +958,16 @@ function commitBack(opts: CliOptions, gitPlan: RatchetGitPlan, raises: RatchetPr
     warn(classifyWriteRefusal('', { hasToken: false }).message)
     return
   }
-  if (!writeRaises(opts.configPath, raises)) return
+  const env = gitAuthEnv(token)
+  // Before writing: make the ratchet branch visible, then read the baseline it
+  // already proposes. A concurrent run's raise lives THERE, not on the base
+  // branch, so without this a run measuring less would force-push a LOWER value
+  // and the open ratchet PR would end up proposing it.
+  runPrepare(gitPlan, env)
+  const pendingText = readPendingConfig(opts.remote, opts.configPath, env)
+  if (!writeRaises(opts.configPath, raises, pendingText)) return
   try {
-    if (runPlan(gitPlan, gitAuthEnv(token))) {
+    if (runPlan(gitPlan, env)) {
       const raised = raises.map(r => `${r.type}=${r.proposed}`).join(', ')
       console.log(`coverage-ratchet: raised ${raised} via the ratchet PR`)
     }
@@ -701,8 +976,7 @@ function commitBack(opts: CliOptions, gitPlan: RatchetGitPlan, raises: RatchetPr
   }
 }
 
-function main(): void {
-  const opts = parseOrExit()
+function run(opts: CliOptions): void {
   anchorToRepoRoot()
 
   const skip = resolveSkip(opts)
@@ -728,6 +1002,29 @@ function main(): void {
     return
   }
   commitBack(opts, gitPlan, raises)
+}
+
+/**
+ * Argument parsing fails LOUDLY (a workflow-authoring bug the author must see);
+ * everything after it degrades to a warning and exit 0.
+ *
+ * That asymmetry is the business rule "the gate's verdict and the persistence are
+ * independent" (AC6) taken literally. An unreadable `--config`/`--way-of-working`
+ * (an adopter who relocated the adoption folder), a failing `git rev-parse`, a
+ * `writeFileSync` EACCES — none of them may turn a PASSING coverage gate into a
+ * red build. The shell guardrail this step sits next to already tolerates a
+ * missing config by design; the commit-back must not be less fail-safe than the
+ * gate it augments.
+ */
+function main(): void {
+  const opts = parseOrExit()
+  try {
+    run(opts)
+  } catch (e) {
+    warn(
+      `commit-back could not run: ${(e as Error).message} — the coverage gate's verdict is unaffected`,
+    )
+  }
 }
 
 if (require.main === module) {

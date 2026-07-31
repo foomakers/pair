@@ -4,14 +4,19 @@ import {
   RATCHET_BRANCH,
   DEFAULT_MARGIN_PP,
   TOKEN_ENV,
+  EXTRAHEADER_CONFIG_KEY,
   proposeBaseline,
   readBaselineValue,
   readCommitBackFlag,
+  readGuardrailFlag,
   shouldSkipCommitBack,
   planRatchet,
   applyRaises,
   classifyWriteRefusal,
   ratchetGitPlan,
+  ratchetTrackingRefspec,
+  ratchetBranchConfigCommand,
+  gitAuthConfig,
   renderRatchetPlan,
 } from './coverage-baseline-ratchet'
 
@@ -41,6 +46,7 @@ baseline.frontend=19
 `
 
 const measuredPush = {
+  guardrailFlag: 'enabled' as const,
   eventName: 'push',
   refName: 'main',
   baseBranch: 'main',
@@ -119,7 +125,52 @@ describe('readCommitBackFlag — the opt-in, default disabled', () => {
   })
 
   it('is case-insensitive and tolerates missing backticks/bold', () => {
-    expect(readCommitBackFlag('Coverage Baseline Commit-Back: Enabled')).toBe('enabled')
+    expect(readCommitBackFlag('- Coverage Baseline Commit-Back: Enabled')).toBe('enabled')
+    expect(readCommitBackFlag('* **Coverage baseline commit-back**: enabled')).toBe('enabled')
+  })
+
+  it('reads a NESTED bullet (the flag is documented as nested under the guardrail)', () => {
+    const wow = `## Quality
+- **Coverage guardrail**: \`enabled\`
+  - **Coverage baseline commit-back**: \`enabled\`
+`
+    expect(readCommitBackFlag(wow)).toBe('enabled')
+  })
+
+  // The KB documents this flag IN PROSE, and adopters copy guideline sentences into
+  // their own way-of-working. An unanchored, first-match-wins search would let a
+  // QUOTATION switch the ratchet on. This is the first machine-parsed
+  // way-of-working flag, so the parse robustness is a precedent, not a detail.
+  it('ignores the phrase quoted in prose — only a declaring BULLET counts', () => {
+    const quoting = `## Quality
+
+A project that sets \`Coverage baseline commit-back: enabled\` gets a bot PR
+raising the baseline. We have not turned that on.
+`
+    expect(readCommitBackFlag(quoting)).toBe('absent')
+  })
+
+  it('still finds the real declaration in a document that ALSO quotes the phrase', () => {
+    const both = `Docs say \`Coverage baseline commit-back: enabled\` does X.
+
+- **Coverage baseline commit-back**: \`disabled\`
+`
+    expect(readCommitBackFlag(both)).toBe('disabled')
+  })
+})
+
+describe('readGuardrailFlag — the PARENT flag the opt-in is nested under', () => {
+  it('reads the parent guardrail bullet', () => {
+    expect(readGuardrailFlag('- **Coverage guardrail**: `enabled`')).toBe('enabled')
+    expect(readGuardrailFlag('- **Coverage guardrail**: `disabled` (default)')).toBe('disabled')
+  })
+
+  it('reports `absent` when the guardrail is not declared', () => {
+    expect(readGuardrailFlag('- **Something else**: `enabled`')).toBe('absent')
+  })
+
+  it('does not confuse the child flag for the parent', () => {
+    expect(readGuardrailFlag('- **Coverage baseline commit-back**: `enabled`')).toBe('absent')
   })
 })
 
@@ -134,6 +185,26 @@ describe('shouldSkipCommitBack — AC1 (default off), AC4 (loop termination), AC
     expect(shouldSkipCommitBack({ ...measuredPush, commitBackFlag: 'disabled' }).code).toBe(
       'flag-disabled',
     )
+  })
+
+  // The nesting under the guardrail is ENFORCED, not just documented: ratcheting a
+  // baseline for a gate that never runs would raise a floor nothing checks.
+  it('skips when the PARENT guardrail flag is not enabled, even with the opt-in on', () => {
+    const d = shouldSkipCommitBack({
+      ...measuredPush,
+      commitBackFlag: 'enabled',
+      guardrailFlag: 'disabled',
+    })
+    expect(d.skip).toBe(true)
+    expect(d.code).toBe('guardrail-disabled')
+    expect(d.reason).toContain('nested')
+  })
+
+  it('skips when the parent guardrail flag is absent (framework default = off)', () => {
+    expect(
+      shouldSkipCommitBack({ ...measuredPush, commitBackFlag: 'enabled', guardrailFlag: 'absent' })
+        .code,
+    ).toBe('guardrail-disabled')
   })
 
   it('AC5: skips a pull_request run — a PR never writes back (fork or not)', () => {
@@ -182,6 +253,24 @@ describe('shouldSkipCommitBack — AC1 (default off), AC4 (loop termination), AC
       headCommitMessage: `Merge pull request #123 from foomakers/${RATCHET_BRANCH}`,
     })
     expect(d.code).toBe('automated-commit')
+  })
+
+  // A substring match on the branch name would treat ANY commit that merely
+  // mentions it as the ratchet's own and silently swallow a legitimate raise —
+  // including the commits of the story that introduced the ratchet, and any revert
+  // or follow-up naming the branch.
+  it('does NOT treat a commit that merely mentions the ratchet branch as automated', () => {
+    const mentions = [
+      `[US-372] feat: land the ratchet on ${RATCHET_BRANCH}`,
+      `Merge pull request #405 from foomakers/feature/US-372-coverage-baseline-commit-back\n\nadds ${RATCHET_BRANCH}`,
+      `Revert "Merge pull request #9 from foomakers/${RATCHET_BRANCH}"`,
+    ]
+    for (const headCommitMessage of mentions) {
+      expect(
+        shouldSkipCommitBack({ ...measuredPush, commitBackFlag: 'enabled', headCommitMessage })
+          .skip,
+      ).toBe(false)
+    }
   })
 
   it('proceeds on a base-branch push from a human commit with the flag enabled', () => {
@@ -316,6 +405,51 @@ describe('applyRaises — in-place value edit, surrounding markdown untouched', 
     expect(dropped.map(d => d.type)).toEqual(['shared'])
   })
 
+  // The exceptional scenario in the story: "two concurrent runs both raising the
+  // same baseline — the second must not clobber a higher value written by the
+  // first". Re-reading the BASE-BRANCH checkout only covers half of it: run A's
+  // raise is not on the base branch, it is a PENDING proposal on the ratchet
+  // branch. Without reading that ref, run B's lease is valid (it fetched A's tip),
+  // its force-push succeeds, and the open ratchet PR ends up proposing the LOWER
+  // value.
+  it('refuses to lower a HIGHER value pending on the ratchet branch (concurrency, other half)', () => {
+    const pendingText = CONFIG.replace('baseline.shared=84', 'baseline.shared=89')
+    // This run measured less: 87.x => 86, above the base branch's 84 but below the
+    // 89 the open ratchet PR already proposes.
+    const raises = planRatchet(CONFIG, { shared: 87.4 }).filter(p => p.action === 'raise')
+    expect(raises.map(r => r.proposed)).toEqual([86])
+    const { text, changedLines, dropped } = applyRaises(CONFIG, raises, { pendingText })
+    expect(changedLines).toBe(0)
+    expect(text).toBe(CONFIG)
+    expect(dropped.map(d => d.type)).toEqual(['shared'])
+  })
+
+  it('still raises when the proposal is above BOTH the base branch and the pending value', () => {
+    const pendingText = CONFIG.replace('baseline.shared=84', 'baseline.shared=86')
+    const raises = planRatchet(CONFIG, { shared: 90.5 }).filter(p => p.action === 'raise')
+    const { text, changedLines } = applyRaises(CONFIG, raises, { pendingText })
+    expect(changedLines).toBe(1)
+    expect(text).toContain('baseline.shared=89')
+  })
+
+  it('holds at EQUAL to the pending value — the ratchet only ever moves up', () => {
+    const pendingText = CONFIG.replace('baseline.shared=84', 'baseline.shared=89')
+    const raises = planRatchet(CONFIG, { shared: 90.5 }).filter(p => p.action === 'raise')
+    expect(applyRaises(CONFIG, raises, { pendingText }).changedLines).toBe(0)
+  })
+
+  it('falls back to the on-disk value when there is no ratchet branch yet', () => {
+    const raises = planRatchet(CONFIG, { shared: 90.5 }).filter(p => p.action === 'raise')
+    for (const pendingText of [null, undefined, '']) {
+      expect(applyRaises(CONFIG, raises, { pendingText }).changedLines).toBe(1)
+    }
+  })
+
+  it('ignores a ratchet branch whose config lacks the type (no pending proposal for it)', () => {
+    const raises = planRatchet(CONFIG, { shared: 90.5 }).filter(p => p.action === 'raise')
+    expect(applyRaises(CONFIG, raises, { pendingText: '# nothing parseable' }).changedLines).toBe(1)
+  })
+
   it('preserves CRLF line endings on the edited line', () => {
     const crlf = 'x\r\nbaseline.shared=84\r\ny\r\n'
     const raises = planRatchet(crlf, { shared: 90.5 }).filter(p => p.action === 'raise')
@@ -377,49 +511,67 @@ describe('ratchetGitPlan — the exact command sequence (a bot PR, never a push 
   const flat = argvs.flat()
 
   it('never pushes to the base branch — only to the dedicated ratchet branch', () => {
-    const pushes = argvs.filter(c => c[0] === 'git' && c[1] === 'push')
+    const pushes = argvs.filter(c => c[0] === 'git' && c.includes('push'))
     expect(pushes.length).toBe(1)
     expect(pushes[0]).toContain(`HEAD:refs/heads/${RATCHET_BRANCH}`)
     expect(pushes.flat().join(' ')).not.toContain('refs/heads/main')
   })
 
   it('pushes with --force-with-lease (never a bare force)', () => {
-    const push = argvs.find(c => c[1] === 'push') as string[]
+    const push = argvs.find(c => c.includes('push')) as string[]
     expect(push).toContain('--force-with-lease')
     expect(push).not.toContain('--force')
   })
 
-  it('makes the lease possible: maps + fetches a remote-tracking ref BEFORE the push', () => {
-    // Without this a CI checkout (which fetches only the base ref) has no
-    // remote-tracking ref for the destination, and git rejects every
-    // non-fast-forward lease push as `stale info` — the ratchet would work once
-    // and then warn forever.
-    const refspec = `+refs/heads/${RATCHET_BRANCH}:refs/remotes/origin/${RATCHET_BRANCH}`
-    const configIdx = argvs.findIndex(c => c[1] === 'config' && c[2] === '--add')
-    const fetchIdx = argvs.findIndex(c => c[1] === 'fetch')
-    const pushIdx = argvs.findIndex(c => c[1] === 'push')
-    expect(argvs[configIdx]).toEqual(['git', 'config', '--add', 'remote.origin.fetch', refspec])
-    expect(argvs[fetchIdx]).toEqual(['git', 'fetch', '--no-tags', 'origin', refspec])
-    expect(configIdx).toBeLessThan(fetchIdx)
-    expect(fetchIdx).toBeLessThan(pushIdx)
+  it('fetches the ratchet branch in `prepare`, BEFORE anything is written or pushed', () => {
+    // Two things need that ref: `--force-with-lease` (a CI checkout fetches only
+    // the base ref, and without a remote-tracking ref for the destination git
+    // rejects every non-fast-forward lease push as `stale info` — the ratchet would
+    // work once and then warn forever), and reading the baseline the open ratchet PR
+    // already proposes.
+    const refspec = ratchetTrackingRefspec('origin')
+    expect(plan.prepare.map(c => c.argv)).toEqual([
+      ['git', '-c', `remote.origin.fetch=${refspec}`, 'fetch', '--no-tags', 'origin', refspec],
+    ])
+    expect(plan.prepare.every(c => c.optional === true)).toBe(true)
   })
 
-  it('tolerates ONLY the fetch failing — the branch does not exist on the first run', () => {
-    const optional = plan.commands.filter(c => c.optional === true).map(c => c.argv[1])
-    expect(optional).toEqual(['fetch'])
+  it('supplies the refspec TRANSIENTLY (`git -c`) — the checkout config is never mutated', () => {
+    // `git config --add remote.<r>.fetch` would survive `restore` (which only
+    // touches refs and files), breaking the plan's promise that the checkout is
+    // left as the later job steps expect, and repeat invocations in one checkout
+    // would accumulate duplicate refspecs.
+    const refspec = ratchetTrackingRefspec('origin')
+    const all = [...plan.prepare, ...plan.commands, ...plan.restore].map(c => c.argv)
+    expect(all.some(c => c[1] === 'config' && c.includes('--add'))).toBe(false)
+    expect(all.some(c => c.join(' ').includes('config --add remote.origin.fetch'))).toBe(false)
+    const push = all.find(c => c.includes('push')) as string[]
+    expect(push.slice(0, 3)).toEqual(['git', '-c', `remote.origin.fetch=${refspec}`])
+  })
+
+  it('tolerates no failure at all on the write path — every command there is required', () => {
+    expect(plan.commands.filter(c => c.optional === true)).toEqual([])
   })
 
   it('creates no local branch and never switches branches', () => {
-    expect(argvs.some(c => c[1] === 'checkout' || c[1] === 'switch' || c[1] === 'branch')).toBe(
+    const switches = [...plan.prepare, ...plan.commands].map(c => c.argv)
+    expect(switches.some(c => c[1] === 'checkout' || c[1] === 'switch' || c[1] === 'branch')).toBe(
       false,
     )
   })
 
-  it('restores the checkout to the SHA the run was given, by SHA and not HEAD~1', () => {
-    // A relative reset would destroy the base branch's own tip if the sequence
-    // failed before the commit existed.
-    expect(plan.restore).toEqual(['git', 'reset', '--hard', HEAD_SHA])
-    expect(plan.restore).not.toContain('HEAD~1')
+  it('restores NARROWLY: the ratchet commit and the config edit, nothing else', () => {
+    // `reset --hard` would also revert any OTHER tracked file an earlier step of
+    // the same job legitimately modified (this step runs before the E2E tests).
+    // An explicit SHA, never `HEAD~1`: a relative reset would destroy the base
+    // branch's own tip if the sequence failed before the commit existed.
+    expect(plan.restore.map(c => c.argv)).toEqual([
+      ['git', 'reset', '--mixed', HEAD_SHA],
+      ['git', 'checkout', '--', '.pair/adoption/tech/coverage-baseline.md'],
+    ])
+    const flatRestore = plan.restore.flatMap(c => c.argv)
+    expect(flatRestore).not.toContain('--hard')
+    expect(flatRestore).not.toContain('HEAD~1')
   })
 
   it('stages ONLY the config file — never `git add -A`', () => {
@@ -465,9 +617,61 @@ describe('ratchetGitPlan — the exact command sequence (a bot PR, never a push 
       remote: 'origin',
       headCommit: HEAD_SHA,
     })
+    expect(empty.prepare).toEqual([])
     expect(empty.commands).toEqual([])
     expect(empty.prUpdate).toEqual([])
     expect(empty.restore).toEqual([])
+  })
+
+  it('reads the pending baseline from the FETCHED ratchet ref, not from a branch name', () => {
+    // A local branch of that name does not exist in a CI checkout; the remote-
+    // tracking ref the `prepare` fetch created is what must be read.
+    expect(ratchetBranchConfigCommand('origin', 'cfg.md')).toEqual([
+      'git',
+      'show',
+      `refs/remotes/origin/${RATCHET_BRANCH}:cfg.md`,
+    ])
+  })
+})
+
+// The credential is the one thing the entire write path rests on, and a dry run
+// cannot observe it: these assertions are the pin.
+describe('gitAuthConfig — exactly ONE Authorization header, ours', () => {
+  const cfg = gitAuthConfig('t0ken')
+
+  it('resets the multi-valued extraheader (slot 0) BEFORE adding ours (slot 1)', () => {
+    // actions/checkout (persist-credentials defaults to true) has already persisted
+    // the read-only GITHUB_TOKEN under this key. Two values = two Authorization
+    // headers and a server-side coin toss — most likely lost by us, which AC6 would
+    // report as a warning on every base-branch push: a feature that never works and
+    // never says so. git: for http.extraHeader "an empty value will reset the extra
+    // headers to the empty list".
+    expect(cfg['GIT_CONFIG_COUNT']).toBe('2')
+    expect(cfg['GIT_CONFIG_KEY_0']).toBe(EXTRAHEADER_CONFIG_KEY)
+    expect(cfg['GIT_CONFIG_VALUE_0']).toBe('')
+    expect(cfg['GIT_CONFIG_KEY_1']).toBe(EXTRAHEADER_CONFIG_KEY)
+    expect(cfg['GIT_CONFIG_VALUE_1']).toContain('AUTHORIZATION: basic ')
+  })
+
+  it('sends the token as basic x-access-token, and never in argv', () => {
+    const basic = Buffer.from('x-access-token:t0ken').toString('base64')
+    expect(cfg['GIT_CONFIG_VALUE_1']).toBe(`AUTHORIZATION: basic ${basic}`)
+    // The plan's argv must not carry the credential (it would be visible in `ps`).
+    const plan = ratchetGitPlan({
+      raises: planRatchet(CONFIG, { shared: 90.5 }).filter(p => p.action === 'raise'),
+      configPath: 'cfg.md',
+      baseBranch: 'main',
+      remote: 'origin',
+      headCommit: 'deadbeef',
+    })
+    const flat = [...plan.prepare, ...plan.commands].flatMap(c => c.argv).join(' ')
+    expect(flat).not.toContain('t0ken')
+    expect(flat).not.toContain(basic)
+    expect(flat).not.toContain(EXTRAHEADER_CONFIG_KEY)
+  })
+
+  it('gives `gh` the same token, so the PR is opened by the same identity', () => {
+    expect(cfg['GH_TOKEN']).toBe('t0ken')
   })
 })
 
@@ -500,5 +704,9 @@ describe('module constants pin the contract the CI step and the docs rely on', (
     expect(RATCHET_BRANCH).toBe('chore/coverage-baseline-ratchet')
     expect(DEFAULT_MARGIN_PP).toBe(1)
     expect(TOKEN_ENV).toBe('COVERAGE_RATCHET_TOKEN')
+  })
+
+  it('names the git config key actions/checkout persists its credential into', () => {
+    expect(EXTRAHEADER_CONFIG_KEY).toBe('http.https://github.com/.extraheader')
   })
 })
