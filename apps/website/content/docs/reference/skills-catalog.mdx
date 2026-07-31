@@ -45,13 +45,15 @@ Reclassified from process skills — see [Migration Notes](/docs/reference/skill
 
 ### Assessment Capabilities
 
-All `assess-*` skills are **output-only**: they produce a proposal (rendered adoption content + target) plus a human-facing report and write no files. Persistence of a proposal is delegated to `/pair-capability-record-decision`, the **sole adoption writer**, composed by the caller (a process skill or a human/agent). See ADR-009 (`adr-009-assess-output-only`) in the project adoption records.
+All `assess-*` skills are **output-only**: they produce a proposal (rendered adoption content + target) plus a human-facing report and write **no adoption files**. Persistence of a proposal is delegated to `/pair-capability-record-decision`, the **sole adoption writer**, composed by the caller (a process skill or a human/agent). See ADR-009 (`adr-009-assess-output-only`) in the project adoption records.
+
+The only writes any of them perform are **operational reports** under `.pair/working/reports/` (D14) — `assess-security`'s audit, `assess-coupling`'s full-scope audit, and `assess-cost`'s report-mode panel. Never adoption, never backlog items.
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **assess-ai** | `/pair-capability-assess-ai` | Evaluates and recommends AI development tools — coding assistants (Copilot, Claude Code, Cursor), agent frameworks, MCP integrations, models — when the choice is open. |
 | **assess-architecture** | `/pair-capability-assess-architecture` | Evaluates and recommends an architecture pattern (layered, hexagonal, microservices, modular monolith, etc.) when the choice is open. |
-| **assess-cost** | `/pair-capability-assess-cost` | Classifies the financial exposure of a change as a chromatic cost class (green/yellow/orange/red) at review or on demand, by scanning the diff/story for cost signals against the KB cost-signal catalog resolved through the project's stack/architecture/infrastructure adoption. |
+| **assess-cost** | `/pair-capability-assess-cost` | Assesses the financial exposure of a change as a chromatic cost class (green/yellow/orange/red) against the KB cost-signal catalog resolved through the project's stack/architecture/infrastructure adoption, in two modes — review/refinement classification and period cost-monitoring reports. |
 | **assess-coupling** | `/pair-capability-assess-coupling` | Assesses architecture coupling against the three-dimensional model (integration strength x socio-technical distance x volatility + balance rule). |
 | **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Evaluates and recommends infrastructure strategy — cloud provider, CI/CD pipeline, deployment pattern, IaC, environments — when the choice is open. |
 | **assess-methodology** | `/pair-capability-assess-methodology` | Evaluates and recommends the development methodology (Scrum, Kanban, Lean, SAFe, hybrid) — iterations, ceremonies, flow — when the choice is open. |

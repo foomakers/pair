@@ -56,7 +56,7 @@ This framework does not cover:
 
 ### Operational Conventions
 
-**[Working Area](working-area.md)** - `.pair/working/` convention: checkpoints and reports, exclusion from KB registries (D14), and the `working_path` override
+**[Working Area](working-area.md)** - `.pair/working/` convention: checkpoints and reports, the period-keyed idempotent **report-panel** convention (one file per period, headline-first), exclusion from KB registries (D14), and the `working_path` override
 
 ## Introduction to Collaboration Excellence
 

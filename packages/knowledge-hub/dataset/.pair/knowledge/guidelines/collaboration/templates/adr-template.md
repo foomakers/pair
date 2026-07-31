@@ -2,11 +2,13 @@
 
 ## Status
 
-[Proposed | Accepted | Deprecated | Superseded by ADR-YYYY-MM-DD-<topic>]
+[Proposed | Accepted | Accepted (amended YYYY-MM-DD — <what changed>) | Deprecated | Superseded by ADR-YYYY-MM-DD-<topic>]
+
+An ADR whose **normative contract** is later changed keeps its identity (it is not superseded) but says so **above the fold**: the amended form of Status, the amendment date beside the original one, and the amendment itself inline in the body where the contract lives. A reader must never take the pre-amendment contract from a section the amendment contradicts, so any option/contract text the amendment narrows carries a pointer to it.
 
 ## Date
 
-YYYY-MM-DD
+YYYY-MM-DD [(amended YYYY-MM-DD)]
 
 ## Context
 

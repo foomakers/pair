@@ -78,7 +78,7 @@ Document decisions that affect:
 
 ## Status
 
-[Proposed | Accepted | Deprecated | Superseded]
+[Proposed | Accepted | Deprecated | Superseded | Accepted (amended YYYY-MM-DD)]
 
 ## Context
 

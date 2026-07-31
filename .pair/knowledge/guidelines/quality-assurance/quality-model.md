@@ -54,6 +54,8 @@ Coupling sources absent (no subdomain/bounded-context artifacts, no `assess-coup
 
 Cost class = **highest detected signal**. The signal catalog (paid-SDK imports, API-key env vars, IaC/provisioning changes, cron/queues, media processing, LLM calls) is maintained in the [cost-assessment guideline](cost-assessment.md), applied by `assess-cost`; no signal detected ⇒ `green`. General + provider-specific heuristics (AWS first, other providers via adoption links) live there too; deeper running-cost optimization is in [infrastructure/cloud-providers/cost-optimization.md](../infrastructure/cloud-providers/cost-optimization.md). This value is always computed and written to the story/PR body's matrix (§1); it is projected as the `cost:green|yellow|orange|red` tag only if a project adds `cost` to its Tag Projection declaration (§5) — the KB does not do this by default.
 
+**Cost monitoring (R6.3/R6.4) → `assess-cost` report mode.** The class above is computed twice per change (refinement, review); comparing the refinement-time *prediction* against the *real* class of the merged diff (R6.3) and surfacing systematic drift **periodically rather than per-PR** (R6.4) is `assess-cost`'s report mode, rendered as a period-keyed panel per the [report-panel convention](../collaboration/working-area.md#report-panels--period-key-and-idempotent-update). Drift is measured against the catalog current at run time — a catalog change inside the monitored window is a confounder, not a prediction error.
+
 ## 4. Per-Tier Requirements
 
 | Tier | Merge | Reviewers | SLA | Checklist | Approval |
