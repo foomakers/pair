@@ -238,6 +238,37 @@ describe('quick mode is declared where the questions are (AC1)', () => {
     expect(defaults.toLowerCase()).toMatch(/loud no-op/)
   })
 
+  // Review round 3 on PR #408: the SAME defect class as the assertion above,
+  // recurring in a surface that assertion structurally cannot see. Phase 3.5
+  // composes /map-subdomains and /map-contexts, and BOTH end in an unconditional
+  // "Approve or adjust?" — so "quick mode asks nothing" was false again, two
+  // questions further on. Pinning the composed-family suppression per surface is
+  // a stopgap; the real fix is a non-interactive signal on the families (#410).
+  it('suppresses the composed map-* approval rounds in quick mode, as a disclosed deviation', () => {
+    const step = sections.get('3.5.2') ?? sections.get('3.5') ?? datasetSkill()
+    expect(step).toMatch(
+      /map-\\?\*[\s\S]{0,600}approval round|approval round[\s\S]{0,600}map-\\?\*/i,
+    )
+    expect(step.toLowerCase()).toMatch(/deviation/)
+
+    const defaults = datasetDefaults()
+    // Three deviations now, not two — the count is stated in prose, so a fourth
+    // surface cannot be added without updating the disclosure.
+    expect(defaults).toMatch(/Three, all deliberate/i)
+    expect(defaults).toMatch(/map-\\?\*[\s\S]{0,600}approval round is not run/i)
+  })
+
+  // The one gate quick mode deliberately KEEPS. Asserted so a future "make quick
+  // mode ask nothing at all" change cannot silently swallow it: accepting an
+  // unbalanced + volatile relationship without a judgement would write a domain
+  // model recording a coupling risk nobody approved.
+  it('keeps the unbalanced+volatile HALT even in quick mode, and says so', () => {
+    const defaults = datasetDefaults()
+    expect(defaults).toMatch(/unbalanced \+ volatile/i)
+    expect(defaults.toLowerCase()).not.toMatch(/phase 3\.5[^|\n]*never blocking\s*\|/)
+    expect(defaults).toMatch(/quick mode (does not suppress it|keeps that gate)/i)
+  })
+
   it('qualifies the approval-round HALT conditions as guided-only', () => {
     const halt = datasetSkill().split('## HALT Conditions')[1] ?? ''
     expect(halt).toMatch(/Adoption file generation rejected[^\n]*guided only/i)

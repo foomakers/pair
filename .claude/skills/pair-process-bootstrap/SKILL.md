@@ -219,6 +219,8 @@ Runs after architecture and tech-stack are adopted (Step 3.1) — both are prere
 3. **Act**: Compose `/pair-capability-map-contexts` with `$scope: all` — the only caller allowed a full-catalog run. Uses the subdomain catalog (Step 3.5.1) plus architecture.md and tech-stack.md (Step 3.1).
 4. **Verify**: Bounded context catalog created/updated, or fallback noted. Domain modeling never blocks bootstrap completion — proceed to Phase 4 regardless of outcome.
 
+**Quick mode**: both composed `map-*` skills carry their own **unconditional** developer-approval round (`/pair-capability-map-subdomains` Step 3 "Approve or adjust?", `/pair-capability-map-contexts` Step 4 the same), so composing them plainly would emit two more questions inside a depth that asks none — the same collision as the assess-\* family in Step 2.2, in a different surface. Quick mode therefore **accepts each proposed delta as-is** and reports the catalogs once in the Step 4.3 summary; every entry stays an ordinary adoption file the developer can edit afterwards. This is a **disclosed per-adopter deviation** — see [quick-mode-defaults.md](./quick-mode-defaults.md) § Disclosed deviations. **One exception survives**: `/pair-capability-map-contexts` HALTs on an unbalanced + volatile relationship offered with neither mitigation nor acceptance, and quick mode does **not** suppress that — accepting it silently would write a domain model recording a coupling risk nobody judged. That single gate is the one place Phase 3.5 can still ask in quick mode.
+
 ## Phase 4: Finalization
 
 ### Step 4.1: Consistency Verification
@@ -302,7 +304,7 @@ Phase completion is detected via output file existence — never re-does complet
 
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill not installed → skip that phase/step with a warning, never blocks) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (`/pair-capability-record-decision` not installed → proposals cannot be persisted, document manually) for the standard scenarios. Additional cases (bootstrap's per-phase optional dependencies):
 
-- **assess-\* skills not installed**: Skip assessment phase, reference guideline files directly, ask developer for manual decisions. Log: "assess-\* skills not installed — using manual assessment."
+- **assess-\* skills not installed**: Skip assessment phase, reference guideline files directly, ask developer for manual decisions **in guided mode only** — in quick mode the manual path asks nothing either, taking the same per-project-type defaults and reporting them (Step 2.2). Log: "assess-\* skills not installed — using manual assessment."
 - **/specify-prd not installed**: HALT at Phase 0 if PRD is missing (a required dependency, not optional). Suggest creating PRD manually using how-to-01.
 - **/setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /pair-capability-setup-pm not installed."
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
