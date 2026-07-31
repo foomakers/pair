@@ -119,6 +119,40 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
     },
   )
 
+  // Contract clause 5. "Implicit" answers HOW membership happens, not WHETHER the item
+  // is visible: on Azure an area path outside the team's configured areas, and on Linear
+  // a project-scoped view, both leave a created-and-assigned item out of the view the
+  // team reads. So an implicit-membership adapter must also NAME what decides that view.
+  // Table-driven rather than a generic regex, and it fails loudly on an adapter it does
+  // not know — enrolling a new implicit adapter is a deliberate edit, not a default.
+  const IMPLICIT_VIEW_DECIDERS: Record<string, string> = {
+    'azure-devops-implementation.md': '--area',
+    'linear-implementation.md': 'projectId',
+    // No separate field exists here: the file's path IS both membership and view.
+    'filesystem-implementation.md': "location",
+  }
+
+  it.each(adapterCases)(
+    '$corpus/$file — implicit membership still names what decides the read view (clause 5)',
+    ({ file, content }) => {
+      const body = normalize(section(content, VISIBILITY_HEADING))
+      // The PINNED sentence form (`Board` prefix), not the bare phrase: an adapter
+      // legitimately cross-references the other semantics in prose — github's section
+      // explains what implicit membership means elsewhere — and matching the bare
+      // phrase read that as github declaring itself implicit.
+      if (!/board membership is implicit/.test(body)) return
+      const decider = IMPLICIT_VIEW_DECIDERS[file]
+      expect(
+        decider,
+        `${file} declares implicit membership but is not enrolled in IMPLICIT_VIEW_DECIDERS — ` +
+          `add the field that decides its read view (contract clause 5)`,
+      ).toBeDefined()
+      expect(body, `${file} must name '${decider}' in its visibility section`).toContain(
+        normalize(decider as string),
+      )
+    },
+  )
+
   // The assertion above accepts either word, by design: it must hold for an
   // adapter this suite has never seen. But for the adapters that DO exist, the
   // loose form lets a regression flip azure/filesystem to "explicit" — or github
@@ -398,7 +432,10 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
       // numeric form belongs to the separate `gh project` commands. The pinned half
       // is the never-a-node-ID one, which is what an agent gets wrong.
       expect(normalize(content)).toContain("takes the project's title, never its node")
-      expect(normalize(content)).not.toContain('(or number)')
+      // Scoped to the CLAIM, not to the whole file: "(or number)" is legitimate prose
+      // elsewhere, so a bare ban would redden on a sentence that has nothing to do with
+      // --project.
+      expect(content).not.toMatch(/takes the project's \*?\*?title\*?\*?[^.\n]*\(or number\)/i)
     },
   )
 
@@ -488,8 +525,17 @@ function markdownFiles(dir: string): string[] {
  * lines are dropped before joining — an apostrophe in a comment would otherwise
  * unbalance the quote count and hide the command underneath it.
  */
-/** Marks a fence boundary in the line stream: no command spans two code blocks. */
-const FENCE_BREAK = ' fence'
+/**
+ * Marks a fence boundary in the line stream: no command spans two code blocks.
+ *
+ * The leading NUL is what makes the sentinel collision-proof — markdown cannot
+ * contain one, so no content line can ever equal it. Written ESCAPED on purpose: it
+ * used to be a literal NUL byte in this source, invisible in every editor and diff
+ * (it renders as a space, and a round-4 reviewer read it as one), so a well-meant
+ * "tidy the whitespace" edit would have silently turned it into a value markdown CAN
+ * produce. Keep the escape.
+ */
+const FENCE_BREAK = '\u0000fence'
 
 /** Code-block lines only, shell prompts stripped, blanks and comments dropped. */
 function fencedLines(markdown: string): string[] {
@@ -560,6 +606,15 @@ const CREATE_FAMILIES = [
   },
 ]
 
+type CreateRecipeCase = {
+  corpus: string
+  file: string
+  tool: string
+  family: (typeof CREATE_FAMILIES)[number]
+  command: string
+  occurrence: number
+}
+
 const createRecipeCases = KB_ROOTS.flatMap(({ label, dir }) =>
   markdownFiles(dir)
     .flatMap(path =>
@@ -578,7 +633,19 @@ const createRecipeCases = KB_ROOTS.flatMap(({ label, dir }) =>
           : []
       }),
     )
-    .map((recipe, index) => ({ ...recipe, occurrence: index + 1 })),
+    .reduce<{ perFile: Map<string, number>; out: CreateRecipeCase[] }>(
+      // `occurrence` numbers recipes WITHIN a file. It exists to disambiguate two
+      // recipes in the same document; numbering across the corpus made a case name
+      // depend on how many recipes happened to precede it in unrelated files, so
+      // adding a snippet to one adapter renamed the cases of every later one.
+      (acc, recipe) => {
+        const n = (acc.perFile.get(recipe.file) ?? 0) + 1
+        acc.perFile.set(recipe.file, n)
+        acc.out.push({ ...recipe, occurrence: n })
+        return acc
+      },
+      { perFile: new Map(), out: [] },
+    ).out,
 )
 
 describe('KB-wide — no issue-create recipe omits the assignee (gh, az, linear) (#402)', () => {

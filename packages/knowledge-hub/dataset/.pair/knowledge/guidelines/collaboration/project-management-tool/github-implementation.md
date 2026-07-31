@@ -436,6 +436,10 @@ gh issue create --title "[title]" --body-file [file] --assignee "[login]" --proj
 
 # Without --project (or after any MCP create): membership is still missing.
 # Run Step 2b below — it is idempotent, so it is safe to run unconditionally.
+#
+# No project named in way-of-working.md at all: omit --project AND skip Step 2b.
+# That is the Step 1 no-project outcome, not a workaround — there is no board to
+# be absent from, so the item is not invisible.
 
 # Existing issue — --add-assignee adds without replacing, so it is safe to run unconditionally
 gh issue edit [NUMBER] --add-assignee "[login]"
@@ -518,6 +522,8 @@ Never carry an empty id into Step 3: `updateProjectV2ItemFieldValue` fails with 
 #### Step 2b: Add the Issue as a Project Item (idempotent — safe as an unconditional precondition)
 
 Reached whenever Step 2 found nothing, and safe to run even when it found something (see **Idempotent** below) — so the conditional shape is an optimisation, never a requirement. Membership must exist before the status field can be written — the field lives on the **item**, not on the issue.
+
+`[PROJECT_ID]` below comes from **Step 1**: run it first when you arrive here straight from the create recipe rather than through Step 2.
 
 ```bash
 # Get the issue's node id, then add it to the project

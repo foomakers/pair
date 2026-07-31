@@ -374,6 +374,9 @@ case $SEVERITY in
         # --assignee is not optional: an unassigned incident issue is invisible
         # in the assignee-filtered view the team reads (see the PM-tool adapter's
         # "Item Visibility: Membership and Assignee" section).
+        # No --project on purpose: an incident is not a backlog item, so it is
+        # deliberately board-less. If your team DOES track incidents on the board,
+        # add --project and the adapter's add-item step (Step 2b) after this call.
         gh issue create \
             --title "🚨 Security Incident: $INCIDENT_TYPE" \
             --body "High priority security incident requiring immediate attention" \

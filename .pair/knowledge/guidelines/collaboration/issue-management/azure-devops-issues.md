@@ -32,6 +32,7 @@ az boards work-item create \
   --title "[Story title]" \
   --description "[Body following the user-story-template]" \
   --assigned-to "[user@example.com]" \
+  --area "[team area path]" \
   --project <project>
 ```
 
@@ -45,6 +46,7 @@ az boards work-item create \
   --title "[Task title]" \
   --description "[Body following the task-template]" \
   --assigned-to "[user@example.com]" \
+  --area "[team area path]" \
   --project <project>
 ```
 
@@ -56,6 +58,7 @@ az boards work-item create \
   --title "[Bug title]" \
   --description "[Reproduction steps, expected vs actual]" \
   --assigned-to "[user@example.com]" \
+  --area "[team area path]" \
   --project <project>
 ```
 

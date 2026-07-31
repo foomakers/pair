@@ -40,6 +40,8 @@ linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ suc
 
 `issue.identifier` (e.g. `ENG-412`) is the item id pair uses in commits, branch names, and the PR's `Refs:` line.
 
+Add `"projectId":"<project-id>"` to the same `input` **only when [way-of-working.md](../../../../adoption/tech/way-of-working.md) names a project view** — on Linear membership comes from the required `teamId`, so a project is a grouping inside the team, not what makes the issue visible. JSON carries no comments, which is why the condition is stated here rather than inside the snippet.
+
 ### Epic
 
 Same mutation without `parentId`, labelled `epic`. Attach it to a Project via `projectId` when initiatives are tracked as Projects.

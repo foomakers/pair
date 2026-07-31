@@ -213,7 +213,7 @@ Status changes are reflected by moving files between directories:
 **Assignee**: [name or handle of the person the work is done for]
 ```
 
-**Where the line goes**: the item templates carry **no `Assignee` field**, so copying a template does not leave a slot for it. Add it to the item's context block — for a user story, in **`## Epic Context`** immediately after `**Priority**`; for a task, in the same header block that carries the parent story. Writing it anywhere the grep below finds it is correct; leaving it out because the template lacked a field is not.
+**Where the line goes**: the item templates carry **no `Assignee` field**, so copying a template does not leave a slot for it. Add it to the item's context block — for a user story, in **`## Epic Context`** immediately after `**Priority**`; for a task, in the same header block that carries the parent story; for an **epic** or an **initiative**, in its own header/context block, the one carrying `**Priority**`. Writing it anywhere the grep below finds it is correct; leaving it out because the template lacked a field is not.
 
 **Why the slot is not in the shared templates** (a deliberate choice, not an oversight): on every other adapter the assignee is a **native tracker field** — GitHub's `assignees`, Azure's `--assigned-to`, Linear's `assigneeId` — so a template slot would be dead weight there, and a second source of truth competing with the field the board actually filters on. The templates therefore stay tool-neutral and this adapter owns the convention, which is why the placement rule is stated here and is looser than a template field would be. Recorded with the rest of the contract rationale in this repository's `.pair/adoption/decision-log/2026-07-31-pm-adapter-visibility-contract.md`.
 
@@ -248,6 +248,7 @@ Fill out all sections of the initiative template:
 - **Business Objective**: Clear statement of business goals
 - **Success Metrics**: Measurable outcomes and KPIs
 - **Priority**: P0 (Must-Have) | P1 (Should-Have) | P2 (Could-Have)
+- **Assignee**: the person the work is done for — required, see [Item Visibility](#item-visibility-membership-and-assignee)
 - **Estimated Timeline**: High-level timeframe
 - **Dependencies**: External dependencies and blockers
 - **Epic References**: Links to related epics (added as epics are created)
