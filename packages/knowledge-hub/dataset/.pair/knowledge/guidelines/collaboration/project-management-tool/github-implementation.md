@@ -43,6 +43,8 @@ npm install -g @github/github-mcp-server
 - Issue workflow automation
 - Integration with project boards
 
+**Creating an issue?** The create recipe — assignee **and** project membership, which are two independent writes — lives in [Item Visibility: Membership and Assignee](#item-visibility-membership-and-assignee) further down this file. It sits next to the board-status mechanics it depends on rather than here.
+
 ### Project Tracking
 
 #### → See [../project-tracking/](../project-tracking/README.md)
@@ -203,8 +205,13 @@ npm install -g @github/github-mcp-server
 ```bash
 # Fallback commands when MCP unavailable
 gh project list --owner [ORG]
-gh issue create --project [PROJECT_ID]
-gh pr create --project [PROJECT_ID]
+
+# --project takes the project's TITLE (or number), never its node ID.
+# Passing it at create time is what makes the item a board member —
+# see "Item Visibility: Membership and Assignee" below for why that matters
+# and for the Step 2b path when this flag is not used.
+gh issue create --project "[project title]"
+gh pr create --project "[project title]"
 ```
 
 ### API Integration
@@ -392,14 +399,18 @@ mcp__github__issue_write:
 | Assignee           | Open, on the board, green — and absent from the assignee-filtered view teams read   |
 | Project membership | Open, assigned, green — and absent from the board entirely                          |
 
-**Board membership is explicit on GitHub**: an issue and a project item are **distinct objects**, and `gh issue create` produces only the issue. Membership is a separate `addProjectV2ItemById` call (Step 2b below). This is tool-specific — on tools where membership is implicit, the guide says so; never assume the GitHub shape elsewhere.
+**Board membership is explicit on GitHub**: an issue and a project item are **distinct objects**. `mcp__github__issue_write` has **no project field at all**, and `gh issue create` produces only the issue **unless you pass `--project`**. Either way membership is a separate decision, made by `--project` at create time or by `addProjectV2ItemById` afterwards (Step 2b below). This is tool-specific — on tools where membership is implicit, the guide says so; never assume the GitHub shape elsewhere.
 
 The assignee is required by the Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md): the board is read filtered by assignee. Set it **as part of the create**, never as a follow-up step.
 
-#### Create an Issue with its Assignee
+#### Create an Issue with its Assignee and its Membership
+
+**Creating does not imply membership.** Both writes belong to the create, because the two failure modes above are independent: an issue created with an assignee and no membership is open, assigned, green and absent from the board — which is the exact defect this section exists to prevent, and it is reachable through the **most common** path, a follow-up issue filed with no status transition.
 
 ```text
-# MCP-first
+# MCP-first — NOTE: issue_write has no project field.
+# This call creates the issue and its assignee ONLY.
+# Step 2b is REQUIRED after it, not optional.
 mcp__github__issue_write:
   method: create
   owner: [org]
@@ -411,8 +422,12 @@ mcp__github__issue_write:
 ```
 
 ```bash
-# CLI fallback
-gh issue create --title "[title]" --body-file [file] --assignee "[login]"
+# CLI fallback — one shot: --project takes the project's TITLE (or number),
+# never its node ID, and the project is the one named in way-of-working.md.
+gh issue create --title "[title]" --body-file [file] --assignee "[login]" --project "[project title]"
+
+# Without --project (or after any MCP create): membership is still missing.
+# Run Step 2b below — it is idempotent, so it is safe to run unconditionally.
 
 # Existing issue — --add-assignee adds without replacing, so it is safe to run unconditionally
 gh issue edit [NUMBER] --add-assignee "[login]"

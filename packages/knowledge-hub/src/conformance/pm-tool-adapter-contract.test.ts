@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync, readdirSync } from 'fs'
+import { readFileSync, readdirSync, existsSync } from 'fs'
 import { join } from 'path'
 
 /**
@@ -111,6 +111,41 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
     ({ content }) => {
       const body = normalize(section(content, VISIBILITY_HEADING))
       expect(body).toMatch(/membership is (explicit|implicit)/)
+    },
+  )
+
+  // The assertion above accepts either word, by design: it must hold for an
+  // adapter this suite has never seen. But for the adapters that DO exist, the
+  // loose form lets a regression flip azure/filesystem to "explicit" — or github
+  // to "implicit" — and stay green, which is exactly the confusion AC4 exists to
+  // prevent ("silence is what makes an agent invent an add-item step"). So pin
+  // the known values by name. Still count-free: a sixth adapter is governed by
+  // the loose assertion above until someone states its semantics here.
+  const KNOWN_SEMANTICS = [
+    { file: 'github-implementation.md', word: 'explicit' },
+    { file: 'azure-devops-implementation.md', word: 'implicit' },
+    { file: 'filesystem-implementation.md', word: 'implicit' },
+  ]
+  const knownCases = CORPORA.flatMap(({ label, dir }) =>
+    KNOWN_SEMANTICS.filter(k => existsSync(join(dir, k.file))).map(k => ({
+      corpus: label,
+      file: k.file,
+      word: k.word,
+      content: readFileSync(join(dir, k.file), 'utf-8'),
+    })),
+  )
+
+  it.each(knownCases)(
+    '$corpus/$file pins its membership as $word, so a flip cannot pass (AC4)',
+    ({ content, word }) => {
+      const body = normalize(section(content, VISIBILITY_HEADING))
+      const other = word === 'explicit' ? 'implicit' : 'explicit'
+      // Pin the adapter's OWN declaration — the `board membership is …` sentence.
+      // A bare `membership is <word>` negative was wrong: github's section legitimately
+      // says "on tools where membership is implicit, the guide says so", a pointer to
+      // the other adapters, not a claim about GitHub. Caught by this test failing.
+      expect(body).toContain(`board membership is ${word}`)
+      expect(body).not.toContain(`board membership is ${other}`)
     },
   )
 
@@ -274,4 +309,40 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
       "a pr's author is not its assignees",
     )
   })
+
+  // Review finding M1 on PR #404. The create recipe used to write the assignee and
+  // NOT the membership, so `/write-issue` called without `$status` — the follow-up
+  // path, which is how #384 and #372 were actually filed — produced the exact
+  // defect this story exists to remove: open, assigned, green, off the board.
+  // AC1 only closes the status-write path; these pin the create path.
+  it.each(githubCases)(
+    '$corpus: the create recipe states that creating does not imply membership',
+    ({ content }) => {
+      const body = normalize(section(content, VISIBILITY_HEADING))
+      expect(body).toContain('creating does not imply membership')
+    },
+  )
+
+  it.each(githubCases)('$corpus: the create recipe carries the membership write', ({ content }) => {
+    const body = section(content, VISIBILITY_HEADING)
+    // Same whole-command discipline as the assignee pin above: a bare `--project`
+    // check would be satisfied by the `gh pr create` line alone.
+    expect(body).toMatch(/gh issue create\b[^\n]*--project "\[project title\]"/)
+    // MCP has no project field, so Step 2b is mandatory after it — not optional.
+    expect(normalize(body)).toContain('step 2b is required after it, not optional')
+  })
+
+  it.each(githubCases)(
+    '$corpus: --project is documented as a title, never a node id',
+    ({ content }) => {
+      // The Advanced Features snippet passed [PROJECT_ID], contradicting this file's
+      // own visibility section AND being wrong about the flag's argument type.
+      // Asserted on RAW content, not normalize()d: normalize strips `_`, so
+      // `[PROJECT_ID]` becomes `[projectid]` and a check written with the underscore
+      // could never match. That exact vacuity was caught by injection-testing this
+      // guard — the regression was reinstated and the suite stayed green.
+      expect(content).not.toMatch(/gh (issue|pr) create --project \[PROJECT_ID\]/i)
+      expect(normalize(content)).toContain("takes the project's title (or number), never its node")
+    },
+  )
 })

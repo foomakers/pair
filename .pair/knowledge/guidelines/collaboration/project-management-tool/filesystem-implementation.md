@@ -213,6 +213,8 @@ Status changes are reflected by moving files between directories:
 **Assignee**: [name or handle of the person the work is done for]
 ```
 
+**Where the line goes**: the item templates carry **no `Assignee` field**, so copying a template does not leave a slot for it. Add it to the item's context block — for a user story, in **`## Epic Context`** immediately after `**Priority**`; for a task, in the same header block that carries the parent story. Writing it anywhere the grep below finds it is correct; leaving it out because the template lacked a field is not.
+
 Grep is the filtered view: `grep -rl 'Assignee.*<name>' .pair/adoption/product/backlog/` — which is exactly why an item with the line missing is invisible. **If the assignee cannot be resolved**: **report it** — never drop it silently by writing the file with the line omitted or left as a placeholder.
 
 ## Working with Initiatives
