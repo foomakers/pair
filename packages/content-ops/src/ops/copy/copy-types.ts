@@ -10,5 +10,9 @@ export type CopyPathOpsResult = {
   skillLinkPathMap?: SkillLinkPathMap
 }
 
-/** Naming transform options (flatten and/or prefix) applied during a copy. */
-export type TransformOpts = { flatten: boolean; prefix?: string }
+/**
+ * Naming transform options (flatten and/or prefix, optionally depth-bounded).
+ * Declared next to `transformPath`, which consumes it — re-exported here so the
+ * copy modules keep importing their types from one place.
+ */
+export type { TransformOpts } from '../naming-transforms'

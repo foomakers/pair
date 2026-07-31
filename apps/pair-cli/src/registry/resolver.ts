@@ -11,6 +11,17 @@ export interface RegistryConfig {
   description: string
   include: string[]
   flatten: boolean
+  /**
+   * Bounds `flatten` to this registry's ENTRY granularity (#407): only the first
+   * `flattenDepth` source segments are joined into the installed directory name,
+   * anything deeper stays a real sub-path. The `skills` registry's entries are
+   * two segments (`process/review`), so a third segment (`references/`) is
+   * content *of* that skill and must install inside it.
+   *
+   * Omitted ⇒ every separator is flattened, as before. Validated as a positive
+   * integer by `validateFlattenDepthField`.
+   */
+  flattenDepth?: number
   prefix?: string
   targets: TargetConfig[]
 }
@@ -66,6 +77,13 @@ function normalizeRegistryConfig(name: string, raw: Record<string, unknown>): Re
     description: String(raw['description'] || ''),
     include: Array.isArray(raw['include']) ? (raw['include'] as string[]) : [],
     flatten: typeof raw['flatten'] === 'boolean' ? raw['flatten'] : false,
+    // Carried through as-is (no coercion): validateFlattenDepthField rejects a
+    // non-positive-integer loudly rather than letting a config typo degrade into
+    // an unbounded flatten, which is exactly the #407 defect.
+    // `!== undefined`, not `!= null`: an explicit `"flattenDepth": null` must reach
+    // validateFlattenDepthField and be rejected by name, not be silently dropped into
+    // the unbounded default — a null is a config mistake, not an omission.
+    ...(raw['flattenDepth'] !== undefined && { flattenDepth: raw['flattenDepth'] as number }),
     ...(raw['prefix'] != null && { prefix: String(raw['prefix']) }),
     targets,
   }

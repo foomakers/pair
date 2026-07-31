@@ -1,6 +1,6 @@
 # ADR-005: Skills Infrastructure for Agent-Assisted Development
 
-**Status:** Accepted
+**Status:** Accepted — **amended by [ADR-020](adr-020-bounded-flatten-depth-entry-granularity.md)** (flatten is bounded to the registry's entry granularity for the `skills` registry; see Key Design Choice #2 and the Flatten/prefix rationale below)
 **Date:** 2026-02-10
 **Context:** Epic #97 - Agent Skills in KB, Story #98 - Skill Infrastructure and Navigator
 
@@ -11,16 +11,16 @@ Introduce a `.skills/` directory within the KB dataset as the source of truth fo
 ### Key Design Choices
 
 1. **Directory structure**: `.skills/{category}/{skill-name}/SKILL.md` — skills organized by category (navigator, process, capability).
-2. **Naming transforms**: Flatten (`navigator/next` → `navigator-next`) + prefix (`pair-navigator-next`) to produce unique, tool-compatible directory names.
+2. **Naming transforms**: Flatten (`navigator/next` → `navigator-next`) + prefix (`pair-navigator-next`) to produce unique, tool-compatible directory names. **Amended by ADR-020**: flatten joins only the registry's ENTRY segments (`flattenDepth: 2` for `skills`); a deeper segment is content *of* the skill and installs inside it (`process/review/references` → `pair-process-review/references`, not the sibling `pair-process-review-references`).
 3. **Multi-target distribution**: One canonical target (`.claude/skills/`) receives the physical copy; 5 secondary targets (`.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/`, `.windsurf/skills/`) receive symlinks pointing to canonical.
 4. **Link rewriting**: Relative markdown links inside skill files are rewritten after flatten/prefix copy to maintain correctness.
-5. **Configuration**: Skills registry defined in `config.json` with `flatten: true`, `prefix: "pair"`, `behavior: "mirror"`, and explicit `targets[]` array.
+5. **Configuration**: Skills registry defined in `config.json` with `flatten: true`, `flattenDepth: 2` (ADR-020), `prefix: "pair"`, `behavior: "overwrite"`, and explicit `targets[]` array.
 
 ## Rationale
 
 - **Open standard**: Agent Skills (agentskills.io) is supported by Claude Code, Cursor, VS Code Copilot, OpenAI Codex, and Windsurf. Adopting this standard maximizes tool compatibility.
 - **Symlinks over copies**: Avoids content duplication across 6 targets, reducing disk usage and ensuring consistency. Windows environments fall back to copy mode (validated at config time).
-- **Flatten/prefix**: AI tools expect skills in flat directory structures. Prefixing with `pair-` prevents naming collisions with skills from other sources.
+- **Flatten/prefix**: AI tools expect skills in flat directory structures. Prefixing with `pair-` prevents naming collisions with skills from other sources. **Amended by ADR-020**: "flat" means the skill *directory names* are flat — a skill's own sub-directories (e.g. `references/`) stay nested inside it, which is what the Agent Skills progressive-disclosure layout requires.
 - **KB-native**: Skills live in the KB dataset alongside existing `.pair/` content, leveraging the existing distribution pipeline (`pair install`, `pair update`).
 
 ## Consequences

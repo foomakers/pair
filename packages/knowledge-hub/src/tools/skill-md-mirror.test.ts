@@ -130,6 +130,9 @@ describe('directional guard ignores root-only artifacts with no dataset source',
   it('enumerates ONLY the dataset-derived expected set, never a root-only skill', async () => {
     // Synthetic dataset that deliberately does NOT contain `agent-browser` (a real root-only skill).
     const tree: DatasetTree = {
+      // The nested reference needs a TWO-segment entry: a one-segment entry owning
+      // a sub-directory is refused outright by the shallow-entry guard.
+      'catalog/nested/SKILL.md': '---\nname: nested\ndescription: "n"\n---\n\n# nested\n',
       'capability/verify-quality/SKILL.md': '---\nname: verify-quality\n---\n\n# vq\n',
       'next/SKILL.md': '---\nname: next\n---\n\n# next\n',
     }
@@ -218,17 +221,27 @@ describe('root-copy read distinguishes a missing copy from an unreadable one', (
  * no mirror-delete" — would become quietly false.
  */
 describe('SKILL_COPY_OPTS stays pinned to the pair-cli skills registry', () => {
-  it('flatten/prefix/source/behavior match apps/pair-cli/config.json asset_registries.skills', () => {
+  it('flatten/flattenDepth/prefix/source/behavior match apps/pair-cli/config.json asset_registries.skills', () => {
     const config = JSON.parse(
       readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
     ) as {
       asset_registries: {
-        skills: { source: string; flatten: boolean; prefix: string; behavior: string }
+        skills: {
+          source: string
+          flatten: boolean
+          flattenDepth?: number
+          prefix: string
+          behavior: string
+        }
       }
     }
     const registry = config.asset_registries.skills
     expect(SKILL_COPY_OPTS.flatten).toBe(registry.flatten)
     expect(SKILL_COPY_OPTS.prefix).toBe(registry.prefix)
+    // #407: the entry granularity is part of the transform, so it is pinned too —
+    // otherwise the guard would derive sibling `-references` paths the real
+    // `pair update` no longer produces.
+    expect(SKILL_COPY_OPTS.flattenDepth).toBe(registry.flattenDepth)
     // the guard reads the dataset from the registry's declared source dir (.skills)
     expect(DATASET_SKILLS.endsWith(registry.source)).toBe(true)
     // ...and runs the pipeline with the registry's declared copy behavior
@@ -305,9 +318,19 @@ describe('installedArtifactPath — root location via the real naming transform'
     expect(installedArtifactPath('next/SKILL.md')).toBe('pair-next/SKILL.md')
   })
 
-  it('flattens a nested sub-dir into its own prefixed dir, as the pipeline does today (#407)', () => {
+  // Inverted when #407 landed. This asserted the DEFECT — the sub-dir flattened
+  // OUT of its skill into a sibling pseudo-skill — deliberately, because the
+  // guard's job is to mirror whatever the real pipeline does, and pinning the
+  // then-current behaviour is what kept the guard honest until the pipeline was
+  // fixed. The bounded flatten (`flattenDepth`) now keeps it inside the skill,
+  // so the expectation flips with it.
+  it('keeps a nested sub-dir INSIDE its skill, as the bounded flatten does (#407)', () => {
     expect(installedArtifactPath('process/review/references/deep.md')).toBe(
-      'pair-process-review-references/deep.md',
+      'pair-process-review/references/deep.md',
+    )
+    // The sibling shape the pipeline used to produce is now unreachable.
+    expect(installedArtifactPath('process/review/references/deep.md')).not.toContain(
+      'pair-process-review-references',
     )
   })
 
@@ -447,7 +470,7 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
  */
 describe('drift-injection on sub-docs and nested references (non-SKILL.md artifacts)', () => {
   const SUB = 'demo/sub-doc.md'
-  const NESTED = 'demo/references/deep.md'
+  const NESTED = 'catalog/nested/references/deep.md'
   const SUB_ROOT = '.claude/skills/pair-demo/sub-doc.md'
   const MINI: DatasetTree = {
     'demo/SKILL.md': '---\nname: demo\ndescription: "d"\n---\n\n# demo\n',
@@ -457,6 +480,10 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     // `/command` -> `/pair-*` skill-reference rewrite.
     [SUB]:
       '# sub\n\nDisclosed from [SKILL.md](SKILL.md).\nSee [kb](../../.pair/kb.md).\nCompose /verify-quality first.\nTail line kept unchanged.\nAnother tail line.\nAnd a third.\n',
+    // The nested reference needs a TWO-segment entry that holds files of its own:
+    // a one-segment entry owning a sub-directory, and an entry deeper than the
+    // flatten depth, are both refused by the layout guards.
+    'catalog/nested/SKILL.md': '---\nname: nested\ndescription: "n"\n---\n\n# nested\n',
     [NESTED]: '# deep\n\nCompose /verify-quality here.\n',
     'capability/verify-quality/SKILL.md': '---\nname: verify-quality\n---\n\n# vq\n',
     // non-markdown noise: copied by the pipeline, never asserted as an artifact
@@ -471,14 +498,18 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
   it('asserts the sub-doc and the nested reference, and NOT the non-markdown file', () => {
     expect([...mirror.byDatasetPath.keys()].sort()).toEqual([
       'capability/verify-quality/SKILL.md',
-      'demo/SKILL.md',
+      'catalog/nested/SKILL.md',
       NESTED,
+      'demo/SKILL.md',
       SUB,
     ])
     expect(mirror.producedPaths).toContain('pair-demo/sub-doc.md')
-    // a nested subdir is FLATTENED into its own top-level prefixed dir (current
-    // pipeline behavior — a defect tracked in #407, mirrored here, not endorsed)
-    expect(mirror.producedPaths).toContain('pair-demo-references/deep.md')
+    // The nested subdir is PRESERVED inside its skill (#407). Its fixture entry is
+    // `catalog/nested` — two segments — because a one-segment entry owning a
+    // sub-directory is now refused outright by the shallow-entry layout guard,
+    // while the sub-doc case above stays on the one-segment `demo/` precisely
+    // because that is where the link-depth rewrite is observable.
+    expect(mirror.producedPaths).toContain('pair-catalog-nested/references/deep.md')
     // The pipeline REALLY copied the non-markdown file (asserted on the
     // destination tree, so this cannot pass vacuously) and the guard's asserted
     // set above still excludes it.
@@ -489,13 +520,20 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     const sub = mirror.byDatasetPath.get(SUB)!
     expect(sub).toContain('](./SKILL.md)') // sibling self-pointer normalised
     expect(sub).not.toContain('[SKILL.md](SKILL.md)')
+    // A ONE-segment entry is deliberate here: `demo/` sits 2 levels below the
+    // dataset root and `pair-demo/` sits 3 below the mirror root, so the link up
+    // MUST be recomputed. With a two-segment entry both sides are 3 levels and
+    // the rewriter correctly leaves the link alone — a degenerate case that
+    // cannot demonstrate the bump. The nested-reference case needs the opposite
+    // (two segments, else the shallow-entry guard refuses it), so it has its own
+    // fixture below.
     expect(sub).toContain('](../../../.pair/kb.md)') // link-depth bump
     expect(sub).not.toContain('](../../.pair/kb.md)')
     expect(sub).toContain('/pair-capability-verify-quality') // skill-reference rewrite
     expect(sub).not.toContain(' /verify-quality ')
   })
 
-  it('rewrites a nested reference file too (flattened into its own prefixed dir)', () => {
+  it('rewrites a nested reference file too (now preserved inside the skill, #407)', () => {
     expect(mirror.byDatasetPath.get(NESTED)).toContain('/pair-capability-verify-quality')
   })
 
@@ -548,6 +586,6 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     const drifted = `${deep}stray\n`
     const message = captureThrownMessage(() => assertRootArtifactMatches(NESTED, deep, drifted))
     expect(message).toContain(NESTED)
-    expect(message).toContain('.claude/skills/pair-demo-references/deep.md')
+    expect(message).toContain('.claude/skills/pair-catalog-nested/references/deep.md')
   })
 })

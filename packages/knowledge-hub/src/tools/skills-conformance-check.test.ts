@@ -12,8 +12,11 @@ import {
   countByCategory,
   checkProseCounts,
   checkCategoryLabelCounts,
+  checkEntrypointDepth,
+  ENTRY_DEPTH,
   runChecks,
 } from './skills-conformance-check'
+import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
 
 describe('parseFrontmatter', () => {
@@ -300,5 +303,83 @@ describe('runChecks — block-scalar size-gate cannot be bypassed (finding 1)', 
       ),
     ).toBe(true)
     expect(errors.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Authoring rule 1 of `skill-conventions/nested-sub-documents.md` ("only the entry
+ * directory holds SKILL.md") was stated but unenforced — the same silent-hole class
+ * as #407's too-deep entry, one layer up. A `SKILL.md` inside a real skill's
+ * `references/` is correctly-shaped CONTENT for the copy pipeline's layout guards
+ * (recognising it there would need the `SKILL.md` knowledge ADR-020 keeps out of a
+ * shared transform), and the mirror-equality guard derives the installed path from
+ * that same transform, so it agrees with itself. Static corpus knowledge is the
+ * right layer, and this is it.
+ */
+describe('checkEntrypointDepth (#411 round 4)', () => {
+  const at = (rel: string) => pathJoin('/corpus', rel)
+
+  it('accepts a SKILL.md at the entry depth, and the bare meta skill above it', () => {
+    expect(
+      checkEntrypointDepth('/corpus', [
+        at('process/review/SKILL.md'),
+        at('capability/grill/SKILL.md'),
+        at('next/SKILL.md'),
+      ]),
+    ).toEqual([])
+  })
+
+  it('ignores non-entrypoint markdown at any depth', () => {
+    // Sub-documents are the whole point of the convention — only the entrypoint
+    // NAME is depth-constrained.
+    expect(
+      checkEntrypointDepth('/corpus', [
+        at('process/review/references/deep.md'),
+        at('process/review/merge-and-cascade.md'),
+      ]),
+    ).toEqual([])
+  })
+
+  it('rejects a SKILL.md below the entry depth — it would install non-invocable', () => {
+    const errors = checkEntrypointDepth('/corpus', [at('process/review/references/SKILL.md')])
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('references')
+    expect(errors[0]).toContain('non-invocable')
+  })
+
+  it('rejects a SKILL.md at the registry root, which has no skill directory at all', () => {
+    const errors = checkEntrypointDepth('/corpus', [at('SKILL.md')])
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('registry root')
+  })
+
+  it("ENTRY_DEPTH is the registry's declared flattenDepth, not an independent number", () => {
+    // Same fact as `apps/pair-cli/config.json`'s `skills.flattenDepth`, itself
+    // pinned to that file by skill-md-mirror's own test. Duplicated as a plain
+    // constant so this gate script keeps running under ts-node with no build.
+    expect(ENTRY_DEPTH).toBe(SKILL_COPY_OPTS.flattenDepth)
+  })
+})
+
+describe('runChecks — a too-deep SKILL.md fails the gate (#411 round 4)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-depth-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('reads a SKILL.md the entry walk never reaches, and reports it (drives CLI exit 1)', () => {
+    mkdirSync(join(root, 'process/review/references'), { recursive: true })
+    writeFileSync(
+      join(root, 'process/review', 'SKILL.md'),
+      '---\nname: review\ndescription: "Reviews."\n---\nbody',
+    )
+    writeFileSync(
+      join(root, 'process/review/references', 'SKILL.md'),
+      '---\nname: bogus\ndescription: "Would install silently non-invocable."\n---\nbody',
+    )
+
+    const { errors, skillCount } = runChecks(root)
+    // The entry walk still counts ONE skill — which is exactly why nothing saw the
+    // second file before this check.
+    expect(skillCount).toBe(1)
+    expect(errors.some(e => e.includes('references') && e.includes('SKILL.md'))).toBe(true)
   })
 })

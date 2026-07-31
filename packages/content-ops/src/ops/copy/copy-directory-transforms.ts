@@ -1,9 +1,14 @@
 import { join, relative, dirname } from 'path/posix'
-import { logger, createError } from '../../observability'
+import { logger } from '../../observability'
 import { copyFileHelper } from '../../file-system'
 import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
-import { transformPath, detectCollisions } from '../naming-transforms'
+import { transformPath, isRegistryEntryPath } from '../naming-transforms'
+import {
+  validateNoCollisions,
+  validateNoShallowEntryWithSubdir,
+  validateNoDeepEntry,
+} from './layout-validation'
 import { rewriteLinksAfterTransform, PathMappingEntry } from '../link-rewriter'
 import { syncFrontmatter } from '../frontmatter-transform'
 import {
@@ -37,32 +42,6 @@ async function collectFiles(
     }
   }
   return result
-}
-
-/**
- * Collects unique subdirectory names from a file list, validates no
- * flatten collisions exist, and throws if any are found.
- */
-function validateNoCollisions(
-  files: string[],
-  transformOpts: TransformOpts,
-  srcPath: string,
-): void {
-  const dirSet = new Set<string>()
-  for (const filePath of files) {
-    const dir = dirname(filePath)
-    if (dir !== '.') dirSet.add(dir)
-  }
-  const transformedDirs = [...dirSet].map(d => transformPath(d, transformOpts))
-  const collisions = detectCollisions(transformedDirs)
-  if (collisions.length > 0) {
-    throw createError({
-      type: 'IO_ERROR',
-      message: `Flatten naming collision detected: ${collisions.join(', ')}. Different source paths resolve to the same target name.`,
-      operation: 'copyDir',
-      path: srcPath,
-    })
-  }
 }
 
 /**
@@ -104,6 +83,7 @@ async function copyFileWithTransform(ctx: {
     targetFilePath,
     dirMappingFiles,
     topLevelFiles,
+    isEntryDir: isRegistryEntryPath(dir, transformOpts.flattenDepth),
   })
 }
 
@@ -112,6 +92,12 @@ async function copyFileWithTransform(ctx: {
  * when a subdirectory was renamed, and records the file in either
  * `dirMappingFiles` (files under a subdirectory) or `topLevelFiles` (root-level
  * source files) so link rewriting and mirror cleanup can see it.
+ *
+ * `isEntryDir` is false for a directory BELOW the registry's entry granularity
+ * (a skill's `references/` sub-dir under a bounded flatten, #407). Such a file is
+ * still tracked for link rewriting, but its frontmatter `name` is left alone:
+ * the dir it lives in was not renamed into a new entry, so syncing would write a
+ * PATH (`pair-process-review/references`) as the doc's name.
  */
 async function trackTransformedFile(ctx: {
   fileService: FileSystemService
@@ -121,6 +107,7 @@ async function trackTransformedFile(ctx: {
   targetFilePath: string
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
+  isEntryDir: boolean
 }): Promise<void> {
   const {
     fileService,
@@ -130,6 +117,7 @@ async function trackTransformedFile(ctx: {
     targetFilePath,
     dirMappingFiles,
     topLevelFiles,
+    isEntryDir,
   } = ctx
 
   if (dir === '.') {
@@ -142,7 +130,7 @@ async function trackTransformedFile(ctx: {
   if (!transformedDir) return
 
   const leafName = dir.split('/').pop()!
-  if (leafName !== transformedDir) {
+  if (isEntryDir && leafName !== transformedDir) {
     const content = await fileService.readFile(targetFilePath)
     const synced = syncFrontmatter(content, { from: leafName, to: transformedDir })
     if (synced !== content) {
@@ -206,16 +194,35 @@ async function copyAllFilesWithTransform(params: {
 }
 
 /**
- * Copies a directory with flatten/prefix naming transforms applied.
- * Each file's directory path (relative to source) is transformed, then
- * the file is copied to the transformed location under the target.
+ * The naming-transform options for this copy, from the caller's `SyncOptions`.
+ *
+ * `flattenDepth` is DROPPED when `flatten` is false, deliberately: it is a bound
+ * ON flattening, so with no flattening there is nothing to bound. Keeping it
+ * would leave the pipeline internally inconsistent — `transformPath` ignores the
+ * depth unless `flatten` is set, while `isRegistryEntryPath` consults it
+ * unconditionally, so a `{ flatten: false, flattenDepth: 2 }` copy would apply an
+ * UNBOUNDED path transform yet classify a third-level directory as content
+ * (silently dropping it from the skill-name map and the frontmatter `name:` sync).
+ * The CLI rejects that combination at config validation
+ * (`validateFlattenDepthField`), but `copyDirectoryWithTransforms` is public API
+ * of `@pair/content-ops`; normalising here keeps ONE source of truth for
+ * "bounded?" instead of gating every consumer of the option (#411 review).
  */
 function buildTransformOpts(options?: SyncOptions): TransformOpts {
   const flatten = options?.flatten ?? false
   const prefix = options?.prefix
-  return prefix ? { flatten, prefix } : { flatten }
+  const flattenDepth = flatten ? options?.flattenDepth : undefined
+  const base: TransformOpts = flattenDepth === undefined ? { flatten } : { flatten, flattenDepth }
+  return prefix ? { ...base, prefix } : base
 }
 
+/**
+ * Copies a directory with flatten/prefix naming transforms applied.
+ * Each file's directory path (relative to source) is transformed, then the file
+ * is copied to the transformed location under the target. Source-layout
+ * invariants are checked FIRST (see `layout-validation.ts`), so an unrepresentable
+ * layout aborts before anything is written.
+ */
 export async function copyDirectoryWithTransforms(params: {
   fileService: FileSystemService
   srcPath: string
@@ -230,6 +237,8 @@ export async function copyDirectoryWithTransforms(params: {
 
   const files = await collectFiles(fileService, srcPath, srcPath)
   validateNoCollisions(files, transformOpts, srcPath)
+  validateNoShallowEntryWithSubdir(files, transformOpts, srcPath)
+  validateNoDeepEntry(files, transformOpts, srcPath)
 
   await fileService.mkdir(destPath, { recursive: true })
 
@@ -271,9 +280,25 @@ export async function copyDirectoryWithTransforms(params: {
  * skill's leftover flattened directory is cleaned up, and a prefix change no
  * longer leaves the old prefixed directory orphaned alongside the new one.
  *
- * Only top-level entries are considered — matches the granularity of the
- * non-transform `handleMirrorCleanup` and the flatten use case (one source
- * subdirectory maps to exactly one top-level target directory).
+ * Under an UNBOUNDED flatten only top-level entries are considered — matching
+ * the granularity of the non-transform `handleMirrorCleanup`, and sufficient
+ * because one source subdirectory then maps to exactly one top-level target
+ * directory. Under a BOUNDED flatten (`flattenDepth`, #407) a source
+ * subdirectory maps to a target SUB-PATH instead, so cleanup descends into a
+ * transformed entry as well: at that granularity a `references/` removed from the
+ * source is what would otherwise stay installed forever, with its
+ * progressive-disclosure docs still being loaded. Descent is gated on
+ * `flattenDepth` being present, so the unbounded path stays byte-for-byte as before.
+ *
+ * NOT a live fix — FORWARD-COMPATIBILITY, and deliberately so: this whole
+ * function runs only under `behavior: 'mirror'`, and the one registry declaring
+ * `flattenDepth` today (`skills`) declares `behavior: 'overwrite'`, so on the real
+ * `pair update` path a deleted `references/` still survives — exactly as a deleted
+ * whole skill directory always has under `overwrite`. The descent keeps the
+ * library's mirror contract correct at the granularity the bounded flatten
+ * introduced, for a `skills` flip to `mirror` or any other registry adopting the
+ * option; it is exercised by unit tests, not by production configuration.
+ * Recorded as an ACCEPTED RESIDUAL in ADR-020's Trade-offs (#411 review).
  *
  * `topLevelFiles` (file names copied directly from the source root, with no
  * subdirectory of their own) must be included in `expected` alongside the
@@ -291,17 +316,60 @@ async function cleanupStaleTransformedEntries(params: {
   const { fileService, destPath, dirMappingFiles, topLevelFiles, transformOpts } = params
 
   const expected = new Set<string>(topLevelFiles)
+  // Every transformed sub-path a bounded flatten produces, plus each of its
+  // ancestors: a directory holding only deeper directories has no file of its
+  // own in the mapping, and must not read as stale.
+  const expectedNested = new Set<string>()
   for (const originalSubDir of dirMappingFiles.keys()) {
     const transformedDir = transformPath(originalSubDir, transformOpts)
-    expected.add(transformedDir.split('/')[0]!)
+    const segments = transformedDir.split('/')
+    expected.add(segments[0]!)
+    for (let i = 2; i <= segments.length; i++) {
+      expectedNested.add(segments.slice(0, i).join('/'))
+    }
   }
 
   const entries = await fileService.readdir(destPath).catch(() => [])
   for (const entry of entries) {
-    if (expected.has(entry.name)) continue
-    const toRemove = join(destPath, entry.name)
-    await fileService.rm(toRemove, { recursive: true, force: true })
-    logger.info(`Mirror: removed stale transformed entry ${toRemove}`)
+    if (!expected.has(entry.name)) {
+      const toRemove = join(destPath, entry.name)
+      await fileService.rm(toRemove, { recursive: true, force: true })
+      logger.info(`Mirror: removed stale transformed entry ${toRemove}`)
+      continue
+    }
+    if (transformOpts.flattenDepth !== undefined && entry.isDirectory()) {
+      await cleanupStaleNestedDirs(
+        fileService,
+        join(destPath, entry.name),
+        entry.name,
+        expectedNested,
+      )
+    }
+  }
+}
+
+/**
+ * Removes sub-directories of a transformed entry that no longer correspond to a
+ * preserved source sub-path. Only directories are considered: a file inside an
+ * entry belongs to that entry and is handled by the entry's own copy/overwrite.
+ */
+async function cleanupStaleNestedDirs(
+  fileService: FileSystemService,
+  dirPath: string,
+  relativeDir: string,
+  expectedNested: Set<string>,
+): Promise<void> {
+  const entries = await fileService.readdir(dirPath).catch(() => [])
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const relPath = `${relativeDir}/${entry.name}`
+    const childPath = join(dirPath, entry.name)
+    if (!expectedNested.has(relPath)) {
+      await fileService.rm(childPath, { recursive: true, force: true })
+      logger.info(`Mirror: removed stale nested entry ${childPath}`)
+      continue
+    }
+    await cleanupStaleNestedDirs(fileService, childPath, relPath, expectedNested)
   }
 }
 

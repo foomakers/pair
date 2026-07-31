@@ -1620,3 +1620,85 @@ describe('update — local source path styles (#199 reorg)', () => {
     expect(await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)).toBe('# New Content')
   })
 })
+
+/**
+ * #407 — the wiring, at the layer the story names: `pair update` reads
+ * `flattenDepth` from the registry config and the copy pipeline honours it.
+ * Without the resolver/validation/buildCopyOptions chain the option is dropped
+ * silently and this installs the sibling `pair-process-review-references/`.
+ */
+describe('#407: a skill nested references/ dir installs inside the skill via pair update', () => {
+  const moduleDir = '/project'
+  const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+  const configWith = (flattenDepth?: number) => ({
+    asset_registries: {
+      skills: {
+        source: '.skills',
+        behavior: 'mirror',
+        flatten: true,
+        ...(flattenDepth !== undefined && { flattenDepth }),
+        prefix: 'pair',
+        description: 'Agent skills',
+        targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+      },
+    },
+  })
+
+  const seed = (flattenDepth?: number) =>
+    new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify(configWith(flattenDepth)),
+        [`${datasetSrc}/.skills/process/review/SKILL.md`]:
+          '---\nname: review\n---\n# /review\nDetail in [deep dive](./references/deep.md).',
+        [`${datasetSrc}/.skills/process/review/references/deep.md`]:
+          '# Deep dive\nBack to [SKILL](../SKILL.md).',
+        // Pre-existing target — `update` requires the project to be installed.
+        [`${moduleDir}/.claude/skills/pair-process-review/SKILL.md`]: '# stale',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+  const updateConfig: UpdateCommandConfig = {
+    command: 'update',
+    resolution: 'default',
+    kb: true,
+    offline: false,
+  }
+
+  test('installs it inside the skill, with both links intact', async () => {
+    const fs = seed(2)
+    await handleUpdateCommand(updateConfig, fs, { httpClient: new MockHttpClientService() })
+
+    const installed = `${moduleDir}/.claude/skills/pair-process-review`
+    expect(await fs.exists(`${installed}/references/deep.md`)).toBe(true)
+    expect(
+      await fs.exists(`${moduleDir}/.claude/skills/pair-process-review-references/deep.md`),
+    ).toBe(false)
+    expect(await fs.readFile(`${installed}/SKILL.md`)).toContain(
+      '[deep dive](./references/deep.md)',
+    )
+    expect(await fs.readFile(`${installed}/references/deep.md`)).toContain('[SKILL](../SKILL.md)')
+  })
+
+  test('without flattenDepth the same dataset still installs the pre-#407 sibling layout', async () => {
+    const fs = seed()
+    await handleUpdateCommand(updateConfig, fs, { httpClient: new MockHttpClientService() })
+
+    expect(
+      await fs.exists(`${moduleDir}/.claude/skills/pair-process-review-references/deep.md`),
+    ).toBe(true)
+  })
+
+  test('rejects a config typo instead of silently flattening everything', async () => {
+    const fs = seed(0)
+    await expect(
+      handleUpdateCommand(updateConfig, fs, { httpClient: new MockHttpClientService() }),
+    ).rejects.toThrow(/flattenDepth must be a positive integer/)
+  })
+})

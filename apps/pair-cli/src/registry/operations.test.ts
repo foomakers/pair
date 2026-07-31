@@ -101,6 +101,23 @@ describe('buildCopyOptions', () => {
     const options = buildCopyOptions(config)
     expect(options.flatten).toBe(true)
     expect(options.prefix).toBe('pair')
+    expect(options.flattenDepth).toBeUndefined()
+  })
+
+  // #407: dropped here, the copy pipeline always ran an unbounded flatten and a
+  // skill's nested `references/` installed as a sibling pseudo-skill.
+  it('forwards flattenDepth to the copy pipeline when the registry declares it', () => {
+    const config: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills',
+      include: [],
+      flatten: true,
+      flattenDepth: 2,
+      prefix: 'pair',
+      targets: [{ path: '.skills', mode: 'canonical' }],
+    }
+    expect(buildCopyOptions(config).flattenDepth).toBe(2)
   })
 
   it('includes targets when set', () => {

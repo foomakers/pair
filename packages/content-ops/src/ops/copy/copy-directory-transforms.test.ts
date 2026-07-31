@@ -361,6 +361,331 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
       expect(skill).toContain('[edge cases](./edge-cases.md)')
       expect(edgeCases).toContain('[SKILL](./SKILL.md)')
     })
+    // #407 (placement half — landed). The standard Agent-Skills
+    // progressive-disclosure layout. Before `flattenDepth`, this installed as the
+    // SIBLING dir `pair-process-review-references/`: not a sub-doc of the skill at
+    // all, so the skill's own `./references/deep.md` pointed at nothing.
+    it('installs a nested references/ dir INSIDE the skill, not as a sibling (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nDetail in [deep dive](./references/deep.md).',
+        '/dataset/source/process/review/references/deep.md':
+          '# Deep dive\nBack to [SKILL](../SKILL.md).',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      expect(
+        await fileService.exists('/dataset/target/pair-process-review/references/deep.md'),
+      ).toBe(true)
+      // ...and NOT as a sibling pseudo-skill, which was the defect.
+      expect(
+        await fileService.exists('/dataset/target/pair-process-review-references/deep.md'),
+      ).toBe(false)
+
+      // The skill's FORWARD link is correct with no rewrite: both files moved
+      // together, so the same-dir-relative href still resolves.
+      const skill = await fileService.readFile('/dataset/target/pair-process-review/SKILL.md')
+      expect(skill).toContain('[deep dive](./references/deep.md)')
+    })
+
+    // Round-3 Major on PR #411: the shallow guard's symmetric twin. An entry
+    // DEEPER than flattenDepth silently mis-installed — a REGRESSION the bounded
+    // flatten introduced, since full flattening handled it fine.
+    it('rejects an entry deeper than flattenDepth, instead of mis-installing it (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/capability/sub/foo/SKILL.md': '---\nname: foo\n---\n# /foo',
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+      })
+
+      await expect(
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+        }),
+      ).rejects.toThrow(/entry too deep|holds none/)
+    })
+
+    // Round-5 Minor on PR #411: the second way out ("give the ancestor files of
+    // its own") makes THIS rule pass by reclassifying the offender as content —
+    // which, for a registry whose entries carry an entrypoint file, produces the
+    // very non-invocable install the same message cites as the reason to reject.
+    // Consumers of this package have no `skills:conformance` gate to catch the
+    // follow-on shape, so the advice must stay qualified.
+    it('qualifies the "give the ancestor files" remedy as content-only (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/capability/sub/foo/SKILL.md': '---\nname: foo\n---\n# /foo',
+      })
+
+      await expect(
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+        }),
+      ).rejects.toThrow(
+        /IF 'capability\/sub\/foo' is meant to be CONTENT of it .* installs as content, not as an entry/s,
+      )
+    })
+
+    // The rule must NOT fire on legitimate content, which is the whole point of
+    // the story: `references` is deeper than flattenDepth too, but its depth-2
+    // ancestor holds files, so something owns it.
+    it('still accepts a nested references/ dir, whose ancestor is a real entry', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+        '/dataset/source/process/review/references/deep.md': '# Deep',
+      })
+
+      await expect(
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+        }),
+      ).resolves.toBeDefined()
+    })
+
+    // The link half of #407. A sub-doc's link UP to its skill points at the
+    // PARENT directory, which the file's own dir-mapping cannot rebase — it only
+    // covers targets inside itself. Before the fix this fell through to the
+    // source-root fallback and became `../../../source/process/review/SKILL.md`:
+    // a path back into the dataset layout, dead in the install.
+    it('keeps a nested sub-doc back-link pointing at its own skill (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nDetail in [deep dive](./references/deep.md).',
+        '/dataset/source/process/review/references/deep.md':
+          '# Deep dive\nBack to [SKILL](../SKILL.md).',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      const deep = await fileService.readFile(
+        '/dataset/target/pair-process-review/references/deep.md',
+      )
+      // Both files moved together, so the relative path is still correct and the
+      // rewriter must leave it alone rather than re-root it.
+      expect(deep).toContain('[SKILL](../SKILL.md)')
+      expect(deep).not.toContain('source/process/review')
+    })
+
+    // The sibling case, which the same mechanism has to get right: when the
+    // nested dir does NOT move with its parent (unbounded flatten), the link up
+    // must be REWRITTEN to wherever the parent landed — not left alone.
+    // Both directions, because they are the same mechanism: the FORWARD link
+    // must be rewritten too. Its own directory moved AND the sub-directory it
+    // points into moved elsewhere, so the most specific move has to win — with
+    // the own-directory rebase asked first, the forward link was left as
+    // `./references/deep.md`, pointing at nothing (#407 review).
+    it('rewrites the back-link when the nested dir becomes a sibling (unbounded)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nDetail in [deep dive](./references/deep.md).',
+        '/dataset/source/process/review/references/deep.md':
+          '# Deep dive\nBack to [SKILL](../SKILL.md).',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', targets: [] },
+      })
+
+      const deep = await fileService.readFile(
+        '/dataset/target/pair-process-review-references/deep.md',
+      )
+      expect(deep).toContain('[SKILL](../pair-process-review/SKILL.md)')
+      expect(deep).not.toContain('source/process/review')
+
+      const skill = await fileService.readFile('/dataset/target/pair-process-review/SKILL.md')
+      expect(skill).toContain('[deep dive](../pair-process-review-references/deep.md)')
+      expect(skill).not.toContain('](./references/deep.md)')
+    })
+
+    // #407 review (Major). `flattenDepth` states "an entry is N segments deep",
+    // and `.skills/next` is a ONE-segment entry while `process/review` is two.
+    // `next/references` therefore has the same shape as a real entry and would
+    // install as the sibling `pair-next-references/` — every defect this option
+    // removes, back for `next`. Unrepresentable, so it must fail loudly.
+    it('refuses a source entry shallower than flattenDepth that owns a sub-dir (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/next/SKILL.md': '---\nname: next\n---\n# /next',
+        '/dataset/source/next/references/deep.md': '# Deep dive\nBack to [SKILL](../SKILL.md).',
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nProgressive disclosure lives under /references.',
+      })
+
+      await expect(
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+        }),
+      ).rejects.toThrow(/Ambiguous layout for a bounded flatten/)
+
+      // Fails BEFORE copying anything, so no half-installed sibling is left behind
+      // and no unrelated skill body was rewritten.
+      expect(await fileService.exists('/dataset/target/pair-next-references/deep.md')).toBe(false)
+      expect(await fileService.exists('/dataset/target/pair-process-review/SKILL.md')).toBe(false)
+    })
+
+    it('accepts a shallower entry that owns no sub-dir, alongside deeper entries (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/next/SKILL.md': '---\nname: next\n---\n# /next',
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      // The real `.skills/` shape today: a one-segment entry and two-segment
+      // entries side by side, both installing at the top level.
+      expect(await fileService.exists('/dataset/target/pair-next/SKILL.md')).toBe(true)
+      expect(await fileService.exists('/dataset/target/pair-process-review/SKILL.md')).toBe(true)
+    })
+
+    // #411 round 4: the enforced rule is BROADER than "a registry-root skill
+    // cannot ship a sub-dir", and the broader form is the documented one (ADR-020
+    // Trade-offs, nested-sub-documents.md). A CATEGORY dir with a file of its own
+    // hits it too, because entry-vs-category is decided by "holds files directly"
+    // — the price of keeping SKILL.md knowledge out of a transform four non-skill
+    // registries share. Pinned here so the rule cannot silently narrow, and so
+    // the cost of adding a category-level README is a visible, intentional fact.
+    it('refuses a CATEGORY dir that holds a file of its own beside a skill (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/README.md': '# Process skills',
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+      })
+
+      const run = copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      await expect(run).rejects.toThrow(/Ambiguous layout for a bounded flatten/)
+      // The remediation must name the way out for THIS shape, not only "move the
+      // directory deeper", which is wrong advice for a category dir.
+      await expect(run).rejects.toThrow(/move\/remove the file\(s\) held directly by 'process'/)
+      expect(await fileService.exists('/dataset/target/pair-process/README.md')).toBe(false)
+      expect(await fileService.exists('/dataset/target/pair-process-review/SKILL.md')).toBe(false)
+    })
+
+    // #411 round 4: `flattenDepth` without `flatten` is a contradiction — the path
+    // transform stays unbounded while entry classification would be bounded, so a
+    // `references/` dir was dropped from the skill-name map and the frontmatter
+    // sync although nothing was flattened. The CLI rejects the combination, but
+    // `copyDirectoryWithTransforms` is public API, so the option is normalised
+    // away here: ONE source of truth for "is this copy bounded?".
+    it('ignores flattenDepth entirely when flatten is false, so every dir is an entry', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+        '/dataset/source/process/review/references/deep.md':
+          '---\nname: references\n---\n# Deep dive',
+      })
+
+      const result = await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: false, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      // Unbounded path transform ⇒ unbounded classification: the nested dir is an
+      // entry like any other, exactly as before #407.
+      expect(result.skillNameMap!.get('references')).toBe('pair-process/review/references')
+      expect(result.skillNameMap!.get('review')).toBe('pair-process/review')
+    })
+
+    // #407 review finding: with a bounded flatten, `process/review/references`
+    // is a real sub-path and so appears in the dir mapping next to the skill
+    // dirs. Treating it as a SKILL registered `references` as a skill name
+    // pointing at ONE arbitrary skill's sub-dir, and the `/references` token in
+    // an unrelated skill's body was rewritten to it — a cross-skill corruption
+    // decided by directory iteration order.
+    it('never rewrites a /references token across skills when both own a references/ dir (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nProgressive disclosure lives under /references.',
+        '/dataset/source/process/review/references/deep.md': '# Review deep dive',
+        '/dataset/source/capability/grill/SKILL.md': '---\nname: grill\n---\n# /grill',
+        '/dataset/source/capability/grill/references/deep.md': '# Grill deep dive',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      const skill = await fileService.readFile('/dataset/target/pair-process-review/SKILL.md')
+      expect(skill).toContain('under /references.')
+      expect(skill).not.toContain('pair-capability-grill/references')
+      // Both skills' own renames still happen — the fix scopes the map, it does
+      // not disable it.
+      expect(skill).toContain('# /pair-process-review')
+      const grill = await fileService.readFile('/dataset/target/pair-capability-grill/SKILL.md')
+      expect(grill).toContain('# /pair-capability-grill')
+    })
+
+    // Same root cause on the frontmatter side: the sub-doc's dir is not a
+    // renamed skill dir, so its `name:` must be left alone instead of being set
+    // to a PATH (`pair-process-review/references`).
+    it('does not rewrite a nested sub-doc frontmatter name to a path (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+        '/dataset/source/process/review/references/deep.md':
+          '---\nname: references\n---\n# Deep dive',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      const deep = await fileService.readFile(
+        '/dataset/target/pair-process-review/references/deep.md',
+      )
+      expect(deep).toContain('name: references')
+      expect(deep).not.toContain('pair-process-review/references')
+    })
   })
 
   describe('mirror behavior — idempotent updates (AC4)', () => {
@@ -462,6 +787,57 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
       await expect(fileService.exists('/dataset/target/pair-catalog-next/SKILL.md')).resolves.toBe(
         true,
       )
+    })
+
+    // #407 review: under a bounded flatten a source sub-directory maps to a
+    // target SUB-PATH, so top-level-only cleanup could no longer see it — a
+    // `references/` deleted from the source stayed installed forever (and its
+    // docs kept being loaded). Cleanup descends into a transformed entry.
+    it('removes a nested sub-dir that is gone from the source (bounded + mirror, #407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+        '/dataset/source/process/review/references/deep.md': '# Deep dive',
+      })
+
+      const runOnce = () =>
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: {
+            flatten: true,
+            prefix: 'pair',
+            flattenDepth: 2,
+            defaultBehavior: 'mirror',
+            targets: [],
+          },
+        })
+
+      await runOnce()
+      await expect(
+        fileService.exists('/dataset/target/pair-process-review/references/deep.md'),
+      ).resolves.toBe(true)
+
+      // Idempotent while the source is unchanged...
+      await runOnce()
+      await expect(
+        fileService.exists('/dataset/target/pair-process-review/references/deep.md'),
+      ).resolves.toBe(true)
+
+      // ...and the nested target goes away with its source.
+      await fileService.rm('/dataset/source/process/review/references', {
+        recursive: true,
+        force: true,
+      })
+      await runOnce()
+      await expect(
+        fileService.exists('/dataset/target/pair-process-review/references/deep.md'),
+      ).resolves.toBe(false)
+      // The entry itself and its own files are untouched.
+      await expect(
+        fileService.exists('/dataset/target/pair-process-review/SKILL.md'),
+      ).resolves.toBe(true)
     })
 
     it('does not clean up stale entries when behavior is not mirror', async () => {

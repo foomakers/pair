@@ -22,7 +22,7 @@
 
 import { logger } from '../observability'
 import { FileSystemService } from '../file-system'
-import { transformPath } from './naming-transforms'
+import { transformPath, isRegistryEntryPath, type TransformOpts } from './naming-transforms'
 
 /** Maps original (short) skill name → new (prefixed) skill name */
 export type SkillNameMap = Map<string, string>
@@ -175,13 +175,23 @@ export function findSkillReferences(content: string, names: Iterable<string>): s
 /**
  * Builds a skill name map from the directory mapping collected during copy.
  * For each transformed directory: leafName (original) → transformedName (new).
+ *
+ * Directories BELOW the registry's entry granularity are skipped: with a bounded
+ * flatten (`flattenDepth`, #407) a skill's `references/` sub-dir is a real
+ * sub-path and therefore appears in the mapping, but it is content, not a skill
+ * — see `isRegistryEntryPath`.
+ *
+ * Typed as the full `TransformOpts` on purpose: it is forwarded verbatim to
+ * `transformPath`, which reads `flattenDepth` too, so a narrower declared type
+ * would invite a refactor to rebuild the object and silently drop the depth.
  */
 export function buildSkillNameMap(
   dirMappingFiles: Map<string, string[]>,
-  transformOpts: { flatten?: boolean; prefix?: string },
+  transformOpts: TransformOpts,
 ): SkillNameMap {
   const map: SkillNameMap = new Map()
   for (const originalSubDir of dirMappingFiles.keys()) {
+    if (!isRegistryEntryPath(originalSubDir, transformOpts.flattenDepth)) continue
     const leafName = originalSubDir.split('/').pop()!
     const transformedName = transformPath(originalSubDir, transformOpts)
     if (leafName !== transformedName) {
@@ -234,14 +244,18 @@ export async function rewriteSkillReferencesInFiles(params: RewriteSkillRefsPara
  * Contract: converts only a skill's `SKILL.md` entrypoint link. Deep links to
  * other files inside a skill dir (e.g. `references/*.md`) are NOT converted —
  * none exist in the KB today; add per-file mappings here if that changes.
+ * For the same reason a directory below the entry granularity is skipped (#407):
+ * a `references/` sub-dir holds no `SKILL.md` of its own. `TransformOpts` (not a
+ * narrower shape) for the reason given on `buildSkillNameMap`.
  */
 export function buildSkillLinkPathMap(
   dirMappingFiles: Map<string, string[]>,
-  transformOpts: { flatten?: boolean; prefix?: string },
+  transformOpts: TransformOpts,
 ): SkillLinkPathMap {
   const map: SkillLinkPathMap = new Map()
   for (const originalSubDir of dirMappingFiles.keys()) {
     if (!originalSubDir.includes('/')) continue
+    if (!isRegistryEntryPath(originalSubDir, transformOpts.flattenDepth)) continue
     const transformed = transformPath(originalSubDir, transformOpts)
     map.set(`../.skills/${originalSubDir}/SKILL.md`, `../.claude/skills/${transformed}/SKILL.md`)
   }

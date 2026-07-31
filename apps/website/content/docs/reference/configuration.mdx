@@ -43,6 +43,7 @@ Override with `--config <path>` on any command.
 | `description` | `string` | Yes | Human-readable description shown by `--list-targets` |
 | `include` | `string[]` | No | Glob patterns for files to include (default: all) |
 | `flatten` | `boolean` | No | Flatten directory hierarchy into dash-separated names |
+| `flattenDepth` | `number` | No | Bound flattening to the registry's entry depth — the first N source segments are joined, anything deeper is preserved as a real sub-path. Requires `flatten: true`; must be a positive integer. Omitted = every separator is flattened |
 | `prefix` | `string` | No | Prefix to prepend to flattened directory names |
 | `targets` | `Target[]` | No | Multi-target distribution configuration |
 
@@ -105,14 +106,33 @@ The transform also updates:
 - Markdown links between transformed files
 - Skill cross-references (e.g., `/verify-quality` → `/pair-capability-verify-quality`)
 
+### Bounded Flattening (`flattenDepth`)
+
+Without `flattenDepth`, **every** separator is flattened — so a sub-directory of an entry becomes a sibling entry of its own. Set `flattenDepth` to the number of source segments an entry occupies and only those are joined; anything deeper stays a real sub-path inside the entry:
+
+```text
+Source:  .skills/process/review/references/deep.md
+Flatten: process/review/references → process-review/references   # flattenDepth: 2
+Prefix:  process-review/references → pair-process-review/references
+Target:  .claude/skills/pair-process-review/references/deep.md
+```
+
+Compare with the unbounded result for the same source: `.claude/skills/pair-process-review-references/deep.md` — a sibling directory outside the skill, with the skill's own `./references/deep.md` link pointing at nothing.
+
+Notes:
+- Set it when your registry's entries own sub-directories (e.g. an Agent Skills `references/` progressive-disclosure directory).
+- A directory deeper than `flattenDepth` is treated as **content**, not an entry: it gets no prefix, no frontmatter `name` sync, and no skill-reference mapping.
+- Entries normally all sit at that depth, and a mixed-depth corpus is still workable: a shallower entry is fine while it owns no sub-directory (pair's own root-level `next` skill installs beside 39 two-segment ones), and **aborts the copy** only once it does. So does an entry deeper than the depth that nothing owns as content. Either way the copy fails with an explicit error before writing anything, instead of installing something broken.
+
 ## Example: Skills Registry
 
 ```json
 {
   "skills": {
     "source": ".skills",
-    "behavior": "mirror",
+    "behavior": "overwrite",
     "flatten": true,
+    "flattenDepth": 2,
     "prefix": "pair",
     "description": "Agent skills distributed to AI tool directories",
     "targets": [
@@ -156,7 +176,7 @@ pair validate-config --config ./custom-config.json
 - Required fields present (`behavior`, `source`, `description`)
 - Behavior values are valid (`mirror`, `add`, `overwrite`, `skip`)
 - Target paths are accessible
-- Transform config is valid (non-empty prefix, not combined with symlink mode)
+- Transform config is valid (non-empty prefix, not combined with symlink mode; `flattenDepth` a positive integer, and only alongside `flatten: true`)
 - Source paths exist (if specified)
 - Include patterns are valid arrays
 - No registry's `target` overlaps a reserved path — the working area (default or overridden `working_path`) — and `working_path` is project-relative; see [Working Area Override](#working-area-override)

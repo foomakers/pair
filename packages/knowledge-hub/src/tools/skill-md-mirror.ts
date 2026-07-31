@@ -6,9 +6,17 @@
  * canonical dataset source under `packages/knowledge-hub/dataset/.skills/`
  * by `pair update`. Rather than re-implement that transform, these helpers run
  * the REAL copy pipeline — `copyDirectoryWithTransforms` with the exact
- * `{ flatten: true, prefix: 'pair' }` options `apps/pair-cli/config.json`
- * declares for the `skills` registry — over an in-memory clone of the dataset,
- * so a bug in the real pipeline FAILS the guard instead of being masked.
+ * `{ flatten: true, flattenDepth: 2, prefix: 'pair' }` options
+ * `apps/pair-cli/config.json` declares for the `skills` registry — over an
+ * in-memory clone of the dataset, so a bug in the real pipeline FAILS the guard
+ * instead of being masked.
+ *
+ * `flattenDepth: 2` is the registry's ENTRY granularity (#407): a dataset skill
+ * dir is `<category>/<name>` (or the bare `next`), so a THIRD segment
+ * (`references/`) is content of that skill and installs inside it rather than as
+ * a sibling `pair-<category>-<name>-references/`. The mapping asserted here is
+ * unchanged for every current skill — no dataset skill dir is deeper than two
+ * segments — but the derivation now matches the corrected pipeline.
  *
  * The composed transform covers all four drift classes the guard must catch:
  * dir-rename (`transformPath`), frontmatter `name:` sync (`syncFrontmatter`),
@@ -24,10 +32,11 @@
  * artifact the dataset contributes, not only `SKILL.md`. The case list is
  * derived from the dataset at collection time and is recursive, so a new
  * sub-doc — or the first `references/` subdir — is covered with no test edit
- * and no count anywhere. Caveat for that first `references/` subdir: today's
- * pipeline INSTALLS it wrongly (flattened out of its skill, links broken) — a
- * defect tracked in #407; this guard faithfully mirrors that behavior rather
- * than endorsing it (see `installedArtifactPath`).
+ * and no count anywhere. That first `references/` subdir now installs INSIDE its
+ * skill, with both link directions intact — #407 bounded the flatten to the
+ * registry's entry depth, and `SKILL_COPY_OPTS` carries the `flattenDepth: 2` the
+ * registry declares, so the derivation below is correct rather than
+ * faithfully-wrong (see `installedArtifactPath`).
  *
  * ACCEPTED RESIDUAL — orphans (decided in #384's review): because the guard is
  * directional and `pair update` copies with behavior 'overwrite' (no
@@ -56,7 +65,7 @@ import {
 } from '@pair/content-ops'
 
 /** The exact naming-transform options the `skills` registry uses in config.json. */
-export const SKILL_COPY_OPTS = { flatten: true, prefix: 'pair' } as const
+export const SKILL_COPY_OPTS = { flatten: true, flattenDepth: 2, prefix: 'pair' } as const
 
 /**
  * The FULL `SyncOptions` the guard runs the pipeline with: content-ops' defaults
@@ -185,24 +194,20 @@ export function datasetSkillArtifacts(tree: DatasetTree): string[] {
  *
  * Composes the REAL `transformPath` over the artifact's dataset directory with
  * the registry's options — exactly what the copy pipeline's per-file transform
- * does (`dirname(file)` → `transformPath` → join the untouched file name). This
- * is why a NESTED sub-directory lands in its OWN flattened top-level dir
- * (`process/review/references/deep.md` → `pair-process-review-references/deep.md`)
- * rather than under a preserved `references/`: the pipeline flattens every
- * directory segment, not just the skill's own.
+ * does (`dirname(file)` → `transformPath` → join the untouched file name).
  *
- * That nested-flatten mapping is CURRENT PIPELINE BEHAVIOR, mirrored here
- * faithfully — and it is a DEFECT, tracked in #407 (a skill's `references/`
- * sub-doc installs outside its skill dir with both links broken). Do NOT read it
- * as a sanctioned layout for a new `references/` sub-doc. Nor does it self-correct:
- * #407's fix changes the copy pipeline's per-file PLACEMENT (`copy-directory-transforms.ts`
- * maps `dirname(file)` through `transformPath` and joins), not `transformPath` itself,
- * so this derivation goes STALE — what actually happens is that the produced-paths
- * cross-check (derivation vs. the pipeline's real output set) fails loudly, and
- * this function plus its expectations must be updated in that PR.
+ * The mapping is BOUNDED: `SKILL_COPY_OPTS.flattenDepth` is the
+ * registry's entry depth, so a third segment (`references/`) is preserved as a
+ * real sub-path and a sub-doc installs INSIDE its skill
+ * (`process/review/references/deep.md` → `pair-process-review/references/deep.md`),
+ * with both link directions intact. That is the sanctioned layout for a new
+ * sub-doc — see `skill-conventions/nested-sub-documents.md` for the authoring rules
+ * and the two layouts the bound cannot represent.
  *
- * That correspondence is not taken on trust — a guard test asserts this
- * derivation reproduces the pipeline's actual output paths set-for-set.
+ * The correspondence with the real pipeline is not taken on trust — a guard test
+ * asserts this derivation reproduces the pipeline's actual output paths
+ * set-for-set, so a placement change in `copy-directory-transforms.ts` that this
+ * derivation does not follow fails loudly instead of drifting.
  */
 export function installedArtifactPath(datasetArtifact: string): string {
   const dir = posix.dirname(datasetArtifact)
