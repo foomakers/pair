@@ -20,17 +20,29 @@ const DATASET_SKILLS = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
 const ROOT_CLAUDE_SKILLS = join(REPO_ROOT, '.claude/skills')
 
 /**
- * On-disk root mirror of a dataset artifact, or `undefined` when it is missing
- * OR unreadable — an unreadable root copy must be reported as such with its
- * path, never swallowed into a pass.
+ * On-disk root mirror of a dataset artifact, or `undefined` ONLY when it is
+ * genuinely absent (which the guard reports as "missing → run `pair update`").
+ *
+ * A copy that EXISTS but cannot be read (EACCES, a directory in its place) is a
+ * different failure with a different fix: it is rethrown naming the path and the
+ * underlying cause, never collapsed into `undefined` — which would mislabel it
+ * as missing and hand the developer a hint (`pair update`) that cannot fix an
+ * EACCES. `read` is injectable so that branch is actually covered by a test.
  */
-const rootMirrorContent = (datasetArtifact: string): string | undefined => {
+const rootMirrorContent = (
+  datasetArtifact: string,
+  read: (p: string) => string = p => readFileSync(p, 'utf-8'),
+): string | undefined => {
   const p = join(ROOT_CLAUDE_SKILLS, installedArtifactPath(datasetArtifact))
   if (!existsSync(p)) return undefined
   try {
-    return readFileSync(p, 'utf-8')
-  } catch {
-    return undefined
+    return read(p)
+  } catch (err) {
+    throw new Error(
+      `Root mirror for dataset artifact '${datasetArtifact}' EXISTS at ${p} but is ` +
+        `unreadable: ${(err as Error).message}. Fix the file/permissions — ` +
+        `'pair update' cannot regenerate over an unreadable path.`,
+    )
   }
 }
 
@@ -87,7 +99,7 @@ describe('dataset -> root mirror equality for every skill artifact (data-driven)
     const expected = mirror.byDatasetPath.get(artifact)
     expect(expected, `pipeline produced no output for ${artifact}`).toBeDefined()
 
-    // Throws (AC4 missing / AC2+AC3 drift) or passes. The assertion helper
+    // Throws (AC4 missing / AC2 drift) or passes. The assertion helper
     // lives in the production module so this guard and the drift-injection
     // tests below exercise the same code path.
     expect(() =>
@@ -131,15 +143,52 @@ describe('directional guard ignores root-only artifacts with no dataset source',
   })
 
   it('ignores a root-only EXTRA file inside a dataset-backed skill dir', async () => {
-    // The dataset skill dir contributes only SKILL.md; the root copy of that same
-    // skill also carries a hand-added `scratch.md`. The dataset-derived case list
-    // never mentions it, so it is not asserted and not drift.
+    // The dataset skill dir contributes only SKILL.md; a hand-added `scratch.md`
+    // is then REALLY written into the installed dir of that same skill (not just
+    // asserted-absent — the file exists in the destination tree below), and the
+    // dataset-derived case list still never mentions it: not asserted, not drift.
     const tree: DatasetTree = { 'process/review/SKILL.md': '---\nname: review\n---\n\n# r\n' }
-    const { byDatasetPath, producedPaths } = await buildInstalledArtifacts(tree)
+    const mirror = await buildInstalledArtifacts(tree)
+    expect(mirror.producedPaths).toEqual(['pair-process-review/SKILL.md'])
 
-    expect(producedPaths).toEqual(['pair-process-review/SKILL.md'])
-    expect([...byDatasetPath.keys()]).toEqual(['process/review/SKILL.md'])
-    expect(producedPaths).not.toContain('pair-process-review/scratch.md')
+    await mirror.root.write('pair-process-review/scratch.md', '# hand-added, no dataset source\n')
+    const afterStray = await mirror.root.markdownPaths()
+    // the stray really is on the installed side now...
+    expect(afterStray).toContain('pair-process-review/scratch.md')
+    // ...yet the guard's iteration domain (dataset artifacts) is unchanged, so it
+    // is never asserted and the guard stays green.
+    expect([...mirror.byDatasetPath.keys()]).toEqual(['process/review/SKILL.md'])
+    expect(datasetSkillArtifacts(tree).map(installedArtifactPath)).not.toContain(
+      'pair-process-review/scratch.md',
+    )
+  })
+
+})
+
+/**
+ * Missing vs unreadable are DISTINCT failures with distinct fixes: `pair update`
+ * regenerates a missing copy, but cannot fix an EACCES. The root-copy read must
+ * therefore never collapse "unreadable" into "missing" (nor, worse, into a pass).
+ */
+describe('root-copy read distinguishes a missing copy from an unreadable one', () => {
+  it('reports an EXISTING but unreadable root copy as unreadable, never as missing', () => {
+    // The catch branch of the root-copy read: an EACCES (or a dir in its place)
+    // must fail with its path and cause, not be swallowed into `undefined` and
+    // mislabelled "does not exist. Run 'pair update'".
+    const artifact = 'next/SKILL.md'
+    const rootPath = join(ROOT_CLAUDE_SKILLS, installedArtifactPath(artifact))
+    expect(existsSync(rootPath)).toBe(true) // precondition: it DOES exist
+
+    const message = captureThrownMessage(() =>
+      rootMirrorContent(artifact, () => {
+        throw new Error('EACCES: permission denied')
+      }),
+    )
+    expect(message).toContain(artifact)
+    expect(message).toContain(rootPath)
+    expect(message).toContain('unreadable')
+    expect(message).toContain('EACCES: permission denied')
+    expect(message).not.toContain('does not exist')
   })
 })
 
@@ -217,6 +266,12 @@ describe('datasetSkillArtifacts — every markdown artifact the dataset contribu
  * including the flatten of a NESTED sub-directory into its own top-level
  * prefixed dir (`process/review/references` → `pair-process-review-references`),
  * which is emphatically NOT a preserved `references/` subdir.
+ *
+ * That nested mapping is CURRENT pipeline behavior and a KNOWN DEFECT — tracked
+ * as #407 (the sub-doc installs outside its skill dir, both links broken). These
+ * expectations pin what the pipeline does today so the guard cannot lie about the
+ * mirror; they must be flipped to the corrected layout by #407's fix, NOT copied
+ * as the sanctioned way to ship a `references/` sub-doc.
  */
 describe('installedArtifactPath — root location via the real naming transform', () => {
   it('maps a skill-dir artifact into that skill prefixed root dir', () => {
@@ -226,7 +281,7 @@ describe('installedArtifactPath — root location via the real naming transform'
     expect(installedArtifactPath('next/SKILL.md')).toBe('pair-next/SKILL.md')
   })
 
-  it('flattens a nested sub-directory into its own prefixed dir, as the pipeline does', () => {
+  it('flattens a nested sub-dir into its own prefixed dir, as the pipeline does today (#407)', () => {
     expect(installedArtifactPath('process/review/references/deep.md')).toBe(
       'pair-process-review-references/deep.md',
     )
@@ -341,12 +396,12 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
     expect(message).toContain('+name: demo') // drifted actual content shown as an added diff line
   })
 
-  it('FAILS on relative-link-depth drift (AC3)', () => {
+  it('FAILS on relative-link-depth drift (AC2)', () => {
     const drifted = expected.replace('](../../../.pair/foo.md)', '](../../.pair/foo.md)')
     expect(() => assertRootArtifactMatches(SKILL, expected, drifted)).toThrow(/drifted/)
   })
 
-  it('FAILS on /command skill-reference drift (AC3)', () => {
+  it('FAILS on /command skill-reference drift (AC2)', () => {
     const drifted = expected.replace('/pair-capability-verify-quality', '/verify-quality')
     expect(() => assertRootArtifactMatches(SKILL, expected, drifted)).toThrow(/drifted/)
   })
@@ -397,9 +452,13 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
       SUB,
     ])
     expect(mirror.producedPaths).toContain('pair-demo/sub-doc.md')
-    // a nested subdir is FLATTENED into its own top-level prefixed dir
+    // a nested subdir is FLATTENED into its own top-level prefixed dir (current
+    // pipeline behavior — a defect tracked in #407, mirrored here, not endorsed)
     expect(mirror.producedPaths).toContain('pair-demo-references/deep.md')
-    expect(mirror.producedPaths.some(p => p.includes('.DS_Store'))).toBe(false)
+    // The pipeline REALLY copied the non-markdown file (asserted on the
+    // destination tree, so this cannot pass vacuously) and the guard's asserted
+    // set above still excludes it.
+    expect(mirror.root.has('pair-demo/.DS_Store')).toBe(true)
   })
 
   it('the transform genuinely rewrites the sub-doc (fixture is meaningful)', () => {

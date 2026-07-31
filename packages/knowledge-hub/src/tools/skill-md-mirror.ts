@@ -24,16 +24,32 @@
  * artifact the dataset contributes, not only `SKILL.md`. The case list is
  * derived from the dataset at collection time and is recursive, so a new
  * sub-doc — or the first `references/` subdir — is covered with no test edit
- * and no count anywhere.
+ * and no count anywhere. Caveat for that first `references/` subdir: today's
+ * pipeline INSTALLS it wrongly (flattened out of its skill, links broken) — a
+ * defect tracked in #407; this guard faithfully mirrors that behavior rather
+ * than endorsing it (see `installedArtifactPath`).
+ *
+ * ACCEPTED RESIDUAL — orphans (decided in #384's review): because the guard is
+ * directional and `pair update` copies with behavior 'overwrite' (no
+ * mirror-delete), a sub-doc DELETED from the dataset but left behind in
+ * `.claude/skills/<skill>/` is neither asserted nor cleaned, and agents keep
+ * reading it. Detecting it would need a non-directional check (root `.md` under
+ * `installedSkillDir(datasetDir)` with no dataset source) that must exempt
+ * root-only skills like `agent-browser`; that inversion is deliberately NOT in
+ * this guard, whose contract is "every dataset artifact is faithfully
+ * mirrored". Regenerating deletions belongs to `pair update`, not here.
  */
 import { readdirSync, readFileSync } from 'fs'
-import { join, relative, sep } from 'path'
-import { dirname as posixDirname } from 'path/posix'
+import { join, relative, sep, posix } from 'path'
+// Dataset/root artifact paths are ALWAYS posix (they are content identities, not
+// host paths), hence `posix.dirname`/`posix.basename`; only the on-disk dataset
+// walk above uses the platform-native `join`/`relative`/`sep`.
 import {
   InMemoryFileSystemService,
   copyDirectoryWithTransforms,
   transformPath,
   defaultSyncOptions,
+  walkMarkdownFiles,
 } from '@pair/content-ops'
 
 /** The exact naming-transform options the `skills` registry uses in config.json. */
@@ -88,7 +104,7 @@ export function readSkillsDatasetFromDisk(skillsDir: string): DatasetTree {
  * The dataset skill directories — every posix dir that directly contains a
  * `SKILL.md` (`capability/<name>`, `process/<name>`, or the bare `next`),
  * sorted for stable `it.each` ordering. Data-driven: adding a skill to the
- * dataset extends this list with no test edit (AC5).
+ * dataset extends this list with no test edit (AC3).
  *
  * Deliberately NOT reusing `collectSkillDirs` from the sibling
  * `skills-guide-mirror.ts`: that one re-walks the disk and returns ANY dir
@@ -124,9 +140,18 @@ export function installedSkillDir(datasetSkillDir: string): string {
  *
  * The list is derived from the already-read `tree`, so it is recursive by
  * construction: a future `references/` subdir is enumerated the day it lands,
- * with no test edit. Markdown-only: a stray `.DS_Store` or a diagram is copied
- * by the pipeline but is not a *transformed* artifact, so it is never asserted.
- * Nothing here encodes HOW MANY artifacts exist.
+ * with no test edit. Nothing here encodes HOW MANY artifacts exist.
+ *
+ * Markdown-only, for two DIFFERENT reasons — kept apart on purpose:
+ * 1. junk (a stray `.DS_Store`, an editor backup): not content at all, so it
+ *    must NEVER be asserted — the pipeline copies it, the guard ignores it.
+ * 2. legitimate non-markdown assets (the `templates/*.sh` pattern the root-only
+ *    `agent-browser` skill already ships): real content whose equality is NOT
+ *    guarded — an ACCEPTED RESIDUAL, out of #384's scope by explicit story
+ *    decision (Edge Cases exclude non-markdown), not an oversight. Only
+ *    markdown goes through the content rewrites this guard exists to pin
+ *    (frontmatter sync, link-depth bump, `/command` rewrite); a byte-equality
+ *    check for opaque assets is a different, simpler guard.
  */
 export function datasetSkillArtifacts(tree: DatasetTree): string[] {
   return Object.keys(tree)
@@ -145,12 +170,20 @@ export function datasetSkillArtifacts(tree: DatasetTree): string[] {
  * rather than under a preserved `references/`: the pipeline flattens every
  * directory segment, not just the skill's own.
  *
+ * That nested-flatten mapping is CURRENT PIPELINE BEHAVIOR, mirrored here
+ * faithfully — and it is a DEFECT, tracked in #407 (a skill's `references/`
+ * sub-doc installs outside its skill dir with both links broken). Do NOT read it
+ * as a sanctioned layout for a new `references/` sub-doc: when #407 fixes the
+ * transform, this derivation and its tests follow the corrected mapping
+ * automatically-by-review (the guard composes the real transform, so the
+ * expectations here must be updated in that PR).
+ *
  * That correspondence is not taken on trust — a guard test asserts this
  * derivation reproduces the pipeline's actual output paths set-for-set.
  */
 export function installedArtifactPath(datasetArtifact: string): string {
-  const dir = posixDirname(datasetArtifact)
-  const fileName = datasetArtifact.slice(dir === '.' ? 0 : dir.length + 1)
+  const dir = posix.dirname(datasetArtifact)
+  const fileName = posix.basename(datasetArtifact)
   return dir === '.' ? fileName : `${transformPath(dir, SKILL_COPY_OPTS)}/${fileName}`
 }
 
@@ -183,22 +216,17 @@ async function runCopyPipeline(tree: DatasetTree): Promise<InMemoryFileSystemSer
   return fileService
 }
 
-/** Recursively collects markdown paths under `dir`, relative to `root` (posix). */
-async function collectMarkdownUnder(
-  fileService: InMemoryFileSystemService,
-  dir: string,
-  root: string,
-): Promise<string[]> {
-  const out: string[] = []
-  for (const entry of await fileService.readdir(dir)) {
-    const full = `${dir}/${entry.name}`
-    if (entry.isDirectory()) {
-      out.push(...(await collectMarkdownUnder(fileService, full, root)))
-    } else if (entry.name.endsWith('.md')) {
-      out.push(full.slice(root.length + 1))
-    }
-  }
-  return out
+/**
+ * Every markdown path currently in the pipeline's destination tree, relative to
+ * `.claude/skills/` and sorted. Reuses `content-ops`' own `walkMarkdownFiles`
+ * (no parallel traversal — the same principle this guard applies to the copy
+ * transform); it joins with the platform `sep`, so the result is normalised back
+ * to the posix identities the rest of this module speaks.
+ */
+async function producedMarkdownPaths(fileService: InMemoryFileSystemService): Promise<string[]> {
+  return (await walkMarkdownFiles(VIRTUAL_DEST, fileService))
+    .map(p => p.split(sep).join('/').slice(VIRTUAL_DEST.length + 1))
+    .sort()
 }
 
 /**
@@ -213,10 +241,24 @@ async function collectMarkdownUnder(
  *   derivation against the pipeline's real output set, so a path-mapping
  *   assumption (notably for nested sub-directories) can never silently exclude
  *   an artifact from the assertion.
+ * - `root` — a handle on that destination tree, addressed in
+ *   `.claude/skills/`-relative terms. It exists so directionality (AC5) can be
+ *   proven against a REAL filesystem state instead of a tautology: `has` shows
+ *   what the pipeline genuinely wrote (including non-markdown it copies but the
+ *   guard ignores), and `write` + `markdownPaths` let a caller drop a root-only
+ *   file in after the run and re-derive the produced set.
  */
 export type InstalledMirror = {
   byDatasetPath: Map<string, string>
   producedPaths: string[]
+  root: {
+    /** True iff the pipeline wrote this root-relative path (markdown or not). */
+    has: (rootRelPath: string) => boolean
+    /** Adds a root-only file to the destination, as a hand-edit would. */
+    write: (rootRelPath: string, content: string) => Promise<void>
+    /** Re-derives the destination's markdown paths (post-mutation included). */
+    markdownPaths: () => Promise<string[]>
+  }
 }
 
 export async function buildInstalledArtifacts(tree: DatasetTree): Promise<InstalledMirror> {
@@ -232,7 +274,13 @@ export async function buildInstalledArtifacts(tree: DatasetTree): Promise<Instal
 
   return {
     byDatasetPath,
-    producedPaths: (await collectMarkdownUnder(fileService, VIRTUAL_DEST, VIRTUAL_DEST)).sort(),
+    producedPaths: await producedMarkdownPaths(fileService),
+    root: {
+      has: rootRelPath => fileService.existsSync(`${VIRTUAL_DEST}/${rootRelPath}`),
+      write: (rootRelPath, content) =>
+        fileService.writeFile(`${VIRTUAL_DEST}/${rootRelPath}`, content),
+      markdownPaths: () => producedMarkdownPaths(fileService),
+    },
   }
 }
 
@@ -318,7 +366,7 @@ export function diffSkillMd(expected: string, actual: string): string {
  * Throws LOUDLY, naming the offending artifact by its DATASET-relative path
  * (its canonical identity), pointing at the generated root path, and giving the
  * `pair update` regenerate hint, when the mirror is missing (AC4) or has
- * drifted (AC2/AC3). This is the guard's assertion helper, kept in a tested
+ * drifted (AC2). This is the guard's assertion helper, kept in a tested
  * production module (per the "gate & tooling code in tested modules" ADL) so
  * both the real on-disk guard and the drift-injection tests drive the same
  * code path.
