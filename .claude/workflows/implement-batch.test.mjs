@@ -677,3 +677,55 @@ test('a leading # on the id is normalized away (worktree paths and markers never
   assert.match(impl.prompt, /pair-worktrees\/234\b/, 'worktree path uses the bare id')
   assert.ok(!/pair-worktrees\/#/.test(impl.prompt), 'no stray # in a shell path')
 })
+
+// ── meta must be a PURE LITERAL ────────────────────────────────────────────
+// Regression guard. The loader parses `meta` statically and rejects any expression
+// node, so a `+`-concatenated string (a BinaryExpression) makes the whole workflow
+// UNLOADABLE — and it fails SILENTLY: the workflow simply stops appearing in the
+// registry, so `Workflow({name})` reports "not found" and only an explicit
+// `scriptPath` surfaces the real reason. Shipped once, in the #401 fix itself.
+//
+// The invariant is checked structurally: strip comments and string literals from
+// the meta block, and what remains must be nothing but object/array punctuation.
+// Anything else — an operator, a call, a spread, a template literal, an identifier
+// reference — leaves a residue and fails here.
+test('meta is a pure literal — no expression can make the workflow silently unloadable', () => {
+  const open = SRC.indexOf('const meta = {')
+  assert.ok(open > -1, 'meta declaration found')
+  const bodyStart = SRC.indexOf('{', open)
+  let depth = 0
+  let bodyEnd = -1
+  let inStr = null
+  for (let i = bodyStart; i < SRC.length; i++) {
+    const c = SRC[i]
+    if (inStr) {
+      if (c === '\\') i++
+      else if (c === inStr) inStr = null
+      continue
+    }
+    if (c === "'" || c === '"' || c === '`') inStr = c
+    else if (c === '{' || c === '[') depth++
+    else if (c === '}' || c === ']') {
+      depth--
+      if (depth === 0) {
+        bodyEnd = i
+        break
+      }
+    }
+  }
+  assert.ok(bodyEnd > bodyStart, 'meta object literal is balanced')
+
+  const residue = SRC.slice(bodyStart, bodyEnd + 1)
+    .replace(/^[ \t]*\/\/.*$/gm, '') // line comments
+    .replace(/'(?:[^'\\]|\\.)*'/g, '') // single-quoted strings
+    .replace(/"(?:[^"\\]|\\.)*"/g, '') // double-quoted strings
+    .replace(/[A-Za-z_$][\w$]*\s*:/g, '') // property keys (inline ones too)
+    .replace(/[\s{}[\],:]/g, '') // structural punctuation
+
+  assert.equal(
+    residue,
+    '',
+    `meta contains non-literal syntax (residue: ${JSON.stringify(residue.slice(0, 80))}). ` +
+      'Every value must be a single literal — no concatenation, no template literals, no calls.',
+  )
+})

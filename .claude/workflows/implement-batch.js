@@ -2,15 +2,13 @@ export const meta = {
   name: 'implement-batch',
   description:
     'Drive a mutex-safe batch of ready Pair stories, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
+  // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
+  // expression node. A `+`-concatenated string is a BinaryExpression and makes the whole
+  // workflow UNLOADABLE: it silently disappears from the registry and only `scriptPath`
+  // reports why. Keep every value here a single literal, however long the line gets
+  // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"stories":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} — ' +
-    'a bare list of issue refs ("#234 #236") is NOT accepted and the run throws: title feeds the ' +
-    'prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to ' +
-    'derive them. Optional per story: notes (scope directive) and prNumber (re-enter the review ' +
-    'loop on an existing PR). Pre-filter for mutex safety — no two stories may touch the same ' +
-    'shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent ' +
-    'enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and ' +
-    'loses the in-worktree review log.',
+    'REQUIRED args shape: {"stories":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} — a bare list of issue refs ("#234 #236") is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per story: notes (scope directive) and prNumber (re-enter the review loop on an existing PR). Pre-filter for mutex safety — no two stories may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a full `pnpm quality-gate` on a cold worktree cache qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
     { title: 'Implement', model: 'opus' },
