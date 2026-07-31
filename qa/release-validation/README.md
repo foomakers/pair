@@ -31,6 +31,7 @@ Execute in order. P0 blocks release sign-off.
 | CP6 | [CP6-website-search-navigation.md](CP6-website-search-navigation.md) | P1 | Orama search, sidebar, prev/next, llms.txt, privacy |
 | CP7 | [CP7-registry-publish.md](CP7-registry-publish.md) | P0 | npmjs.org visibility, install from public registry |
 | CP8 | [CP8-packaging.md](CP8-packaging.md) | P1 | `pair package` with source/target layouts, metadata, validation |
+| CP9 | [CP9-quickstart-onboarding.md](CP9-quickstart-onboarding.md) | P1 | Timed quickstart onboarding: bootstrap `$mode: quick` under 10 min, guided regression |
 
 ## Execution by AI Assistant
 
@@ -94,5 +95,6 @@ Consult before each release. If any condition is true, update the corresponding 
 - [ ] New distribution channel (brew, npx global, etc.) → add to CP2 or new CP
 - [ ] npmjs.org publish config changed → update CP7
 - [ ] Landing page sections changed → update CP1
+- [ ] Bootstrap resolution depths or their defaults changed → update CP9
 
 When updating, increment the test count in this README and add a changelog entry at the bottom of the affected CP file.
