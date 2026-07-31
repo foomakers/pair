@@ -13,6 +13,26 @@ describe('registry resolver', () => {
     expect(extractRegistries(config2)).toHaveProperty('b')
   })
 
+  // #407: normalizeRegistryConfig used to ignore the key entirely, so
+  // `"flattenDepth": 2` in config.json was silently dropped and the copy pipeline
+  // always ran an unbounded flatten.
+  it('extractRegistries reads flattenDepth, and omits it when absent', () => {
+    const config = {
+      asset_registries: {
+        skills: {
+          source: '.skills',
+          flatten: true,
+          flattenDepth: 2,
+          targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        },
+        knowledge: { source: '.pair', targets: [{ path: '.pair', mode: 'canonical' }] },
+      },
+    }
+    const registries = extractRegistries(config)
+    expect(registries['skills']?.flattenDepth).toBe(2)
+    expect(registries['knowledge']?.flattenDepth).toBeUndefined()
+  })
+
   it('resolveTarget correctly resolves relative and absolute targets', () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
     const config = {

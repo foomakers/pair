@@ -29,6 +29,7 @@ import {
   type SkillNameMap,
   type SkillLinkPathMap,
 } from '@pair/content-ops'
+import { SKILL_COPY_OPTS } from './skill-md-mirror'
 
 /**
  * Recursively finds directories under `root` that directly contain at least
@@ -65,13 +66,16 @@ export function collectSkillDirs(root: string): string[] {
 /**
  * Builds the real `skillNameMap` (short name -> installed prefixed name)
  * from the dataset's `.skills/` tree, using the same canonical
- * `buildSkillNameMap` + `{ flatten: true, prefix: 'pair' }` options the real
- * transfer pipeline uses (see `copy-directory-transforms.ts`'s
- * `applySkillReferenceRewrites`).
+ * `buildSkillNameMap` + the single `SKILL_COPY_OPTS` pinned to the `skills`
+ * registry (see `copy-directory-transforms.ts`'s `applySkillReferenceRewrites`).
+ * Reusing that constant — rather than re-typing the knobs — is what keeps the
+ * entry granularity (`flattenDepth`, #407) in step: `collectSkillDirs` returns
+ * ANY dir holding a file, so a skill's `references/` sub-dir reaches this map and
+ * must be recognized as content, not registered as a skill named `references`.
  */
 export function buildDatasetSkillNameMap(skillsDir: string): SkillNameMap {
   const dirMappingFiles = new Map<string, string[]>(collectSkillDirs(skillsDir).map(d => [d, []]))
-  return buildSkillNameMap(dirMappingFiles, { flatten: true, prefix: 'pair' })
+  return buildSkillNameMap(dirMappingFiles, SKILL_COPY_OPTS)
 }
 
 /**
@@ -83,7 +87,7 @@ export function buildDatasetSkillNameMap(skillsDir: string): SkillNameMap {
  */
 export function buildSkillLinkPathMap(skillsDir: string): SkillLinkPathMap {
   const dirMappingFiles = new Map<string, string[]>(collectSkillDirs(skillsDir).map(d => [d, []]))
-  return prodBuildSkillLinkPathMap(dirMappingFiles, { flatten: true, prefix: 'pair' })
+  return prodBuildSkillLinkPathMap(dirMappingFiles, SKILL_COPY_OPTS)
 }
 
 /**

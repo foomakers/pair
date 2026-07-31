@@ -158,6 +158,11 @@ export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
     include,
     flatten: registryConfig.flatten,
     targets: registryConfig.targets,
+    // #407: without this the copy pipeline always ran unbounded, so a skill's
+    // nested `references/` installed as a sibling pseudo-skill.
+    ...(registryConfig.flattenDepth !== undefined && {
+      flattenDepth: registryConfig.flattenDepth,
+    }),
     ...(registryConfig.prefix && { prefix: registryConfig.prefix }),
   }
 

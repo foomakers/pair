@@ -218,17 +218,27 @@ describe('root-copy read distinguishes a missing copy from an unreadable one', (
  * no mirror-delete" — would become quietly false.
  */
 describe('SKILL_COPY_OPTS stays pinned to the pair-cli skills registry', () => {
-  it('flatten/prefix/source/behavior match apps/pair-cli/config.json asset_registries.skills', () => {
+  it('flatten/flattenDepth/prefix/source/behavior match apps/pair-cli/config.json asset_registries.skills', () => {
     const config = JSON.parse(
       readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
     ) as {
       asset_registries: {
-        skills: { source: string; flatten: boolean; prefix: string; behavior: string }
+        skills: {
+          source: string
+          flatten: boolean
+          flattenDepth?: number
+          prefix: string
+          behavior: string
+        }
       }
     }
     const registry = config.asset_registries.skills
     expect(SKILL_COPY_OPTS.flatten).toBe(registry.flatten)
     expect(SKILL_COPY_OPTS.prefix).toBe(registry.prefix)
+    // #407: the entry granularity is part of the transform, so it is pinned too —
+    // otherwise the guard would derive sibling `-references` paths the real
+    // `pair update` no longer produces.
+    expect(SKILL_COPY_OPTS.flattenDepth).toBe(registry.flattenDepth)
     // the guard reads the dataset from the registry's declared source dir (.skills)
     expect(DATASET_SKILLS.endsWith(registry.source)).toBe(true)
     // ...and runs the pipeline with the registry's declared copy behavior

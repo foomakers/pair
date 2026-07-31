@@ -6,9 +6,17 @@
  * canonical dataset source under `packages/knowledge-hub/dataset/.skills/`
  * by `pair update`. Rather than re-implement that transform, these helpers run
  * the REAL copy pipeline — `copyDirectoryWithTransforms` with the exact
- * `{ flatten: true, prefix: 'pair' }` options `apps/pair-cli/config.json`
- * declares for the `skills` registry — over an in-memory clone of the dataset,
- * so a bug in the real pipeline FAILS the guard instead of being masked.
+ * `{ flatten: true, flattenDepth: 2, prefix: 'pair' }` options
+ * `apps/pair-cli/config.json` declares for the `skills` registry — over an
+ * in-memory clone of the dataset, so a bug in the real pipeline FAILS the guard
+ * instead of being masked.
+ *
+ * `flattenDepth: 2` is the registry's ENTRY granularity (#407): a dataset skill
+ * dir is `<category>/<name>` (or the bare `next`), so a THIRD segment
+ * (`references/`) is content of that skill and installs inside it rather than as
+ * a sibling `pair-<category>-<name>-references/`. The mapping asserted here is
+ * unchanged for every current skill — no dataset skill dir is deeper than two
+ * segments — but the derivation now matches the corrected pipeline.
  *
  * The composed transform covers all four drift classes the guard must catch:
  * dir-rename (`transformPath`), frontmatter `name:` sync (`syncFrontmatter`),
@@ -56,7 +64,7 @@ import {
 } from '@pair/content-ops'
 
 /** The exact naming-transform options the `skills` registry uses in config.json. */
-export const SKILL_COPY_OPTS = { flatten: true, prefix: 'pair' } as const
+export const SKILL_COPY_OPTS = { flatten: true, flattenDepth: 2, prefix: 'pair' } as const
 
 /**
  * The FULL `SyncOptions` the guard runs the pipeline with: content-ops' defaults

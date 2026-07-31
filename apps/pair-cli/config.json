@@ -32,6 +32,7 @@
       "source": ".skills",
       "behavior": "overwrite",
       "flatten": true,
+      "flattenDepth": 2,
       "prefix": "pair",
       "description": "Agent skills distributed to AI tool directories",
       "targets": [

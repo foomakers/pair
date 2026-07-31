@@ -338,6 +338,51 @@ describe('registry validation - targets', () => {
     expect(errors).toHaveLength(0)
   })
 
+  // #407: flattenDepth bounds flatten to the registry's entry granularity. It is
+  // read from JSON, so an invalid value must be REJECTED — degrading silently
+  // would degrade back into the unbounded flatten this option exists to fix.
+  it('accepts a positive-integer flattenDepth alongside flatten: true', () => {
+    const config: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills',
+      include: [],
+      flatten: true,
+      flattenDepth: 2,
+      prefix: 'pair',
+      targets: [{ path: '.skills', mode: 'canonical' }],
+    }
+    expect(validateRegistry('skills', config)).toHaveLength(0)
+  })
+
+  it.each([0, -1, 1.5, '2', null])('rejects the invalid flattenDepth %p', flattenDepth => {
+    const config = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills',
+      include: [],
+      flatten: true,
+      flattenDepth,
+      targets: [{ path: '.skills', mode: 'canonical' }],
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors.some(e => e.includes('flattenDepth must be a positive integer'))).toBe(true)
+  })
+
+  it('rejects flattenDepth without flatten: true (it would do nothing)', () => {
+    const config = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills',
+      include: [],
+      flatten: false,
+      flattenDepth: 2,
+      targets: [{ path: '.skills', mode: 'canonical' }],
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors.some(e => e.includes('flattenDepth requires flatten: true'))).toBe(true)
+  })
+
   it('rejects non-boolean flatten', () => {
     const config = {
       behavior: 'mirror',

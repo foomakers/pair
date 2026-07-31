@@ -81,6 +81,7 @@ export function validateRegistry(name: string, config: unknown): string[] {
   errors.push(...validateDescription(name, reg))
   errors.push(...validateIncludes(name, reg))
   errors.push(...validateFlattenField(name, reg))
+  errors.push(...validateFlattenDepthField(name, reg))
   errors.push(...validatePrefixField(name, reg))
   errors.push(...validateTargetConfigs(name, reg))
 
@@ -134,6 +135,24 @@ function validateFlattenField(name: string, reg: Record<string, unknown>): strin
   if (flatten === undefined) return []
   if (typeof flatten !== 'boolean') {
     return [`Registry '${name}' flatten must be a boolean`]
+  }
+  return []
+}
+
+/**
+ * `flattenDepth` bounds `flatten` to the registry's entry granularity (#407).
+ * Rejected loudly rather than coerced: a typo (`0`, `-1`, `"2"`, `1.5`) would
+ * otherwise degrade into an unbounded flatten — reintroducing the very defect
+ * the option exists to fix — and it is meaningless without `flatten: true`.
+ */
+function validateFlattenDepthField(name: string, reg: Record<string, unknown>): string[] {
+  const flattenDepth = reg['flattenDepth']
+  if (flattenDepth === undefined) return []
+  if (typeof flattenDepth !== 'number' || !Number.isInteger(flattenDepth) || flattenDepth < 1) {
+    return [`Registry '${name}' flattenDepth must be a positive integer`]
+  }
+  if (reg['flatten'] !== true) {
+    return [`Registry '${name}' flattenDepth requires flatten: true`]
   }
   return []
 }
