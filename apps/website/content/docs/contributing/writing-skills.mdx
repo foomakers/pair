@@ -208,8 +208,9 @@ Hard mechanics on top of the principles:
 - **Size limits** — the spec caps `name` at 64 chars and `description` at 1024 chars separately; Pair adopts a stricter combined ≤1024 bound for both together.
 - **Portability** — the [agentskills.io](https://agentskills.io) spec's top-level frontmatter fields are `name` and `description` (required) plus `license`, `compatibility`, `metadata`, and `allowed-tools` (optional); the spec's own example `version`/`author` keys live *under* `metadata:`, not top-level. Pair skills carry `version`/`author` at top level instead — a tolerated **Pair extension** beyond the spec's optional fields, kept there for provenance tracking (who authored/last bumped a skill) until a future skill-corpus pass considers moving them under `metadata:`. Assistant-specific fields (e.g., `disable-model-invocation`) stay out of the dataset regardless: a skill must install identically on Claude Code, Cursor, VS Code Copilot, and Codex.
 - **Mirror sync** — the dataset copy (`packages/knowledge-hub/dataset/.skills/`) and the installed mirror (`.claude/skills/`) change in the same commit, always.
+- **`version` bumps track observable behaviour, not edits** — minor (`0.5.0 → 0.6.0`) when a skill gains or changes something a caller can observe: a new argument, a new mode/execution depth, a new or removed phase, a changed HALT condition. Patch (`0.6.0 → 0.6.1`) for a behaviour-preserving correction to the algorithm's wording. **No bump** for prose, formatting, link, or documentation-only edits — which is why a clarity pass across many skills leaves their versions alone. Same value in both copies: the mirror transform rewrites `name`/`description`, never `version`.
 
-**How to check:** character-count `name` and `description` against the combined bound; diff the frontmatter's fields against the spec's top-level list plus the tolerated `version`/`author` extension — anything else is a portability violation; confirm the commit touches both copies.
+**How to check:** character-count `name` and `description` against the combined bound; diff the frontmatter's fields against the spec's top-level list plus the tolerated `version`/`author` extension — anything else is a portability violation; confirm the commit touches both copies; if the diff adds an argument, a mode, or a phase, confirm `version` moved.
 
 ### 9. Evaluation
 
@@ -229,6 +230,7 @@ One line per principle — use it when authoring or reviewing any skill change:
 - [ ] Prohibitions only as hard guardrails, each paired with its positive target
 - [ ] Each concept's rules co-located under one heading, adjacent to the step they govern
 - [ ] `name` ≤ 64 / `description` ≤ 1024 chars separately (spec), and both together ≤ 1024 (Pair's stricter bound); frontmatter limited to spec fields + the tolerated `version`/`author` extension (no assistant-specific fields); dataset + mirror in the same commit
+- [ ] `version` bumped iff observable behaviour changed (new argument/mode/phase → minor; wording-only → no bump), identical in both copies
 - [ ] Description rewrites carry before/after trigger-eval evidence
 
 ## Writing a new skill

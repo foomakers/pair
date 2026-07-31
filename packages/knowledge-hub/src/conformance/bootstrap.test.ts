@@ -135,6 +135,149 @@ describe('quick mode composes the Guided/Quick Setup Convention (AC3)', () => {
   })
 })
 
+/**
+ * Split SKILL.md into `### Step x.y` sections (heading + body up to the next
+ * `##`/`###` heading), so a quick-mode note can be asserted WHERE it belongs
+ * rather than anywhere in the file.
+ */
+const stepSections = (skill: string): Map<string, string> => {
+  const out = new Map<string, string>()
+  const lines = skill.split('\n')
+  let current: string | null = null
+  let buf: string[] = []
+  const flush = (): void => {
+    if (current) out.set(current, buf.join('\n'))
+  }
+  for (const line of lines) {
+    const m = /^###\s+Step\s+([0-9.]+):/.exec(line)
+    if (m) {
+      flush()
+      current = m[1].replace(/\.$/, '')
+      buf = [line]
+      continue
+    }
+    if (/^##\s/.test(line)) {
+      flush()
+      current = null
+      buf = []
+      continue
+    }
+    if (current) buf.push(line)
+  }
+  flush()
+  return out
+}
+
+// A step is question-bearing if its own text interviews the developer: a
+// blockquote line ending in a question, an explicit "ask N questions" rule, or
+// a present-and-approve round. Those are exactly the steps quick mode has to
+// say something about — and the derivation makes a FUTURE interview step fail
+// this guard unless its author adds the note too.
+const INTERVIEW_MARKERS = [
+  /^\s*>.*\?\s*$/m,
+  /Ask \d+(-\d+)? focused questions/i,
+  /for developer review/i,
+  /until approved/i,
+]
+
+describe('quick mode is declared where the questions are (AC1)', () => {
+  const sections = stepSections(datasetSkill())
+
+  it('finds the guided step sections it is supposed to check', () => {
+    for (const step of ['1.2', '2.2', '2.3', '3.1', '3.2', '4.2', '4.3']) {
+      expect(sections.has(step), `Step ${step} section not found`).toBe(true)
+    }
+  })
+
+  it('carries a `**Quick mode**:` note in EVERY question-bearing step', () => {
+    const missing: string[] = []
+    for (const [step, body] of sections) {
+      const interviews = INTERVIEW_MARKERS.some(re => re.test(body))
+      if (interviews && !/\*\*Quick mode\*\*/.test(body)) missing.push(step)
+    }
+    expect(
+      missing,
+      `question-bearing steps with no quick-mode note: ${missing.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('covers the composed-assessment and finalization steps too (2.2, 4.2, 4.3)', () => {
+    for (const step of ['2.2', '4.2', '4.3']) {
+      expect(sections.get(step), `Step ${step}`).toMatch(/\*\*Quick mode\*\*/)
+    }
+  })
+
+  it('tells composed assess-* skills to use their own quick signal (Path A $choice)', () => {
+    // the assess-* family's declared default is GUIDED, so plain composition
+    // would interview once per installed skill.
+    expect(sections.get('2.2')).toMatch(/\$choice/)
+    expect(sections.get('2.2')?.toLowerCase()).toMatch(/path a/)
+  })
+
+  it('qualifies the approval-round HALT conditions as guided-only', () => {
+    const halt = datasetSkill().split('## HALT Conditions')[1] ?? ''
+    expect(halt).toMatch(/Adoption file generation rejected[^\n]*guided only/i)
+    expect(halt).toMatch(/Project categorization rejected[^\n]*guided only/i)
+  })
+})
+
+describe('the fallback tier points at a KB anchor that exists (AC3)', () => {
+  const CHECKLIST_REL = '.pair/knowledge/assets/bootstrap-checklist.md'
+  const ANCHOR = '## Quick-Mode Per-Project-Type Defaults'
+
+  it('bootstrap-checklist.md carries the per-project-type defaults table, in both copies', () => {
+    for (const p of [join(ROOT, CHECKLIST_REL), join(__dirname, '../../dataset', CHECKLIST_REL)]) {
+      const c = read(p)
+      expect(c).toContain(ANCHOR)
+      // one column per project type, and the rows quick mode resolves from
+      expect(c).toMatch(/Type A[^|]*\|[^|]*Type B[^|]*\|[^|]*Type C/)
+      for (const row of ['Architecture — style', 'Infrastructure —', 'UX/UI', 'Way of Working —']) {
+        expect(c, `${p}: missing fallback row ${row}`).toContain(row)
+      }
+      // and it must NOT invent the two non-defaultable ones
+      expect(c).toMatch(/Deliberately absent from this table/)
+    }
+  })
+
+  it('names that anchor as the fallback source instead of the asset as a whole', () => {
+    const c = `${datasetSkill()}\n${datasetDefaults()}`
+    expect(c).toContain('Quick-Mode Per-Project-Type Defaults')
+    // the worked examples are explicitly ruled out as a default source
+    expect(c).toMatch(/Context-Specific Examples/)
+  })
+
+  it('keeps the cascade tiers disjoint — decision-log belongs to preferences only', () => {
+    const defaults = datasetDefaults()
+    expect(defaults).toMatch(/excluding[^|]*decision-log/i)
+  })
+})
+
+describe('the PRD is a precondition, not a quick-mode default (AC1)', () => {
+  it('SKILL.md and the defaults doc both say so', () => {
+    for (const c of [datasetSkill(), datasetDefaults()]) {
+      expect(c.toLowerCase()).toMatch(/precondition/)
+      expect(c).toMatch(/PRD/)
+    }
+  })
+
+  it('the timed critical path authors the PRD outside the stopwatch', () => {
+    const cp = read(join(ROOT, 'qa/release-validation/CP9-quickstart-onboarding.md'))
+    expect(cp).toMatch(/outside\s+the\s+stopwatch/i)
+    expect(cp).toMatch(/PRD/)
+    // two splits, so a slow run names the phase that caused it
+    expect(cp.toLowerCase()).toMatch(/bootstrap-elapsed/)
+    expect(cp.toLowerCase()).toMatch(/story-elapsed/)
+  })
+
+  it('the docs page states the same precondition', () => {
+    const doc = read(
+      join(ROOT, 'apps/website/content/docs/getting-started/bootstrap-quick-mode.mdx'),
+    )
+    expect(doc.toLowerCase()).toMatch(/precondition/)
+    expect(doc).toMatch(/PRD/)
+  })
+})
+
 describe('per-decision defaultability — T1 (AC1/AC4)', () => {
   const c = (): string => datasetDefaults()
 
@@ -273,5 +416,23 @@ describe('timed onboarding scenario + docs (AC1, DoD)', () => {
     expect(doc.toLowerCase()).toMatch(/guided/)
     const meta = read(join(ROOT, 'apps/website/content/docs/getting-started/meta.json'))
     expect(meta).toContain('bootstrap-quick-mode')
+  })
+
+  // landing.e2e.test.ts walks Quickstart's footer `next` link and asserts it
+  // lands on Quickstart: Solo. Inserting a page BETWEEN them would still pass
+  // that test (its locator resolves the sidebar link) while silently voiding
+  // the prev/next guarantee it exists to check — so pin the order here, in the
+  // local gate, where e2e ordering is not otherwise observable.
+  it('sits after the quickstart-{solo,team,org} trio in nav order', () => {
+    const pages: string[] = JSON.parse(
+      read(join(ROOT, 'apps/website/content/docs/getting-started/meta.json')),
+    ).pages
+    expect(pages[pages.indexOf('quickstart') + 1]).toBe('quickstart-solo')
+    expect(pages.indexOf('bootstrap-quick-mode')).toBeGreaterThan(pages.indexOf('quickstart-org'))
+  })
+
+  it('is cross-linked from the Getting Started index (DoD)', () => {
+    const index = read(join(ROOT, 'apps/website/content/docs/getting-started/index.mdx'))
+    expect(index).toContain('/docs/getting-started/bootstrap-quick-mode')
   })
 })

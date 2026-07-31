@@ -1,7 +1,7 @@
 ---
 name: pair-process-bootstrap
 description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /pair-process-specify-prd, /pair-capability-setup-pm, /pair-capability-record-decision, assess-* (optional)."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -31,7 +31,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 
 | Argument | Required | Description |
 | -------- | -------- | ----------- |
-| `$mode`  | No       | Resolution depth: `guided` (the **declared default**) or `quick`. Absent ⇒ `guided`, and Phases 0-4 below run unchanged. `quick` takes KB-sensible defaults instead of asking, per the [Guided / Quick Setup Convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md). See Resolution Depth below. |
+| `$mode`  | No       | Resolution depth: `guided` (the **declared default**) or `quick`. Absent ⇒ `guided`, and Phases 0-4 below run unchanged. `quick` takes KB-sensible defaults instead of asking, per the [Guided / Quick Setup Convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md). Passing `guided` explicitly is accepted as a **loud no-op** — a deliberate, documented deviation from the convention's minimum (it fixes only that an explicit signal must select the **non-default** depth), kept for callers that want the depth visible at the call site; see [quick-mode-defaults.md](./quick-mode-defaults.md) § Selector. See Resolution Depth below. |
 
 ## Resolution Depth: guided (default) or quick
 
@@ -41,6 +41,7 @@ One entry point, two resolution depths. Quick mode is **additive**: a second res
 - **quick** — `$mode: quick` is the explicit opt-in signal. Bootstrap **asks no questions** for any decision that has a safe default, so an empty repository reaches a **first workable story** in minutes rather than a full interview.
 - **The resolution is the convention's, not bootstrap's.** Defaults resolve through the convention's cascade (explicit argument > project state > saved preferences > hardcoded fallback). Bootstrap declares only its per-adopter delta — which decision points are defaultable, which tier fills each, which are still asked — in [quick-mode-defaults.md](./quick-mode-defaults.md). There is **no bespoke** Quickstart resolution order.
 - **Not every question disappears.** Decisions with no safe KB default (PM tool; tech stack on a genuinely empty repo) are still asked in quick mode — see [quick-mode-defaults.md](./quick-mode-defaults.md).
+- **A populated PRD is a precondition, not a default.** Phase 0 is BLOCKING and identical in both depths: a missing or template PRD composes `/pair-process-specify-prd`, an interactive authoring session. That session is **outside** the quick-mode question budget and outside the minutes-scale claim — quick mode reaches a first workable story in minutes *from a populated PRD*. On a repo with no PRD, author it first (or expect the PRD interview before quick mode's own path starts).
 - **Non-interactive safety**: guided needs a TTY. With no TTY (CI, piped stdin) guided can never run — bootstrap warns and runs quick instead, and never hangs waiting for input it cannot receive.
 - **Already configured**: identical in both depths — every phase checks its own output first and confirms rather than overwriting.
 
@@ -126,6 +127,8 @@ One entry point, two resolution depths. Quick mode is **additive**: a second res
 
 4. **Verify**: Assessment data collected (via skills or manually) and persisted via `/pair-capability-record-decision`. All adoption files written from assess-\* proposals are consistent.
 
+**Quick mode**: composed assess-\* skills must be invoked with their own quick signal — the resolution cascade's **Path A `$choice`**, resolved from project state — never plain, because the assess-\* family's declared default is guided (Path C, the full interview). A domain project state cannot resolve falls back to the per-project-type default named in [quick-mode-defaults.md](./quick-mode-defaults.md); the tech stack on a genuinely empty repo is the one exception and is still asked (Step 2.3). The manual-assessment path (item 3) asks nothing either — it takes the same defaults and reports them.
+
 ### Step 2.3: Gather Information per Section
 
 For each missing adoption file, work through the relevant checklist section. Reference the [Bootstrap Checklist](../../../.pair/knowledge/assets/bootstrap-checklist.md) for section-specific questions.
@@ -136,10 +139,10 @@ For each missing adoption file, work through the relevant checklist section. Ref
 2. **Tech Stack** — languages, frameworks, libraries with versions
    - Reference: [Technical Standards](../../../.pair/knowledge/guidelines/technical-standards/README.md)
 
-3. **Infrastructure** — deployment, CI/CD, monitoring, environments
+3. *`Infrastructure`* — deployment, CI/CD, monitoring, environments
    - Reference: [Infrastructure Guidelines](../../../.pair/knowledge/guidelines/infrastructure/README.md)
 
-4. **UX/UI** — design system, accessibility, device support
+4. *`UX/UI`* — design system, accessibility, device support
    - Reference: [UX Guidelines](../../../.pair/knowledge/guidelines/user-experience/README.md)
 
 5. **Way of Working** — processes, quality gates, release cycles
@@ -151,7 +154,7 @@ For each missing adoption file, work through the relevant checklist section. Ref
 - Wait for developer responses before proceeding
 - Record each significant decision via `/pair-capability-record-decision` (`non-architectural` → ADL, `architectural` → ADR)
 
-**Quick mode**: no section questions — each section is filled from the project-type defaults in [Bootstrap Checklist](../../../.pair/knowledge/assets/bootstrap-checklist.md), with the same `/pair-capability-record-decision` calls. Exception: an undetectable tech stack (empty repo, nothing to read from project state) is still asked ([quick-mode-defaults.md](./quick-mode-defaults.md)).
+**Quick mode**: no section questions — each section is filled from one named KB anchor, [Bootstrap Checklist](../../../.pair/knowledge/assets/bootstrap-checklist.md) § `Quick-Mode Per-Project-Type Defaults` (plus § `Decision Framework` for the core architectural pattern), with the same `/pair-capability-record-decision` calls. The § `Context-Specific Examples` are worked examples of already-decided projects — **never** a default source. Exception: an undetectable tech stack (empty repo, nothing to read from project state) is still asked; the table has no stack row by design ([quick-mode-defaults.md](./quick-mode-defaults.md)).
 
 ## Phase 3: Standards Generation
 
@@ -169,6 +172,8 @@ For each missing adoption file (in order: architecture → tech-stack → infras
 4. **Act**: Iterate on feedback until approved.
 5. **Act**: Save to [adoption/tech/](../../../.pair/adoption/tech)`<filename>.md`.
 6. **Verify**: File written, consistent with other adoption files.
+
+**Quick mode**: steps 3 and 4 are skipped for **every** document — no per-document presentation, no approval round, no iteration loop. Documents are generated, written and then reported once in the Step 4.3 summary; steps 1, 2, 5 and 6 are identical in both depths ([quick-mode-defaults.md](./quick-mode-defaults.md)).
 
 ### Step 3.2: Quality Gate Setup
 
@@ -273,9 +278,9 @@ BOOTSTRAP COMPLETE:
 ## HALT Conditions
 
 - **PRD missing or template and /pair-process-specify-prd fails** (Phase 0) — cannot bootstrap without product context
-- **Project categorization rejected** (Phase 1) — developer must confirm before technical decisions
+- **Project categorization rejected** (Phase 1, **guided only**) — developer must confirm before technical decisions; quick mode derives the type from PRD signals and records it without a confirmation round
 - **Critical technical decision unresolved** (Phase 2) — cannot generate adoption files with gaps
-- **Adoption file generation rejected** (Phase 3) — each document needs developer approval
+- **Adoption file generation rejected** (Phase 3, **guided only**) — each document needs developer approval in the guided depth; quick mode writes without an approval round (Step 3.1), so this condition cannot arise there
 - **Non-defaultable input unresolvable in quick mode** (Step 2.3, Step 4.2) — a decision with no safe KB default (PM tool, undetectable tech stack) that cannot be resolved from the cascade and cannot be asked (no TTY); report which input to pass explicitly, never guess it
 
 On HALT: report the blocker clearly, propose resolution, wait for developer.

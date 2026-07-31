@@ -24,7 +24,9 @@ Quick mode is **additive**. It is a second depth of the same skill, not a separa
 /pair-process-bootstrap $mode: quick
 ```
 
-Expect at most two questions:
+**One precondition**: a populated `.pair/adoption/product/PRD.md`. Phase 0 of bootstrap is blocking in both depths — with no PRD it composes `/pair-process-specify-prd`, a full interactive authoring session that is neither defaulted nor counted below. Write the PRD first, then run quick mode.
+
+With the PRD in place, expect at most two questions:
 
 - **Which PM tool?** — the choice is organisational, not technical, so there is no safe default to guess. Skipped if your `way-of-working.md` already names one.
 - **Which tech stack?** — normally read straight from `package.json`, lockfiles and config. Only asked on a genuinely empty repository, where there is nothing to read.
@@ -54,9 +56,9 @@ An already-configured project is **confirmed, not overwritten**: each phase chec
 Quick mode does not invent its own resolution order. It follows the shared Guided / Quick Setup Convention that `pair package` and the `assess-*` skills already use — highest wins:
 
 1. **Explicit argument** — anything you named in the invocation
-2. **Project state** — what is already on disk: `.pair/adoption/**`, the PRD, `package.json`, lockfiles, CI workflows, `git config`
-3. **Saved preferences** — decisions a previous run recorded in the decision log
-4. **Fallback** — the per-project-type defaults in the KB bootstrap checklist
+2. **Project state** — what is already on disk, except the decision log: `.pair/adoption/tech/**`, `.pair/adoption/product/**`, the PRD, `package.json`, lockfiles, CI workflows, `git config`
+3. **Saved preferences** — decisions a previous run recorded in `.pair/adoption/decision-log/`
+4. **Fallback** — the _Quick-Mode Per-Project-Type Defaults_ table in the KB bootstrap checklist (never its worked examples)
 
 Bootstrap only declares which of its own decisions each tier fills. That mapping, decision by decision, lives next to the skill in `quick-mode-defaults.md` (`.claude/skills/pair-process-bootstrap/quick-mode-defaults.md` once the KB is installed).
 

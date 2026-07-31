@@ -5,10 +5,11 @@
 1. [Project Categorization](#project-categorization)
 2. [Architecture Foundation Assessment](#architecture-foundation-assessment)
 3. [Process Methodology Assessment](#process-methodology-assessment)
-4. [Core Checklists](#core-checklists)
-5. [Documentation Requirements](#documentation-requirements)
-6. [Context-Specific Examples](#context-specific-examples)
-7. [Bootstrap Templates](#bootstrap-templates)
+4. [Quick-Mode Per-Project-Type Defaults](#quick-mode-per-project-type-defaults)
+5. [Core Checklists](#core-checklists)
+6. [Documentation Requirements](#documentation-requirements)
+7. [Context-Specific Examples](#context-specific-examples)
+8. [Bootstrap Templates](#bootstrap-templates)
 
 ---
 
@@ -109,6 +110,36 @@
 - [ ] **Deployment Strategy**: Blue-green, canary, rolling updates, feature flags
 - [ ] **Quality Gates**: Automated testing, manual approval, rollback triggers
 - [ ] **Hotfix Process**: Critical bug handling, bypass procedures, communication plan
+
+---
+
+## Quick-Mode Per-Project-Type Defaults
+
+The `hardcoded fallback` tier for a setup skill running its **quick** depth — see the [Guided / Quick Setup Convention](../guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md). One value per section per project type, so a quick run resolves each adoption section from a KB value instead of inventing one or asking. Resolve the project type first ([Project Categorization](#project-categorization)), then read the column. Every value here is a starting point, overridable exactly like any other adopted decision.
+
+**Deliberately absent from this table** — a quick run must not invent these:
+
+- **Tech stack** — read from project state (`package.json`, lockfiles, config files), or asked. No per-type stack is safe: a Type A project is as plausibly a Python CLI as a Next.js portfolio.
+- **Project management tool** — organisational, not technical. Read from `way-of-working.md`, or asked.
+- **[Context-Specific Examples](#context-specific-examples)** (below) are worked examples of three *already-decided* projects, including their stack and PM tool. They illustrate; they are never a default source.
+
+| Section / decision            | Type A (Pet / PoC)                                            | Type B (Startup / Scale-up)                                | Type C (Enterprise)                                                             |
+| ----------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Architecture — core pattern   | Modular Monolith (per [Decision Framework](#decision-framework)) | Modular Monolith with microservice preparation              | Modular Monolith until a domain split is justified — evaluate per Decision Framework |
+| Architecture — style          | Layered                                                       | Hexagonal                                                  | Hexagonal                                                                       |
+| Architecture — data           | Single database                                               | Single database, read replica when load requires            | Database per bounded context, integration via events                            |
+| Infrastructure — environments | prod only                                                     | dev + prod                                                  | dev + staging + prod                                                            |
+| Infrastructure — hosting      | managed platform (PaaS), no orchestration                     | managed platform or containers                              | containers or managed cloud, IaC mandatory                                      |
+| Infrastructure — CI/CD        | repository-native CI: build, test, deploy from `main`         | repository-native CI + preview environments                 | repository-native CI + gated promotion per environment                          |
+| Infrastructure — IaC          | none                                                          | app-tier IaC                                                | full IaC, no manual infrastructure changes                                      |
+| Observability                 | platform logs + one uptime check                              | + error tracking + a metrics dashboard                      | + APM, log aggregation, security monitoring, alert routing                      |
+| UX/UI                         | off-the-shelf component library, responsive web, WCAG 2.1 AA on new UI | design tokens + component library, responsive web, WCAG 2.1 AA | versioned design-system package, supported-browser matrix, WCAG 2.1 AA (AAA where regulated) |
+| Way of Working — flow         | Kanban, no ceremonies                                         | 2-week sprints: standup, planning, review, retro            | 2-week sprints, full ceremony set including backlog refinement                  |
+| Way of Working — branching    | trunk-based, short-lived branches, PR with 1 review           | same, with protected `main`                                 | same + a release branch for hotfixes                                            |
+| Way of Working — commits/PRs  | Conventional Commits, KB PR template                          | idem                                                        | idem + a linked work item required on every PR                                  |
+| Way of Working — quality gates | standard pipeline: type check, test, lint, format            | idem                                                        | idem + dependency and security scanning                                         |
+| Way of Working — DoD          | KB Definition of Done template, unchanged                     | idem + a coverage threshold                                 | idem + compliance/audit evidence                                                |
+| Release                       | on demand from `main`                                         | every sprint                                                | milestone-driven, with a manual approval gate                                   |
 
 ---
 
@@ -348,15 +379,15 @@
 
 #### Architecture Foundation Decisions:
 
-- ✅ **Monolith vs Microservices**: Modular Monolith → _Single Next.js application_
-- ✅ **Architectural Style**: Layered → _Pages/Components/Utils structure_
-- ✅ **Data Strategy**: Static + Headless CMS → _Markdown files + optional Sanity_
+- ✅ **Monolith vs Microservices**: Modular Monolith → *Single Next.js application*
+- ✅ **Architectural Style**: Layered → *Pages/Components/Utils structure*
+- ✅ **Data Strategy**: Static + Headless CMS → *Markdown files + optional Sanity*
 
 #### Process Methodology Decisions:
 
-- ✅ **Iteration Model**: Kanban → _Feature-based development, no sprints_
-- ✅ **Release Strategy**: Continuous deployment → _Vercel auto-deploy on push_
-- ✅ **Quality Gates**: Minimal → _TypeScript + basic testing_
+- ✅ **Iteration Model**: Kanban → *Feature-based development, no sprints*
+- ✅ **Release Strategy**: Continuous deployment → *Vercel auto-deploy on push*
+- ✅ **Quality Gates**: Minimal → *TypeScript + basic testing*
 
 #### Project Management Tool:
 
@@ -391,9 +422,9 @@ Monitoring: Vercel built-in monitoring
 
 #### Architecture Foundation Decisions:
 
-- ✅ **Monolith vs Microservices**: Modular Monolith → _Single deployable with service layers_
-- ✅ **Architectural Style**: Event-Driven → _Real-time data processing architecture_
-- ✅ **Data Strategy**: Polyglot Persistence → _PostgreSQL + ClickHouse + Redis_
+- ✅ **Monolith vs Microservices**: Modular Monolith → *Single deployable with service layers*
+- ✅ **Architectural Style**: Event-Driven → *Real-time data processing architecture*
+- ✅ **Data Strategy**: Polyglot Persistence → *PostgreSQL + ClickHouse + Redis*
 
 #### Project Management Tool:
 
@@ -401,9 +432,9 @@ Monitoring: Vercel built-in monitoring
 
 #### Process Methodology Decisions:
 
-- ✅ **Iteration Model**: 2-week Sprints → _Balanced planning with fast delivery_
-- ✅ **Release Strategy**: Sprint-based with feature flags → _Risk mitigation_
-- ✅ **Quality Gates**: High → _95% test coverage, performance budgets_
+- ✅ **Iteration Model**: 2-week Sprints → *Balanced planning with fast delivery*
+- ✅ **Release Strategy**: Sprint-based with feature flags → *Risk mitigation*
+- ✅ **Quality Gates**: High → *95% test coverage, performance budgets*
 
 #### Final Tech Stack (Definitive):
 
@@ -435,15 +466,15 @@ Testing: Jest 29.x + Cypress 13.x + Artillery (load testing)
 
 #### Architecture Foundation Decisions:
 
-- ✅ **Monolith vs Microservices**: Domain Microservices → _Customer, Sales, Marketing, Integration services_
-- ✅ **Architectural Style**: Hexagonal + CQRS → _Complex business logic isolation_
-- ✅ **Data Strategy**: Database per Service + Event Sourcing → _Audit requirements_
+- ✅ **Monolith vs Microservices**: Domain Microservices → *Customer, Sales, Marketing, Integration services*
+- ✅ **Architectural Style**: Hexagonal + CQRS → *Complex business logic isolation*
+- ✅ **Data Strategy**: Database per Service + Event Sourcing → *Audit requirements*
 
 #### Process Methodology Decisions:
 
-- ✅ **Iteration Model**: 3-week Sprints → _Enterprise coordination needs_
-- ✅ **Release Strategy**: Quarterly releases with monthly patches → _Risk management_
-- ✅ **Quality Gates**: Enterprise → _Security scans, compliance checks, performance testing_
+- ✅ **Iteration Model**: 3-week Sprints → *Enterprise coordination needs*
+- ✅ **Release Strategy**: Quarterly releases with monthly patches → *Risk management*
+- ✅ **Quality Gates**: Enterprise → *Security scans, compliance checks, performance testing*
 
 #### Project Management Tool:
 
