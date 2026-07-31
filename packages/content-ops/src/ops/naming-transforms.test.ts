@@ -242,3 +242,23 @@ describe('transformPath with a bounded flatten depth (#407)', () => {
     )
   })
 })
+
+describe('bounded flatten is not less traversal-safe than the unbounded form (#411 round 3)', () => {
+  it('refuses a `..` head when flattenDepth is 1', () => {
+    // Returned '../evil' before the fix — escaping the destination root, in the
+    // very dimension the guard claims to harden.
+    expect(() => flattenPath('../evil', 1)).toThrow(/refusing to preserve/)
+  })
+
+  it('refuses a `.` head when flattenDepth is 1', () => {
+    expect(() => flattenPath('./evil', 1)).toThrow(/refusing to preserve/)
+  })
+
+  it('the unbounded form stays safe by construction, as before', () => {
+    expect(flattenPath('../evil')).toBe('..-evil')
+  })
+
+  it('a `..` in the head of a deeper bound is refused too', () => {
+    expect(() => flattenPath('../a/b', 2)).toThrow(/refusing to preserve/)
+  })
+})

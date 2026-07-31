@@ -49,19 +49,27 @@ function assertValidFlattenDepth(flattenDepth: number, operation: string, path: 
 }
 
 /**
- * A preserved tail is joined onto a destination root by the copy pipeline, so a
- * `.`/`..` segment in it could escape that root. The unbounded form is
- * traversal-safe by construction (every separator becomes a hyphen); the
- * bounded form has to say no explicitly.
+ * A bounded result is joined onto a destination root by the copy pipeline, so a
+ * `.`/`..` segment surviving in it could escape that root. The unbounded form is
+ * traversal-safe by construction (every separator becomes a hyphen); the bounded
+ * form has to say no explicitly.
+ *
+ * Checks EVERY segment, not only the preserved tail. Round-3 review of PR #411:
+ * with `flattenDepth === 1` the head is a single un-joined segment, so
+ * `flattenPath('../evil', 1)` returned `'../evil'` — leaving the bounded form
+ * strictly LESS traversal-safe than the unbounded one it replaces, in exactly the
+ * dimension this guard advertises. Not reachable through the CLI today (dir names
+ * come from `dirname(relative(...))`, and no registry declares depth 1), which is
+ * why it was a hole rather than a live bug.
  */
-function assertNoTraversalInTail(tail: string[], dirName: string): void {
-  const offender = tail.find(segment => segment === '.' || segment === '..')
+function assertNoTraversal(segments: string[], dirName: string): void {
+  const offender = segments.find(segment => segment === '.' || segment === '..')
   if (offender !== undefined) {
     throw createError({
       type: 'IO_ERROR',
       message:
         `flattenPath: refusing to preserve the relative segment '${offender}' of '${dirName}' — ` +
-        'a preserved sub-path is joined onto the destination root and could escape it.',
+        'a bounded result is joined onto the destination root and could escape it.',
       operation: 'flattenPath',
       path: dirName,
     })
@@ -102,9 +110,14 @@ export function flattenPath(dirName: string, flattenDepth?: number): string {
   const segments = trimmed.split('/')
   // Fewer segments than the entry depth: nothing below the entry to preserve, so
   // this is the unbounded result — a shallower entry is never padded.
-  if (segments.length <= flattenDepth) return segments.join('-')
+  if (segments.length <= flattenDepth) {
+    // With flattenDepth 1 a single segment is returned UN-joined, so hyphen-joining
+    // cannot neutralise a `..` here either.
+    if (segments.length === 1) assertNoTraversal(segments, dirName)
+    return segments.join('-')
+  }
+  assertNoTraversal(segments, dirName)
   const tail = segments.slice(flattenDepth)
-  assertNoTraversalInTail(tail, dirName)
   return [segments.slice(0, flattenDepth).join('-'), ...tail].join('/')
 }
 

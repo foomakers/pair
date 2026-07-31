@@ -400,6 +400,46 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
     // covers targets inside itself. Before the fix this fell through to the
     // source-root fallback and became `../../../source/process/review/SKILL.md`:
     // a path back into the dataset layout, dead in the install.
+    // Round-3 Major on PR #411: the shallow guard's symmetric twin. An entry
+    // DEEPER than flattenDepth silently mis-installed — a REGRESSION the bounded
+    // flatten introduced, since full flattening handled it fine.
+    it('rejects an entry deeper than flattenDepth, instead of mis-installing it (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/capability/sub/foo/SKILL.md': '---\nname: foo\n---\n# /foo',
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+      })
+
+      await expect(
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+        }),
+      ).rejects.toThrow(/entry too deep|holds none/)
+    })
+
+    // The rule must NOT fire on legitimate content, which is the whole point of
+    // the story: `references` is deeper than flattenDepth too, but its depth-2
+    // ancestor holds files, so something owns it.
+    it('still accepts a nested references/ dir, whose ancestor is a real entry', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+        '/dataset/source/process/review/references/deep.md': '# Deep',
+      })
+
+      await expect(
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+        }),
+      ).resolves.toBeDefined()
+    })
+
     it('keeps a nested sub-doc back-link pointing at its own skill (#407)', async () => {
       const fileService = createTestFileService({
         '/dataset/source/process/review/SKILL.md':

@@ -144,6 +144,54 @@ function validateNoShallowEntryWithSubdir(
 }
 
 /**
+ * The DEEPER half of the same layout mismatch, and the reason it needs its own
+ * rule: `validateNoShallowEntryWithSubdir` above rejects an entry SHALLOWER than
+ * `flattenDepth`. An entry DEEPER than it is equally unrepresentable and was
+ * silently mis-installed — a regression introduced by the bounded flatten itself.
+ *
+ * `capability/sub/foo/SKILL.md` (three segments, `flattenDepth` 2) installed at
+ * `pair-capability-sub/foo/SKILL.md`: a pseudo-entry directory with NO `SKILL.md`
+ * at its root, so the skill loader never sees the skill. Two further defects
+ * followed silently, because `isRegistryEntryPath` reports false for it: the
+ * frontmatter `name:` was left unsynced, and no entry reached `skillNameMap`, so
+ * a `/foo` reference in an unrelated skill stayed dangling. Before the bounded
+ * flatten the same source produced a perfectly usable `pair-capability-sub-foo/`.
+ *
+ * Telling a too-deep ENTRY from legitimate CONTENT uses the shape data already
+ * collected, with no `SKILL.md` knowledge (ADR-020's coupling argument): a
+ * directory deeper than `flattenDepth` that holds files directly is content **iff**
+ * its nearest ancestor at depth <= `flattenDepth` also holds files directly — that
+ * ancestor is the entry the content belongs to. `process/review/references` passes
+ * (its depth-2 ancestor `process/review` holds files); `capability/sub/foo` fails
+ * (`capability/sub` holds none, so nothing owns it).
+ */
+function validateNoDeepEntry(files: string[], transformOpts: TransformOpts, srcPath: string): void {
+  const { flattenDepth } = transformOpts
+  if (!transformOpts.flatten || flattenDepth === undefined || flattenDepth < 1) return
+
+  const { dirsWithOwnFiles } = collectDirShapes(files)
+
+  for (const dir of dirsWithOwnFiles) {
+    const segments = dir.split('/')
+    if (segments.length <= flattenDepth) continue
+    const ancestor = segments.slice(0, flattenDepth).join('/')
+    if (dirsWithOwnFiles.has(ancestor)) continue // content of a real entry
+    throw createError({
+      type: 'IO_ERROR',
+      message:
+        `Ambiguous layout for a bounded flatten (flattenDepth=${flattenDepth}): '${dir}' is ` +
+        `${segments.length} segment(s) deep and holds files directly, but its ancestor at depth ` +
+        `${flattenDepth} ('${ancestor}') holds none — so nothing owns it as content and it is an ` +
+        `entry too deep. It would install at a path with no entry root, invisible to the skill ` +
+        `loader, with an unsynced frontmatter name and no skill-name mapping. ` +
+        `Move it to depth ${flattenDepth}, or give '${ancestor}' files of its own.`,
+      operation: 'copyDir',
+      path: join(srcPath, dir),
+    })
+  }
+}
+
+/**
  * Copies a single file to its transformed location and tracks the
  * directory mapping for later link rewriting.
  */
@@ -320,6 +368,7 @@ export async function copyDirectoryWithTransforms(params: {
   const files = await collectFiles(fileService, srcPath, srcPath)
   validateNoCollisions(files, transformOpts, srcPath)
   validateNoShallowEntryWithSubdir(files, transformOpts, srcPath)
+  validateNoDeepEntry(files, transformOpts, srcPath)
 
   await fileService.mkdir(destPath, { recursive: true })
 
