@@ -19,7 +19,7 @@ Story #282 shipped the coverage guardrail with an explicitly **advisory** persis
 1. **Does a pull-request run write back, or only the post-merge run on the base branch?**
 2. **With what credential?**
 
-Both must be decided against the **post-#234 regime**, not against today's unprotected `main`. Story #234 (PR #390, parked open) makes `pair-review` and `pair-explicit-approval` **required status checks** on `main` and sets **`enforce_admins: true`** ([adr-018](../tech/adr/adr-018-pr-state-flow-required-checks.md)). Under that regime:
+Both must be decided against the **post-#234 regime**, not against today's unprotected `main`. Story #234 (PR #390, parked open) makes `pair-review` and `pair-explicit-approval` **required status checks** on `main` and sets **`enforce_admins: true`** (ADR-018, which lands with that story — not linked here because this decision precedes its merge). Under that regime:
 
 - **A direct push to `main` is structurally impossible for CI.** Required status checks are evaluated on pushes to a protected branch, not only on merges; `enforce_admins: true` removes the admin escape hatch. A commit pushed by a workflow will never carry a `pair-explicit-approval` context — that context is produced by a *human* approving a PR (adr-018 pins it to `pull_request.head.sha`). So the "simplest" option in the story body — defer to the post-merge run and push — is not merely awkward after #390, it is **rejected by the host**.
 - **Writing to the PR branch mutates `head.sha`**, which is exactly the commit both required contexts are pinned to. A raise would therefore invalidate a human approval that had already been given, forcing a re-approval on every coverage improvement — the automation would consume the very control #234 introduces.

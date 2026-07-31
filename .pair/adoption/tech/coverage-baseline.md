@@ -45,5 +45,6 @@ baseline.frontend=19
 ## Notes
 
 - **Baseline-relative, not an absolute wall.** A drop below `baseline.<type>` blocks; below the gradual `target` but at/above baseline only warns (R7.3: incremental improvement).
-- **Human-committed.** The gate never persists a baseline itself; raise a baseline here by committing a new value once coverage improves.
+- **Human-committed by default.** The gate never persists a baseline itself; raise a baseline here by committing a new value once coverage improves.
+- **Opt-in ratchet (#372), currently `disabled`.** `Coverage baseline commit-back` in [way-of-working.md](./way-of-working.md) is the nested opt-in that automates the raise. While it is `disabled` (pair's current state and the framework default) nothing writes to this file but a human. When enabled, a **push to the base branch** — never a pull-request run — proposes the raise as a **bot pull request** from `chore/coverage-baseline-ratchet` (never a push to `main`), editing only the `baseline.<type>=` values below, in place. It is **monotonic**: a baseline is only ever raised; lowering one stays a deliberate human commit. The value it writes is `floor(measured) - 1pp` — the same ~1pp margin documented above, which is also why re-running on unchanged coverage proposes nothing. See ADL [2026-07-30-coverage-ratchet-pr-not-push.md](../decision-log/2026-07-30-coverage-ratchet-pr-not-push.md).
 - **Fail-safe.** If a coverage report is missing, the CI step runs the gate at a conservative fixed `red` tier, so a missing report blocks rather than silently passes.
