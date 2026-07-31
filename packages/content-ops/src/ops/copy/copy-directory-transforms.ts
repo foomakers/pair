@@ -1,6 +1,6 @@
 import { join, relative, dirname } from 'path/posix'
 import { logger } from '../../observability'
-import { copyFileHelper } from '../../file-system'
+import { copyFileHelper, isExcluded } from '../../file-system'
 import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
 import { transformPath, isRegistryEntryPath } from '../naming-transforms'
@@ -61,24 +61,6 @@ async function collectInstallableFiles(
 ): Promise<string[]> {
   const collected = await collectFiles(fileService, srcPath, srcPath)
   return collected.filter(f => !isExcluded(f, exclude))
-}
-
-/**
- * Whether a source-relative file path falls under one of the excluded entries.
- *
- * Segment-wise, never a string prefix: `process/setup` excludes
- * `process/setup/SKILL.md` and `process/setup/references/deep.md`, and leaves
- * `process/setup-helper/SKILL.md` alone. A plain `startsWith` would drop the
- * latter — the classic shape of this bug, and the reason there is a test for it.
- */
-function isExcluded(filePath: string, exclude: string[] | undefined): boolean {
-  if (!exclude || exclude.length === 0) return false
-  const segments = filePath.split('/')
-  return exclude.some(entry => {
-    const entrySegments = entry.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
-    if (entrySegments.length > segments.length) return false
-    return entrySegments.every((seg, i) => seg === segments[i])
-  })
 }
 
 /**

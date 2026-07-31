@@ -1,0 +1,13 @@
+{
+  "asset_registries": {
+    "skills": {
+      "source": ".skills",
+      "target_path": ".claude/skills",
+      "behavior": "overwrite",
+      "description": "Agent skills, flattened and prefixed",
+      "flatten": true,
+      "prefix": "pair",
+      "exclude": ["process/setup"]
+    }
+  }
+}

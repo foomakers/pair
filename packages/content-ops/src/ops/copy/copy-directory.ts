@@ -97,6 +97,9 @@ async function performDirectoryCopyAndUpdate(params: {
     destPath,
     datasetRoot,
     ...(folderBehavior && { folderBehavior }),
+    // `exclude` is registry-level, so it applies to the plain copy path too — not
+    // only to the flatten/prefix one that reads it off SyncOptions directly.
+    ...(options?.exclude?.length && { exclude: options.exclude }),
   })
 
   await updateLinksAfterDirectoryCopy({
@@ -152,6 +155,7 @@ async function performDirectoryCopy(params: {
   folderBehavior?: Record<string, Behavior>
   sourceFolderBehavior: Behavior
   defaultBehavior: Behavior
+  exclude?: string[]
 }) {
   const {
     fileService,
@@ -163,6 +167,7 @@ async function performDirectoryCopy(params: {
     folderBehavior,
     sourceFolderBehavior,
     defaultBehavior,
+    exclude,
   } = params
   await fileService.mkdir(destPath, { recursive: true })
   validateSubfolderOperation({ srcPath, destPath, normSource, normTarget, operation: 'copy' })
@@ -178,6 +183,7 @@ async function performDirectoryCopy(params: {
     datasetRoot,
     ...(folderBehavior && { folderBehavior }),
     defaultBehavior,
+    ...(exclude?.length && { exclude }),
   })
 
   logger.info(`Copied contents of ${srcPath} -> ${destPath}`)
@@ -190,8 +196,10 @@ async function copyDirectoryContents(params: {
   datasetRoot: string
   folderBehavior?: Record<string, Behavior>
   defaultBehavior: Behavior
+  exclude?: string[]
 }) {
-  const { fileService, srcPath, destPath, datasetRoot, folderBehavior, defaultBehavior } = params
+  const { fileService, srcPath, destPath, datasetRoot, folderBehavior, defaultBehavior, exclude } =
+    params
 
   try {
     const copyContext: CopyDirContext = {
@@ -201,6 +209,8 @@ async function copyDirectoryContents(params: {
       defaultBehavior,
       datasetRoot,
       ...(folderBehavior && { folderBehavior }),
+      // srcPath IS the registry source root here, so exclude entries resolve against it.
+      ...(exclude?.length && { exclude, excludeRoot: srcPath }),
     }
     await copyDirHelper(copyContext)
   } catch (err) {

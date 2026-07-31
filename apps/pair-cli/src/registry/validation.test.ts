@@ -91,6 +91,44 @@ describe('registry validation - validateRegistry', () => {
     const errors = validateRegistry('test', config)
     expect(errors).toContain("Registry 'test' include array must contain only strings")
   })
+
+  // `exclude` is the entry-level counterpart of `include`, so it gets the same
+  // two shape checks: a non-array or a non-string member is a config error, not
+  // something the copy pipeline should discover and silently ignore.
+  it('fails when exclude is not an array', () => {
+    const config = {
+      source: '.skills',
+      behavior: 'overwrite',
+      description: 'Test',
+      exclude: 'process/setup',
+      targets: [{ path: '.claude/skills', mode: 'installed' }],
+    }
+    const errors = validateRegistry('test', config)
+    expect(errors).toContain("Registry 'test' exclude must be an array of strings")
+  })
+
+  it('fails when exclude array contains non-string items', () => {
+    const config = {
+      source: '.skills',
+      behavior: 'overwrite',
+      description: 'Test',
+      exclude: ['process/setup', 7],
+      targets: [{ path: '.claude/skills', mode: 'installed' }],
+    }
+    const errors = validateRegistry('test', config)
+    expect(errors).toContain("Registry 'test' exclude array must contain only strings")
+  })
+
+  it('accepts a well-formed exclude array', () => {
+    const config = {
+      source: '.skills',
+      behavior: 'overwrite',
+      description: 'Test',
+      exclude: ['process/setup'],
+      targets: [{ path: '.claude/skills', mode: 'installed' }],
+    }
+    expect(validateRegistry('test', config)).toHaveLength(0)
+  })
 })
 
 describe('registry validation - detectOverlappingTargets', () => {

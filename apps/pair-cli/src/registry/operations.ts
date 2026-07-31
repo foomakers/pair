@@ -69,6 +69,9 @@ function buildCopyDirHelperContext(ctx: {
     defaultBehavior: options?.defaultBehavior ?? 'overwrite',
     datasetRoot,
     ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
+    // A registry may declare `exclude` without flatten/prefix; this is the path it
+    // takes then, so the entries must be honored here as well as in the transform path.
+    ...(options?.exclude?.length && { exclude: options.exclude, excludeRoot: srcPath }),
   }
 }
 

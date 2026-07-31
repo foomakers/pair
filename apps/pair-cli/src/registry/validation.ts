@@ -86,6 +86,7 @@ export function validateRegistry(name: string, config: unknown): string[] {
   errors.push(...validateBehavior(name, reg))
   errors.push(...validateDescription(name, reg))
   errors.push(...validateIncludes(name, reg))
+  errors.push(...validateExcludes(name, reg))
   errors.push(...validateFlattenField(name, reg))
   errors.push(...validateFlattenDepthField(name, reg))
   errors.push(...validatePrefixField(name, reg))
@@ -124,6 +125,26 @@ function validateIncludes(name: string, reg: Record<string, unknown>): string[] 
 
   if (include.some(item => typeof item !== 'string')) {
     return [`Registry '${name}' include array must contain only strings`]
+  }
+
+  return []
+}
+
+/**
+ * Same two shape checks as `validateIncludes`: `exclude` is the entry-level
+ * counterpart of `include`, and a malformed one must fail here rather than reach
+ * the copy pipeline, which would treat a non-array as "nothing excluded".
+ */
+function validateExcludes(name: string, reg: Record<string, unknown>): string[] {
+  const exclude = reg['exclude']
+  if (exclude === undefined) return []
+
+  if (!Array.isArray(exclude)) {
+    return [`Registry '${name}' exclude must be an array of strings`]
+  }
+
+  if (exclude.some(item => typeof item !== 'string')) {
+    return [`Registry '${name}' exclude array must contain only strings`]
   }
 
   return []

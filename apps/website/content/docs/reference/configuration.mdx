@@ -42,10 +42,18 @@ Override with `--config <path>` on any command.
 | `behavior` | `string` | Yes | Sync behavior: `mirror`, `add`, `overwrite`, `skip` |
 | `description` | `string` | Yes | Human-readable description shown by `--list-targets` |
 | `include` | `string[]` | No | Glob patterns for files to include (default: all) |
+| `exclude` | `string[]` | No | Source-relative entries never installed — the whole subtree is skipped |
 | `flatten` | `boolean` | No | Flatten directory hierarchy into dash-separated names |
 | `flattenDepth` | `number` | No | Bound flattening to the registry's entry depth — the first N source segments are joined, anything deeper is preserved as a real sub-path. Requires `flatten: true`; must be a positive integer. Omitted = every separator is flattened |
 | `prefix` | `string` | No | Prefix to prepend to flattened directory names |
 | `targets` | `Target[]` | No | Multi-target distribution configuration |
+
+`exclude` matches **path segments**, not string prefixes: `"process/setup"` skips
+`process/setup` and everything under it, and leaves a sibling `process/setup-helper`
+alone. It means *never install*, not *uninstall* — `behavior: overwrite` performs no
+cleanup, so an entry already present in the target from an earlier run stays there when
+it later becomes excluded. Remove it by hand, or use `behavior: mirror` for a registry
+whose target should track the source exactly.
 
 ## Behavior Modes
 
