@@ -490,8 +490,7 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
   })
 
   it('the branching guideline is parametrised on base-branch, not hardcoded on main', () => {
-    const rel =
-      '.pair/knowledge/guidelines/technical-standards/git-workflow/development-process.md'
+    const rel = '.pair/knowledge/guidelines/technical-standards/git-workflow/development-process.md'
     for (const root of [DATASET, REPO_ROOT]) {
       const guideline = read(root, rel)
       expect(guideline, root).toContain('<base-branch>')
