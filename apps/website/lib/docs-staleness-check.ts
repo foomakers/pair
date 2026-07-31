@@ -113,7 +113,7 @@ export function countHowToGuides(howToDir: string): number | null {
 
 /** Check 1: every "N skills" phrasing in content matches the actual skill count. */
 export function findSkillCountMismatches(content: string, rel: string, actual: number): string[] {
-  return countMismatches(content, rel, actual, SKILL_COUNT_RE, 'Skill count')
+  return countMismatches(content, rel, actual, { re: SKILL_COUNT_RE, label: 'Skill count' })
 }
 
 /**
@@ -125,16 +125,19 @@ export function findPluginSkillCountMismatches(
   rel: string,
   declared: number,
 ): string[] {
-  return countMismatches(content, rel, declared, SKILL_COUNT_PROBE_RE, 'Plugin skill count')
+  return countMismatches(content, rel, declared, {
+    re: SKILL_COUNT_PROBE_RE,
+    label: 'Plugin skill count',
+  })
 }
 
 function countMismatches(
   content: string,
   rel: string,
   actual: number,
-  re: RegExp,
-  label: string,
+  kind: { re: RegExp; label: string },
 ): string[] {
+  const { re, label } = kind
   const errors: string[] = []
   for (const m of content.matchAll(re)) {
     const n = m[1]
@@ -424,25 +427,66 @@ export function checkCliCommands(
   return { errors, commandCount: commandDirs.length }
 }
 
+
+/**
+ * Per-file checks — each doc is read once and run through every content-level check:
+ * 1 (skill counts), 1b (the plugin transcript), 2b (guide counts), 5 (dead links).
+ * Extracted from runAllChecks only to keep it under the line ceiling.
+ */
+function perFileErrors(params: {
+  docsFiles: string[]
+  docsDir: string
+  skillCount: number
+  declaredPluginSkills: number | null
+  howToCount: number | null
+  validRoutes: Set<string>
+}): string[] {
+  const { docsFiles, docsDir, skillCount, declaredPluginSkills, howToCount, validRoutes } = params
+  const errors: string[] = []
+  for (const file of docsFiles) {
+    const content = readFileSync(file, 'utf-8')
+    const rel = relative(docsDir, file)
+    errors.push(...findSkillCountMismatches(content, rel, skillCount))
+    if (declaredPluginSkills !== null) {
+      errors.push(...findPluginSkillCountMismatches(content, rel, declaredPluginSkills))
+    }
+    if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
+    errors.push(...findDeadLinks(content, rel, validRoutes))
+  }
+  return errors
+}
+
 /** Run every check against a repo root and collect all drift errors. */
-export function runAllChecks(root: string): RunResult {
-  const SKILLS_DIR = join(root, 'packages/knowledge-hub/dataset/.skills')
-  const COMMANDS_DIR = join(root, 'apps/pair-cli/src/commands')
+/**
+ * The source-of-truth paths every check reads, resolved from one repo root. Kept as
+ * its own function so `runAllChecks` stays inside the line ceiling and the path list
+ * has a single place to change.
+ */
+function checkPaths(root: string) {
   const DOCS_DIR = join(root, 'apps/website/content/docs')
-  const CATALOG_FILE = join(DOCS_DIR, 'reference/skills-catalog.mdx')
-  const COMMANDS_FILE = join(DOCS_DIR, 'reference/cli/commands.mdx')
-  const HOW_TO_DIR = join(root, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to')
-  const TUTORIALS_DIR = join(DOCS_DIR, 'tutorials')
+  return {
+    SKILLS_DIR: join(root, 'packages/knowledge-hub/dataset/.skills'),
+    COMMANDS_DIR: join(root, 'apps/pair-cli/src/commands'),
+    DOCS_DIR,
+    CATALOG_FILE: join(DOCS_DIR, 'reference/skills-catalog.mdx'),
+    COMMANDS_FILE: join(DOCS_DIR, 'reference/cli/commands.mdx'),
+    HOW_TO_DIR: join(root, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to'),
+    TUTORIALS_DIR: join(DOCS_DIR, 'tutorials'),
+    // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
+    // repo root: the marketplace entry's `source` points there.
+    PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
+  }
+}
+
+export function runAllChecks(root: string): RunResult {
+  const paths = checkPaths(root)
+  const { SKILLS_DIR, DOCS_DIR, HOW_TO_DIR } = paths
 
   const errors: string[] = []
   const docsFiles = walkMdx(DOCS_DIR)
   const allSkills = collectSkills(SKILLS_DIR)
   const skillCount = allSkills.length
-  // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
-  // repo root: the marketplace entry's `source` points there.
-  const declaredPluginSkills = countDeclaredPluginSkills(
-    join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
-  )
+  const declaredPluginSkills = countDeclaredPluginSkills(paths.PLUGIN_MANIFEST)
   const validRoutes = buildValidRoutes(docsFiles, DOCS_DIR)
   const howToCount = countHowToGuides(HOW_TO_DIR)
 
@@ -451,28 +495,26 @@ export function runAllChecks(root: string): RunResult {
     errors.push(`How-to guides dir not found: ${HOW_TO_DIR} — guide-count check cannot run`)
   }
 
-  // Per-file checks — read each doc once and run all content-level checks:
-  // 1 (skill counts), 2b (guide counts), 5 (dead links, markdown + JSX href).
-  for (const file of docsFiles) {
-    const content = readFileSync(file, 'utf-8')
-    const rel = relative(DOCS_DIR, file)
-    errors.push(...findSkillCountMismatches(content, rel, skillCount))
-    if (declaredPluginSkills !== null) {
-      errors.push(...findPluginSkillCountMismatches(content, rel, declaredPluginSkills))
-    }
-    if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
-    errors.push(...findDeadLinks(content, rel, validRoutes))
-  }
+  errors.push(
+    ...perFileErrors({
+      docsFiles,
+      docsDir: DOCS_DIR,
+      skillCount,
+      declaredPluginSkills,
+      howToCount,
+      validRoutes,
+    }),
+  )
 
   // Check 2: catalog sync (both directions)
-  const catalog = readFileSync(CATALOG_FILE, 'utf-8')
+  const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
   errors.push(...checkCatalogSync(allSkills, catalog))
 
   // Check 2c: catalog row CONTENT (Command + Description) single-sourced from the dataset
   errors.push(...checkCatalogContent(generateCatalogRows(SKILLS_DIR), catalog))
 
   // Checks 3 & 4: CLI command anchors + tutorial references
-  const cli = checkCliCommands(COMMANDS_DIR, COMMANDS_FILE, TUTORIALS_DIR)
+  const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, paths.TUTORIALS_DIR)
   errors.push(...cli.errors)
 
   // NOTE: repo-root README.md is intentionally OUT of this gate's scope — the gate
