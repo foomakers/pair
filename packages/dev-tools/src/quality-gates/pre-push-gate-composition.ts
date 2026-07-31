@@ -25,6 +25,13 @@
  * and the `npm run` / `yarn` spellings, since a single token between the runner
  * and the script name would otherwise defeat the whole expansion.
  *
+ * Boundary of that expansion: ROOT scripts only. A `pnpm --filter <pkg> <script>`
+ * body is never read (it lives in another package.json), so a write-mode tool
+ * reached through a package script is caught by NAME — the offender patterns below
+ * — not by expansion. Every package-level write script in this repo is named
+ * `prettier:fix`, `mdlint:fix` or `lint:fix`, all of which the patterns match; a
+ * differently named one would be a blind spot.
+ *
  * Per the gate-tooling ADL (2026-07-13) the logic lives here as a tested module;
  * `main()` behind a `require.main` guard is the thin CLI — the ADR-014 shape
  * shared with the siblings in this folder.
@@ -32,26 +39,33 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
+import { REPO_ROOT } from './repo-root'
+
 /**
- * The repo root, resolved from this file's location:
- * packages/dev-tools/src/quality-gates -> src -> dev-tools -> packages -> repo
- * root (up 4). Centralized here so the hop count exists once — the CLI entry and
- * the tests import it instead of re-deriving it (ADR-014 records a folder move
- * breaking every duplicated `__dirname`-relative constant once already).
+ * The root `package.json` this guard inspects. Derived from the shared `REPO_ROOT`
+ * (`./repo-root`), so the hop count to the repo root exists once for the whole
+ * folder — the tests import this constant instead of re-deriving the path (ADR-014
+ * records a folder move breaking every duplicated `__dirname`-relative constant
+ * once already).
  */
-export const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
 export const ROOT_PACKAGE_JSON = resolve(REPO_ROOT, 'package.json')
 
 /**
- * Every shape in which the two formatters can be invoked in WRITE mode. Both
- * tools are reachable three ways — the turbo task, the package's `bin` alias (as
- * a name or as the `.sh` file it points at), and the underlying CLI with its
- * write flag — and an asymmetric list would ban one tool's shell entrypoint while
- * letting the other's through, which is exactly how the regression comes back.
+ * Every shape in which a WRITE-MODE tool can be invoked from the gate. Each tool is
+ * reachable three ways — the turbo task, the package's `bin` alias (as a name or as
+ * the `.sh` file it points at), and the underlying CLI with its write flag — and an
+ * asymmetric list would ban one tool's shell entrypoint while letting the other's
+ * through, which is exactly how the regression comes back.
  *
- * Deliberately an explicit list rather than a `/:fix/` pattern: `lint:fix` is an
- * eslint autofix, a different concern, and banning every `:fix` string would make
- * the guard fire on things it has no opinion about.
+ * The invariant is "the gate must not write", so eslint's autofix belongs here too:
+ * `lint:fix` (→ `eslint . --fix`) modifies files the branch never touched exactly
+ * like a formatter does, i.e. the AC1 failure mode of #394, reintroducible by the
+ * same one-word edit. Nothing in the gate runs it today; that is precisely when a
+ * guard is cheap to widen.
+ *
+ * Still an explicit list rather than a `/:fix/` pattern — a guard that fires on any
+ * `:fix` string, including things it has no opinion about, gets disabled — so a new
+ * write-mode tool needs a line here.
  *
  * The CLI patterns stop at a command separator (`&& | ; { }`), so `prettier:check`
  * in one command cannot pair up with a `--write` belonging to another.
@@ -59,10 +73,13 @@ export const ROOT_PACKAGE_JSON = resolve(REPO_ROOT, 'package.json')
 const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern: RegExp }[] = [
   { name: 'prettier:fix', pattern: /\bprettier:fix\b/ },
   { name: 'mdlint:fix', pattern: /\bmdlint:fix\b/ },
+  { name: 'lint:fix', pattern: /\blint:fix\b/ },
   { name: 'prettier-fix', pattern: /\bprettier-fix(?:\.sh)?\b/ },
   { name: 'markdownlint-fix', pattern: /\bmarkdownlint-fix(?:\.sh)?\b/ },
+  { name: 'lint-fix', pattern: /\blint-fix(?:\.sh)?\b/ },
   { name: 'prettier --write', pattern: /\bprettier\b[^&|;{}\n]*\s--write\b/ },
   { name: 'markdownlint --fix', pattern: /\bmarkdownlint\b[^&|;{}\n]*\s--fix\b/ },
+  { name: 'eslint --fix', pattern: /\beslint\b[^&|;{}\n]*\s--fix\b/ },
 ]
 
 /** The package runners a root script can delegate through. */
@@ -108,9 +125,10 @@ export const PRE_PUSH_REMEDY =
 const MAX_EXPANSION_DEPTH = 10
 
 /**
- * Every write-mode formatter present in a gate command, in the order the offender
- * list declares them (not the order the command names them). Returns all
- * offenders rather than the first, so a partial fix cannot look clean.
+ * Every write-mode step present in a gate command (the two formatters plus eslint's
+ * autofix), in the order the offender list declares them (not the order the command
+ * names them). Returns all offenders rather than the first, so a partial fix cannot
+ * look clean.
  */
 export function findWriteModeFormatters(gateCommand: string): string[] {
   return WRITE_MODE_FORMATTERS.filter(f => f.pattern.test(gateCommand)).map(f => f.name)
@@ -151,17 +169,18 @@ function writeModeFailure(offenders: string[], expanded: string): GateCheckResul
   return {
     ok: false,
     message:
-      `quality-gate reaches ${offenders.length} formatter(s) in WRITE mode: ${offenders.join(', ')}.\n` +
+      `quality-gate reaches ${offenders.length} step(s) that WRITE files: ${offenders.join(', ')}.\n` +
       `Resolved gate: ${expanded}\n` +
       `At pre-push the commits already exist, so this rewrites the working tree and cannot fix\n` +
       `what is being pushed — it only pollutes the next diff with unrelated files.\n` +
-      `Use the :check variants and keep the fix in \`pnpm format\`. ${PRE_PUSH_REMEDY}`,
+      `Use the :check variants; writing stays in the commands a developer runs deliberately\n` +
+      `(\`pnpm format\`, \`pnpm lint:fix\`). ${PRE_PUSH_REMEDY}`,
   }
 }
 
 /**
  * Checks the repo's own gate composition and reports:
- * 1. any write-mode formatter reachable from it (directly or via delegation),
+ * 1. any write-mode step reachable from it (directly or via delegation),
  * 2. the gate having stopped RUNNING the guard itself (`pnpm gate:composition`) —
  *    `referencesScript`, not a substring, so `echo gate:composition` does not count,
  * 3. the remedy script named in the failure message having disappeared.

@@ -125,7 +125,7 @@ This runs (in order): `ts:check`, `test`, `lint`, `format:check` (prettier + mar
 The gate never formats. It is the pre-push hook, where the commits already exist: a write-mode
 formatter would rewrite the working tree without touching what is being pushed, so it only pollutes
 the next diff. On a `format:check` failure, run `pnpm format` and commit the result — `gate:composition`
-guards the gate against a write-mode formatter creeping back in. See ADL
+guards the gate against a write-mode step (formatter or eslint autofix) creeping back in. See ADL
 [2026-07-31-pre-push-gate-is-check-only.md](.pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 
 ### Custom Gate Registry

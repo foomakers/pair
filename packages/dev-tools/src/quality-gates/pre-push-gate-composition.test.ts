@@ -25,7 +25,7 @@ import {
 // symptom (a diff polluted with unrelated files) looks like author error rather
 // than tooling behaviour. Three times in two days it polluted a PR here (#388,
 // #408, #411 — see the ADL's Context).
-describe('the pre-push gate never runs a formatter in write mode (#394)', () => {
+describe('the pre-push gate never runs a write-mode step (#394)', () => {
   it('flags prettier:fix', () => {
     expect(findWriteModeFormatters('turbo ts:check test lint && turbo prettier:fix')).toEqual([
       'prettier:fix',
@@ -83,11 +83,23 @@ describe('the pre-push gate never runs a formatter in write mode (#394)', () => 
     ).toEqual([])
   })
 
-  it('does not mistake lint:fix for a formatter — it is not one of the two', () => {
-    // `lint:fix` is an eslint autofix, a separate concern from formatting, and it
-    // is NOT in the gate. The guard must stay specific rather than banning every
-    // `:fix` string it sees.
-    expect(findWriteModeFormatters('turbo lint:fix')).toEqual([])
+  // eslint's autofix is not a formatter, but it WRITES: `lint:fix` resolves to
+  // `eslint . --fix`, which modifies files the branch never touched — AC1 of #394
+  // ("pushing a branch never modifies a file the branch did not change"), one word
+  // away from the gate. Nothing runs it today; the guard covers it anyway.
+  it('flags lint:fix — eslint autofix writes files just like a formatter', () => {
+    expect(findWriteModeFormatters('turbo lint:fix')).toEqual(['lint:fix'])
+  })
+
+  it('flags the lint-fix shell entrypoint and the raw `eslint --fix`', () => {
+    expect(findWriteModeFormatters('./tools/eslint-config/bin/lint-fix.sh')).toEqual(['lint-fix'])
+    expect(findWriteModeFormatters('eslint . --config eslint.config.cjs --fix')).toEqual([
+      'eslint --fix',
+    ])
+  })
+
+  it('leaves check-mode eslint alone (a --fix belonging to another command)', () => {
+    expect(findWriteModeFormatters('eslint . && other-tool --fix')).toEqual([])
   })
 
   it('names the remedy, so a failure is actionable', () => {
@@ -238,6 +250,20 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     const r = checkRootGate(pkg({ 'quality-gate': `${gate} && pnpm ${GUARD_SCRIPT}` }))
     expect(r.ok).toBe(false)
     expect(r.message).toContain('prettier:fix')
+  })
+
+  // The review's own reproduction: `&& pnpm lint:fix` appended to the real gate used
+  // to return ok=true, while `lint:fix` → `eslint . --fix` rewrites files the branch
+  // never touched — the AC1 failure mode, back through a one-word edit.
+  it('fails when the gate appends `pnpm lint:fix` (eslint autofix writes too)', () => {
+    const r = checkRootGate(
+      pkg({
+        'quality-gate': `turbo ts:check test lint && pnpm format:check && pnpm ${GUARD_SCRIPT} && pnpm lint:fix`,
+        'lint:fix': 'turbo lint:fix',
+      }),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('lint:fix')
   })
 
   it('fails when a gate script calls the prettier bin wrapper directly', () => {

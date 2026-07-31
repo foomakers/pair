@@ -8,10 +8,14 @@ out/
 **/node_modules/
 **/.cache/
 
-# Generated artifacts are NOT enumerated here. The wrappers in ./bin pass the
+# A NEW generated artifact does not need a line here: the wrappers in ./bin pass the
 # repo's own .gitignore files as additional --ignore-path entries (prettier 3.6
 # accepts the flag repeatedly), so "gitignored => never formatted" holds by
 # construction. That matters since #394: in write mode a generated file was
 # silently rewritten on every push, in check mode it would BLOCK every push —
 # a generated file must be able to do neither, and enumerating them reactively
 # only re-arms the same failure the next time a tool writes somewhere new.
+#
+# The entries ABOVE stay: they are the floor for non-git contexts, where
+# `git rev-parse --show-toplevel` fails and the delegation silently no-ops. Do not
+# delete them expecting the delegation to cover them.

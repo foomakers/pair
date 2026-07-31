@@ -19,7 +19,16 @@
 #   2. the same file OUTSIDE a gitignored path is reported / rewritten;
 #   3. the gitignored path is PATH-ANCHORED (`pkg/gen/`) and the wrapper runs from
 #      `pkg/`, which is where markdownlint needed the root patterns re-anchored to
-#      the cwd (git resolves them against the ignore file's directory).
+#      the cwd (git resolves them against the ignore file's directory);
+#   4. each wrapper EXITS on the violation path (status 1, no tool-error output) —
+#      without that, a wrapper that dies (a config it cannot resolve, a flag a tool
+#      version dropped) reports nothing about `gen/` and names `src/` inside its own
+#      error text, so the text-only assertions pass on a fully broken wrapper. Check
+#      mode is the mode the gate runs, so it must be the harder half to fool.
+#
+# Plus a table-driven check of `_reanchor-gitignore.awk` (pure text in / text out):
+# its branches fail as an OVER-ignore — silently unformatted files, not a loud error —
+# which is the failure mode hardest to notice.
 #
 # Per the gate-tooling ADL (2026-07-13) this shell surface is verified with a smoke
 # test, not a vitest unit test.
@@ -34,11 +43,35 @@ PRETTIER_CHECK="$REPO_ROOT/tools/prettier-config/bin/prettier-check.sh"
 PRETTIER_FIX="$REPO_ROOT/tools/prettier-config/bin/prettier-fix.sh"
 MDLINT_CHECK="$REPO_ROOT/tools/markdownlint-config/bin/markdownlint-check.sh"
 MDLINT_FIX="$REPO_ROOT/tools/markdownlint-config/bin/markdownlint-fix.sh"
+REANCHOR_AWK="$REPO_ROOT/tools/markdownlint-config/bin/_reanchor-gitignore.awk"
 
 FAILED=0
-for f in "$PRETTIER_CHECK" "$PRETTIER_FIX" "$MDLINT_CHECK" "$MDLINT_FIX"; do
+for f in "$PRETTIER_CHECK" "$PRETTIER_FIX" "$MDLINT_CHECK" "$MDLINT_FIX" "$REANCHOR_AWK"; do
   assert_file "$f" || exit 1
 done
+
+# A wrapper that BROKE, as opposed to one that found violations. Both tools print the
+# offending path inside their own error text, so status + this pattern are what keep a
+# dead wrapper from passing the check-mode assertions.
+TOOL_ERROR_RE='\[error\]|^Error:|ENOENT|Cannot find|No files matching'
+
+assert_violations_reported() { # assert_violations_reported <tool> <status> <output>
+  if [ "$2" -eq 1 ] && ! echo "$3" | grep -qE "$TOOL_ERROR_RE"; then
+    log_succ "$1 exited 1 (violations found), not a tool error"
+  else
+    log_fail "$1 did not report violations cleanly — status $2 (1 = violations, else broken)"
+    echo "$3"; FAILED=1
+  fi
+}
+
+assert_exits_clean() { # assert_exits_clean <tool> <status> <output>
+  if [ "$2" -eq 0 ] && ! echo "$3" | grep -qE "$TOOL_ERROR_RE"; then
+    log_succ "$1 exited 0 with nothing to report"
+  else
+    log_fail "$1 did not exit clean — status $2"
+    echo "$3"; FAILED=1
+  fi
+}
 
 # --- A throwaway git repo: the wrappers read `git rev-parse --show-toplevel`, so the
 # ignore delegation can be exercised without touching this repo's own .gitignore.
@@ -52,6 +85,15 @@ cat > "$PROBE/.gitignore" <<'EOF'
 node_modules/
 pkg/gen/
 EOF
+
+# HERMETIC: the workspace lives under this repo's own .tmp/, so without a config of
+# its own prettier's discovery walks OUT of the fixture and resolves the pair repo's
+# `package.json#prettier` — making the scenario depend on the outer repo's install
+# state (that is how the reviewer saw prettier exit 2 here). A local package.json +
+# .prettierrc.json stop the search inside the probe. markdownlint needs none: its
+# wrapper passes --config explicitly.
+printf '{ "name": "probe", "private": true }\n' > "$PROBE/package.json"
+printf '{}\n' > "$PROBE/.prettierrc.json"
 
 # Pristine copies on disk: comparison is `cmp`, not `$(cat)` — command substitution
 # strips trailing newlines and would call every markdown file "rewritten".
@@ -72,28 +114,36 @@ write_probes() {
 write_probes
 
 # --- CHECK mode: the ignored file must not be named, the tracked one must be ---
-prettier_out="$(cd "$PROBE/pkg" && "$PRETTIER_CHECK" 2>&1 || true)"
+# Status FIRST: a text-only pass is exactly what a dead wrapper produces.
+prettier_out="$(cd "$PROBE/pkg" && "$PRETTIER_CHECK" 2>&1)"
+prettier_status=$?
+assert_violations_reported prettier-check "$prettier_status" "$prettier_out"
 if echo "$prettier_out" | grep -q 'gen/bad.json'; then
   log_fail "prettier-check reported a gitignored file (would block every push)"
   echo "$prettier_out"; FAILED=1
 else
   log_succ "prettier-check ignores gen/bad.json (gitignored)"
 fi
-if echo "$prettier_out" | grep -q 'src/bad.json'; then
+# `grep -x`: `--list-different` prints one path per line, so an exact line match cannot
+# be satisfied by the path appearing inside an error message.
+if echo "$prettier_out" | grep -qx 'src/bad.json'; then
   log_succ "prettier-check still reports src/bad.json (not ignored)"
 else
   log_fail "prettier-check did not report src/bad.json — it now ignores too much"
   echo "$prettier_out"; FAILED=1
 fi
 
-mdlint_out="$(cd "$PROBE/pkg" && "$MDLINT_CHECK" 2>&1 || true)"
+mdlint_out="$(cd "$PROBE/pkg" && "$MDLINT_CHECK" 2>&1)"
+mdlint_status=$?
+assert_violations_reported markdownlint-check "$mdlint_status" "$mdlint_out"
 if echo "$mdlint_out" | grep -q 'gen/bad.md'; then
   log_fail "markdownlint-check reported a gitignored file (would block every push)"
   echo "$mdlint_out"; FAILED=1
 else
   log_succ "markdownlint-check ignores gen/bad.md (root pattern re-anchored to the cwd)"
 fi
-if echo "$mdlint_out" | grep -q 'src/bad.md'; then
+# The rule id, not just the path: markdownlint names the file in its error text too.
+if echo "$mdlint_out" | grep -q 'src/bad.md.*MD009'; then
   log_succ "markdownlint-check still reports src/bad.md (not ignored)"
 else
   log_fail "markdownlint-check did not report src/bad.md — it now ignores too much"
@@ -133,26 +183,84 @@ SPACED="$WORKSPACE/with space/repo"
 mkdir -p "$SPACED/pkg/gen" "$SPACED/pkg/src"
 git -C "$SPACED" init --quiet
 cp "$PROBE/.gitignore" "$SPACED/.gitignore"
+cp "$PROBE/package.json" "$SPACED/package.json"
+cp "$PROBE/.prettierrc.json" "$SPACED/.prettierrc.json"
 # Only the gitignored probes here: with the delegation intact both wrappers must exit
 # CLEAN, which is what makes an unquoted-args failure unambiguous.
 cp "$PRISTINE/bad.json" "$SPACED/pkg/gen/bad.json"
 cp "$PRISTINE/bad.md" "$SPACED/pkg/gen/bad.md"
 spaced_out="$(cd "$SPACED/pkg" && "$PRETTIER_CHECK" 2>&1)"
 spaced_status=$?
-if [ "$spaced_status" -eq 0 ] && ! echo "$spaced_out" | grep -q 'No files matching'; then
-  log_succ "prettier-check survives a repo path containing a space"
-else
-  log_fail "prettier-check broke on a path with a space (status $spaced_status)"
-  echo "$spaced_out"; FAILED=1
-fi
+assert_exits_clean "prettier-check (repo path with a space)" "$spaced_status" "$spaced_out"
 spaced_md="$(cd "$SPACED/pkg" && "$MDLINT_CHECK" 2>&1)"
 spaced_md_status=$?
-if [ "$spaced_md_status" -eq 0 ]; then
-  log_succ "markdownlint-check survives a repo path containing a space"
-else
-  log_fail "markdownlint-check broke on a path with a space (status $spaced_md_status)"
-  echo "$spaced_md"; FAILED=1
-fi
+assert_exits_clean "markdownlint-check (repo path with a space)" "$spaced_md_status" "$spaced_md"
+
+# --- _reanchor-gitignore.awk, table-driven: one fixture, three cwd positions ---
+# Every branch of the translation is an OVER-ignore risk: get it wrong and files stop
+# being checked silently (losing `!packages/dev-tools/src/release` would quietly stop
+# checking tracked source). Pure text in / text out — no formatter, no git repo.
+AWK_FIXTURE="$WORKSPACE/reanchor.gitignore"
+cat > "$AWK_FIXTURE" <<'EOF'
+# a comment
+
+node_modules/
+**/.cache/
+apps/website/gen/
+apps/*/dist/
+docs/performance/report.md
+!packages/dev-tools/src/release
+apps/website
+EOF
+
+assert_reanchor() { # assert_reanchor <label> <REL> <expected-file>
+  local actual="$WORKSPACE/reanchor.actual"
+  awk -v REL="$2" -f "$REANCHOR_AWK" "$AWK_FIXTURE" > "$actual" 2>&1
+  if diff -u "$3" "$actual" > "$WORKSPACE/reanchor.diff" 2>&1; then
+    log_succ "re-anchor (REL=$2): $1"
+  else
+    log_fail "re-anchor (REL=$2): $1 — output differs"
+    cat "$WORKSPACE/reanchor.diff"; FAILED=1
+  fi
+}
+
+# cwd is a package: anchored-inside-cwd re-anchored (also through a glob segment),
+# patterns outside cwd dropped, `**/` and bare-name patterns verbatim, and the entry
+# that IS cwd becomes `**`.
+cat > "$WORKSPACE/expected-website" <<'EOF'
+# a comment
+
+node_modules/
+**/.cache/
+/gen/
+/dist/
+**
+EOF
+assert_reanchor 'anchored inside cwd + glob segment + ignored-dir-is-cwd' \
+  'apps/website' "$WORKSPACE/expected-website"
+
+# Negation survives re-anchoring, and everything under another top-level dir is dropped.
+cat > "$WORKSPACE/expected-devtools" <<'EOF'
+# a comment
+
+node_modules/
+**/.cache/
+!/src/release
+EOF
+assert_reanchor 'negation preserved, unrelated anchors dropped' \
+  'packages/dev-tools' "$WORKSPACE/expected-devtools"
+
+# cwd sits INSIDE an ignored tree: everything here is ignored (`**`), twice over.
+cat > "$WORKSPACE/expected-inside" <<'EOF'
+# a comment
+
+node_modules/
+**/.cache/
+**
+**
+EOF
+assert_reanchor 'cwd inside the ignored tree' \
+  'apps/website/gen/report' "$WORKSPACE/expected-inside"
 
 if [ "$FAILED" -ne 0 ]; then
   log_fail "$TEST_NAME had failures"; exit 1
