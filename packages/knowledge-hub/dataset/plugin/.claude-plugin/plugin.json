@@ -9,15 +9,6 @@
   "homepage": "https://pair.foomakers.com/docs",
   "repository": "https://github.com/foomakers/pair",
   "license": "MIT",
-  "keywords": [
-    "sdlc",
-    "agile",
-    "ddd",
-    "code-review",
-    "knowledge-base",
-    "project-management"
-  ],
-  "skills": [
-    "./skills/pair-capability-setup-cli"
-  ]
+  "keywords": ["sdlc", "agile", "ddd", "code-review", "knowledge-base", "project-management"],
+  "skills": ["./skills/pair-capability-setup-cli"]
 }

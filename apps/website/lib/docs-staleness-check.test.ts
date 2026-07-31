@@ -101,7 +101,10 @@ describe('findPluginSkillCountMismatches', () => {
 
 describe('countDeclaredPluginSkills', () => {
   it('reads the real manifest at the plugin root', () => {
-    const manifest = join(REPO_ROOT, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json')
+    const manifest = join(
+      REPO_ROOT,
+      'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json',
+    )
     expect(countDeclaredPluginSkills(manifest)).toBeGreaterThan(0)
   })
 

@@ -427,7 +427,6 @@ export function checkCliCommands(
   return { errors, commandCount: commandDirs.length }
 }
 
-
 /**
  * Per-file checks — each doc is read once and run through every content-level check:
  * 1 (skill counts), 1b (the plugin transcript), 2b (guide counts), 5 (dead links).

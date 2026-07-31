@@ -252,7 +252,6 @@ export function expectedPluginSkillPaths(skillDirs: string[]): string[] {
   return skillDirs.map(dir => `${SKILL_PATH_PREFIX}${dir}`).sort()
 }
 
-
 /**
  * Asserts the hand-maintained catalog equals the dataset-derived one. Throws
  * naming every missing entry (skill added to the KB, manifest not updated) and
