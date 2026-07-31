@@ -22,6 +22,10 @@
 # two current callers (markdownlint-check.sh, markdownlint-fix.sh) set none; a third
 # that does would lose its own cleanup silently, so source this BEFORE installing yours
 # and re-install a combined handler that also removes "$IGNORE_FILE".
+# Also: the cleanup expands `$_ignore_combined` AT EXIT, so a caller must not reassign
+# that variable after sourcing this — the trap would then delete the caller's file and
+# leak the temp one. A failed `mktemp` exits 2 (a broken wrapper, not a lint violation),
+# matching what `format:check` reports for the same class of failure.
 
 IGNORE_FILE="$SCRIPT_DIR/../.markdownlintignore"
 
@@ -44,9 +48,14 @@ if [ -f ".gitignore" ] && [ "$_ignore_cwd" != "$_ignore_git_root" ]; then
 fi
 
 if [ -n "$_ignore_root_file" ] || [ -n "$_ignore_local_file" ]; then
-  _ignore_combined="$(mktemp "${TMPDIR:-/tmp}/markdownlintignore.XXXXXX")"
-  # shellcheck disable=SC2064 # expand now: the path must survive this file's scope
-  trap "rm -f '$_ignore_combined'" EXIT
+  if ! _ignore_combined="$(mktemp "${TMPDIR:-/tmp}/markdownlintignore.XXXXXX")"; then
+    echo "markdownlint wrapper: cannot create a temporary ignore file" >&2
+    exit 2
+  fi
+  # Deferred expansion (no SC2064 suppression): an expand-now trap embeds the path in
+  # a single-quoted string, so a TMPDIR containing a quote would break the command it
+  # builds. The variable is this helper's own — see the Effect: contract.
+  trap 'rm -f "$_ignore_combined"' EXIT
   {
     cat "$IGNORE_FILE"
     echo

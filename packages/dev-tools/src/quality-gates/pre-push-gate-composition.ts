@@ -97,7 +97,12 @@ const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern:
   { name: 'eslint --fix', pattern: /\beslint\b[^&|;{}\n]*\s--fix\b/ },
   // `\bsync-version\b` also matches the `sync-version-in-docs(.ts)` spelling, since
   // `-` is a word boundary — one entry covers the script name and the module path.
-  { name: 'sync-version', pattern: /\bsync-version\b(?![^&|;{}\n]*--check\b)/ },
+  // The `--check` lookahead deliberately crosses `{` and `}`, unlike the CLI patterns
+  // above: script expansion inlines a referenced body as `{ … }` immediately after the
+  // match, so a delegated `pnpm sync-version --check` puts a brace between the name and
+  // its own flag. Real separators (`&& | ;` and newline) still bound the lookahead, so a
+  // `--check` in the NEXT command cannot launder a write.
+  { name: 'sync-version', pattern: /\bsync-version\b(?![^&|;\n]*--check\b)/ },
   { name: 'test:perf', pattern: /\btest:perf\b/ },
   { name: 'benchmark-update-link', pattern: /\bbenchmark-update-link(?:\.ts)?\b/ },
 ]

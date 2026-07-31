@@ -243,7 +243,8 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     JSON.stringify({
       scripts: {
         'quality-gate': `turbo ts:check test lint && pnpm format:check && pnpm ${GUARD_SCRIPT} && pnpm dup:check`,
-        'format:check': 'pnpm prettier:check && pnpm mdlint:check',
+        // Mirrors the shipped body: both checkers always run, the worse status wins.
+        'format:check': 'pnpm prettier:check; _p=$?; pnpm mdlint:check; _m=$?; exit $((_p || _m))',
         'prettier:check': 'turbo prettier:check',
         'mdlint:check':
           "turbo mdlint:check && ./tools/markdownlint-config/bin/markdownlint-check.sh '*.md'",
@@ -261,6 +262,32 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     // what the GATE reaches, not about the repo owning a formatter.
     const r = checkRootGate(pkg({}))
     expect(r.ok, r.message).toBe(true)
+  })
+
+  // Pattern level is not enough: checkRootGate EXPANDS a referenced root script by
+  // inlining `{ body }` right after the match, so the `--check` sparing has to survive
+  // the braces AND the second bare `sync-version` the body brings with it. Asserted at
+  // integration level because the form a real gate would use — `pnpm sync-version
+  // --check` delegating to a root script — is exactly the one the lookahead broke on.
+  it('spares a delegated `sync-version --check` through script expansion', () => {
+    const r = checkRootGate(
+      pkg({
+        'quality-gate': `turbo ts:check test lint && pnpm sync-version --check && pnpm ${GUARD_SCRIPT}`,
+        'sync-version': 'pnpm --filter @pair/dev-tools sync-version',
+      }),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('still flags a delegated `sync-version` with no --check', () => {
+    const r = checkRootGate(
+      pkg({
+        'quality-gate': `turbo ts:check test lint && pnpm sync-version && pnpm ${GUARD_SCRIPT}`,
+        'sync-version': 'pnpm --filter @pair/dev-tools sync-version',
+      }),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('sync-version')
   })
 
   it('fails and NAMES every offender when the gate inlines formatters', () => {

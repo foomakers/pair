@@ -32,7 +32,7 @@
     "e2e": "pnpm --filter @pair/website e2e",
     "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup",
     "format": "pnpm prettier:fix && pnpm mdlint:fix",
-    "format:check": "pnpm prettier:check; _p=$?; pnpm mdlint:check; _m=$?; exit $((_p || _m))",
+    "format:check": "pnpm prettier:check; _p=$?; pnpm mdlint:check; _m=$?; exit $((_p > 1 || _m > 1 ? 2 : (_p || _m)))",
     "gate:composition": "pnpm --filter @pair/dev-tools pre-push-gate:check"
   },
   "devDependencies": {

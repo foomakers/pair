@@ -78,7 +78,9 @@ This runs (in order): `ts:check`, `test`, `lint`, `format:check` (prettier + mar
 
 The gate never formats. It is the pre-push hook, where the commits already exist: a write-mode
 formatter would rewrite the working tree without touching what is being pushed, so it only pollutes
-the next diff. On a `format:check` failure, run `pnpm format` and commit the result. **Two-step remedy:**
+the next diff. On a `format:check` failure, run `pnpm format` and commit the result. Exit **2** instead of 1 means a
+formatter wrapper itself failed (a broken install, not drift) — read its output rather than running
+`pnpm format`. **Two-step remedy:**
 if `pnpm format` touched `packages/knowledge-hub/dataset/.skills/**`, re-sync the generated
 `.claude/skills/**` copies (`pair update`) in the same commit, or `skills:conformance` fails later in the
 same gate — the dataset copy is inside format scope, its generated twin is not (`.claude/` is not a
