@@ -11,26 +11,15 @@ description: Set up pair with Claude Code — configure AGENTS.md, CLAUDE.md, th
 
 ## Install Channels
 
-pair ships its skills through **two channels**. Pick one per project — never both at once, or the same skill is installed twice from two sources.
+pair reaches your project through **one** mechanism: the CLI writes the knowledge base and the skill catalog into your repo. The Claude Code marketplace is the **zero-setup entry point to it** — it ships a single bootstrap skill that installs the CLI and runs it for you.
 
-| Channel | Command | What you get | Use it when |
-|---------|---------|--------------|-------------|
-| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` | The full skill catalog as the `pair` plugin, invoked as `/pair:pair-next` (or the bare `/pair-next`) | You work in Claude Code only, want zero setup, and only need knowledge-base-reading skills — adoption-dependent skills need the CLI channel ([see the caveat below](#adoption-files-on-the-marketplace-channel) / [#392](https://github.com/foomakers/pair/issues/392)) |
-| **CLI** (tool-agnostic) | `pair-cli init` / `pair-cli update` | Skills written into your repo's `.claude/skills/` plus the `.pair/` knowledge base and adoption files | You want the KB and adoption files in the repo, or you also use Cursor, Windsurf, or Copilot |
+| Step | Command | What it does |
+|------|---------|--------------|
+| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` → `/plugin install pair@pair` | Installs one skill: `/pair-capability-setup-cli` |
+| **Bootstrap** | `/pair-capability-setup-cli` | Installs `pair-cli` (locally when your project has a `package.json`, otherwise via `npx`), creates the git repository if there is none, then runs the CLI |
+| **CLI** (tool-agnostic) | `pair-cli install` / `pair-cli update` | Writes `.pair/` (knowledge base + adoption files) and `.claude/skills/` — also what you run directly if you skip the marketplace, or if you use Cursor, Windsurf or Copilot |
 
-Both channels are built from the same source of truth — `packages/knowledge-hub` in the pair repository — so the skill names and content are identical.
-
-<Callout type="warn">
-  **Install one channel, not both.** Because the content is identical, installing both puts the
-  same skill name in `.claude/skills/` *and* in the plugin catalog — and every cross-skill
-  composition in the corpus (a process skill invoking `/pair-capability-verify-quality`,
-  `/pair-capability-classify`, …) plus every doc reference uses the bare `/pair-…` form, which now
-  matches two sources. **Resolution order between project scope and the plugin is unspecified — do
-  not rely on it** (we have verified bare-name resolution only with the plugin as the *sole* source;
-  the both-installed case has not been observed). Use the prefixed `/pair:pair-…` form if you ever
-  need to be sure which copy runs. Nothing detects this state today — keeping to one channel per
-  project is on you.
-</Callout>
+You are not choosing between two copies of the catalog: the marketplace never ships it. That is what makes the two safe to have installed at once — see below.
 
 ### Marketplace Install
 
@@ -38,52 +27,29 @@ Both channels are built from the same source of truth — `packages/knowledge-hu
 # 1. register pair's marketplace (the repository itself)
 /plugin marketplace add foomakers/pair
 
-# 2. install the plugin
+# 2. install the bootstrap plugin
 /plugin install pair@pair
+
+# 3. run it in the project you want pair in
+/pair-capability-setup-cli
 ```
 
-The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair repository, with the plugin manifest alongside it at `.claude-plugin/plugin.json`. The plugin **loads skills only** — it declares no agents, hooks, MCP or LSP servers, commands, monitors, settings overrides or plugin dependencies, and pair's repository root carries none of the directories Claude Code would auto-discover them from. A guard in the pair repository allowlists the keys each manifest may declare (the plugin manifest, the marketplace manifest, and every plugin entry in it), so nothing else can be added by hand without failing the build.
+The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair repository. Its one entry's `source` points at `packages/knowledge-hub/dataset/plugin`, which is therefore the **plugin root**: it holds `.claude-plugin/plugin.json` (where Claude Code looks) next to the `skills/` directory that manifest declares. `claude plugin details pair@pair` reports `Skills (1)`, `Agents (0)`, `Hooks (0)`, `MCP servers (0)`, `LSP servers (0)`.
 
-Be precise about what "skills only" covers: because the plugin's source is the whole pair repository, every file in it is **copied** into the cache — including files the plugin never declares, such as `.claude/agents/` and the third-party `.claude/skills/agent-browser`. Non-declaration is a *loading* control: those files sit in the cache inert, and Claude Code exposes exactly the 41 declared pair skills (`claude plugin details pair@pair` reports `Skills (41)`, `Agents (0)`, `Hooks (0)`, `MCP servers (0)`, `LSP servers (0)`).
+**Why the payload is that small, and not the repository.** An earlier design shipped the whole pair repository as the plugin, so the full catalog installed natively. It also copied pair's own `.pair/` into the cache — and a skill step that reads an adoption file resolved *pair's* decisions as if they were yours, with no graceful-degradation path, because from the skill's point of view the files were present. Worse, `/pair-capability-record-decision` writes adoption files, so a decision recorded on that channel landed inside the plugin cache and was destroyed by the next `/plugin update`. Shipping only the bootstrap skill removes both: there is no `.pair/` in the cache to resolve or to write into, and the files a skill reads are the ones the CLI put in **your** repository.
 
-Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`), so the knowledge base the skills reference travels with them. Treat the cache as **disposable, not as storage**: `/plugin update` replaces it wholesale, so anything written there — see the adoption-writes warning below — is lost.
-
-### Adoption Files on the Marketplace Channel
-
-<Callout type="warn">
-  **Adoption files: the marketplace channel reads pair's, not yours.** The plugin's source is the
-  pair repository itself, so `.pair/adoption/` travels inside the plugin cache. Skill steps that read
-  an adoption file resolve *that* copy — pair's own decisions — and see them as if they were your
-  project's. This is not a graceful-degradation path: no default kicks in, because from the skill's
-  point of view adoption files are present.
-
-  Concretely, on the marketplace channel a skill can resolve pair's PM tool
-  (`way-of-working.md`: GitHub Projects on the `foomakers/pair` board), pair's risk-matrix and
-  coverage deltas, and pair's tech stack — running against **your** credentials. So skills whose
-  behavior depends on adoption files — `/pair-capability-write-issue`, `/pair-process-review`,
-  `/pair-capability-verify-quality`, `/pair-capability-record-decision`, and any process skill
-  composing them — require the **CLI channel** (`pair-cli init`), which puts your own
-  `.pair/adoption/` in your repo. On the marketplace channel, stick to skills that only read the
-  knowledge base.
-
-  **Adoption *writes* have no correct destination on this channel at all.**
-  `/pair-capability-record-decision` is the sole writer of adoption files (ADRs, ADLs, context maps)
-  and resolves its targets skill-relative, so on the marketplace channel your recorded decision is
-  written **inside the plugin cache** — invisible to your repository and destroyed by the next
-  `/plugin update`. Record decisions on the CLI channel; there is no marketplace-channel workaround.
-  Project-scoped adoption resolution, read *and* write, is tracked in
-  [#392](https://github.com/foomakers/pair/issues/392).
-</Callout>
+A guard in the pair repository allowlists the keys each manifest may declare (the plugin manifest, the marketplace manifest, and every entry in it), and asserts the plugin root carries no auto-discovered component directory other than the declared `skills/` — so an agent, hook, monitor or MCP server cannot be added to the payload by hand without failing the build.
 
 <Callout type="info">
-  **Skill naming on the plugin channel.** Plugin skills are exposed as `pair:pair-…`, while the docs
-  and every cross-skill composition name siblings in the bare `/pair-…` form. Claude Code resolves
-  the bare name too, as long as it is unique — verified on CLI v2.1.220 for a real composition pair
-  (`pair-process-review` → `pair-capability-verify-quality`, both resolved from the plugin by bare
-  name, with no pair skills installed in the project or user scope). Uniqueness is exactly what
-  installing both channels destroys, which is the other reason to pick one. If a bare name ever fails
-  to resolve, the prefixed form always works: `/pair:pair-capability-verify-quality`.
+  **Keeping both installed is fine here.** The plugin declares exactly one skill,
+  `pair-capability-setup-cli`, and the CLI never installs that one into your project — it is
+  authored outside the distributed corpus precisely so it cannot travel through the CLI. So no skill
+  name resolves from two sources, and the ambiguity that used to make "pick one channel" a rule
+  simply has no subject. Keep the plugin if you want the bootstrap available for the next project;
+  remove it with `/plugin uninstall pair@pair` if you would rather not.
 </Callout>
+
+Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`). Treat the cache as **disposable, not as storage**: `/plugin update` replaces it wholesale. Nothing you own lives there — the bootstrap skill writes into your repository, never into the cache.
 
 Update or remove the plugin with the standard Claude Code commands:
 
@@ -93,7 +59,7 @@ Update or remove the plugin with the standard Claude Code commands:
 /plugin uninstall pair@pair
 ```
 
-No version is pinned in the manifest, so an update always fetches the current catalog.
+No version is pinned in the manifest, so an update always fetches the current bootstrap skill.
 
 ## Configure Agent File
 

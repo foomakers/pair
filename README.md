@@ -20,14 +20,15 @@ npx @foomakers/pair-cli install
 
 This installs the pair Knowledge Base into your project. Your AI assistant reads `.pair/` and `.claude/skills/` to follow your team's standards, process, and architecture decisions.
 
-**In Claude Code only?** Install the skills natively instead, with no CLI step:
+**In Claude Code?** Skip the command line — install the bootstrap plugin and let it do the above:
 
 ```text
 /plugin marketplace add foomakers/pair
 /plugin install pair@pair
+/pair-capability-setup-cli
 ```
 
-Pick **one** channel per project, not both. The marketplace channel ships the skill catalog alone — the knowledge base travels inside Claude Code's plugin cache, so adoption-dependent skills still need the CLI channel. See [Install Channels](https://pair.foomakers.com/docs/integrations/claude-code#install-channels) for the full comparison and caveats.
+The plugin ships **one** skill, which installs `pair-cli` and runs it, so your project ends up with exactly the tree the command above produces. See [Install Channels](https://pair.foomakers.com/docs/integrations/claude-code#install-channels).
 
 ## What You Get
 

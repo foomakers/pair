@@ -35,11 +35,16 @@ export function resolveRoot(): string {
 export const SKILL_COUNT_RE =
   /(\d+)\+?\s+(?:declared\s+)?(?:pair\s+|composable\s+|agent\s+|idempotent\s+)?skills/g
 
-// A quoted `claude plugin details` transcript: `Skills (41)`. Pinned because it is
-// an assertion about our OWN plugin manifest, not a third-party observation — and
-// because the marketplace docs quoted `Skills (40)` while the dataset held 41, drift
-// no phrasing above could catch. Anchored on the literal capitalized `Skills (`, so
-// the sibling `Agents (0)` / `Hooks (0)` counts in the same transcript never match.
+// A quoted `claude plugin details` transcript: `Skills (1)`. Pinned because it is an
+// assertion about our OWN plugin manifest, not a third-party observation — and because
+// the marketplace docs quoted a stale count while the manifest held another, drift no
+// phrasing above could catch. Anchored on the literal capitalized `Skills (`, so the
+// sibling `Agents (0)` / `Hooks (0)` counts in the same transcript never match.
+//
+// It is checked against the count the PLUGIN MANIFEST declares, NOT against the dataset
+// skill count: since the payload shrank to the bootstrap corpus, the plugin declares one
+// skill while the dataset holds 41, and conflating the two would demand a number that is
+// wrong on both readings.
 export const SKILL_COUNT_PROBE_RE = /\bSkills \((\d+)\)/g
 
 // How-to guide count phrasings. Requires a how-to qualifier so arbitrary
@@ -86,6 +91,18 @@ export function walkMdx(dir: string): string[] {
   return out
 }
 
+/**
+ * How many skills the plugin manifest declares. `null` if the manifest is missing —
+ * the caller then skips the probe check rather than pinning every transcript to 0.
+ */
+export function countDeclaredPluginSkills(manifestPath: string): number | null {
+  if (!existsSync(manifestPath)) return null
+  const raw: unknown = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+  const skills = (raw as { skills?: unknown }).skills
+  if (Array.isArray(skills)) return skills.length
+  return typeof skills === 'string' ? 1 : 0
+}
+
 /** Count of how-to guide files (NN-how-to-*.md) in a KB how-to dir. `null` if the dir is missing. */
 export function countHowToGuides(howToDir: string): number | null {
   if (!existsSync(howToDir)) return null
@@ -96,13 +113,33 @@ export function countHowToGuides(howToDir: string): number | null {
 
 /** Check 1: every "N skills" phrasing in content matches the actual skill count. */
 export function findSkillCountMismatches(content: string, rel: string, actual: number): string[] {
+  return countMismatches(content, rel, actual, SKILL_COUNT_RE, 'Skill count')
+}
+
+/**
+ * Check 1b: every quoted `Skills (N)` plugin transcript matches what the plugin
+ * manifest declares. Separate from check 1 on purpose — see SKILL_COUNT_PROBE_RE.
+ */
+export function findPluginSkillCountMismatches(
+  content: string,
+  rel: string,
+  declared: number,
+): string[] {
+  return countMismatches(content, rel, declared, SKILL_COUNT_PROBE_RE, 'Plugin skill count')
+}
+
+function countMismatches(
+  content: string,
+  rel: string,
+  actual: number,
+  re: RegExp,
+  label: string,
+): string[] {
   const errors: string[] = []
-  for (const re of [SKILL_COUNT_RE, SKILL_COUNT_PROBE_RE]) {
-    for (const m of content.matchAll(re)) {
-      const n = m[1]
-      if (n !== undefined && parseInt(n, 10) !== actual) {
-        errors.push(`Skill count mismatch in ${rel}: docs say "${m[0]}", actual count is ${actual}`)
-      }
+  for (const m of content.matchAll(re)) {
+    const n = m[1]
+    if (n !== undefined && parseInt(n, 10) !== actual) {
+      errors.push(`${label} mismatch in ${rel}: docs say "${m[0]}", actual count is ${actual}`)
     }
   }
   return errors
@@ -401,6 +438,11 @@ export function runAllChecks(root: string): RunResult {
   const docsFiles = walkMdx(DOCS_DIR)
   const allSkills = collectSkills(SKILLS_DIR)
   const skillCount = allSkills.length
+  // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
+  // repo root: the marketplace entry's `source` points there.
+  const declaredPluginSkills = countDeclaredPluginSkills(
+    join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
+  )
   const validRoutes = buildValidRoutes(docsFiles, DOCS_DIR)
   const howToCount = countHowToGuides(HOW_TO_DIR)
 
@@ -415,6 +457,9 @@ export function runAllChecks(root: string): RunResult {
     const content = readFileSync(file, 'utf-8')
     const rel = relative(DOCS_DIR, file)
     errors.push(...findSkillCountMismatches(content, rel, skillCount))
+    if (declaredPluginSkills !== null) {
+      errors.push(...findPluginSkillCountMismatches(content, rel, declaredPluginSkills))
+    }
     if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
     errors.push(...findDeadLinks(content, rel, validRoutes))
   }

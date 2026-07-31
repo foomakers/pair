@@ -65,9 +65,10 @@ The tag push triggers the **Release workflow** (`release.yml`) which:
 
 ## Release checklist: skill marketplace manifest
 
-The [marketplace channel](/docs/integrations/claude-code#install-channels) is served by two hand-maintained files at the repository root: `.claude-plugin/marketplace.json` and `.claude-plugin/plugin.json`. They are deliberately **not generated** — when the skill catalog changes (a skill is added, renamed, or removed), update them in the same PR:
+The [marketplace channel](/docs/integrations/claude-code#install-channels) is served by two hand-maintained files: `.claude-plugin/marketplace.json` at the repository root, and `.claude-plugin/plugin.json` inside the plugin root it points to (`packages/knowledge-hub/dataset/plugin`). They are deliberately **not generated**. The plugin ships the bootstrap corpus only, so adding a skill to the distributed catalog no longer touches them:
 
-- `.claude-plugin/plugin.json` `skills` lists one `./.claude/skills/pair-<flattened-name>` entry per dataset skill, and nothing stale.
+- `plugin.json` `skills` lists one `./skills/<name>` entry per directory under the plugin root's `skills/`, and nothing stale.
+- The marketplace entry's `source` still points at the plugin root — pointing it at `./` would ship the whole repository again, and with it pair's own `.pair/adoption/` inside every user's plugin cache.
 - `claude plugin validate .` passes. The "no version specified" warning is expected: the manifest pins no version so `/plugin update` always fetches the current catalog. Never run this check with `--strict` — that flag turns the expected warning into a hard failure, and the missing version pin is a deliberate decision.
 - Skills only, on all three hand-edited surfaces — `plugin.json` carries metadata plus `skills` and nothing else; the marketplace entry carries metadata plus `source`/`category`/`tags`/`strict` and **no `skills`** (an entry-level `skills` silently replaces the plugin's whole catalog); and `marketplace.json`'s own top level carries marketplace metadata plus `owner`/`plugins`, never `forceRemoveDeletedPlugins`, `allowCrossMarketplaceDependenciesOn` or `metadata.pluginRoot`.
 - No root-level component directory named after a manifest component key (`agents/`, `commands/`, `hooks/`, `skills/`, `monitors/`, …) and no root `.mcp.json`: the plugin source is `"./"`, so the repository itself is the payload and Claude Code auto-discovers those components at its root whatever the manifest says.

@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { readSkillsDatasetFromDisk } from './skill-md-mirror'
+import { readdirSync } from 'fs'
 import { parseFrontmatter } from './skills-conformance-check'
 import {
   SKILL_PATH_PREFIX,
+  PLUGIN_ROOT_REL,
+  PLUGIN_MANIFEST_REL,
   expectedPluginSkillPaths,
+  assertBootstrapSkillsValid,
   declaredSkillPaths,
   parseMarketplaceManifest,
   parsePluginManifest,
@@ -22,12 +25,22 @@ import {
 
 // packages/knowledge-hub/src/tools -> repo root
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
-const DATASET_SKILLS = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
 const MARKETPLACE_JSON = join(REPO_ROOT, '.claude-plugin/marketplace.json')
-const PLUGIN_JSON = join(REPO_ROOT, '.claude-plugin/plugin.json')
+// The plugin root is the bootstrap corpus's parent, NOT the repo root: plugin.json
+// and every declared skill path resolve against it.
+const PLUGIN_ROOT = join(REPO_ROOT, PLUGIN_ROOT_REL)
+const PLUGIN_JSON = join(REPO_ROOT, PLUGIN_MANIFEST_REL)
+const BOOTSTRAP_SKILLS = join(PLUGIN_ROOT, 'skills')
 
-/** True when `relPath` (a `./`-prefixed plugin-root-relative dir) holds a SKILL.md. */
-const hasSkillMd = (relPath: string): boolean => existsSync(join(REPO_ROOT, relPath, 'SKILL.md'))
+/** True when `relPath` (a `./`-prefixed PLUGIN-root-relative dir) holds a SKILL.md. */
+const hasSkillMd = (relPath: string): boolean => existsSync(join(PLUGIN_ROOT, relPath, 'SKILL.md'))
+
+/** The bootstrap skill dirs on disk — the expected catalog's only source. */
+const bootstrapSkillDirs = (): string[] =>
+  readdirSync(BOOTSTRAP_SKILLS, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name)
+    .sort()
 
 /** Runs `fn`, expecting it to throw, and returns the thrown Error's message. */
 const captureThrownMessage = (fn: () => void): string => {
@@ -49,25 +62,40 @@ describe('.claude-plugin marketplace + plugin manifests (real repo)', () => {
   const marketplace = parseMarketplaceManifest(readFileSync(MARKETPLACE_JSON, 'utf-8'))
   const plugin = parsePluginManifest(readFileSync(PLUGIN_JSON, 'utf-8'))
   const declared = declaredSkillPaths(plugin.skills)
-  const expected = expectedPluginSkillPaths(readSkillsDatasetFromDisk(DATASET_SKILLS))
+  const expected = expectedPluginSkillPaths(bootstrapSkillDirs())
 
-  it('exposes exactly one plugin entry sourced from the marketplace root (AC1)', () => {
+  it('exposes exactly one plugin entry sourced from the bootstrap corpus (AC1)', () => {
     expect(marketplace.plugins).toHaveLength(1)
     const entry = marketplace.plugins[0]!
-    // Marketplace-root source: the plugin root is the repo, so the skills'
-    // relative KB links (`../../../.pair/knowledge/...`) resolve in the cache.
-    expect(entry.source).toBe('./')
+    // NOT './': the payload is the bootstrap corpus, not the repository. That is what
+    // keeps pair's own .pair/adoption out of the plugin cache, so a skill on this
+    // channel can no longer read pair's decisions as if they were the project's.
+    expect(entry.source).toBe(`./${PLUGIN_ROOT_REL}`)
     // The marketplace entry name is what `/plugin install <name>@<marketplace>`
     // and `enabledPlugins` key on — keep it identical to plugin.json's name.
     expect(entry.name).toBe(plugin.name)
   })
 
-  it('lists every dataset skill and nothing stale (AC2)', () => {
+  it('lists every bootstrap skill and nothing stale (AC2)', () => {
     expect(() => assertSkillCatalogInSync(declared, expected)).not.toThrow()
-    // Sanity: the expected set really is dataset-derived, not an empty list.
+    // Sanity: the expected set really is derived from disk, not an empty list.
     expect(expected.length).toBeGreaterThan(0)
-    expect(expected).toContain(`${SKILL_PATH_PREFIX}pair-next`)
-    expect(expected).toContain(`${SKILL_PATH_PREFIX}pair-process-implement`)
+    expect(expected).toContain(`${SKILL_PATH_PREFIX}pair-capability-setup-cli`)
+  })
+
+  it('ships the bootstrap corpus ONLY — the distributed catalog travels via the CLI', () => {
+    // The declared catalog must not contain a generated `.claude/skills/` path: that
+    // would mean the payload is the repo again, and with it pair's own adoption files.
+    expect(declared.every(path => path.startsWith(SKILL_PATH_PREFIX))).toBe(true)
+    expect(declared.some(path => path.includes('.claude/skills'))).toBe(false)
+  })
+
+  it('every bootstrap skill is valid and ISOLATED (no KB or adoption link)', () => {
+    const files = bootstrapSkillDirs().map(dir => ({
+      dir,
+      content: readFileSync(join(BOOTSTRAP_SKILLS, dir, 'SKILL.md'), 'utf-8'),
+    }))
+    expect(() => assertBootstrapSkillsValid(files)).not.toThrow()
   })
 
   it('declares only skill dirs that exist on disk with a SKILL.md', () => {
@@ -129,25 +157,23 @@ describe('.claude-plugin marketplace + plugin manifests (real repo)', () => {
     // plugin.json prevents *loading* a component, not *copying* it. The payload-level
     // guarantee is the absence of the paths Claude Code discovers at the plugin root.
     expect(() =>
-      assertNoRootPluginComponents(rel => existsSync(join(REPO_ROOT, rel))),
+      assertNoRootPluginComponents(rel => existsSync(join(PLUGIN_ROOT, rel))),
     ).not.toThrow()
   })
 
   // Data-driven over the real manifest: a newly listed skill is covered with no test edit.
-  it.each(declared)(
-    '%s installs under the name the dataset transform gives it (AC2)',
-    declaredPath => {
-      const dirName = declaredPath.slice(SKILL_PATH_PREFIX.length)
-      const frontmatter = parseFrontmatter(
-        readFileSync(join(REPO_ROOT, declaredPath, 'SKILL.md'), 'utf-8'),
-      )
-      // Plugin skills are invoked as `/<plugin>:<frontmatter name>` (bare name too),
-      // so the frontmatter name is the user-visible skill name. Its equality with the
-      // dataset source (name AND description) is pinned by the mirror-equality guard
-      // in skill-md-mirror.test.ts; here we pin the manifest path to that same name.
-      expect(frontmatter?.values.name).toBe(dirName)
-    },
-  )
+  it.each(declared)('%s is invoked under its own directory name (AC2)', declaredPath => {
+    const dirName = declaredPath.slice(SKILL_PATH_PREFIX.length)
+    const frontmatter = parseFrontmatter(
+      readFileSync(join(PLUGIN_ROOT, declaredPath, 'SKILL.md'), 'utf-8'),
+    )
+    // Plugin skills are invoked as `/<plugin>:<frontmatter name>` (bare name too), so
+    // the frontmatter name is the user-visible one. These skills are AUTHORED, not
+    // generated, so no install transform assigns that name — the directory is the only
+    // other place it appears, and the two must agree or the manifest points at a skill
+    // that answers to a different name.
+    expect(frontmatter?.values.name).toBe(dirName)
+  })
 })
 
 describe('parseMarketplaceManifest — required Claude Code schema fields', () => {
@@ -310,20 +336,20 @@ describe('assertSkillCatalogInSync — drift injection', () => {
   })
 })
 
-describe('expectedPluginSkillPaths — derived from the dataset, never hardcoded', () => {
-  it('maps dataset skill dirs through the real install transform', () => {
-    const paths = expectedPluginSkillPaths({
-      'capability/verify-quality/SKILL.md': '---\nname: verify-quality\n---\n',
-      'process/implement/SKILL.md': '---\nname: implement\n---\n',
-      'next/SKILL.md': '---\nname: next\n---\n',
-      // a non-SKILL.md asset must not become a catalog entry
-      'capability/verify-quality/references/matrix.md': '# matrix\n',
-    })
-    expect(paths).toEqual([
-      './.claude/skills/pair-capability-verify-quality',
-      './.claude/skills/pair-next',
-      './.claude/skills/pair-process-implement',
+describe('expectedPluginSkillPaths — derived from the bootstrap corpus, never hardcoded', () => {
+  it('prefixes each bootstrap skill dir and sorts', () => {
+    const paths = expectedPluginSkillPaths([
+      'pair-capability-setup-cli',
+      'pair-capability-another-bootstrap',
     ])
+    expect(paths).toEqual([
+      './skills/pair-capability-another-bootstrap',
+      './skills/pair-capability-setup-cli',
+    ])
+  })
+
+  it('is empty for an empty corpus, so the catalog guard cannot pass vacuously', () => {
+    expect(expectedPluginSkillPaths([])).toEqual([])
   })
 })
 
@@ -528,13 +554,18 @@ describe('assertNoRootPluginComponents — payload-level skills-only guarantee',
   it.each(ROOT_PLUGIN_COMPONENT_PATHS)('FAILS when %s exists at the plugin root', path => {
     const message = captureThrownMessage(() => assertNoRootPluginComponents(rel => rel === path))
     expect(message).toContain(path)
-    expect(message).toMatch(/skills only/i)
+    expect(message).toMatch(/bootstrap skills\/ dir and nothing else/i)
   })
 
-  it('covers a root-level `skills/` dir — auto-discovered on top of the manifest', () => {
-    // The manifest `skills` field is additive, not exclusive: a root `skills/` dir
-    // would ship AND load skills absent from plugin.json, bypassing the catalog guard.
-    expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain('skills')
+  it('EXEMPTS `skills/` — at this plugin root it IS the declared payload', () => {
+    // Under the previous shape (source: "./", the whole repo) a root `skills/` dir was
+    // a hazard: additive auto-discovery would ship AND load skills absent from
+    // plugin.json. Now the plugin root is the bootstrap corpus's parent, so `skills/`
+    // sits there by construction and auto-discovery agrees with the manifest instead of
+    // competing — the whole payload is what we mean to ship. Every OTHER component key
+    // stays forbidden, which the cases above assert one by one.
+    expect(ROOT_PLUGIN_COMPONENT_PATHS).not.toContain('skills')
+    expect(SCHEMA_COMPONENT_KEYS).toContain('skills')
   })
 
   it('is DERIVED from the schema component keys, so it cannot lag the schema', () => {
@@ -542,7 +573,7 @@ describe('assertNoRootPluginComponents — payload-level skills-only guarantee',
     // (`monitors` — unsandboxed background scripts, hooks' trust tier — was missing).
     // Deriving it means a component key added to SCHEMA_COMPONENT_KEYS extends the
     // root-payload guard in the same edit as the manifest allowlist.
-    for (const key of SCHEMA_COMPONENT_KEYS) {
+    for (const key of SCHEMA_COMPONENT_KEYS.filter(k => k !== 'skills')) {
       expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain(key)
     }
     expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain('monitors')

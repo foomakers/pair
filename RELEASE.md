@@ -52,9 +52,10 @@ The tag push triggers the **Release workflow** (`release.yml`) which:
 
 ## Release Checklist: Skill Marketplace Manifest
 
-`.claude-plugin/marketplace.json` + `.claude-plugin/plugin.json` are the **native Claude Code install channel** (`/plugin marketplace add foomakers/pair`). They are **hand-maintained**, not generated — when the skill catalog changes (skill added, renamed, removed), update them in the same PR:
+`.claude-plugin/marketplace.json` + `packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json` are the **native Claude Code install channel** (`/plugin marketplace add foomakers/pair`). The plugin ships the **bootstrap corpus only** — the distributed catalog travels through the CLI — so a skill added to `dataset/.skills/` needs no manifest edit at all. They are still hand-maintained, not generated:
 
-- [ ] `.claude-plugin/plugin.json` `skills` lists one `./.claude/skills/pair-<flattened-name>` entry per dataset skill, and nothing stale
+- [ ] `packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json` `skills` lists one `./skills/<name>` entry per directory under that manifest's `skills/`, and nothing stale
+- [ ] the marketplace entry's `source` still points at the plugin root (`./packages/knowledge-hub/dataset/plugin`) — pointing it at `./` would put pair's own `.pair/adoption/` back in every user's plugin cache
 - [ ] `claude plugin validate .` passes (the pinned-version warning is expected — see the [marketplace-plugin-packaging ADL](.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md)). Do **not** add `--strict`: it turns that expected warning into a failure, and the no-version-pin is a deliberate decision (ADL Decision 4)
 - [ ] Skills only, on all three hand-edited surfaces — `plugin.json` carries metadata + `skills` and nothing else; the marketplace entry carries metadata + `source`/`category`/`tags`/`strict` and **no `skills`** (an entry-level `skills` silently REPLACES the plugin's catalog); `marketplace.json`'s own top level carries marketplace metadata + `owner`/`plugins` and none of `forceRemoveDeletedPlugins`, `allowCrossMarketplaceDependenciesOn`, `metadata.pluginRoot`
 - [ ] No root-level component directory named after a manifest component key (`agents/`, `commands/`, `hooks/`, `skills/`, `monitors/`, …) and no root `.mcp.json` — with `source: "./"` the repo IS the plugin payload, so Claude Code auto-discovers those regardless of the manifest

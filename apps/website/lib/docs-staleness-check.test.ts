@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { resolve } from 'node:path'
 import {
   findSkillCountMismatches,
+  findPluginSkillCountMismatches,
+  countDeclaredPluginSkills,
   findGuideCountMismatches,
   findDeadLinks,
   checkCatalogSync,
@@ -71,20 +73,40 @@ describe('findSkillCountMismatches', () => {
     expect(errs[0]).toContain('40 declared pair skills')
   })
 
-  it('flags a wrong `Skills (N)` probe transcript', () => {
-    const errs = findSkillCountMismatches('reports `Skills (40)`, `Agents (0)`', 'a.mdx', 41)
+  // The `Skills (N)` transcript is NOT a dataset-skill count — check 1 must ignore it,
+  // or the two readings fight over one number (the plugin declares 1, the dataset 41).
+  it('leaves the `Skills (N)` plugin transcript to the plugin check', () => {
+    expect(findSkillCountMismatches('reports `Skills (1)`', 'a.mdx', 41)).toHaveLength(0)
+  })
+})
+
+describe('findPluginSkillCountMismatches', () => {
+  it('flags a `Skills (N)` transcript that disagrees with the manifest', () => {
+    const errs = findPluginSkillCountMismatches('reports `Skills (40)`, `Agents (0)`', 'a.mdx', 1)
     expect(errs).toHaveLength(1)
     expect(errs[0]).toContain('Skills (40)')
+    expect(errs[0]).toContain('Plugin skill count')
   })
 
-  it('passes a matching `Skills (N)` probe transcript', () => {
-    expect(findSkillCountMismatches('reports `Skills (41)`', 'a.mdx', 41)).toHaveLength(0)
+  it('passes a matching transcript', () => {
+    expect(findPluginSkillCountMismatches('reports `Skills (1)`', 'a.mdx', 1)).toHaveLength(0)
   })
 
   it('does not read a sibling `Agents (N)`/`Hooks (N)` count as a skill count', () => {
     expect(
-      findSkillCountMismatches('`Agents (0)`, `Hooks (0)`, `MCP servers (0)`', 'a.mdx', 41),
+      findPluginSkillCountMismatches('`Agents (0)`, `Hooks (0)`, `MCP servers (0)`', 'a.mdx', 1),
     ).toHaveLength(0)
+  })
+})
+
+describe('countDeclaredPluginSkills', () => {
+  it('reads the real manifest at the plugin root', () => {
+    const manifest = join(REPO_ROOT, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json')
+    expect(countDeclaredPluginSkills(manifest)).toBeGreaterThan(0)
+  })
+
+  it('returns null for a missing manifest, so the probe check is skipped not zeroed', () => {
+    expect(countDeclaredPluginSkills(join(REPO_ROOT, 'nope/plugin.json'))).toBeNull()
   })
 })
 

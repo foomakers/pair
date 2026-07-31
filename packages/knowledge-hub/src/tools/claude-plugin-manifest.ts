@@ -10,14 +10,25 @@
  * exact hand edit to make, so the manual process has an automatic backstop for
  * its one real risk (a skill added/renamed/removed without a manifest update).
  *
- * The expected catalog is derived from the canonical dataset
- * (`packages/knowledge-hub/dataset/.skills/`) through the same install
- * transform `pair update` applies (`installedSkillDir` in `skill-md-mirror.ts`),
- * so there is exactly ONE source of truth for the skill catalog across both
- * distribution channels (D1: marketplace + CLI). Skill *names and descriptions*
- * are not duplicated into the manifest at all — they live in each installed
- * `SKILL.md` frontmatter, which the mirror-equality guard already pins
- * byte-for-byte to its dataset source, so no description-drift surface exists.
+ * The plugin is a **bootstrap payload, not the catalog**: its root is
+ * `packages/knowledge-hub/dataset/plugin` (the marketplace entry's
+ * `source`), and it ships the skills authored under that root's `skills/` — today
+ * exactly one, which installs `pair-cli` and lets the CLI produce the project's
+ * knowledge base and full skill catalog. The 40-odd distributed skills therefore
+ * travel through the CLI only; the marketplace channel is the entry point to it,
+ * not a second copy of it.
+ *
+ * Two consequences worth stating, because the previous shape (`source: "./"`, the
+ * whole repo as payload) had the opposite ones. Nothing in the plugin cache can
+ * resolve pair's own `.pair/adoption/` any more, so adoption reads and writes on
+ * this channel are no longer silently answered by pair's files. And the expected
+ * catalog is derived from the bootstrap corpus on disk rather than from the
+ * dataset, so it stays a derived list — a new bootstrap skill extends it with no
+ * code edit — without pinning 40 hand-maintained entries.
+ *
+ * The bootstrap corpus sits OUTSIDE `dataset/.skills/`, so neither
+ * `skills:conformance` nor the mirror-equality guard sees it.
+ * {@link assertBootstrapSkillsValid} is what replaces them.
  *
  * Validation follows Claude Code's published schemas (required fields only —
  * `claude-code-marketplace.json` / `claude-code-plugin-manifest.json` on
@@ -26,9 +37,9 @@
  * permitted keys on each of the three hand-edited surfaces (the plugin manifest,
  * the marketplace manifest's own top level, and each `plugins[]` entry), so a
  * component key the schema adds tomorrow fails closed, plus the absence of a
- * root-level component payload, since `source: "./"` makes the repo the plugin
- * root. That root-payload list is derived from the schema's component keys rather
- * than hand-enumerated, so the two halves of the rule cannot drift apart.
+ * root-level component payload other than the declared `skills/`. That list is
+ * derived from the schema's component keys rather than hand-enumerated, so the two
+ * halves of the rule cannot drift apart.
  *
  * Rule of record for skills-only distribution:
  * `.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md`
@@ -37,16 +48,24 @@
  * "D23" already denotes *mechanical isolation* in the skill corpus — so this
  * module cites the ADL, never the bare identifiers.
  */
-import { datasetSkillDirs, installedSkillDir, type DatasetTree } from './skill-md-mirror'
 
 /**
- * Plugin-root-relative prefix of every declared skill directory. The plugin's
- * `source` is the marketplace root (`"./"` — the repo), so the installed root
- * mirror `.claude/skills/<prefixed>/` is what ships; that also keeps each
- * skill's relative KB links (`../../../.pair/knowledge/...`) resolvable inside
- * the plugin cache.
+ * Skill dirs are declared relative to the PLUGIN ROOT, which is
+ * `packages/knowledge-hub/dataset/plugin` (the marketplace entry's
+ * `source`) — not the repository root. See the ADL's Decision 1.
  */
-export const SKILL_PATH_PREFIX = './.claude/skills/'
+export const SKILL_PATH_PREFIX = './skills/'
+
+/** The plugin root, repo-relative: what the marketplace entry's `source` names. */
+export const PLUGIN_ROOT_REL = 'packages/knowledge-hub/dataset/plugin'
+
+/** The plugin manifest's repo-relative path, for error messages. */
+/**
+ * The plugin manifest's repo-relative path. Claude Code looks for it at
+ * `<plugin root>/.claude-plugin/plugin.json` — probe-verified: `claude plugin validate`
+ * on a directory holding a bare `plugin.json` fails with "No manifest found".
+ */
+export const PLUGIN_MANIFEST_REL = `${PLUGIN_ROOT_REL}/.claude-plugin/plugin.json`
 
 const KEBAB_CASE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -220,16 +239,19 @@ export function declaredSkillPaths(skills: unknown): string[] {
 }
 
 /**
- * The skill directories the manifest MUST declare, derived from the dataset
- * tree through the real install transform: every dataset skill dir becomes
- * `./.claude/skills/<prefixed>`. Sorted, so the expected catalog is stable and
- * never a hardcoded list (a new dataset skill extends it with no code edit).
+ * The skill directories the manifest MUST declare: every skill dir present under
+ * the plugin root's `skills/`. Derived from disk, never hardcoded — adding a
+ * bootstrap skill extends the expected catalog with no code edit, exactly as the
+ * dataset-derived version did before the payload shrank.
+ *
+ * `skillDirs` is injected (the assertion stays filesystem-free), and each name is
+ * a directory name, not a path: the prefix is added here so the manifest's path
+ * style lives in ONE place.
  */
-export function expectedPluginSkillPaths(tree: DatasetTree): string[] {
-  return datasetSkillDirs(tree)
-    .map(dir => `${SKILL_PATH_PREFIX}${installedSkillDir(dir)}`)
-    .sort()
+export function expectedPluginSkillPaths(skillDirs: string[]): string[] {
+  return skillDirs.map(dir => `${SKILL_PATH_PREFIX}${dir}`).sort()
 }
+
 
 /**
  * Asserts the hand-maintained catalog equals the dataset-derived one. Throws
@@ -246,7 +268,7 @@ export function assertSkillCatalogInSync(declared: string[], expected: string[])
   const duplicates = declared.filter((path, i) => declared.indexOf(path) !== i)
   if (duplicates.length > 0) {
     fail(
-      `.claude-plugin/plugin.json declares duplicate skill entries: ${[...new Set(duplicates)].join(', ')}. ` +
+      `${PLUGIN_MANIFEST_REL} declares duplicate skill entries: ${[...new Set(duplicates)].join(', ')}. ` +
         `Remove the repeated line(s).`,
     )
   }
@@ -256,8 +278,8 @@ export function assertSkillCatalogInSync(declared: string[], expected: string[])
   if (missing.length === 0 && stale.length === 0) return
 
   const parts = [
-    `.claude-plugin/plugin.json skill catalog is out of sync with the dataset ` +
-      `(packages/knowledge-hub/dataset/.skills). The manifest is hand-maintained — ` +
+    `${PLUGIN_MANIFEST_REL} skill catalog is out of sync with the bootstrap corpus ` +
+      `(${PLUGIN_ROOT_REL}/skills). The manifest is hand-maintained — ` +
       `edit it by hand (see the skill-marketplace step in RELEASE.md):`,
   ]
   if (missing.length > 0) {
@@ -265,7 +287,7 @@ export function assertSkillCatalogInSync(declared: string[], expected: string[])
   }
   if (stale.length > 0) {
     parts.push(
-      `  stale (no dataset skill — remove from "skills"):\n${stale.map(p => `    - ${p}`).join('\n')}`,
+      `  stale (no such bootstrap skill — remove from "skills"):\n${stale.map(p => `    - ${p}`).join('\n')}`,
     )
   }
   fail(parts.join('\n'))
@@ -284,9 +306,79 @@ export function assertDeclaredSkillsResolve(
   const broken = declared.filter(path => !hasSkillMd(path))
   if (broken.length > 0) {
     fail(
-      `.claude-plugin/plugin.json declares skill dirs with no SKILL.md:\n` +
+      `${PLUGIN_MANIFEST_REL} declares skill dirs with no SKILL.md:\n` +
         `${broken.map(p => `    - ${p}/SKILL.md`).join('\n')}\n` +
-        `Run 'pair update' to regenerate the root mirror, or fix the manifest path by hand.`,
+        `These are authored files, not generated — fix the manifest path, or add the missing ` +
+        `SKILL.md under ${PLUGIN_ROOT_REL}/skills/.`,
+    )
+  }
+}
+
+/** A bootstrap skill as read from disk: its directory name and its SKILL.md text. */
+export interface BootstrapSkillFile {
+  dir: string
+  content: string
+}
+
+/**
+ * Asserts every bootstrap skill is a valid, ISOLATED skill.
+ *
+ * These files are authored under the plugin root rather than generated from
+ * `dataset/.skills/`, which is what keeps the CLI from installing them into a
+ * consuming project — but it also puts them outside `skills:conformance` and
+ * outside the mirror-equality guard. This is the replacement, and it checks the
+ * three things those two would have caught:
+ *
+ * - **Frontmatter present and self-consistent** — `name` equals the directory
+ *   name (the invocable name IS the directory here, since no install transform
+ *   renames it), plus a non-empty `description` and a `version`.
+ * - **No knowledge-base reference.** The load-bearing property: a bootstrap skill
+ *   runs BEFORE the knowledge base exists in the project, and on this channel the
+ *   only KB within reach would be pair's own. A `.pair/knowledge/` link here is
+ *   either dangling or answering from the wrong project — and it is exactly the
+ *   kind of edit that looks harmless in review.
+ * - **No adoption-file reference**, for the same reason.
+ *
+ * `files` is injected, so the assertion itself stays filesystem-free.
+ */
+export function assertBootstrapSkillsValid(files: BootstrapSkillFile[]): void {
+  if (files.length === 0) {
+    fail(
+      `No bootstrap skill found under ${PLUGIN_ROOT_REL}/skills. The plugin ships that corpus ` +
+        `and nothing else, so an empty one means the marketplace channel installs no skill at all.`,
+    )
+  }
+
+  const problems: string[] = []
+  for (const { dir, content } of files) {
+    const name = /^name:\s*(.+?)\s*$/m.exec(content)?.[1]
+    if (name !== dir) {
+      problems.push(`${dir}: frontmatter name is ${JSON.stringify(name ?? null)}, expected ${dir}`)
+    }
+    if (!/^description:\s*"[^"]/m.test(content)) {
+      problems.push(`${dir}: frontmatter needs a non-empty quoted description`)
+    }
+    if (!/^version:\s*\d+\.\d+\.\d+\s*$/m.test(content)) {
+      problems.push(`${dir}: frontmatter needs a semver version`)
+    }
+    // LINK TARGETS, not mentions: the skill legitimately explains its own isolation
+    // in prose ("every other pair skill links into `.pair/knowledge/**`"), and a
+    // substring match would redden on the sentence documenting the rule it obeys —
+    // the false-positive shape that gets a guard disabled.
+    const link = /\]\(([^)]*\.pair\/(?:knowledge|adoption)[^)]*)\)/.exec(content)
+    if (link) {
+      problems.push(
+        `${dir}: links to ${link[1]} — a bootstrap skill must be ISOLATED, since it runs before ` +
+          `the knowledge base exists in the project and the only one within reach on this ` +
+          `channel is pair's own. State what it needs inline instead of linking.`,
+      )
+    }
+  }
+
+  if (problems.length > 0) {
+    fail(
+      `Invalid bootstrap skill(s) under ${PLUGIN_ROOT_REL}/skills:\n` +
+        problems.map(p => `    - ${p}`).join('\n'),
     )
   }
 }
@@ -488,30 +580,37 @@ export function assertSkillsOnlyDistribution(
  * to auto-discover costs nothing — pair ships no root component directory under
  * any of these names, and the failure message says where they belong instead.
  *
- * `skills` is included deliberately: a root-level `skills/` directory is
- * auto-discovered *in addition to* the manifest's `skills` field, so it would ship
- * AND load skills that never appear in `plugin.json` — bypassing
- * {@link assertSkillCatalogInSync} entirely. pair's skills live under
- * `.claude/skills/`, which is declared, never auto-discovered.
+ * `skills` is the ONE exception, and only since the payload shrank: the plugin root
+ * IS the bootstrap corpus's parent, so `skills/` sits at that root by construction.
+ * Auto-discovery and the manifest therefore agree instead of competing — the whole
+ * payload is the two files we mean to ship, so there is no undeclared skill for
+ * auto-discovery to leak. Under the previous shape (`source: "./"`, the whole repo)
+ * the same directory name WAS a hazard, which is why it is called out here rather
+ * than quietly dropped.
  *
  * `.mcp.json` is the one root path that is a file rather than a directory named
  * after its key, so it is appended explicitly.
  */
-export const ROOT_PLUGIN_COMPONENT_PATHS = [...SCHEMA_COMPONENT_KEYS, '.mcp.json'] as const
+export const ROOT_PLUGIN_COMPONENT_PATHS = [
+  ...SCHEMA_COMPONENT_KEYS.filter(key => key !== 'skills'),
+  '.mcp.json',
+] as const
 
 /**
  * Asserts no root-level plugin component path exists. `exists` is injected — the
  * assertion itself stays filesystem-free.
  */
 export function assertNoRootPluginComponents(exists: (relPath: string) => boolean): void {
+  // `exists` resolves relative to the PLUGIN root, not the repo root — the caller
+  // supplies that base, so moving the plugin root needs no change here.
   const present = ROOT_PLUGIN_COMPONENT_PATHS.filter(path => exists(path))
   if (present.length > 0) {
     fail(
-      `The plugin root (the repo, since the plugin source is "./") carries plugin component ` +
+      `The plugin root (${PLUGIN_ROOT_REL}) carries plugin component ` +
         `path(s) ${present.join(', ')}: Claude Code auto-discovers components there regardless of ` +
-        `what plugin.json declares (a root skills/ dir would even load skills the catalog guard ` +
-        `never sees; a root monitors/ or hooks/ would arm unsandboxed scripts on every installed ` +
-        `machine). pair distributes skills only — move them under .claude/ or remove them. ` +
+        `what plugin.json declares (a root monitors/ or hooks/ would arm unsandboxed scripts on ` +
+        `every installed machine). pair's plugin ships the bootstrap skills/ dir and nothing ` +
+        `else — remove them. ` +
         `Rule of record: ` +
         `.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md, Decision 5.`,
     )
