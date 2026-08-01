@@ -157,7 +157,7 @@ Projects can define additional quality gates beyond the standard ones (Lint, Typ
 | ----------- | ---------------------------------------------------------------------------------- |
 | Order       | Execution sequence among custom gates (standard gates always run first)            |
 | Gate        | Human-readable gate name                                                           |
-| Command     | Shell command to execute (e.g., `pnpm prettier:fix`)                               |
+| Command     | Shell command to execute (e.g., `pnpm format:check`) — a gate step must not WRITE   |
 | Scope Key   | Maps to `/pair-capability-verify-quality` `$scope` argument for selective execution                |
 | Required    | `Yes` = failure → FAIL verdict; `No` (Advisory) = failure → WARNING, not a blocker |
 | Description | Brief explanation of what the gate checks                                          |
