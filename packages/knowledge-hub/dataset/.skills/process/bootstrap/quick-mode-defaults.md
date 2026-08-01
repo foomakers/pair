@@ -32,7 +32,6 @@ The convention's precedence, highest wins, with bootstrap's source named per tie
 
 **Why these three rows changed (2026-08-01).** They used to be `fallback` outright, skipping the convention's `project state` tier — so on a repository that already had a `Dockerfile`, a `terraform/` directory or an error-tracking dependency, quick mode wrote the KB default with the evidence sitting right there. The convention's cascade is `explicit argument > project state > recorded decision > hardcoded fallback` for **every** decision point, and quick differs from guided only in whether the resolved value is confirmed — never in where it comes from. A fallback is what you reach when the repository is silent, not a shortcut past reading it.
 
-
 ## Per-decision resolution
 
 | Phase / step | Decision point                                                       | Quick mode                                                                                                     | Tier              |
