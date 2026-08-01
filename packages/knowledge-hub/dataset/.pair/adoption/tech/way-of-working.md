@@ -11,7 +11,7 @@ This document defines the **validated development practices and team workflows**
 ## Quality Gates
 
 - `pnpm quality-gate` is the adopted project-level quality gate command.
-- Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting (`prettier:fix`).
+- Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting **checked, never written** (`format:check`). The gate is the pre-push hook, where the commits already exist, so a write-mode formatter would rewrite the tree without touching what is being pushed — see the ADL [2026-07-31-pre-push-gate-is-check-only.md](../../decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 - **Hook manager**: `husky` (KB default, decision D21/Q11) — pre-commit runs fast local checks, pre-push runs lint. Override here if the project uses a different hook manager (e.g. `lefthook`, `simple-git-hooks`); `/pair-capability-setup-gates` reads this override before provisioning.
 - **Pre-merge tiering**: `disabled` (default) — every PR runs the full pre-merge check suite. Set to `enabled` to opt into risk-tier-scoped pre-merge checks (lighter checks on lower-risk PRs) per [tier-aware-pipeline.md](../../knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md); `/pair-capability-setup-gates` reads this flag before generating the pipeline.
 - **Review enforcement**: `disabled` (default) — the pair review **runs and publishes its verdict**, but nothing it says blocks a merge: `pair-review` and `pair-explicit-approval` are not required status checks, and the 🔴 explicit-approval rule is advisory. Set to `enabled` to make them required and the rule binding, per [pr-states.md](../../knowledge/guidelines/collaboration/project-management-tool/pr-states.md); `/pair-capability-setup-gates` reads this flag before touching branch protection, and `/pair-process-bootstrap` asks for it when no decision exists. Disabled is the default deliberately: a review that blocks by default turns a first install into a repository nobody can merge into — on a single-maintainer repo the 🔴 non-author approval is unobtainable outright. The tier requirements themselves (reviewer count, SLA, checklist depth, whether 🔴 needs explicit approval) are redefinable in this file; that the review **runs** is not.
@@ -42,7 +42,7 @@ Custom gates run **after** the standard gates (Lint, Type Check, Test). Add rows
 
 | Order | Gate       | Command             | Scope Key  | Required | Description                  |
 | ----- | ---------- | ------------------- | ---------- | -------- | ---------------------------- |
-| 1     | Formatting | `pnpm prettier:fix` | formatting | No       | Prettier auto-fix and verify |
+| 1     | Formatting | `pnpm format:check` | formatting | No       | Check formatting; `pnpm format` writes, deliberately outside the gate |
 
 ## Merge Strategy
 
