@@ -331,12 +331,16 @@ export interface BootstrapSkillFile {
  * - **Frontmatter present and self-consistent** — `name` equals the directory
  *   name (the invocable name IS the directory here, since no install transform
  *   renames it), plus a non-empty `description` and a `version`.
- * - **No knowledge-base reference.** The load-bearing property: a bootstrap skill
- *   runs BEFORE the knowledge base exists in the project, and on this channel the
- *   only KB within reach would be pair's own. A `.pair/knowledge/` link here is
- *   either dangling or answering from the wrong project — and it is exactly the
+ * - **No knowledge-base or adoption LINK.** The load-bearing property: a bootstrap
+ *   skill runs BEFORE the knowledge base exists in the project, and its own payload
+ *   lives in the plugin cache — so a relative link out of it resolves to pair's KB or
+ *   to nothing. Either way it answers for the wrong project, and it is exactly the
  *   kind of edit that looks harmless in review.
- * - **No adoption-file reference**, for the same reason.
+ *
+ *   Note what is NOT banned, deliberately: reading the project's `.pair/llms.txt` at
+ *   runtime, relative to the working directory, after checking it exists. That is the
+ *   user's own installed KB and is how the assistant answers project questions. This
+ *   guard matches LINK TARGETS precisely so that the useful half stays legal.
  *
  * `files` is injected, so the assertion itself stays filesystem-free.
  */

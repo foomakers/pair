@@ -15,8 +15,8 @@ pair reaches your project through **one** mechanism: the CLI writes the knowledg
 
 | Step | Command | What it does |
 |------|---------|--------------|
-| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` → `/plugin install pair@pair` | Installs one skill: `/pair-capability-setup-cli` |
-| **Bootstrap** | `/pair-capability-setup-cli` | Installs `pair-cli` (locally when your project has a `package.json`, otherwise via `npx`), creates the git repository if there is none, then runs the CLI |
+| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` → `/plugin install pair@pair` | Installs one skill: `/pair-assistant` |
+| **Assistant** | `/pair-assistant` | **Sets pair up when it is missing** — installs `pair-cli` (locally when your project has a `package.json`, otherwise via `npx`), creates the git repository if there is none, runs the install. **Then stays useful**: it turns a request into the right CLI command, and answers questions about your project from your own `.pair/llms.txt` |
 | **CLI** (tool-agnostic) | `pair-cli install` / `pair-cli update` | Writes `.pair/` (knowledge base + adoption files) and `.claude/skills/` — also what you run directly if you skip the marketplace, or if you use Cursor, Windsurf or Copilot |
 
 You are not choosing between two copies of the catalog: the marketplace never ships it. That is what makes the two safe to have installed at once — see below.
@@ -31,8 +31,10 @@ You are not choosing between two copies of the catalog: the marketplace never sh
 /plugin install pair@pair
 
 # 3. run it in the project you want pair in
-/pair-capability-setup-cli
+/pair-assistant
 ```
+
+After setup it keeps its job: ask it to update the KB, check which version you are on, validate your config or scaffold an external KB, and it picks the command — reading `pair-cli --help` rather than a list baked into the skill, so it cannot recommend a flag your installed version does not have. Ask it how your project does something, and it reads your `.pair/llms.txt` and answers from **your** knowledge base, naming the file it used.
 
 The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair repository. Its one entry's `source` points at `packages/knowledge-hub/dataset/plugin`, which is therefore the **plugin root**: it holds `.claude-plugin/plugin.json` (where Claude Code looks) next to the `skills/` directory that manifest declares. `claude plugin details pair@pair` reports `Skills (1)`, `Agents (0)`, `Hooks (0)`, `MCP servers (0)`, `LSP servers (0)`.
 
@@ -42,7 +44,7 @@ A guard in the pair repository allowlists the keys each manifest may declare (th
 
 <Callout type="info">
   **Keeping both installed is fine here.** The plugin declares exactly one skill,
-  `pair-capability-setup-cli`, and the CLI never installs that one into your project — it is
+  `pair-assistant`, and the CLI never installs that one into your project — it is
   authored outside the distributed corpus precisely so it cannot travel through the CLI. So no skill
   name resolves from two sources, and the ambiguity that used to make "pick one channel" a rule
   simply has no subject. Keep the plugin if you want the bootstrap available for the next project;

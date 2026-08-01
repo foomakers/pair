@@ -80,7 +80,7 @@ describe('.claude-plugin marketplace + plugin manifests (real repo)', () => {
     expect(() => assertSkillCatalogInSync(declared, expected)).not.toThrow()
     // Sanity: the expected set really is derived from disk, not an empty list.
     expect(expected.length).toBeGreaterThan(0)
-    expect(expected).toContain(`${SKILL_PATH_PREFIX}pair-capability-setup-cli`)
+    expect(expected).toContain(`${SKILL_PATH_PREFIX}pair-assistant`)
   })
 
   it('ships the bootstrap corpus ONLY — the distributed catalog travels via the CLI', () => {
@@ -338,14 +338,8 @@ describe('assertSkillCatalogInSync — drift injection', () => {
 
 describe('expectedPluginSkillPaths — derived from the bootstrap corpus, never hardcoded', () => {
   it('prefixes each bootstrap skill dir and sorts', () => {
-    const paths = expectedPluginSkillPaths([
-      'pair-capability-setup-cli',
-      'pair-capability-another-bootstrap',
-    ])
-    expect(paths).toEqual([
-      './skills/pair-capability-another-bootstrap',
-      './skills/pair-capability-setup-cli',
-    ])
+    const paths = expectedPluginSkillPaths(['pair-assistant', 'pair-another-bootstrap'])
+    expect(paths).toEqual(['./skills/pair-another-bootstrap', './skills/pair-assistant'])
   })
 
   it('is empty for an empty corpus, so the catalog guard cannot pass vacuously', () => {

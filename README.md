@@ -25,10 +25,10 @@ This installs the pair Knowledge Base into your project. Your AI assistant reads
 ```text
 /plugin marketplace add foomakers/pair
 /plugin install pair@pair
-/pair-capability-setup-cli
+/pair-assistant
 ```
 
-The plugin ships **one** skill, which installs `pair-cli` and runs it, so your project ends up with exactly the tree the command above produces. See [Install Channels](https://pair.foomakers.com/docs/integrations/claude-code#install-channels).
+The plugin ships **one** skill: an assistant that installs `pair-cli` and runs it — so your project ends up with exactly the tree the command above produces — and then keeps helping you drive the CLI and answer questions from your own knowledge base. See [Install Channels](https://pair.foomakers.com/docs/integrations/claude-code#install-channels).
 
 ## What You Get
 
