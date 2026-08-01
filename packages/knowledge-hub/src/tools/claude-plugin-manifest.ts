@@ -369,10 +369,7 @@ export function assertBootstrapSkillsValid(files: BootstrapSkillFile[]): void {
     )
   }
 
-  const problems = files.flatMap(file => [
-    ...frontmatterProblems(file),
-    ...isolationProblems(file),
-  ])
+  const problems = files.flatMap(file => [...frontmatterProblems(file), ...isolationProblems(file)])
 
   if (problems.length > 0) {
     fail(
