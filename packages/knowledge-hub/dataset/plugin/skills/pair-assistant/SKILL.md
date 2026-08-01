@@ -43,9 +43,36 @@ Then ask, presenting both outcomes concretely:
 > Which would you like? (1 is safe and reversible; 2 takes longer and asks you questions.)
 
 - **Option 1** → continue with Setup and stop there, saying what was written.
-- **Option 2** → run Setup first (the guided pass needs the knowledge base it installs), then hand off to `/pair-process-bootstrap`, which owns the adoption checklist. Do not improvise that flow here: it is a real skill with its own steps, and it is in the catalogue the install just put in the project.
+- **Option 2** → run Setup first (the adoption pass needs the knowledge base it installs), then hand off to `/pair-process-bootstrap` **with the project's context** (below). Do not improvise that flow here: it is a real skill with its own phases, and it arrives with the install.
 
 If the user does not answer, do **option 1**. Installing files is recoverable; a half-finished adoption pass that leaves the project described wrongly is worse than one not started.
+
+#### Handing bootstrap the project's context — fewer questions, faster
+
+On an existing project the interview should be short, because most answers are already visible in the repository. Two facts about `/pair-process-bootstrap` make that cheap, and both mean **you do not build a detector here**:
+
+- It **already reads project state** for the tech stack — only an *undetectable* stack (nothing to read) is asked.
+- It **already resumes**: each phase checks whether its output exists and skips it, so nothing completed is redone.
+
+So your job is to hand over the evidence you have and let it skip work, not to re-derive what it derives better. Collect only what is cheap and unambiguous — you ran most of it in the preflight:
+
+```bash
+ls pnpm-lock.yaml yarn.lock package-lock.json bun.lockb 2>/dev/null   # package manager
+git remote -v                                                         # code host
+ls .github/workflows .gitlab-ci.yml azure-pipelines.yml 2>/dev/null   # existing CI
+```
+
+State those findings in the handoff, as evidence rather than as decisions — a question whose answer is already on disk does not need to be asked. Leave the deeper reading to the skills that own it: `/pair-capability-assess-stack` for the stack, `/pair-capability-setup-gates` for gates. Do not summarise their job into a guess of your own.
+
+**Which depth to propose.** Bootstrap has two: `guided` (its default — it asks, each question pre-filled) and `$mode: quick` (same resolved values, taken as-is instead of confirmed).
+
+Read that difference precisely, because it decides the recommendation: **both depths resolve each value through the same cascade** — explicit argument, then **project state**, then a previously recorded decision, then a KB fallback. Quick does not mean "use pair's defaults"; it means "do not stop to confirm". On an existing project most values therefore come from the repository in either depth: the stack from `package.json` and lockfiles, the test runner from the resolved stack, the AI tooling from `.claude/` or `AGENTS.md`, the categorization from PRD signals.
+
+- **Existing project, and the user wants it done** → `$mode: quick` is the right suggestion, and the honest way to describe it is "it reads your project and does not stop to ask", not "it guesses".
+- **Existing project, and the user wants to see each decision** → guided, with the evidence above so each question arrives already answered.
+- **Where the repository genuinely cannot tell** — architecture style, infrastructure, observability — quick fills from the KB fallback. Say which sections those are when you propose it, so the user knows exactly which values arrived without evidence and can correct those files first.
+
+Either way, tell the user **what to expect before it starts**: which questions remain, which phases will be skipped because their output already exists, and that re-invoking bootstrap resumes rather than restarting.
 
 ## What this skill may and may not reference
 
