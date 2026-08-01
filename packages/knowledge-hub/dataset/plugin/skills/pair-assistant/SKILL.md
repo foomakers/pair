@@ -15,7 +15,8 @@ One entry point for two jobs: **get pair into this project** when it is not ther
 git rev-parse --is-inside-work-tree 2>/dev/null   # is this a repository?
 ls package.json 2>/dev/null                        # local install possible?
 ls .pair/llms.txt 2>/dev/null                      # is pair installed here?
-npx pair-cli --version 2>/dev/null                 # is the CLI reachable?
+ls node_modules/.bin/pair-cli 2>/dev/null           # CLI installed locally?
+command -v pair-cli 2>/dev/null                    # CLI on PATH?
 git ls-files | head -50                            # is there already a codebase here?
 ```
 
@@ -27,18 +28,36 @@ git ls-files | head -50                            # is there already a codebase
 
 Say which branch you took and why. A user who cannot tell whether you are installing or operating has to guess what you are about to change.
 
+### Never run a bare `npx pair-cli`
+
+**An unscoped `pair-cli` package exists on npm and is not ours** (`pair-cli@0.1.0`, a third party; pair publishes `@foomakers/pair-cli`). So `npx pair-cli …` on a machine with no local binary fetches and executes a stranger's package — and a `2>/dev/null` would hide npx's own notice that it is doing so. Two rules, no exceptions:
+
+- To run the **project's** binary: `npx --no pair-cli …`. `--no` refuses to fetch anything, so it either runs the local install or fails naming what it would have downloaded.
+- To run **ours without installing**: name it in full, `npx @foomakers/pair-cli …`.
+
+Detect the CLI by looking for the binary (above), never by invoking it.
+
 ### Step 0b — An existing project: ask before writing anything
 
 Adopting pair into a project that already exists is not the same as starting one with it. The project already has a stack, conventions and a way of working; pair's value there is that its adoption files **describe that reality**, not that they arrive as blank templates. So do not decide for the user.
 
-First, the reassurance they will want, because it is a fact and not a promise: **installing cannot overwrite adoption files you already have.** The adoption layer is installed with `add` behaviour — new files only, existing ones untouched. The knowledge base and the skill catalog are refreshed; your decisions are not.
+First, tell them exactly what install touches, because one part of it **does** overwrite and they must know before they answer:
+
+- **Your adoption decisions are safe.** `.pair/adoption/**` installs with `add` behaviour — new files only, existing ones untouched.
+- **`CLAUDE.md` and `AGENTS.md` are REPLACED.** They are targets of a mirrored registry and the copy is unconditional. If this project has its own — very likely — it will be overwritten. Say so, and offer to save a copy first (`cp CLAUDE.md CLAUDE.md.bak`) or to stop.
+- **`.pair/knowledge/**` and `.github/**` are mirrored** — replaced, and files no longer in the source are deleted.
+- `.claude/skills/**` is overwritten in place, without deleting.
+
+Do not compress this into "nothing you have is overwritten". That sentence was in an earlier draft of this skill and it was false.
 
 Then ask, presenting both outcomes concretely:
 
 > This project already has code. I can do either of these:
 >
-> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog). Nothing you already have is overwritten. You end up with pair's standards available, and adoption files still to fill in.
-> 2. **Install pair and adopt this project into it** — the same install, then a guided pass that fills the adoption files from what this project *already is*: its tech stack, its architecture, its way of working, its quality gates. That is the difference between having pair's defaults and having *your* project described in pair's terms — which is what every process skill then reads.
+> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog), and replaces `CLAUDE.md`/`AGENTS.md` as noted above. You end up with pair's standards available, and adoption files still to fill in.
+> 2. **Install pair and adopt this project into it** — the same install, then a pass that describes this project in pair's terms: its tech stack, its architecture, its way of working, its quality gates. That is the difference between having pair's defaults and having *your* project on record — which is what every process skill then reads.
+>
+>    One thing to know, because it decides whether option 2 does anything: install writes the adoption files **already populated with pair's own choices**, and the adoption pass skips a section whose file is already populated. So it will not silently rewrite them — where a section already says something, you and I have to change it deliberately. I will show you which sections those are before touching any.
 >
 > Which would you like? (1 is safe and reversible; 2 takes longer and asks you questions.)
 
@@ -68,7 +87,7 @@ State those findings in the handoff, as evidence rather than as decisions — a 
 
 Read that difference precisely, because it decides the recommendation: **both depths resolve each value through the same cascade** — explicit argument, then **project state**, then a previously recorded decision, then a KB fallback. Quick does not mean "use pair's defaults"; it means "do not stop to confirm". On an existing project most values therefore come from the repository in either depth: the stack from `package.json` and lockfiles, the test runner from the resolved stack, the AI tooling from `.claude/` or `AGENTS.md`, the categorization from PRD signals.
 
-- **Existing project, and the user wants it done** → `$mode: quick` is the right suggestion, and the honest way to describe it is "it reads your project and does not stop to ask", not "it guesses".
+- **Existing project, and the user wants it done** → `$mode: quick` is the right suggestion, and the honest way to describe it is "it reads your project and does not stop to confirm", not "it guesses" — **and not "it asks nothing"**. Three things stay asked even in quick, and the first is blocking: a **missing or template PRD** starts an interactive authoring session (`/pair-process-specify-prd`) and HALTs if the PRD is still absent; the **PM tool** and an **undetectable tech stack** have no safe default and are asked or reported. Say those up front, or "minutes" becomes a promise you did not keep.
 - **Existing project, and the user wants to see each decision** → guided, with the evidence above so each question arrives already answered.
 - **Where the repository genuinely cannot tell** — architecture style, infrastructure, observability — quick fills from the KB fallback. Say which sections those are when you propose it, so the user knows exactly which values arrived without evidence and can correct those files first.
 
@@ -127,9 +146,9 @@ Three rules, each with a reason:
 ### Step 3 — Let the CLI produce the files
 
 ```bash
-# local mode — npx resolves the project's own binary first, so this is
-# manager-agnostic and needs no pnpm/yarn/npm exec variant
-npx pair-cli install
+# local mode — `--no` runs the project's own binary and refuses to fetch,
+# so a failed install cannot silently become a stranger's package
+npx --no pair-cli install
 
 # no-package.json mode — fetch and run without installing
 npx @foomakers/pair-cli install
@@ -156,8 +175,8 @@ Then point at the next step: `/pair-next` reads the project state and recommends
 **The CLI describes itself.** Do not carry a command reference in this file or in your head:
 
 ```bash
-npx pair-cli --help              # the command list, with one-line descriptions
-npx pair-cli <command> --help    # that command's options, exactly as shipped
+npx --no pair-cli --help         # the command list, with one-line descriptions
+npx --no pair-cli <command> --help  # that command's options, exactly as shipped
 ```
 
 Run the relevant `--help` **before** proposing a command with options. This file deliberately lists no flags: a flag list here would be a third copy of the CLI's surface (after the code and the published reference) with nothing keeping it honest — and the version installed in *this* project may differ from the one this file was written against.
@@ -205,7 +224,7 @@ If a request matches nothing here, go back to `--help` and to `llms.txt` and rea
 ### How to act
 
 1. **State the command and what it will change** before running it. Anything that writes into the user's repository is theirs to approve.
-2. **Prefer the project's own binary** (`npx pair-cli …`) over a fetched one, so the version matches the project.
+2. **Prefer the project's own binary** (`npx --no pair-cli …`) over a fetched one, so the version matches the project — and never a bare `npx pair-cli` (see above).
 3. **Report what the CLI printed**, including warnings. Never restate a failure as a success, and never summarise away a message that names a path.
 4. **Stop on the first failure** and show its output. Do not retry with different flags hoping one works.
 5. **Quote the project's own words** when answering from `llms.txt`, and name the file — so the user can check you, and correct the source rather than you.

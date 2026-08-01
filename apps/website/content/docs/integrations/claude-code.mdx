@@ -6,7 +6,7 @@ description: Set up pair with Claude Code — configure AGENTS.md, CLAUDE.md, th
 ## Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
-- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists) — required for the CLI channel, optional for the [marketplace channel](#install-channels)
+- A pair-enabled project (`pair-cli install` completed, `.pair/` directory exists) — required for the CLI channel, optional for the [marketplace channel](#install-channels)
 - Node.js 18+
 
 ## Install Channels
@@ -82,7 +82,7 @@ No version is pinned in the manifest, so an update always fetches the current bo
 <Callout type="info">
   **CLI channel only.** Everything from here to [Use Skills](#use-skills) — the project structure,
   `AGENTS.md`/`CLAUDE.md` generation, the `.claude/` directory, the bridge pattern — describes a
-  project set up with `pair-cli init`. On the marketplace channel none of it exists in your
+  project set up with `pair-cli install`. On the marketplace channel none of it exists in your
   repository: the skills and the knowledge base live in the plugin cache.
 </Callout>
 
@@ -109,7 +109,7 @@ your-project/
 
 ### AGENTS.md
 
-The universal bridge file. pair generates it during `pair-cli init`. It contains:
+The universal bridge file. pair generates it during `pair-cli install`. It contains:
 
 - Task selection algorithm (which how-to guide to follow)
 - Essential commands (`pnpm install`, `pnpm test`, `pnpm lint`)
@@ -196,7 +196,7 @@ For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
 
 ### Skill Discovery
 
-Claude Code discovers skills in `.claude/skills/`. pair installs skills there during `pair-cli init` or `pair-cli update`. Each skill is a `SKILL.md` file that Claude Code reads when you invoke the corresponding slash command.
+Claude Code discovers skills in `.claude/skills/`. pair installs skills there during `pair-cli install` or `pair-cli update`. Each skill is a `SKILL.md` file that Claude Code reads when you invoke the corresponding slash command.
 
 Skills are installed through the **transform pipeline** — the KB source uses a category structure (`.skills/process/implement/`) which gets flattened and prefixed:
 
@@ -207,7 +207,7 @@ Prefix:       process-implement → pair-process-implement
 Installed:    .claude/skills/pair-process-implement/SKILL.md
 ```
 
-This happens automatically during `pair-cli init` and `pair-cli update`.
+This happens automatically during `pair-cli install` and `pair-cli update`.
 
 ## Workflow Tips
 
@@ -236,7 +236,7 @@ Open Claude Code in your pair-enabled project and run:
 /pair-next
 ```
 
-**Expected output**: Claude Code reads your adoption files and suggests the next action (e.g., "Story #42 is refined and ready — run `/pair-process-implement #42`"). If it can't find `.pair/`, check that `pair-cli init` completed successfully.
+**Expected output**: Claude Code reads your adoption files and suggests the next action (e.g., "Story #42 is refined and ready — run `/pair-process-implement #42`"). If it can't find `.pair/`, check that `pair-cli install` completed successfully.
 
 ## Related
 

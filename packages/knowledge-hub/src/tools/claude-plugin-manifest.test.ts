@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import { readdirSync } from 'fs'
 import { parseFrontmatter } from './skills-conformance-check'
@@ -35,11 +35,19 @@ const BOOTSTRAP_SKILLS = join(PLUGIN_ROOT, 'skills')
 /** True when `relPath` (a `./`-prefixed PLUGIN-root-relative dir) holds a SKILL.md. */
 const hasSkillMd = (relPath: string): boolean => existsSync(join(PLUGIN_ROOT, relPath, 'SKILL.md'))
 
-/** The bootstrap skill dirs on disk — the expected catalog's only source. */
+/**
+ * The bootstrap skill dirs on disk — the expected catalog's only source.
+ *
+ * `statSync`, not `Dirent.isDirectory()`: a Dirent for a SYMLINK reports false, so a
+ * symlinked skill directory would be invisible to both this guard and
+ * `assertBootstrapSkillsValid` while Claude Code loads it anyway. Since `skills` is
+ * exempt from the root-payload check at this plugin root, this discovery is the only
+ * compensating control — and the ADL's Alternatives records a symlinked
+ * `plugin/skills/*` as a shape somebody already considered.
+ */
 const bootstrapSkillDirs = (): string[] =>
-  readdirSync(BOOTSTRAP_SKILLS, { withFileTypes: true })
-    .filter(entry => entry.isDirectory())
-    .map(entry => entry.name)
+  readdirSync(BOOTSTRAP_SKILLS)
+    .filter(name => statSync(join(BOOTSTRAP_SKILLS, name)).isDirectory())
     .sort()
 
 /** Runs `fn`, expecting it to throw, and returns the thrown Error's message. */

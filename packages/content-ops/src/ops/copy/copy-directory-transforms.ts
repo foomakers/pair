@@ -45,7 +45,6 @@ async function collectFiles(
 }
 
 /**
-/**
  * The source files this copy will actually install: collected, then stripped of
  * every excluded entry.
  *

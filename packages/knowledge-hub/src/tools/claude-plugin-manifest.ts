@@ -253,7 +253,7 @@ export function expectedPluginSkillPaths(skillDirs: string[]): string[] {
 }
 
 /**
- * Asserts the hand-maintained catalog equals the dataset-derived one. Throws
+ * Asserts the hand-maintained catalog equals the one derived from the bootstrap corpus. Throws
  * naming every missing entry (skill added to the KB, manifest not updated) and
  * every stale entry (skill renamed/removed, manifest not updated), together
  * with the file to edit — the automatic backstop for AC3's manual process.
@@ -313,6 +313,23 @@ export function assertDeclaredSkillsResolve(
   }
 }
 
+/**
+ * Just the fenced code blocks of a markdown document, concatenated — the part an agent
+ * executes rather than reads. Used to scope the escape-path check away from prose.
+ */
+function fencedBlocks(markdown: string): string {
+  const out: string[] = []
+  let open = false
+  for (const line of markdown.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      open = !open
+      continue
+    }
+    if (open) out.push(line)
+  }
+  return out.join('\n')
+}
+
 /** A bootstrap skill as read from disk: its directory name and its SKILL.md text. */
 export interface BootstrapSkillFile {
   dir: string
@@ -364,7 +381,9 @@ export function assertBootstrapSkillsValid(files: BootstrapSkillFile[]): void {
     if (!/^version:\s*\d+\.\d+\.\d+\s*$/m.test(content)) {
       problems.push(`${dir}: frontmatter needs a semver version`)
     }
-    // LINK TARGETS, not mentions: the skill legitimately explains its own isolation
+    // Two checks, because the promise is wider than a markdown link.
+    //
+    // (a) LINK TARGETS, not mentions: the skill legitimately explains its own isolation
     // in prose ("every other pair skill links into `.pair/knowledge/**`"), and a
     // substring match would redden on the sentence documenting the rule it obeys —
     // the false-positive shape that gets a guard disabled.
@@ -374,6 +393,27 @@ export function assertBootstrapSkillsValid(files: BootstrapSkillFile[]): void {
         `${dir}: links to ${link[1]} — a bootstrap skill must be ISOLATED, since it runs before ` +
           `the knowledge base exists in the project and the only one within reach on this ` +
           `channel is pair's own. State what it needs inline instead of linking.`,
+      )
+    }
+
+    // (b) A SKILL-RELATIVE ESCAPE inside a FENCED BLOCK — the commands an agent runs,
+    // which (a) does not see. `../…/.pair/knowledge/…` is the shape that resolves into
+    // the plugin cache; a bare `.pair/llms.txt` is cwd-relative, reads the USER's
+    // project, and is exactly what this skill is for, so only the `../` form is rejected.
+    //
+    // Scoped to fenced blocks and link targets rather than the whole file ON PURPOSE, and
+    // not from caution: the "anywhere" version was written first and it reddened on this
+    // very skill, which quotes the forbidden shape in prose to explain what is forbidden.
+    // A guard that fails on the sentence stating its own rule is the shape that gets
+    // guards disabled. Prose is exposition; a fence is an instruction.
+    const escape = /(?:\.\.\/)+[^\s)`'"]*\.pair\/(?:knowledge|adoption)/.exec(
+      fencedBlocks(content),
+    )
+    if (escape) {
+      problems.push(
+        `${dir}: contains the skill-relative path '${escape[0]}' — a '../' escape resolves ` +
+          `INSIDE the plugin cache, i.e. against pair's own knowledge base rather than the ` +
+          `user's project. Read the project's files relative to the working directory instead.`,
       )
     }
   }
@@ -444,7 +484,7 @@ export const ALLOWED_PLUGIN_MANIFEST_KEYS = [...PLUGIN_METADATA_KEYS, 'skills'] 
  * `plugin.json`'s catalog, and {@link assertSkillCatalogInSync} reads
  * `plugin.json` only. One hand-added key would therefore void the catalog guard
  * (verified: an entry-level `"skills": ["./.claude/skills/agent-browser"]`
- * installs as a 1-skill plugin instead of 40, with `claude plugin validate` and
+ * replaces the plugin's whole catalog with that one entry, with `claude plugin validate` and
  * every other guard still passing).
  */
 export const ALLOWED_MARKETPLACE_ENTRY_KEYS = [
@@ -469,7 +509,7 @@ export const ALLOWED_MARKETPLACE_ENTRY_KEYS = [
  * `metadata` is permitted for its descriptive fields only; its `pluginRoot`
  * sub-key is rejected separately by {@link assertSkillsOnlyDistribution} because
  * it relocates the base path of relative plugin sources, i.e. silently changes
- * what payload ships from under `source: "./"` (ADL Decision 1's invariant).
+ * which directory ships as the payload from under the entry's `source` (ADL Decision 1).
  */
 export const ALLOWED_MARKETPLACE_MANIFEST_KEYS = [
   '$schema',
@@ -550,7 +590,7 @@ export function assertSkillsOnlyDistribution(
       : ''
   const pluginRootNote = nested.includes('metadata.pluginRoot')
     ? ` "metadata.pluginRoot" rebases relative plugin sources, so it silently changes which ` +
-      `directory ships as the plugin payload from under source: "./".`
+      `directory ships as the plugin payload from under the entry's source.`
     : ''
   fail(
     `${label} declares ${offending.map(k => `"${k}"`).join(', ')}: pair distributes skills only — ` +
