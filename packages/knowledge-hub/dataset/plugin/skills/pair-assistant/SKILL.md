@@ -170,7 +170,8 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | broken links in installed KB content fixed | `update-link` | validates and updates links |
 | their registry config validated | `validate-config` | asset registries + KB structure |
 | to know this project's standards, process or decisions | `.pair/llms.txt` → the file it points to | never answer from memory when the project has its own record |
-| to know what to work on next | `/pair-next` | it reads adoption files and PM state; do not reimplement it here |
+| to know what to work on next | `/pair-next` | invoke it — it reads adoption files and PM state; never reimplement it here |
+| anything a catalogue skill owns (refine, plan, implement, review, gates) | that skill, by bare name | see step 6, including the adoption precondition |
 
 If a request matches nothing here, go back to `--help` and to `llms.txt` and reason from what is actually there. If it matches nothing in either, say so plainly instead of inventing a flag or a rule.
 
@@ -182,11 +183,41 @@ If a request matches nothing here, go back to `--help` and to `llms.txt` and rea
 4. **Stop on the first failure** and show its output. Do not retry with different flags hoping one works.
 5. **Quote the project's own words** when answering from `llms.txt`, and name the file — so the user can check you, and correct the source rather than you.
 
+## Step 6 — Run the CLI, and invoke the installed skills
+
+This assistant **executes**; it does not only advise. Two things it may drive:
+
+**The CLI.** State the command and what it will change, run it, report what it printed. Anything that writes into the user's repository is theirs to approve first.
+
+**The installed skills.** After setup, the project's `.claude/skills/` holds the full catalogue, and those skills are invoked by their bare `/pair-…` name — the same way the corpus composes internally. Prefer delegating to a skill over doing its job here: it carries the steps, the gates and the templates that this file deliberately does not.
+
+```bash
+ls .claude/skills/            # what this project actually has, at this version
+```
+
+Discover the catalogue that way rather than from a list written here — the same reason the CLI's flags are not written here. The names change; `ls` does not go stale.
+
+**Why the dispatch is unambiguous.** This assistant exists only in the plugin; the catalogue exists only in the project. So every bare name has exactly one source: `/pair-assistant` resolves to the plugin, `/pair-next` and the rest resolve to the project. That is a property of the packaging (the CLI never installs this skill), not a coincidence to rely on loosely.
+
+### Check the precondition before delegating
+
+**A skill that reads adoption files needs adoption files that are the project's.** Right after `install`, `.pair/adoption/` holds what pair shipped — its structure, and in places pair's own concrete choices, such as a quality-gate table naming specific commands. Those are defaults, **not this project's decisions**, until someone fills them in.
+
+So before invoking an adoption-dependent skill (anything that resolves the PM tool, the risk matrix, the coverage baseline, the tech stack — `/pair-capability-write-issue`, `/pair-process-review`, `/pair-capability-verify-quality`, `/pair-capability-record-decision`, and the process skills composing them), check whether the adoption pass has actually been done:
+
+```bash
+cat .pair/adoption/tech/way-of-working.md   # does this describe THIS project?
+```
+
+If it still reads as pair's defaults, say so and offer the adoption pass (`/pair-process-bootstrap`) first. Do not invoke the skill and let it act on a decision the project never made — that is the same failure this channel was redesigned to remove, arriving by a different route.
+
+Skills that only read the knowledge base — the guidelines, the how-to guides — have no such precondition and can be invoked immediately.
+
 ### What this skill does not do
 
 - It does not configure a PM tool, quality gates, or any adoption decision — those are their own skills, and they need the knowledge base this one installs.
 - It does not write the knowledge base or adoption files. The CLI writes the KB; other skills own their content.
-- It does not replace the catalog. Once pair is installed the process skills are there — this assistant points at them rather than reimplementing them.
+- It does not replace the catalogue. Once pair is installed the process skills are there — this assistant **invokes** them (step 6) rather than reimplementing their steps.
 - It does not uninstall the plugin for you. Removing a plugin from the user's Claude Code installation is theirs to run, not a side effect of a setup step.
 
 ## Idempotence
