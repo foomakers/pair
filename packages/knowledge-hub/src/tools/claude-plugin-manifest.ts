@@ -369,54 +369,10 @@ export function assertBootstrapSkillsValid(files: BootstrapSkillFile[]): void {
     )
   }
 
-  const problems: string[] = []
-  for (const { dir, content } of files) {
-    const name = /^name:\s*(.+?)\s*$/m.exec(content)?.[1]
-    if (name !== dir) {
-      problems.push(`${dir}: frontmatter name is ${JSON.stringify(name ?? null)}, expected ${dir}`)
-    }
-    if (!/^description:\s*"[^"]/m.test(content)) {
-      problems.push(`${dir}: frontmatter needs a non-empty quoted description`)
-    }
-    if (!/^version:\s*\d+\.\d+\.\d+\s*$/m.test(content)) {
-      problems.push(`${dir}: frontmatter needs a semver version`)
-    }
-    // Two checks, because the promise is wider than a markdown link.
-    //
-    // (a) LINK TARGETS, not mentions: the skill legitimately explains its own isolation
-    // in prose ("every other pair skill links into `.pair/knowledge/**`"), and a
-    // substring match would redden on the sentence documenting the rule it obeys —
-    // the false-positive shape that gets a guard disabled.
-    const link = /\]\(([^)]*\.pair\/(?:knowledge|adoption)[^)]*)\)/.exec(content)
-    if (link) {
-      problems.push(
-        `${dir}: links to ${link[1]} — a bootstrap skill must be ISOLATED, since it runs before ` +
-          `the knowledge base exists in the project and the only one within reach on this ` +
-          `channel is pair's own. State what it needs inline instead of linking.`,
-      )
-    }
-
-    // (b) A SKILL-RELATIVE ESCAPE inside a FENCED BLOCK — the commands an agent runs,
-    // which (a) does not see. `../…/.pair/knowledge/…` is the shape that resolves into
-    // the plugin cache; a bare `.pair/llms.txt` is cwd-relative, reads the USER's
-    // project, and is exactly what this skill is for, so only the `../` form is rejected.
-    //
-    // Scoped to fenced blocks and link targets rather than the whole file ON PURPOSE, and
-    // not from caution: the "anywhere" version was written first and it reddened on this
-    // very skill, which quotes the forbidden shape in prose to explain what is forbidden.
-    // A guard that fails on the sentence stating its own rule is the shape that gets
-    // guards disabled. Prose is exposition; a fence is an instruction.
-    const escape = /(?:\.\.\/)+[^\s)`'"]*\.pair\/(?:knowledge|adoption)/.exec(
-      fencedBlocks(content),
-    )
-    if (escape) {
-      problems.push(
-        `${dir}: contains the skill-relative path '${escape[0]}' — a '../' escape resolves ` +
-          `INSIDE the plugin cache, i.e. against pair's own knowledge base rather than the ` +
-          `user's project. Read the project's files relative to the working directory instead.`,
-      )
-    }
-  }
+  const problems = files.flatMap(file => [
+    ...frontmatterProblems(file),
+    ...isolationProblems(file),
+  ])
 
   if (problems.length > 0) {
     fail(
@@ -424,6 +380,64 @@ export function assertBootstrapSkillsValid(files: BootstrapSkillFile[]): void {
         problems.map(p => `    - ${p}`).join('\n'),
     )
   }
+}
+
+/**
+ * Frontmatter self-consistency. `name` must equal the DIRECTORY: these skills are
+ * authored, so no install transform assigns the invocable name, and the directory is
+ * the only other place it appears.
+ */
+function frontmatterProblems({ dir, content }: BootstrapSkillFile): string[] {
+  const problems: string[] = []
+  const name = /^name:\s*(.+?)\s*$/m.exec(content)?.[1]
+  if (name !== dir) {
+    problems.push(`${dir}: frontmatter name is ${JSON.stringify(name ?? null)}, expected ${dir}`)
+  }
+  if (!/^description:\s*"[^"]/m.test(content)) {
+    problems.push(`${dir}: frontmatter needs a non-empty quoted description`)
+  }
+  if (!/^version:\s*\d+\.\d+\.\d+\s*$/m.test(content)) {
+    problems.push(`${dir}: frontmatter needs a semver version`)
+  }
+  return problems
+}
+
+/**
+ * The isolation invariant, in two checks, because the promise is wider than a link.
+ *
+ * (a) LINK TARGETS, not mentions: the skill legitimately explains its own isolation in
+ * prose ("every other pair skill links into `.pair/knowledge/**`"), and a substring
+ * match would redden on the sentence documenting the rule it obeys — the false-positive
+ * shape that gets a guard disabled.
+ *
+ * (b) A SKILL-RELATIVE ESCAPE inside a FENCED BLOCK — the commands an agent runs, which
+ * (a) does not see. `../…/.pair/knowledge/…` resolves into the plugin cache; a bare
+ * `.pair/llms.txt` is cwd-relative, reads the USER's project, and is exactly what this
+ * skill is for, so only the `../` form is rejected. Scoped to fences ON PURPOSE, and not
+ * from caution: the whole-file version was written first and it reddened on this very
+ * skill, which quotes the forbidden shape to explain what is forbidden. Prose is
+ * exposition; a fence is an instruction.
+ */
+function isolationProblems({ dir, content }: BootstrapSkillFile): string[] {
+  const problems: string[] = []
+  const link = /\]\(([^)]*\.pair\/(?:knowledge|adoption)[^)]*)\)/.exec(content)
+  if (link) {
+    problems.push(
+      `${dir}: links to ${link[1]} — a bootstrap skill must be ISOLATED, since it runs before ` +
+        `the knowledge base exists in the project and the only one within reach on this ` +
+        `channel is pair's own. State what it needs inline instead of linking.`,
+    )
+  }
+
+  const escape = /(?:\.\.\/)+[^\s)`'"]*\.pair\/(?:knowledge|adoption)/.exec(fencedBlocks(content))
+  if (escape) {
+    problems.push(
+      `${dir}: contains the skill-relative path '${escape[0]}' — a '../' escape resolves ` +
+        `INSIDE the plugin cache, i.e. against pair's own knowledge base rather than the ` +
+        `user's project. Read the project's files relative to the working directory instead.`,
+    )
+  }
+  return problems
 }
 
 /**
