@@ -16,14 +16,36 @@ git rev-parse --is-inside-work-tree 2>/dev/null   # is this a repository?
 ls package.json 2>/dev/null                        # local install possible?
 ls .pair/llms.txt 2>/dev/null                      # is pair installed here?
 npx pair-cli --version 2>/dev/null                 # is the CLI reachable?
+git ls-files | head -50                            # is there already a codebase here?
 ```
 
 | State | Go to |
 | --- | --- |
-| No `.pair/`, or no CLI reachable | **Setup** (steps 1–4) |
 | `.pair/` present and the CLI answers | **Assist** (step 5) |
+| No `.pair/`, and the repository is empty or nearly so | **Setup** (steps 1–4) — greenfield, just install |
+| No `.pair/`, but **there is already a codebase** | **Ask first** (step 0b), then Setup |
 
 Say which branch you took and why. A user who cannot tell whether you are installing or operating has to guess what you are about to change.
+
+### Step 0b — An existing project: ask before writing anything
+
+Adopting pair into a project that already exists is not the same as starting one with it. The project already has a stack, conventions and a way of working; pair's value there is that its adoption files **describe that reality**, not that they arrive as blank templates. So do not decide for the user.
+
+First, the reassurance they will want, because it is a fact and not a promise: **installing cannot overwrite adoption files you already have.** The adoption layer is installed with `add` behaviour — new files only, existing ones untouched. The knowledge base and the skill catalog are refreshed; your decisions are not.
+
+Then ask, presenting both outcomes concretely:
+
+> This project already has code. I can do either of these:
+>
+> 1. **Install pair only** — adds `.pair/` (knowledge base, adoption templates) and `.claude/skills/` (the skill catalog). Nothing you already have is overwritten. You end up with pair's standards available, and adoption files still to fill in.
+> 2. **Install pair and adopt this project into it** — the same install, then a guided pass that fills the adoption files from what this project *already is*: its tech stack, its architecture, its way of working, its quality gates. That is the difference between having pair's defaults and having *your* project described in pair's terms — which is what every process skill then reads.
+>
+> Which would you like? (1 is safe and reversible; 2 takes longer and asks you questions.)
+
+- **Option 1** → continue with Setup and stop there, saying what was written.
+- **Option 2** → run Setup first (the guided pass needs the knowledge base it installs), then hand off to `/pair-process-bootstrap`, which owns the adoption checklist. Do not improvise that flow here: it is a real skill with its own steps, and it is in the catalogue the install just put in the project.
+
+If the user does not answer, do **option 1**. Installing files is recoverable; a half-finished adoption pass that leaves the project described wrongly is worse than one not started.
 
 ## What this skill may and may not reference
 
@@ -120,6 +142,17 @@ cat .pair/llms.txt
 ```
 
 Use it whenever the request is about *how this project works* rather than about a CLI command — its testing strategy, its code-design rules, its way of working, which how-to covers a task. The answer then comes from the user's repository, so it is right for their project by construction, and it stays right when they change it.
+
+### Where the context comes from — and where it can be wrong
+
+Both sources have a known weak spot. Knowing them is what keeps an answer honest:
+
+- **`llms.txt` is an index, and nothing guards it.** No gate checks that it matches the knowledge base it describes (tracked as issue #416 in the pair repository). So treat it as a table of contents, never as the content: if a path it names does not exist, **do not give up and do not guess** — list `.pair/knowledge/` and find the file, and say that the index is stale so the user can regenerate it. Prefer what a file actually says over what the index says about it.
+- **The installed KB may be behind.** `kb-info` reports whether it is. When the answer to a question depends on a guideline, and the KB is behind, say so and offer `update` — an answer from a stale copy is still an answer about their project, but they should know which copy it came from.
+- **`--help` is authoritative about flags and silent about conventions.** It tells you what the CLI accepts, never what this project has decided. Never infer a project convention from a CLI option.
+- **This file can be older than both.** It ships with the plugin and updates only when the plugin does. If it disagrees with `--help` or with the project's own KB, they win — that is the whole reason neither is copied in here.
+
+Always name the file or command an answer came from. It lets the user correct the source instead of correcting you.
 
 ### Intent → where the answer lives
 
