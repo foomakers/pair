@@ -49,6 +49,20 @@ A guard in the pair repository allowlists the keys each manifest may declare (th
   remove it with `/plugin uninstall pair@pair` if you would rather not.
 </Callout>
 
+<Callout type="info">
+  **Cloning only what is needed.** The plugin *payload* is a few kilobytes, but adding the
+  marketplace from GitHub clones the repository to read `marketplace.json` and resolve the entry's
+  nested `source`. `marketplace add` takes `--sparse` for exactly this monorepo shape, so you can
+  limit the checkout to the two directories that matter:
+
+```bash
+/plugin marketplace add foomakers/pair --sparse .claude-plugin packages/knowledge-hub/dataset/plugin
+```
+
+  Measured with a local path instead of a GitHub source, the marketplace directory is 0 B — the path
+  is referenced in place — and the installed plugin cache is 12 KB.
+</Callout>
+
 Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`). Treat the cache as **disposable, not as storage**: `/plugin update` replaces it wholesale. Nothing you own lives there — the bootstrap skill writes into your repository, never into the cache.
 
 Update or remove the plugin with the standard Claude Code commands:
