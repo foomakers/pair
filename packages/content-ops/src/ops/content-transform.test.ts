@@ -90,6 +90,12 @@ describe('generated output ends with exactly one newline', () => {
   it('leaves a file that already ends in one newline alone', () => {
     expect(applyTransformCommands('# Doc\n\ncontent\n', 'claude')).toBe('# Doc\n\ncontent\n')
   })
+
+  // It trims, it never appends: content with no trailing newline is not this helper's
+  // business, and adding one changed what every target receives.
+  it('does NOT add a newline to content that has none', () => {
+    expect(applyTransformCommands('# Doc', 'claude')).toBe('# Doc')
+  })
 })
 
 describe('applyTransformCommands', () => {

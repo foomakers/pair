@@ -10,14 +10,17 @@ const MARKER_LINE_RE = /^<!-- @[\w]+-[\w]+-(?:start|end) -->\n?/gm
 const collapseBlankLines = (s: string): string => s.replace(/\n{3,}/g, '\n\n')
 
 /**
- * Exactly one trailing newline. `collapseBlankLines` cannot do this: a file left with a
- * single trailing blank line ends in `\n\n`, which is two newlines, not three or more.
+ * Trims EXTRA trailing newlines, and only those. `collapseBlankLines` cannot: a file left
+ * with a single trailing blank line ends in `\n\n`, which is two newlines, not three or
+ * more. Content that ends without a newline is left exactly as it is — an earlier version
+ * of this helper added one, which changed what `pair update` writes for every target and
+ * broke a test that pinned a fixture without a trailing newline.
  * A source whose LAST block is skipped always lands there — and the artifact then trips
  * `MD012/no-multiple-blanks` in the very repository that generated it (observed on
  * CLAUDE.md, whose source ends with `@claude-skip-end`: the generated file failed the
  * pre-push gate it is shipped alongside).
  */
-const normalizeEnding = (s: string): string => (s === '' ? s : s.replace(/\n*$/, '\n'))
+const normalizeEnding = (s: string): string => s.replace(/\n{2,}$/, '\n')
 
 const tidy = (s: string): string => normalizeEnding(collapseBlankLines(s))
 
