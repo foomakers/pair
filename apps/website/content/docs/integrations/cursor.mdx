@@ -6,12 +6,12 @@ description: Set up pair with Cursor — configure .cursor/rules, discover skill
 ## Prerequisites
 
 - [Cursor](https://cursor.com) installed
-- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists)
+- A pair-enabled project (`pair-cli install` completed, `.pair/` directory exists)
 - Node.js 18+
 
 ## Configure Agent File
 
-Cursor reads project-level rules from `.cursor/rules/` at the repository root. pair generates these bridge files during `pair-cli init`.
+Cursor reads project-level rules from `.cursor/rules/` at the repository root. pair generates these bridge files during `pair-cli install`.
 
 ### .cursor/rules/
 
@@ -82,7 +82,7 @@ Open Cursor in your pair-enabled project and ask:
 Read the pair rules in .cursor/rules/ and tell me what project I'm working on
 ```
 
-**Expected output**: Cursor reads the rules, follows the references to `.pair/adoption/`, and describes your project context (tech stack, architecture, current work items). If it can't find the rules, check that `pair-cli init` completed successfully.
+**Expected output**: Cursor reads the rules, follows the references to `.pair/adoption/`, and describes your project context (tech stack, architecture, current work items). If it can't find the rules, check that `pair-cli install` completed successfully.
 
 ## Related
 

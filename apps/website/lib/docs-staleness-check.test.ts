@@ -8,7 +8,7 @@ import {
   findDeadLinks,
   checkCatalogSync,
   checkCommandAnchors,
-  checkTutorialCommands,
+  checkDocsCommands,
   countHowToGuides,
   buildValidRoutes,
   runAllChecks,
@@ -201,15 +201,40 @@ describe('checkCommandAnchors', () => {
   })
 })
 
-describe('checkTutorialCommands', () => {
-  it('flags an unknown pair-cli command reference', () => {
-    expect(checkTutorialCommands(['run pair-cli bogus'], ['install'])).toHaveLength(1)
+describe('checkDocsCommands', () => {
+  const commands = ['install', 'update', 'kb-validate']
+  const doc = (content: string) => [{ rel: 'a.mdx', content }]
+
+  it('flags a command a doc tells the reader to run that does not exist', () => {
+    const errs = checkDocsCommands(doc('Run `pair-cli init` first.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli init')
   })
 
-  it('ignores builtins and prose words after pair-cli', () => {
-    expect(
-      checkTutorialCommands(['pair-cli --version', 'pair-cli is installed'], ['install']),
-    ).toHaveLength(0)
+  it('flags a hyphen-less subcommand (`kb validate`)', () => {
+    expect(checkDocsCommands(doc('```bash\npair-cli kb validate\n```'), commands)).toHaveLength(1)
+  })
+
+  it('passes a real command in a span and in a fence', () => {
+    expect(checkDocsCommands(doc('Run `pair-cli install`.'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\nnpx --no pair-cli update\n```'), commands)).toHaveLength(
+      0,
+    )
+  })
+
+  // The reason the rule is positional rather than a prose-word allow-list: these are
+  // English, and an earlier list-based version had to grow a word for each of them.
+  it('ignores "pair-cli" used as a noun in prose', () => {
+    const prose = 'Common pair-cli workflows, and the pair-cli version it invokes.'
+    expect(checkDocsCommands(doc(prose), commands)).toHaveLength(0)
+  })
+
+  it('ignores a version string printed as OUTPUT in a fence', () => {
+    expect(checkDocsCommands(doc('```text\npair-cli vX.Y.Z\n```'), commands)).toHaveLength(0)
+  })
+
+  it('ignores a flag, which is never a command name', () => {
+    expect(checkDocsCommands(doc('```bash\npair-cli --version\n```'), commands)).toHaveLength(0)
   })
 })
 

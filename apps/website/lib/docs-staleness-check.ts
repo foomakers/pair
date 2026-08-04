@@ -367,26 +367,67 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
   return errors
 }
 
-const CLI_BUILTINS = new Set(['--version', '--help'])
-const PROSE_WORDS = new Set(['as', 'is', 'on', 'to', 'installed', 'and', 'or', 'in', 'for', 'the'])
+/**
+ * A `pair-cli <word>` INVOCATION, as opposed to the words "pair-cli" in a sentence.
+ *
+ * Positional, deliberately, and not a list of prose words to keep extending: `pair-cli`
+ * counts as an invocation only at the start of an inline code span or of a fenced line,
+ * optionally behind `$ ` or `npx [--no] <pkg>`. That is what separates an instruction
+ * from English — "common pair-cli workflows" and "the pair-cli version it invokes" are
+ * prose and must not fail the gate, while `` `pair-cli init` `` is a command that does
+ * not exist. The previous shape kept a PROSE_WORDS allow-list, which is the maintenance
+ * pattern where the next false positive is fixed by adding a word rather than by fixing
+ * the rule; under the positional rule that list is dead and is gone.
+ */
+const INVOCATION_PREFIX = String.raw`(?:\$\s*)?(?:npx\s+(?:--no\s+)?@?[\w/.-]+\s+)?pair-cli\s+`
+const SPAN_INVOCATION = new RegExp('`\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
+const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
 
-/** Check 4: every `pair-cli <cmd>` referenced in tutorial content maps to a command dir. */
-export function checkTutorialCommands(tutorialContents: string[], commandDirs: string[]): string[] {
+/**
+ * `vX.Y.Z` / `v0.4.3` on a fenced line is printed OUTPUT, never a command — which is why
+ * the token is captured whole (uppercase and dots included) instead of lower-case only:
+ * a capture of just `v` would be indistinguishable from a two-letter command typo.
+ */
+const VERSION_STRING = /^v[\dX]/i
+
+/**
+ * Check 4: every `pair-cli <command>` the docs tell a reader to run exists.
+ *
+ * Scoped to the whole docs tree, not just tutorials. That widening is the point: with
+ * tutorials only, 21 references to three non-existent commands (`init`, `kb validate`,
+ * `kb info`) survived across eight pages — each one telling a reader to run something
+ * that fails.
+ */
+export function checkDocsCommands(
+  docs: { rel: string; content: string }[],
+  commandDirs: string[],
+): string[] {
   const errors: string[] = []
-  const referenced = new Set<string>()
-  for (const content of tutorialContents) {
-    for (const m of content.matchAll(/pair-cli\s+([a-z][a-z0-9-]*)/g)) {
-      if (m[1] !== undefined) referenced.add(m[1])
-    }
-  }
-  for (const cmd of referenced) {
-    if (CLI_BUILTINS.has(`--${cmd}`)) continue
-    if (PROSE_WORDS.has(cmd)) continue
-    if (!commandDirs.includes(cmd)) {
-      errors.push(`Tutorial references "pair-cli ${cmd}" but no matching command dir in commands/`)
+  for (const { rel, content } of docs) {
+    for (const cmd of invokedCommands(content)) {
+      if (commandDirs.includes(cmd) || VERSION_STRING.test(cmd)) continue
+      errors.push(`${rel} tells the reader to run "pair-cli ${cmd}", which is not a command`)
     }
   }
   return errors
+}
+
+/** The commands a document actually invokes — code spans plus fenced command lines. */
+function invokedCommands(content: string): Set<string> {
+  const found = new Set<string>()
+  for (const m of content.matchAll(SPAN_INVOCATION)) {
+    if (m[1] !== undefined) found.add(m[1])
+  }
+  let inFence = false
+  for (const line of content.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    const m = inFence ? LINE_INVOCATION.exec(line) : null
+    if (m?.[1] !== undefined) found.add(m[1])
+  }
+  return found
 }
 
 /** Build the set of valid /docs routes from the docs .mdx file list. */
@@ -411,19 +452,14 @@ export interface RunResult {
 export function checkCliCommands(
   commandsDir: string,
   commandsFile: string,
-  tutorialsDir: string,
+  docs: { rel: string; content: string }[],
 ): { errors: string[]; commandCount: number } {
   const errors: string[] = []
   const commandDirs = readdirSync(commandsDir, { withFileTypes: true })
     .filter(d => d.isDirectory())
     .map(d => d.name)
   errors.push(...checkCommandAnchors(commandDirs, readFileSync(commandsFile, 'utf-8')))
-  if (existsSync(tutorialsDir)) {
-    const tutorialContents = readdirSync(tutorialsDir)
-      .filter(f => f.endsWith('.mdx'))
-      .map(f => readFileSync(join(tutorialsDir, f), 'utf-8'))
-    errors.push(...checkTutorialCommands(tutorialContents, commandDirs))
-  }
+  errors.push(...checkDocsCommands(docs, commandDirs))
   return { errors, commandCount: commandDirs.length }
 }
 
@@ -470,7 +506,6 @@ function checkPaths(root: string) {
     CATALOG_FILE: join(DOCS_DIR, 'reference/skills-catalog.mdx'),
     COMMANDS_FILE: join(DOCS_DIR, 'reference/cli/commands.mdx'),
     HOW_TO_DIR: join(root, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to'),
-    TUTORIALS_DIR: join(DOCS_DIR, 'tutorials'),
     // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
     // repo root: the marketplace entry's `source` points there.
     PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
@@ -513,12 +548,23 @@ export function runAllChecks(root: string): RunResult {
   errors.push(...checkCatalogContent(generateCatalogRows(SKILLS_DIR), catalog))
 
   // Checks 3 & 4: CLI command anchors + tutorial references
-  const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, paths.TUTORIALS_DIR)
+  const docs = docsFiles.map(file => ({
+    rel: relative(DOCS_DIR, file),
+    content: readFileSync(file, 'utf-8'),
+  }))
+  const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, docs)
   errors.push(...cli.errors)
 
-  // NOTE: repo-root README.md is intentionally OUT of this gate's scope — the gate
-  // governs the published docs site (apps/website/content/docs) only. README's own
-  // literal skill/guide counts are tracked and fixed by PR #325.
+  // The repo-root README is IN scope. It used to be excluded, with the note "tracked and
+  // fixed by PR #325" — that PR is merged, so the exclusion outlived its own reason while
+  // the counts stayed unpinned. It is the first page a reader sees; the same count checks
+  // apply, and nothing else about the gate's docs-site focus changes.
+  const readme = join(root, 'README.md')
+  if (existsSync(readme)) {
+    const content = readFileSync(readme, 'utf-8')
+    errors.push(...findSkillCountMismatches(content, 'README.md', skillCount))
+    if (howToCount !== null) errors.push(...findGuideCountMismatches(content, 'README.md', howToCount))
+  }
 
   return { errors, skillCount, commandCount: cli.commandCount }
 }

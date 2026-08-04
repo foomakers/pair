@@ -45,7 +45,7 @@ Resources managed by pair in this repo:
 
 | Directory | What it contains |
 |-----------|-----------------|
-| `.pair/knowledge/` | 11 how-to guides, 9 guideline areas (code design, testing, security, collaboration, ...), templates for commits, PRs, stories, ADRs |
+| `.pair/knowledge/` | 9 how-to guides, 9 guideline areas (code design, testing, security, collaboration, ...), templates for commits, PRs, stories, ADRs |
 | `.pair/adoption/tech/` | Architecture, tech stack, infrastructure, way of working, 15 ADRs |
 | `.pair/adoption/product/` | PRD, subdomain model |
 | `.pair/adoption/decision-log/` | Non-architectural decision records |
