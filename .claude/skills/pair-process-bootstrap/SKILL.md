@@ -189,15 +189,30 @@ For each missing adoption file (in order: architecture → tech-stack → infras
    >
    > If yes, describe the additional gates. If no, I'll configure the standard pipeline only.
 
-4. **Act**: For each quality gate (standard + custom):
+4. **Act — ask for the review gate, when no decision exists**: check whether `way-of-working.md` already declares `Review enforcement`. If it does, honour it and say which way. If it does **not**, ask — never assume:
+
+   > **Review gate:**
+   > pair reviews every PR and publishes a verdict. Should that verdict be able to BLOCK a merge?
+   >
+   > - **no** (default) — the review runs and reports; nothing it says stops a merge.
+   > - **yes** — `pair-review` and `pair-explicit-approval` become required checks, and a 🔴 PR
+   >   additionally needs an approval from a human who is not the author. On a one-person
+   >   repository that approval cannot be obtained at all, so a red PR would be unmergeable.
+   >
+   > Applying branch protection for those checks needs admin rights and stays a human step
+   > either way.
+
+   Record the answer as `Review enforcement: disabled|enabled`. **No answer, or quick mode ⇒ `disabled`** — the tier below has no project-state signal to read, and a default that blocks turns a fresh install into a repository nobody can merge into.
+
+5. **Act**: For each quality gate (standard + custom):
    - Add entry to the Custom Gate Registry in `way-of-working.md` with: Order, Gate name, Command, Scope Key, Required flag, Description
    - Create placeholder script entries (in `package.json` scripts or technology-specific equivalent) so the gate infrastructure is executable from day one
 
-5. **Act**: Record quality gate decisions via `/pair-capability-record-decision`:
+6. **Act**: Record quality gate decisions via `/pair-capability-record-decision`:
    - `$type`: `non-architectural`
    - `$topic`: `quality-gate-setup`
 
-6. **Verify**: Quality gates documented in way-of-working and placeholder scripts exist.
+7. **Verify**: Quality gates documented in way-of-working and placeholder scripts exist.
 
 **Quick mode**: the custom-gate question is skipped — the standard pipeline only, written as the same registry entries and scripts guided mode would produce ([quick-mode-defaults.md](./quick-mode-defaults.md)).
 

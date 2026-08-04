@@ -64,6 +64,13 @@ Cost class = **highest detected signal**. The signal catalog (paid-SDK imports, 
 | 🟡 Yellow | Blocked until reviewed | 1 reviewer | 1 working day | standard | reviewer approval |
 | 🔴 Red | Blocked until reviewed and approved | 1 reviewer | 2 working days | extended | explicit approval required |
 
+**Checklist depth** is that table's third column and means exactly this — there is no separate "extended checklist" artifact anywhere, and none is needed:
+
+| Depth | Meaning |
+| --- | --- |
+| `standard` (🟢/🟡) | The [code-review template](../collaboration/templates/code-review-template.md) — resolved per [template resolution](../technical-standards/ai-development/skill-conventions/template-resolution.md) — as designed: verdict first, the Assessments block, and the Details sections that the change actually touches. Sections with nothing to say are collapsed/omitted. |
+| `extended` (🔴) | The **same** template with **no section skipped**: every Assessments subsection (all Security dimensions, Cost, Architecture) and every Details section is answered explicitly — "not applicable" is written out rather than omitted — and the Definition-of-Done check is run in full. Depth, not a different document. |
+
 Reviewer counts and SLAs are **KB defaults** (D10), resolved through the same **Argument > Adoption > KB default** cascade as every other rule in this document — not fixed forever. A project may override either per tier in `tech/risk-matrix.md`'s Overrides section (§6), e.g. requiring 2 reviewers at 🔴 Red for a larger team:
 
 ```markdown
@@ -73,7 +80,9 @@ Reviewer counts and SLAs are **KB defaults** (D10), resolved through the same **
 - tier.red.sla_days: 3
 ```
 
-Review always runs, tests are always green, at every tier (R5.3 + D10) — this part is not overridable, only the reviewer count and SLA are. Gate (mechanical) and review (judgment) are distinct enforcers — gate blocks first, review starts only once gates are green:
+Review always runs and tests are always green, at every tier (R5.3 + D10) — **that** part is not overridable. Everything else in the table above is: the reviewer count, the SLA, the checklist depth and whether 🔴 requires explicit approval are read through the `Argument > Adoption > KB default` cascade, so a project redefines them in its own `way-of-working.md`.
+
+**And whether any of it BLOCKS is opt-in.** The table states requirements; making them enforceable is the `Review enforcement` flag in `way-of-working.md`, **`disabled` by default**. Disabled, the review still runs and publishes its verdict, `pr-state:*` is still synthesized, and nothing is a required check — the verdict is information, not a gate. Enabled, `pair-review` and `pair-explicit-approval` become required and the 🔴 rule binds. The default is deliberate: a review that blocks on a fresh install produces a repository nobody can merge into, and on a single-maintainer repo the 🔴 non-author approval cannot be obtained at all. `/pair-process-bootstrap` asks for the flag when no decision exists rather than assuming one. Gate (mechanical) and review (judgment) are distinct enforcers — gate blocks first, review starts only once gates are green. **Refinement** (the merge-side companion below, [pr-states.md](../collaboration/project-management-tool/pr-states.md)): a review *may* run at a red gate to report findings early, but it produces **no merge-enabling verdict** — a red gate never yields `ready-to-merge`, whatever the judgment says. "Starts only once gates are green" is about the *merge-enabling* review, not about a prohibition on reading a red-gated diff.
 
 | Tier | Gate checks |
 | --- | --- |
@@ -82,6 +91,8 @@ Review always runs, tests are always green, at every tier (R5.3 + D10) — this 
 | 🔴 | + integration/E2E |
 
 Install runs at every tier (implicit in each row). Deterministic secret scanning also runs at **every** tier, unconditionally — it is not tier-scoped (security/[secret-scanning.md](security/secret-scanning.md)). How this matrix becomes an actual pipeline that reads the `risk:*` tag only (fail-safe 🔴 when untagged, explicit failure on a missing suite, build+deploy-only post-merge staging) is the delivery-side companion [tier-aware-pipeline.md](../infrastructure/cicd-strategy/tier-aware-pipeline.md) — this table stays the single source of the criteria; that document owns the wiring.
+
+How the two enforcers combine into a merge decision — the PR states (`to-be-reviewed` → `ready-to-merge` / `not-approved`), the synthesis of gates × verdict × tier × explicit approval, and the required checks that make the review unskippable — is the review-side companion [pr-states.md](../collaboration/project-management-tool/pr-states.md). It **reads** the requirements above (including the 🔴 explicit-approval row) and declares none of its own.
 
 ## 5. Tag Projection
 

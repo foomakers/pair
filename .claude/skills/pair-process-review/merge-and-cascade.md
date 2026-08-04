@@ -1,6 +1,14 @@
 # Phase 6: Merge & Close — Detail
 
-Disclosed from [SKILL.md](./SKILL.md) Phase 6 — only reached when the reviewer picked "Merge now" in Step 5.4.
+Disclosed from [SKILL.md](./SKILL.md) Phase 6 — only reached when the reviewer picked "Merge now" in Step 5.5, and only executed when the PR state synthesis says `ready-to-merge` (Step 6.0).
+
+### Step 6.0: Merge Precondition — PR state must be `ready-to-merge` (BLOCKING)
+
+The merge is permitted by the **synthesis**, not by the reviewer's enthusiasm — see [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md).
+
+1. **Act**: Re-read the current signals (gates, verdict, `risk:*` tier, human approvals on the current head) and re-run the Step 5.4 synthesis — signals may have changed since the verdict was submitted (a new commit, a tier raise, a dismissed approval).
+2. **Check**: `merge_allowed <state>` (from [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh)).
+3. **Verify**: State is `ready-to-merge` → continue to Step 6.1. Any other state → **HALT**, reporting the unmet condition (red gate, review not approved, or 🔴 without explicit human approval). Never bypass, dismiss, or re-run a required check to get a green merge button.
 
 ### Step 6.1: Read Merge Strategy
 
@@ -80,6 +88,7 @@ The merge happens on the **code host**; the item writes in Step 6.4 happen on th
 STORY DONE:
 ├── Story:        [#ID: Title]
 ├── PR:           [#PR-number — merged]
+├── PR state:     [ready-to-merge — synthesis verified at Step 6.0]
 ├── Merge:        [squash | merge | rebase]
 ├── Story:        Done
 ├── Epic:         [#ID — Done | In Progress (X/Y stories done)]

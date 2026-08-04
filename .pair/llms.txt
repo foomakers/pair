@@ -130,6 +130,7 @@
 - [Filesystem - Complete Implementation Guide](.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md)
 - [GitHub Projects - Complete Implementation Guide](.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)
 - [Linear - Complete Implementation Guide](.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md)
+- [PR State Flow — gate ≠ review](.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md)
 - [Project Management Tool Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
 - [Azure DevOps Project Tracking](.pair/knowledge/guidelines/collaboration/project-tracking/azure-devops-tracking.md)
 - [Filesystem Project Tracking](.pair/knowledge/guidelines/collaboration/project-tracking/filesystem-tracking.md)

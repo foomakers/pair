@@ -99,7 +99,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 | Decision              | Condition                                               | Next Step                                                                |
 | --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
-| **APPROVED**          | All requirements met, quality gates pass                | Squash merge, mark story "Done"                                          |
+| **APPROVED**          | All requirements met, quality gates pass                | Squash merge **only when the PR state is `ready-to-merge`** (`merge_allowed`: required checks green — `pair-review` + `pair-explicit-approval` at 🔴 — see [pr-states.md](../guidelines/collaboration/project-management-tool/pr-states.md)), then mark story "Done" |
 | **CHANGES REQUESTED** | Critical issues, missing ADR, failing tests, AC not met | Return to [10-how-to-implement-a-task.md](10-how-to-implement-a-task.md) |
 | **TECH DEBT**         | Only minor issues, tracked as debt                      | Approve PR, create debt items                                            |
 

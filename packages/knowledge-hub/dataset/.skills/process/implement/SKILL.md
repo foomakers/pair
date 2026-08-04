@@ -305,14 +305,25 @@ The PR is produced on a **guaranteed-clean context**: a fresh subagent whose ent
 1. **Check**: Is subagent spawning available in this tool/environment?
 2. **Act — primary path (subagent)**: Spawn an **anonymous subagent** whose prompt is the **handoff document only** — the checkpoint contents (or the path `.pair/working/checkpoints/<story-id>.md`) plus a single instruction: run `/publish-pr $story=<story-id> $handoff=.pair/working/checkpoints/<story-id>.md`. Pass **no other session context** — the subagent's context is the handoff and nothing else (clean context / fresh context reset within one execution, R4.1). The subagent runs `/publish-pr` (gate → PR → tags → ready-for-review → board) and returns the PR number/URL and board result.
 3. **Act — degraded inline path (AC3)**: If subagent spawning is **unavailable** (tool/environment cannot spawn one — subagent spawning unavailable), do NOT skip the split: the checkpoint is already written (Step 3.2), then compose `/publish-pr` **inline** in the current session (`$story`, `$handoff` = the checkpoint). **Note the degradation in the output** (`Context: degraded — inline publish, no subagent reset`). Behavior is otherwise equivalent to the primary path.
-4. **Act — edge case (subagent fails mid-PR)**: The checkpoint remains valid. Re-invoking `/implement` re-runs this closing phase; `/publish-pr` is **idempotent** — it detects an existing PR and updates it in place rather than opening a second one. Never open a second PR for the story.
-5. **Verify**: A single ready-for-review PR exists (created or updated), and its number/URL is captured for the output. A red quality gate inside `/publish-pr` propagates here as a **HALT** (no PR side effects) — implement does not create the PR itself.
+4. **Act — dispatch the review (AC1 of #234; this session is the actor)**: `/publish-pr` Phase 5 registers the `pair-review` check as **pending** (merge blocked from t0) but cannot spawn the review subagent from inside the handoff subagent — nested dispatch is commonly forbidden — so it returns **`Review: review-dispatch-required — /review $pr=<n>`**. When that signal comes back, **this top-level session** spawns the anonymous review subagent (a sibling of the publish subagent, not a nested one), prompt = the PR reference plus the bounded instruction:
+
+   ```text
+   Run /review $pr=<number> $dispatched=true.
+   Phases 1–5 only: verdict, `pair-review` check, PR-state synthesis.
+   NEVER run Phase 6 and NEVER merge, whatever the verdict — the merge is a human act.
+   ```
+
+   Pass no authoring context (D23 isolation: the reviewer must not inherit the author's assumptions). If `/publish-pr` returns `Review: dispatched` instead (it ran at top level), there is nothing to do here. If this session cannot spawn the reviewer either, record `Review: pending — dispatch unavailable, run /review <pr> in a fresh session`: the merge stays blocked, so the review is deferred, never skipped.
+5. **Act — edge case (subagent fails mid-PR)**: The checkpoint remains valid. Re-invoking `/implement` re-runs this closing phase; `/publish-pr` is **idempotent** — it detects an existing PR and updates it in place rather than opening a second one. Never open a second PR for the story.
+6. **Verify**: A single ready-for-review PR exists (created or updated), its number/URL is captured for the output, and the review is either dispatched or explicitly recorded as deferred. A red quality gate inside `/publish-pr` propagates here as a **HALT** (no PR side effects) — implement does not create the PR itself.
 
 Note: the checkpoint is **not** removed here — it must survive the review/fix loop so a re-review or fix round can resume from it. Cleanup happens at merge (Phase 4).
 
 ## Phase 4: Post-Review Merge
 
-After code review approval (typically via `/review`), re-invoke `/implement` to merge and close — see [post-review-merge.md](post-review-merge.md) for the verify-approval, merge-commit, merge, parent-cascade, and checkpoint-cleanup steps (Steps 4.1–4.5) plus the completion output.
+After code review approval (typically via `/pair-process-review`), re-invoke `/implement` to merge and close — see [post-review-merge.md](post-review-merge.md) for the merge-precondition, merge-commit, merge, parent-cascade, and checkpoint-cleanup steps (Steps 4.1–4.5) plus the completion output.
+
+This is one of the flow's **two** merge paths (the other is `/pair-process-review` Phase 6), and both carry the **same** blocking precondition: the PR-state synthesis must be `ready-to-merge` (`merge_allowed` from [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh)), re-evaluated on the current head — an approving review alone is not the condition. See [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md).
 
 On story completion (Done, at merge), the checkpoint is no longer needed — `post-review-merge.md` Step 4.5 removes `.pair/working/checkpoints/<story-id>.md` so finished-story state never lingers (checkpoint lifecycle: written at the closing phase, cleaned up at merge).
 
@@ -330,6 +341,7 @@ IMPLEMENTATION COMPLETE:
 ├── Checkpoint: [.pair/working/checkpoints/<id>.md — written]
 ├── Context:    [clean — subagent handoff-only | degraded — inline publish, no subagent reset]
 ├── PR:         [#PR-number — URL — Created | Updated (from /publish-pr)]
+├── Review:     [dispatched — subagent (clean context) | pending — dispatch unavailable, run /review <pr>]
 └── Quality:    [All gates passing]
 ```
 
@@ -347,7 +359,7 @@ Implementation stops immediately when:
 - **Commit template not found** (Step 2.8 / Step 3.1) — cannot commit without template
 - **`/publish-pr` not installed** (Step 3.3) — implement composes the PR sequence, never re-implements it
 - **Quality gate red inside `/publish-pr`** (Step 3.3) — propagates as implement's HALT; no PR side effects (the PR-template-not-found and gate HALTs live in `/publish-pr`)
-- **PR not approved** (Step 4.1) — cannot merge without review approval
+- **PR state is not `ready-to-merge`** (Step 4.1) — `merge_allowed` fails: red gate, review not approved/still pending, or 🔴 without an explicit non-author human approval on the current head. Never bypass a required check to merge
 
 On HALT: report the blocker clearly, propose resolution, wait for developer.
 
@@ -361,7 +373,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 4. **Tasks**: scans task checklist and git log to identify completed tasks. Skips them.
 5. **PR**: the closing phase re-composes `/publish-pr`, which detects an existing PR and updates it in place — never a duplicate. A subagent that failed mid-PR is recovered this way (the checkpoint stays valid, the rerun is idempotent).
 6. **Quality gates**: re-runs all gates (fast if already passing).
-7. **Merge**: if PR exists and is approved, proceeds directly to Phase 4 (merge).
+7. **Merge**: if a PR exists and its state synthesizes to `ready-to-merge`, proceeds directly to Phase 4 (merge); otherwise Phase 4's Step 4.1 HALTs with the unmet condition.
 
 The skill resumes from the first incomplete step — never re-does completed work.
 
@@ -369,7 +381,7 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults) for the standard scenarios. Additional cases:
 
-- **Subagent spawning unavailable**: take the degraded inline path (Step 3.3) — checkpoint still written, `/publish-pr` composed inline, degradation noted in the output. Never skip the checkpoint/PR split.
+- **Subagent spawning unavailable**: take the degraded inline path (Step 3.3) — checkpoint still written, `/publish-pr` composed inline, degradation noted in the output. Never skip the checkpoint/PR split. The review dispatch degrades the same way: `pair-review` stays pending (merge blocked) and the re-run instruction is recorded, never an inline self-review.
 - **`/checkpoint` not installed**: skip the resume probe and the write step; resume from git+PM state (Idempotent Re-invocation) and synthesize the handoff inline for `/publish-pr`.
 - **`/publish-pr` not installed**: **HALT** — implement composes the gate/PR/board sequence, it never re-implements it. Report the missing dependency.
 - **`/assess-stack` not installed**: Warn on new dependency, continue without validation.

@@ -126,6 +126,42 @@ Quality gates run before every commit. Customize them in `.pair/adoption/tech/wa
 | 2 | Security Scan | `npm audit` | Yes |
 ```
 
+## The Review Gate — Off by Default
+
+pair reviews every pull request and publishes a verdict. Whether that verdict can **block a merge** is a separate switch, and it ships **off**.
+
+**Off (the default).** The review runs, posts its findings, and sets the PR's state label (`pr-state:to-be-reviewed` / `ready-to-merge` / `not-approved`). Nothing it says stops you merging. The verdict is information.
+
+**On.** Two status checks become required — `pair-review` (the verdict itself) and `pair-explicit-approval` (the 🔴 rule) — so a merge waits for the review, and a red-tier PR additionally waits for a human approval from **someone other than the author**.
+
+Turn it on in `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+- **Review enforcement**: `enabled`
+```
+
+Then apply branch protection for the two checks — writing it needs admin rights, so it is a deliberate human step, not something a skill does behind you. Until that is applied the switch is declared but not in force, and pair says so rather than claiming a merge is blocked when it is not.
+
+<Callout type="warn">
+  **Before you enable it on a one-person repository.** The 🔴 tier requires an approval from a
+  non-author human, and hosts reject self-approval — so on a single-maintainer repo a red PR cannot
+  reach `ready-to-merge` at all. It is not a bug to work around (never self-approve to unblock):
+  either a second account reviews, or `pair-explicit-approval` is deliberately not a required check
+  there. This is why the switch is off by default — a review that blocks on a fresh install produces
+  a repository nobody can merge into.
+</Callout>
+
+### Changing what each tier requires
+
+Reviewer count, SLA, checklist depth and whether 🔴 needs explicit approval are **KB defaults**. To change them, add only the keys you are changing to `way-of-working.md`:
+
+```yaml
+# tier.red.reviewers: 2
+# tier.red.sla_days: 3
+```
+
+The defaults are not copied into your adoption file, deliberately: a copy that matches is a second version of the same truth with nothing keeping the two in step, and because adoption wins over the KB default, a stale copy would quietly override an improved one. **Once you do override, write the effective table into that file** — when the values differ from the defaults, the ones in force belong where they are decided.
+
 ## Record Significant Decisions
 
 For decisions that need rationale and context — "why did we choose this?" — record an Architecture Decision Record:
