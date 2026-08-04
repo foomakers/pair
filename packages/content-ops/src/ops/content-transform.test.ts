@@ -77,7 +77,8 @@ describe('generated output ends with exactly one newline', () => {
   // artifact then violates MD012 in the very repo that generates it — observed on
   // CLAUDE.md, whose source ends with @claude-skip-end.
   it('trims the blank line a trailing skip block leaves behind', () => {
-    const src = '# Doc\n\ncontent\n\n<!-- @claude-skip-start -->\nprivate\n<!-- @claude-skip-end -->\n'
+    const src =
+      '# Doc\n\ncontent\n\n<!-- @claude-skip-start -->\nprivate\n<!-- @claude-skip-end -->\n'
     expect(applyTransformCommands(src, 'claude')).toBe('# Doc\n\ncontent\n')
   })
 
