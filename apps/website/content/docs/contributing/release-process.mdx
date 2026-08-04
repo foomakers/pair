@@ -63,6 +63,18 @@ The tag push triggers the **Release workflow** (`release.yml`) which:
 3. Packages the CLI bundle (`scripts/package-manual.sh`).
 4. Creates a GitHub Release with all artifacts.
 
+## Release checklist: skill marketplace manifest
+
+The [marketplace channel](/docs/integrations/claude-code#install-channels) is served by two hand-maintained files: `.claude-plugin/marketplace.json` at the repository root, and `.claude-plugin/plugin.json` inside the plugin root it points to (`packages/knowledge-hub/dataset/plugin`). They are deliberately **not generated**. The plugin ships the bootstrap corpus only, so adding a skill to the distributed catalog no longer touches them:
+
+- `plugin.json` `skills` lists one `./skills/<name>` entry per directory under the plugin root's `skills/`, and nothing stale.
+- The marketplace entry's `source` still points at the plugin root — pointing it at `./` would ship the whole repository again, and with it pair's own `.pair/adoption/` inside every user's plugin cache.
+- `claude plugin validate .` passes. The "no version specified" warning is expected: the manifest pins no version so `/plugin update` always fetches the current catalog. Never run this check with `--strict` — that flag turns the expected warning into a hard failure, and the missing version pin is a deliberate decision.
+- Skills only, on all three hand-edited surfaces — `plugin.json` carries metadata plus `skills` and nothing else; the marketplace entry carries metadata plus `source`/`category`/`tags`/`strict` and **no `skills`** (an entry-level `skills` silently replaces the plugin's whole catalog); and `marketplace.json`'s own top level carries marketplace metadata plus `owner`/`plugins`, never `forceRemoveDeletedPlugins`, `allowCrossMarketplaceDependenciesOn` or `metadata.pluginRoot`.
+- At the **plugin root**, no component directory named after a manifest component key (`agents/`, `commands/`, `hooks/`, `monitors/`, …) and no `.mcp.json`. `skills/` is the one exception: at that root it is the declared payload, so auto-discovery and the manifest coincide instead of competing. The repository root is not the payload any more.
+
+The catalog guard in `packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts` (run by `pnpm test`) fails when the manifest drifts from the bootstrap corpus (`packages/knowledge-hub/dataset/plugin/skills/`), naming the exact entry to add or remove — so a forgotten update is caught before release, not after. The same guard asserts the skills-only rule as an **allowlist** per surface — so `settings`, `dependencies`, `monitors`, `commands` and any key a future schema revision adds fail closed too — plus a root-payload check whose path list is *derived* from the schema's component keys, so the manifest half and the payload half of the rule can never drift apart. Both checklist lines have an automatic backstop.
+
 ## Workflows
 
 | Workflow | File | Trigger | Purpose |

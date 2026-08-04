@@ -118,6 +118,17 @@ assert_file() {
   fi
 }
 
+# Assert file does NOT exist. The absence half of assert_file: an option whose whole
+# job is to leave something out (registry `exclude`) can only be checked negatively.
+assert_no_file() {
+  if [ ! -e "$1" ]; then
+    log_succ "File absent as expected: $1"
+  else
+    log_fail "File present but should be absent: $1"
+    return 1
+  fi
+}
+
 # Assert directory exists
 assert_dir() {
   if [ -d "$1" ]; then

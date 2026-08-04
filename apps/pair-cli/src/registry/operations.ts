@@ -69,6 +69,9 @@ function buildCopyDirHelperContext(ctx: {
     defaultBehavior: options?.defaultBehavior ?? 'overwrite',
     datasetRoot,
     ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
+    // A registry may declare `exclude` without flatten/prefix; this is the path it
+    // takes then, so the entries must be honored here as well as in the transform path.
+    ...(options?.exclude?.length && { exclude: options.exclude, excludeRoot: srcPath }),
   }
 }
 
@@ -163,6 +166,9 @@ export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
     ...(registryConfig.flattenDepth !== undefined && {
       flattenDepth: registryConfig.flattenDepth,
     }),
+    // Optional access on purpose: `buildCopyOptions` is called with hand-built
+    // RegistryConfig objects too, not only with output of `parseRegistry`.
+    ...(registryConfig.exclude?.length ? { exclude: registryConfig.exclude } : {}),
     ...(registryConfig.prefix && { prefix: registryConfig.prefix }),
   }
 

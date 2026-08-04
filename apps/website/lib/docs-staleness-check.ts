@@ -32,7 +32,20 @@ export function resolveRoot(): string {
 // adjective — "N pair/composable/agent/idempotent skills". Subset counts
 // ("9 process skills") do NOT match: the adjective, when present, must be one of
 // the whitelisted total-count words.
-export const SKILL_COUNT_RE = /(\d+)\+?\s+(?:pair\s+|composable\s+|agent\s+|idempotent\s+)?skills/g
+export const SKILL_COUNT_RE =
+  /(\d+)\+?\s+(?:declared\s+)?(?:pair\s+|composable\s+|agent\s+|idempotent\s+)?skills/g
+
+// A quoted `claude plugin details` transcript: `Skills (1)`. Pinned because it is an
+// assertion about our OWN plugin manifest, not a third-party observation — and because
+// the marketplace docs quoted a stale count while the manifest held another, drift no
+// phrasing above could catch. Anchored on the literal capitalized `Skills (`, so the
+// sibling `Agents (0)` / `Hooks (0)` counts in the same transcript never match.
+//
+// It is checked against the count the PLUGIN MANIFEST declares, NOT against the dataset
+// skill count: since the payload shrank to the bootstrap corpus, the plugin declares one
+// skill while the dataset holds 41, and conflating the two would demand a number that is
+// wrong on both readings.
+export const SKILL_COUNT_PROBE_RE = /\bSkills \((\d+)\)/g
 
 // How-to guide count phrasings. Requires a how-to qualifier so arbitrary
 // "N guides" prose ("5 guides at the museum") never false-positives: a match
@@ -78,6 +91,18 @@ export function walkMdx(dir: string): string[] {
   return out
 }
 
+/**
+ * How many skills the plugin manifest declares. `null` if the manifest is missing —
+ * the caller then skips the probe check rather than pinning every transcript to 0.
+ */
+export function countDeclaredPluginSkills(manifestPath: string): number | null {
+  if (!existsSync(manifestPath)) return null
+  const raw: unknown = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+  const skills = (raw as { skills?: unknown }).skills
+  if (Array.isArray(skills)) return skills.length
+  return typeof skills === 'string' ? 1 : 0
+}
+
 /** Count of how-to guide files (NN-how-to-*.md) in a KB how-to dir. `null` if the dir is missing. */
 export function countHowToGuides(howToDir: string): number | null {
   if (!existsSync(howToDir)) return null
@@ -88,11 +113,36 @@ export function countHowToGuides(howToDir: string): number | null {
 
 /** Check 1: every "N skills" phrasing in content matches the actual skill count. */
 export function findSkillCountMismatches(content: string, rel: string, actual: number): string[] {
+  return countMismatches(content, rel, actual, { re: SKILL_COUNT_RE, label: 'Skill count' })
+}
+
+/**
+ * Check 1b: every quoted `Skills (N)` plugin transcript matches what the plugin
+ * manifest declares. Separate from check 1 on purpose — see SKILL_COUNT_PROBE_RE.
+ */
+export function findPluginSkillCountMismatches(
+  content: string,
+  rel: string,
+  declared: number,
+): string[] {
+  return countMismatches(content, rel, declared, {
+    re: SKILL_COUNT_PROBE_RE,
+    label: 'Plugin skill count',
+  })
+}
+
+function countMismatches(
+  content: string,
+  rel: string,
+  actual: number,
+  kind: { re: RegExp; label: string },
+): string[] {
+  const { re, label } = kind
   const errors: string[] = []
-  for (const m of content.matchAll(SKILL_COUNT_RE)) {
+  for (const m of content.matchAll(re)) {
     const n = m[1]
     if (n !== undefined && parseInt(n, 10) !== actual) {
-      errors.push(`Skill count mismatch in ${rel}: docs say "${m[0]}", actual count is ${actual}`)
+      errors.push(`${label} mismatch in ${rel}: docs say "${m[0]}", actual count is ${actual}`)
     }
   }
   return errors
@@ -317,26 +367,67 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
   return errors
 }
 
-const CLI_BUILTINS = new Set(['--version', '--help'])
-const PROSE_WORDS = new Set(['as', 'is', 'on', 'to', 'installed', 'and', 'or', 'in', 'for', 'the'])
+/**
+ * A `pair-cli <word>` INVOCATION, as opposed to the words "pair-cli" in a sentence.
+ *
+ * Positional, deliberately, and not a list of prose words to keep extending: `pair-cli`
+ * counts as an invocation only at the start of an inline code span or of a fenced line,
+ * optionally behind `$ ` or `npx [--no] <pkg>`. That is what separates an instruction
+ * from English — "common pair-cli workflows" and "the pair-cli version it invokes" are
+ * prose and must not fail the gate, while `` `pair-cli init` `` is a command that does
+ * not exist. The previous shape kept a PROSE_WORDS allow-list, which is the maintenance
+ * pattern where the next false positive is fixed by adding a word rather than by fixing
+ * the rule; under the positional rule that list is dead and is gone.
+ */
+const INVOCATION_PREFIX = String.raw`(?:\$\s*)?(?:npx\s+(?:--no\s+)?@?[\w/.-]+\s+)?pair-cli\s+`
+const SPAN_INVOCATION = new RegExp('`\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
+const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
 
-/** Check 4: every `pair-cli <cmd>` referenced in tutorial content maps to a command dir. */
-export function checkTutorialCommands(tutorialContents: string[], commandDirs: string[]): string[] {
+/**
+ * `vX.Y.Z` / `v0.4.3` on a fenced line is printed OUTPUT, never a command — which is why
+ * the token is captured whole (uppercase and dots included) instead of lower-case only:
+ * a capture of just `v` would be indistinguishable from a two-letter command typo.
+ */
+const VERSION_STRING = /^v[\dX]/i
+
+/**
+ * Check 4: every `pair-cli <command>` the docs tell a reader to run exists.
+ *
+ * Scoped to the whole docs tree, not just tutorials. That widening is the point: with
+ * tutorials only, 21 references to three non-existent commands (`init`, `kb validate`,
+ * `kb info`) survived across eight pages — each one telling a reader to run something
+ * that fails.
+ */
+export function checkDocsCommands(
+  docs: { rel: string; content: string }[],
+  commandDirs: string[],
+): string[] {
   const errors: string[] = []
-  const referenced = new Set<string>()
-  for (const content of tutorialContents) {
-    for (const m of content.matchAll(/pair-cli\s+([a-z][a-z0-9-]*)/g)) {
-      if (m[1] !== undefined) referenced.add(m[1])
-    }
-  }
-  for (const cmd of referenced) {
-    if (CLI_BUILTINS.has(`--${cmd}`)) continue
-    if (PROSE_WORDS.has(cmd)) continue
-    if (!commandDirs.includes(cmd)) {
-      errors.push(`Tutorial references "pair-cli ${cmd}" but no matching command dir in commands/`)
+  for (const { rel, content } of docs) {
+    for (const cmd of invokedCommands(content)) {
+      if (commandDirs.includes(cmd) || VERSION_STRING.test(cmd)) continue
+      errors.push(`${rel} tells the reader to run "pair-cli ${cmd}", which is not a command`)
     }
   }
   return errors
+}
+
+/** The commands a document actually invokes — code spans plus fenced command lines. */
+function invokedCommands(content: string): Set<string> {
+  const found = new Set<string>()
+  for (const m of content.matchAll(SPAN_INVOCATION)) {
+    if (m[1] !== undefined) found.add(m[1])
+  }
+  let inFence = false
+  for (const line of content.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    const m = inFence ? LINE_INVOCATION.exec(line) : null
+    if (m?.[1] !== undefined) found.add(m[1])
+  }
+  return found
 }
 
 /** Build the set of valid /docs routes from the docs .mdx file list. */
@@ -361,36 +452,92 @@ export interface RunResult {
 export function checkCliCommands(
   commandsDir: string,
   commandsFile: string,
-  tutorialsDir: string,
+  docs: { rel: string; content: string }[],
 ): { errors: string[]; commandCount: number } {
   const errors: string[] = []
   const commandDirs = readdirSync(commandsDir, { withFileTypes: true })
     .filter(d => d.isDirectory())
     .map(d => d.name)
   errors.push(...checkCommandAnchors(commandDirs, readFileSync(commandsFile, 'utf-8')))
-  if (existsSync(tutorialsDir)) {
-    const tutorialContents = readdirSync(tutorialsDir)
-      .filter(f => f.endsWith('.mdx'))
-      .map(f => readFileSync(join(tutorialsDir, f), 'utf-8'))
-    errors.push(...checkTutorialCommands(tutorialContents, commandDirs))
-  }
+  errors.push(...checkDocsCommands(docs, commandDirs))
   return { errors, commandCount: commandDirs.length }
 }
 
+/**
+ * Per-file checks — each doc is read once and run through every content-level check:
+ * 1 (skill counts), 1b (the plugin transcript), 2b (guide counts), 5 (dead links).
+ * Extracted from runAllChecks only to keep it under the line ceiling.
+ */
+function perFileErrors(params: {
+  docsFiles: string[]
+  docsDir: string
+  skillCount: number
+  declaredPluginSkills: number | null
+  howToCount: number | null
+  validRoutes: Set<string>
+}): string[] {
+  const { docsFiles, docsDir, skillCount, declaredPluginSkills, howToCount, validRoutes } = params
+  const errors: string[] = []
+  for (const file of docsFiles) {
+    const content = readFileSync(file, 'utf-8')
+    const rel = relative(docsDir, file)
+    errors.push(...findSkillCountMismatches(content, rel, skillCount))
+    if (declaredPluginSkills !== null) {
+      errors.push(...findPluginSkillCountMismatches(content, rel, declaredPluginSkills))
+    }
+    if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
+    errors.push(...findDeadLinks(content, rel, validRoutes))
+  }
+  return errors
+}
+
+/**
+ * The repo-root README's count claims. It used to be excluded from this gate, with the
+ * note "tracked and fixed by PR #325" — that PR is merged, so the exemption outlived its
+ * own reason while the counts stayed unpinned (and a live drift sat there: 11 how-to
+ * guides claimed against 9 on disk). It is the first page a reader sees; the same count
+ * checks apply, and nothing else about the gate's docs-site focus changes.
+ */
+function readmeErrors(path: string, skillCount: number, howToCount: number | null): string[] {
+  if (!existsSync(path)) return []
+  const content = readFileSync(path, 'utf-8')
+  const errors = findSkillCountMismatches(content, 'README.md', skillCount)
+  if (howToCount !== null) {
+    errors.push(...findGuideCountMismatches(content, 'README.md', howToCount))
+  }
+  return errors
+}
+
 /** Run every check against a repo root and collect all drift errors. */
-export function runAllChecks(root: string): RunResult {
-  const SKILLS_DIR = join(root, 'packages/knowledge-hub/dataset/.skills')
-  const COMMANDS_DIR = join(root, 'apps/pair-cli/src/commands')
+/**
+ * The source-of-truth paths every check reads, resolved from one repo root. Kept as
+ * its own function so `runAllChecks` stays inside the line ceiling and the path list
+ * has a single place to change.
+ */
+function checkPaths(root: string) {
   const DOCS_DIR = join(root, 'apps/website/content/docs')
-  const CATALOG_FILE = join(DOCS_DIR, 'reference/skills-catalog.mdx')
-  const COMMANDS_FILE = join(DOCS_DIR, 'reference/cli/commands.mdx')
-  const HOW_TO_DIR = join(root, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to')
-  const TUTORIALS_DIR = join(DOCS_DIR, 'tutorials')
+  return {
+    SKILLS_DIR: join(root, 'packages/knowledge-hub/dataset/.skills'),
+    COMMANDS_DIR: join(root, 'apps/pair-cli/src/commands'),
+    DOCS_DIR,
+    CATALOG_FILE: join(DOCS_DIR, 'reference/skills-catalog.mdx'),
+    COMMANDS_FILE: join(DOCS_DIR, 'reference/cli/commands.mdx'),
+    HOW_TO_DIR: join(root, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to'),
+    // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
+    // repo root: the marketplace entry's `source` points there.
+    PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
+  }
+}
+
+export function runAllChecks(root: string): RunResult {
+  const paths = checkPaths(root)
+  const { SKILLS_DIR, DOCS_DIR, HOW_TO_DIR } = paths
 
   const errors: string[] = []
   const docsFiles = walkMdx(DOCS_DIR)
   const allSkills = collectSkills(SKILLS_DIR)
   const skillCount = allSkills.length
+  const declaredPluginSkills = countDeclaredPluginSkills(paths.PLUGIN_MANIFEST)
   const validRoutes = buildValidRoutes(docsFiles, DOCS_DIR)
   const howToCount = countHowToGuides(HOW_TO_DIR)
 
@@ -399,30 +546,33 @@ export function runAllChecks(root: string): RunResult {
     errors.push(`How-to guides dir not found: ${HOW_TO_DIR} — guide-count check cannot run`)
   }
 
-  // Per-file checks — read each doc once and run all content-level checks:
-  // 1 (skill counts), 2b (guide counts), 5 (dead links, markdown + JSX href).
-  for (const file of docsFiles) {
-    const content = readFileSync(file, 'utf-8')
-    const rel = relative(DOCS_DIR, file)
-    errors.push(...findSkillCountMismatches(content, rel, skillCount))
-    if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
-    errors.push(...findDeadLinks(content, rel, validRoutes))
-  }
+  errors.push(
+    ...perFileErrors({
+      docsFiles,
+      docsDir: DOCS_DIR,
+      skillCount,
+      declaredPluginSkills,
+      howToCount,
+      validRoutes,
+    }),
+  )
 
   // Check 2: catalog sync (both directions)
-  const catalog = readFileSync(CATALOG_FILE, 'utf-8')
+  const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
   errors.push(...checkCatalogSync(allSkills, catalog))
 
   // Check 2c: catalog row CONTENT (Command + Description) single-sourced from the dataset
   errors.push(...checkCatalogContent(generateCatalogRows(SKILLS_DIR), catalog))
 
   // Checks 3 & 4: CLI command anchors + tutorial references
-  const cli = checkCliCommands(COMMANDS_DIR, COMMANDS_FILE, TUTORIALS_DIR)
+  const docs = docsFiles.map(file => ({
+    rel: relative(DOCS_DIR, file),
+    content: readFileSync(file, 'utf-8'),
+  }))
+  const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, docs)
   errors.push(...cli.errors)
 
-  // NOTE: repo-root README.md is intentionally OUT of this gate's scope — the gate
-  // governs the published docs site (apps/website/content/docs) only. README's own
-  // literal skill/guide counts are tracked and fixed by PR #325.
+  errors.push(...readmeErrors(join(root, 'README.md'), skillCount, howToCount))
 
   return { errors, skillCount, commandCount: cli.commandCount }
 }

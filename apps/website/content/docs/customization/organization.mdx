@@ -195,7 +195,7 @@ The layout mode maps to the `source` and `targets` fields in your `config.json` 
 
 ```bash
 # 1. Validate with the same layout you'll package
-pair-cli kb validate --layout source
+pair-cli kb-validate --layout source
 
 # 2. Package (with metadata)
 pair-cli package --layout source \
@@ -208,7 +208,7 @@ pair-cli package --layout source \
 unzip -l dist/my-kb-source.zip
 
 # 4. Validate the packaged KB
-pair-cli kb validate dist/my-kb-source.zip
+pair-cli kb-validate dist/my-kb-source.zip
 ```
 
 ### Organizational packaging
@@ -232,10 +232,10 @@ Before distributing, validate the package:
 
 ```bash
 # Validate KB structure and internal consistency
-pair-cli kb validate
+pair-cli kb-validate
 
 # Inspect package metadata
-pair-cli kb info
+pair-cli kb-info
 ```
 
 Validation checks:

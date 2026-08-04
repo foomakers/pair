@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { resolve } from 'node:path'
 import {
   findSkillCountMismatches,
+  findPluginSkillCountMismatches,
+  countDeclaredPluginSkills,
   findGuideCountMismatches,
   findDeadLinks,
   checkCatalogSync,
   checkCommandAnchors,
-  checkTutorialCommands,
+  checkDocsCommands,
   countHowToGuides,
   buildValidRoutes,
   runAllChecks,
@@ -61,6 +63,53 @@ describe('findSkillCountMismatches', () => {
 
   it('ignores subset counts ("N process skills")', () => {
     expect(findSkillCountMismatches('9 process skills', 'a.mdx', 35)).toHaveLength(0)
+  })
+
+  // The two phrasings the marketplace docs introduced, both of which drifted
+  // silently (docs said 40 while the dataset held 41) because neither matched.
+  it('flags a wrong "N declared pair skills"', () => {
+    const errs = findSkillCountMismatches('exactly the 40 declared pair skills', 'a.mdx', 41)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('40 declared pair skills')
+  })
+
+  // The `Skills (N)` transcript is NOT a dataset-skill count — check 1 must ignore it,
+  // or the two readings fight over one number (the plugin declares 1, the dataset 41).
+  it('leaves the `Skills (N)` plugin transcript to the plugin check', () => {
+    expect(findSkillCountMismatches('reports `Skills (1)`', 'a.mdx', 41)).toHaveLength(0)
+  })
+})
+
+describe('findPluginSkillCountMismatches', () => {
+  it('flags a `Skills (N)` transcript that disagrees with the manifest', () => {
+    const errs = findPluginSkillCountMismatches('reports `Skills (40)`, `Agents (0)`', 'a.mdx', 1)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('Skills (40)')
+    expect(errs[0]).toContain('Plugin skill count')
+  })
+
+  it('passes a matching transcript', () => {
+    expect(findPluginSkillCountMismatches('reports `Skills (1)`', 'a.mdx', 1)).toHaveLength(0)
+  })
+
+  it('does not read a sibling `Agents (N)`/`Hooks (N)` count as a skill count', () => {
+    expect(
+      findPluginSkillCountMismatches('`Agents (0)`, `Hooks (0)`, `MCP servers (0)`', 'a.mdx', 1),
+    ).toHaveLength(0)
+  })
+})
+
+describe('countDeclaredPluginSkills', () => {
+  it('reads the real manifest at the plugin root', () => {
+    const manifest = join(
+      REPO_ROOT,
+      'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json',
+    )
+    expect(countDeclaredPluginSkills(manifest)).toBeGreaterThan(0)
+  })
+
+  it('returns null for a missing manifest, so the probe check is skipped not zeroed', () => {
+    expect(countDeclaredPluginSkills(join(REPO_ROOT, 'nope/plugin.json'))).toBeNull()
   })
 })
 
@@ -152,15 +201,40 @@ describe('checkCommandAnchors', () => {
   })
 })
 
-describe('checkTutorialCommands', () => {
-  it('flags an unknown pair-cli command reference', () => {
-    expect(checkTutorialCommands(['run pair-cli bogus'], ['install'])).toHaveLength(1)
+describe('checkDocsCommands', () => {
+  const commands = ['install', 'update', 'kb-validate']
+  const doc = (content: string) => [{ rel: 'a.mdx', content }]
+
+  it('flags a command a doc tells the reader to run that does not exist', () => {
+    const errs = checkDocsCommands(doc('Run `pair-cli init` first.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli init')
   })
 
-  it('ignores builtins and prose words after pair-cli', () => {
-    expect(
-      checkTutorialCommands(['pair-cli --version', 'pair-cli is installed'], ['install']),
-    ).toHaveLength(0)
+  it('flags a hyphen-less subcommand (`kb validate`)', () => {
+    expect(checkDocsCommands(doc('```bash\npair-cli kb validate\n```'), commands)).toHaveLength(1)
+  })
+
+  it('passes a real command in a span and in a fence', () => {
+    expect(checkDocsCommands(doc('Run `pair-cli install`.'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\nnpx --no pair-cli update\n```'), commands)).toHaveLength(
+      0,
+    )
+  })
+
+  // The reason the rule is positional rather than a prose-word allow-list: these are
+  // English, and an earlier list-based version had to grow a word for each of them.
+  it('ignores "pair-cli" used as a noun in prose', () => {
+    const prose = 'Common pair-cli workflows, and the pair-cli version it invokes.'
+    expect(checkDocsCommands(doc(prose), commands)).toHaveLength(0)
+  })
+
+  it('ignores a version string printed as OUTPUT in a fence', () => {
+    expect(checkDocsCommands(doc('```text\npair-cli vX.Y.Z\n```'), commands)).toHaveLength(0)
+  })
+
+  it('ignores a flag, which is never a command name', () => {
+    expect(checkDocsCommands(doc('```bash\npair-cli --version\n```'), commands)).toHaveLength(0)
   })
 })
 

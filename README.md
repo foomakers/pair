@@ -20,10 +20,20 @@ npx @foomakers/pair-cli install
 
 This installs the pair Knowledge Base into your project. Your AI assistant reads `.pair/` and `.claude/skills/` to follow your team's standards, process, and architecture decisions.
 
+**In Claude Code?** Skip the command line — install the bootstrap plugin and let it do the above:
+
+```text
+/plugin marketplace add foomakers/pair
+/plugin install pair@pair
+/pair-assistant
+```
+
+The plugin ships **one** skill: an assistant that installs `pair-cli` and runs it — so your project ends up with exactly the tree the command above produces — and then keeps helping you drive the CLI and answer questions from your own knowledge base. See [Install Channels](https://pair.foomakers.com/docs/integrations/claude-code#install-channels).
+
 ## What You Get
 
 - **Knowledge Base** — guidelines, how-to guides, and templates for every SDLC phase
-- **Agent Skills** — 38 idempotent workflows following the [agentskills.io](https://agentskills.io) open standard
+- **Agent Skills** — 41 idempotent workflows following the [agentskills.io](https://agentskills.io) open standard
 - **Adoption Files** — project-specific decisions (architecture, tech stack, way of working)
 - **AI-friendly index** — `.pair/llms.txt` for machine-readable KB discovery ([llmstxt.org](https://llmstxt.org))
 
@@ -35,11 +45,11 @@ Resources managed by pair in this repo:
 
 | Directory | What it contains |
 |-----------|-----------------|
-| `.pair/knowledge/` | 11 how-to guides, 9 guideline areas (code design, testing, security, collaboration, ...), templates for commits, PRs, stories, ADRs |
+| `.pair/knowledge/` | 9 how-to guides, 9 guideline areas (code design, testing, security, collaboration, ...), templates for commits, PRs, stories, ADRs |
 | `.pair/adoption/tech/` | Architecture, tech stack, infrastructure, way of working, 15 ADRs |
 | `.pair/adoption/product/` | PRD, subdomain model |
 | `.pair/adoption/decision-log/` | Non-architectural decision records |
-| `.claude/skills/` | 38 Agent Skills — process workflows (implement, review, refine) and capabilities (quality gates, estimation, manual testing, debt assessment) |
+| `.claude/skills/` | 41 Agent Skills — process workflows (implement, review, refine) and capabilities (quality gates, estimation, manual testing, debt assessment) |
 | `AGENTS.md` | Universal agent entry point linking to `.pair/` |
 
 ## Documentation

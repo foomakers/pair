@@ -6,10 +6,85 @@ description: Set up pair with Claude Code — configure AGENTS.md, CLAUDE.md, th
 ## Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
-- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists)
+- A pair-enabled project (`pair-cli install` completed, `.pair/` directory exists) — required for the CLI channel, optional for the [marketplace channel](#install-channels)
 - Node.js 18+
 
+## Install Channels
+
+pair reaches your project through **one** mechanism: the CLI writes the knowledge base and the skill catalog into your repo. The Claude Code marketplace is the **zero-setup entry point to it** — it ships a single bootstrap skill that installs the CLI and runs it for you.
+
+| Step | Command | What it does |
+|------|---------|--------------|
+| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` → `/plugin install pair@pair` | Installs one skill: `/pair-assistant` |
+| **Assistant** | `/pair-assistant` | **Sets pair up when it is missing** — installs `pair-cli` (locally when your project has a `package.json`, otherwise via `npx`), creates the git repository if there is none, runs the install. **Then stays useful**: it turns a request into the right CLI command, and answers questions about your project from your own `.pair/llms.txt` |
+| **CLI** (tool-agnostic) | `pair-cli install` / `pair-cli update` | Writes `.pair/` (knowledge base + adoption files) and `.claude/skills/` — also what you run directly if you skip the marketplace, or if you use Cursor, Windsurf or Copilot |
+
+You are not choosing between two copies of the catalog: the marketplace never ships it. That is what makes the two safe to have installed at once — see below.
+
+### Marketplace Install
+
+```bash
+# 1. register pair's marketplace (the repository itself)
+/plugin marketplace add foomakers/pair
+
+# 2. install the bootstrap plugin
+/plugin install pair@pair
+
+# 3. run it in the project you want pair in
+/pair-assistant
+```
+
+After setup it keeps its job: ask it to update the KB, check which version you are on, validate your config or scaffold an external KB, and it picks the command — reading `pair-cli --help` rather than a list baked into the skill, so it cannot recommend a flag your installed version does not have. Ask it how your project does something, and it reads your `.pair/llms.txt` and answers from **your** knowledge base, naming the file it used.
+
+The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair repository. Its one entry's `source` points at `packages/knowledge-hub/dataset/plugin`, which is therefore the **plugin root**: it holds `.claude-plugin/plugin.json` (where Claude Code looks) next to the `skills/` directory that manifest declares. `claude plugin details pair@pair` reports `Skills (1)`, `Agents (0)`, `Hooks (0)`, `MCP servers (0)`, `LSP servers (0)`.
+
+**Why the payload is that small, and not the repository.** An earlier design shipped the whole pair repository as the plugin, so the full catalog installed natively. It also copied pair's own `.pair/` into the cache — and a skill step that reads an adoption file resolved *pair's* decisions as if they were yours, with no graceful-degradation path, because from the skill's point of view the files were present. Worse, `/pair-capability-record-decision` writes adoption files, so a decision recorded on that channel landed inside the plugin cache and was destroyed by the next `/plugin update`. Shipping only the bootstrap skill removes both: there is no `.pair/` in the cache to resolve or to write into, and the files a skill reads are the ones the CLI put in **your** repository.
+
+A guard in the pair repository allowlists the keys each manifest may declare (the plugin manifest, the marketplace manifest, and every entry in it), and asserts the plugin root carries no auto-discovered component directory other than the declared `skills/` — so an agent, hook, monitor or MCP server cannot be added to the payload by hand without failing the build.
+
+<Callout type="info">
+  **Keeping both installed is fine here.** The plugin declares exactly one skill,
+  `pair-assistant`, and the CLI never installs that one into your project — it is
+  authored outside the distributed corpus precisely so it cannot travel through the CLI. So no skill
+  name resolves from two sources, and the ambiguity that used to make "pick one channel" a rule
+  simply has no subject. Keep the plugin if you want the bootstrap available for the next project;
+  remove it with `/plugin uninstall pair@pair` if you would rather not.
+</Callout>
+
+<Callout type="info">
+  **Cloning only what is needed.** The plugin *payload* is a few kilobytes, but adding the
+  marketplace from GitHub clones the repository to read `marketplace.json` and resolve the entry's
+  nested `source`. `marketplace add` takes `--sparse` for exactly this monorepo shape, so you can
+  limit the checkout to the two directories that matter:
+
+```bash
+/plugin marketplace add foomakers/pair --sparse .claude-plugin packages/knowledge-hub/dataset/plugin
+```
+
+  Measured with a local path instead of a GitHub source, the marketplace directory is 0 B — the path
+  is referenced in place — and the installed plugin cache is 12 KB.
+</Callout>
+
+Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`). Treat the cache as **disposable, not as storage**: `/plugin update` replaces it wholesale. Nothing you own lives there — the bootstrap skill writes into your repository, never into the cache.
+
+Update or remove the plugin with the standard Claude Code commands:
+
+```bash
+/plugin update pair@pair
+/plugin marketplace update pair
+/plugin uninstall pair@pair
+```
+
+No version is pinned in the manifest, so an update always fetches the current bootstrap skill.
+
 ## Configure Agent File
+
+<Callout type="info">
+  **CLI channel only.** Everything from here to [Use Skills](#use-skills) — the project structure,
+  `AGENTS.md`/`CLAUDE.md` generation, the `.claude/` directory, the bridge pattern — describes a
+  project set up with `pair-cli install`. On the marketplace channel none of it exists in your
+  repository: the skills and the knowledge base live in the plugin cache.
+</Callout>
 
 Claude Code reads two files at the repository root plus the `.claude/` directory:
 
@@ -34,7 +109,7 @@ your-project/
 
 ### AGENTS.md
 
-The universal bridge file. pair generates it during `pair-cli init`. It contains:
+The universal bridge file. pair generates it during `pair-cli install`. It contains:
 
 - Task selection algorithm (which how-to guide to follow)
 - Essential commands (`pnpm install`, `pnpm test`, `pnpm lint`)
@@ -121,7 +196,7 @@ For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
 
 ### Skill Discovery
 
-Claude Code discovers skills in `.claude/skills/`. pair installs skills there during `pair-cli init` or `pair-cli update`. Each skill is a `SKILL.md` file that Claude Code reads when you invoke the corresponding slash command.
+Claude Code discovers skills in `.claude/skills/`. pair installs skills there during `pair-cli install` or `pair-cli update`. Each skill is a `SKILL.md` file that Claude Code reads when you invoke the corresponding slash command.
 
 Skills are installed through the **transform pipeline** — the KB source uses a category structure (`.skills/process/implement/`) which gets flattened and prefixed:
 
@@ -132,7 +207,7 @@ Prefix:       process-implement → pair-process-implement
 Installed:    .claude/skills/pair-process-implement/SKILL.md
 ```
 
-This happens automatically during `pair-cli init` and `pair-cli update`.
+This happens automatically during `pair-cli install` and `pair-cli update`.
 
 ## Workflow Tips
 
@@ -161,7 +236,7 @@ Open Claude Code in your pair-enabled project and run:
 /pair-next
 ```
 
-**Expected output**: Claude Code reads your adoption files and suggests the next action (e.g., "Story #42 is refined and ready — run `/pair-process-implement #42`"). If it can't find `.pair/`, check that `pair-cli init` completed successfully.
+**Expected output**: Claude Code reads your adoption files and suggests the next action (e.g., "Story #42 is refined and ready — run `/pair-process-implement #42`"). If it can't find `.pair/`, check that `pair-cli install` completed successfully.
 
 ## Related
 

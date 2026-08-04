@@ -110,3 +110,26 @@ describe('registry resolver', () => {
     expect(claudeTarget!.transform).toEqual({ prefix: 'claude' })
   })
 })
+
+describe('exclude in the registry config (#277)', () => {
+  it('is read from raw config', () => {
+    const registries = extractRegistries({
+      asset_registries: { skills: { source: '.skills', exclude: ['process/setup'] } },
+    })
+    expect(registries['skills']?.exclude).toEqual(['process/setup'])
+  })
+
+  it('defaults to empty when absent, so no registry changes behaviour', () => {
+    const registries = extractRegistries({
+      asset_registries: { knowledge: { source: '.knowledge' } },
+    })
+    expect(registries['knowledge']?.exclude).toEqual([])
+  })
+
+  it('ignores a non-array value instead of trusting it', () => {
+    const registries = extractRegistries({
+      asset_registries: { skills: { source: '.skills', exclude: 'process/setup' } },
+    })
+    expect(registries['skills']?.exclude).toEqual([])
+  })
+})

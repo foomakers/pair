@@ -50,6 +50,32 @@ export type CopyDirContext = {
   folderBehavior?: Record<string, Behavior>
   defaultBehavior: Behavior
   datasetRoot: string
+  /** Source-relative entries never copied. Requires `excludeRoot` to resolve against. */
+  exclude?: string[]
+  /** The registry source root the `exclude` entries are relative to. */
+  excludeRoot?: string
+}
+
+/**
+ * Whether a source-relative path falls under one of the excluded entries.
+ *
+ * Segment-wise, never a string prefix: `process/setup` excludes
+ * `process/setup/SKILL.md` and `process/setup/references/deep.md`, and leaves
+ * `process/setup-helper/SKILL.md` alone. A plain `startsWith` would drop the
+ * latter — the classic shape of this bug, and the reason there is a test for it.
+ *
+ * Shared by both copy paths: the transform path filters its collected file list
+ * with it, the plain path skips entries during the walk. One predicate, so the
+ * two cannot disagree on what `exclude` means.
+ */
+export function isExcluded(filePath: string, exclude: string[] | undefined): boolean {
+  if (!exclude || exclude.length === 0) return false
+  const segments = filePath.replace(/\\/g, '/').replace(/^\/+/, '').split('/')
+  return exclude.some(entry => {
+    const entrySegments = entry.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
+    if (entrySegments.length > segments.length) return false
+    return entrySegments.every((seg, i) => seg === segments[i])
+  })
 }
 
 /**
@@ -113,6 +139,10 @@ async function copyDirEntry(entry: Dirent, context: CopyDirContext): Promise<voi
   const oldEntry = join(oldDir, entry.name)
   const newEntry = join(newDir, entry.name)
 
+  // Excluded entries are dropped before any behavior resolution or mkdir, so the
+  // whole subtree is as if it were never in the source.
+  if (isExcludedEntry(context, oldEntry)) return
+
   // Determine behavior for this entry
   const relPath = datasetRoot ? normalizeKey(relative(datasetRoot, oldEntry)) : entry.name
   const entryBehavior = resolveBehavior(relPath, folderBehavior, defaultBehavior)
@@ -121,18 +151,35 @@ async function copyDirEntry(entry: Dirent, context: CopyDirContext): Promise<voi
   if (entryBehavior === 'add' && (await destinationExists(fileService, newEntry))) return
 
   if (entry.isDirectory()) {
-    const recursiveContext: CopyDirContext = {
-      fileService,
-      oldDir: oldEntry,
-      newDir: newEntry,
-      defaultBehavior,
-      datasetRoot,
-    }
-    if (folderBehavior) {
-      recursiveContext.folderBehavior = folderBehavior
-    }
-    await copyDirHelper(recursiveContext)
+    await copyDirHelper(descendContext(context, oldEntry, newEntry))
   } else {
     await copyFileHelper(fileService, oldEntry, newEntry, entryBehavior)
+  }
+}
+
+/** Whether this source entry falls under the context's `exclude` list. */
+function isExcludedEntry(context: CopyDirContext, oldEntry: string): boolean {
+  const { exclude, excludeRoot } = context
+  if (!excludeRoot) return false
+  return isExcluded(relative(excludeRoot, oldEntry), exclude)
+}
+
+/**
+ * The context for recursing into a sub-directory: same options, new endpoints.
+ * `exclude`/`excludeRoot` must survive the descent — the root stays the registry
+ * source, so entry paths keep resolving against the same base at every depth.
+ */
+function descendContext(context: CopyDirContext, oldEntry: string, newEntry: string) {
+  const { fileService, folderBehavior, defaultBehavior, datasetRoot, exclude, excludeRoot } =
+    context
+  return {
+    fileService,
+    oldDir: oldEntry,
+    newDir: newEntry,
+    defaultBehavior,
+    datasetRoot,
+    ...(folderBehavior && { folderBehavior }),
+    ...(exclude && { exclude }),
+    ...(excludeRoot && { excludeRoot }),
   }
 }

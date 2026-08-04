@@ -1,0 +1,14 @@
+{
+  "$schema": "https://www.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "pair",
+  "description": "pair assistant: sets pair up when it is missing, then helps you use pair-cli and your project's own knowledge base.",
+  "author": {
+    "name": "Foomakers",
+    "url": "https://github.com/foomakers"
+  },
+  "homepage": "https://pair.foomakers.com/docs",
+  "repository": "https://github.com/foomakers/pair",
+  "license": "MIT",
+  "keywords": ["sdlc", "agile", "ddd", "code-review", "knowledge-base", "project-management"],
+  "skills": ["./skills/pair-assistant"]
+}

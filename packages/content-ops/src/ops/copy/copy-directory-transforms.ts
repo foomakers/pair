@@ -1,6 +1,6 @@
 import { join, relative, dirname } from 'path/posix'
 import { logger } from '../../observability'
-import { copyFileHelper } from '../../file-system'
+import { copyFileHelper, isExcluded } from '../../file-system'
 import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
 import { transformPath, isRegistryEntryPath } from '../naming-transforms'
@@ -42,6 +42,24 @@ async function collectFiles(
     }
   }
   return result
+}
+
+/**
+ * The source files this copy will actually install: collected, then stripped of
+ * every excluded entry.
+ *
+ * Filtered HERE, before validation and before any `mkdir`, so an excluded entry
+ * cannot contribute a flatten collision, a directory mapping, or a link-rewrite
+ * pass — it is as if it were never in the source. Extracted from
+ * `copyDirectoryWithTransforms` only to keep it under the 50-line ceiling.
+ */
+async function collectInstallableFiles(
+  fileService: FileSystemService,
+  srcPath: string,
+  exclude: string[] | undefined,
+): Promise<string[]> {
+  const collected = await collectFiles(fileService, srcPath, srcPath)
+  return collected.filter(f => !isExcluded(f, exclude))
 }
 
 /**
@@ -235,7 +253,7 @@ export async function copyDirectoryWithTransforms(params: {
   const { fileService, srcPath, destPath, options } = params
   const transformOpts = buildTransformOpts(options)
 
-  const files = await collectFiles(fileService, srcPath, srcPath)
+  const files = await collectInstallableFiles(fileService, srcPath, options?.exclude)
   validateNoCollisions(files, transformOpts, srcPath)
   validateNoShallowEntryWithSubdir(files, transformOpts, srcPath)
   validateNoDeepEntry(files, transformOpts, srcPath)

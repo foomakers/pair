@@ -1,0 +1,24 @@
+{
+  "$schema": "https://www.schemastore.org/claude-code-marketplace.json",
+  "name": "pair",
+  "description": "pair — AI-assisted SDLC skills for Claude Code. The marketplace ships the bootstrap skill; the full catalog is installed by pair-cli.",
+  "owner": {
+    "name": "Foomakers",
+    "url": "https://github.com/foomakers"
+  },
+  "plugins": [
+    {
+      "name": "pair",
+      "source": "./packages/knowledge-hub/dataset/plugin",
+      "description": "pair bootstrap skill: installs pair-cli and lets the CLI produce this project's knowledge base and skill catalog.",
+      "category": "workflow",
+      "tags": [
+        "sdlc",
+        "agile",
+        "ddd",
+        "code-review",
+        "project-management"
+      ]
+    }
+  ]
+}

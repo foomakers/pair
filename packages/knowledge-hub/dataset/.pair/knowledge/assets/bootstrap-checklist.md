@@ -123,6 +123,8 @@ The `hardcoded fallback` tier for a setup skill running its **quick** depth — 
 - **Project management tool** — organisational, not technical. Read from `way-of-working.md`, or asked.
 - **[Context-Specific Examples](#context-specific-examples)** (below) are worked examples of three _already-decided_ projects, including their stack and PM tool. They illustrate; they are never a default source.
 
+> **Read the repository before taking a row from this table.** These are the values quick mode uses when the project cannot tell you — the `hardcoded fallback` tier of the [guided/quick cascade](../guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md). Where the repository _does_ show the answer — a workspace layout, a `Dockerfile` or `terraform/`, an error-tracking dependency, the CI workflows and their environment names — that evidence wins over the row. A default is for silence, not a shortcut past looking.
+
 | Section / decision            | Type A (Pet / PoC)                                            | Type B (Startup / Scale-up)                                | Type C (Enterprise)                                                             |
 | ----------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Architecture — core pattern   | Modular Monolith (per [Decision Framework](#decision-framework)) | Modular Monolith with microservice preparation              | Modular Monolith until a domain split is justified — evaluate per Decision Framework |
