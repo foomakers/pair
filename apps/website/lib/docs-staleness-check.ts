@@ -491,6 +491,23 @@ function perFileErrors(params: {
   return errors
 }
 
+/**
+ * The repo-root README's count claims. It used to be excluded from this gate, with the
+ * note "tracked and fixed by PR #325" — that PR is merged, so the exemption outlived its
+ * own reason while the counts stayed unpinned (and a live drift sat there: 11 how-to
+ * guides claimed against 9 on disk). It is the first page a reader sees; the same count
+ * checks apply, and nothing else about the gate's docs-site focus changes.
+ */
+function readmeErrors(path: string, skillCount: number, howToCount: number | null): string[] {
+  if (!existsSync(path)) return []
+  const content = readFileSync(path, 'utf-8')
+  const errors = findSkillCountMismatches(content, 'README.md', skillCount)
+  if (howToCount !== null) {
+    errors.push(...findGuideCountMismatches(content, 'README.md', howToCount))
+  }
+  return errors
+}
+
 /** Run every check against a repo root and collect all drift errors. */
 /**
  * The source-of-truth paths every check reads, resolved from one repo root. Kept as
@@ -555,16 +572,7 @@ export function runAllChecks(root: string): RunResult {
   const cli = checkCliCommands(paths.COMMANDS_DIR, paths.COMMANDS_FILE, docs)
   errors.push(...cli.errors)
 
-  // The repo-root README is IN scope. It used to be excluded, with the note "tracked and
-  // fixed by PR #325" — that PR is merged, so the exclusion outlived its own reason while
-  // the counts stayed unpinned. It is the first page a reader sees; the same count checks
-  // apply, and nothing else about the gate's docs-site focus changes.
-  const readme = join(root, 'README.md')
-  if (existsSync(readme)) {
-    const content = readFileSync(readme, 'utf-8')
-    errors.push(...findSkillCountMismatches(content, 'README.md', skillCount))
-    if (howToCount !== null) errors.push(...findGuideCountMismatches(content, 'README.md', howToCount))
-  }
+  errors.push(...readmeErrors(join(root, 'README.md'), skillCount, howToCount))
 
   return { errors, skillCount, commandCount: cli.commandCount }
 }
