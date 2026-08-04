@@ -10,25 +10,38 @@ const MARKER_LINE_RE = /^<!-- @[\w]+-[\w]+-(?:start|end) -->\n?/gm
 const collapseBlankLines = (s: string): string => s.replace(/\n{3,}/g, '\n\n')
 
 /**
+ * Exactly one trailing newline. `collapseBlankLines` cannot do this: a file left with a
+ * single trailing blank line ends in `\n\n`, which is two newlines, not three or more.
+ * A source whose LAST block is skipped always lands there — and the artifact then trips
+ * `MD012/no-multiple-blanks` in the very repository that generated it (observed on
+ * CLAUDE.md, whose source ends with `@claude-skip-end`: the generated file failed the
+ * pre-push gate it is shipped alongside).
+ */
+const normalizeEnding = (s: string): string => (s === '' ? s : s.replace(/\n*$/, '\n'))
+
+const tidy = (s: string): string => normalizeEnding(collapseBlankLines(s))
+
+/**
  * Strips ALL marker comments from content, regardless of prefix or command.
- * Content between markers is preserved. Triple+ blank lines are collapsed.
+ * Content between markers is preserved. Triple+ blank lines are collapsed and the
+ * output ends with exactly one newline.
  */
 export function stripAllMarkers(content: string): string {
-  return collapseBlankLines(content.replace(MARKER_LINE_RE, ''))
+  return tidy(content.replace(MARKER_LINE_RE, ''))
 }
 
 /**
  * Applies transform commands for a specific prefix.
  * For "skip": removes everything between start/end markers (inclusive).
- * Other prefixes' markers are left untouched.
- * Triple+ blank lines are collapsed.
+ * Other prefixes' markers are left untouched. Triple+ blank lines are collapsed and the
+ * output ends with exactly one newline.
  */
 export function applyTransformCommands(content: string, prefix: string): string {
   const skipBlockRe = new RegExp(
     `<!-- @${prefix}-skip-start -->[\\s\\S]*?<!-- @${prefix}-skip-end -->\\n?`,
     'g',
   )
-  return collapseBlankLines(content.replace(skipBlockRe, ''))
+  return tidy(content.replace(skipBlockRe, ''))
 }
 
 export type MarkerError = {

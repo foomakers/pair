@@ -71,6 +71,27 @@ describe('stripAllMarkers', () => {
   })
 })
 
+describe('generated output ends with exactly one newline', () => {
+  // A source whose LAST block is skipped leaves a trailing blank line, and
+  // collapseBlankLines does not see it: two newlines are not "three or more". The
+  // artifact then violates MD012 in the very repo that generates it — observed on
+  // CLAUDE.md, whose source ends with @claude-skip-end.
+  it('trims the blank line a trailing skip block leaves behind', () => {
+    const src = '# Doc\n\ncontent\n\n<!-- @claude-skip-start -->\nprivate\n<!-- @claude-skip-end -->\n'
+    expect(applyTransformCommands(src, 'claude')).toBe('# Doc\n\ncontent\n')
+  })
+
+  it('does the same when only the markers are stripped', () => {
+    const src = '# Doc\n\ncontent\n\n<!-- @claude-skip-start -->\n<!-- @claude-skip-end -->\n'
+    expect(stripAllMarkers(src).endsWith('\n')).toBe(true)
+    expect(stripAllMarkers(src).endsWith('\n\n')).toBe(false)
+  })
+
+  it('leaves a file that already ends in one newline alone', () => {
+    expect(applyTransformCommands('# Doc\n\ncontent\n', 'claude')).toBe('# Doc\n\ncontent\n')
+  })
+})
+
 describe('applyTransformCommands', () => {
   it('returns unchanged content when no markers present', () => {
     const input = '# Title\n\nSome content\n'
