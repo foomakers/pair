@@ -66,9 +66,22 @@ describe('quality-model.md — structure', () => {
       /Reviewer counts and SLAs are \*\*KB defaults\*\*[\s\S]{0,300}Argument > Adoption > KB default/,
     )
     expect(QUALITY_MODEL).toContain('tier.red.reviewers: 2')
+  })
+
+  // Two claims that must not collapse into each other: WHAT the tiers require is
+  // overridable, THAT the review runs is not, and whether any of it BLOCKS is a separate
+  // opt-in. The previous assertion pinned a single sentence saying only reviewer count and
+  // SLA were overridable — true before the enforcement flag existed, and it would now hide
+  // a revert of the default back to blocking.
+  it('separates the un-overridable part from the requirements and from enforcement', () => {
     expect(QUALITY_MODEL).toMatch(
-      /this part is not overridable, only the reviewer count and SLA are/,
+      /Review always runs and tests are always green[\s\S]{0,120}\*\*that\*\* part is not overridable/i,
     )
+    expect(QUALITY_MODEL).toMatch(/whether any of it BLOCKS is opt-in/i)
+    expect(QUALITY_MODEL).toMatch(/`Review enforcement`[\s\S]{0,120}`disabled` by default/)
+    // The consequence that makes the default non-negotiable, so a future edit cannot drop
+    // it as decoration: enabling it on a single-maintainer repo cannot be satisfied.
+    expect(QUALITY_MODEL).toMatch(/single-maintainer[\s\S]{0,140}cannot be obtained/i)
   })
 
   it('defines the chromatic tag projection', () => {
