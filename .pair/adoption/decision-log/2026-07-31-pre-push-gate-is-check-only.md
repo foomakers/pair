@@ -48,6 +48,21 @@ A second failure mode surfaced while implementing this: generated artifacts. In 
 - **Enumerate generated directories in the shared ignore files**: rejected as the primary mechanism. It is reactive — each new generated tree blocks a push until someone adds a line — and it was already the cause of two blocked pushes here. Delegating to `.gitignore` makes the rule declarative.
 - **A comment/doc line saying "don't put `:fix` in the gate"**: rejected as the only safeguard. The regression is one word and its symptom (a diff full of unrelated files) reads as author error, not tooling behaviour; the executable guard is what makes it non-silent.
 
+## Open Decision — escalate before implementing
+
+**Should the gate apply the fix as well as failing, and should `pnpm format` realign the generated mirrors?** Raised by the maintainer 2026-08-04 while reviewing this story; **deliberately not implemented**, and not to be implemented without their call.
+
+What is settled: the gate **fails** on a formatting violation. That was the story's point, and it holds — before this change `prettier:fix` corrected the files, exited 0 and let the push through, so nothing failed except in the one sub-case where the fix touched `dataset/.skills/**` and `skills:conformance` then compared dataset against mirror.
+
+What is open, and the two shapes it could take:
+
+- **A — the gate applies the fix, then still fails** (`pnpm format || true` before `format:check`). The contributor only has to commit. Cost: a hook writes files the contributor never staged, which is the symptom that motivated this story ("a diff full of unrelated files"), and at pre-push the fix cannot reach the commits being pushed — so it saves a command, not a cycle.
+- **B — `pnpm format` also runs `pair update`**, so the command that reformats the dataset realigns `.claude/skills/**` and `.pair/**` in the same step. It closes the residual manual step (the two-step remedy nobody remembers) but couples a formatting command to an install command and makes `format` write outside format scope.
+
+Why it matters enough to record rather than leave implicit: the divergence this is about bit **seven times in one day**, three of them because a mirror was hand-ported instead of regenerated. The current state is safe — the mirror guard runs first in the gate and catches it with the right message — but the remedy is still a human remembering `pair update`.
+
+Not scoped, not estimated, no story. Escalate to the maintainer first.
+
 ## Consequences
 
 - `pnpm quality-gate` no longer modifies the working tree. A formatting violation in a changed file still fails the push, with `pnpm format` named in the failure message.
