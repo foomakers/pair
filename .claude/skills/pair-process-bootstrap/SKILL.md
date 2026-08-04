@@ -204,15 +204,15 @@ For each missing adoption file (in order: architecture → tech-stack → infras
 
    Record the answer as `Review enforcement: disabled|enabled`. **No answer, or quick mode ⇒ `disabled`** — the tier below has no project-state signal to read, and a default that blocks turns a fresh install into a repository nobody can merge into.
 
-4. **Act**: For each quality gate (standard + custom):
+5. **Act**: For each quality gate (standard + custom):
    - Add entry to the Custom Gate Registry in `way-of-working.md` with: Order, Gate name, Command, Scope Key, Required flag, Description
    - Create placeholder script entries (in `package.json` scripts or technology-specific equivalent) so the gate infrastructure is executable from day one
 
-5. **Act**: Record quality gate decisions via `/pair-capability-record-decision`:
+6. **Act**: Record quality gate decisions via `/pair-capability-record-decision`:
    - `$type`: `non-architectural`
    - `$topic`: `quality-gate-setup`
 
-6. **Verify**: Quality gates documented in way-of-working and placeholder scripts exist.
+7. **Verify**: Quality gates documented in way-of-working and placeholder scripts exist.
 
 **Quick mode**: the custom-gate question is skipped — the standard pipeline only, written as the same registry entries and scripts guided mode would produce ([quick-mode-defaults.md](./quick-mode-defaults.md)).
 
