@@ -2,7 +2,7 @@
 
 > **Verdict-first (D22, R6.6).** This is the **native GitHub review body** submitted with the review action (Approve / Request Changes / Comment). In `/pair-process-review`'s own self-review flow it is submitted as that native review body — **not a separate PR comment** (decision Q5). (An independent reviewer agent, or a self-authored PR where GitHub blocks self-approval, delivers this **same body** via a PR comment instead — see `.claude/agents/reviewer.md` and review Step 5.3; the artifact is identical, only the delivery event differs.) The top of the body — classification tags, tier, cost class and the 1-line verdict — reads in **~30 seconds**; every assessment is a 1-line verdict with the breakdown collapsed in `<details>`. A reader scanning the top understands verdict, tier and cost class inside the 30-second reading budget without opening a single `<details>`.
 >
-> **Not assessed is explicit.** When the backing capability is missing or failed (`/pair-capability-assess-security`, `/pair-capability-assess-cost`, `/pair-capability-assess-coupling`), the section verdict reads **not assessed** — never silently omitted.
+> **Not assessed is explicit.** When the backing capability is missing or failed (`/assess-security`, `/assess-cost`, `/assess-coupling`), the section verdict reads **not assessed** — never silently omitted.
 
 ## Verdict
 
@@ -18,7 +18,7 @@ ticked off in the remediation report, not in place, so an unticked box upstream 
 history and not an open item. Say so when the count is zero. -->
 > **Open findings: <N>.** <When 0: every finding is resolved; nothing on this PR is waiting on anyone.>
 
-<!-- Unassessed-chip fallback: the chip is NEVER dropped — the verdict line always carries both `risk:` and `cost:` prefixes and stays scannable. `cost:n/a` renders when `/pair-capability-assess-cost` is absent (cost is a single-source dimension). `risk:n/a` renders ONLY when `/pair-capability-classify` is entirely absent (no matrix at all, per skill Step 1.5) — a single unassessed dimension (Security relevance, or Coupling until #263) is EXCLUDED from `max(assessed)` (§3.1 / D21), NOT propagated to the tier, so the risk chip still shows the max of the other assessed dimensions. `n/a` is a rendering placeholder, not a tag value (no `cost:not assessed` / `risk:not assessed` tag is ever emitted). This keeps the top-line degradation consistent with the section degradation, whose collapsed body reads "not assessed". -->
+<!-- Unassessed-chip fallback: the chip is NEVER dropped — the verdict line always carries both `risk:` and `cost:` prefixes and stays scannable. `cost:n/a` renders when `/assess-cost` is absent (cost is a single-source dimension). `risk:n/a` renders ONLY when `/classify` is entirely absent (no matrix at all, per skill Step 1.5) — a single unassessed dimension (Security relevance, or Coupling until #263) is EXCLUDED from `max(assessed)` (§3.1 / D21), NOT propagated to the tier, so the risk chip still shows the max of the other assessed dimensions. `n/a` is a rendering placeholder, not a tag value (no `cost:not assessed` / `risk:not assessed` tag is ever emitted). This keeps the top-line degradation consistent with the section degradation, whose collapsed body reads "not assessed". -->
 
 <!-- Classification-changed drift note: include ONLY when the review-time tier/cost differs from the story's refinement-time classification. Raise-only per quality-model §3.2 / D17 — a drift note fires upward, never records a silent downgrade. Omit the line entirely when unchanged. -->
 > **Classification changed:** `risk:<from>` → `risk:<to>` — [one-line reason]
@@ -33,8 +33,8 @@ history and not an open item. Say so when the count is zero. -->
 | Service/domain criticality  | [color] | [KB default / table]       | [note]            |
 | Change/diff risk            | [color] | [diff footprint]           | [note]            |
 | Business impact             | [color] | [subdomain class]          | [note]            |
-| Security relevance          | [color] | `/pair-capability-assess-security`         | [raise-only, D17] |
-| Coupling balance            | [color] | `/pair-capability-assess-coupling`         | [not assessed until #263] |
+| Security relevance          | [color] | `/assess-security`         | [raise-only, D17] |
+| Coupling balance            | [color] | `/assess-coupling`         | [not assessed until #263] |
 
 Tier = max(assessed). Cost = highest detected signal. Review value is a **floor** (D17): confirm or raise, never lower.
 
@@ -52,7 +52,7 @@ Each assessment is a **1-line verdict**; open the `<details>` for the breakdown.
 <summary>Details</summary>
 
 - Inputs touched by the diff and whether each is validated / sanitized.
-- Feeds from `/pair-capability-assess-security` (`$mode: review`).
+- Feeds from `/assess-security` (`$mode: review`).
 
 </details>
 
@@ -115,7 +115,7 @@ Any **introduced** red finding drives **CHANGES-REQUESTED** (introduced-red-secu
 | ------ | ----- | -------- | ---- |
 | [signal] | [color] | [stack] | [note] |
 
-Feeds from `/pair-capability-assess-cost` against the diff. A **red** cost class surfaces a **blocking human sign-off** requirement in the Verdict area. Capability absent → not assessed.
+Feeds from `/assess-cost` against the diff. A **red** cost class surfaces a **blocking human sign-off** requirement in the Verdict area. Capability absent → not assessed.
 
 </details>
 
@@ -127,7 +127,7 @@ Feeds from `/pair-capability-assess-cost` against the diff. A **red** cost class
 <summary>Details</summary>
 
 - Integration strength / socio-technical distance / volatility on the integrations the diff touches.
-- Feeds from `/pair-capability-assess-coupling` (`$scope: diff`). Capability absent (until #263) → not assessed.
+- Feeds from `/assess-coupling` (`$scope: diff`). Capability absent (until #263) → not assessed.
 
 </details>
 
@@ -194,7 +194,7 @@ Feeds from `/pair-capability-assess-cost` against the diff. A **red** cost class
 <details>
 <summary>Tech debt</summary>
 
-- Items flagged by `/pair-capability-analyze-debt` (surfaced, never blocking on debt grounds alone).
+- Items flagged by `/analyze-debt` (surfaced, never blocking on debt grounds alone).
 
 </details>
 
