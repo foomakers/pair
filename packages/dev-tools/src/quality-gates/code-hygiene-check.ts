@@ -7,15 +7,14 @@
  * (package script `code-hygiene:check`, delegated from the repo-root `hygiene:check`
  * script). Exit 0 = clean, Exit 1 = violations found.
  *
- * Runs `git grep` with an explicit `cwd` (the repo root, resolved from this file's
- * location: packages/dev-tools/src/quality-gates -> src -> dev-tools -> packages
- * -> repo root, up 4) so the scan behaves identically regardless of the caller's
- * working directory (e.g. `pnpm --filter` sets cwd to the package dir, not the repo root).
+ * Runs `git grep` with an explicit `cwd` (the repo root, from `./repo-root` — the
+ * hop count is defined once for this folder) so the scan behaves identically
+ * regardless of the caller's working directory (e.g. `pnpm --filter` sets cwd to
+ * the package dir, not the repo root).
  */
 import { execSync } from 'child_process'
-import { resolve } from 'path'
 
-const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
+import { REPO_ROOT } from './repo-root'
 
 // Path of this module, relative to the repo root — excluded from its own scan so
 // the patterns below (deliberately split so they don't match this file) never

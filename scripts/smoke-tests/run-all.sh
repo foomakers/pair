@@ -268,6 +268,7 @@ if [ "$IS_CI" = "true" ]; then
     "tier-aware-gate.sh"
     "coverage-gate.sh"
     "pr-state-flow.sh"
+    "format-ignore-delegation.sh"
   )
   
   for t in "${CI_TESTS[@]}"; do

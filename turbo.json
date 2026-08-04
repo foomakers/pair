@@ -1,5 +1,13 @@
 {
   "$schema": "https://turborepo.org/schema.json",
+  "//": "globalDependencies: the formatter tasks are cacheable, and since #394 their ignore SOURCES include the repo-root .gitignore plus the shared ignore files and the bin wrappers that pass them. Without this, adding a generated dir to .gitignore touches no package file, so turbo replays a pre-change result — a stale PASS, or a stale FAIL a developer cannot clear. BLAST RADIUS ACCEPTED DELIBERATELY: globalDependencies is the widest invalidation lever there is — turbo folds it into the GLOBAL hash, so editing .gitignore, either shared ignore file, or anything under the two bin/** dirs also busts build/test/ts:check/lint/test:coverage caches that cannot possibly be affected, i.e. a full local + CI rebuild and retest on an edit that changes no compilation input. The narrower option (per-task inputs on prettier:check|prettier:fix|mdlint:check|mdlint:fix = [\"$TURBO_DEFAULT$\", \"../../.gitignore\", \"../../tools/prettier-config/**\", ...]) was passed over on purpose: it hardcodes the ../../ depth in four places (wrong for a differently nested package) and degrades SILENTLY to a stale cache when a fifth formatter task is added without it, whereas over-approximation only ever fails towards extra work. Revisit if the over-invalidation becomes measurable.",
+  "globalDependencies": [
+    ".gitignore",
+    "tools/prettier-config/.prettierignore",
+    "tools/prettier-config/bin/**",
+    "tools/markdownlint-config/.markdownlintignore",
+    "tools/markdownlint-config/bin/**"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

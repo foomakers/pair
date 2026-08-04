@@ -74,7 +74,20 @@ Before committing, always run:
 pnpm quality-gate
 ```
 
-This runs (in order): `ts:check`, `test`, `lint`, `prettier:fix`, `mdlint:fix`, `hygiene:check`, `docs:staleness`.
+This runs (in order): `ts:check`, `test`, `lint`, `format:check` (prettier + markdownlint, **check mode**), `gate:composition`, `hygiene:check`, `docs:staleness`, `skills:conformance`, `dup:check`.
+
+The gate never formats. It is the pre-push hook, where the commits already exist: a write-mode
+formatter would rewrite the working tree without touching what is being pushed, so it only pollutes
+the next diff. On a `format:check` failure, run `pnpm format` and commit the result. Exit **2** instead of 1 means a
+formatter wrapper itself failed (a broken install, not drift) — read its output rather than running
+`pnpm format`. **Two-step remedy:**
+if `pnpm format` touched `packages/knowledge-hub/dataset/.skills/**`, re-sync the generated
+`.claude/skills/**` copies (`pair update`) in the same commit, or `skills:conformance` fails later in the
+same gate — the dataset copy is inside format scope, its generated twin is not (`.claude/` is not a
+workspace member), and the mirror guard asserts the two are byte-equal through the real `pair update`
+transform. `gate:composition` guards the gate against a write-mode step (formatter or eslint autofix)
+creeping back in. See ADL
+[the pre-push gate is check-only](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 
 ### Gate registry
 
@@ -88,8 +101,8 @@ This runs (in order): `ts:check`, `test`, `lint`, `prettier:fix`, `mdlint:fix`, 
 
 Husky is configured to run checks automatically:
 
-- **Pre-commit** — Linting and formatting checks.
-- **Pre-push** — Tests run before pushing.
+- **Pre-commit** — Type checking (`pnpm ts:check`).
+- **Pre-push** — The full quality gate (`pnpm quality-gate`), formatting included in **check** mode.
 
 ### Troubleshooting hooks
 
@@ -97,20 +110,24 @@ Husky is configured to run checks automatically:
 |---------|----------|
 | Hooks not running | Run `pnpm install` after cloning. Verify `.husky/` exists. |
 | Permission errors | `chmod +x .husky/*` |
-| Pre-commit fails | Run hook commands manually (`pnpm lint`, `pnpm test`) to debug. |
+| Pre-commit fails | Run the hook command manually (`pnpm ts:check`) to debug. |
+| Pre-push fails on formatting | Run `pnpm format`, commit the result, push again — the gate never formats for you. |
 
 ## Common commands
 
 ```bash
 pnpm install              # Install all dependencies
-pnpm quality-gate         # Full quality check
+pnpm quality-gate         # Full quality check (never writes — formatting is checked only)
+pnpm format               # Apply formatting (prettier + markdownlint, write mode)
+pnpm format:check         # Check formatting only — what the gate runs
 pnpm build                # Build all packages
 pnpm test                 # Run all tests
 pnpm lint                 # Lint all packages
 pnpm lint:fix             # Auto-fix linting issues
 pnpm ts:check             # Type-check all TypeScript
-pnpm prettier:check       # Check formatting
-pnpm prettier:fix         # Auto-format code
+pnpm prettier:check       # Check formatting (prettier only)
+pnpm prettier:fix         # Auto-format code (prettier only)
+pnpm mdlint:check         # Check markdown only (markdownlint)
 pnpm clean                # Clean build artifacts and caches
 ```
 

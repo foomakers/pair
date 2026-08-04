@@ -17,8 +17,8 @@
  * and passed as the first argument. The new version is read from
  * apps/pair-cli/package.json.
  *
- * REPO_ROOT is resolved from this file's location: packages/dev-tools/src/quality-gates
- * -> src -> dev-tools -> packages -> repo root (up 4).
+ * REPO_ROOT comes from `./repo-root` — the hop count to the repo root is defined
+ * once for this folder, not per tool.
  *
  * RULE FOR DOC AUTHORS: every occurrence of the old version is rewritten on EVERY .md/.mdx
  * line (only the `isExternalLine` forms are spared), prose included and unreviewed. So never
@@ -27,9 +27,9 @@
  * Point at the CHANGELOG instead; wording without a literal version cannot be rewritten.
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
-import { join, relative, resolve } from 'path'
+import { join, relative } from 'path'
 
-const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
+import { REPO_ROOT } from './repo-root'
 
 // Directories/patterns to skip — not our version strings. Merged with infra dirs
 // that should never be walked (large, generated, or vendored trees).

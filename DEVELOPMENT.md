@@ -62,15 +62,18 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 
 ```bash
 pnpm install              # Install all dependencies
-pnpm quality-gate         # Full quality check (ts:check + test + lint + prettier + mdlint + hygiene)
+pnpm quality-gate         # Full quality check (ts:check + test + lint + format check + hygiene)
+pnpm format               # Apply formatting (prettier + markdownlint, write mode)
+pnpm format:check         # Check formatting only — what the gate runs; never writes
 pnpm test                 # Run all tests (Turbo)
 pnpm build                # Build all packages (Turbo)
 pnpm lint                 # Lint all packages (Turbo)
 pnpm lint:fix             # Auto-fix linting issues (Turbo)
 pnpm ts:check             # Type-check all TypeScript (Turbo)
 pnpm test:coverage        # Tests with coverage report
-pnpm prettier:check       # Check formatting
-pnpm prettier:fix         # Auto-format code
+pnpm prettier:check       # Check formatting (prettier only)
+pnpm prettier:fix         # Auto-format code (prettier only)
+pnpm mdlint:check         # Check markdown only (markdownlint)
 pnpm clean                # Clean build artifacts and caches
 pnpm sync-deps            # Update all dependencies recursively
 pnpm deps:outdated        # Show outdated dependencies
@@ -118,7 +121,20 @@ Before committing, always run:
 pnpm quality-gate
 ```
 
-This runs (in order): `ts:check`, `test`, `lint`, `prettier:fix`, `mdlint:fix`, `hygiene:check`, `docs:staleness`.
+This runs (in order): `ts:check`, `test`, `lint`, `format:check` (prettier + markdownlint, **check mode**), `gate:composition`, `hygiene:check`, `docs:staleness`, `skills:conformance`, `dup:check`.
+
+The gate never formats. It is the pre-push hook, where the commits already exist: a write-mode
+formatter would rewrite the working tree without touching what is being pushed, so it only pollutes
+the next diff. On a `format:check` failure, run `pnpm format` and commit the result. Exit **2** instead of 1 means a
+formatter wrapper itself failed (a broken install, not drift) — read its output rather than running
+`pnpm format`. **Two-step remedy:**
+if `pnpm format` touched `packages/knowledge-hub/dataset/.skills/**`, re-sync the generated
+`.claude/skills/**` copies (`pair update`) in the same commit, or `skills:conformance` fails later in the
+same gate — the dataset copy is inside format scope, its generated twin is not (`.claude/` is not a
+workspace member), and the mirror guard asserts the two are byte-equal through the real `pair update`
+transform. `gate:composition` guards the gate against a write-mode step (formatter or eslint autofix)
+creeping back in. See ADL
+[2026-07-31-pre-push-gate-is-check-only.md](.pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 
 ### Custom Gate Registry
 
