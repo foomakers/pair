@@ -76,9 +76,9 @@ describe('parseGitIndexEntries reads `git ls-files -s` output (#400)', () => {
   // `.trim()` on the line silently rewrites a path with a trailing space, and the
   // path the developer is told to `chmod` then does not exist.
   it('preserves a path with a trailing space verbatim', () => {
-    expect(parseGitIndexEntries(entry('100644', 'scripts/smoke-tests/scenarios/x .sh '))[0]).toEqual(
-      { mode: '100644', path: 'scripts/smoke-tests/scenarios/x .sh ' },
-    )
+    expect(
+      parseGitIndexEntries(entry('100644', 'scripts/smoke-tests/scenarios/x .sh '))[0],
+    ).toEqual({ mode: '100644', path: 'scripts/smoke-tests/scenarios/x .sh ' })
   })
 })
 
