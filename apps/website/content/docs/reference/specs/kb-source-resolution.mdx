@@ -208,15 +208,30 @@ When `requiresDownload: true` for URL sources:
 The slot is derived from the **identity of the source** (its resolved path or URL), so two
 different sources never share a slot and the same source always reuses its own. Only the
 official KB writes the version-keyed slot — an external KB can never overwrite it or its
-`manifest.json` ([foomakers/pair#395](https://github.com/foomakers/pair/issues/395)).
+`manifest.json` ([foomakers/pair#395](https://github.com/foomakers/pair/issues/395)). The
+root of every slot above is `~/.pair/kb` unless `PAIR_KB_CACHE_DIR` overrides it.
 
 A slot whose `manifest.json` names a different KB than the one expected is treated as
-**contaminated**: it is discarded and re-fetched rather than served, so a machine polluted
-by an older CLI heals on its next install.
+**contaminated**: it is discarded and re-fetched rather than served. The contaminated slot
+is set aside first, not deleted, so a failing re-fetch (offline, 5xx) leaves the previous
+content in place instead of no cache at all. A slot with no `manifest.json` at all is
+treated as an aborted download and re-fetched too.
+
+**Scope of the self-heal:** the official slot is keyed by CLI version, so detection only
+applies to the slot of the CLI version you are running. A slot polluted by an **older**
+CLI (before [foomakers/pair#395](https://github.com/foomakers/pair/issues/395)) lives under
+that older version's directory and is never read again — abandoned, not discarded.
 
 **Disk:** one slot per distinct source. Slots are plain directories with no hidden state —
 `rm -rf ~/.pair/kb/external` is always safe, and the next install re-populates what it
-needs. There is no automatic eviction.
+needs. There is no automatic eviction. Three leftovers `rm -rf ~/.pair/kb/external` does
+**not** cover, all safe to delete by hand:
+
+| Leftover                     | Left by                                                    |
+| ---------------------------- | ---------------------------------------------------------- |
+| `~/.pair/kb/<old-version>/`  | an older CLI, possibly polluted by a pre-fix `--source`      |
+| `~/.pair/kb/git-<hash>/`     | a git `--source` clone from before the `external/` namespace |
+| `~/.pair/kb/<version>.bak`   | an install that was interrupted mid-write                    |
 
 ## Configuration
 
@@ -224,7 +239,7 @@ needs. There is no automatic eviction.
 
 | Variable              | Description                         | Default               |
 | --------------------- | ----------------------------------- | --------------------- |
-| `PAIR_KB_CACHE_DIR`   | Override KB cache directory          | `~/.pair/kb`          |
+| `PAIR_KB_CACHE_DIR`   | Override the KB cache root (absolute path) | `~/.pair/kb`     |
 | `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL  | GitHub latest release  |
 | `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos | Not set      |
 | `PAIR_DIAG`           | Enable diagnostic logging            | `0` (disabled)        |
