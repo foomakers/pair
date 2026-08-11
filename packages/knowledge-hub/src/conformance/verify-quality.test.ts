@@ -229,11 +229,41 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(step15).toMatch(/grep -q '\^risk:'/)
     expect(step15).toMatch(/has_risk_tag/)
     // One spelling of the rule on every branch that reads labels: each `LABELS=` read is
-    // followed by a `has_risk_tag` test rather than an emptiness test.
+    // followed by at least one `has_risk_tag` test rather than an emptiness test.
     const labelReads = (step15Code.match(/LABELS="\$\(/g) ?? []).length
     const tagTests = (step15Code.match(/has_risk_tag "\$LABELS"/g) ?? []).length
-    expect(labelReads).toBeGreaterThanOrEqual(3)
-    expect(tagTests).toBeGreaterThanOrEqual(3)
+    expect(labelReads).toBeGreaterThanOrEqual(2)
+    expect(tagTests).toBeGreaterThanOrEqual(labelReads)
+  })
+
+  it('every variable the snippet READS is initialized in the step before first use', () => {
+    // The fail-safe design only holds if nothing can be read stale. This skill is
+    // idempotent by contract, so it is re-invoked in shells where a previous run's
+    // variables survive: an arm that falls through to `resolve_tier "$LABELS"` without
+    // assigning `LABELS` would resolve the PREVIOUS run's tier — a silent NARROW on
+    // exactly the paths whose purpose is to fail safe (D17 forbids the direction).
+    const lines = step15Code.split('\n')
+    const assignedAt = new Map<string, number>()
+    lines.forEach((l, i) => {
+      for (const m of l.matchAll(/(?:^|[\s;(])([A-Z][A-Z0-9_]*)=/g)) {
+        const name = m[1] as string
+        if (!assignedAt.has(name)) assignedAt.set(name, i)
+      }
+    })
+    const readBeforeAssigned: string[] = []
+    lines.forEach((l, i) => {
+      for (const m of l.matchAll(/\$\{?([A-Z][A-Z0-9_]*)\}?/g)) {
+        const name = m[1] as string
+        const at = assignedAt.get(name)
+        if (at === undefined || at > i) readBeforeAssigned.push(`${name} (line ${i + 1})`)
+      }
+    })
+    expect(
+      readBeforeAssigned,
+      `read before assignment in Step 1.5: ${readBeforeAssigned.join(', ')}`,
+    ).toEqual([])
+    // Pin the one the fall-through arms depend on, by spelling too.
+    expect(step15Code).toMatch(/^\s*LABELS=""/m)
   })
 
   it('AC4 — every resolution branch sets a DISTINCT reason; the generic line stays for the sourceless case', () => {
@@ -256,8 +286,14 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // `$story` (the refinement tier — an under-check anywhere else, D17).
     expect(step15).toMatch(/no pull requests found/i)
     expect(reasons).toContain('current-branch PR unreadable — the code host is not reachable')
-    // the story-card read is nested under the no-PR arm, not under a bare failure arm
-    expect(step15).toMatch(/no pull requests found[\s\S]{0,600}gh issue view/)
+    // the no-PR message is the ONLY thing that raises the pre-publish flag …
+    const noPrFlagLines = step15Code.split('\n').filter(l => /NO_PR_ON_BRANCH=1/.test(l))
+    expect(noPrFlagLines.length).toBe(1)
+    expect(step15Code).toMatch(
+      /no pull requests found'?\s*"\$PR_ERR"[\s\S]{0,200}NO_PR_ON_BRANCH=1/,
+    )
+    // … and the story-card read is nested under that flag, not under a bare failure arm
+    expect(step15Code).toMatch(/NO_PR_ON_BRANCH" = "1"[\s\S]{0,400}gh issue view/)
   })
 
   it('a passed `$pr` never falls back to the story card — the refinement tier would be an under-check (D17)', () => {
@@ -289,16 +325,51 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // `git rev-parse HEAD` to a head sha read from the PR. A bare `TREE_MATCH=match`
     // promoted by BRANCH identity passes a spelling ban and still reports "matches PR
     // #N's head" for a locally-committed-unpushed or stale checkout of that branch.
-    const matchAssignments = step15Code.split('\n').filter(l => /TREE_MATCH=match\b/.test(l))
-    expect(matchAssignments.length).toBeGreaterThan(0)
-    for (const line of matchAssignments) {
+    const lines = step15Code.split('\n')
+    const compare = /\[ "\$\(git rev-parse HEAD\)" = "\$PR_HEAD_SHA" \]/
+    const matchAt = lines.map((l, i) => (/TREE_MATCH=match\b/.test(l) ? i : -1)).filter(i => i >= 0)
+    expect(matchAt.length).toBeGreaterThan(0)
+    for (const i of matchAt) {
+      const window = lines.slice(Math.max(0, i - 2), i + 1).join('\n')
       expect(
-        line.trim(),
-        `every TREE_MATCH=match must be guarded by the commit compare, got: ${line.trim()}`,
-      ).toMatch(/\[ "\$\(git rev-parse HEAD\)" = "\$[A-Z_]*HEAD_SHA" \]/)
+        window,
+        `every TREE_MATCH=match must be guarded by the commit compare, got: ${lines[i]?.trim()}`,
+      ).toMatch(compare)
     }
     // and no branch-name equality decides anything, on either arm
     expect(step15Code).not.toMatch(/\[ "\$LOCAL_REF" = "\$[A-Z_]*HEAD_REF" \]/)
+    // ONE name for the PR head sha across the whole step: the rendering spec interpolates
+    // `PR_HEAD_SHA`, so a second spelling on one arm renders an EMPTY sha in that arm's row.
+    const shaNames = new Set(
+      [...step15Code.matchAll(/\b([A-Z][A-Z0-9_]*HEAD_SHA)\b/g)].map(m => m[1]),
+    )
+    expect(shaNames, `one head-sha variable only, got: ${[...shaNames].join(', ')}`).toEqual(
+      new Set(['PR_HEAD_SHA']),
+    )
+  })
+
+  it('AC5 — "ahead of the PR head" is its OWN arm: the ⚠️ is reserved for stale/divergent trees', () => {
+    // `/implement` composes verify-quality after every task and `/publish-pr` runs it as a
+    // pre-flight — both on the story branch, BEFORE pushing. Once a PR exists, every such
+    // run is tree-different by construction; rendering ⚠️ on that expected state trains
+    // the reader to ignore the warning that means "the suites ran on OTHER code".
+    const lines = step15Code.split('\n')
+    const aheadAt = lines.map((l, i) => (/TREE_MATCH=ahead\b/.test(l) ? i : -1)).filter(i => i >= 0)
+    expect(aheadAt.length).toBeGreaterThan(0)
+    for (const i of aheadAt) {
+      const window = lines.slice(Math.max(0, i - 2), i + 1).join('\n')
+      expect(window, 'the ahead arm must be decided by ancestry, not by branch name').toMatch(
+        /git merge-base --is-ancestor "\$PR_HEAD_SHA" HEAD/,
+      )
+    }
+    // the ⚠️ belongs to `mismatch` only
+    const out = section(SKILL, '## Output Format')
+    const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
+    const arms = treeRow.split('|')
+    const warned = arms.filter(a => a.includes('⚠️'))
+    expect(warned.length).toBe(1)
+    expect(warned[0]).toMatch(/NOT PR #N's head/)
+    expect(arms.some(a => /ahead of PR #N's head/.test(a))).toBe(true)
   })
 
   it('AC5 — the current-branch arm reads the head sha too, and names the PR it reports on', () => {
@@ -320,12 +391,30 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(localAt).toBeGreaterThan(-1)
     expect(prGuardAt).toBeGreaterThan(-1)
     expect(localAt, 'LOCAL_REF must be hoisted above the `$pr` guard').toBeLessThan(prGuardAt)
+    // …and it must name a COMMIT when detached: `git rev-parse --abbrev-ref HEAD` yields the
+    // literal string "HEAD" there, while both renderings promise a commit — and a detached
+    // checkout is the canonical independent-review/CI shape this contract targets.
+    expect(step15Code).toMatch(/\[ "\$LOCAL_REF" = HEAD \][\s\S]{0,120}git rev-parse --short HEAD/)
+  })
+
+  it('the PR-read temp file is released even if a later arm exits early', () => {
+    expect(step15Code).toMatch(/trap 'rm -f "\$PR_ERR"'/)
   })
 
   it('a `$pr` given as a URL is normalized to a bare number before it is rendered', () => {
     // The Arguments table accepts "number or URL", but every rendering assumes a number:
     // the REASON strings say "PR #123 …" and the Output Format row is "PR #N".
     expect(step15Code).toMatch(/PR_NUM=/)
+    // The number comes from the `pull/<n>` PATH SEGMENT, never from the string TAIL: a
+    // tail match yields nothing for `…/pull/420/files` (⇒ the reason renders the whole
+    // URL) and yields the WRONG number for `…/pull/420#issuecomment-98765`.
+    expect(step15Code).toMatch(/pull\|pull-requests\|merge_requests/)
+    expect(step15Code).not.toMatch(/grep -oE '\[0-9\]\+\$'/)
+    // a bare number still passes through, anchored at BOTH ends
+    expect(step15Code).toMatch(/grep -oE '\^\[0-9\]\+\$'/)
+    // and the Arguments table says which forms are recognized
+    const args = section(SKILL, '## Arguments')
+    expect(args).toMatch(/pull\/<n>|`pull\/`/)
     const reasonStrings = [...step15Code.matchAll(/REASON="([^"]*)"/g)].map(m => m[1] as string)
     const prReasons = reasonStrings.filter(r => /\bPR\b/.test(r) && /\$/.test(r))
     expect(prReasons.length).toBeGreaterThan(0)
@@ -360,13 +449,23 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
       'TREE_MATCH must be resolved before the point that reads the tiering flag',
     ).toBeLessThan(flagStepAt)
     expect(step15).toMatch(/tier-independent/i)
+    // …on BOTH resolution paths. The promotion of `none` for the CHECKED-OUT BRANCH's own
+    // PR must be pre-flag too: left in the tiering-enabled point, the ⚠️ arm is unreachable
+    // in the DEFAULT `disabled` configuration — where the row would be the only thing
+    // saying which code the full suite ran on.
+    const preFlag = step15Code.slice(0, step15Code.indexOf('source .pair/knowledge/assets'))
+    expect(preFlag, 'the branch (no-`$pr`) PR read must sit before the flag').toContain(
+      'gh pr view --json',
+    )
+    expect(preFlag).toContain('gh pr view "$1"')
   })
 
-  it('AC5 — the PR is read in ONE round trip, and an unreadable PR renders `unknown`, never a mismatch', () => {
-    // Three `gh pr view "$pr"` calls cost three round trips AND, on the unreadable path,
-    // return empty and drive a "NOT PR #N's head" row that asserts a mismatch the snippet
-    // could not know.
-    expect((step15.match(/gh pr view "\$pr"/g) ?? []).length).toBe(1)
+  it('AC5 — the PR is read in ONE round trip on either path, and an unreadable PR renders `unknown`', () => {
+    // Two calls cost two round trips AND, on the unreadable path, return empty and drive a
+    // "NOT PR #N's head" row that asserts a mismatch the snippet could not know. One read
+    // point serves both paths (`$pr` and the checked-out branch's own PR).
+    expect((step15Code.match(/read_pr /g) ?? []).length).toBe(1)
+    expect((step15Code.match(/gh pr view/g) ?? []).length).toBe(2) // the two arms of read_pr
     expect(step15).toMatch(/--json labels,headRefName,headRefOid/)
     expect(step15).toMatch(/TREE_MATCH=unknown/)
   })
@@ -375,17 +474,39 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // No improvised rows: the values the snippet can assign and the arms the report
     // enumerates are the same set, so a pre-publish run never claims to match a PR that
     // does not exist and an unreadable PR never renders as a mismatch.
-    const assigned = new Set([...step15.matchAll(/TREE_MATCH=(\w+)/g)].map(m => m[1]))
-    expect(assigned).toEqual(new Set(['match', 'mismatch', 'unknown', 'none']))
+    const assigned = new Set([...step15Code.matchAll(/TREE_MATCH=(\w+)/g)].map(m => m[1]))
+    expect(assigned).toEqual(new Set(['match', 'ahead', 'mismatch', 'unknown', 'none']))
     const out = section(SKILL, '## Output Format')
     const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
     expect(treeRow).toMatch(/matches PR #N's head/)
+    expect(treeRow).toMatch(/ahead of PR #N's head/)
     expect(treeRow).toMatch(/⚠️ NOT PR #N's head/)
     expect(treeRow).toMatch(/unknown — PR #N unreadable/)
-    expect(treeRow).toMatch(/no PR named/)
-    // and the tier-source row covers the modes that read no tag at all
-    const sourceRow = (out.match(/^├── Tier source:.*$/m) as RegExpMatchArray)[0]
+    expect(treeRow).toMatch(/no PR on this branch/)
+  })
+
+  it('AC5 — the tier SOURCE is resolved by the snippet too, with one arm per resolved value', () => {
+    // Same contract as `Tree:`, for the same reason: an improvised row has no arm for
+    // "`$pr` supplied but unreadable" or "current-branch PR unreadable", and neither
+    // `PR #N (named by $pr)` (claims a tier came from a PR that could not be read) nor
+    // `fail-safe — no source resolved` (a source WAS named) is true there.
+    const assigned = [...step15Code.matchAll(/TIER_SOURCE="([^"]+)"/g)].map(m => m[1] as string)
+    expect(assigned.length).toBeGreaterThanOrEqual(6)
+    expect(new Set(assigned).size, `duplicate TIER_SOURCE values: ${assigned.join(' | ')}`).toBe(
+      assigned.length,
+    )
+    const out = section(SKILL, '## Output Format')
+    const sourceRow = (out.match(/^├── Tier source:.*$/m) as RegExpMatchArray)[0].replace(/`/g, '')
+    for (const value of assigned) {
+      const rendered = value
+        .replace(/\$PR_NUM/g, 'N')
+        .replace(/\$story/g, 'ID')
+        .replace(/\\\$/g, '$')
+      expect(sourceRow, `Tier source: has no arm for ${value}`).toContain(rendered)
+    }
+    // and the modes that read no tag at all keep their arms
     expect(sourceRow).toMatch(/n\/a \(tiering disabled/)
+    expect(sourceRow).toMatch(/fail-safe — no source resolved/)
   })
 
   it('AC5 — report rows are column-aligned: every value bracket sits at the same offset', () => {
@@ -452,6 +573,18 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
     // host with no checks. Redirecting `<gates>` to "CI's check on the head commit"
     // without this arm leaves Step 5.4 with no gates value at all.
     expect(step21).toMatch(/no conclusion|not (yet )?published|no check|pending/i)
+    expect(step21).toMatch(/to-be-reviewed/)
+    expect(step21).toMatch(/never[^.\n]*ready-to-merge|ready-to-merge[^.\n]*never/i)
+  })
+
+  it('the authoritative-gates read is NAMED and code-host-routed, not left to improvisation', () => {
+    // "Read the gates from CI's check on the head commit" with no command and no routing
+    // pointer forces a guess (`gh pr checks`? the status API? which conclusions count?),
+    // and leaves a non-GitHub host nothing to substitute — on the input that decides
+    // `ready-to-merge`. Every other host read in this corpus carries the qualification.
+    expect(step21).toMatch(/gh pr checks/)
+    expect(step21).toMatch(/routing table|way-of-working-pm-resolution/i)
+    expect(step21).toMatch(/success/)
     expect(step21).toMatch(/to-be-reviewed/)
     expect(step21).toMatch(/never[^.\n]*ready-to-merge|ready-to-merge[^.\n]*never/i)
   })
