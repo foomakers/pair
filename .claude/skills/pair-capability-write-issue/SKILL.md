@@ -32,7 +32,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 ### Step 1: Validate Arguments
 
 1. **Check**: Which mode is this? `$mode` defaults to `write`.
-2. **Act (`$mode: comment`)**: `$type` and `$content` are **not** required and are ignored. Require `$id` and `$comment`; if either is missing → **HALT**: `comment mode requires $id and $comment.` Then go to Step 2 and continue at **Step 7c** (Steps 3, 4 and 6 do not run — no template, no body render, no board write).
+2. **Act (`$mode: comment`)**: `$type` and `$content` are **not** required and are ignored. Require `$id` and `$comment`; if either is missing → **HALT**: `comment mode requires $id and $comment.` Then go to Step 2 and continue at **Step 7c** (Steps 3, 4, 6, 6b and 7b do not run — no template, no body render, no assignee resolution, no board write).
 3. **Check (`$mode: write`)**: Is `$type` one of the supported types (`story`, `task`, `epic`, `initiative`)?
 4. **Skip**: If valid, proceed to Step 2.
 5. **Act**: If unsupported type → **HALT**:
@@ -120,7 +120,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
 
 1. **Check**: Resolve the assignee in one order — **the argument first, then the adoption default, then none**:
    - `$assignee`, when the caller passed one;
-   - else the adoption's `default-assignee` — [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Assignment` (schema and cascade: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)). **An empty value is absent, not an empty-string assignee.**
+   - else the adoption's `default-assignee` — [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Assignment` (schema and cascade: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)). This is a **PM-tool** write, so it reads that key and never `code-host-assignee` — the split-configuration key belongs to the code-host branch of the same cascade (`/pair-capability-publish-pr`, the PR assignee). **An empty value is absent, not an empty-string assignee.**
    - else none.
 2. **Act (resolved)**: carry it into Step 7 and write it **as part of the create and of the update, never as a follow-up step**.
 3. **Act (nothing resolved, or the tool rejects what was resolved)**: **write the item without an assignee and warn** — **never a HALT**:
@@ -145,7 +145,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
    - Create issue with the formatted body.
    - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`), plus any topical labels in `$labels` (e.g. `tech-debt`).
    - If `$parent` is provided, link to parent issue (hierarchy: epic → story → task).
-   - Configure project field settings (priority, type, status, assignee) per the implementation guide — the assignee is the one resolved in Step 6b, set on the create call itself.
+   - Configure project field settings — priority, type, assignee (status via Step 7b) — per the implementation guide: the assignee is the one resolved in Step 6b, set on the create call itself, and the board state is **never** written here.
    - **Creating does not imply membership**: on an explicit-membership tool the new issue is not a board item yet, so a `$status` write goes through Step 7b like any other, never straight to the state field.
    - Record the new issue identifier for return, then **re-read the created item** and report the assignee and labels the read observed (a create is a write, so the invariant above applies to it too).
 3. **Act (Update)**:
@@ -153,9 +153,9 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
    - If not found → **HALT**: `Issue #$id not found.`
    - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). That contract is also what makes a comment durable where the item **is** a file: on `filesystem` the back-link lives in the body's `## Activity Log` section, so a later write-mode render preserves it only because the caller read-merges the current body first — dropping the section is a caller bug, not an accepted behavior. Comment mode (Step 7c) never reaches here and never writes the body.
    - Preserve existing labels and hierarchy links unless explicitly changed.
-   - Apply the assignee resolved in Step 6b — the update path carries it exactly as the create path does (the adapters' add-an-assignee call adds without replacing, so it is safe to run unconditionally). Resolved to none ⇒ leave whatever assignee the item already has; never clear one.
+   - Apply the assignee resolved in Step 6b **conditionally**: write it when the caller passed `$assignee` **explicitly**, or when the read above shows the item currently has **no** assignee. Otherwise **leave the existing assignee untouched** — an item deliberately assigned to someone else must not be reassigned as a side effect of a body update (the adoption default would otherwise silently pull every updated item back to the maintainer and out of that person's filtered view — the same invisibility failure, inverted). Resolved to none ⇒ leave whatever assignee the item already has; never clear one. Whether the adapter's call **adds** to or **replaces** the assignee set is the adapter's concern, documented in its guide — this skill states only which value applies and when.
    - If `$status` was provided, the board field is written in **Step 7b** (membership → confirm → state), never here — this step writes the item, not the board.
-4. **Verify**: The item was created or updated **and re-read**: the read shows the body, labels and assignee that were written. If `$status` was provided, Step 7b runs next and owns the board field.
+4. **Verify**: The item was created or updated **and re-read**: the read shows the body, the labels and the assignee now in effect. Report the labels the read observed on the `Labels` output row — a label the tracker dropped or refused is a **finding**, never an assumed success. If `$status` was provided, Step 7b runs next and owns the board field.
 
 ### Step 7b: Write the Board State (write mode, only when Step 6 resolved a board state)
 
@@ -209,14 +209,15 @@ ISSUE WRITTEN:
 ├── PM Tool:  [adopted tool name]
 ├── Template: [template file used | n-a (comment mode)]
 ├── Parent:   [parent issue ID | "none" | n-a (comment mode)]
-├── Assignee: [login — confirmed by read | none — WARNING: invisible in an assignee-filtered view | n-a (comment mode)]
+├── Labels:   [type label + topical labels — confirmed by read | dropped by tracker: label — finding | n-a (comment mode)]
+├── Assignee: [login — confirmed by read | unchanged: login — confirmed by read | none — WARNING: invisible in an assignee-filtered view | n-a (comment mode)]
 ├── Board:    [board state — confirmed by read | n-a (no $status, or no board state maps to the macrostate — readiness falls back to the item body) | HALT — reason]
 └── Status:   [Success | HALT — reason]
 ```
 
-Every value on the `Assignee` and `Board` rows is what a **read** returned, not what a call reported — the two rows exist in this shape because a write reported as done and never confirmed is how items ended up open, green and off the board.
+Every value on the `Labels`, `Assignee` and `Board` rows is what a **read** returned, not what a call reported — the three rows exist in this shape because a write reported as done and never confirmed is how items ended up open, green and off the board. `/pair-capability-publish-pr` reports its own PR-side writes on the same shape (its `Tags:` row), so the two writers stay symmetric on one invariant.
 
-In **comment mode** the three `n-a (comment mode)` values are the specified rendering, not an omission: no `$type` is taken, no template is resolved and no hierarchy is touched, so there is nothing to report on those rows (`Status: Success` on a posted comment, or the warning text from Step 7c.2).
+In **comment mode** the five `n-a (comment mode)` values are the specified rendering, not an omission — one reason per row: no `$type` is taken, no template is resolved, no hierarchy is touched, no label is written and no assignee is touched, so there is nothing to report on those rows (`Status: Success` on a posted comment, or the warning text from Step 7c.2).
 
 **Return value**: The issue identifier (e.g., `#42`) — used by composing skills in chain operations.
 
@@ -234,7 +235,7 @@ $content:
 $parent: #313
 ```
 
-Output — since `$id` is absent, Step 7 creates a new issue from [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md) with `$content` mapped into the template's sections, linked to parent `#313`, labeled `task`:
+Output — since `$id` is absent, Step 7 creates a new issue from [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md) with `$content` mapped into the template's sections, linked to parent `#313`, labeled `task`, and assigned to the adoption's `default-assignee` (no `$assignee` was passed — Step 6b). No `$status` was passed either, so Step 7b never runs and the board row reports the documented skip:
 
 ```text
 ISSUE WRITTEN:
@@ -244,6 +245,9 @@ ISSUE WRITTEN:
 ├── PM Tool:  github-projects
 ├── Template: task-template.md
 ├── Parent:   #313
+├── Labels:   task — confirmed by read
+├── Assignee: rucka — confirmed by read
+├── Board:    n-a (no $status)
 └── Status:   Success
 ```
 
@@ -282,6 +286,7 @@ When composed by `/pair-capability-publish-pr` (the cross-link back-link, split 
 - **Output**: `Commented`, or `Comment warned` with the manual-link instruction when the id doesn't resolve or the PM tool errors (Step 7c.2). Either way `/pair-capability-publish-pr` keeps the PR — a back-link failure never fails the publish, which is why comment mode warns instead of HALTing.
 - Only invoked when `code-host` differs from `pm-tool`; on a single-tool project the host links PR and item natively, so `/pair-capability-publish-pr` skips this composition.
 - **Dedup is the caller's**: `/pair-capability-publish-pr` first checks whether the item already carries a comment holding this PR URL and skips the composition if so, because comment mode cannot dedupe itself (Step 7c). Without that check a re-publish would accrete one `PR: <url>` comment per round.
+- **The board write (default write mode) is the second composition**: `/pair-capability-publish-pr` Phase 4 step 7 passes `$status: Review` **only when the adoption's `## State Mapping` maps a board state to `Review`**, and omits `$status` when none does. **Omitting is the caller's job, not this skill's**: once `$status` arrives here it has been *requested*, and Step 6.4 can only HALT (route (c)) — this skill cannot tell "requested and unmappable" from "never requested" after the fact, which is exactly why the D4 minimal-board skip is expressed as an omission by the caller.
 
 When invoked **independently**:
 

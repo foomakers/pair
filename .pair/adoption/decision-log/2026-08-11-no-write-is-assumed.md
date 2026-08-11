@@ -33,6 +33,9 @@ Concretely:
 2. **Membership precedes state** is the ordering half, stated tool-agnostically in `/pair-capability-write-issue` Step 7b as three beats — membership, a read that confirms it, the state field — with all per-tool mechanics referenced out to the adapters (the constraint the 2026-07-31 ADL put on this story). An unconfirmable membership **HALTs with the specific reason**; a skipped board write is never reported as success.
 3. **An unassigned item is a warning, not a blocker.** The assignee cascade (`$assignee` → adoption `default-assignee` → none) never HALTs: the failure mode is invisibility, and refusing to file the item is worse than filing it unassigned. The rejected-assignee case takes the same branch — reported, never silently dropped.
 4. **The default assignee comes from a declared adoption key** (`default-assignee`, schema in `skill-conventions/way-of-working-pm-resolution.md` § *Assignee resolution*), never from the authenticated user: an agent under a bot token would assign every item to the bot and pass its own check.
+5. **The cascade has one code-host branch**: a PR write resolves `code-host-assignee` first and `default-assignee` second, an item write resolves `default-assignee` only. Declared in the same section, applied by `/pair-capability-publish-pr`. Without the branch the key was a schema field no skill resolved — and a split project's PR would be assigned the PM tool's login, rejected by the host, and published unassigned.
+6. **An update never reassigns an item away from its current assignee.** The resolved assignee is written on an update only when the caller passed `$assignee` explicitly or the item has none; otherwise the existing one stands. Add-vs-replace semantics stay the adapter's (only GitHub's `--add-assignee` adds; Linear, Azure and `filesystem` replace), so the skill states *which value and when*, never *how*.
+7. **The D4 skip is expressed by the caller omitting `$status`**, never by the writer softening its HALT: once a macrostate is requested, an unmappable one can only HALT (route (c)). `/pair-capability-publish-pr` therefore resolves `## State Mapping` before composing the board write and omits `$status` when no board state maps to `Review` — which is this project's own case.
 
 ## Alternatives Considered
 
@@ -46,7 +49,8 @@ Concretely:
 
 - Every board write now costs at least one extra read, and a publish costs one PR read. Deliberate: the alternative price was items that look green and are not on the board.
 - `/pair-capability-write-issue` gains a HALT (`membership could not be confirmed`) that did not exist before. It fires only where a board is present and membership is impossible — never on a project that simply has no board (the D4 minimal-board path stays a documented skip, and Step 6 now separates the two outcomes explicitly, because the pre-existing HALT for an unmappable `$status` was being read as covering both).
-- Output shapes changed on both skills (`Assignee` and `Board` rows on the item write; `Assignee` and a read-confirmed `Tags` row on the publish), so both carry a minor version bump.
+- Output shapes changed on both skills (`Labels`, `Assignee` and `Board` rows on the item write; `Assignee` and a read-confirmed `Tags` row on the publish), so both carry a minor version bump.
+- On this project's board no column maps to `Review`, so every `/pair-capability-publish-pr` run takes the documented skip and reports `Board: n-a — no Review state on this board`. That is the intended outcome of decision 7, not a degraded publish: readiness is carried by the PR.
 - A future skill that writes to a tracker inherits the rule by pointing at it — the invariant is prose in one skill plus a conformance guard, not a shared code path. That is the accepted limit of this decision: it binds the corpus, not a runtime.
 
 ## Adoption Impact

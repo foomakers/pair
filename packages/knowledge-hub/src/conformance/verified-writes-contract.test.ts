@@ -144,7 +144,12 @@ describe('/write-issue — $assignee is part of the parameter contract (#403 AC1
       // Step 7.2 delegated "project field settings (priority, type, status)" — an
       // enumeration that EXCLUDED the assignee, which is how the delegation to the
       // adapters (#402) never reached the assignee mechanic they document.
-      expect(normalize(content)).toContain('priority, type, status, assignee')
+      //
+      // `status` is NOT in the enumeration: the create call configures the item's own
+      // fields, and the board state goes through Step 7b (membership → confirm →
+      // state). Listing it here would contradict the two lines below it and license an
+      // agent to write the state field on the create call — the exact defect.
+      expect(normalize(content)).toContain('priority, type, assignee (status via step 7b)')
     },
   )
 
@@ -152,10 +157,38 @@ describe('/write-issue — $assignee is part of the parameter contract (#403 AC1
     '$corpus: states the assignee is ignored in comment mode',
     ({ content }) => {
       // Comment mode is the non-destructive path: it must stay byte-identical on the
-      // item's body, labels AND assignee.
+      // item's body, labels AND assignee. Pinned on the exclusion SENTENCE, not on the
+      // `$assignee` token: the token also appears in the Arguments table row, so a
+      // token-level assertion stays green when the exclusion itself is deleted.
       const body = normalize(content)
       expect(body).toMatch(/in comment mode only \$id and \$comment are read/)
-      expect(body).toContain('$assignee')
+      expect(body).toContain('$labels, $assignee and $parent are ignored')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: routes comment mode past the two write-mode-only steps',
+    ({ content }) => {
+      // The routing enumeration an agent actually reads in Step 1.2. Steps 6b and 7b are
+      // write-mode-only, so a stale enumeration here is how the original defect was born
+      // (Step 7.2's enumeration excluded the assignee).
+      expect(normalize(content)).toContain('steps 3, 4, 6, 6b and 7b do not run')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: an update never reassigns an item away from its current assignee',
+    ({ content }) => {
+      // The adoption default must not overwrite a deliberate assignment on every
+      // unrelated body update: that silently pulls the item out of the assignee-filtered
+      // view of whoever owns it — this story's failure mode, inverted. Only an explicit
+      // `$assignee`, or an item with no assignee at all, may be written.
+      const body = normalize(content)
+      expect(body).toContain('leave the existing assignee untouched')
+      expect(body).toContain('never clear one')
+      // …and add-vs-replace stays the adapter's concern: exactly one of the four
+      // documented adapters adds without replacing, so the skill may not generalize it.
+      expect(body).toContain("is the adapter's concern")
     },
   )
 })
@@ -333,6 +366,47 @@ describe('/write-issue — a board that cannot express the macrostate (#403 AC6)
       expect(body).toContain('readiness falls back to the item body')
     },
   )
+
+  it.each(writeIssueCases)(
+    '$corpus: puts the omit-$$status duty on the caller, where it is honourable',
+    ({ content }) => {
+      // The skip is only reachable if the CALLER omits `$status`: once it arrives here it
+      // has been requested, and an unmappable request can only HALT. Stated in the
+      // Composition Interface because the composing caller is the one that must act.
+      expect(normalize(content)).toContain("omitting is the caller's job, not this skill's")
+    },
+  )
+})
+
+describe('/write-issue — the report is what a read observed (#403 AC8)', () => {
+  it.each(writeIssueCases)(
+    '$corpus: reports the labels and the assignee a read confirmed',
+    ({ content }) => {
+      // Steps 7.2/7.4 re-read the labels; without a row for them an observed divergence
+      // (a label the tracker dropped) has nowhere to be reported, and "report what the
+      // read observed" is unfulfillable for labels. `/publish-pr` carries the twin row
+      // (`Tags:`) — the two writers stay symmetric on one invariant.
+      expect(content).toMatch(/├── Labels:/)
+      expect(content).toMatch(/├── Assignee:/)
+      expect(normalize(content)).toContain('dropped by tracker: label — finding')
+    },
+  )
+
+  it.each(writeIssueCases)('$corpus: the board row is a read, not a claim', ({ content }) => {
+    expect(content).toMatch(/├── Board:.*confirmed by read/)
+  })
+
+  it.each(writeIssueCases)(
+    '$corpus: the worked example renders the mandatory rows',
+    ({ content }) => {
+      // An agent pattern-matches the concrete example far more readily than it
+      // reconstructs the schema, so an example missing the rows teaches the old shape.
+      const example = normalize(section(content, 'Example: Creating a Task Issue', 2))
+      expect(example).toContain('├── labels:')
+      expect(example).toContain('├── assignee:')
+      expect(example).toContain('├── board:')
+    },
+  )
 })
 
 describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC7)', () => {
@@ -397,6 +471,60 @@ describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC
     // and "assumed assigned", so the row is part of the contract, not decoration.
     expect(content).toMatch(/├── Assignee:/)
   })
+
+  it.each(publishPrCases)(
+    '$corpus: takes the code-host branch of the cascade (`code-host-assignee` first)',
+    ({ content }) => {
+      // A PR is a code-host write, and on a SPLIT project the same human carries two
+      // logins: resolving the PM-tool one here gets it rejected by the host and the PR
+      // is published unassigned — the very invisibility this story removes, on the one
+      // path the story said the contract must not assume away. Without this branch the
+      // schema key has no reader at all.
+      const body = normalize(content)
+      expect(body).toContain('code-host-assignee when declared, else default-assignee')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: reads the ready-for-review transition back where it is written',
+    ({ content }) => {
+      // `gh pr ready` is a write like any other under AC8, and the post-write read three
+      // steps earlier could only ever show the pre-transition draft state. A PR left in
+      // draft is unmergeable however green it looks.
+      const body = normalize(content)
+      expect(body).toContain('read the pr back and confirm it is no longer a draft')
+      expect(body).toContain('ready-for-review not confirmed')
+    },
+  )
+})
+
+describe('/publish-pr — the board write it composes (#403 AC6)', () => {
+  it.each(publishPrCases)(
+    '$corpus: resolves the state mapping BEFORE composing, and omits $$status when Review is unmapped',
+    ({ content }) => {
+      // The composed skill's D4 skip is expressed as "the caller omits `$status`". A
+      // caller that passes `Review` unconditionally makes the skip unreachable: on a
+      // minimal board (this project's own — no column maps to Review) the composition
+      // HALTs on every publish instead. AC6's "documented behaviour, not an error" only
+      // holds if the primary composing caller can honour it.
+      const body = normalize(content)
+      expect(body).toContain('resolve ## state mapping first')
+      expect(body).toContain('omit $status entirely')
+      expect(body).toContain('n-a — no review state on this board')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: surfaces a composed board HALT instead of absorbing it',
+    ({ content }) => {
+      // Phase 4 and Graceful Degradation covered only the membership HALT; a Step 6
+      // macrostate HALT had nowhere to land, so it would have been reported as a green
+      // publish — the silent success this whole contract exists to remove.
+      const body = normalize(content)
+      expect(body).toContain('unmappable requested macrostate')
+      expect(body).toContain('never absorbed into a green publish')
+    },
+  )
 })
 
 describe('no write is assumed — every write is re-read back (#403 AC8)', () => {
@@ -472,6 +600,19 @@ describe('adoption schema — the machine-readable half of the Assignment rule (
     },
   )
 
+  it.each(conventionCases)(
+    '$corpus: every declared key has a reader — the code-host branch of the cascade',
+    ({ content }) => {
+      // `code-host-assignee` was declared in the schema table with no step resolving it:
+      // a field with no rule behind it, which on a split project silently degrades to
+      // "PR published unassigned". The cascade names WHICH key each side reads.
+      const body = normalize(section(content, 'Assignee resolution', 2))
+      expect(body).toContain('code-host-assignee')
+      expect(body).toContain('code-host-assignee when declared, else default-assignee')
+      expect(body).toContain('pm-tool write')
+    },
+  )
+
   it.each(conventionCases)('$corpus: the routing table carries the assignee row', ({ content }) => {
     // Skills route by field, never by assumption — so the operation class has to be IN
     // the table a skill reads, not only in the prose above it.
@@ -485,6 +626,9 @@ describe('adoption schema — the machine-readable half of the Assignment rule (
     expect(template).toMatch(/^##\s+Assignment\s*$/m)
     expect(template).toContain('`default-assignee`')
     expect(normalize(template)).toContain('invisible in an assignee-filtered view')
+    // Both declared keys carry the side that reads them, so the schema a project copies
+    // never ships a field nothing resolves.
+    expect(normalize(template)).toContain('read for pull request assignment')
   })
 
   it("this project's adoption declares a resolvable default-assignee", () => {

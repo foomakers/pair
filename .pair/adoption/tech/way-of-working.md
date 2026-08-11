@@ -35,7 +35,7 @@ Maps this project's GitHub Projects board columns to the 5 canonical macrostates
 The machine-readable half of the Assignment rule stated at the top of this file. That paragraph is the rationale — the board is read filtered by assignee, so an unassigned item is invisible on it; this section is what a skill can actually resolve.
 
 - `default-assignee`: `rucka` — the maintainer. Applied to items (`/pair-capability-write-issue`) and to pull requests (`/pair-capability-publish-pr`) whenever the caller passes no `$assignee`.
-- No `code-host-assignee`: PM tool and code host are both GitHub here, one identifier for both.
+- No `code-host-assignee`: PM tool and code host are both GitHub here, one identifier for both — so the PR-side branch of the cascade (`code-host-assignee`, else `default-assignee`) falls through to the value above.
 
 Resolution order, the split-tool routing and why the fallback is never the authenticated user: [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
 
@@ -86,4 +86,4 @@ The "Merge" column only bites when `Review enforcement` is `enabled` (above). Di
 
 ---
 
-All development activities must follow these adopted practices. For process and rationale, see [way-of-working.md](../../way-of-working.md).
+All development activities must follow these adopted practices. For process and rationale, see [way-of-working.md](../../knowledge/way-of-working.md).

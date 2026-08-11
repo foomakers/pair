@@ -86,7 +86,7 @@ Optional. **Who** items and pull requests are assigned to. **Omitted by default*
 | Field                | Default                | Meaning                                                                                                    |
 | -------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `default-assignee`   | *(none)*               | The identifier an item or PR is assigned to when the caller passes none.                                     |
-| `code-host-assignee` | *(`default-assignee`)* | Only when the code host knows the same person by a different identifier than the PM tool (split configuration). |
+| `code-host-assignee` | *(`default-assignee`)* | Only when the code host knows the same person by a different identifier than the PM tool (split configuration). Read for **pull request** assignment; items keep using `default-assignee`. |
 
 Example:
 
@@ -94,4 +94,4 @@ Example:
 - `default-assignee`: `jane-doe`
 ```
 
-The resolution order (`$assignee` argument → this field → none + warning), the split-tool routing, and why the fallback is never the authenticated user live in [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
+The resolution order (`$assignee` argument → the adoption default for the side being written, `code-host-assignee` then `default-assignee` on a pull request → none + warning), the split-tool routing, and why the fallback is never the authenticated user live in [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
