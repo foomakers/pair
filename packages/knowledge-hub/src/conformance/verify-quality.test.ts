@@ -170,8 +170,27 @@ const section = (doc: string, heading: string): string => {
   return next === -1 ? rest : rest.slice(0, next)
 }
 
+/** Step 1.5's body — where every tier/tree resolution rule lives. */
+const step15 = section(SKILL, '### Step 1.5: Resolve the Tier Gate Matrix (CI parity)')
+
+/** Every `REASON="…"` the resolution snippet assigns, in source order. */
+const reasons = [...step15.matchAll(/REASON="([^"]+)"/g)].map(m => m[1])
+
+/**
+ * Step 1.5's EXECUTABLE lines only — shell inside its fenced blocks, with `#`
+ * comment lines and the surrounding prose dropped. Assertions about what the
+ * snippet *decides on* run against this, so a comment that quotes a banned test
+ * to explain why it is banned does not read as the test itself.
+ */
+const step15Code = [...step15.matchAll(/```bash\n([\s\S]*?)```/g)]
+  .map(m => m[1] as string)
+  .join('\n')
+  .split('\n')
+  .filter(l => !/^\s*#/.test(l))
+  .join('\n')
+
 describe('verify-quality — optional $pr argument: which PR the tier is read from (#382)', () => {
-  it('AC1 — the Arguments table documents `$pr` as optional', () => {
+  it('the Arguments table documents `$pr` as optional', () => {
     const args = section(SKILL, '## Arguments')
     expect(args).toMatch(/\|\s*`\$pr`\s*\|\s*No\s*\|/)
   })
@@ -199,17 +218,46 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(SKILL).toMatch(/fail-safe/)
   })
 
-  it('AC4 — "no tag" is decided by TAG PRESENCE, not by empty labels (a PR labelled pr-state:* still reports its own reason)', () => {
-    // An `[ -z "$LABELS" ]` test only fires on a PR with NO labels at all, so the common
-    // shape (pr-state:*/cost:*/type labels, no risk:*) would silently emit the generic
-    // fail-safe line the skill forbids. The guard is a risk:*-prefix test.
-    expect(SKILL).toMatch(/grep -q '\^risk:'/)
-    expect(SKILL).toMatch(/has_risk_tag/)
-    expect(SKILL).not.toMatch(/elif \[ -z "\$LABELS" \]/)
-    // and the same rule on the story-card branch — one spelling of the rule, not two
-    expect(SKILL).toMatch(
-      /has_risk_tag[\s\S]{0,600}story card reachable but carries no risk:\* tag/,
+  it('AC4 — "no tag" is decided by TAG PRESENCE: label EMPTINESS decides nothing, on any branch', () => {
+    // Property, not spelling: emptiness of `$LABELS` must not be a decision anywhere in
+    // Step 1.5. An `[ -z "$LABELS" ]` / `[ -n "$LABELS" ]` test conflates three states —
+    // no PR, a PR with zero labels, and a failed read — so the common shape (pr-state:*/
+    // cost:*/type labels and no risk:*) would emit the generic fail-safe line the skill
+    // forbids, and a zero-label PR would fall through to the story card's refinement tier.
+    expect(step15Code).not.toMatch(/\[\s*-[zn]\s*"\$LABELS"\s*\]/)
+    // Secondary guard on today's spelling of the replacement.
+    expect(step15).toMatch(/grep -q '\^risk:'/)
+    expect(step15).toMatch(/has_risk_tag/)
+    // One spelling of the rule on every branch that reads labels: each `LABELS=` read is
+    // followed by a `has_risk_tag` test rather than an emptiness test.
+    const labelReads = (step15Code.match(/LABELS="\$\(/g) ?? []).length
+    const tagTests = (step15Code.match(/has_risk_tag "\$LABELS"/g) ?? []).length
+    expect(labelReads).toBeGreaterThanOrEqual(3)
+    expect(tagTests).toBeGreaterThanOrEqual(3)
+  })
+
+  it('AC4 — every resolution branch sets a DISTINCT reason; the generic line stays for the sourceless case', () => {
+    // The invariant the Fail-safe bullet states: six reachable failure states, six
+    // different messages. Uniqueness is asserted on the values, not on their wording, so
+    // a rephrase stays green while a copy-pasted duplicate (two states, one message) fails.
+    expect(reasons.length).toBeGreaterThanOrEqual(6)
+    expect(new Set(reasons).size, `duplicate REASON strings: ${reasons.join(' | ')}`).toBe(
+      reasons.length,
     )
+    // and each of the three sources appears in both of its two states (reachable / unreadable)
+    for (const source of [/PR \$pr/, /current-branch PR/, /story card/]) {
+      expect(reasons.filter(r => source.test(r)).length).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('AC4 — an unreadable current-branch PR fails safe with its own reason, it never degrades to the story card', () => {
+    // `gh pr view` exits non-zero for BOTH "no PR on this branch" and "host unreachable",
+    // so the exit status alone cannot decide: only the no-PR message may fall through to
+    // `$story` (the refinement tier — an under-check anywhere else, D17).
+    expect(step15).toMatch(/no pull requests found/i)
+    expect(reasons).toContain('current-branch PR unreadable — the code host is not reachable')
+    // the story-card read is nested under the no-PR arm, not under a bare failure arm
+    expect(step15).toMatch(/no pull requests found[\s\S]{0,600}gh issue view/)
   })
 
   it('a passed `$pr` never falls back to the story card — the refinement tier would be an under-check (D17)', () => {
@@ -227,15 +275,60 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     )
   })
 
-  it('AC5 — the `Tree:` row is PRODUCED by Step 1.5, and detached checkouts compare COMMITS not branch names', () => {
-    // Without this the ⚠️ arm is not deterministically reachable: a review worktree is
-    // usually DETACHED, where `git rev-parse --abbrev-ref HEAD` echoes "HEAD" and a naive
-    // name comparison mislabels a correct PR-head checkout as a mismatch.
-    expect(SKILL).toMatch(/headRefName/)
-    expect(SKILL).toMatch(/headRefOid/)
-    expect(SKILL).toMatch(/git rev-parse --abbrev-ref HEAD/)
-    expect(SKILL).toMatch(/TREE_MATCH/)
-    expect(SKILL).toMatch(/detached/i)
+  it('AC5 — the `Tree:` row is PRODUCED by Step 1.5, and the match test is a COMMIT compare in every case', () => {
+    // Without this the ⚠️ arm is not deterministically reachable. Branch NAMES cannot be
+    // the test: a checkout on the PR's own branch at a different commit (stale, or ahead
+    // with unpushed work) is not the PR's head, and a detached review worktree at the head
+    // is — a name compare gets both wrong, in opposite directions.
+    expect(step15).toMatch(/headRefName/)
+    expect(step15).toMatch(/headRefOid/)
+    expect(step15).toMatch(/TREE_MATCH/)
+    expect(step15).toMatch(/detached/i)
+    // the property: HEAD's commit is compared to the PR's head sha, and no branch-name
+    // equality decides anything
+    expect(step15).toMatch(/"\$\(git rev-parse HEAD\)" = "\$PR_HEAD_SHA"/)
+    expect(step15).not.toMatch(/\[ "\$LOCAL_REF" = "\$PR_HEAD_REF" \]/)
+  })
+
+  it('AC5 — the tree is resolved TIER-INDEPENDENTLY, before the `Pre-merge tiering` flag is read', () => {
+    // `disabled` is the default, and it skips straight to Step 2 — so a tree resolution
+    // living under the tiering-enabled arm would never run in the default configuration,
+    // and /review's `Tree: ⚠️` advisory rule could never fire.
+    const treeAt = step15.indexOf('TREE_MATCH')
+    const flagStepAt = step15.search(/\*\*Check — is tiering on\?\*\*/)
+    expect(treeAt).toBeGreaterThan(-1)
+    expect(flagStepAt).toBeGreaterThan(-1)
+    expect(
+      treeAt,
+      'TREE_MATCH must be resolved before the point that reads the tiering flag',
+    ).toBeLessThan(flagStepAt)
+    expect(step15).toMatch(/tier-independent/i)
+  })
+
+  it('AC5 — the PR is read in ONE round trip, and an unreadable PR renders `unknown`, never a mismatch', () => {
+    // Three `gh pr view "$pr"` calls cost three round trips AND, on the unreadable path,
+    // return empty and drive a "NOT PR #N's head" row that asserts a mismatch the snippet
+    // could not know.
+    expect((step15.match(/gh pr view "\$pr"/g) ?? []).length).toBe(1)
+    expect(step15).toMatch(/--json labels,headRefName,headRefOid/)
+    expect(step15).toMatch(/TREE_MATCH=unknown/)
+  })
+
+  it('AC5 — every resolved TREE_MATCH value has a rendering arm in the Output Format', () => {
+    // No improvised rows: the values the snippet can assign and the arms the report
+    // enumerates are the same set, so a pre-publish run never claims to match a PR that
+    // does not exist and an unreadable PR never renders as a mismatch.
+    const assigned = new Set([...step15.matchAll(/TREE_MATCH=(\w+)/g)].map(m => m[1]))
+    expect(assigned).toEqual(new Set(['match', 'mismatch', 'unknown', 'none']))
+    const out = section(SKILL, '## Output Format')
+    const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
+    expect(treeRow).toMatch(/matches PR #N's head/)
+    expect(treeRow).toMatch(/⚠️ NOT PR #N's head/)
+    expect(treeRow).toMatch(/unknown — PR #N unreadable/)
+    expect(treeRow).toMatch(/no PR named/)
+    // and the tier-source row covers the modes that read no tag at all
+    const sourceRow = (out.match(/^├── Tier source:.*$/m) as RegExpMatchArray)[0]
+    expect(sourceRow).toMatch(/n\/a \(tiering disabled/)
   })
 
   it('AC5 — report rows are column-aligned: every value bracket sits at the same offset', () => {
