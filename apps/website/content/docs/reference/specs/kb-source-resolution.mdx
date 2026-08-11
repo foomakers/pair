@@ -197,19 +197,27 @@ When `requiresDownload: true` for URL sources:
 
 **Cache location — one slot per source, not per CLI version:**
 
-| Source                                | Slot                                        |
-| ------------------------------------- | ------------------------------------------- |
-| Official KB (auto-download)           | `~/.pair/kb/{version}/`                     |
-| `--source <zip>`                      | `~/.pair/kb/external/zip-{name}-{hash}/`    |
-| `--source <dir>` (copied into cache)  | `~/.pair/kb/external/dir-{name}-{hash}/`    |
-| `--source <git-url>`                  | `~/.pair/kb/external/git-{hash}/`           |
-| `--url <remote-zip>`                  | `~/.pair/kb/external/url-{name}-{hash}/`    |
+| Source                      | Slot                                     |
+| --------------------------- | ---------------------------------------- |
+| Official KB (auto-download) | `~/.pair/kb/{version}/`                  |
+| `--source <zip>`            | `~/.pair/kb/external/zip-{name}-{hash}/` |
+| `--source <dir>`            | **none** — read in place                 |
+| `--source <git-url>`        | `~/.pair/kb/external/git-{hash}/`        |
+| `--url <remote-zip>`        | `~/.pair/kb/external/url-{name}-{hash}/` |
 
 The slot is derived from the **identity of the source** (its resolved path or URL), so two
 different sources never share a slot and the same source always reuses its own. Only the
 official KB writes the version-keyed slot — an external KB can never overwrite it or its
 `manifest.json` ([foomakers/pair#395](https://github.com/foomakers/pair/issues/395)). The
-root of every slot above is `~/.pair/kb` unless `PAIR_KB_CACHE_DIR` overrides it.
+root of every slot above is `~/.pair/kb` unless `PAIR_KB_CACHE_DIR` overrides it (which
+must be an absolute path — slots are deleted recursively, so a relative value pointing at
+the current directory is rejected rather than honoured).
+
+**A directory source is never copied into the cache.** `--source <dir>` validates the
+directory and installs from it **in place**, so it occupies no slot and there is nothing
+to invalidate: edit the directory and the next install picks the edit up. Only the archive
+forms (`zip`, remote `zip`, git clone) need a slot, because they have to be materialized
+somewhere before they can be read.
 
 A slot whose `manifest.json` names a different KB than the one expected is treated as
 **contaminated**: it is discarded and re-fetched rather than served. The contaminated slot
@@ -239,7 +247,7 @@ needs. There is no automatic eviction. Three leftovers `rm -rf ~/.pair/kb/extern
 
 | Variable              | Description                         | Default               |
 | --------------------- | ----------------------------------- | --------------------- |
-| `PAIR_KB_CACHE_DIR`   | Override the KB cache root (absolute path) | `~/.pair/kb`     |
+| `PAIR_KB_CACHE_DIR`   | Override the KB cache root. Must be ABSOLUTE and free of `..` segments — rejected otherwise, because slots are deleted recursively | `~/.pair/kb` |
 | `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL  | GitHub latest release  |
 | `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos | Not set      |
 | `PAIR_DIAG`           | Enable diagnostic logging            | `0` (disabled)        |

@@ -143,10 +143,13 @@ pair-cli install --source ./dist/acme-kb-1.0.0.zip --offline
 ```
 
 <Callout>
-  **Every source gets its own cache slot.** An external KB is cached under
-  `~/.pair/kb/external/<source>-<hash>/`, never in the official KB's version slot
-  (`~/.pair/kb/<cli-version>/`) — so installing an external KB in one project cannot
-  change what any other project on the machine resolves. If the official slot **for the
+  **No external source ever writes the official KB's slot.** An external KB that has to
+  be materialized first — a ZIP, a remote ZIP, a git clone — is cached under
+  `~/.pair/kb/external/<kind>-<label>-<hash>/`, never in the official KB's version slot
+  (`~/.pair/kb/<cli-version>/`). A **local directory** is not cached at all: it is
+  installed from in place, so editing it changes what the next install produces. Either
+  way, installing an external KB in one project cannot change what any other project on
+  the machine resolves. If the official slot **for the
   CLI version you are running** is found holding a different KB, it is discarded and
   re-fetched instead of served. Slots left polluted by an older CLI (the bug fixed in
   [foomakers/pair#395](https://github.com/foomakers/pair/issues/395)) sit under that older

@@ -193,7 +193,7 @@ pair validate-config --config ./custom-config.json
 
 | Variable | Description | Default |
 | -------- | ----------- | ------- |
-| `PAIR_KB_CACHE_DIR` | Override the KB cache root (absolute path); slots are created under it | `~/.pair/kb` |
+| `PAIR_KB_CACHE_DIR` | Override the KB cache root; slots are created under it. Must be an ABSOLUTE path with no `..` segments — the CLI rejects anything else, because slots are deleted recursively | `~/.pair/kb` |
 | `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL | GitHub latest release |
 | `PAIR_GIT_TOKEN` | Token injected into HTTPS git clone URLs for private repos | Not set |
 | `PAIR_DIAG` | Enable diagnostic logging (`1` to enable) | `0` |
