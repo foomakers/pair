@@ -81,6 +81,13 @@ jobs:
         run: pnpm lint
       - name: Run code-hygiene check
         run: pnpm hygiene:check
+      # Its own step, NOT left to the unit test inside `pnpm test`: `test` is a
+      # cacheable turbo task whose inputs all live inside @pair/dev-tools, so a
+      # scenario added mode 644 without touching that package replays a cached
+      # PASS and the guard never runs. This step and the root `quality-gate`
+      # chain are the enforcement points (#400).
+      - name: Run smoke-scenario mode check
+        run: pnpm smoke-modes:check
       - name: Run docs-staleness check
         run: pnpm docs:staleness
       - name: Run skills-conformance check
@@ -227,14 +234,11 @@ jobs:
           fi
       - name: Install dependencies
         run: pnpm install
-      # DEPENDENCY-AWARE build, deliberately: `pnpm --filter @pair/pair-cli build`
-      # bypasses turbo's dependsOn graph, so `@pair/content-ops` — whose `exports`
-      # point at `dist/` — is never built and the CLI compile dies with ~45
-      # `TS2307: Cannot find module '@pair/content-ops'`. That is the "Turbo
-      # Caching" gotcha named in DEVELOPMENT.md and way-of-working.md, whose text
-      # says the workaround is "not needed in CI after a root build" — this job is
-      # the first CI job that would have violated that assumption. `...` = the
-      # package AND its workspace dependencies.
+      # `...` = the package AND its workspace dependencies. Dependency-aware
+      # deliberately: a filtered `pnpm build` bypasses turbo's dependsOn graph and
+      # the CLI compile dies with ~45 `TS2307: Cannot find module
+      # '@pair/content-ops'`. See DEVELOPMENT.md § "Turbo Caching" — this job is
+      # the live example named there.
       - name: Build CLI + its workspace deps
         run: pnpm turbo build --filter=@pair/pair-cli...
       # The runner then packages the built CLI itself and works in $RUNNER_TEMP.

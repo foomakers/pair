@@ -22,9 +22,11 @@ import {
 // the bit locally while the tracked mode stays 644 — which is the regression that
 // must be caught, on every checkout and platform.
 //
-// Fixtures below are literal `git ls-files -s` lines: `<mode> <sha> <stage>\t<path>`.
+// Fixtures below are literal `git ls-files -s -z` records:
+// `<mode> <sha> <stage>\t<path>`, NUL-terminated (never newline-separated — a
+// path may legally contain a newline, which is exactly why `-z` is used).
 const sha = '0000000000000000000000000000000000000000'
-const entry = (mode: string, path: string): string => `${mode} ${sha} 0\t${path}`
+const entry = (mode: string, path: string): string => `${mode} ${sha} 0\t${path}\0`
 
 const executableFixture = [
   entry(EXECUTABLE_MODE, 'scripts/smoke-tests/run-all.sh'),
@@ -32,10 +34,10 @@ const executableFixture = [
   entry(EXECUTABLE_MODE, 'scripts/smoke-tests/scenarios/coverage-gate.sh'),
   entry('100644', 'scripts/smoke-tests/lib/utils.sh'),
   entry('100644', 'scripts/smoke-tests/README.md'),
-].join('\n')
+].join('')
 
-describe('parseGitIndexEntries reads `git ls-files -s` output (#400)', () => {
-  it('extracts mode and path from a tab-separated index line', () => {
+describe('parseGitIndexEntries reads `git ls-files -s -z` output (#400)', () => {
+  it('extracts mode and path from a tab-separated index record', () => {
     expect(parseGitIndexEntries(entry('100755', 'scripts/smoke-tests/run-all.sh'))).toEqual([
       { mode: '100755', path: 'scripts/smoke-tests/run-all.sh' },
     ])
@@ -47,20 +49,20 @@ describe('parseGitIndexEntries reads `git ls-files -s` output (#400)', () => {
     )
   })
 
-  it('ignores blank lines instead of emitting empty entries', () => {
-    expect(parseGitIndexEntries(`\n${entry('100755', 'x.sh')}\n\n`)).toHaveLength(1)
+  it('ignores empty records instead of emitting empty entries', () => {
+    expect(parseGitIndexEntries(`\0${entry('100755', 'x.sh')}\0`)).toHaveLength(1)
   })
 
   it('returns nothing for empty output rather than throwing', () => {
     expect(parseGitIndexEntries('')).toEqual([])
   })
 
-  // A malformed line must be DROPPED, not turned into a plausible-looking entry.
-  // Taking the mode as `slice(0, indexOf(' '))` on a line with a tab but no space
-  // yields `indexOf(' ') === -1` -> `slice(0, -1)`, i.e. the line minus its last
+  // A malformed record must be DROPPED, not turned into a plausible-looking entry.
+  // Taking the mode as `slice(0, indexOf(' '))` on a record with a tab but no space
+  // yields `indexOf(' ') === -1` -> `slice(0, -1)`, i.e. the record minus its last
   // character, which then fails the `!== 100755` check and is reported as a
   // non-executable file with a nonsense mode: a confident wrong diagnosis.
-  it('drops a line whose pre-tab segment carries no mode instead of inventing one', () => {
+  it('drops a record whose pre-tab segment carries no mode instead of inventing one', () => {
     expect(parseGitIndexEntries('scripts/smoke-tests/scenarios/x.sh')).toEqual([])
     expect(parseGitIndexEntries('\tscripts/smoke-tests/scenarios/x.sh')).toEqual([])
   })
@@ -73,16 +75,34 @@ describe('parseGitIndexEntries reads `git ls-files -s` output (#400)', () => {
   })
 
   // Path bytes are the identity of the file the failure message names: a blanket
-  // `.trim()` on the line silently rewrites a path with a trailing space, and the
+  // `.trim()` on the record silently rewrites a path with a trailing space, and the
   // path the developer is told to `chmod` then does not exist.
   it('preserves a path with a trailing space verbatim', () => {
     expect(
       parseGitIndexEntries(entry('100644', 'scripts/smoke-tests/scenarios/x .sh '))[0],
     ).toEqual({ mode: '100644', path: 'scripts/smoke-tests/scenarios/x .sh ' })
   })
+
+  // Same invariant, for the one class git ACTUALLY rewrites. Without `-z`, and
+  // with `core.quotePath` at its default, git C-quotes any path carrying
+  // non-ASCII bytes, a control character, a quote or a backslash, emitting
+  // `"scripts/…/sc\303\251nario.sh"` — the remedy would then name a path that
+  // does not exist. `-z` disables quoting entirely, so the parser must accept
+  // the byte-exact path and a NEWLINE inside it.
+  it('preserves a non-ASCII path byte-exact (no C-quoting under -z)', () => {
+    expect(
+      parseGitIndexEntries(entry('100644', 'scripts/smoke-tests/scenarios/scénario.sh'))[0],
+    ).toEqual({ mode: '100644', path: 'scripts/smoke-tests/scenarios/scénario.sh' })
+  })
+
+  it('preserves a path containing a newline (only NUL terminates a record)', () => {
+    expect(
+      parseGitIndexEntries(entry('100644', 'scripts/smoke-tests/scenarios/a\nb.sh'))[0]?.path,
+    ).toBe('scripts/smoke-tests/scenarios/a\nb.sh')
+  })
 })
 
-describe('requiresExecutableBit covers what is RUN, not what is sourced (#400)', () => {
+describe('requiresExecutableBit covers what the RUNNER executes (#400)', () => {
   it('requires the bit on every scenario', () => {
     expect(requiresExecutableBit('scripts/smoke-tests/scenarios/coverage-gate.sh')).toBe(true)
   })
@@ -100,10 +120,24 @@ describe('requiresExecutableBit covers what is RUN, not what is sourced (#400)',
     expect(requiresExecutableBit('scripts/smoke-tests/fixtures/github-pr-reviews.json')).toBe(false)
   })
 
-  // A scenario is a scenario wherever it sits in the tree: a nested folder must
-  // not become the place where an unexecutable file hides.
-  it('covers a scenario in a nested folder', () => {
-    expect(requiresExecutableBit('scripts/smoke-tests/scenarios/nested/thing.sh')).toBe(true)
+  // The predicate is exactly the runner's glob (`"$SCENARIOS_DIR"/*.sh`), which
+  // the AC7 membership audit in `runner-outcomes.sh` also uses. Data sitting
+  // NEXT TO the scenarios is read, not executed: demanding +x on a JSON fixture
+  // is a guard that misdiagnoses, and misdiagnosis is what gets a guard routed
+  // around.
+  it('exempts a data file inside scenarios/ — only *.sh is executed', () => {
+    expect(requiresExecutableBit('scripts/smoke-tests/scenarios/fixtures/gh-response.json')).toBe(
+      false,
+    )
+    expect(requiresExecutableBit('scripts/smoke-tests/scenarios/README.md')).toBe(false)
+  })
+
+  // Nesting does not exist for this suite: the runner globs top-level `*.sh`
+  // only, and so does the CI-membership audit. Requiring the bit on a nested
+  // file would make the guard and the suite disagree about a file the runner can
+  // never reach — asserted here so the three stay in step.
+  it('does not reach a nested path the runner never globs', () => {
+    expect(requiresExecutableBit('scripts/smoke-tests/scenarios/nested/thing.sh')).toBe(false)
   })
 
   it('ignores paths outside the smoke-test tree', () => {
@@ -152,7 +186,7 @@ describe('findNonExecutable names every offending file and its mode (#400)', () 
       entry('100644', 'scripts/smoke-tests/scenarios/a.sh'),
       entry('100644', 'scripts/smoke-tests/scenarios/b.sh'),
       entry(EXECUTABLE_MODE, 'scripts/smoke-tests/scenarios/c.sh'),
-    ].join('\n')
+    ].join('')
     expect(findNonExecutable(parseGitIndexEntries(two)).map(e => e.path)).toEqual([
       'scripts/smoke-tests/scenarios/a.sh',
       'scripts/smoke-tests/scenarios/b.sh',

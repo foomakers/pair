@@ -20,17 +20,26 @@
  * carries the bit locally (or on a filesystem that reports every file as
  * executable) while the tracked mode stays `100644` — so the filesystem is
  * exactly the wrong place to assert this. Reading the index rather than `HEAD` is
- * deliberate: it catches a `chmod +x` that was never `git add`-ed, on the
- * pre-push gate, instead of one commit later.
+ * deliberate: it catches a `chmod +x` that was never `git add`-ed, instead of one
+ * commit later.
  *
  * Check-only, like the pre-push gate (ADL 2026-07-31): it names the file, its mode
  * and the command to fix it, and never chmods anything. A gate that repairs the
  * tree it is judging stops being evidence about the commit.
  *
- * Per the gate-tooling ADL (2026-07-13) the logic lives here as a tested module.
- * Its enforcement point is `smoke-scenario-modes.test.ts` — which runs inside
- * `pnpm test`, i.e. inside both the pre-push gate and the CI `build` job — so no
- * extra CLI entrypoint or pipeline step exists to be forgotten.
+ * Per the gate-tooling ADL (2026-07-13) the logic lives here as a tested module and
+ * `main()` behind a `require.main` guard is the thin CLI — the ADR-014 shape shared
+ * with the siblings in this folder.
+ *
+ * ENFORCEMENT POINT: the CLI, wired as `smoke-modes:check` (package) ->
+ * `pnpm smoke-modes:check` (root) -> the root `quality-gate` chain the pre-push
+ * hook runs, plus its own step in the CI `build` job. The unit test alone is NOT
+ * the enforcement point, and the difference is not pedantic: `test` is a CACHEABLE
+ * turbo task whose inputs are all inside this package, so adding a scenario with
+ * mode 644 and touching nothing here leaves `@pair/dev-tools#test`'s hash
+ * unchanged, turbo replays a cached PASS, and the guard never executes. The root
+ * gate scripts (`hygiene:check`, `docs:staleness`, `skills:conformance`) are not
+ * turbo tasks and run unconditionally — which is why this one joins them.
  */
 import { execFileSync } from 'child_process'
 
@@ -39,9 +48,17 @@ import { REPO_ROOT } from './repo-root'
 /** The only git mode a runnable tracked script may have. */
 export const EXECUTABLE_MODE = '100755'
 
+/** The extension the runner globs. Anything else in the folder is data, not a scenario. */
+const SCENARIO_EXTENSION = '.sh'
+
 /** The smoke-test tree this guard reads, and the paths inside it that must run. */
 export const MUST_BE_EXECUTABLE = {
-  /** Everything under here is invoked by the runner as a child process. */
+  /**
+   * The folder the runner globs. A scenario is a `*.sh` file DIRECTLY in here —
+   * `run-all.sh` iterates `"$SCENARIOS_DIR"/*.sh` (top level, `.sh` only) and the
+   * AC7 membership audit in `runner-outcomes.sh` walks the same glob. Anything
+   * else living here (a data fixture, a README) is read, never executed.
+   */
   scenariosDir: 'scripts/smoke-tests/scenarios/',
   /** The runner itself — `pnpm smoke-tests` and the CI job execute it directly. */
   runner: 'scripts/smoke-tests/run-all.sh',
@@ -62,40 +79,60 @@ export interface ModeCheckResult {
 }
 
 /**
- * Parses `git ls-files -s` output: `<mode> <sha> <stage>\t<path>`.
+ * Parses `git ls-files -s -z` output: `<mode> <sha> <stage>\t<path>` records,
+ * NUL-terminated.
+ *
+ * Records are split on NUL, never on newline, because `-z` lets a path carry
+ * ANY byte — including a newline — and splitting on `\n` would cut such a path
+ * into two unusable halves.
  *
  * The path is taken after the TAB rather than by splitting on whitespace, so a
  * filename containing a space — including a TRAILING one — survives byte for
  * byte: the path is the identity of the file the failure message tells you to
- * chmod, so rewriting it produces a command that does not match any file.
+ * chmod, so rewriting it produces a command that does not match any file. `-z`
+ * closes the same hole for the class git itself rewrites: without it, and with
+ * `core.quotePath` at its default, git C-quotes any path with a non-ASCII byte,
+ * a control character, a quote or a backslash, and the remedy would name
+ * `"scripts/…/sc\303\251nario.sh"` — a path that does not exist.
  *
- * The mode is read from the PRE-tab segment only. A line the parser cannot read
+ * The mode is read from the PRE-tab segment only. A record the parser cannot read
  * is dropped rather than turned into an entry with a salvaged-looking mode: a
  * bogus mode would fail the `!== 100755` check and be reported as a
  * non-executable file, i.e. a confident wrong diagnosis instead of no diagnosis.
  */
 export function parseGitIndexEntries(lsFilesOutput: string): IndexEntry[] {
   return lsFilesOutput
-    .split('\n')
-    .filter(line => line !== '')
-    .flatMap(line => {
-      const tab = line.indexOf('\t')
+    .split('\0')
+    .filter(record => record !== '')
+    .flatMap(record => {
+      const tab = record.indexOf('\t')
       if (tab === -1) return []
-      const mode = line.slice(0, tab).split(' ')[0] ?? ''
+      const mode = record.slice(0, tab).split(' ')[0] ?? ''
       if (mode === '') return []
-      return [{ mode, path: line.slice(tab + 1) }]
+      return [{ mode, path: record.slice(tab + 1) }]
     })
 }
 
 /**
  * Whether a path is RUN (must be `100755`) or merely read.
  *
- * `lib/utils.sh` is sourced, not executed, and the fixtures and README are data:
- * demanding the bit there would make the guard noise, and a guard people route
- * around asserts nothing (the #394 lesson).
+ * "Run" is defined as what the runner actually globs: a `*.sh` file DIRECTLY in
+ * `scenarios/`, plus the runner itself. Everything else is read — `lib/utils.sh`
+ * is sourced, a fixture is data, a README is prose — and demanding the bit there
+ * would make the guard tell a developer to `chmod +x` a JSON file. A guard that
+ * misdiagnoses is a guard people route around (the #394 lesson).
+ *
+ * Nesting is deliberately out of reach, and that is the same rule the rest of the
+ * suite applies: `run-all.sh` globs `"$SCENARIOS_DIR"/*.sh` and the AC7 membership
+ * audit walks the same glob, so a file under `scenarios/nested/` is neither
+ * executed nor required to be in `CI_TESTS`. Requiring the bit on it would be the
+ * guard asserting something about a file the suite cannot reach.
  */
 export function requiresExecutableBit(path: string): boolean {
-  return path.startsWith(MUST_BE_EXECUTABLE.scenariosDir) || path === MUST_BE_EXECUTABLE.runner
+  if (path === MUST_BE_EXECUTABLE.runner) return true
+  if (!path.startsWith(MUST_BE_EXECUTABLE.scenariosDir)) return false
+  const name = path.slice(MUST_BE_EXECUTABLE.scenariosDir.length)
+  return name.endsWith(SCENARIO_EXTENSION) && !name.includes('/')
 }
 
 /** Every runnable file whose staged mode is not exactly `100755`, in index order. */
@@ -153,9 +190,16 @@ export function checkSmokeScenarioModes(lsFilesOutput: string): ModeCheckResult 
   }
 }
 
-/** `git ls-files -s` over the smoke-test tree of THIS repo (cwd-independent). */
+/**
+ * `git ls-files -s -z` over the smoke-test tree of THIS repo (cwd-independent).
+ *
+ * `-z` is load-bearing, not cosmetic: without it git C-quotes any path carrying a
+ * non-ASCII byte, a control character, a quote or a backslash, and the parser
+ * would hand the QUOTED spelling to the failure message — a `chmod +x <path>`
+ * remedy that matches no file.
+ */
 export function readSmokeTestsIndex(): string {
-  return execFileSync('git', ['ls-files', '-s', '--', MUST_BE_EXECUTABLE.tree], {
+  return execFileSync('git', ['ls-files', '-s', '-z', '--', MUST_BE_EXECUTABLE.tree], {
     cwd: REPO_ROOT,
     encoding: 'utf-8',
   })
@@ -164,4 +208,18 @@ export function readSmokeTestsIndex(): string {
 /** Checks this repo's staged (index) smoke-test modes. */
 export function checkThisRepoSmokeScenarioModes(): ModeCheckResult {
   return checkSmokeScenarioModes(readSmokeTestsIndex())
+}
+
+/** Thin CLI wrapper: print the report and set the exit code (ADR-014 shape). */
+export function main(): void {
+  const result = checkThisRepoSmokeScenarioModes()
+  if (!result.ok) {
+    console.error(`\n❌ smoke-scenario modes\n\n${result.message}\n`)
+    process.exit(1)
+  }
+  console.log(`✓ smoke-scenario modes: ${result.message}`)
+}
+
+if (require.main === module) {
+  main()
 }

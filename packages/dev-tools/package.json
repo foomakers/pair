@@ -14,6 +14,7 @@
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix",
     "code-hygiene:check": "ts-node src/quality-gates/code-hygiene-check.ts",
+    "smoke-modes:check": "ts-node src/quality-gates/smoke-scenario-modes.ts",
     "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",
     "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",
     "determine-version": "ts-node src/release/determine-version.ts",
