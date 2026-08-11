@@ -8,7 +8,8 @@ import {
   copyDirectoryContents,
 } from '@pair/content-ops'
 import { downloadWithRetry } from './download-manager'
-import cacheManager, { type KBSource } from './cache-manager'
+import cacheManager from './cache-manager'
+import { getSourceCachePath, resolveSourcePath, type KBSource } from './cache-slot-key'
 import checksumManager from './checksum-manager'
 import formatDownloadError from './error-formatter'
 import { announceDownload, announceSuccess } from './download-ui'
@@ -122,10 +123,12 @@ export async function installKBFromLocalDirectory(
   fs: FileSystemService,
 ): Promise<string> {
   // Slot keyed by source identity, never by CLI version: an external directory must not
-  // land in the official KB's slot (US-395).
-  const resolvedDirPath = cacheManager.resolveSourcePath(dirPath, fs)
+  // land in the official KB's slot (US-395). The caller has already classified this path
+  // as a directory (`localKBSource`); the slot derives from the same resolved path, so
+  // both sides land on the same slot.
+  const resolvedDirPath = resolveSourcePath(dirPath, fs)
   const source: KBSource = { kind: 'directory', path: resolvedDirPath }
-  const cachePath = cacheManager.getSourceCachePath(source)
+  const cachePath = getSourceCachePath(source)
 
   // Validate directory exists
   if (!fs.existsSync(resolvedDirPath)) {
@@ -174,10 +177,12 @@ export async function installKBFromLocalZip(
   skipVerify = false,
 ): Promise<string> {
   // Slot keyed by source identity, never by CLI version: an external ZIP must not land
-  // in the official KB's slot (US-395).
-  const resolvedZipPath = cacheManager.resolveSourcePath(zipPath, fs)
+  // in the official KB's slot (US-395). The caller has already classified this path as a
+  // ZIP (`localKBSource`); the slot derives from the same resolved path, so both sides
+  // land on the same slot.
+  const resolvedZipPath = resolveSourcePath(zipPath, fs)
   const source: KBSource = { kind: 'zip', path: resolvedZipPath }
-  const cachePath = cacheManager.getSourceCachePath(source)
+  const cachePath = getSourceCachePath(source)
 
   // Validate ZIP file exists
   if (!fs.existsSync(resolvedZipPath)) {

@@ -1,11 +1,18 @@
-import { join, dirname, resolve } from 'path'
+import { join, dirname } from 'path'
 import { rmSync } from 'fs'
 import { FileSystemService, HttpClientService, validateKBStructure } from '@pair/content-ops'
 import { findPackageJsonPath } from './discovery'
-import { isKBCached, ensureKBAvailable } from '#kb-manager'
+import {
+  isKBCached,
+  ensureKBAvailable,
+  ensureCacheDirectory,
+  getSourceCachePath,
+  localKBSource,
+  purgeSlot,
+  type KBSource,
+} from '#kb-manager'
 import { installKBFromLocalZip } from '#kb-manager/kb-installer'
 import { cloneGitRepo } from '#kb-manager/git-clone'
-import cacheManager from '#kb-manager/cache-manager'
 import { isDiagEnabled } from '#diagnostics'
 
 /**
@@ -132,9 +139,10 @@ export interface DatasetResolveOptions {
 
 async function resolveGitDataset(fs: FileSystemService, url: string): Promise<string> {
   // Source-identity slot, never the official KB's version slot (US-395)
-  const cachePath = cacheManager.getSourceCachePath({ kind: 'git', url })
-  await cacheManager.purgeSlot({ kind: 'git', url }, fs)
-  await cacheManager.ensureCacheDirectory(cachePath, fs)
+  const source: KBSource = { kind: 'git', url }
+  const cachePath = getSourceCachePath(source)
+  await purgeSlot(source, fs)
+  await ensureCacheDirectory(cachePath, fs)
   cloneGitRepo(url, cachePath)
   rmSync(join(cachePath, '.git'), { recursive: true, force: true })
   return cachePath
@@ -146,8 +154,11 @@ async function resolveLocalDataset(
   version: string,
   skipVerify = false,
 ): Promise<string> {
-  const resolved = resolve(fs.currentWorkingDirectory(), path)
-  if (path.endsWith('.zip')) {
+  // ZIP-vs-directory is classified in ONE place (`localKBSource`), so this dispatch and
+  // the cache slot the installer writes can never disagree — `KB.ZIP` included (US-395).
+  const source = localKBSource(path, fs)
+  const resolved = source.path
+  if (source.kind === 'zip') {
     return installKBFromLocalZip(version, resolved, fs, skipVerify)
   }
   if (!fs.existsSync(resolved)) {

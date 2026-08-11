@@ -2,7 +2,8 @@ import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/c
 import { detectSourceType, logger as log, SourceType } from '@pair/content-ops'
 
 import { type ProgressWriter } from '@pair/content-ops/http'
-import cacheManager, { type KBSource } from './cache-manager'
+import cacheManager from './cache-manager'
+import { getSourceCachePath, localKBSource, officialSource, type KBSource } from './cache-slot-key'
 import urlUtils from './url-utils'
 import {
   installKB,
@@ -28,11 +29,11 @@ export interface KBManagerDeps {
  */
 function resolveSource(version: string, deps: KBManagerDeps): KBSource {
   const sourceUrl = deps.customUrl
-  if (!sourceUrl) return cacheManager.officialSource(version)
+  if (!sourceUrl) return officialSource(version)
   if (detectSourceType(sourceUrl, deps.fs) === SourceType.REMOTE_URL) {
     return { kind: 'remote', url: sourceUrl }
   }
-  return cacheManager.localKBSource(sourceUrl, deps.fs)
+  return localKBSource(sourceUrl, deps.fs)
 }
 
 function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
@@ -48,25 +49,27 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
 export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
   const fs = deps.fs
   const source = resolveSource(version, deps)
-  const cachePath = cacheManager.getSourceCachePath(source)
+  const cachePath = getSourceCachePath(source)
 
   if (!deps.customUrl) {
     const state = await cacheManager.inspectSlot(source, fs)
     if (state.status === 'ready') return cachePath
     if (state.status === 'contaminated') {
       // AC5: a slot polluted by an earlier `--source` install is never served — it is
-      // discarded and re-fetched, so users self-heal without knowing ~/.pair/kb exists.
+      // replaced and re-fetched, so users self-heal without knowing the cache exists.
       log.warn(
         `Cached KB at ${cachePath} belongs to "${state.found}", not "${state.expected}" — discarding it and re-downloading.`,
       )
-      await cacheManager.purgeSlot(source, fs)
     }
   }
 
-  const hadCache = deps.customUrl ? await cacheManager.backupCachedKB(source, fs) : false
+  // The slot is set ASIDE, never deleted, before it is rewritten — for a contaminated
+  // official slot as much as for a custom source. A failing re-fetch (offline, 5xx, proxy)
+  // must leave the user with the cache they had, not with no cache at all.
+  const hadCache = await cacheManager.backupCachedKB(source, fs)
 
   try {
-    const result = await installFromSource(version, cachePath, deps)
+    const result = await installFromSource(version, source, cachePath, deps)
     if (hadCache) await cacheManager.removeBackupKB(source, fs)
     return result
   } catch (err) {
@@ -77,24 +80,21 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
 
 async function installFromSource(
   version: string,
+  source: KBSource,
   cachePath: string,
   deps: KBManagerDeps,
 ): Promise<string> {
-  const sourceUrl = deps.customUrl || urlUtils.buildGithubReleaseUrl(version)
   const installerDeps = buildInstallerDeps(deps)
   const fs = deps.fs
 
-  // Check if source is a local path instead of a remote URL
-  const sourceType = detectSourceType(sourceUrl, fs)
-  if (sourceType !== SourceType.REMOTE_URL) {
-    if (sourceUrl.endsWith('.zip')) {
-      return installKBFromLocalZip(version, sourceUrl, fs, deps.skipVerify)
-    }
-    return installKBFromLocalDirectory(version, sourceUrl, fs)
-  }
+  // Dispatch on the ALREADY-RESOLVED identity, never on a second look at the raw string:
+  // the slot a source owns and the installer it is routed to must agree (US-395).
+  if (source.kind === 'zip') return installKBFromLocalZip(version, source.path, fs, deps.skipVerify)
+  if (source.kind === 'directory') return installKBFromLocalDirectory(version, source.path, fs)
 
-  // Remote URL - use standard download
-  return installKB(version, cachePath, sourceUrl, {
+  const downloadUrl =
+    source.kind === 'remote' ? source.url : urlUtils.buildGithubReleaseUrl(version)
+  return installKB(version, cachePath, downloadUrl, {
     fs,
     ...installerDeps,
     ...(deps.retryOptions ? { retryOptions: deps.retryOptions } : {}),

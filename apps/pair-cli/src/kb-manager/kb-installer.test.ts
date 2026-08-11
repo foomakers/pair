@@ -8,11 +8,11 @@ import {
   toIncomingMessage,
 } from '@pair/content-ops'
 import { installKB, installKBFromLocalZip, installKBFromLocalDirectory } from './kb-installer'
-import cacheManager from './cache-manager'
+import { getSourceCachePath } from './cache-slot-key'
 
 // A local source owns a slot keyed by its own identity, not by the CLI version (US-395)
-const zipSlot = (path: string) => cacheManager.getSourceCachePath({ kind: 'zip', path })
-const dirSlot = (path: string) => cacheManager.getSourceCachePath({ kind: 'directory', path })
+const zipSlot = (path: string) => getSourceCachePath({ kind: 'zip', path })
+const dirSlot = (path: string) => getSourceCachePath({ kind: 'directory', path })
 
 describe('KB Installer', () => {
   it('downloads and installs when checksum absent', async () => {

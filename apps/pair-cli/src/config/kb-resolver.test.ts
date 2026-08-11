@@ -228,6 +228,27 @@ describe('resolveDatasetRoot', () => {
     )
   })
 
+  it('local resolution routes an uppercase .ZIP to the ZIP installer too (US-395)', async () => {
+    const kbInstaller = await import('#kb-manager/kb-installer')
+    vi.spyOn(kbInstaller, 'installKBFromLocalZip').mockResolvedValue('/cached/unzipped')
+
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const result = await resolveDatasetRoot(
+      fs,
+      { resolution: 'local', path: '/tmp/KB.ZIP' },
+      { cliVersion: '2.0.0' },
+    )
+
+    expect(result).toBe('/cached/unzipped')
+    expect(kbInstaller.installKBFromLocalZip).toHaveBeenCalledWith(
+      '2.0.0',
+      '/tmp/KB.ZIP',
+      fs,
+      false,
+    )
+  })
+
   it('uses fallback version 0.0.0 when cliVersion not provided', async () => {
     const kbInstaller = await import('#kb-manager/kb-installer')
     vi.spyOn(kbInstaller, 'installKBFromLocalZip').mockResolvedValue('/cached/path')
@@ -245,10 +266,9 @@ describe('resolveDatasetRoot', () => {
 
   it('git resolution keys the cache on the git source, never on cliVersion (US-395)', async () => {
     const gitClone = await import('#kb-manager/git-clone')
-    const cache = await import('#kb-manager/cache-manager')
+    const cache = await import('#kb-manager')
 
     vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {})
-    vi.spyOn(cache.default, 'ensureCacheDirectory').mockResolvedValue()
 
     const url = 'https://github.com/acme/repo.git#v1.0.0'
     const expectedSlot = cache.getSourceCachePath({ kind: 'git', url })
@@ -266,13 +286,10 @@ describe('resolveDatasetRoot', () => {
 
   it('git resolution propagates clone errors', async () => {
     const gitClone = await import('#kb-manager/git-clone')
-    const cache = await import('#kb-manager/cache-manager')
 
     vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
       throw new Error('Git clone failed: auth error')
     })
-    vi.spyOn(cache.default, 'getCachedKBPath').mockReturnValue('/home/.pair/kb/1.0.0')
-    vi.spyOn(cache.default, 'ensureCacheDirectory').mockResolvedValue()
 
     const fs = new InMemoryFileSystemService({}, '/project', '/project')
 

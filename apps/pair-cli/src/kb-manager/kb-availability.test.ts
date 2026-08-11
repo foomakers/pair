@@ -9,7 +9,7 @@ import {
   type FileSystemService,
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
-import { getSourceCachePath, OFFICIAL_KB_NAME } from './cache-manager'
+import { getSourceCachePath, OFFICIAL_KB_NAME } from './cache-slot-key'
 
 // Helper to create valid ZIP data for InMemoryFileSystemService
 function createValidZipData(files: Record<string, string>): string {
@@ -112,7 +112,14 @@ describe('KB Manager - Version handling', () => {
     vi.clearAllMocks()
 
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
+    // A real extraction leaves a manifest behind; without one the slot reads as a
+    // half-written download and the second call re-fetches (US-395 AC5).
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(
+        join(targetPath, 'manifest.json'),
+        JSON.stringify({ name: OFFICIAL_KB_NAME, version: '1.2.3' }),
+      )
+    })
 
     const versionWithV = 'v1.2.3'
 
@@ -684,6 +691,37 @@ describe('KB Manager - contaminated official slot self-heals (US-395 AC5)', () =
     consoleWarnSpy.mockRestore()
   })
 
+  it('keeps the contaminated cache when the re-fetch fails, instead of leaving no cache', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [officialSlot + '/manifest.json']: JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        [officialSlot + '/.pair/knowledge/foreign.md']: 'foreign content',
+      },
+      '/',
+      '/',
+    )
+
+    // The user is offline / the release is unreachable: the re-download fails.
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '0' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(404)),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    await expect(ensureKBAvailable(testVersion, { httpClient, fs })).rejects.toThrow()
+
+    // wrong-but-working content is still there — a failed re-fetch is not destructive
+    expect(await fs.readFile(officialSlot + '/.pair/knowledge/foreign.md')).toBe('foreign content')
+    expect(fs.existsSync(officialSlot + '.bak')).toBe(false)
+
+    consoleWarnSpy.mockRestore()
+  })
+
   it('serves the cache without downloading when the slot holds the official KB', async () => {
     const fs = new InMemoryFileSystemService(
       {
@@ -701,6 +739,44 @@ describe('KB Manager - contaminated official slot self-heals (US-395 AC5)', () =
 
     expect(result).toBe(officialSlot)
     expect(httpClient.getUrls()).toHaveLength(0)
+  })
+})
+
+/**
+ * US-395 — the source's identity is derived ONCE and every dispatch follows it. When the
+ * slot was keyed case-insensitively (`KB.ZIP` → a zip slot) but the installer was picked
+ * with `endsWith('.zip')`, an uppercase archive was routed to the DIRECTORY installer:
+ * it purged a second, unrelated slot and failed with "Failed to install KB from local
+ * directory", leaving an orphan slot behind.
+ */
+describe('KB Manager - one identity per source, whatever the extension case (US-395)', () => {
+  it('installs an uppercase .ZIP as a ZIP, into the slot its identity owns', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const zipPath = '/downloads/KB.ZIP'
+    const fs = new InMemoryFileSystemService(
+      {
+        [zipPath]: createValidZipData({
+          'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+          '.pair/knowledge/acme.md': '# acme',
+        }),
+      },
+      '/work',
+      '/work',
+    )
+
+    const result = await ensureKBAvailable('0.2.0', {
+      httpClient: new MockHttpClientService(),
+      fs,
+      customUrl: zipPath,
+      skipVerify: true,
+    })
+
+    expect(result).toBe(getSourceCachePath({ kind: 'zip', path: zipPath }))
+    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'acme.md'))).toBe(true)
+    // no orphan directory slot was created for the same archive
+    expect(fs.existsSync(getSourceCachePath({ kind: 'directory', path: zipPath }))).toBe(false)
+
+    consoleLogSpy.mockRestore()
   })
 })
 
