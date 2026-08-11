@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OFFLINE_SAFE=true
+OFFLINE_SAFE=true
 #
 # Smoke runner vocabulary + CI list integrity — story #400.
 #
@@ -191,9 +191,10 @@ done
 
 # Every excluded entry carries a reason (`<file>: <why>`), and names a real file.
 # The reason cannot be an opinion: an excluded scenario must either DECLARE
-# `OFFLINE_SAFE=false` (the rule — CI runs every offline-safe scenario) or name a
-# tracking issue, which is the flakiness escape hatch the story allows in both
-# directions. Without this, "excluded" degrades back into "nobody got round to it".
+# `OFFLINE_SAFE=false` on its own line (the enforced rule is opt-OUT — a scenario
+# runs in CI unless it says otherwise) or name a tracking issue, which is the
+# flakiness escape hatch the story allows in both directions. Without this,
+# "excluded" degrades back into "nobody got round to it".
 for e in "${CI_EXCLUDED[@]}"; do
   name="${e%%:*}"
   reason="${e#*: }"

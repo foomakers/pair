@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OFFLINE_SAFE=true
+OFFLINE_SAFE=true
 #
 # Coverage baseline + CI guardrail — verification scenario (story #282).
 #

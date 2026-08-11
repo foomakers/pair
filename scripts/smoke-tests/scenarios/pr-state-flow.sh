@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OFFLINE_SAFE=true
+OFFLINE_SAFE=true
 #
 # PR state flow (gate ≠ review) + pair review as a required check — verification
 # scenario (story #234).
