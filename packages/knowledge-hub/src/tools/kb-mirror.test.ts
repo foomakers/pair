@@ -41,6 +41,41 @@ const KB_FILES = kbDatasetMarkdownPaths(DATASET_KB)
 const KB_NON_MD_FILES = kbDatasetNonMarkdownPaths(DATASET_KB)
 
 /**
+ * Dataset source + its transform output, computed ONCE per markdown file, here at
+ * module scope (i.e. at collection, which no `testTimeout` bounds).
+ *
+ * `rewriteSkillReferences` is O(lines x skills) — every non-fenced line is matched
+ * against one compiled pattern per installed skill — so a full pass over this
+ * corpus is the expensive operation in this file. Every consumer below (the
+ * equality `it.each`, the frozen-untransformed sweep, the idempotence check) reads
+ * from this map instead of transforming again, leaving exactly ONE corpus pass
+ * inside a test body (the re-transform in the idempotence assertion, which is the
+ * thing under test there). Recomputing per consumer put the two aggregate tests
+ * over vitest's default 5s per-test budget on CI's slower runners.
+ */
+const EXPECTED: ReadonlyMap<string, { source: string; expected: string }> = new Map(
+  KB_FILES.map(rel => {
+    const source = datasetContent(rel)
+    return [rel, { source, expected: transform(source) }] as const
+  }),
+)
+
+/** Precomputed `{ source, expected }` for a dataset markdown file. */
+const expectedFor = (rel: string): { source: string; expected: string } => {
+  const hit = EXPECTED.get(rel)
+  if (!hit) throw new Error(`no precomputed transform for '${rel}' — not a dataset markdown file`)
+  return hit
+}
+
+/**
+ * Generous explicit budget for the two whole-corpus assertions. The default 5s is
+ * a per-test timeout tuned for unit tests, not for a sweep over a 5 MB corpus on a
+ * shared CI runner (~10x slower than a dev machine on this suite); an explicit
+ * value keeps a slow runner from turning a green invariant red.
+ */
+const CORPUS_TEST_TIMEOUT_MS = 30_000
+
+/**
  * Data-driven mirror-equality guard for the WHOLE KB tree (#393 AC1/AC5): for
  * every file the dataset contributes, the root `.pair/knowledge/<rel>` copy must
  * equal the REAL `pair update` transform of its dataset source — not the source
@@ -70,7 +105,7 @@ describe('KB dataset -> root mirror equality for every KB file (data-driven) (#3
   })
 
   it.each(KB_FILES)('root mirror for %s equals the real transform of its dataset source', rel => {
-    assertKbMirrorMatches(rel, transform(datasetContent(rel)), mirrorContent(rel))
+    assertKbMirrorMatches(rel, expectedFor(rel).expected, mirrorContent(rel))
   })
 
   it.each(KB_NON_MD_FILES)(
@@ -93,15 +128,19 @@ describe('KB dataset -> root mirror equality for every KB file (data-driven) (#3
  * exist.
  */
 describe('KB mirror — no file is frozen in an untransformed state (AC5) (#393)', () => {
-  it('lists no KB mirror that is byte-identical to a source the transform would change', () => {
-    const frozen = KB_FILES.filter(rel => {
-      // one read per file: `datasetContent(rel)` used to be called twice per
-      // candidate inside this predicate alone.
-      const src = datasetContent(rel)
-      return isFrozenUntransformed(src, mirrorContent(rel), transform(src))
-    })
-    expect(frozen).toEqual([])
-  })
+  it(
+    'lists no KB mirror that is byte-identical to a source the transform would change',
+    () => {
+      const frozen = KB_FILES.filter(rel => {
+        // source + transform output both come from the module-scope EXPECTED map:
+        // this sweep does no transforming of its own, only mirror reads.
+        const { source, expected } = expectedFor(rel)
+        return isFrozenUntransformed(source, mirrorContent(rel), expected)
+      })
+      expect(frozen).toEqual([])
+    },
+    CORPUS_TEST_TIMEOUT_MS,
+  )
 })
 
 /**
@@ -115,10 +154,18 @@ describe('KB mirror transform is idempotent (#393)', () => {
   // the transform, not of any individual file, so 441 `it` blocks bought nothing
   // but collection cost. Concatenating keeps every real input in the assertion —
   // any file that double-prefixed would still fail here.
-  it('re-transforming the installed output of the whole KB corpus is a no-op', () => {
-    const once = transform(KB_FILES.map(datasetContent).join('\n'))
-    expect(transform(once)).toBe(once)
-  })
+  it(
+    're-transforming the installed output of the whole KB corpus is a no-op',
+    () => {
+      // `once` is assembled from the ALREADY-transformed per-file outputs computed at
+      // module scope, i.e. literally the bytes `pair update` installs — so this test
+      // body performs the single re-transform that is the property under test, and no
+      // setup pass.
+      const once = KB_FILES.map(rel => expectedFor(rel).expected).join('\n')
+      expect(transform(once)).toBe(once)
+    },
+    CORPUS_TEST_TIMEOUT_MS,
+  )
 
   it('is a no-op on content with no skill references at all', () => {
     const plain = '# Title\n\nNo slash commands here, only prose.\n'
