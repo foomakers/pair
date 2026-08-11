@@ -128,8 +128,8 @@ A project decides which other model parameters, if any, to expose by adding them
 Optional file holding up to three independent sections — a project may have none, one, or all three; the presence of one never implies the others:
 
 - **`## Tag Projection`** (§5) — which classification tags get emitted. In practice the section most projects end up with first, since `classify` proactively proposes it the first time it runs (§5) — a project doesn't have to know this file exists to get a sensible default.
-- **`## Criticality Table`** — per-service/domain criticality overrides (§3.1).
-- **`## Overrides`** — threshold overrides for other dimensions, plus optional per-tier reviewer-count/SLA overrides (§4).
+- **`## Criticality Table`** — per-service/domain criticality overrides (§3.1). Offered by `/pair-process-bootstrap` Phase 3.6, which proposes the candidate rows from the project's domain model and writes only the ones confirmed; hand-authoring from the example asset stays equally valid.
+- **`## Overrides`** — threshold overrides for other dimensions, plus optional per-tier reviewer-count/SLA overrides (§4). Offered by the same `/pair-process-bootstrap` Phase 3.6.
 
 Absent entirely ⇒ KB defaults (§3.1) apply completely to the matrix, and no tags are emitted (§5) — nothing fails (D21). This is the state before `classify` has ever run, or before its Tag Projection proposal has been answered.
 
@@ -150,6 +150,7 @@ Active: risk
 - change-risk.shared-paths: ["packages/billing/**"]
 ```
 
+- **Key namespace** (what the read side queries): a story or diff resolves to the **deployable that owns the touched files** — the workspace package, app, or top-level path scope (`apps/website`, `packages/billing`; a single-deployable repository resolves to that one scope). That identifier is the key looked up in the criticality table, so **rows are keyed by it**. Bounded contexts and subdomains name *business* boundaries and often carry different names: they are good sources of candidate rows and of the criticality *value*, but a row keyed by a name no diff ever resolves to is never read, while the deployable it meant to cover stays unlisted and falls to the conservative High below.
 - **Malformed file** (unparseable table, unknown keys): skills warn and fall back to KB defaults entirely (D21) — including no tag emission, exactly as if the whole file were absent.
 - **Unknown service/domain** (queried but not in the criticality table): treated as unclassified ⇒ conservative High for that dimension.
 - A filled-in example (also usable as adoption starting point) is at [risk-matrix-example.md](../../assets/risk-matrix-example.md).

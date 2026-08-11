@@ -29,6 +29,16 @@ const datasetDefaults = (): string => read(join(DATASET_DIR, 'quick-mode-default
 const mirrorSkill = (): string => read(join(MIRROR_DIR, 'SKILL.md'))
 
 const CHECKLIST_REL = '.pair/knowledge/assets/bootstrap-checklist.md'
+const QUALITY_MODEL_REL = '.pair/knowledge/guidelines/quality-assurance/quality-model.md'
+
+/** A top-level `## N. …` section of the quality model, heading excluded. */
+const qualityModelSection = (base: string, n: number): string => {
+  const doc = read(join(base, QUALITY_MODEL_REL))
+  const after = doc.split(new RegExp(`^## ${n}\\. .*$`, 'm'))[1] ?? ''
+  // stop at the next NUMBERED section: §6 embeds a fenced example whose lines
+  // start with `## Tag Projection`, which a bare `^## ` split would cut on.
+  return after.split(/^## \d+\. /m)[0]
+}
 
 /** The `### Step 3.6.x` body, heading included, up to the next `##`/`###`. */
 const stepBody = (skill: string, step: string): string => {
@@ -36,7 +46,7 @@ const stepBody = (skill: string, step: string): string => {
   const out: string[] = []
   let inside = false
   for (const line of lines) {
-    if (new RegExp(`^###\\s+Step\\s+${step.replace('.', '\\.')}:`).test(line)) {
+    if (new RegExp(`^###\\s+Step\\s+${step.replace(/\./g, '\\.')}:`).test(line)) {
       inside = true
       out.push(line)
       continue
@@ -47,13 +57,13 @@ const stepBody = (skill: string, step: string): string => {
   return out.join('\n')
 }
 
-/** Phase 3.6's own body: from its heading to the next `## ` heading. */
-const phaseBody = (skill: string): string => {
+/** A `## Phase X` body: from its heading to the next `## ` heading. */
+const phaseSection = (skill: string, heading: RegExp): string => {
   const lines = skill.split('\n')
   const out: string[] = []
   let inside = false
   for (const line of lines) {
-    if (/^##\s+Phase 3\.6/.test(line)) {
+    if (heading.test(line)) {
       inside = true
       out.push(line)
       continue
@@ -63,6 +73,9 @@ const phaseBody = (skill: string): string => {
   }
   return out.join('\n')
 }
+
+/** Phase 3.6's own body: from its heading to the next `## ` heading. */
+const phaseBody = (skill: string): string => phaseSection(skill, /^##\s+Phase 3\.6/)
 
 /** Contiguous `>`-blockquote blocks of a body, in order. */
 const blockquoteBlocks = (body: string): string[] => {
@@ -96,6 +109,44 @@ describe('the phase exists and sits after Phase 3.5 (positioning, AC5)', () => {
     expect(p4).toBeGreaterThan(p36)
   })
 
+  // Position in the document is NOT reachability. Phase 3.6 was inserted
+  // between 3.5 and 4 while every exit path of the immediately preceding step
+  // (not installed / already populated / normal completion) still said
+  // "proceed to Phase 4" — so an executor following the algorithm's own
+  // routing statements jumps straight to Finalization and the phase never runs.
+  it('routes INTO Phase 3.6 from the phase it follows — no exit of 3.5 reaches Phase 4', () => {
+    for (const skill of [datasetSkill(), mirrorSkill()]) {
+      const p35 = phaseSection(skill, /^##\s+Phase 3\.5/)
+      expect(p35, 'Phase 3.5 section not found').toMatch(/Step 3\.5\.2/)
+      expect(p35, 'a step inside Phase 3.5 still routes to Phase 4').not.toMatch(/Phase 4/)
+      // the LAST routing target stated by a numbered step of the phase is 3.6
+      // (prose outside the algorithm can name the phase for other reasons)
+      const targets =
+        p35
+          .split('\n')
+          .filter(l => /^\d+\.\s/.test(l))
+          .join('\n')
+          .match(/Phase (?:3\.\d|4)/g) ?? []
+      expect(targets.at(-1), 'the last routing target of Phase 3.5 must be Phase 3.6').toBe(
+        'Phase 3.6',
+      )
+    }
+  })
+
+  // Same defect class one phase earlier: Step 3.2's "already configured" skip
+  // jumped to Phase 4, bypassing domain modeling AND the delta on every re-run
+  // of a project whose Custom Gate Registry is already populated.
+  it('does not let Step 3.2’s already-configured skip bypass Phases 3.5 and 3.6', () => {
+    for (const skill of [datasetSkill(), mirrorSkill()]) {
+      const skip =
+        stepBody(skill, '3.2')
+          .split('\n')
+          .find(l => /^\d+\.\s+\*\*Skip\*\*/.test(l)) ?? ''
+      expect(skip, 'no Skip item in Step 3.2').not.toBe('')
+      expect(skip, 'Step 3.2 must hand control to Phase 3.5, not past it').toMatch(/Phase 3\.5/)
+    }
+  })
+
   it('carries one step per owned section — criticality table and overrides', () => {
     const c = datasetSkill()
     expect(c).toMatch(/^###\s+Step 3\.6\.1:.*Criticality Table/m)
@@ -118,7 +169,22 @@ describe('the phase exists and sits after Phase 3.5 (positioning, AC5)', () => {
     const step = stepBody(datasetSkill(), '3.6.1').toLowerCase()
     expect(step).toMatch(/skipped|absent|not installed|no domain/)
     expect(step).toMatch(/workspace|deployable|package/)
-    expect(step).toMatch(/empty table is a valid|empty is a valid|empty table stays valid/)
+    expect(step).toMatch(/empty answer is a valid|empty table is a valid/)
+  })
+
+  // "an empty table is a valid answer" is only true of an empty ANSWER. A
+  // written-but-rowless `## Criticality Table` is an EXISTING table in which
+  // every service is unlisted ⇒ conservative High (§6) — the opposite of the
+  // reassurance. The write item must therefore refuse to create a rowless one.
+  it('says which "empty" is the safe one — no section written, not a rowless section', () => {
+    const step = stepBody(datasetSkill(), '3.6.1').toLowerCase()
+    expect(step, 'the safe empty must be "no section at all"').toMatch(/no section at all/)
+    expect(step, 'a rowless written table must be named as the unsafe one').toMatch(
+      /rowless|written-but-rowless|written but rowless/,
+    )
+    expect(step, 'the section is created only when a row is confirmed').toMatch(
+      /only when at least one row is confirmed/,
+    )
   })
 })
 
@@ -167,6 +233,26 @@ describe('the guided question-set covers both sections (AC1)', () => {
     expect(step.toLowerCase()).toMatch(/merge-binding|required check/)
   })
 
+  // `enabled` is a reachable outcome of Step 3.2's own question, so the prompt
+  // may not assert the `disabled` default as recorded fact: in an enabled
+  // project it would tell the developer these are not merge-binding at the
+  // exact moment they decide whether to override them.
+  it('renders the recorded Review enforcement value instead of asserting `disabled`', () => {
+    for (const skill of [datasetSkill(), mirrorSkill()]) {
+      const question =
+        blockquoteQuestions(stepBody(skill, '3.6.2')).find(q => /reviewer|sla/i.test(q)) ?? ''
+      expect(question, 'no reviewer/SLA question').not.toBe('')
+      expect(question, 'the recorded value must be rendered, not asserted').toMatch(
+        /Review enforcement: *`?\[/,
+      )
+      expect(question.toLowerCase(), 'the `enabled` branch is not stated').toMatch(/enabled/)
+      expect(question.toLowerCase(), 'the `disabled` branch is not stated').toMatch(/disabled/)
+      expect(question, 'still claims Step 3.2 recorded `disabled`').not.toMatch(
+        /`disabled` default Step 3\.2 just recorded/i,
+      )
+    }
+  })
+
   // a full-catalog offer (Phase 3.5 runs at `$scope: all`) must not read as a
   // form to complete: one gate question before the row loop, not N prompts.
   it('gates the row loop on a single up-front "author the table at all?" question', () => {
@@ -175,18 +261,95 @@ describe('the guided question-set covers both sections (AC1)', () => {
     expect(questions.length, 'a gate question plus the per-row question').toBeGreaterThanOrEqual(2)
     const gate = questions[0].toLowerCase()
     expect(gate).toMatch(/skip the table|author the table/)
-    expect(step.toLowerCase()).toMatch(/list to prune, not a form to complete/)
+    // semantics, not one phrasing: the offer must read as prunable, not as a form
+    expect(step.toLowerCase()).toMatch(/list to prune|keep only some|not a form to complete/)
     // the gate is asked BEFORE the per-row walk
     expect(step.indexOf(questions[0])).toBeLessThan(step.search(/one recommendation at a time/))
   })
 
+  // Pruning is NOT neutral: absent table ⇒ Medium for everyone, but a service
+  // unlisted in an EXISTING table ⇒ conservative High (§6). An executor copies
+  // the blockquotes verbatim, so the consequence has to live inside them —
+  // not only in the prose of item 3.
+  it('states the not-listed⇒High consequence inside both prune/drop prompts', () => {
+    const questions = blockquoteQuestions(stepBody(datasetSkill(), '3.6.1'))
+    expect(questions.length, 'gate question plus per-row question').toBeGreaterThanOrEqual(2)
+    for (const q of questions.slice(0, 2)) {
+      const lower = q.toLowerCase()
+      expect(lower, `prompt does not name the High consequence: ${q}`).toMatch(
+        /conservative \*\*high\*\*|conservative high/,
+      )
+      expect(lower, `prompt does not say dropping is not neutral: ${q}`).toMatch(
+        /not neutral|unlisted/,
+      )
+    }
+  })
+
+  // the gate prompt is fixed text, but the candidates have two possible
+  // sources (Phase 3.5's catalogs, or the repository) — claiming a domain
+  // model that does not exist is exactly what the copied-verbatim convention
+  // makes harmful.
+  it('parameterises the candidate source in the gate prompt', () => {
+    const gate = blockquoteQuestions(stepBody(datasetSkill(), '3.6.1'))[0] ?? ''
+    expect(gate.toLowerCase()).toMatch(
+      /domain model \| the workspaces|workspaces in this repository/,
+    )
+  })
+
   // one key space: two catalogs at different granularities must not both
   // supply rows, since an unlisted/near-miss key resolves to conservative High.
-  it('names which catalog supplies the criticality key and de-duplicates the other', () => {
+  it('names one key space and de-duplicates candidates into it', () => {
     const step = stepBody(datasetSkill(), '3.6.1').toLowerCase()
-    expect(step).toMatch(/bounded contexts supply the keys/)
-    expect(step).toMatch(/once, not twice/)
-    expect(step).toMatch(/conservative high/)
+    expect(step, 'no statement of what supplies the key').toMatch(
+      /suppl(?:y|ies) the keys?|keyed by/,
+    )
+    expect(step, 'no de-duplication rule across the two catalogs').toMatch(
+      /once, not twice|never twice|de-?duplicat|one key never produces two rows/,
+    )
+    expect(step, 'the cost of a near-miss key is not stated').toMatch(
+      /conservative \*\*high\*\*|conservative high/,
+    )
+  })
+
+  // WRITE-side keys must be READ-side keys. The two catalogs Phase 3.5
+  // produces name BUSINESS boundaries (this repo: development-collaboration,
+  // knowledge-standards), while a diff resolves to a deployable (apps/website,
+  // packages/pair-cli). A table keyed by the former leaves every queried key
+  // unlisted ⇒ conservative High on every PR — strictly worse than declining
+  // the offer. The catalogs may name candidates and recommend values; they may
+  // not define the key space.
+  it('keys the rows by what the read side resolves, not by a catalog name', () => {
+    for (const skill of [datasetSkill(), mirrorSkill()]) {
+      const step = stepBody(skill, '3.6.1').toLowerCase()
+      expect(step, 'the key is not anchored to a deployable/workspace/path scope').toMatch(
+        /deployable|workspace|top-level path/,
+      )
+      expect(step, 'the catalogs are not demoted to candidate/value sources').toMatch(
+        /candidate names?|suggest the names?|name the candidates|supply the candidates/,
+      )
+      expect(step, 'the step does not cite the read-side key rule it depends on').toMatch(
+        /§6|quality-model/,
+      )
+    }
+  })
+
+  // The recommended value must not be read off the subdomain class: §3.1
+  // already spends that signal on the Business impact dimension, so deriving
+  // criticality from it makes two of five dimensions carry one signal.
+  it('states the criticality criterion in its own terms, with an explicit H/M/L mapping', () => {
+    const step = stepBody(datasetSkill(), '3.6.1').toLowerCase()
+    expect(
+      step,
+      'no criterion of its own (blast radius / exposure / sensitivity / uptime)',
+    ).toMatch(/blast radius|data sensitivity|user-facing|uptime/)
+    for (const value of ['high', 'medium', 'low']) {
+      expect(step, `no explicit default for ${value}`).toMatch(
+        new RegExp(`\\*\\*${value}\\*\\*[^\\n]*:|:[^\\n]*\\*\\*${value}\\*\\*`),
+      )
+    }
+    expect(step, 'does not warn that Business impact already reads the subdomain class').toMatch(
+      /business impact/,
+    )
   })
 })
 
@@ -253,6 +416,61 @@ describe('the reused pattern still exists where bootstrap points (AC2, cross-doc
       expect(step, `${path}: Step 5 no longer targets risk-matrix.md`).toContain('risk-matrix.md')
     }
   })
+
+  // The ADL claims the two-writer split is "discoverable rather than folklore"
+  // BECAUSE skills-guide.md § Adoption Files carries the row. Unpinned, that
+  // row can be deleted or rewritten with the suite green and the ADL still
+  // asserting discoverability.
+  it('skills-guide § Adoption Files names bootstrap as the writer of both sections', () => {
+    for (const [base, bootstrap] of [
+      [ROOT, '/pair-process-bootstrap'],
+      [DATASET, '/bootstrap'],
+    ] as const) {
+      const guide = read(join(base, '.pair/knowledge/skills-guide.md'))
+      const adoption = (guide.split('## Adoption Files')[1] ?? '').split(/^## /m)[0]
+      expect(adoption, `${base}: no '## Adoption Files' section`).not.toBe('')
+      const row =
+        adoption.split('\n').find(l => l.startsWith('|') && l.includes('`tech/risk-matrix.md`')) ??
+        ''
+      expect(row, `${base}: no tech/risk-matrix.md row in § Adoption Files`).not.toBe('')
+      expect(row, `${base}: the row does not name bootstrap as a writer`).toContain(bootstrap)
+      expect(row, `${base}: the row does not name the owned sections`).toContain(
+        '## Criticality Table',
+      )
+      expect(row, `${base}: the row does not name the owned sections`).toContain('## Overrides')
+    }
+  })
+
+  // The write side cannot pick a key namespace the read side never defined.
+  // §6 owns the schema, so it owns the answer to "what does a diff resolve to
+  // as its service/domain?" — without it, every authored table is a guess.
+  it('quality-model §6 defines the key the read side resolves a diff to', () => {
+    for (const base of [ROOT, DATASET]) {
+      const s6 = qualityModelSection(base, 6)
+      expect(s6, `${base}: §6 not found`).toMatch(/Criticality Table/)
+      expect(s6.toLowerCase(), `${base}: §6 states no key namespace`).toMatch(/key/)
+      expect(s6.toLowerCase(), `${base}: §6 does not say what a diff resolves to`).toMatch(
+        /deployable/,
+      )
+    }
+  })
+
+  // The ADL claims this PR fixes the discoverability of the two delta sections;
+  // the schema owner is the page a reader lands on first, so the pointer has to
+  // exist THERE too — a pointer, never a restatement of the phase.
+  it('quality-model §6 points at the guided authoring path for both delta sections', () => {
+    for (const base of [ROOT, DATASET]) {
+      const s6 = qualityModelSection(base, 6)
+      for (const section of ['## Criticality Table', '## Overrides']) {
+        const bullet = s6.split('\n').find(l => l.startsWith('- ') && l.includes(section)) ?? ''
+        expect(bullet, `${base}: no §6 bullet for ${section}`).not.toBe('')
+        expect(bullet, `${base}: ${section} bullet names no guided path`).toMatch(
+          /pair-process-bootstrap/,
+        )
+        expect(bullet, `${base}: ${section} bullet does not name the phase`).toMatch(/Phase 3\.6/)
+      }
+    }
+  })
 })
 
 describe('the flow is opt-in and never blocks (AC3)', () => {
@@ -303,6 +521,36 @@ describe('idempotency — an authored file is never re-proposed (AC4)', () => {
     expect(section).toMatch(/Criticality Table|risk-matrix/i)
   })
 
+  // The phase claims classify's propose-then-write-if-confirmed pattern but
+  // deliberately drops half of it: classify writes `Active: none` on a decline
+  // so it never asks again, while a decline here writes nothing (AC3) and IS
+  // re-offered. Undocumented, that reads as a bug against "never re-does
+  // completed work" — so both the phase and the ADL must say it out loud.
+  it('discloses that a decline is not recorded, unlike classify’s `Active: none`', () => {
+    const section = datasetSkill().split('## Idempotent Re-invocation')[1] ?? ''
+    for (const [where, body] of [
+      ['Step 3.6.1', stepBody(datasetSkill(), '3.6.1')],
+      ['Idempotent Re-invocation', section],
+    ] as const) {
+      expect(body, `${where}: does not name classify’s Active: none divergence`).toMatch(
+        /Active: none/,
+      )
+      expect(body.toLowerCase(), `${where}: does not say a decline is not recorded`).toMatch(
+        /not recorded|offers the candidates again|asked again/,
+      )
+    }
+    const adl = read(
+      join(
+        ROOT,
+        '.pair/adoption/decision-log/2026-08-11-criticality-delta-is-authored-after-domain-modeling.md',
+      ),
+    )
+    const consequences = (adl.split('## Consequences')[1] ?? '').split(/^## /m)[0]
+    expect(consequences, 'the ADL Consequences do not mirror the divergence').toMatch(
+      /Active: none/,
+    )
+  })
+
   // the guard must be a PHASE-level precondition: behind the per-section
   // presence check it is bypassable — a malformed `## Criticality Table`
   // heading reads as "already authored", and Step 3.6.2 then writes into a
@@ -321,6 +569,11 @@ describe('idempotency — an authored file is never re-proposed (AC4)', () => {
     expect(precondition, 'Step 3.6.0 (parse precondition) missing').toMatch(/\*\*Check/)
     expect(precondition.toLowerCase()).toMatch(/whole phase|both steps/)
     expect(precondition.toLowerCase()).toMatch(/skipped — file malformed/)
+    // every other numbered step in the file closes on a **Verify**, and every
+    // other Skip names where control goes — a step that does neither reads as
+    // an oversight rather than as the gate it is.
+    expect(precondition, 'Step 3.6.0 has no **Verify**').toMatch(/\*\*Verify\*\*/)
+    expect(precondition, 'the malformed path names no continuation').toMatch(/Phase 4/)
     // ...and neither per-section step re-owns the parse decision
     for (const step of ['3.6.1', '3.6.2']) {
       expect(stepBody(datasetSkill(), step).toLowerCase(), `Step ${step}`).toMatch(/presence only/)
@@ -352,6 +605,19 @@ describe('quick mode asks nothing and writes nothing (AC7)', () => {
     expect(doc.toLowerCase()).toMatch(/fabricat|guess|invent/)
   })
 
+  // the Tier column names the cascade tier a value is READ from. Nothing is
+  // read here — and `fallback` would point at `bootstrap-checklist.md`'s
+  // per-type table, which the same row says deliberately does not carry it.
+  it('leaves the Phase 3.6 row’s cascade tier empty rather than claiming `fallback`', () => {
+    const row =
+      datasetDefaults()
+        .split('\n')
+        .find(l => l.startsWith('| Phase 3.6') && l.includes('Criticality Table')) ?? ''
+    expect(row, 'no Phase 3.6 row in the per-decision table').not.toBe('')
+    const tier = (row.split('|').at(-2) ?? '').trim()
+    expect(tier, 'Phase 3.6 resolves nothing from any tier').toBe('—')
+  })
+
   // guided needs a TTY, and bootstrap downgrades to quick without one — so the
   // CI/piped-stdin case must resolve to "nothing asked, nothing written" HERE
   // too, not to a phase that hangs on a question it cannot receive an answer to.
@@ -371,6 +637,26 @@ describe('quick mode asks nothing and writes nothing (AC7)', () => {
       const c = read(join(base, CHECKLIST_REL))
       const absent = c.split('**Deliberately absent from this table**')[1] ?? ''
       expect(absent.split('\n|')[0], `${base}: criticality not listed`).toMatch(/criticality/i)
+    }
+  })
+
+  // `classify` may already have written `## Tag Projection` — the common state,
+  // and this repository's own. What a quick run leaves unwritten is the DELTA
+  // SECTIONS, not necessarily the file.
+  it('does not claim the whole file stays absent after a quick run', () => {
+    for (const base of [ROOT, DATASET]) {
+      const bullet =
+        read(join(base, CHECKLIST_REL))
+          .split('\n')
+          .find(l => l.includes('Service/domain criticality')) ?? ''
+      expect(bullet, `${base}: no criticality bullet`).not.toBe('')
+      expect(
+        bullet,
+        `${base}: an existing Tag Projection makes "file stays absent" false`,
+      ).not.toMatch(/file stays absent/i)
+      expect(bullet.toLowerCase(), `${base}: what stays unwritten is not named`).toMatch(
+        /no delta section|neither delta section|delta sections?/,
+      )
     }
   })
 })
@@ -428,9 +714,14 @@ describe('Step 4.3 reports the outcome (DoD)', () => {
       expect(slot).toMatch(/declined/)
       expect(slot).toMatch(/already authored/)
     }
-    // the two whole-phase outcomes stay single-slot
+    // every whole-phase outcome the skill declares must be representable here
     expect(line).toMatch(/skipped — quick mode/)
     expect(line).toMatch(/skipped — file malformed/)
+    // Graceful Degradation declares a THIRD one; without it, a run on a
+    // project lacking the quality-model guideline has no value to report.
+    expect(line, 'the quality-model-absent skip has no representable value').toMatch(
+      /skipped — quality model not installed/,
+    )
   })
 
   it('names the summary as where the quick-mode skip is reported once', () => {
