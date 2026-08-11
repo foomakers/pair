@@ -1,7 +1,7 @@
 ---
 name: pair-capability-setup-pm
 description: "Configures the project management tool — creates/wires it up, applies its implementation guide, updates way-of-working, records the decision — whether the tool was already chosen or picked here. Invoke directly to set up a tracker ('configure Jira', 'set up GitHub Projects'). Composed by /pair-process-bootstrap; /pair-capability-assess-pm delegates here once a tool is picked."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -101,7 +101,8 @@ Configure the project management tool for the current project. Guides the develo
    - Access method (e.g., MCP, CLI, direct)
    - Reference to implementation guide
 3. **Act — `## Git Workflow` (only when needed)**: if the selected PM tool **hosts no code** — `linear`, `jira`, **`filesystem`** (it tracks item state in files and has no repositories, branches or PRs) — ask which tool hosts the repositories and write `code-host` (+ `base-branch`) in the `## Git Workflow` section. When the PM tool *is* the code host (GitHub Projects, Azure DevOps), **write nothing** — omitted means "same tool", the zero-configuration default. See [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) for the full hosts-code / hosts-no-code split.
-4. **Verify**: Way-of-working reflects current PM configuration, and `code-host` is declared iff the PM tool cannot host the code.
+4. **Act — `## Assignment` (always ask)**: ask **who items and pull requests default to**, and write `## Assignment` → `default-assignee` in way-of-working.md. This is the one adoption key that has no safe inferred value: skills never fall back to the authenticated user (an agent under a bot token would assign everything to the bot), so **nothing declared here means every item and every PR this project files is written unassigned** — and most boards are read filtered by assignee, so those items are invisible on the board while open and green. When step 3 just declared a separate `code-host`, also ask whether that host knows the same person by a **different identifier** and write `code-host-assignee` when it does. Already declared ⇒ confirm it and leave it byte-identical (idempotent). Declined ⇒ write nothing and say what it costs. Schema and cascade: [Assignee resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
+5. **Verify**: Way-of-working reflects current PM configuration, `code-host` is declared iff the PM tool cannot host the code, and `## Assignment` either declares `default-assignee` or the developer was told, in so many words, that items and PRs will be filed unassigned.
 
 ### Step 5: Record Decision
 
@@ -121,6 +122,7 @@ PM CONFIGURED:
 ├── Project:    [project identifier]
 ├── Access:     [MCP | CLI | filesystem]
 ├── Adoption:   [way-of-working.md updated]
+├── Assignment: [default-assignee: <identifier> (+ code-host-assignee: <identifier>) | none declared — items and PRs will be filed unassigned]
 ├── Decision:   [ADL entry path]
 └── Status:     [Configured | Already configured (unchanged) | Reconfigured]
 ```

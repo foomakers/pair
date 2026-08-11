@@ -87,6 +87,8 @@ function skillCorpora(
 
 const writeIssueCases = skillCorpora('capability', 'write-issue')
 const publishPrCases = skillCorpora('capability', 'publish-pr')
+const setupPmCases = skillCorpora('capability', 'setup-pm')
+const implementCases = skillCorpora('process', 'implement')
 
 const ROUTING_CONVENTION =
   '.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md'
@@ -263,8 +265,11 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
   it.each(writeIssueCases)(
     '$corpus: leaves the per-tool mechanic to the adapter',
     ({ content }) => {
-      // One rule here, six adapters there — the field/flag that actually sets the
-      // assignee is the implementation guide's, never invented in the skill.
+      // One rule here, every mechanic in its adapter — the field/flag that actually
+      // sets the assignee is the implementation guide's, never invented in the skill.
+      // No adapter COUNT is asserted (or stated in the prose): a number goes stale the
+      // moment a tracker is added, and the PM-tool README rejects counting for that
+      // reason.
       expect(cascadeSection(content)).toContain('never invent')
     },
   )
@@ -272,17 +277,45 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
 
 describe('/write-issue — membership precedes state, confirmed by a read (#403 AC4, AC5)', () => {
   const boardSection = (content: string): string =>
-    normalize(section(content, 'Step 7b: Write the Board State'))
+    normalize(section(content, 'Step 7b: Board Membership'))
 
   it.each(writeIssueCases)('$corpus: has a dedicated board-write step', ({ content }) => {
-    expect(content).toMatch(/^### Step 7b: Write the Board State/m)
+    expect(content).toMatch(/^### Step 7b: Board Membership/m)
   })
+
+  it.each(writeIssueCases)(
+    '$corpus: membership is established on every create, with or without $$status',
+    ({ content }) => {
+      // Gating membership behind `$status` leaves the MOST COMMON path uncovered: an
+      // item filed with no requested transition (a follow-up task, a promoted tech-debt
+      // finding, a story planned ahead of its sprint) is created on an
+      // explicit-membership tool as an issue that is not a board item — open, assigned,
+      // green and absent from the board. That is #384/#372 verbatim, so the membership
+      // beats must not depend on a macrostate having been requested.
+      const body = boardSection(content)
+      expect(body).toContain('membership is not a consequence of $status')
+      expect(body).toContain('run on every create')
+      // …and the state field stays gated on Step 6, which is the half that IS conditional.
+      expect(body).toContain('only when step 6 resolved a board state')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: reports confirmed membership even when no state was written',
+    ({ content }) => {
+      // Without its own value on the `Board:` row, membership has nowhere to be
+      // reported when no state is written, and the row conflates presence with state —
+      // the create path would render `n-a` on an item that WAS put on the board.
+      expect(normalize(content)).toContain('no state written (no $status)')
+    },
+  )
 
   it.each(writeIssueCases)(
     '$corpus: states the invariant once, tool-agnostically',
     ({ content }) => {
       // Stated in the SKILL (this story's half); the per-tool mechanics stay in the
-      // adapters (#402's half) — one invariant, six adapters, no restatement.
+      // adapters (#402's half) — one invariant, every mechanic in its adapter, no
+      // restatement and no adapter count.
       const body = normalize(content)
       expect(body).toContain('membership precedes state')
       expect(body).toContain('the mechanics stay in the adapters')
@@ -301,7 +334,7 @@ describe('/write-issue — membership precedes state, confirmed by a read (#403 
       // Prose that merely MENTIONS both in one section would satisfy the phrase pin
       // above. This asserts the actual ordering inside the step, the same structural
       // discipline the adapter guard applies to github's Step 2b vs Step 3.
-      const body = normalize(section(content, 'Step 7b: Write the Board State'))
+      const body = normalize(section(content, 'Step 7b: Board Membership'))
       const addMembership = body.indexOf('add the membership')
       const writeState = body.indexOf('write the state field')
       expect(addMembership).toBeGreaterThan(-1)
@@ -405,6 +438,22 @@ describe('/write-issue — the report is what a read observed (#403 AC8)', () =>
       expect(example).toContain('├── labels:')
       expect(example).toContain('├── assignee:')
       expect(example).toContain('├── board:')
+      // The example is a create with no `$status` on an explicit-membership tool, i.e.
+      // exactly the path that used to end `n-a` on an off-board item. It must now show
+      // the membership the create established.
+      expect(example).toContain('no state written (no $status)')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: the posted comment is confirmed by a read too (AC8 is universal)',
+    ({ content }) => {
+      // Comment mode is a write path like any other: `gh issue comment` exiting 0 is not
+      // evidence a comment exists, and the skill would otherwise report `Commented` on a
+      // call that posted nothing — the same claim the invariant forbids everywhere else.
+      const body = normalize(section(content, 'Step 7c: Post a Comment', 3))
+      expect(body).toContain("read the item's comments back")
+      expect(body).toContain('never as commented')
     },
   )
 })
@@ -486,6 +535,44 @@ describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC
   )
 
   it.each(publishPrCases)(
+    '$corpus: an existing PR is never reassigned away from its current assignee',
+    ({ content }) => {
+      // The twin of the item writer's rule (its Step 7.3). The update path here is the
+      // one the documented fix→re-publish loop runs on every round: applying the
+      // adoption default unconditionally silently pulls a PR a maintainer reassigned to
+      // the colleague who owns its review back to `default-assignee`, out of that
+      // person's assignee-filtered view. Same invisibility, inverted — and a divergence
+      // between the two callers is what "one rule, two callers" forbids.
+      const body = normalize(content)
+      expect(body).toContain('leave the existing assignee untouched')
+      expect(body).toContain('never clear one')
+    },
+  )
+
+  it.each([...writeIssueCases, ...publishPrCases])(
+    '$skill/$corpus: reports an assignee left untouched as such',
+    ({ content }) => {
+      // "unchanged" is a distinct observation from "written": without the variant the
+      // conditional write has no truthful rendering and the report claims a write that
+      // deliberately did not happen.
+      expect(normalize(content)).toContain('unchanged: login — confirmed by read')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: reads back the review check and the state label it publishes (AC8)',
+    ({ content }) => {
+      // Phase 5's two writes were exempt from the invariant the same file states as
+      // universal: a status API that no-ops leaves `pair-review` claimed-but-absent
+      // (merge NOT blocked while the report says it is), and a label API that no-ops
+      // renders `pr-state:to-be-reviewed` on a PR carrying no such label.
+      const body = normalize(content)
+      expect(body).toContain('read the status back')
+      expect(body).toContain("read the pr's labels back")
+    },
+  )
+
+  it.each(publishPrCases)(
     '$corpus: reads the ready-for-review transition back where it is written',
     ({ content }) => {
       // `gh pr ready` is a write like any other under AC8, and the post-write read three
@@ -551,6 +638,49 @@ describe('no write is assumed — every write is re-read back (#403 AC8)', () =>
       expect(normalize(content)).toContain(
         'a write that cannot be confirmed by a read is a failure or a finding, never a silent success',
       )
+    },
+  )
+})
+
+describe('the other PM-tool writers obey the same two rules (#403)', () => {
+  it.each(implementCases)(
+    '$corpus: story activation resolves the assignee by the cascade, not the current user',
+    ({ content }) => {
+      // Step 0.1b runs on EVERY story and wrote "assign to the current developer" — the
+      // one default the cascade forbids, for the reason the cascade exists: an agent
+      // under a bot token assigns every story to the bot and passes its own check.
+      const body = normalize(section(content, 'Step 0.1b', 3))
+      expect(body).toContain('only when it has no assignee')
+      expect(body).toContain('never the authenticated user')
+      expect(body).toContain('default-assignee')
+    },
+  )
+
+  it.each(implementCases)(
+    '$corpus: story activation writes the board state in the invariant order',
+    ({ content }) => {
+      // The same direct board write the invariant governs: an item that is not in the
+      // tracked view has no state field to write, and the write is not evidence of
+      // itself. Stated by reference (a status-only change cannot compose the item
+      // writer, whose write mode overwrites the body).
+      const body = normalize(section(content, 'Step 0.1b', 3))
+      expect(body).toContain('membership, then a read that confirms it, then the state field')
+      expect(body).toContain('what the read observed')
+    },
+  )
+
+  it.each(setupPmCases)(
+    '$corpus: the setup path writes the Assignment section it declares',
+    ({ content }) => {
+      // `default-assignee` is a declared key with no writer anywhere in setup: this skill
+      // backfills `## Git Workflow` but never `## Assignment`, so a project configured
+      // through it (or through /bootstrap, which composes it) takes the
+      // warn-and-write-unassigned branch on every item and PR — the invisibility failure
+      // as the out-of-the-box outcome.
+      const body = normalize(content)
+      expect(body).toContain('## assignment')
+      expect(body).toContain('default-assignee')
+      expect(body).toContain('code-host-assignee')
     },
   )
 })
