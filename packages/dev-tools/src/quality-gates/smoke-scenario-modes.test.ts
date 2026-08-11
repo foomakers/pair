@@ -16,10 +16,11 @@ import {
 // `Permission denied` -> FAIL, indistinguishable from a real assertion failure,
 // and nothing in CI ran the suite at all so nobody read the line.
 //
-// The guard reads the GIT INDEX (`git ls-files -s`), never the filesystem: the
-// mode is a property of the commit. A `test -x` on the working tree passes on a
-// filesystem that carries the bit locally while the committed tree stays 644 —
-// which is the regression that must be caught, on every checkout and platform.
+// The guard reads the GIT INDEX (`git ls-files -s`), never the filesystem, so it
+// asserts the STAGED mode — what is about to be committed, and what `HEAD` carries
+// once it is. A `test -x` on the working tree passes on a filesystem that carries
+// the bit locally while the tracked mode stays 644 — which is the regression that
+// must be caught, on every checkout and platform.
 //
 // Fixtures below are literal `git ls-files -s` lines: `<mode> <sha> <stage>\t<path>`.
 const sha = '0000000000000000000000000000000000000000'
@@ -52,6 +53,32 @@ describe('parseGitIndexEntries reads `git ls-files -s` output (#400)', () => {
 
   it('returns nothing for empty output rather than throwing', () => {
     expect(parseGitIndexEntries('')).toEqual([])
+  })
+
+  // A malformed line must be DROPPED, not turned into a plausible-looking entry.
+  // Taking the mode as `slice(0, indexOf(' '))` on a line with a tab but no space
+  // yields `indexOf(' ') === -1` -> `slice(0, -1)`, i.e. the line minus its last
+  // character, which then fails the `!== 100755` check and is reported as a
+  // non-executable file with a nonsense mode: a confident wrong diagnosis.
+  it('drops a line whose pre-tab segment carries no mode instead of inventing one', () => {
+    expect(parseGitIndexEntries('scripts/smoke-tests/scenarios/x.sh')).toEqual([])
+    expect(parseGitIndexEntries('\tscripts/smoke-tests/scenarios/x.sh')).toEqual([])
+  })
+
+  it('takes the mode from the pre-tab segment, never from the path after it', () => {
+    // No space before the tab: the whole pre-tab segment is the mode.
+    expect(parseGitIndexEntries('100755\tscripts/smoke-tests/run-all.sh')).toEqual([
+      { mode: '100755', path: 'scripts/smoke-tests/run-all.sh' },
+    ])
+  })
+
+  // Path bytes are the identity of the file the failure message names: a blanket
+  // `.trim()` on the line silently rewrites a path with a trailing space, and the
+  // path the developer is told to `chmod` then does not exist.
+  it('preserves a path with a trailing space verbatim', () => {
+    expect(parseGitIndexEntries(entry('100644', 'scripts/smoke-tests/scenarios/x .sh '))[0]).toEqual(
+      { mode: '100644', path: 'scripts/smoke-tests/scenarios/x .sh ' },
+    )
   })
 })
 
@@ -139,7 +166,7 @@ describe('checkSmokeScenarioModes reports actionably (#400)', () => {
     expect(r.ok, r.message).toBe(true)
   })
 
-  it('fails naming the file, its committed mode and the fix', () => {
+  it('fails naming the file, its staged mode and the fix', () => {
     const r = checkSmokeScenarioModes(entry('100644', 'scripts/smoke-tests/scenarios/x.sh'))
     expect(r.ok).toBe(false)
     expect(r.message).toContain('scripts/smoke-tests/scenarios/x.sh')
@@ -172,7 +199,7 @@ describe('the guard runs against THIS repo, not only against fixtures (#400)', (
 
   // RED before this story: `scenarios/coverage-gate.sh` is committed 100644, so
   // one of the 16 CI-listed scenarios could not run at all.
-  it('every committed smoke scenario in this repo is executable by its git mode', () => {
+  it('every tracked smoke scenario in this repo is executable by its staged git mode', () => {
     const result = checkThisRepoSmokeScenarioModes()
     expect(result.ok, result.message).toBe(true)
   })
