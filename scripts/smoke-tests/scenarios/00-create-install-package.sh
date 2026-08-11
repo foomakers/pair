@@ -27,11 +27,34 @@ if [ -z "${VERSION:-}" ]; then
 fi
 PACKAGE_SCRIPT="$REPO_ROOT/scripts/workflows/release/package-manual.sh"
 
+# The runner already executes this script as its packaging preflight, BEFORE the
+# scenario loop, and then again as CI_TESTS[0]. Packaging twice costs real minutes
+# on a job whose duration is a governed number (AC6, #400), so the second pass
+# asserts the artifact instead of rebuilding it.
+PACKAGED_CLI_FILE="$TMP_DIR/packaged-cli"
+if [ -f "$PACKAGED_CLI_FILE" ]; then
+  EXISTING="$(cat "$PACKAGED_CLI_FILE")"
+  log_info "Packaged CLI already produced by the preflight: $EXISTING"
+  if [ ! -x "$EXISTING" ]; then
+    log_fail "packaged-cli marker points at a path that is not an executable file: $EXISTING"
+    exit 1
+  fi
+  log_succ "$TEST_NAME (artifact reused, packaged once per run)"
+  exit 0
+fi
+
 log_info "Preflight: running package script in --dry-run mode for version $VERSION"
 
-# If dry-run fails (missing tools), skip gracefully (non-fatal)
+# A dry-run failure is a MISSING TOOL on a developer machine — worth skipping —
+# and a broken build in CI, where "skip" would publish `✅ PASS` for a run in
+# which nothing was packaged and nothing was asserted. That silently-green no-op
+# is exactly the family #400 exists to remove, so in CI it is fatal.
 if ! "$PACKAGE_SCRIPT" --dry-run "$VERSION"; then
-  log_warn "package-manual.sh --dry-run failed (missing tools or env). Skipping package creation." 
+  if [ "${IS_CI:-false}" = "true" ] || [ "${CI:-}" = "true" ]; then
+    log_fail "package-manual.sh --dry-run failed in CI — the CLI could not be packaged, so nothing below ran"
+    exit 1
+  fi
+  log_warn "package-manual.sh --dry-run failed (missing tools or env). Skipping package creation."
   exit 0
 fi
 

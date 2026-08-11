@@ -4,14 +4,22 @@ set -e
 # Default values
 BINARY_PATH=""
 KB_SOURCE=""
-SCENARIOS_DIR="$(dirname "$0")/scenarios"
 TMP_DIR=""
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SMOKE_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SMOKE_DIR/../.." && pwd)"
+
+# Both are ABSOLUTE and both are overridable, which is what makes the runner's own
+# reporting testable: scenarios/runner-outcomes.sh drives this script against a
+# fixture directory (a passing scenario, a failing one, a 644 one, a listed-absent
+# one) and asserts the four report rows and the exit code. Without the seam the
+# only thing a test could do is grep this file's source for the words.
+SCENARIOS_DIR="${SCENARIOS_DIR:-$SMOKE_DIR/scenarios}"
+CI_TESTS_FILE="${CI_TESTS_FILE:-$SMOKE_DIR/lib/ci-tests.sh}"
 
 # Shared helpers. Only `scenario_state` / `file_mode` are used here (the runner's
 # outcome vocabulary, #400); sourcing defines functions and colours, it runs nothing.
 # shellcheck source=./lib/utils.sh
-source "$(dirname "$0")/lib/utils.sh"
+source "$SMOKE_DIR/lib/utils.sh"
 
 # Help function
 usage() {
@@ -68,7 +76,12 @@ if [ -z "$BINARY_PATH" ]; then
     BINARY_PATH="node $DEFAULT_DIST"
   else
     echo "Built CLI not found at $DEFAULT_DIST — attempting build..."
-    if (cd "$REPO_ROOT" && pnpm --filter @pair/pair-cli build 2>&1); then
+    # `--filter=@pair/pair-cli...` (trailing dots) builds the CLI AND its workspace
+    # dependencies through turbo's dependsOn graph. `pnpm --filter @pair/pair-cli
+    # build` does not: it skips @pair/content-ops, whose `exports` point at `dist/`,
+    # and the compile dies with ~45 `TS2307: Cannot find module '@pair/content-ops'`
+    # on any tree where that package was never built.
+    if (cd "$REPO_ROOT" && pnpm turbo build --filter=@pair/pair-cli... 2>&1); then
       if [ -f "$DEFAULT_DIST" ]; then
         echo "Build succeeded. Using: $DEFAULT_DIST"
         BINARY_PATH="node $DEFAULT_DIST"
@@ -153,6 +166,10 @@ fi
 export KB_SOURCE_PATH="$KB_SOURCE" # Can be empty
 export TMP_DIR="$TMP_DIR"
 export REPO_ROOT="$REPO_ROOT"
+# Scenarios need to tell a pipeline run from a developer run: a preflight that may
+# be skipped gracefully on a laptop missing a tool must be FATAL in CI, where a
+# graceful skip is a green row for a scenario that asserted nothing.
+export IS_CI="$IS_CI"
 
 # --- Sanitize environment for child processes
 # Some environment keys originating from pnpm workspace config can end up as
@@ -199,7 +216,7 @@ fi
 # --- Final guard: TEST_BINARY must be set and must not be a directory ---
 if [ -z "${TEST_BINARY:-}" ]; then
   echo "Error: No usable CLI binary found. Either:"
-  echo "  1. Build the project: pnpm --filter @pair/pair-cli build"
+  echo "  1. Build the project: pnpm turbo build --filter=@pair/pair-cli..."
   echo "  2. Provide --binary <path>"
   exit 1
 fi
@@ -261,10 +278,16 @@ run_scenario() {
   fi
   if [ "$state" = "NOT_EXECUTABLE" ]; then
     mode="$(file_mode "$script")"
+    # ONE path for both halves of the remedy. Printing "$script" alongside a
+    # hardcoded "scenarios/$name" made the two disagree for a nested scenario —
+    # and the mode guard deliberately supports nesting — so the pasted command
+    # failed with "did not match any files".
+    local rel
+    rel="$(repo_relative_path "$script")"
     echo -e "\033[0;31m[NOT EXECUTABLE]\033[0m $name — mode $mode; the runner cannot execute it"
     echo "  This is NOT an assertion failure: the scenario never ran."
-    echo "  Fix the COMMITTED mode (a local chmod alone leaves the commit at $mode):"
-    echo "    chmod +x $script && git update-index --chmod=+x scripts/smoke-tests/scenarios/$name"
+    echo "  Fix the TRACKED mode (a local chmod alone leaves the git index at $mode):"
+    echo "    chmod +x $rel && git update-index --chmod=+x $rel"
     FAILED_TESTS+=("$name (not executable, mode $mode)")
     echo "| $name | 🚫 NOT EXECUTABLE (mode $mode) |" >> "$REPORT_FILE"
     return
@@ -290,7 +313,7 @@ if [ "$IS_CI" = "true" ]; then
   # either in CI_TESTS or in CI_EXCLUDED with a reason, and every listed name is a
   # file that exists. Keeping the array here made "CI_TESTS" a claim nobody checked.
   # shellcheck source=./lib/ci-tests.sh
-  source "$(dirname "$0")/lib/ci-tests.sh"
+  source "$CI_TESTS_FILE"
 
   for t in "${CI_TESTS[@]}"; do
     script="$SCENARIOS_DIR/$t"

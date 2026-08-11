@@ -12,18 +12,21 @@
 #   1. the runner's classification is a THREE-state answer before a scenario is
 #      ever executed — RUNNABLE / MISSING / NOT_EXECUTABLE — so "cannot run" can
 #      never again be reported as "ran and failed";
-#   2. the NOT_EXECUTABLE report names the file AND its mode (that is the whole
-#      difference between an actionable line and a `Permission denied`);
-#   3. the runner is CHECK-ONLY (ADL 2026-07-31): it never chmods a scenario;
+#   2. the four REPORT ROWS and the exit code, by running run-all.sh for real
+#      against a fixture scenarios/ dir and a fixture CI list (a pass, a fail, a
+#      644, a listed-absent) and reading the report it wrote. Grepping the
+#      runner's source for the words would pass on a token in a comment;
+#   3. the runner is CHECK-ONLY (ADL 2026-07-31): it never chmods a scenario —
+#      observed on the 644 fixture, which is still 644 after the run;
 #   4. `CI_TESTS` means what it says — every scenario in `scenarios/` is either in
 #      the CI list or in `CI_EXCLUDED` *with a reason*, and every listed name is a
 #      file that exists. AC7 as an executable invariant instead of a prose note:
 #      a scenario added tomorrow cannot silently be absent from CI.
 #
 # Per the gate-tooling ADL (2026-07-13) this shell surface is verified with a smoke
-# test, not a vitest unit test. The COMMITTED mode of every scenario is a separate,
-# unit-tested guard (packages/dev-tools/src/quality-gates/smoke-scenario-modes.ts):
-# the filesystem states below are runtime states, the git index is the commit.
+# test, not a vitest unit test. The TRACKED (staged) mode of every scenario is a
+# separate, unit-tested guard (packages/dev-tools/src/quality-gates/smoke-scenario-modes.ts):
+# the states below are runtime states of the filesystem, that one reads the git index.
 source "$(dirname "$0")/../lib/utils.sh"
 ensure_tmp_dir
 
@@ -68,32 +71,110 @@ check "file_mode reports the octal mode of a 644 file" 644 "$(file_mode "$FIX/un
 check "file_mode reports 755 for the executable one"   755 "$(file_mode "$FIX/runnable.sh")"
 check "file_mode on a missing file is empty, never a stat error" "" "$(file_mode "$FIX/nope.sh" 2>/dev/null)"
 
-# --- 3. The runner reports all three outcomes, and NEVER repairs a mode ---
-for token in 'NOT EXECUTABLE' 'MISSING' 'FAIL'; do
-  if grep -q "$token" "$RUNNER"; then
-    log_succ "runner reports the '$token' outcome"
+# --- 3. The runner REALLY renders the four outcomes, and NEVER repairs a mode ---
+#
+# This section EXECUTES run-all.sh against a fixture scenarios/ directory and a
+# fixture CI list, then reads the report it wrote. Grepping the runner's source
+# for the word `NOT EXECUTABLE` would pass on a token that appears only in a
+# comment — and it does appear in several — while a refactor that echoed
+# `[NOT EXECUTABLE]` to stdout but wrote `❌ FAIL` into the report row would go
+# unnoticed. The report rows and the exit code are the observable contract.
+RUN_ROOT="$FIX/run"
+FIXTURE_SCENARIOS="$RUN_ROOT/scenarios"
+mkdir -p "$FIXTURE_SCENARIOS" "$RUN_ROOT/tmp"
+
+printf '#!/usr/bin/env bash\nexit 0\n' >"$FIXTURE_SCENARIOS/fx-pass.sh"
+chmod 755 "$FIXTURE_SCENARIOS/fx-pass.sh"
+printf '#!/usr/bin/env bash\necho "boom"\nexit 1\n' >"$FIXTURE_SCENARIOS/fx-fail.sh"
+chmod 755 "$FIXTURE_SCENARIOS/fx-fail.sh"
+printf '#!/usr/bin/env bash\nexit 0\n' >"$FIXTURE_SCENARIOS/fx-unexecutable.sh"
+chmod 644 "$FIXTURE_SCENARIOS/fx-unexecutable.sh"
+# fx-absent.sh is deliberately NOT created: listed for the run, gone from disk.
+
+cat >"$RUN_ROOT/ci-tests.sh" <<'FIXTURE_LIST'
+CI_TESTS=(
+  "fx-pass.sh"
+  "fx-fail.sh"
+  "fx-unexecutable.sh"
+  "fx-absent.sh"
+)
+CI_EXCLUDED=()
+FIXTURE_LIST
+
+# A stand-in binary: the fixture scenarios never call it, but the runner's final
+# guard requires TEST_BINARY, and passing --binary skips the packaging preflight.
+printf '#!/usr/bin/env bash\nexit 0\n' >"$RUN_ROOT/fake-pair"
+chmod 755 "$RUN_ROOT/fake-pair"
+
+RUN_LOG="$RUN_ROOT/run.log"
+set +e
+# GITHUB_STEP_SUMMARY is blanked so this nested run never appends a fixture report
+# to the real job summary. RUNNER_TEMP pins the nested TMP_DIR under the fixture,
+# which is how the report is found afterwards.
+env -u PAIR_DIAG \
+  SCENARIOS_DIR="$FIXTURE_SCENARIOS" \
+  CI_TESTS_FILE="$RUN_ROOT/ci-tests.sh" \
+  RUNNER_TEMP="$RUN_ROOT/tmp" \
+  GITHUB_STEP_SUMMARY="" \
+  "$RUNNER" --ci --binary "$RUN_ROOT/fake-pair" >"$RUN_LOG" 2>&1
+RUN_RC=$?
+set -e
+
+check "a run containing a failure exits 1" 1 "$RUN_RC"
+
+RUN_REPORT="$(find "$RUN_ROOT/tmp" -name 'smoke-report.md' -maxdepth 2 2>/dev/null | head -1)"
+if [ -z "$RUN_REPORT" ] || [ ! -f "$RUN_REPORT" ]; then
+  log_fail "the fixture run produced no report (see $RUN_LOG)"; FAILED=1
+else
+  # One row per outcome, verbatim: four distinct vocabularies, not two.
+  assert_row() { # assert_row <description> <expected row substring>
+    if grep -qF "$2" "$RUN_REPORT"; then
+      log_succ "$1"
+    else
+      log_fail "$1 — no '$2' row in $RUN_REPORT"; FAILED=1
+    fi
+  }
+  assert_row "a passing scenario is reported PASS"             "| fx-pass.sh | ✅ PASS |"
+  assert_row "a failing scenario is reported FAIL"             "| fx-fail.sh | ❌ FAIL |"
+  assert_row "a 644 scenario is NOT EXECUTABLE, with its mode" "| fx-unexecutable.sh | 🚫 NOT EXECUTABLE (mode 644) |"
+  assert_row "a listed-but-absent scenario is MISSING"         "| fx-absent.sh | ⚠️ MISSING |"
+
+  # NOT EXECUTABLE must not degrade into FAIL (the collapse that hid coverage-gate.sh).
+  if grep -qF "| fx-unexecutable.sh | ❌ FAIL |" "$RUN_REPORT"; then
+    log_fail "an unexecutable scenario was reported as a plain FAIL"; FAILED=1
   else
-    log_fail "runner has no '$token' outcome"; FAILED=1
+    log_succ "NOT EXECUTABLE never renders as FAIL"
   fi
-done
+fi
+
+# The remedy must be actionable AND tracked-mode level: `chmod +x` alone leaves the
+# git index at 644, which is exactly the bug that survived for weeks. Both halves
+# must name the SAME path — a hardcoded `scenarios/<basename>` disagreed with the
+# runner's own path for any nested scenario, and the pasted command then failed
+# with "did not match any files".
+REMEDY="$(grep -m1 'update-index --chmod=+x' "$RUN_LOG" || true)"
+if [ -z "$REMEDY" ]; then
+  log_fail "the NOT EXECUTABLE message does not name the tracked-mode remedy"; FAILED=1
+else
+  log_succ "the NOT EXECUTABLE message names the tracked-mode remedy"
+  CHMOD_PATH="$(echo "$REMEDY" | sed -n 's/.*chmod +x \(.*\) && git update-index.*/\1/p')"
+  INDEX_PATH="$(echo "$REMEDY" | sed -n 's/.*update-index --chmod=+x \(.*\)$/\1/p')"
+  check "both halves of the remedy name one path" "$CHMOD_PATH" "$INDEX_PATH"
+fi
+
 if grep -q 'scenario_state' "$RUNNER"; then
   log_succ "runner classifies through scenario_state (one decision, one place)"
 else
   log_fail "runner no longer uses scenario_state — the outcomes can drift apart"; FAILED=1
 fi
 # Check-only, like the pre-push gate: a runner that chmods the tree it is judging
-# turns a red commit into a green run on one machine only.
+# turns a red commit into a green run on one machine only. Observed, not grepped:
+# the 644 fixture is still 644 after the run.
+check "the runner left the 644 fixture untouched" 644 "$(file_mode "$FIXTURE_SCENARIOS/fx-unexecutable.sh")"
 if grep -Eq '^[[:space:]]*chmod\b' "$RUNNER" "$SMOKE_DIR/lib/ci-tests.sh" "$SMOKE_DIR/lib/utils.sh"; then
   log_fail "the runner chmods a file — it must report the mode, never fix it"; FAILED=1
 else
   log_succ "runner never chmods (check-only)"
-fi
-# The remedy must be actionable AND commit-level: `chmod +x` alone leaves the
-# committed mode 644, which is exactly the bug that survived for weeks.
-if grep -q 'update-index --chmod=+x' "$RUNNER"; then
-  log_succ "the NOT EXECUTABLE message points at the COMMITTED mode fix"
-else
-  log_fail "the NOT EXECUTABLE message does not name the commit-level remedy"; FAILED=1
 fi
 
 # --- 4. CI list integrity (AC7) ---
@@ -174,13 +255,19 @@ else
   log_fail "the smoke job has no measured cost / revisit threshold recorded"; FAILED=1
 fi
 # Nothing is auto-corrected in CI: the guard reports, it never fixes a mode.
-# Comment lines are exempt (the job DOCUMENTS that it never chmods); an executed
-# `chmod` is not. release.yml does chmod its release scripts before running them —
-# which is exactly the habit that lets a 644 commit go unnoticed.
-if grep -Eq '^[[:space:]]*[^#[:space:]].*\bchmod\b' "$CI_WORKFLOW"; then
-  log_fail "ci.yml runs chmod — CI must never repair a mode (check-only)"; FAILED=1
+#
+# SCOPED to smoke-test paths on purpose. `ci.yml` is a shared file several stories
+# touch, and a future job may legitimately need `chmod` on something else (the
+# `secret-scan` job already downloads and extracts a binary). A repo-wide grep
+# would fail this suite with a message that misdiagnoses the cause. What is
+# forbidden is narrower and exact: CI repairing a SMOKE SCENARIO's mode — the
+# habit that lets a 644 commit go unnoticed (release.yml does chmod its own
+# release scripts before running them, which is out of this invariant's scope).
+# Comment lines are exempt: the job DOCUMENTS that it never chmods.
+if grep -Eq '^[[:space:]]*[^#[:space:]].*\bchmod\b.*scripts/smoke-tests' "$CI_WORKFLOW"; then
+  log_fail "ci.yml chmods a smoke-test path — CI must report a scenario's mode, never repair it"; FAILED=1
 else
-  log_succ "CI never chmods a scenario (check-only)"
+  log_succ "CI never chmods a smoke scenario (check-only)"
 fi
 
 rm -rf "$FIX"

@@ -200,6 +200,14 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     if: "!(startsWith(github.event.head_commit.message, 'chore: release v'))"
+    # This job executes PR-authored code (pnpm lifecycle scripts + shell scenarios
+    # that package and run a CLI), so it takes the least token it can and a timeout
+    # that turns a scenario blocking on stdin into a 15-minute red instead of a
+    # 6-hour default. Defence in depth: a fork PR already gets a read-only token
+    # and no secrets.
+    permissions:
+      contents: read
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -216,8 +224,18 @@ jobs:
           fi
       - name: Install dependencies
         run: pnpm install
-      # The runner builds/packages the CLI itself and works in $RUNNER_TEMP, so no
-      # build step is needed here. `--ci` selects the CI-safe list (lib/ci-tests.sh),
-      # enables PAIR_DIAG=1 and appends the report to the job summary.
+      # DEPENDENCY-AWARE build, deliberately: `pnpm --filter @pair/pair-cli build`
+      # bypasses turbo's dependsOn graph, so `@pair/content-ops` — whose `exports`
+      # point at `dist/` — is never built and the CLI compile dies with ~45
+      # `TS2307: Cannot find module '@pair/content-ops'`. That is the "Turbo
+      # Caching" gotcha named in DEVELOPMENT.md and way-of-working.md, whose text
+      # says the workaround is "not needed in CI after a root build" — this job is
+      # the first CI job that would have violated that assumption. `...` = the
+      # package AND its workspace dependencies.
+      - name: Build CLI + its workspace deps
+        run: pnpm turbo build --filter=@pair/pair-cli...
+      # The runner then packages the built CLI itself and works in $RUNNER_TEMP.
+      # `--ci` selects the CI-safe list (lib/ci-tests.sh), enables PAIR_DIAG=1 and
+      # appends the report to the job summary.
       - name: Run smoke suite (CI-safe list)
         run: ./scripts/smoke-tests/run-all.sh --ci --cleanup

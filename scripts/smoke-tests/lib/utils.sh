@@ -33,9 +33,26 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 # file_mode <path> — octal mode, portably (GNU stat, then BSD stat).
 # Prints nothing for a path that does not exist, instead of a stat error.
+#
+# The chain is TERMINATED with `echo unknown` so the function always exits 0. The
+# runner calls it under `set -e` as a bare assignment (`mode="$(file_mode …)"`),
+# whose status is the substitution's: an unterminated chain on a platform with
+# neither stat flavour would abort the suite mid-report — the reporting path
+# killing the reporter, on the one code path added to make failures legible.
 file_mode() {
   [ -e "$1" ] || return 0
-  stat -c '%a' "$1" 2>/dev/null || stat -f '%OLp' "$1" 2>/dev/null
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%OLp' "$1" 2>/dev/null || echo unknown
+}
+
+# repo_relative_path <path> — strip the repo root prefix, so a printed remedy is a
+# single path that `git update-index` accepts verbatim.
+repo_relative_path() {
+  local root="${REPO_ROOT:-}"
+  case "$1" in
+    "$root"/*) echo "${1#"$root"/}" ;;
+    ./*) echo "${1#./}" ;;
+    *) echo "$1" ;;
+  esac
 }
 
 # scenario_state <path> — RUNNABLE | MISSING | NOT_EXECUTABLE
