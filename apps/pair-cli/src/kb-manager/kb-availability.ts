@@ -1,8 +1,8 @@
 import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
-import { detectSourceType, SourceType } from '@pair/content-ops'
+import { detectSourceType, logger as log, SourceType } from '@pair/content-ops'
 
 import { type ProgressWriter } from '@pair/content-ops/http'
-import cacheManager from './cache-manager'
+import cacheManager, { type KBSource } from './cache-manager'
 import urlUtils from './url-utils'
 import {
   installKB,
@@ -21,9 +21,19 @@ export interface KBManagerDeps {
   skipVerify?: boolean
 }
 
-// Internal: use cacheManager directly. Public re-exports live in the kb-manager index.
-const getCachedKBPath = cacheManager.getCachedKBPath
-const isKBCached = cacheManager.isKBCached
+/**
+ * Identity of the KB this call installs — the official KB when no `customUrl` is given,
+ * otherwise the custom source itself. The slot follows the identity, so an external
+ * source can never occupy the official KB's slot (US-395).
+ */
+function resolveSource(version: string, deps: KBManagerDeps): KBSource {
+  const sourceUrl = deps.customUrl
+  if (!sourceUrl) return cacheManager.officialSource(version)
+  if (detectSourceType(sourceUrl, deps.fs) === SourceType.REMOTE_URL) {
+    return { kind: 'remote', url: sourceUrl }
+  }
+  return cacheManager.localKBSource(sourceUrl, deps.fs)
+}
 
 function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
   const result: InstallerDeps = {
@@ -37,23 +47,30 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
 
 export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
   const fs = deps.fs
-  const cachePath = getCachedKBPath(version)
+  const source = resolveSource(version, deps)
+  const cachePath = cacheManager.getSourceCachePath(source)
 
   if (!deps.customUrl) {
-    const cached = await isKBCached(version, fs)
-    if (cached) {
-      return cachePath
+    const state = await cacheManager.inspectSlot(source, fs)
+    if (state.status === 'ready') return cachePath
+    if (state.status === 'contaminated') {
+      // AC5: a slot polluted by an earlier `--source` install is never served — it is
+      // discarded and re-fetched, so users self-heal without knowing ~/.pair/kb exists.
+      log.warn(
+        `Cached KB at ${cachePath} belongs to "${state.found}", not "${state.expected}" — discarding it and re-downloading.`,
+      )
+      await cacheManager.purgeSlot(source, fs)
     }
   }
 
-  const hadCache = deps.customUrl ? await cacheManager.backupCachedKB(version, fs) : false
+  const hadCache = deps.customUrl ? await cacheManager.backupCachedKB(source, fs) : false
 
   try {
     const result = await installFromSource(version, cachePath, deps)
-    if (hadCache) await cacheManager.removeBackupKB(version, fs)
+    if (hadCache) await cacheManager.removeBackupKB(source, fs)
     return result
   } catch (err) {
-    if (hadCache) await cacheManager.restoreCachedKB(version, fs)
+    if (hadCache) await cacheManager.restoreCachedKB(source, fs)
     throw err
   }
 }

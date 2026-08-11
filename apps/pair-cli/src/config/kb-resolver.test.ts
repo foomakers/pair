@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { homedir } from 'os'
+import { join } from 'path'
 import { InMemoryFileSystemService, MockHttpClientService } from '@pair/content-ops'
 import {
   getKnowledgeHubDatasetPath,
@@ -241,27 +243,25 @@ describe('resolveDatasetRoot', () => {
     )
   })
 
-  it('git resolution uses gitCacheKey (not cliVersion) for cache path', async () => {
+  it('git resolution keys the cache on the git source, never on cliVersion (US-395)', async () => {
     const gitClone = await import('#kb-manager/git-clone')
     const cache = await import('#kb-manager/cache-manager')
 
     vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {})
-    vi.spyOn(gitClone, 'gitCacheKey').mockReturnValue('git-abc123')
-    vi.spyOn(cache.default, 'getCachedKBPath').mockReturnValue('/home/.pair/kb/git-abc123')
     vi.spyOn(cache.default, 'ensureCacheDirectory').mockResolvedValue()
 
+    const url = 'https://github.com/acme/repo.git#v1.0.0'
+    const expectedSlot = cache.getSourceCachePath({ kind: 'git', url })
+    const officialSlot = cache.getSourceCachePath(cache.officialSource('1.0.0'))
+
     const fs = new InMemoryFileSystemService({}, '/project', '/project')
-    fs.mkdirSync('/home/.pair/kb/git-abc123/.git')
+    fs.mkdirSync(join(expectedSlot, '.git'))
 
-    const result = await resolveDatasetRoot(
-      fs,
-      { resolution: 'git', url: 'https://github.com/acme/repo.git#v1.0.0' },
-      { cliVersion: '1.0.0' },
-    )
+    const result = await resolveDatasetRoot(fs, { resolution: 'git', url }, { cliVersion: '1.0.0' })
 
-    expect(result).toBe('/home/.pair/kb/git-abc123')
-    expect(gitClone.gitCacheKey).toHaveBeenCalledWith('https://github.com/acme/repo.git#v1.0.0')
-    expect(cache.default.getCachedKBPath).toHaveBeenCalledWith('git-abc123')
+    expect(result).toBe(expectedSlot)
+    expect(result).not.toBe(officialSlot)
+    expect(result.startsWith(join(homedir(), '.pair', 'kb', 'external'))).toBe(true)
   })
 
   it('git resolution propagates clone errors', async () => {

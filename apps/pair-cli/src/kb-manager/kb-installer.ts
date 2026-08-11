@@ -8,7 +8,7 @@ import {
   copyDirectoryContents,
 } from '@pair/content-ops'
 import { downloadWithRetry } from './download-manager'
-import cacheManager from './cache-manager'
+import cacheManager, { type KBSource } from './cache-manager'
 import checksumManager from './checksum-manager'
 import formatDownloadError from './error-formatter'
 import { announceDownload, announceSuccess } from './download-ui'
@@ -121,18 +121,19 @@ export async function installKBFromLocalDirectory(
   dirPath: string,
   fs: FileSystemService,
 ): Promise<string> {
-  const cachePath = cacheManager.getCachedKBPath(version)
-
-  // Resolve relative paths using injectable cwd
-  const resolvedDirPath = dirPath.startsWith('/')
-    ? dirPath
-    : join(fs.currentWorkingDirectory(), dirPath)
+  // Slot keyed by source identity, never by CLI version: an external directory must not
+  // land in the official KB's slot (US-395).
+  const resolvedDirPath = cacheManager.resolveSourcePath(dirPath, fs)
+  const source: KBSource = { kind: 'directory', path: resolvedDirPath }
+  const cachePath = cacheManager.getSourceCachePath(source)
 
   // Validate directory exists
   if (!fs.existsSync(resolvedDirPath)) {
     throw new Error(`Directory not found: ${resolvedDirPath}`)
   }
 
+  // Replace the slot wholesale so files from a previous install cannot linger
+  await cacheManager.purgeSlot(source, fs)
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
@@ -172,10 +173,11 @@ export async function installKBFromLocalZip(
   fs: FileSystemService,
   skipVerify = false,
 ): Promise<string> {
-  const cachePath = cacheManager.getCachedKBPath(version)
-
-  // Resolve relative paths
-  const resolvedZipPath = zipPath.startsWith('/') ? zipPath : join(process.cwd(), zipPath)
+  // Slot keyed by source identity, never by CLI version: an external ZIP must not land
+  // in the official KB's slot (US-395).
+  const resolvedZipPath = cacheManager.resolveSourcePath(zipPath, fs)
+  const source: KBSource = { kind: 'zip', path: resolvedZipPath }
+  const cachePath = cacheManager.getSourceCachePath(source)
 
   // Validate ZIP file exists
   if (!fs.existsSync(resolvedZipPath)) {
@@ -197,6 +199,8 @@ export async function installKBFromLocalZip(
     log.warn('Skipping package verification (--skip-verify)')
   }
 
+  // Replace the slot wholesale so files from a previous install cannot linger
+  await cacheManager.purgeSlot(source, fs)
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {

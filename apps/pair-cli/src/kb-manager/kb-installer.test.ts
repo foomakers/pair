@@ -8,6 +8,11 @@ import {
   toIncomingMessage,
 } from '@pair/content-ops'
 import { installKB, installKBFromLocalZip, installKBFromLocalDirectory } from './kb-installer'
+import cacheManager from './cache-manager'
+
+// A local source owns a slot keyed by its own identity, not by the CLI version (US-395)
+const zipSlot = (path: string) => cacheManager.getSourceCachePath({ kind: 'zip', path })
+const dirSlot = (path: string) => cacheManager.getSourceCachePath({ kind: 'directory', path })
 
 describe('KB Installer', () => {
   it('downloads and installs when checksum absent', async () => {
@@ -112,7 +117,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = '/absolute/path/kb.zip'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const expectedCachePath = zipSlot(zipPath)
 
     // Create valid ZIP content in InMemoryFS format (JSON serialized)
     const zipContent = {
@@ -140,8 +145,9 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = './downloads/kb.zip'
-    const resolvedZipPath = join(process.cwd(), 'downloads', 'kb.zip')
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    // relative paths resolve against the INJECTED cwd ('/'), not process.cwd()
+    const resolvedZipPath = '/downloads/kb.zip'
+    const expectedCachePath = zipSlot(resolvedZipPath)
 
     // Create valid ZIP content
     const zipContent = {
@@ -203,7 +209,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange - Simulates ZIP created by `pair package` which has .zip-temp/ root
     const version = '0.2.0'
     const zipPath = '/path/kb.zip'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
+    const cachePath = zipSlot(zipPath)
 
     // Create valid ZIP with .zip-temp root directory structure
     const zipContent = {
@@ -251,7 +257,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = '/path/manifest-plus.zip'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
+    const cachePath = zipSlot(zipPath)
 
     // Pre-populate extraction output so extractZip (test path) results in both files
     const fs = new InMemoryFileSystemService(
@@ -317,7 +323,7 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
     // Arrange
     const version = '0.2.0'
     const dirPath = '/path/manifest-plus-dir'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const expectedCachePath = dirSlot(dirPath)
     const fs = new InMemoryFileSystemService(
       {
         [join(dirPath, 'manifest.json')]: '{}',
@@ -340,7 +346,7 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
     // Arrange
     const version = '0.2.0'
     const dirPath = '/absolute/path/kb'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const expectedCachePath = dirSlot(dirPath)
     const fs = new InMemoryFileSystemService(
       {
         [join(dirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
@@ -363,7 +369,7 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
     const dirPath = './relative/kb'
     // fs.currentWorkingDirectory() returns '/' so resolve('/', './relative/kb') = '/relative/kb'
     const resolvedDirPath = '/relative/kb'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const expectedCachePath = dirSlot(resolvedDirPath)
     const fs = new InMemoryFileSystemService(
       {
         [join(resolvedDirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
@@ -511,7 +517,7 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
   it('installKBFromLocalZip returns cachePath when ZIP has root-level registries beside .pair/', async () => {
     const version = '0.4.1'
     const zipPath = '/path/kb-full.zip'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
+    const cachePath = zipSlot(zipPath)
 
     // Full dataset structure matching real knowledge-base-0.4.1.zip
     const zipContent = {
@@ -541,7 +547,7 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
   it('installKBFromLocalDirectory returns cachePath when dir has root-level registries beside .pair/', async () => {
     const version = '0.4.1'
     const dirPath = '/source/kb'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
+    const cachePath = dirSlot(dirPath)
 
     const fs = new InMemoryFileSystemService(
       {
@@ -596,5 +602,128 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
     expect(fs.existsSync(join(result, '.github'))).toBe(true)
     expect(fs.existsSync(join(result, 'AGENTS.md'))).toBe(true)
     expect(fs.existsSync(join(result, '.skills'))).toBe(true)
+  })
+})
+
+/**
+ * US-395: `install --source <zip>` used to extract an external KB into the OFFICIAL KB's
+ * version-keyed slot (~/.pair/kb/<cliVersion>/), rewriting its manifest.json and
+ * contaminating the shared cache of every other project on the machine.
+ */
+describe('US-395: an external source never lands in the official KB cache slot', () => {
+  const OFFICIAL_MANIFEST = JSON.stringify({ name: 'knowledge-base', version: '0.4.3' })
+
+  function populatedOfficialCache(version: string, extra: Record<string, string>) {
+    const officialSlot = join(homedir(), '.pair', 'kb', version)
+    return new InMemoryFileSystemService(
+      {
+        [`${officialSlot}/manifest.json`]: OFFICIAL_MANIFEST,
+        [`${officialSlot}/.pair/knowledge/guidelines/testing.md`]: '# official testing guideline',
+        [`${officialSlot}/getting-started.md`]: '# official getting started',
+        ...extra,
+      },
+      '/',
+      '/',
+    )
+  }
+
+  it('leaves the official slot and its manifest untouched when installing an external ZIP (AC1)', async () => {
+    const version = '0.4.3'
+    const officialSlot = join(homedir(), '.pair', 'kb', version)
+    const zipPath = '/downloads/acme-kb-1.0.0.zip'
+    const fs = populatedOfficialCache(version, {
+      [zipPath]: JSON.stringify({
+        'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        '.pair/knowledge/acme.md': '# acme',
+      }),
+    })
+
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
+
+    expect(result).not.toBe(officialSlot)
+    expect(await fs.readFile(`${officialSlot}/manifest.json`)).toBe(OFFICIAL_MANIFEST)
+    expect(fs.existsSync(`${officialSlot}/.pair/knowledge/guidelines/testing.md`)).toBe(true)
+  })
+
+  it('installs only what the external ZIP ships — no official-KB files mixed in (AC2)', async () => {
+    const version = '0.4.3'
+    const officialSlot = join(homedir(), '.pair', 'kb', version)
+    const zipPath = '/downloads/acme-kb-1.0.0.zip'
+    const fs = populatedOfficialCache(version, {
+      [zipPath]: JSON.stringify({
+        'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        '.pair/knowledge/acme.md': '# acme',
+      }),
+    })
+
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
+
+    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'acme.md'))).toBe(true)
+    expect(fs.existsSync(join(result, 'getting-started.md'))).toBe(false)
+    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'guidelines', 'testing.md'))).toBe(false)
+    expect(result.startsWith(officialSlot)).toBe(false)
+  })
+
+  it('leaves the official slot untouched when installing an external directory', async () => {
+    const version = '0.4.3'
+    const officialSlot = join(homedir(), '.pair', 'kb', version)
+    const dirPath = '/sources/acme-kb'
+    const fs = populatedOfficialCache(version, {
+      [`${dirPath}/AGENTS.md`]: '# acme agents',
+      [`${dirPath}/.pair/knowledge/acme.md`]: '# acme',
+    })
+
+    const result = await installKBFromLocalDirectory(version, dirPath, fs)
+
+    expect(result).not.toBe(officialSlot)
+    expect(await fs.readFile(`${officialSlot}/manifest.json`)).toBe(OFFICIAL_MANIFEST)
+    expect(fs.existsSync(join(result, 'AGENTS.md'))).toBe(true)
+  })
+
+  it('re-installing the same source replaces the slot instead of merging stale files', async () => {
+    const version = '0.4.3'
+    const zipPath = '/downloads/acme-kb.zip'
+    const fs = new InMemoryFileSystemService(
+      {
+        [zipPath]: JSON.stringify({
+          'manifest.json': JSON.stringify({ name: 'acme-kb', version: '2.0.0' }),
+          '.pair/knowledge/new.md': '# new',
+        }),
+      },
+      '/',
+      '/',
+    )
+
+    const firstSlot = await installKBFromLocalZip(version, zipPath, fs, true)
+    await fs.writeFile(join(firstSlot, '.pair', 'knowledge', 'stale.md'), '# from a previous KB')
+
+    const secondSlot = await installKBFromLocalZip(version, zipPath, fs, true)
+
+    expect(secondSlot).toBe(firstSlot)
+    expect(fs.existsSync(join(secondSlot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
+    expect(fs.existsSync(join(secondSlot, '.pair', 'knowledge', 'new.md'))).toBe(true)
+  })
+
+  it('gives two different external ZIPs two different slots (AC4)', async () => {
+    const version = '0.4.3'
+    const zipA = '/team-a/dist/kb-1.0.0.zip'
+    const zipB = '/team-b/dist/kb-1.0.0.zip'
+    const payload = (name: string) =>
+      JSON.stringify({
+        'manifest.json': JSON.stringify({ name, version: '1.0.0' }),
+        '.pair/knowledge/index.md': `# ${name}`,
+      })
+    const fs = new InMemoryFileSystemService(
+      { [zipA]: payload('kb-a'), [zipB]: payload('kb-b') },
+      '/',
+      '/',
+    )
+
+    const slotA = await installKBFromLocalZip(version, zipA, fs, true)
+    const slotB = await installKBFromLocalZip(version, zipB, fs, true)
+
+    expect(slotA).not.toBe(slotB)
+    expect(await fs.readFile(join(slotA, '.pair', 'knowledge', 'index.md'))).toBe('# kb-a')
+    expect(await fs.readFile(join(slotB, '.pair', 'knowledge', 'index.md'))).toBe('# kb-b')
   })
 })

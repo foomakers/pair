@@ -9,6 +9,7 @@ import {
   type FileSystemService,
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
+import { getSourceCachePath, OFFICIAL_KB_NAME } from './cache-manager'
 
 // Helper to create valid ZIP data for InMemoryFileSystemService
 function createValidZipData(files: Record<string, string>): string {
@@ -463,6 +464,8 @@ describe('KB manager integration - local directory paths via customUrl', () => {
 describe('KB Manager - Cache bypass when customUrl provided', () => {
   const testVersion = '0.2.0'
   const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
+  // US-395: every non-official source installs into its own identity-keyed slot
+  const remoteSlot = (url: string) => getSourceCachePath({ kind: 'remote', url })
 
   it('should download from remote customUrl even when cache exists (AC-1)', async () => {
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -500,7 +503,10 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
 
     // Should have downloaded (httpClient was called), not just returned cache
     expect(httpClient.getUrls()[0]).toBe(customUrl)
-    expect(result).toBe(expectedCachePath)
+    // US-395: a custom source gets its OWN slot; the official slot stays as it was
+    expect(result).toBe(remoteSlot(customUrl))
+    expect(result).not.toBe(expectedCachePath)
+    expect(await fs.readFile(expectedCachePath + '/.pair/knowledge/test.md')).toBe('old content')
 
     consoleLogSpy.mockRestore()
   })
@@ -550,17 +556,19 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     expect(httpClient.getUrls()).toHaveLength(0)
   })
 
-  it('should restore cache when remote customUrl download fails (AC-5)', async () => {
+  it('should restore the source slot when remote customUrl download fails (AC-5)', async () => {
+    const failingUrl = 'https://failing.example.com/kb.zip'
+    const sourceSlot = remoteSlot(failingUrl)
     const fs = new InMemoryFileSystemService(
       {
         [expectedCachePath + '/manifest.json']: '{"version": "0.2.0"}',
-        [expectedCachePath + '/.pair/knowledge/test.md']: 'cached content',
+        [sourceSlot + '/manifest.json']: '{"name": "acme-kb", "version": "1.0.0"}',
+        [sourceSlot + '/.pair/knowledge/test.md']: 'cached content',
       },
       '/',
       '/',
     )
 
-    const failingUrl = 'https://failing.example.com/kb.zip'
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '0' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(404))
@@ -573,9 +581,11 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
       ensureKBAvailable(testVersion, { httpClient, fs, customUrl: failingUrl }),
     ).rejects.toThrow()
 
-    // Cache is restored from backup after failed download (atomic replacement)
-    expect(fs.existsSync(expectedCachePath)).toBe(true)
-    expect(fs.existsSync(expectedCachePath + '.bak')).toBe(false)
+    // The source's own slot is restored from backup after a failed download
+    expect(await fs.readFile(sourceSlot + '/.pair/knowledge/test.md')).toBe('cached content')
+    expect(fs.existsSync(sourceSlot + '.bak')).toBe(false)
+    // and the official KB's slot was never in play
+    expect(fs.existsSync(expectedCachePath + '/manifest.json')).toBe(true)
   })
 
   it('should download from different customUrl even when cache exists (AC-2)', async () => {
@@ -609,9 +619,88 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     const result = await ensureKBAvailable(testVersion, { httpClient, fs, customUrl: differentUrl })
 
     expect(httpClient.getUrls()[0]).toBe(differentUrl)
-    expect(result).toBe(expectedCachePath)
+    expect(result).toBe(remoteSlot(differentUrl))
+    expect(result).not.toBe(remoteSlot('https://custom.example.com/new-kb.zip'))
 
     consoleLogSpy.mockRestore()
+  })
+})
+
+/**
+ * US-395 AC5 — a cache slot polluted by an earlier `--source` install is detected and
+ * re-fetched, never served. Without this, a user who ran one bad install keeps getting
+ * foreign content in every project, with nothing connecting cause and effect.
+ */
+describe('KB Manager - contaminated official slot self-heals (US-395 AC5)', () => {
+  const testVersion = '0.2.0'
+  const officialSlot = join(homedir(), '.pair', 'kb', testVersion)
+
+  it('discards a slot whose manifest names another KB and re-downloads the official one', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        // Left behind by a previous `install --source acme-kb.zip`
+        [officialSlot + '/manifest.json']: JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        [officialSlot + '/.pair/knowledge/foreign.md']: 'foreign content',
+      },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(
+        join(targetPath, 'manifest.json'),
+        JSON.stringify({ name: OFFICIAL_KB_NAME, version: testVersion }),
+      )
+      await fs.writeFile(join(targetPath, '.pair', 'knowledge', 'official.md'), 'official content')
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
+
+    expect(result).toBe(officialSlot)
+    // it did NOT trust the polluted slot
+    expect(httpClient.getUrls().length).toBeGreaterThan(0)
+    // the foreign content is gone, not merged with the official KB
+    expect(fs.existsSync(officialSlot + '/.pair/knowledge/foreign.md')).toBe(false)
+    expect(await fs.readFile(officialSlot + '/.pair/knowledge/official.md')).toBe(
+      'official content',
+    )
+    expect(JSON.parse(await fs.readFile(officialSlot + '/manifest.json')).name).toBe(
+      OFFICIAL_KB_NAME,
+    )
+
+    consoleLogSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
+  })
+
+  it('serves the cache without downloading when the slot holds the official KB', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [officialSlot + '/manifest.json']: JSON.stringify({
+          name: OFFICIAL_KB_NAME,
+          version: testVersion,
+        }),
+      },
+      '/',
+      '/',
+    )
+    const httpClient = new MockHttpClientService()
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
+
+    expect(result).toBe(officialSlot)
+    expect(httpClient.getUrls()).toHaveLength(0)
   })
 })
 
