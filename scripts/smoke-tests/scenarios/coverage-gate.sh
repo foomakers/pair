@@ -303,13 +303,29 @@ else
   # CI checkout fetches the base ref only, and without this git rejects every
   # non-fast-forward lease push as 'stale info' (the ratchet would work once,
   # then warn forever). The fetch itself is tolerated — first run, no branch yet.
+  #
+  # The mapping is TRANSIENT (`git -c <key>=<refspec>`), not persisted with
+  # `config --add`: the module leaves the job's checkout config untouched, and its
+  # unit tests assert exactly that (coverage-baseline-ratchet.test.ts). The two
+  # assertions below were written against the `config --add` spelling and were
+  # never executed — this scenario was committed mode 644 (#400), so the change of
+  # spelling in #405 could not be caught here. Realigned to the decided behaviour,
+  # refutation included, so the transient form is now the asserted one.
   expect_out "AC2 maps a remote-tracking ref for the lease" \
-    "config --add remote.origin.fetch +refs/heads/chore/coverage-baseline-ratchet" "$OUT"
+    "-c remote.origin.fetch=+refs/heads/chore/coverage-baseline-ratchet" "$OUT"
+  refute_out "AC2 does not persist the refspec in the checkout config" \
+    "config --add remote.origin.fetch" "$OUT"
   expect_out "AC2 fetch failure is tolerated"     "fetch --no-tags origin"            "$OUT"
   expect_out "AC2 restores the checkout afterwards" "restores the workspace"          "$OUT"
   refute_out "AC2 never pushes to the base ref"  "refs/heads/main"                    "$OUT"
   refute_out "AC2 never stages everything"       "git add -A"                         "$OUT"
-  refute_out "AC2 never switches the checkout to a bot branch" "git checkout"         "$OUT"
+  # Branch switching, precisely: `git checkout <branch>` / `git switch` / `git branch`.
+  # A bare `git checkout` substring also matches the restore step's `git checkout --
+  # <configPath>`, which reverts ONE file and switches nothing — so the coarse form
+  # forbade the very cleanup the module documents (and its unit test asserts).
+  refute_out "AC2 never switches to a bot branch"  "git checkout chore/"              "$OUT"
+  refute_out "AC2 never uses git switch"           "git switch"                       "$OUT"
+  refute_out "AC2 creates no local branch"         "git branch"                       "$OUT"
   cfg_untouched "AC2 dry run wrote nothing"
 
   # === AC4 — LOOP TERMINATION, demonstrated as a sequence ===
