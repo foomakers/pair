@@ -88,6 +88,18 @@ function skillCorpora(
 const writeIssueCases = skillCorpora('capability', 'write-issue')
 const publishPrCases = skillCorpora('capability', 'publish-pr')
 
+const ROUTING_CONVENTION =
+  '.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md'
+const WOW = '.pair/adoption/tech/way-of-working.md'
+
+/** A KB file's two copies — the dataset source and the installed root mirror. */
+const kbCorpora = (rel: string): { corpus: string; content: string }[] => [
+  { corpus: 'dataset', content: read(join(DATASET, rel)) },
+  { corpus: 'generated root', content: read(join(REPO_ROOT, rel)) },
+]
+
+const conventionCases = kbCorpora(ROUTING_CONVENTION)
+
 /**
  * The body of the section whose heading starts with `headingPrefix` at `level`,
  * up to the next heading of the same level or shallower.
@@ -413,4 +425,75 @@ describe('no write is assumed — every write is re-read back (#403 AC8)', () =>
       )
     },
   )
+})
+
+describe('adoption schema — the machine-readable half of the Assignment rule (#403)', () => {
+  it.each(conventionCases)(
+    '$corpus: the resolution convention owns an assignee-resolution section',
+    ({ content }) => {
+      // The schema lives where the OTHER way-of-working keys are resolved
+      // (`code-host`, `base-branch`), not inside either skill: two skills reading a
+      // key that each defines for itself is how they drift apart.
+      expect(content).toMatch(/^##\s+Assignee resolution\s*$/m)
+    },
+  )
+
+  it.each(conventionCases)('$corpus: declares the key and its cascade, once', ({ content }) => {
+    const body = normalize(section(content, 'Assignee resolution', 2))
+    expect(body).toContain('default-assignee')
+    // Byte-for-byte the order both skills state — one sentence, three readers.
+    expect(body).toContain('the argument first, then the adoption default, then none')
+  })
+
+  it.each(conventionCases)(
+    '$corpus: the default is never the authenticated user',
+    ({ content }) => {
+      const body = normalize(section(content, 'Assignee resolution', 2))
+      expect(body).toContain('never the authenticated user')
+      expect(body).toContain('bot token')
+    },
+  )
+
+  it.each(conventionCases)('$corpus: an empty declaration is absent, not empty', ({ content }) => {
+    expect(normalize(section(content, 'Assignee resolution', 2))).toContain(
+      'an empty value is absent',
+    )
+  })
+
+  it.each(conventionCases)(
+    '$corpus: routes the two assignee writes to their own sides',
+    ({ content }) => {
+      // The story assignee is a PM-tool write, the PR assignee a code-host write. On a
+      // single-tool project they coincide; the contract must not assume it, because a
+      // split project's two tools rarely share one identifier for the same human.
+      const body = normalize(section(content, 'Assignee resolution', 2))
+      expect(body).toContain('the item assignee is a pm-tool write')
+      expect(body).toContain('the pull request assignee is a code-host write')
+    },
+  )
+
+  it.each(conventionCases)('$corpus: the routing table carries the assignee row', ({ content }) => {
+    // Skills route by field, never by assumption — so the operation class has to be IN
+    // the table a skill reads, not only in the prose above it.
+    expect(normalize(content)).toContain('| item / pull request assignee')
+  })
+
+  it('the way-of-working TEMPLATE documents the section a project declares it in', () => {
+    // Dataset-only: `.pair/adoption/` is user-owned (registry behavior `add`), so the
+    // template is the shipped schema and the root file below is this project's own.
+    const template = read(join(DATASET, WOW))
+    expect(template).toMatch(/^##\s+Assignment\s*$/m)
+    expect(template).toContain('`default-assignee`')
+    expect(normalize(template)).toContain('invisible in an assignee-filtered view')
+  })
+
+  it("this project's adoption declares a resolvable default-assignee", () => {
+    // The reason this assertion exists: the Assignment rule sat in this file as PROSE
+    // since 2026-07-30 and nothing could resolve it, which is how #384, #372, #404,
+    // #405, #406 and #408 were filed unassigned. A declared value is the difference
+    // between a rule and an enforceable one.
+    const adoption = read(join(REPO_ROOT, WOW))
+    expect(adoption).toMatch(/^##\s+Assignment\s*$/m)
+    expect(adoption).toMatch(/`default-assignee`:\s*`[^`\s]+`/)
+  })
 })

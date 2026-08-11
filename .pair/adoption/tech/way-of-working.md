@@ -30,6 +30,15 @@ Maps this project's GitHub Projects board columns to the 5 canonical macrostates
 - `Refined` (legacy board column) maps to the canonical `Ready` — the column keeps its name, skills treat it as `Ready` (migration note #243). This is what lets `/pair-process-refine-story` complete its Draft→Ready transition on this board.
 - No board column maps to `Review`: this project reviews on the PR and merges straight to `Done`. A skill asked to write `Review` will HALT and report the gap rather than guess.
 
+## Assignment
+
+The machine-readable half of the Assignment rule stated at the top of this file. That paragraph is the rationale — the board is read filtered by assignee, so an unassigned item is invisible on it; this section is what a skill can actually resolve.
+
+- `default-assignee`: `rucka` — the maintainer. Applied to items (`/pair-capability-write-issue`) and to pull requests (`/pair-capability-publish-pr`) whenever the caller passes no `$assignee`.
+- No `code-host-assignee`: PM tool and code host are both GitHub here, one identifier for both.
+
+Resolution order, the split-tool routing and why the fallback is never the authenticated user: [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).
+
 ## Manual Testing
 
 - Manual test suites live in `qa/` at the repository root.
