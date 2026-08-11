@@ -160,6 +160,29 @@ else
   log_fail "runner does not source lib/ci-tests.sh — the list exists twice"; FAILED=1
 fi
 
+# --- 5. The suite actually RUNS in CI, with its cost declared (AC1, AC6, AC8) ---
+# This is the story's whole point: an assertion nobody executes is not an assertion.
+CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
+if grep -q 'run-all.sh --ci' "$CI_WORKFLOW"; then
+  log_succ "CI runs the smoke suite"
+else
+  log_fail "no CI job runs run-all.sh --ci — the CI_TESTS list is a claim again"; FAILED=1
+fi
+if grep -qi 'MEASURED COST' "$CI_WORKFLOW" && grep -qi 'REVISIT THRESHOLD' "$CI_WORKFLOW"; then
+  log_succ "the job records its measured cost and the revisit threshold"
+else
+  log_fail "the smoke job has no measured cost / revisit threshold recorded"; FAILED=1
+fi
+# Nothing is auto-corrected in CI: the guard reports, it never fixes a mode.
+# Comment lines are exempt (the job DOCUMENTS that it never chmods); an executed
+# `chmod` is not. release.yml does chmod its release scripts before running them —
+# which is exactly the habit that lets a 644 commit go unnoticed.
+if grep -Eq '^[[:space:]]*[^#[:space:]].*\bchmod\b' "$CI_WORKFLOW"; then
+  log_fail "ci.yml runs chmod — CI must never repair a mode (check-only)"; FAILED=1
+else
+  log_succ "CI never chmods a scenario (check-only)"
+fi
+
 rm -rf "$FIX"
 
 if [ "$FAILED" -ne 0 ]; then
