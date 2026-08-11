@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'path'
 //
 // These are content invariants on the sources of record (dataset KB + dataset skills),
 // asserted the same way the rest of the KB/skill corpus is tested (see
-// verify-quality-gate-matrix.test.ts, quality-model.test.ts). The *behavior* of the
+// verify-quality.test.ts, quality-model.test.ts). The *behavior* of the
 // shipped synthesis evaluator (pr-state.sh) is executed end-to-end by
 // scripts/smoke-tests/scenarios/pr-state-flow.sh per the gate-tooling ADL
 // (2026-07-13: shell assets are smoke-tested, never vitest-unit-tested).
