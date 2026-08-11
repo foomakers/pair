@@ -171,11 +171,29 @@ fi
 # turns a red commit into a green run on one machine only. Observed, not grepped:
 # the 644 fixture is still 644 after the run.
 check "the runner left the 644 fixture untouched" 644 "$(file_mode "$FIXTURE_SCENARIOS/fx-unexecutable.sh")"
-if grep -Eq '^[[:space:]]*chmod\b' "$RUNNER" "$SMOKE_DIR/lib/ci-tests.sh" "$SMOKE_DIR/lib/utils.sh"; then
+# Matches `chmod` in any COMMAND position, not just as a line's first word: an
+# anchored `^[[:space:]]*chmod` let `mkdir -p "$d" && chmod +x "$s"`,
+# `[ -x "$s" ] || chmod +x "$s"` and `$(chmod …)` through — a named assertion a
+# reader would take at face value while it asserted almost nothing. What it must
+# NOT match is `chmod` inside a message: the runner PRINTS the remedy
+# (`echo "  chmod +x $rel && …"`), and that is the opposite of repairing.
+CHMOD_CALL='(^|[;&|(`{]|\b(then|do|else)\b)[[:space:]]*chmod([[:space:]]|$)'
+if grep -Eq "$CHMOD_CALL" "$RUNNER" "$SMOKE_DIR/lib/ci-tests.sh" "$SMOKE_DIR/lib/utils.sh"; then
   log_fail "the runner chmods a file — it must report the mode, never fix it"; FAILED=1
 else
   log_succ "runner never chmods (check-only)"
 fi
+
+# The remedy path is only trustworthy if `repo_relative_path` degrades honestly:
+# with REPO_ROOT unset the guard `"${REPO_ROOT:-}"/*` degenerates to `/*`, which
+# matches every absolute path and strips the leading slash — a confidently wrong
+# path in the one message added to make failures legible.
+check "repo_relative_path leaves a path alone when the root is unknown" \
+  "/Users/x/repo/scripts/a.sh" \
+  "$(REPO_ROOT="" repo_relative_path /Users/x/repo/scripts/a.sh)"
+check "repo_relative_path strips a known root" \
+  "scripts/a.sh" \
+  "$(REPO_ROOT=/Users/x/repo repo_relative_path /Users/x/repo/scripts/a.sh)"
 
 # --- 4. CI list integrity (AC7) ---
 # shellcheck source=/dev/null
@@ -244,16 +262,46 @@ fi
 
 # --- 5. The suite actually RUNS in CI, with its cost declared (AC1, AC6, AC8) ---
 # This is the story's whole point: an assertion nobody executes is not an assertion.
-CI_WORKFLOW="$REPO_ROOT/.github/workflows/ci.yml"
-if grep -q 'run-all.sh --ci' "$CI_WORKFLOW"; then
+#
+# Scoped to the workflows DIRECTORY, not to ci.yml: the repo is actively splitting
+# jobs into their own workflow files (#413 adds `format` that way), and the smoke
+# job already carries its own permissions/timeout. Pinning one filename would turn
+# "we moved the job" into a red asserting the suite is not wired into CI at all.
+WORKFLOWS_DIR="$REPO_ROOT/.github/workflows"
+if grep -rq 'run-all.sh --ci' "$WORKFLOWS_DIR"; then
   log_succ "CI runs the smoke suite"
 else
-  log_fail "no CI job runs run-all.sh --ci — the CI_TESTS list is a claim again"; FAILED=1
+  log_fail "no workflow runs run-all.sh --ci — the CI_TESTS list is a claim again"; FAILED=1
 fi
-if grep -qi 'MEASURED COST' "$CI_WORKFLOW" && grep -qi 'REVISIT THRESHOLD' "$CI_WORKFLOW"; then
+if grep -rqi 'MEASURED COST' "$WORKFLOWS_DIR" && grep -rqi 'REVISIT THRESHOLD' "$WORKFLOWS_DIR"; then
   log_succ "the job records its measured cost and the revisit threshold"
 else
   log_fail "the smoke job has no measured cost / revisit threshold recorded"; FAILED=1
+fi
+
+# The TRACKED-mode guard's enforcement point must be a step that always RUNS.
+# `pnpm test` is a cacheable turbo task whose inputs live entirely inside
+# @pair/dev-tools, so a scenario added mode 644 without touching that package
+# replays a cached PASS and the guard never executes. The root gate chain and the
+# CI step are the two places that cannot be cached away — asserted here, and the
+# CLI is EXECUTED so a broken entrypoint is a red rather than a green no-op.
+ROOT_PKG="$REPO_ROOT/package.json"
+if grep -q 'smoke-modes:check' "$ROOT_PKG" && node -e "
+  const g = require('$ROOT_PKG').scripts['quality-gate'] || '';
+  process.exit(g.includes('smoke-modes:check') ? 0 : 1)"; then
+  log_succ "the root quality-gate runs the smoke-scenario mode guard (uncacheable)"
+else
+  log_fail "quality-gate no longer runs pnpm smoke-modes:check — a 644 scenario can be pushed"; FAILED=1
+fi
+if grep -rq 'smoke-modes:check' "$WORKFLOWS_DIR"; then
+  log_succ "a CI step runs the mode guard, not only the cacheable unit test"
+else
+  log_fail "no CI step runs pnpm smoke-modes:check"; FAILED=1
+fi
+if (cd "$REPO_ROOT" && pnpm smoke-modes:check >/dev/null 2>&1); then
+  log_succ "the mode-guard CLI runs and reports green on this tree"
+else
+  log_fail "pnpm smoke-modes:check failed (or its entrypoint is broken)"; FAILED=1
 fi
 # Nothing is auto-corrected in CI: the guard reports, it never fixes a mode.
 #
@@ -264,8 +312,9 @@ fi
 # forbidden is narrower and exact: CI repairing a SMOKE SCENARIO's mode — the
 # habit that lets a 644 commit go unnoticed (release.yml does chmod its own
 # release scripts before running them, which is out of this invariant's scope).
-# Comment lines are exempt: the job DOCUMENTS that it never chmods.
-if grep -Eq '^[[:space:]]*[^#[:space:]].*\bchmod\b.*scripts/smoke-tests' "$CI_WORKFLOW"; then
+# Comment lines are exempt: the job DOCUMENTS that it never chmods. Directory-wide
+# for the same reason as above: the invariant follows the job, not the filename.
+if grep -rEq '^[[:space:]]*[^#[:space:]].*\bchmod\b.*scripts/smoke-tests' "$WORKFLOWS_DIR"; then
   log_fail "ci.yml chmods a smoke-test path — CI must report a scenario's mode, never repair it"; FAILED=1
 else
   log_succ "CI never chmods a smoke scenario (check-only)"

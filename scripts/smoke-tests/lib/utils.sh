@@ -46,10 +46,20 @@ file_mode() {
 
 # repo_relative_path <path> — strip the repo root prefix, so a printed remedy is a
 # single path that `git update-index` accepts verbatim.
+#
+# The unset-REPO_ROOT branch is REAL, not decorative: with `root` empty the pattern
+# "$root"/* degenerates to /* — which matches every absolute path — and the
+# substitution strips the leading slash, printing `Users/x/repo/scripts/a.sh`. A
+# confidently wrong path, on the one code path added to make failures legible.
+# Without a known root the honest answer is the path verbatim.
 repo_relative_path() {
   local root="${REPO_ROOT:-}"
+  if [ -n "$root" ]; then
+    case "$1" in
+      "$root"/*) echo "${1#"$root"/}"; return 0 ;;
+    esac
+  fi
   case "$1" in
-    "$root"/*) echo "${1#"$root"/}" ;;
     ./*) echo "${1#./}" ;;
     *) echo "$1" ;;
   esac
