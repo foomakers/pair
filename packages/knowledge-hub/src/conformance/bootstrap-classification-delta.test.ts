@@ -178,12 +178,14 @@ describe('the phase exists and sits after Phase 3.5 (positioning, AC5)', () => {
   // reassurance. The write item must therefore refuse to create a rowless one.
   it('says which "empty" is the safe one — no section written, not a rowless section', () => {
     const step = stepBody(datasetSkill(), '3.6.1').toLowerCase()
-    expect(step, 'the safe empty must be "no section at all"').toMatch(/no section at all/)
+    expect(step, 'the safe empty must be "no section at all"').toMatch(
+      /no section (at all|is written|written)/,
+    )
     expect(step, 'a rowless written table must be named as the unsafe one').toMatch(
       /rowless|written-but-rowless|written but rowless/,
     )
     expect(step, 'the section is created only when a row is confirmed').toMatch(
-      /only when at least one row is confirmed/,
+      /only (when|if) at least one row is confirmed/,
     )
   })
 })
@@ -249,6 +251,21 @@ describe('the guided question-set covers both sections (AC1)', () => {
       expect(question.toLowerCase(), 'the `disabled` branch is not stated').toMatch(/disabled/)
       expect(question, 'still claims Step 3.2 recorded `disabled`').not.toMatch(
         /`disabled` default Step 3\.2 just recorded/i,
+      )
+      // ...and the directive that says so is addressed to the EXECUTOR, so it
+      // belongs in the numbered item, not inside the text the developer is
+      // shown verbatim (the file's convention: quotes carry substitutable
+      // placeholders, items carry instructions).
+      expect(question, 'an executor directive leaked into the developer-facing quote').not.toMatch(
+        /never assume it/i,
+      )
+      const item =
+        stepBody(skill, '3.6.2')
+          .split('\n')
+          .find(l => /^\d+\.\s+\*\*Act — per-tier reviewer/.test(l)) ?? ''
+      expect(item, 'no reviewer/SLA item lead-in').not.toBe('')
+      expect(item, 'the render-it directive is nowhere in the item’s prose').toMatch(
+        /never assume it/i,
       )
     }
   })
@@ -335,21 +352,40 @@ describe('the guided question-set covers both sections (AC1)', () => {
 
   // The recommended value must not be read off the subdomain class: §3.1
   // already spends that signal on the Business impact dimension, so deriving
-  // criticality from it makes two of five dimensions carry one signal.
-  it('states the criticality criterion in its own terms, with an explicit H/M/L mapping', () => {
+  // criticality from it makes two of five dimensions carry one signal. The
+  // criterion ITSELF lives in quality-model §6 (pinned in the cross-document
+  // block below) — here the step must reach it, not restate it.
+  it('recommends a value from the model’s criterion, never from the subdomain class', () => {
     const step = stepBody(datasetSkill(), '3.6.1').toLowerCase()
-    expect(
-      step,
-      'no criterion of its own (blast radius / exposure / sensitivity / uptime)',
-    ).toMatch(/blast radius|data sensitivity|user-facing|uptime/)
-    for (const value of ['high', 'medium', 'low']) {
-      expect(step, `no explicit default for ${value}`).toMatch(
-        new RegExp(`\\*\\*${value}\\*\\*[^\\n]*:|:[^\\n]*\\*\\*${value}\\*\\*`),
+    expect(step, 'no criterion named at all').toMatch(
+      /blast radius|data sensitivity|user-facing|uptime/,
+    )
+    expect(step, 'the step does not refuse the subdomain class as the source').toMatch(
+      /not read off the subdomain class|not the subdomain class|explicitly not the subdomain/,
+    )
+  })
+
+  // The degraded path (Phase 3.5 skipped or its catalogs empty) is a fully
+  // supported state, but the step's only per-row prompt is hard-shaped as
+  // "recommended `[x]`, because `[reason]`" and the phase declares itself
+  // recommendation-first. Offering those rows bare leaves an executor to emit
+  // a prompt with two empty slots — while §6's criterion (blast radius,
+  // exposure, sensitivity, uptime) reads off a workspace package with no
+  // domain model at all.
+  it('recommends a value on the repository-derived rows too, not only the catalog ones', () => {
+    for (const skill of [datasetSkill(), mirrorSkill()]) {
+      const bullet =
+        stepBody(skill, '3.6.1')
+          .split('\n')
+          .find(l => /Phase 3\.5 skipped/.test(l)) ?? ''
+      expect(bullet, 'no degraded-path bullet').not.toBe('')
+      expect(bullet, 'the degraded path still withholds the recommendation').not.toMatch(
+        /without a recommendation/i,
+      )
+      expect(bullet.toLowerCase(), 'the degraded path states no recommendation rule').toMatch(
+        /same[^.]*recommend|recommendation is unchanged|recommended the same way/,
       )
     }
-    expect(step, 'does not warn that Business impact already reads the subdomain class').toMatch(
-      /business impact/,
-    )
   })
 })
 
@@ -451,6 +487,152 @@ describe('the reused pattern still exists where bootstrap points (AC2, cross-doc
       expect(s6.toLowerCase(), `${base}: §6 states no key namespace`).toMatch(/key/)
       expect(s6.toLowerCase(), `${base}: §6 does not say what a diff resolves to`).toMatch(
         /deployable/,
+      )
+    }
+  })
+
+  // The commit adding how-to-02's Phase 2.6 argues "the how-to is the
+  // orchestration flow of record, a phase living only in the skill would be
+  // drift" — but nothing pinned the how-to. `check:links` validates neither
+  // the phase's presence nor its pointer, so a renumber or a delete leaves the
+  // suite green and reinstates exactly the drift the commit prevents.
+  it('how-to-02 carries the classification-delta phase and points at bootstrap Phase 3.6', () => {
+    const REL = '.pair/knowledge/how-to/02-how-to-complete-bootstrap-checklist.md'
+    for (const [base, bootstrap] of [
+      [ROOT, '/pair-process-bootstrap'],
+      [DATASET, '/bootstrap'],
+    ] as const) {
+      const doc = read(join(base, REL))
+      const heading = doc.split('\n').find(l => /^###\s+Phase 2\.6:/.test(l)) ?? ''
+      expect(heading, `${base}: no Phase 2.6 in how-to-02`).not.toBe('')
+      expect(heading.toLowerCase(), `${base}: Phase 2.6 is not the classification delta`).toMatch(
+        /classification delta/,
+      )
+      // ...positioned between domain modeling and finalization, as in the skill
+      const p25 = doc.search(/^###\s+Phase 2\.5:/m)
+      const p26 = doc.search(/^###\s+Phase 2\.6:/m)
+      const p3 = doc.search(/^###\s+Phase 3:/m)
+      expect(p25, `${base}: no Phase 2.5`).toBeGreaterThan(-1)
+      expect(p26).toBeGreaterThan(p25)
+      expect(p3, `${base}: no Phase 3`).toBeGreaterThan(p26)
+      const body = doc.slice(p26, p3)
+      expect(body, `${base}: Phase 2.6 does not point at the skill's phase`).toContain(bootstrap)
+      expect(body, `${base}: Phase 2.6 does not name Phase 3.6`).toMatch(/Phase 3\.6/)
+    }
+  })
+
+  // The decision log is what a future author (or `/verify-adoption`)
+  // re-derives the design from. Round 2 refused two things round 1 had
+  // recorded — catalog-keyed rows, and a rowless table as a valid answer — so
+  // an ADL still carrying them makes the record of record disagree with the
+  // shipped behaviour, and the likeliest re-derivation reintroduces both.
+  it('the positioning ADL’s Decision 1 matches what shipped (keys, empty answer)', () => {
+    const adl = read(
+      join(
+        ROOT,
+        '.pair/adoption/decision-log/2026-08-11-criticality-delta-is-authored-after-domain-modeling.md',
+      ),
+    )
+    const decision1 = (adl.split(/^## Decision$/m)[1] ?? '').split(/^2\. /m)[0].toLowerCase()
+    expect(decision1, 'no Decision 1 body').not.toBe('')
+    expect(decision1, 'the catalogs are still stated as the key space').not.toMatch(
+      /candidate rows \*\*are\*\* the subdomains|rows are the subdomains/,
+    )
+    expect(decision1, 'Decision 1 does not key the rows by the deployable').toMatch(/deployable/)
+    expect(decision1, 'the catalogs are not demoted to candidate names/values').toMatch(
+      /candidate|recommend/,
+    )
+    expect(decision1, 'an empty TABLE is still offered as valid').not.toMatch(
+      /empty table stays a valid|empty table is a valid/,
+    )
+    expect(decision1, 'the empty ANSWER / no-section semantics are missing').toMatch(
+      /empty answer|no section/,
+    )
+    expect(decision1, 'Decision 1 does not cross-reference the keying ADL').toMatch(
+      /keyed-by-the-deployable|keying adl|2026-08-11-criticality-rows-are-keyed/,
+    )
+  })
+
+  // One key is the degenerate case. The normal diff in a monorepo touches
+  // SEVERAL deployables (this repo: `.claude/`, `.pair/`, `apps/website`,
+  // `packages/knowledge-hub`), and with tier = max(dimensions) (§3.2) a rule
+  // that leaves the choice to the executor makes the whole tier flip between
+  // runs on identical code. The write side already states its multi-key rule
+  // ("two contexts inside one deployable yield one row, at the higher value"),
+  // so the read side's silence is the asymmetry.
+  it('quality-model §6 resolves a multi-deployable change to the highest criticality', () => {
+    for (const base of [ROOT, DATASET]) {
+      const s6 = qualityModelSection(base, 6).toLowerCase()
+      expect(s6, `${base}: §6 does not cover a change touching several deployables`).toMatch(
+        /more than one deployable|several deployables|multiple deployables/,
+      )
+      expect(s6, `${base}: §6 states no highest-of rule`).toMatch(
+        /\*\*highest\*\*|highest criticality|the highest of/,
+      )
+      expect(s6, `${base}: §6 does not say what an unlisted one contributes`).toMatch(
+        /not listed[^.]*conservative high|unlisted[^.]*conservative high|contributes the conservative high/,
+      )
+    }
+    // the copy-paste starting point states it too — it is the other authoring route
+    for (const base of [ROOT, DATASET]) {
+      const example = read(
+        join(base, '.pair/knowledge/assets/risk-matrix-example.md'),
+      ).toLowerCase()
+      expect(example, `${base}: the example asset omits the multi-deployable rule`).toMatch(
+        /highest/,
+      )
+    }
+  })
+
+  // `classify` builds the matrix TWICE (§3.2) — once at refinement, from story
+  // context, before any code exists. "the deployable that owns the touched
+  // files" has no referent there, so the first of the two classifications runs
+  // on an executor's guess, and guessing "none" hits the unlisted⇒High branch
+  // on a story nobody has written yet.
+  it('quality-model §6 resolves the key at refinement time, not only from a diff', () => {
+    for (const base of [ROOT, DATASET]) {
+      const s6 = qualityModelSection(base, 6).toLowerCase()
+      expect(s6, `${base}: §6 says nothing about the refinement-time resolution`).toMatch(
+        /refinement/,
+      )
+      expect(s6, `${base}: §6 does not resolve the key from the story's declared scope`).toMatch(
+        /declared scope|story scope|the story names|scope names/,
+      )
+      expect(
+        s6,
+        `${base}: a story naming no deployable is not routed to the file-absent default`,
+      ).toMatch(/file-absent default|absent-file default/)
+    }
+  })
+
+  // The H/M/L criterion is model semantics — how a project picks a value for a
+  // §3.1 dimension. Living only in `bootstrap`, the OTHER authoring route (hand
+  // -authoring from the example, which §6 calls equally valid) gets no criterion
+  // at all, and a later §3.1/§6 criterion would be a second definition to align.
+  it('quality-model §6 owns the H/M/L criterion, and the skill cites rather than redefines it', () => {
+    for (const base of [ROOT, DATASET]) {
+      const s6 = qualityModelSection(base, 6).toLowerCase()
+      expect(s6, `${base}: §6 states no criterion of its own`).toMatch(
+        /blast radius|data sensitivity|uptime/,
+      )
+      for (const value of ['high', 'medium', 'low']) {
+        expect(s6, `${base}: §6 carries no explicit default for ${value}`).toMatch(
+          new RegExp(`\\*\\*${value}\\*\\*[^\\n]*—|\\*\\*${value}\\*\\*[^\\n]*:`),
+        )
+      }
+      expect(
+        s6,
+        `${base}: §6 does not warn that Business impact reads the subdomain class`,
+      ).toMatch(/business impact/)
+    }
+    // the skill applies the mapping; it must not carry a second copy of it
+    for (const skill of [datasetSkill(), mirrorSkill()]) {
+      const step = stepBody(skill, '3.6.1')
+      expect(step, 'the step does not cite the criterion’s owner').toMatch(
+        /§6[^\n]*(criterion|choosing a value)|(criterion|choosing a value)[^\n]*§6/i,
+      )
+      expect(step.toLowerCase(), 'the step does not say it applies rather than defines').toMatch(
+        /never re-?defines it|applies that mapping|one criterion, one owner/,
       )
     }
   })
@@ -574,6 +756,18 @@ describe('idempotency — an authored file is never re-proposed (AC4)', () => {
     // an oversight rather than as the gate it is.
     expect(precondition, 'Step 3.6.0 has no **Verify**').toMatch(/\*\*Verify\*\*/)
     expect(precondition, 'the malformed path names no continuation').toMatch(/Phase 4/)
+    // Graceful Degradation and the summary line declare a THIRD whole-phase
+    // outcome (`skipped — quality model not installed`), but no step ever
+    // produced it: 3.6.0 is the whole-phase gate and checked only the parse,
+    // and its Verify asserted "exactly one of two states". An executor walking
+    // the algorithm therefore authors sections against a schema that is not
+    // installed.
+    expect(precondition.toLowerCase(), 'Step 3.6.0 never checks the quality model').toMatch(
+      /skipped — quality model not installed/,
+    )
+    expect(precondition.toLowerCase(), 'Step 3.6.0’s Verify still admits only two states').toMatch(
+      /one of three states|three states/,
+    )
     // ...and neither per-section step re-owns the parse decision
     for (const step of ['3.6.1', '3.6.2']) {
       expect(stepBody(datasetSkill(), step).toLowerCase(), `Step ${step}`).toMatch(/presence only/)
