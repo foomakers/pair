@@ -110,9 +110,9 @@ When the source is a Git URL:
 
 1. **Parse ref** — split `url#ref` into repo URL and optional branch/tag
 2. **Inject token** — if `PAIR_GIT_TOKEN` is set and URL is HTTPS, rewrite URL with token
-3. **Shallow clone** — `git clone --depth 1 [--branch ref] <url> <tempDir>`
-4. **Install from clone** — copy dataset from temp dir to `~/.pair/kb/{version}/`
-5. **Cleanup** — remove temp clone directory
+3. **Shallow clone** — `git clone --depth 1 [--branch ref] <url> <slot>` into the git
+   source's own cache slot (`~/.pair/kb/external/git-{hash}/`), replaced on each install
+4. **Cleanup** — remove the clone's `.git` directory, leaving the dataset
 
 Auth strategy:
 - **Default**: git inherits system auth (SSH keys, credential manager, `gh auth`)
@@ -191,13 +191,32 @@ When `requiresDownload: true` for URL sources:
 2. **Fetch checksum** — Download `.sha256` checksum file
 3. **Download KB** — GET request with progress tracking
 4. **Validate SHA256** — Verify integrity (if checksum available)
-5. **Extract to cache** — Store at `~/.pair/kb/{version}/`
+5. **Extract to cache** — Store in the source's own slot (see Cache Strategy below)
 
 ### Cache Strategy
 
-**Cache Location:** `~/.pair/kb/{version}/`
+**Cache location — one slot per source, not per CLI version:**
 
-Downloaded KBs are cached to avoid redundant downloads. Cache key is derived from the download URL or version string.
+| Source                                | Slot                                        |
+| ------------------------------------- | ------------------------------------------- |
+| Official KB (auto-download)           | `~/.pair/kb/{version}/`                     |
+| `--source <zip>`                      | `~/.pair/kb/external/zip-{name}-{hash}/`    |
+| `--source <dir>` (copied into cache)  | `~/.pair/kb/external/dir-{name}-{hash}/`    |
+| `--source <git-url>`                  | `~/.pair/kb/external/git-{hash}/`           |
+| `--url <remote-zip>`                  | `~/.pair/kb/external/url-{name}-{hash}/`    |
+
+The slot is derived from the **identity of the source** (its resolved path or URL), so two
+different sources never share a slot and the same source always reuses its own. Only the
+official KB writes the version-keyed slot — an external KB can never overwrite it or its
+`manifest.json` ([foomakers/pair#395](https://github.com/foomakers/pair/issues/395)).
+
+A slot whose `manifest.json` names a different KB than the one expected is treated as
+**contaminated**: it is discarded and re-fetched rather than served, so a machine polluted
+by an older CLI heals on its next install.
+
+**Disk:** one slot per distinct source. Slots are plain directories with no hidden state —
+`rm -rf ~/.pair/kb/external` is always safe, and the next install re-populates what it
+needs. There is no automatic eviction.
 
 ## Configuration
 

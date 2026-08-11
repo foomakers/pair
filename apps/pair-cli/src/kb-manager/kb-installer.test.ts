@@ -660,7 +660,9 @@ describe('US-395: an external source never lands in the official KB cache slot',
 
     expect(fs.existsSync(join(result, '.pair', 'knowledge', 'acme.md'))).toBe(true)
     expect(fs.existsSync(join(result, 'getting-started.md'))).toBe(false)
-    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'guidelines', 'testing.md'))).toBe(false)
+    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'guidelines', 'testing.md'))).toBe(
+      false,
+    )
     expect(result.startsWith(officialSlot)).toBe(false)
   })
 

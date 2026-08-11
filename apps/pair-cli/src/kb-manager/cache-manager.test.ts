@@ -134,7 +134,10 @@ describe('cache-manager — source-identity keying (US-395)', () => {
   })
 
   it('produces filesystem-safe slot names for messy sources', () => {
-    const slot = cacheSlotKey({ kind: 'remote', url: 'https://cdn.example.com/a b/KB (final)!.zip' })
+    const slot = cacheSlotKey({
+      kind: 'remote',
+      url: 'https://cdn.example.com/a b/KB (final)!.zip',
+    })
     expect(slot.startsWith('external/')).toBe(true)
     expect(slot.slice('external/'.length)).toMatch(/^[a-z0-9._-]+$/)
   })

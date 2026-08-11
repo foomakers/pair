@@ -103,17 +103,25 @@ assert_file "$CONSUMER_DIR/.pair/knowledge/mine.md" || exit 1
 assert_dir "$CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
 log_succ "Scaffolded KB installed into a separate project via --source"
 
-# 5. The published ZIP is a distinct install form — pin its behavior ----------
+# 5. The published ZIP is a distinct install form — and it must not touch the official slot
 # AC3 documents the ZIP as a distribution artifact, so the form must be exercised.
-# HOME is isolated because `install --source <zip>` currently extracts into the
-# version-keyed cache slot ~/.pair/kb/<cliVersion>/ shared with the OFFICIAL KB
-# (foomakers/pair#395): with a real HOME this would contaminate every other project
-# on the machine. The assertions below pin exactly that behavior so the fix is visible.
+# HOME stays isolated, but no longer as a workaround for foomakers/pair#395 (fixed): the
+# reason is now plain test hygiene — a smoke run must not write into the developer's real
+# ~/.pair/kb. Isolation also lets us pre-seed an OFFICIAL cache slot and prove the ZIP
+# install leaves it byte-identical.
 log_info "Test 6: A separate project installs the published release ZIP (isolated HOME)"
 ZIP_CONSUMER_DIR=$(setup_workspace "scaffold-kb-test/zip-consumer")
 ISOLATED_HOME=$(setup_workspace "scaffold-kb-test/isolated-home")
 GENERIC_ZIP="$GENERIC_DIR/dist/generic-kb-1.0.0.zip"
 assert_file "$GENERIC_ZIP" || exit 1
+
+# Pre-seed the official KB's version-keyed slot. Any version works: the fix keys slots by
+# source identity, so an external source must not write to ANY official slot.
+OFFICIAL_SLOT="$ISOLATED_HOME/.pair/kb/9.9.9"
+mkdir -p "$OFFICIAL_SLOT/.pair/knowledge"
+printf '{"name":"knowledge-base","version":"9.9.9"}' > "$OFFICIAL_SLOT/manifest.json"
+printf '# official guideline\n' > "$OFFICIAL_SLOT/.pair/knowledge/official.md"
+OFFICIAL_MANIFEST_BEFORE=$(cat "$OFFICIAL_SLOT/manifest.json")
 
 cd "$ZIP_CONSUMER_DIR"
 REAL_HOME="$HOME"
@@ -128,19 +136,29 @@ if [ "$ZIP_INSTALL_STATUS" -ne 0 ]; then
 fi
 assert_file "$ZIP_CONSUMER_DIR/.pair/knowledge/README.md" || exit 1
 assert_dir "$ZIP_CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
-# Documented limitation, asserted rather than assumed: the external KB took over the
-# official KB's cache slot. Pinned via assert_pinned_bug, so when foomakers/pair#395 lands
-# the run says "the pinned bug appears FIXED — update this assertion" instead of just going
-# red. It fires on a local `pnpm smoke-tests` only: the suite is not in CI (foomakers/pair#400).
-external_kb_took_official_cache_slot() {
-  grep -Fq '"generic-kb"' "$ISOLATED_HOME/.pair/kb/"*/manifest.json 2>/dev/null
-}
-if ! assert_pinned_bug "foomakers/pair#395" \
-  "install --source <zip> extracts the external KB into the official KB's cache slot" \
-  external_kb_took_official_cache_slot; then
-  find "$ISOLATED_HOME/.pair" -maxdepth 3 2>/dev/null || true
+
+# foomakers/pair#395: the external KB must NOT occupy the official KB's cache slot.
+# This was a pinned bug (assert_pinned_bug) until the fix landed; it is now a positive
+# assertion — the shared cache of every other project on the machine depends on it.
+if [ "$OFFICIAL_MANIFEST_BEFORE" != "$(cat "$OFFICIAL_SLOT/manifest.json")" ]; then
+  log_fail "install --source <zip> rewrote the official KB's manifest (foomakers/pair#395)"
+  cat "$OFFICIAL_SLOT/manifest.json"
   exit 1
 fi
-log_succ "Release ZIP installs (pinned: it occupies the official KB cache slot, #395)"
+assert_file "$OFFICIAL_SLOT/.pair/knowledge/official.md" || exit 1
+if grep -Fqs '"generic-kb"' "$ISOLATED_HOME/.pair/kb/"*/manifest.json; then
+  log_fail "External KB landed in an official (version-keyed) cache slot (foomakers/pair#395)"
+  find "$ISOLATED_HOME/.pair/kb" -maxdepth 2 -name manifest.json 2>/dev/null || true
+  exit 1
+fi
+log_succ "Official KB cache slot untouched by the external ZIP install (#395)"
+
+# ...and the external KB does live in its own source-namespaced slot
+if ! grep -Fqs '"generic-kb"' "$ISOLATED_HOME/.pair/kb/external/"*/manifest.json; then
+  log_fail "External KB was not cached under ~/.pair/kb/external/ (foomakers/pair#395)"
+  find "$ISOLATED_HOME/.pair/kb" -maxdepth 3 2>/dev/null || true
+  exit 1
+fi
+log_succ "Release ZIP installs into its own source-keyed cache slot"
 
 echo "=== $TEST_NAME Completed ==="

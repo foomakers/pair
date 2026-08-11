@@ -137,13 +137,19 @@ pair-cli install --source https://github.com/acme/acme-kb.git
 pair-cli install --source ../acme-kb --offline
 ```
 
-<Callout type="warn">
-  **Installing straight from a release ZIP is not equivalent yet.** `pair install --source path-or-url-of-the-zip` extracts the
-  external KB into the version-keyed cache slot (`~/.pair/kb/` followed by the CLI
-  version) that is shared with the official KB, mixing the two and rewriting that
-  slot's `manifest.json` for every project on the machine. Publish the ZIP as your
-  release artifact, but point consumers at the repository (git URL) or a local clone
-  until [foomakers/pair#395](https://github.com/foomakers/pair/issues/395) is fixed.
+```bash
+# from a published release ZIP
+pair-cli install --source ./dist/acme-kb-1.0.0.zip --offline
+```
+
+<Callout>
+  **Every source gets its own cache slot.** An external KB is cached under
+  `~/.pair/kb/external/<source>-<hash>/`, never in the official KB's version slot
+  (`~/.pair/kb/<cli-version>/`) — so installing an external KB in one project cannot
+  change what any other project on the machine resolves. If a slot is found holding a
+  different KB than the one expected (a machine polluted by a CLI older than the fix for
+  [foomakers/pair#395](https://github.com/foomakers/pair/issues/395)), it is discarded and
+  re-fetched instead of served.
 </Callout>
 
 Registries the external KB does not ship (for example `adoption`, `github`) are currently
