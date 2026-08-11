@@ -245,7 +245,7 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
       reasons.length,
     )
     // and each of the three sources appears in both of its two states (reachable / unreadable)
-    for (const source of [/PR \$pr/, /current-branch PR/, /story card/]) {
+    for (const source of [/^PR #\$PR_NUM/, /current-branch PR/, /story card/]) {
       expect(reasons.filter(r => source.test(r)).length).toBeGreaterThanOrEqual(2)
     }
   })
@@ -284,10 +284,67 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(step15).toMatch(/headRefOid/)
     expect(step15).toMatch(/TREE_MATCH/)
     expect(step15).toMatch(/detached/i)
-    // the property: HEAD's commit is compared to the PR's head sha, and no branch-name
-    // equality decides anything
-    expect(step15).toMatch(/"\$\(git rev-parse HEAD\)" = "\$PR_HEAD_SHA"/)
-    expect(step15).not.toMatch(/\[ "\$LOCAL_REF" = "\$PR_HEAD_REF" \]/)
+    // The PROPERTY, not one banned spelling: EVERY `TREE_MATCH=match` in the step —
+    // the `$pr` arm and the current-branch arm alike — must sit on a line that compares
+    // `git rev-parse HEAD` to a head sha read from the PR. A bare `TREE_MATCH=match`
+    // promoted by BRANCH identity passes a spelling ban and still reports "matches PR
+    // #N's head" for a locally-committed-unpushed or stale checkout of that branch.
+    const matchAssignments = step15Code.split('\n').filter(l => /TREE_MATCH=match\b/.test(l))
+    expect(matchAssignments.length).toBeGreaterThan(0)
+    for (const line of matchAssignments) {
+      expect(
+        line.trim(),
+        `every TREE_MATCH=match must be guarded by the commit compare, got: ${line.trim()}`,
+      ).toMatch(/\[ "\$\(git rev-parse HEAD\)" = "\$[A-Z_]*HEAD_SHA" \]/)
+    }
+    // and no branch-name equality decides anything, on either arm
+    expect(step15Code).not.toMatch(/\[ "\$LOCAL_REF" = "\$[A-Z_]*HEAD_REF" \]/)
+  })
+
+  it('AC5 — the current-branch arm reads the head sha too, and names the PR it reports on', () => {
+    // The standalone pre-push flow: a dev on the PR's own branch with unpushed commits is
+    // the CANONICAL pre-push state and is NOT the PR's head. That arm therefore needs
+    // `headRefOid` (to compare) and `number` (to render "PR #N") — a `--json labels` read
+    // can supply neither, so the arm could not even name the PR it claimed to match.
+    const branchRead = step15Code.match(/gh pr view --json [^\s]+/)
+    expect(branchRead, 'the current-branch read must be present').not.toBeNull()
+    expect((branchRead as RegExpMatchArray)[0]).toMatch(/headRefOid/)
+    expect((branchRead as RegExpMatchArray)[0]).toMatch(/number/)
+  })
+
+  it('`LOCAL_REF` is resolved for EVERY arm — the `none` and branch arms render it too', () => {
+    // Assigned inside `if [ -n "$pr" ]` it is empty on exactly the arms that interpolate
+    // it: the `none` row (fires when `$pr` was NOT supplied) and the branch-promoted row.
+    const localAt = step15Code.indexOf('LOCAL_REF=')
+    const prGuardAt = step15Code.indexOf('if [ -n "$pr" ]')
+    expect(localAt).toBeGreaterThan(-1)
+    expect(prGuardAt).toBeGreaterThan(-1)
+    expect(localAt, 'LOCAL_REF must be hoisted above the `$pr` guard').toBeLessThan(prGuardAt)
+  })
+
+  it('a `$pr` given as a URL is normalized to a bare number before it is rendered', () => {
+    // The Arguments table accepts "number or URL", but every rendering assumes a number:
+    // the REASON strings say "PR #123 …" and the Output Format row is "PR #N".
+    expect(step15Code).toMatch(/PR_NUM=/)
+    const reasonStrings = [...step15Code.matchAll(/REASON="([^"]*)"/g)].map(m => m[1] as string)
+    const prReasons = reasonStrings.filter(r => /\bPR\b/.test(r) && /\$/.test(r))
+    expect(prReasons.length).toBeGreaterThan(0)
+    for (const r of prReasons) {
+      expect(r, `PR reasons must render a normalized #number, got: ${r}`).toMatch(/#\$PR_NUM/)
+    }
+    expect(reasonStrings.join(' '), 'no raw `$pr` interpolation in a report string').not.toMatch(
+      /(?<![A-Za-z_])\$pr(?![A-Za-z_])/,
+    )
+  })
+
+  it('point 1 carries the code-host routing qualification, like every other host read in the step', () => {
+    // GitHub-only field names (`headRefName`/`headRefOid`) with no substitution pointer
+    // leave a non-GitHub host nothing to route against: the read fails and a perfectly
+    // reachable PR renders `Tree: unknown` + a 🔴 fail-safe.
+    const point1 = step15.slice(0, step15.search(/\*\*Check — is tiering on\?\*\*/))
+    expect(point1).toMatch(/routing table/i)
+    expect(point1).toMatch(/code host/i)
+    expect(point1).toMatch(/headRefName/)
   })
 
   it('AC5 — the tree is resolved TIER-INDEPENDENTLY, before the `Pre-merge tiering` flag is read', () => {
@@ -390,6 +447,22 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
     expect(step21).toMatch(/head commit|PR head/i)
   })
 
+  it('defines the arm where CI has published NO conclusion on the head commit (absence ≠ green)', () => {
+    // The normal state for the first minutes after a push, and the PERMANENT state on a
+    // host with no checks. Redirecting `<gates>` to "CI's check on the head commit"
+    // without this arm leaves Step 5.4 with no gates value at all.
+    expect(step21).toMatch(/no conclusion|not (yet )?published|no check|pending/i)
+    expect(step21).toMatch(/to-be-reviewed/)
+    expect(step21).toMatch(/never[^.\n]*ready-to-merge|ready-to-merge[^.\n]*never/i)
+  })
+
+  it('disambiguates WHICH gate signal caps the verdict — the advisory run contributes findings only', () => {
+    // Otherwise "with any gate red the review can never reach APPROVED" reads as a block
+    // on evidence the same step just declared advisory (a red local run over other code).
+    expect(step21).toMatch(/authoritative/i)
+    expect(step21).toMatch(/findings only|only[^.\n]*findings/i)
+  })
+
   it('the tag read is qualified by the Tag Projection declaration, not promised unconditionally', () => {
     expect(step21).toMatch(/Tag Projection/)
   })
@@ -398,5 +471,25 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
     expect(step21).toMatch(/2\.4/)
     expect(step21).toMatch(/re-run/i)
     expect(step21).toMatch(/widen-only|never lower|D17/i)
+  })
+
+  it('the /review step numbers verify-quality cross-references still RESOLVE to headings', () => {
+    // Precedent: code-host-routing.test.ts pins publish-pr's cross-reference to the
+    // board-state step by its actual number. A renumber in review/SKILL.md must break the
+    // suite here, not leave verify-quality asserting a step that no longer exists — the
+    // silent-prose-drift class this story exists to remove.
+    const referenced = [...SKILL.matchAll(/`?\/review`?[^.\n]{0,60}?Step (\d+\.\d+)/g)].map(
+      m => m[1] as string,
+    )
+    // the Composition Interface note points at review's post-gate raise step by number too
+    const alsoReferenced = [...SKILL.matchAll(/\(its Step (\d+\.\d+)\)/g)].map(m => m[1] as string)
+    const all = [...new Set([...referenced, ...alsoReferenced])]
+    expect(all, 'verify-quality must cross-reference /review by step number').toContain('2.1')
+    for (const n of all) {
+      expect(
+        REVIEW,
+        `verify-quality references /review Step ${n}, which has no heading in review/SKILL.md`,
+      ).toMatch(new RegExp(`^### Step ${n.replace('.', '\\.')}:`, 'm'))
+    }
   })
 })

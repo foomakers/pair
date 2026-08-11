@@ -26,7 +26,7 @@ Only check gates that are **not already passing** (idempotency preserved).
 | Argument | Required | Description                                                                                                    |
 | -------- | -------- | -------------------------------------------------------------------------------------------------------------- |
 | `$scope` | No       | Limit checking: `code-quality`, `tests`, `lint`, `all`, or any custom scope key from adoption (default: `all`) |
-| `$pr`    | No       | A **PR identifier** (number or URL) naming **which PR** the tier is resolved from. Its `risk:*` labels are read from the **code host** — the same source CI gates on, review-raised (D17) tags included. It names the PR; **the tier is read, never carried** across the boundary, so there is no second source of truth and no widen-only guard of its own. Pass it when the invocation is **not** on that PR's branch (how `/review` composes this skill). **Optional and additive**: callers that omit it are unchanged. |
+| `$pr`    | No       | A **PR identifier** (number or URL; a URL is normalized to its trailing number in Step 1.5, so every report row and reason renders `PR #N`) naming **which PR** the tier is resolved from. Its `risk:*` labels are read from the **code host** — the same source CI gates on, review-raised (D17) tags included. It names the PR; **the tier is read, never carried** across the boundary, so there is no second source of truth and no widen-only guard of its own. Pass it when the invocation is **not** on that PR's branch (how `/review` composes this skill). **Optional and additive**: callers that omit it are unchanged. |
 | `$story` | No       | A **story id**, used only for the pre-publish story-card fallback (Step 1.5) when the branch has no PR yet. With no `$pr`, the tier comes from the **current-branch PR** — `gh pr view` with no argument resolves it (the branch resolves its own PR, and its labels are authoritative). Pass `$story` only to name the story card to read before a PR exists. |
 
 `$scope` and the resolved tier compose: the tier decides the widest set CI would run; `$scope` may narrow within it (e.g. `$scope=lint`). `$scope` never *widens* past the tier. **Empty intersection is a no-op, not a failure**: if `$scope` selects a check the tier doesn't run (e.g. `$scope=tests` on 🟢 green, whose active test set is empty), the intersection is empty — that gate runs nothing and reports `SKIPPED (tier)`, never a FAIL and never a widen.
@@ -48,19 +48,35 @@ This step decides **which** suites the standard gates below run, so the local ru
 1. **Act — which code do the suites run against? (tier-independent, always).** The tier and the tree are two different questions and only the first depends on tiering, so resolve the tree **before** the flag is read: the report's `Tree:` row — and the caller rule keyed on it (`/review` Step 2.1 treats a `Tree: ⚠️` run as **advisory** and keeps it out of its state synthesis) — must exist in **every** configuration, `Pre-merge tiering: disabled` (the default) included. Otherwise a review run from an unrelated checkout reports green gates with nothing saying which code they ran on.
 
    ```bash
-   # ONE round trip for every field this skill reads from the PR: head ref + head sha
-   # (this point) and labels (point 3, consumed only when tiering is enabled).
-   # `-q` emits headRefName on line 1, headRefOid on line 2, then one label per line.
+   # ONE round trip for every field this skill reads from the PR: head ref + head sha +
+   # number (this point) and labels (point 3, consumed only when tiering is enabled).
+   # `gh` here IS the code-host command for GitHub; on another code host substitute that
+   # host's equivalent (routing table, linked below) — including the field names, which
+   # are host-specific: `headRefName`/`headRefOid` are GitHub's spelling of "the PR's
+   # head branch" and "the PR's head COMMIT SHA", and the `-q` line ordering is GitHub's
+   # too. Substitute both, never drop the read: an unread PR fail-safes to 🔴 and renders
+   # `Tree: unknown` for a PR that was in fact perfectly reachable.
+   # `-q` emits headRefName on line 1, headRefOid on line 2, number on line 3, then one
+   # label per line.
    TREE_MATCH=none          # match | mismatch | unknown | none — resolved, never guessed
    PR_FIELDS=""
    PR_READ_OK=0
+   PR_NUM=""
+   # Hoisted: EVERY rendering arm interpolates it, including the ones this `if` never
+   # reaches (`none` fires precisely when `$pr` was not supplied).
+   LOCAL_REF="$(git rev-parse --abbrev-ref HEAD)"             # "HEAD" when detached
    if [ -n "$pr" ]; then
-     if PR_FIELDS="$(gh pr view "$pr" --json labels,headRefName,headRefOid \
-                       -q '.headRefName, .headRefOid, (.labels[].name)' 2>/dev/null)"; then
+     # `$pr` is documented as a number OR a URL; every rendering says "PR #N", so
+     # normalize once, here. A trailing number wins (…/pull/420 → 420); an identifier
+     # with none is echoed verbatim, so the fail-safe reason still names what was passed.
+     PR_NUM="$(printf '%s' "$pr" | grep -oE '[0-9]+$')" || true
+     [ -n "$PR_NUM" ] || PR_NUM="$pr"
+     if PR_FIELDS="$(gh pr view "$pr" --json labels,headRefName,headRefOid,number \
+                       -q '.headRefName, .headRefOid, .number, (.labels[].name)' 2>/dev/null)"; then
        PR_READ_OK=1
        PR_HEAD_REF="$(printf '%s\n' "$PR_FIELDS" | sed -n 1p)"   # display half of the row
        PR_HEAD_SHA="$(printf '%s\n' "$PR_FIELDS" | sed -n 2p)"
-       LOCAL_REF="$(git rev-parse --abbrev-ref HEAD)"            # "HEAD" when detached
+       PR_NUM="$(printf '%s\n' "$PR_FIELDS" | sed -n 3p)"        # authoritative once read
        # Compare COMMITS, in BOTH cases — never branch names. A checkout sitting ON the
        # PR's branch at a DIFFERENT commit (stale, or ahead with unpushed work) is not the
        # PR's head, and a DETACHED review worktree at the head is; a name compare gets the
@@ -75,7 +91,7 @@ This step decides **which** suites the standard gates below run, so the local ru
    fi
    ```
 
-   Row rendering (the Output Format `Tree:` arms, one per resolved value): `match` → `<LOCAL_REF, or the HEAD commit when detached> — matches PR #N's head`; `mismatch` → `⚠️ NOT PR #N's head — the suites ran against this tree`; `unknown` → `unknown — PR #N unreadable`; `none` → `<LOCAL_REF> — no PR named (pre-publish / tiering disabled)`. Point 3 promotes `none` to `match` when the checked-out branch turns out to have a PR of its own.
+   Row rendering (the Output Format `Tree:` arms, one per resolved value): `match` → `<LOCAL_REF, or the HEAD commit when detached> — matches PR #<PR_NUM>'s head (<PR_HEAD_REF>@<PR_HEAD_SHA, 7 chars>)`; `mismatch` → `⚠️ NOT PR #<PR_NUM>'s head (<PR_HEAD_REF>@<PR_HEAD_SHA, 7 chars>) — the suites ran against <LOCAL_REF>`; `unknown` → `unknown — PR #<PR_NUM> unreadable`; `none` → `<LOCAL_REF> — no PR named (pre-publish / tiering disabled)`. Point 3 promotes `none` to `match`/`mismatch` when the checked-out branch turns out to have a PR of its own — by the **same commit compare**, never by branch identity.
 
 2. **Check — is tiering on?** Read the `Pre-merge tiering` flag in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md).
    - **`disabled` (the default), or the flag/section is absent** → **full suite**: the CI gate runs every suite on every PR, so mirror that — set the active suite set to **all adopted gates** (base + unit + integration + e2e + custom + aggregate, exactly the current behavior). Report `Tiering: disabled — running the full suite (CI parity)`, report the `Tree:` row point 1 already resolved (it is tier-independent) and `Tier source: n/a (tiering disabled — no tag read)`, then skip to Step 2. Do NOT read tags in this mode. **Suites the repo lacks are still SKIPPED, not failed, here** — the graceful-degradation rule below applies (absent suites are skipped in full-suite mode); the missing-suite-is-a-failure rule (point 5 below) fires *only* on the enabled path when a resolved tier requires that suite.
@@ -101,10 +117,10 @@ This step decides **which** suites the standard gates below run, so the local ru
      # CI gates on. This is the path `/review` takes when it is not on the PR's branch.
      # No second round trip: point 1 already fetched labels with the head fields.
      if [ "$PR_READ_OK" != "1" ]; then
-       REASON="PR $pr unreadable — nonexistent identifier, or the code host is not reachable"
+       REASON="PR #$PR_NUM unreadable — nonexistent identifier, or the code host is not reachable"
      else
-       LABELS="$(printf '%s\n' "$PR_FIELDS" | sed '1,2d')"   # lines 3.. are the label names
-       has_risk_tag "$LABELS" || REASON="PR $pr reachable but carries no risk:* tag"
+       LABELS="$(printf '%s\n' "$PR_FIELDS" | sed '1,3d')"   # lines 4.. are the label names
+       has_risk_tag "$LABELS" || REASON="PR #$PR_NUM reachable but carries no risk:* tag"
      fi
      # NO story-card fallback on this path (see precedence below).
    else
@@ -125,12 +141,25 @@ This step decides **which** suites the standard gates below run, so the local ru
      #       for BOTH, so the MESSAGE decides: only the "no pull requests found" text is the
      #       pre-publish case that may fall through to `$story`. On another code host, match
      #       ITS no-PR-for-this-branch message (routing table).
+     #
+     # Read the SAME fields point 1 reads (head sha + number), for the same reason: being
+     # ON the PR's branch is NOT being AT its head, and the row has to name the PR.
      BRANCH_ERR="$(mktemp)"
-     if LABELS="$(gh pr view --json labels -q '.labels[].name' 2>"$BRANCH_ERR")"; then
+     if BR_FIELDS="$(gh pr view --json labels,headRefName,headRefOid,number \
+                       -q '.headRefName, .headRefOid, .number, (.labels[].name)' 2>"$BRANCH_ERR")"; then
        # (a)/(b) A PR exists on this branch: ITS labels decide — never the story card's
        # refinement tier. Emptiness is not consulted; tag PRESENCE is.
-       has_risk_tag "$LABELS" || REASON="current-branch PR reachable but carries no risk:* tag"
-       TREE_MATCH=match   # the tree IS the branch whose PR labels were just read
+       PR_HEAD_REF="$(printf '%s\n' "$BR_FIELDS" | sed -n 1p)"
+       BR_HEAD_SHA="$(printf '%s\n' "$BR_FIELDS" | sed -n 2p)"
+       PR_NUM="$(printf '%s\n' "$BR_FIELDS" | sed -n 3p)"
+       LABELS="$(printf '%s\n' "$BR_FIELDS" | sed '1,3d')"
+       has_risk_tag "$LABELS" || REASON="current-branch PR #$PR_NUM reachable but carries no risk:* tag"
+       # IDENTICAL commit compare to point 1 — branch identity decides NOTHING here either.
+       # The canonical pre-push state (on the PR's branch, work committed but not yet
+       # pushed) and a stale checkout behind the PR head are both MISMATCHES: reporting
+       # "matches PR #N's head" there is exactly the confident-report-about-different-code
+       # the `Tree:` row exists to prevent.
+       [ "$(git rev-parse HEAD)" = "$BR_HEAD_SHA" ] && TREE_MATCH=match || TREE_MATCH=mismatch
      elif grep -qi 'no pull requests found' "$BRANCH_ERR"; then
        # (c1) Genuinely no PR on this branch — the ONLY case that falls through.
        if [ -n "$story" ]; then
@@ -158,11 +187,11 @@ This step decides **which** suites the standard gates below run, so the local ru
    ```
 
    - **Resolution precedence**: `$pr` → current-branch PR → `$story` card → fail-safe 🔴. An entry is consulted only when the ones before it were **not supplied**, or — for the branch PR — when the branch demonstrably **has no PR**; never as a retry of one that **failed**. So a supplied `$pr` that yields no tag resolves to the fail-safe: it **never** falls through to the branch PR (a *different* PR) or to the story card (the *refinement* tier, which review confirms-or-**raises**, D17 — running it would be an **under-check**, the one direction the model forbids). The same rule holds one level down: a branch PR that is **unreadable** fails safe with its own reason, it does not degrade to the story card.
-   - **The tier source is not the tree**: `$pr` makes the *tier* exact, not the *result*. When the working tree is not that PR's head, the suites still run against the checked-out code, so the report states the two separately (`Tier source:` and `Tree:` in the Output Format) and flags the mismatch — a confident report about different code is worse than a wide one. Point 1 resolves `TREE_MATCH` for that row by comparing **head commits** in every case (branch names are display only): a stale or unpushed-ahead checkout of the PR's own branch is a `mismatch`, a detached worktree at the head is a `match`, an unreadable PR is `unknown` (never a mismatch asserted without evidence), and a run with no PR named is `none`.
+   - **The tier source is not the tree**: `$pr` makes the *tier* exact, not the *result*. When the working tree is not that PR's head, the suites still run against the checked-out code, so the report states the two separately (`Tier source:` and `Tree:` in the Output Format) and flags the mismatch — a confident report about different code is worse than a wide one. `TREE_MATCH` is resolved by comparing **head commits**, on **both** paths and in every case (branch names are display only, never the test): whether the PR was named by `$pr` (point 1) or found on the checked-out branch (this point), a stale or unpushed-ahead checkout of that PR's own branch is a `mismatch`, a detached worktree at the head is a `match`, an unreadable PR is `unknown` (never a mismatch asserted without evidence), and a run with no PR at all is `none`. **Being on the PR's branch is never itself a match** — locally committed, not-yet-pushed work is the canonical pre-push state and it is precisely the case the row must flag.
 
    - **Two different tools when the project splits them**: the PR labels come from the **code host** and the story card from the **PM tool** (the `gh` snippet above is the single-tool GitHub case, where they coincide). Resolve each side per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) and substitute that tool's command — the precedence (PR labels win, story card is the pre-publish fallback) is unchanged, because CI gates on the code host's PR labels either way.
    - **Edge — pre-publish (no PR yet)**: when the branch has no PR, pass the **story id** as `$story` and the tier resolves from the story card on the PM tool (`gh issue view` for GitHub), as above. A standalone run on a branch that already has a PR needs **no** `$story`: the PR's labels win, so a review-raised (D17) tag is never under-run versus CI.
-   - **Fail-safe**: `resolve_tier` returns `red` for **no** `risk:*` tag or an **unknown/malformed** value — the widest matrix, never a silent skip. When the tier came from the fail-safe, say so explicitly in the report: `Tier: 🔴 red (fail-safe — no resolvable risk:* tag; running the full set)`. **Report the reason the snippet resolved, never a generic one**: an unreachable PM tool is `Tier: 🔴 red (fail-safe — story card unreadable: PM tool not reachable by this command; running the full set)`, distinct from a reachable card with no tag. Misattributing the first as the second hides a configuration problem (a split project running the single-tool `gh issue view`) behind a correct-looking widen. The `$pr` path reports the same way: `Tier: 🔴 red (fail-safe — PR #123 reachable but carries no risk:* tag; running the full set)` is distinct from `… PR #123 unreadable: nonexistent identifier or code host unreachable …` — an invalid identifier is a fail-safe with its own reason, never a crash. The current-branch path is symmetric with it — `… current-branch PR unreadable: the code host is not reachable …` is its own reason too, distinct from a branch PR reachable with no tag. The **generic** line is reserved for the one case with genuinely no source: no `$pr`, no PR on the branch (the host said so), no `$story`. Every other path sets a **distinct** `REASON` — which is why the snippet decides on the **presence of a `risk:*` tag** and on the host's **no-PR message**, never on empty labels or on a bare non-zero exit: a card/PR labelled `pr-state:to-be-reviewed` and nothing else is reachable-with-no-tag, and an unreachable host is a failure — neither is sourceless.
+   - **Fail-safe**: `resolve_tier` returns `red` for **no** `risk:*` tag or an **unknown/malformed** value — the widest matrix, never a silent skip. When the tier came from the fail-safe, say so explicitly in the report: `Tier: 🔴 red (fail-safe — no resolvable risk:* tag; running the full set)`. **Report the reason the snippet resolved, never a generic one**: an unreachable PM tool is `Tier: 🔴 red (fail-safe — story card unreadable: PM tool not reachable by this command; running the full set)`, distinct from a reachable card with no tag. Misattributing the first as the second hides a configuration problem (a split project running the single-tool `gh issue view`) behind a correct-looking widen. The `$pr` path reports the same way: `Tier: 🔴 red (fail-safe — PR #123 reachable but carries no risk:* tag; running the full set)` is distinct from `… PR #123 unreadable: nonexistent identifier or code host unreachable …` — an invalid identifier is a fail-safe with its own reason, never a crash. The current-branch path is symmetric with it — `… current-branch PR unreadable: the code host is not reachable …` is its own reason too, distinct from `… current-branch PR #124 reachable but carries no risk:* tag …` (that arm read the PR's number, so it names it). The **generic** line is reserved for the one case with genuinely no source: no `$pr`, no PR on the branch (the host said so), no `$story`. Every other path sets a **distinct** `REASON` — which is why the snippet decides on the **presence of a `risk:*` tag** and on the host's **no-PR message**, never on empty labels or on a bare non-zero exit: a card/PR labelled `pr-state:to-be-reviewed` and nothing else is reachable-with-no-tag, and an unreachable host is a failure — neither is sourceless.
    - **Widen-only**: because review never lowers a tier (D17), a later run can only widen the set versus an earlier one on the same item — never narrow.
 
 4. **Act — the tier→checks matrix** (projection of [quality-model.md §4](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md); the executable copy is `required_suites_for_tier`, the single source — this skill does not restate an independent matrix):
@@ -280,8 +309,8 @@ Present results as:
 ```text
 QUALITY GATE REPORT:
 ├── Tier:        [🟢 green | 🟡 yellow | 🔴 red (fail-safe — reason) | disabled — full suite | matrix not found — fallback]
-├── Tier source: [PR #N (`$pr`) | current-branch PR | story card #ID | n/a (tiering disabled / matrix fallback — no tag read) | fail-safe — no source resolved]
-├── Tree:        [<checked-out branch, or HEAD commit when detached> — matches PR #N's head | ⚠️ NOT PR #N's head — the suites ran against this tree | unknown — PR #N unreadable | <checked-out branch> — no PR named (pre-publish / tiering disabled)]
+├── Tier source: [PR #N (named by `$pr`, normalized to its number) | current-branch PR #N | story card #ID | n/a (tiering disabled / matrix fallback — no tag read) | fail-safe — no source resolved]
+├── Tree:        [<checked-out branch, or HEAD commit when detached> — matches PR #N's head (<head-branch>@<sha7>) | ⚠️ NOT PR #N's head (<head-branch>@<sha7>) — the suites ran against this tree | unknown — PR #N unreadable | <checked-out branch> — no PR named (pre-publish / tiering disabled)]
 ├── Check set:   [the suites this tier runs — e.g. install lint type build unit] (CI parity)
 ├── Lint:        [PASS | FAIL — N violations]
 ├── Type+Build:  [PASS | FAIL — N errors]
