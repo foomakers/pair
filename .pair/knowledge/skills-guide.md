@@ -260,6 +260,7 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 | Decisions (ADR) | `tech/adr/*.md` | `/pair-capability-verify-adoption`, `/pair-process-review` | `/pair-capability-record-decision` |
 | Decisions (ADL) | `decision-log/*.md` | `/pair-capability-verify-adoption` | `/pair-capability-record-decision` |
 | Domain (context map / subdomain contexts) | `product/context-map.md`, `product/subdomain/*.context.md` | `/pair-process-brainstorm`, `/pair-process-refine-story`, `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-plan-stories`, `/pair-process-plan-tasks` | `/pair-capability-record-decision` (decision-backed sections), `/pair-process-brainstorm`, `/pair-process-refine-story` (inline glossary/entity/rule maintenance) |
+| Classification delta | `tech/risk-matrix.md` | `/pair-capability-classify`, `/pair-process-review` | `/pair-capability-classify` (`## Tag Projection`), `/pair-process-bootstrap` (`## Criticality Table`, `## Overrides`) — **section ownership is the invariant**: writers of this file share it section by section, never whole-file |
 
 ## Navigation
 

@@ -1,7 +1,7 @@
 ---
 name: pair-process-bootstrap
 description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /pair-process-specify-prd, /pair-capability-setup-pm, /pair-capability-record-decision, assess-* (optional)."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -250,44 +250,65 @@ Runs **after Phase 3.5**: the subdomains and bounded contexts just mapped are wh
 
 **Interview style**: recommendation-first, **one recommendation at a time** (the `/pair-capability-grill` sync style, applied inline — the question set is fixed and short, so nothing is composed). With **no TTY** there is nothing to interview: bootstrap already downgrades to quick (see Resolution Depth), so the quick-mode behaviour of both steps below applies — nothing asked, nothing written.
 
+### Step 3.6.0: Parse Precondition (whole phase)
+
+Runs **before either step's presence check**, and gates the whole phase — because a heading is not a parse. A `## Criticality Table` whose table is unreadable would otherwise satisfy Step 3.6.1's presence check, be reported `already authored`, and hand control to Step 3.6.2, which would then write into the very file this phase declared it does not trust.
+
+1. **Check — parse**: `tech/risk-matrix.md` absent ⇒ nothing to distrust, continue to Step 3.6.1. Present ⇒ does it parse — readable tables, known keys, sections in the shape §6 defines?
+2. **Skip — malformed**: unparseable table or unknown keys ⇒ **skip the whole phase**, both steps, reporting `skipped — file malformed`. **Never rewrite** a file over a parse this phase does not trust — and note the write would also be silently inert: per §6 a malformed file falls back to KB defaults *entirely*, exactly as if it were absent, so confirmed entries written into it would resolve to nothing while appearing recorded.
+3. **Act**: it parses ⇒ continue to Step 3.6.1.
+
 ### Step 3.6.1: Criticality Table (optional)
 
-1. **Check**: does `tech/risk-matrix.md` already contain a `## Criticality Table` section?
-2. **Skip**: if it does, the table is already authored — **do not re-propose** it (idempotent, mirroring the §5 "skip if present" rule). Report `already authored` and move to Step 3.6.2.
-3. **Check — parse**: the file exists but is malformed (unparseable table, unknown keys)? The §6 resolution already warns and falls back to KB defaults, so **report that** and skip both steps of this phase. **Never rewrite** a file over a parse this phase does not trust.
-4. **Act — build the candidate rows** (never a blank list):
-   - **Phase 3.5 ran**: the mapped subdomains and bounded contexts are the candidate rows. Each carries a **recommended** criticality and the **reason** for it, read from what 3.5 already recorded — a `core` subdomain, or a context several others depend on, is recommended higher than a `generic` one. The developer **confirms or edits**; nothing is invented on their behalf.
-   - **Phase 3.5 skipped, or its catalogs are empty**: degrade to the repository itself — workspace packages, deployables, top-level services — as the candidate rows, offered without a recommendation.
+1. **Check**: does `tech/risk-matrix.md` already contain a `## Criticality Table` section? Presence only — Step 3.6.0 has already established that the file parses.
+2. **Skip**: if it does, the table is already authored — **do not re-propose** it (idempotent, mirroring the §5 "skip if present" rule). Report `criticality: already authored` and move to Step 3.6.2.
+3. **Act — build the candidate rows** (never a blank list):
+   - **Phase 3.5 ran**: the **bounded contexts supply the keys** — §3.1 keys this dimension by service/domain (`payments`, `marketing-site`), and a context is the closer analogue of a deployable/service than a subdomain is. The mapped subdomains fill the gaps only: a subdomain whose name a context already covers is offered **once, not twice**, and one key never produces two rows. Not mere tidiness — a service *not* listed resolves to conservative High (§6), so a near-miss duplicate key silently reds a dimension instead of being a harmless repeat. Each candidate carries a **recommended** criticality and the **reason** for it, read from what 3.5 already recorded — a `core` subdomain, or a context several others depend on, is recommended higher than a `generic` one. The developer **confirms or edits**; nothing is invented on their behalf.
+   - **Phase 3.5 skipped, or its catalogs are empty**: degrade to the repository itself — workspace packages, deployables, top-level services — as the candidate rows, offered without a recommendation, keyed the same way (one row per deployable).
    - **No distinct services or domains at all**: offer the whole project as a single scope. **An empty table is a valid answer**, and resolves to KB defaults.
-5. **Act**: present the candidates and ask, one recommendation at a time:
+4. **Act — ask once whether to author the table at all**, before entering any row loop. Phase 3.5 is the only `$scope: all` entry point, so the candidate list is a full catalog and can be long: state how long it is, and state that it is a **list to prune, not a form to complete**:
 
-   > **Service/domain criticality (optional).**
-   > From your domain model I would record: `[row]` — `[recommended criticality]`, because `[reason]`.
-   > Skipping is fully supported: with no table this dimension resolves to the KB default for every service (quality-model §3.1).
+   > **Service/domain criticality (optional).** I can propose `[N]` rows from your domain model — a list to prune, not a form to complete.
+   > Recommended: skip. With no table this dimension resolves to the KB default for every service (quality-model §3.1), which is the state most projects stay in.
    >
-   > Confirm this row, edit it, or skip the table entirely?
+   > Skip the table, author it, or see the `[N]` candidates and keep only some?
+
+5. **Act — only if the developer opted in**: walk the rows they kept, **one recommendation at a time**. Pruned rows are never asked about again, so the number of prompts is whatever the developer chose to keep:
+
+   > **`[row]`** — recommended `[recommended criticality]`, because `[reason]`.
+   >
+   > Confirm this row, edit it, or drop it?
 
 6. **Act — on confirmation**: write `## Criticality Table` into `tech/risk-matrix.md` in the shape the model defines (§6), carrying **only the confirmed rows**. File absent ⇒ create it with only the confirmed sections — never a copy of the example asset. Any existing `## Tag Projection` is left untouched.
 7. **Act — on decline or skip**: **nothing is written**. Classification degrades to KB defaults (quality-model §3.1, D21) and setup continues — this step never blocks.
-8. **Verify**: either the section exists with the confirmed rows, or nothing was written — and either way the outcome (`authored` / `declined` / `already authored`) is carried into the Step 4.3 summary.
+8. **Verify**: either the section exists with the confirmed rows, or nothing was written — and either way **this step's own** outcome (`criticality: N rows` / `declined` / `already authored`) is carried into its own slot of the Step 4.3 summary line, independently of Step 3.6.2's.
 
 **Quick mode**: this step **asks nothing and writes nothing** — no safe default exists for a project's criticality map, so the resolved default is "no delta, KB defaults apply"; the skip is reported once in the Step 4.3 summary ([quick-mode-defaults.md](./quick-mode-defaults.md)).
 
 ### Step 3.6.2: Overrides (optional)
 
-1. **Check**: does `tech/risk-matrix.md` already contain an `## Overrides` section?
-2. **Skip**: present ⇒ already authored, and **never re-proposed**. Report it and move to Phase 4.
-3. **Act**: offer the two override families the model defines, one recommendation at a time — the **threshold** overrides for the other risk dimensions (§3.1, e.g. shared paths that must classify at least yellow whatever the diff size) and the optional **per-tier reviewer count / SLA** overrides (§4). Recommend keeping each at its KB default:
+1. **Check**: does `tech/risk-matrix.md` already contain an `## Overrides` section? Presence only — Step 3.6.0 has already established that the file parses.
+2. **Skip**: present ⇒ already authored, and **never re-proposed**. Report `overrides: already authored` and move to Phase 4.
+3. **Act — threshold overrides** (§3.1), asked on their own, one recommendation at a time. Recommend the KB default:
 
-   > **Classification overrides (optional).**
-   > Any path or threshold that should always classify higher than its size suggests? And do the per-tier reviewer counts and SLAs of the quality model (§4) match how this team actually reviews?
-   > Keeping both empty is the recommended answer — the KB defaults then apply unchanged.
+   > **Threshold overrides (optional).**
+   > Any path or threshold that should always classify higher than its size suggests — a shared package whose every change is at least yellow, say?
+   > Recommended: none. The KB thresholds (§3.1) then apply unchanged.
    >
-   > Add an override, or keep the KB defaults?
+   > Add a threshold override, or keep the KB thresholds?
 
-4. **Act — on confirmation**: write the confirmed entries into `## Overrides` in the key shape the model defines (§4/§6) — same write path as Step 3.6.1, same file, `## Tag Projection` untouched.
-5. **Act — on decline**: nothing is written; the KB thresholds (§3.1) and the KB per-tier reviewer/SLA defaults (§4) apply. Never blocks.
-6. **Verify**: the outcome is recorded for the Step 4.3 summary.
+4. **Act — per-tier reviewer count / SLA overrides** (§4), asked **separately**, only after the previous answer is recorded. Recommend the KB default, and say what these actually bind:
+
+   > **Per-tier reviewer counts / SLAs (optional).**
+   > Do the quality model's per-tier reviewer counts and SLAs (§4) match how this team really reviews — two reviewers at red, say?
+   > These are what the **review reports** per tier; they become **merge-binding only with `Review enforcement: enabled`**. With the `disabled` default Step 3.2 just recorded, the review still runs and publishes its verdict, but nothing is a required check (quality-model §4).
+   > Recommended: none. The KB per-tier defaults (§4) then apply unchanged.
+   >
+   > Add a reviewer/SLA override, or keep the KB defaults?
+
+5. **Act — on confirmation** (either family, independently): write the confirmed entries into `## Overrides` in the key shape the model defines (§4/§6) — same write path as Step 3.6.1, same file, `## Tag Projection` untouched. One section carries both families; a run that confirms only one writes only that one's keys.
+6. **Act — on decline**: nothing is written; the KB thresholds (§3.1) and the KB per-tier reviewer/SLA defaults (§4) apply. Never blocks.
+7. **Verify**: **this step's own** outcome (`overrides: N` / `declined` / `already authored`) is recorded in its own slot of the Step 4.3 summary line, independently of Step 3.6.1's.
 
 **Quick mode**: this step **asks nothing and writes nothing**, for the same reason as Step 3.6.1 — reported once in the Step 4.3 summary ([quick-mode-defaults.md](./quick-mode-defaults.md)).
 
@@ -342,7 +363,7 @@ BOOTSTRAP COMPLETE:
 │   └── way-of-working.md:  [generated | existing | skipped]
 ├── Quality Gates:   [N gates configured — standard + custom]
 ├── Domain Model:    [subdomains: N | contexts: N | skipped — not installed]
-├── Classification:  [criticality: N rows, overrides: N | declined | already authored | skipped — quick mode | skipped — file malformed]
+├── Classification:  [criticality: N rows | declined | already authored], [overrides: N | declined | already authored] — or whole-phase [skipped — quick mode | skipped — file malformed]
 ├── PM Tool:         [configured via /setup-pm | already configured]
 ├── Decisions:       [N decisions recorded (ADR: X, ADL: Y)]
 └── Status:          [Complete | Partial — details]
@@ -368,7 +389,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 4. **Quality gates**: detects existing Custom Gate Registry entries, skips Step 3.2.
 5. **PM tool**: detects existing configuration in way-of-working, confirms and skips.
 6. **Decisions**: existing ADL/ADR entries are not re-created.
-7. **Classification delta**: checks `tech/risk-matrix.md` section by section — an existing `## Criticality Table` or `## Overrides` is reported as already authored and never re-proposed (Phase 3.6).
+7. **Classification delta**: a phase-level parse precondition runs first (Step 3.6.0) — a malformed file skips the whole phase; otherwise `tech/risk-matrix.md` is checked section by section, and an existing `## Criticality Table` or `## Overrides` is reported as already authored and never re-proposed (Phase 3.6).
 
 Phase completion is detected via output file existence — never re-does completed work.
 
@@ -384,7 +405,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **/record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/pair-capability-record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
 - **/map-subdomains or /pair-capability-map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
 - **Quality model doc not installed** (Phase 3.6): skip the phase with a warning — the model owns the schema of both sections, so there is nothing to author a delta against. Never blocks.
-- **`tech/risk-matrix.md` present but malformed** (Phase 3.6): report it and write nothing — the §6 resolution already warns and falls back to KB defaults; the file is not rewritten over a parse the phase does not trust.
+- **`tech/risk-matrix.md` present but malformed** (Phase 3.6): the phase-level parse precondition (Step 3.6.0) runs ahead of both steps' presence checks and skips the **whole phase**, reporting `skipped — file malformed` — the §6 resolution already warns and falls back to KB defaults entirely, so the file is neither rewritten over a parse the phase does not trust nor written into inertly.
 - **No TTY (CI, piped stdin)**: guided cannot run — warn and run `$mode: quick` instead, never hang on input that cannot arrive. If a still-asked decision (PM tool, undetectable stack) is then unresolvable → **HALT**.
 
 ## Notes

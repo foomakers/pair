@@ -64,6 +64,26 @@ const phaseBody = (skill: string): string => {
   return out.join('\n')
 }
 
+/** Contiguous `>`-blockquote blocks of a body, in order. */
+const blockquoteBlocks = (body: string): string[] => {
+  const blocks: string[] = []
+  let current: string[] = []
+  for (const line of body.split('\n')) {
+    if (/^\s*>/.test(line)) {
+      current.push(line)
+    } else if (current.length > 0) {
+      blocks.push(current.join('\n'))
+      current = []
+    }
+  }
+  if (current.length > 0) blocks.push(current.join('\n'))
+  return blocks
+}
+
+/** Blockquote blocks that actually ask something (a line ending in `?`). */
+const blockquoteQuestions = (body: string): string[] =>
+  blockquoteBlocks(body).filter(b => /\?\s*$/m.test(b))
+
 describe('the phase exists and sits after Phase 3.5 (positioning, AC5)', () => {
   it('declares Phase 3.6 between Phase 3.5 and Phase 4', () => {
     const c = datasetSkill()
@@ -122,6 +142,52 @@ describe('the guided question-set covers both sections (AC1)', () => {
       /one (question|recommendation) at a time/,
     )
   })
+
+  // AC1 is about the SHAPE of the illustrated prompt, not only about prose
+  // claiming one-at-a-time: an executor copies the blockquote verbatim. Two
+  // override families bundled into one compound question is the failure mode.
+  it('splits Step 3.6.2 into two separate override questions, never one compound prompt', () => {
+    const questions = blockquoteQuestions(stepBody(datasetSkill(), '3.6.2'))
+    expect(questions, 'Step 3.6.2 must carry two blockquote questions').toHaveLength(2)
+    const [thresholds, reviewers] = questions.map(q => q.toLowerCase())
+    expect(thresholds).toMatch(/threshold/)
+    expect(thresholds, 'the threshold question must not also ask about reviewers').not.toMatch(
+      /reviewer|sla/,
+    )
+    expect(reviewers).toMatch(/reviewer/)
+    expect(reviewers).toMatch(/sla/)
+  })
+
+  // the reviewer/SLA overrides only bind a merge with `Review enforcement:
+  // enabled` — which Step 3.2 defaults to `disabled`. Without saying so, the
+  // prompt reads as configuring a merge gate.
+  it('says the reviewer/SLA overrides bind a merge only with Review enforcement enabled', () => {
+    const step = stepBody(datasetSkill(), '3.6.2')
+    expect(step).toMatch(/Review enforcement/)
+    expect(step.toLowerCase()).toMatch(/merge-binding|required check/)
+  })
+
+  // a full-catalog offer (Phase 3.5 runs at `$scope: all`) must not read as a
+  // form to complete: one gate question before the row loop, not N prompts.
+  it('gates the row loop on a single up-front "author the table at all?" question', () => {
+    const step = stepBody(datasetSkill(), '3.6.1')
+    const questions = blockquoteQuestions(step)
+    expect(questions.length, 'a gate question plus the per-row question').toBeGreaterThanOrEqual(2)
+    const gate = questions[0].toLowerCase()
+    expect(gate).toMatch(/skip the table|author the table/)
+    expect(step.toLowerCase()).toMatch(/list to prune, not a form to complete/)
+    // the gate is asked BEFORE the per-row walk
+    expect(step.indexOf(questions[0])).toBeLessThan(step.search(/one recommendation at a time/))
+  })
+
+  // one key space: two catalogs at different granularities must not both
+  // supply rows, since an unlisted/near-miss key resolves to conservative High.
+  it('names which catalog supplies the criticality key and de-duplicates the other', () => {
+    const step = stepBody(datasetSkill(), '3.6.1').toLowerCase()
+    expect(step).toMatch(/bounded contexts supply the keys/)
+    expect(step).toMatch(/once, not twice/)
+    expect(step).toMatch(/conservative high/)
+  })
 })
 
 describe('write path reuses classify’s self-write, not /record-decision (AC2)', () => {
@@ -150,6 +216,42 @@ describe('write path reuses classify’s self-write, not /record-decision (AC2)'
 
   it('owns two sections and leaves classify’s Tag Projection untouched', () => {
     expect(body()).toMatch(/Tag Projection[^.]*untouched|untouched[^.]*Tag Projection/i)
+  })
+})
+
+// The phase's central claim is "same pattern as classify's Tag Projection
+// write". Pinning that only inside bootstrap's own body lets the OTHER end of
+// the reference rot silently: rename the pattern in the model, or move
+// classify's write out of Step 5, and the claim becomes false with a green
+// suite (`check:links` validates the file target, not the anchor or wording).
+describe('the reused pattern still exists where bootstrap points (AC2, cross-document)', () => {
+  const QUALITY_MODEL_REL = '.pair/knowledge/guidelines/quality-assurance/quality-model.md'
+
+  it('quality-model.md still defines propose-then-write-if-confirmed under a `## 5.` heading', () => {
+    for (const base of [ROOT, DATASET]) {
+      const section = read(join(base, QUALITY_MODEL_REL)).split(/^## 5\. /m)[1]
+      expect(section, `${base}: no '## 5.' heading in quality-model.md`).toBeDefined()
+      expect((section ?? '').split(/^## /m)[0], `${base}: §5 body`).toMatch(
+        /propose-then-write-if-confirmed/,
+      )
+    }
+  })
+
+  it('classify’s Step 5 still writes the `## Tag Projection` section', () => {
+    const sources = [
+      join(DATASET, '.skills/capability/classify/SKILL.md'),
+      join(ROOT, '.claude/skills/pair-capability-classify/SKILL.md'),
+    ]
+    for (const path of sources) {
+      const after = read(path).split(/^### Step 5:/m)[1]
+      expect(after, `${path}: no '### Step 5:' heading`).toBeDefined()
+      const step = (after ?? '').split(/^#{2,3}\s/m)[0]
+      expect(step, `${path}: Step 5 no longer writes Tag Projection`).toContain('## Tag Projection')
+      expect(step, `${path}: Step 5 no longer names the pattern`).toMatch(
+        /propose-then-write-if-confirmed/,
+      )
+      expect(step, `${path}: Step 5 no longer targets risk-matrix.md`).toContain('risk-matrix.md')
+    }
   })
 })
 
@@ -199,6 +301,30 @@ describe('idempotency — an authored file is never re-proposed (AC4)', () => {
   it('registers the phase in the Idempotent Re-invocation list', () => {
     const section = datasetSkill().split('## Idempotent Re-invocation')[1] ?? ''
     expect(section).toMatch(/Criticality Table|risk-matrix/i)
+  })
+
+  // the guard must be a PHASE-level precondition: behind the per-section
+  // presence check it is bypassable — a malformed `## Criticality Table`
+  // heading reads as "already authored", and Step 3.6.2 then writes into a
+  // file the phase declared it does not trust (and whose write is inert, §6).
+  it('gates the whole phase on the parse BEFORE either section presence check', () => {
+    const phase = phaseBody(datasetSkill())
+    const guard = phase.search(/malformed/i)
+    const presenceCheck = phase.indexOf('already contain a `## Criticality Table`')
+    expect(guard, 'no malformed guard in the phase').toBeGreaterThan(-1)
+    expect(presenceCheck, 'no per-section presence check found').toBeGreaterThan(-1)
+    expect(guard, 'the malformed guard must precede the per-section **Check**').toBeLessThan(
+      presenceCheck,
+    )
+
+    const precondition = stepBody(datasetSkill(), '3.6.0')
+    expect(precondition, 'Step 3.6.0 (parse precondition) missing').toMatch(/\*\*Check/)
+    expect(precondition.toLowerCase()).toMatch(/whole phase|both steps/)
+    expect(precondition.toLowerCase()).toMatch(/skipped — file malformed/)
+    // ...and neither per-section step re-owns the parse decision
+    for (const step of ['3.6.1', '3.6.2']) {
+      expect(stepBody(datasetSkill(), step).toLowerCase(), `Step ${step}`).toMatch(/presence only/)
+    }
   })
 
   it('reports rather than rewrites a malformed risk-matrix.md', () => {
@@ -280,6 +406,31 @@ describe('Step 4.3 reports the outcome (DoD)', () => {
     const out = datasetSkill().split('## Output Format')[1]?.split('## HALT')[0] ?? ''
     expect(out).toMatch(/Classification/i)
     expect(out.toLowerCase()).toMatch(/declined|skipped/)
+  })
+
+  // both steps carry their outcome independently, so a mixed run (criticality
+  // authored, overrides already authored) must be representable — a single
+  // slot forces the reporter to drop one of the two.
+  it('reports the two sections in their own slots, whole-phase skips aside', () => {
+    const line =
+      datasetSkill()
+        .split('\n')
+        .find(l => /├──\s*Classification:/.test(l)) ?? ''
+    expect(line, 'no Classification summary line').not.toBe('')
+    const slots = line.match(/\[[^\]]*\]/g) ?? []
+    const criticality = slots.find(s => s.includes('criticality:'))
+    const overrides = slots.find(s => s.includes('overrides:'))
+    expect(criticality, 'no criticality slot').toBeDefined()
+    expect(overrides, 'no overrides slot').toBeDefined()
+    // two distinct slots — a shared one cannot express a mixed run
+    expect(overrides, 'criticality and overrides share one slot').not.toBe(criticality)
+    for (const slot of [criticality, overrides]) {
+      expect(slot).toMatch(/declined/)
+      expect(slot).toMatch(/already authored/)
+    }
+    // the two whole-phase outcomes stay single-slot
+    expect(line).toMatch(/skipped — quick mode/)
+    expect(line).toMatch(/skipped — file malformed/)
   })
 
   it('names the summary as where the quick-mode skip is reported once', () => {

@@ -39,9 +39,9 @@ Three decisions, asserted in `packages/knowledge-hub/src/conformance/bootstrap-c
 ## Consequences
 
 - A project can author both sections without opening `risk-matrix-example.md`, and a re-run on an authored file proposes nothing (idempotent per section).
-- A malformed `tech/risk-matrix.md` is reported and left alone — the §6 resolution already warns and falls back to KB defaults, and the phase never rewrites a file over a parse it does not trust.
+- A malformed `tech/risk-matrix.md` is reported and left alone — the §6 resolution already warns and falls back to KB defaults, and the phase never rewrites a file over a parse it does not trust. The parse is a **phase-level precondition** (Step 3.6.0) ahead of both per-section presence checks, deliberately: behind them, a `## Criticality Table` heading with an unreadable table would read as "already authored" and the phase would go on to write the other section into a file it just distrusted — a write §6 makes silently inert.
 - Quick mode's question count is unchanged by this phase: it adds zero.
-- Any future writer of the same file inherits the same split — registry sections self-written by the skill that owns them, adoption decisions through `/pair-capability-record-decision`.
+- Any future writer of the same file inherits the same split — registry sections self-written by the skill that owns them, adoption decisions through `/pair-capability-record-decision`. That split is now **discoverable** rather than folklore: `skills-guide.md` § Adoption Files carries a `tech/risk-matrix.md` row naming both writers and their sections, with section ownership stated as the invariant.
 
 ## Adoption Impact
 
