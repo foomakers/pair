@@ -1,7 +1,7 @@
 ---
 name: write-issue
 description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories, /publish-pr."
-version: 0.6.1
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -109,6 +109,11 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 
 6. **Verify**: A single resolved board state is available, or Step 7 proceeds with no board update.
 
+**Two different outcomes, deliberately** — the HALT in 4 is *not* the minimal-board case, and conflating them makes one of the two wrong:
+
+- **`$status` was requested and no board state can express it** ⇒ the **HALT** above (route (c) in [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). The caller asked for a transition this board cannot represent; doing nothing quietly would be exactly the silent success this skill must never report.
+- **The board simply has no state for that macrostate** (a minimal board, D4 — e.g. no `Ready` column) ⇒ the caller **omits `$status`**, and the board write is **skipped as documented behaviour, not an error**: no board field is written and **readiness falls back to the item body** (the Readiness Fallback in canonical-states.md — Definition-of-Ready criteria evaluated against the item). Reported as `Board: n-a`, never as a state that was written.
+
 ### Step 6b: Resolve the Assignee (write mode only)
 
 The board is read **filtered by assignee**, so an item with no assignee is invisible there even when it is open, green and carries a PR (the Assignment rule in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)). This step resolves **who**; the field or flag that actually writes it belongs to the implementation guide resolved in Step 5 — **never invent one**: six adapters, six mechanics, one rule stated here.
@@ -128,6 +133,11 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
 
 ### Step 7: Create or Update Issue
 
+**Two invariants govern every write from here on**, stated once and never restated per tool:
+
+- **Membership precedes state.** A board state field only exists on an item the tracked view actually holds, so the order is always membership → confirmation → state (Step 7b), never state first. Whether membership is a separate call *at all* is per-tool — each adapter declares it in its `### Item Visibility: Membership and Assignee` section (`Board membership is explicit` on GitHub Projects, `implicit` on Azure Boards, Linear and a filesystem backlog) — so the invariant lives here and **the mechanics stay in the adapters**.
+- **No write is assumed.** A tracker can report success for a write that never happened: `gh project item-add` **exits 0 without creating the item** (observed three times on the real tracker, 2026-08-04 — a second, identical invocation created it). So **every write is re-read back**, and what this skill reports is what the read observed, never what the call returned. **A write that cannot be confirmed by a read is a failure or a finding, never a silent success.**
+
 1. **Check**: Is `$id` provided?
    - **`$id` absent → Create mode**: Create a new issue in the PM tool.
    - **`$id` present → Update mode**: Verify the issue exists, then update it.
@@ -136,15 +146,31 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
    - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`), plus any topical labels in `$labels` (e.g. `tech-debt`).
    - If `$parent` is provided, link to parent issue (hierarchy: epic → story → task).
    - Configure project field settings (priority, type, status, assignee) per the implementation guide — the assignee is the one resolved in Step 6b, set on the create call itself.
-   - Record the new issue identifier for return.
+   - **Creating does not imply membership**: on an explicit-membership tool the new issue is not a board item yet, so a `$status` write goes through Step 7b like any other, never straight to the state field.
+   - Record the new issue identifier for return, then **re-read the created item** and report the assignee and labels the read observed (a create is a write, so the invariant above applies to it too).
 3. **Act (Update)**:
    - Read the existing issue to confirm it exists.
    - If not found → **HALT**: `Issue #$id not found.`
    - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). That contract is also what makes a comment durable where the item **is** a file: on `filesystem` the back-link lives in the body's `## Activity Log` section, so a later write-mode render preserves it only because the caller read-merges the current body first — dropping the section is a caller bug, not an accepted behavior. Comment mode (Step 7c) never reaches here and never writes the body.
    - Preserve existing labels and hierarchy links unless explicitly changed.
    - Apply the assignee resolved in Step 6b — the update path carries it exactly as the create path does (the adapters' add-an-assignee call adds without replacing, so it is safe to run unconditionally). Resolved to none ⇒ leave whatever assignee the item already has; never clear one.
-   - If `$status` was provided, update the project board status field to the board state resolved in Step 6, per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
-4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the resolved board state.
+   - If `$status` was provided, the board field is written in **Step 7b** (membership → confirm → state), never here — this step writes the item, not the board.
+4. **Verify**: The item was created or updated **and re-read**: the read shows the body, labels and assignee that were written. If `$status` was provided, Step 7b runs next and owns the board field.
+
+### Step 7b: Write the Board State (write mode, only when Step 6 resolved a board state)
+
+The order is **membership, then a read that confirms it, then the state field**. A state field cannot be written on an item the tracked view does not hold, and the add that puts it there cannot be trusted to have worked.
+
+1. **Check — is the item already in the tracked view?** Read it per the implementation guide resolved in Step 5. On an implicit-membership tool there is nothing to add and this collapses to that read; on an explicit-membership tool (GitHub Projects — an issue and a project item are distinct objects) a missing item takes the next step.
+2. **Act — add the membership.** The adapters document the add as idempotent, so it is safe to run unconditionally: an item that is already a member is a no-op, never a duplicate.
+3. **Act — re-read to confirm it exists.** The add's **exit status is not evidence**: `gh project item-add` was observed exiting 0 with nothing created, and the identical second invocation created it. So confirm by reading the item back out of the view, and retry the add **once** when that read is negative.
+4. **Act — the read is still negative** ⇒ **HALT**:
+
+   > Board state not written — item `$id` **could not be confirmed** as a member of `[view]` after adding it (`[tool's last response]`). The item itself exists and is off the board: add it to the view manually, or re-invoke. A skipped board write is **never reported as success**.
+
+5. **Act — write the state field** to the board state resolved in Step 6, per the implementation guide (e.g. the GraphQL mutation for GitHub Projects). This is the **board field**, never body text.
+6. **Act — read the field back** and report the value the read returned. **A read-back that does not match the target is a failure**, not a success: report it as one rather than trusting the mutation's own response.
+7. **Verify**: the board field, read back, equals the board state resolved in Step 6 — or one of the two failure paths above was reported.
 
 ### Step 7c: Post a Comment (`$mode: comment`)
 
@@ -184,8 +210,11 @@ ISSUE WRITTEN:
 ├── Template: [template file used | n-a (comment mode)]
 ├── Parent:   [parent issue ID | "none" | n-a (comment mode)]
 ├── Assignee: [login — confirmed by read | none — WARNING: invisible in an assignee-filtered view | n-a (comment mode)]
+├── Board:    [board state — confirmed by read | n-a (no $status, or no board state maps to the macrostate — readiness falls back to the item body) | HALT — reason]
 └── Status:   [Success | HALT — reason]
 ```
+
+Every value on the `Assignee` and `Board` rows is what a **read** returned, not what a call reported — the two rows exist in this shape because a write reported as done and never confirmed is how items ended up open, green and off the board.
 
 In **comment mode** the three `n-a (comment mode)` values are the specified rendering, not an omission: no `$type` is taken, no template is resolved and no hierarchy is touched, so there is nothing to report on those rows (`Status: Success` on a posted comment, or the warning text from Step 7c.2).
 
@@ -268,6 +297,7 @@ When invoked **independently**:
 - **Template not found** (Step 3) — missing knowledge base file.
 - **Target macrostate has no mapped board state** (Step 6) — reports the gap instead of guessing.
 - **Malformed `state-mapping` section** (Step 6) — points to canonical-states.md.
+- **Board membership could not be confirmed** by the re-read after adding it (Step 7b) — the state field has nothing to write to, and a skipped board write is never reported as success. **Not** the minimal-board case (Step 6), which is a documented skip.
 - **`$id` provided but issue not found** (Step 7) — issue does not exist. **Not a HALT in `comment` mode** — warn with the manual-link instruction (Step 7c.2).
 - **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2).
 
@@ -287,6 +317,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 ## Notes
 
 - This skill **modifies PM tool state** — it creates and updates issues, and posts comments on them. It never touches code-host state (branches, PRs, reviews).
+- **No write is assumed** (Step 7): every write here is re-read back, because a tracker can return success for a write that did not happen. The rule is general on purpose — the concrete bug was `gh project item-add` exiting 0 with nothing created, but the class is "trusted the exit status", and only the read closes it.
 - **Comment mode is deliberately narrow**: one verbatim comment on one existing item, no template, no body write, no board write, warn-not-HALT on failure. It exists so a cross-link (or any additive annotation) never risks the item's body — the destructive full-body overwrite is write mode's contract alone.
 - No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent in write mode** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation. **Comment mode is the documented exception**: a comment carries no `$id` of its own, so nothing here can dedupe it — re-invocation appends another comment, and the duplicate-check belongs to the caller (Step 7c).
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.

@@ -79,14 +79,24 @@ function skillCorpora(category: string, name: string): { corpus: string; content
 
 const writeIssueCases = skillCorpora('capability', 'write-issue')
 
-/** The section body of `### <heading>`, up to the next heading of level ≤ 3. */
-function section(markdown: string, headingPrefix: string): string {
+/**
+ * The body of the section whose heading starts with `headingPrefix` at `level`,
+ * up to the next heading of the same level or shallower.
+ *
+ * Scoped rather than whole-file on purpose: a claim asserted against the whole
+ * document goes green when the sentence lands anywhere, including a section
+ * where it means something else. Returns '' when the heading is absent, which
+ * reddens every assertion built on it (no vacuous pass on a renamed heading).
+ */
+function section(markdown: string, headingPrefix: string, level = 3): string {
   const lines = markdown.split('\n')
-  const start = lines.findIndex(line => line.trimEnd().startsWith(`### ${headingPrefix}`))
+  const hashes = '#'.repeat(level)
+  const start = lines.findIndex(line => line.trimEnd().startsWith(`${hashes} ${headingPrefix}`))
   if (start === -1) return ''
+  const stop = new RegExp(`^#{1,${level}} `)
   const body: string[] = []
   for (const line of lines.slice(start + 1)) {
-    if (/^#{1,3} /.test(line)) break
+    if (stop.test(line)) break
     body.push(line)
   }
   return body.join('\n')
@@ -202,6 +212,123 @@ describe('/write-issue — the assignee resolution cascade (#403 AC2, AC3)', () 
       // One rule here, six adapters there — the field/flag that actually sets the
       // assignee is the implementation guide's, never invented in the skill.
       expect(cascadeSection(content)).toContain('never invent')
+    },
+  )
+})
+
+describe('/write-issue — membership precedes state, confirmed by a read (#403 AC4, AC5)', () => {
+  const boardSection = (content: string): string =>
+    normalize(section(content, 'Step 7b: Write the Board State'))
+
+  it.each(writeIssueCases)('$corpus: has a dedicated board-write step', ({ content }) => {
+    expect(content).toMatch(/^### Step 7b: Write the Board State/m)
+  })
+
+  it.each(writeIssueCases)(
+    '$corpus: states the invariant once, tool-agnostically',
+    ({ content }) => {
+      // Stated in the SKILL (this story's half); the per-tool mechanics stay in the
+      // adapters (#402's half) — one invariant, six adapters, no restatement.
+      const body = normalize(content)
+      expect(body).toContain('membership precedes state')
+      expect(body).toContain('the mechanics stay in the adapters')
+    },
+  )
+
+  it.each(writeIssueCases)('$corpus: pins the three-beat order (AC4)', ({ content }) => {
+    expect(boardSection(content)).toContain(
+      'membership, then a read that confirms it, then the state field',
+    )
+  })
+
+  it.each(writeIssueCases)(
+    '$corpus: the membership beat precedes the state-field beat structurally',
+    ({ content }) => {
+      // Prose that merely MENTIONS both in one section would satisfy the phrase pin
+      // above. This asserts the actual ordering inside the step, the same structural
+      // discipline the adapter guard applies to github's Step 2b vs Step 3.
+      const body = normalize(section(content, 'Step 7b: Write the Board State'))
+      const addMembership = body.indexOf('add the membership')
+      const writeState = body.indexOf('write the state field')
+      expect(addMembership).toBeGreaterThan(-1)
+      expect(writeState).toBeGreaterThan(addMembership)
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: the add re-reads because exit 0 is not evidence (AC4)',
+    ({ content }) => {
+      // THE observed defect, three times on the real tracker: `gh project item-add`
+      // exited 0 and produced no item; a second identical invocation created it.
+      const body = boardSection(content)
+      expect(body).toContain('exit status is not evidence')
+      expect(body).toContain('re-read')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: an unconfirmable membership HALTs with the reason (AC5)',
+    ({ content }) => {
+      const body = boardSection(content)
+      expect(body).toContain('halt')
+      // The specific reason, not a generic failure — and never laundered into success.
+      expect(body).toContain('could not be confirmed')
+      expect(body).toContain('never reported as success')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: the state field is read back and the observed value reported',
+    ({ content }) => {
+      const body = boardSection(content)
+      expect(body).toContain('read the field back')
+      expect(body).toContain('a read-back that does not match the target is a failure')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: lists the membership HALT in HALT Conditions',
+    ({ content }) => {
+      expect(normalize(section(content, 'HALT Conditions', 2))).toContain(
+        'membership could not be confirmed',
+      )
+    },
+  )
+})
+
+describe('/write-issue — a board that cannot express the macrostate (#403 AC6)', () => {
+  it.each(writeIssueCases)(
+    '$corpus: distinguishes the documented skip from the HALT',
+    ({ content }) => {
+      // AC6 vs the pre-existing Step 6 HALT: an explicitly requested `$status` that no
+      // board state can express still HALTs (route (c) in canonical-states.md — doing
+      // nothing quietly is the silent success this story removes), while a board that
+      // simply has no such state is the D4 minimal-board path where the caller omits
+      // `$status`. Conflating the two is what makes one of them wrong, so the skill
+      // must say which is which.
+      const body = normalize(content)
+      expect(body).toContain('two different outcomes, deliberately')
+      expect(body).toContain('skipped as documented behaviour, not an error')
+      expect(body).toContain('readiness falls back to the item body')
+    },
+  )
+})
+
+describe('no write is assumed — every write is re-read back (#403 AC8)', () => {
+  it.each(writeIssueCases)('$corpus: states the rule as a general invariant', ({ content }) => {
+    const body = normalize(content)
+    expect(body).toContain('no write is assumed')
+    expect(body).toContain('every write is re-read back')
+    // The rule is what stops the defect class; the observed instance is the evidence.
+    expect(body).toContain('exits 0 without creating the item')
+  })
+
+  it.each(writeIssueCases)(
+    '$corpus: a write that cannot be confirmed is never a silent success',
+    ({ content }) => {
+      expect(normalize(content)).toContain(
+        'a write that cannot be confirmed by a read is a failure or a finding, never a silent success',
+      )
     },
   )
 })
