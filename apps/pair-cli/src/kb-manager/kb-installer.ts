@@ -55,6 +55,14 @@ async function doInstallSteps(
   }
 
   await fs.extractZip(zipPath, cachePath)
+  // UNWRAP a ZIP whose content sits under a single root directory, exactly as the local-ZIP
+  // path does: `installKB` serves the official download AND `--url <remote zip>`, and an
+  // external KB packaged that way otherwise yields a dataset root one level too high.
+  // Unwrap only — a `false` result is NOT raised as an error here: this path has never
+  // validated the downloaded structure, and turning a structure check into a hard failure
+  // on the official download is a behaviour change with no defect behind it (the local-ZIP
+  // path does throw, because its caller handed us the archive and can fix it).
+  await normalizeExtractedKB(cachePath, fs)
   await cleanupFile(zipPath, fs)
 }
 
@@ -116,22 +124,33 @@ export async function installKB(
 /**
  * Clones a git source into the slot its URL owns.
  *
- * The slot lifecycle (purge → create → populate) lives HERE, with every other source
- * form's, instead of in the config layer: slot mechanics duplicated outside the module
- * that owns slots is exactly the shape that produced the contamination US-395 fixes.
+ * The slot lifecycle lives HERE, with every other source form's, instead of in the config
+ * layer: slot mechanics duplicated outside the module that owns slots is exactly the shape
+ * that produced the contamination US-395 fixes.
+ *
+ * The old clone is SET ASIDE, not purged, before the new one is fetched — the invariant
+ * the ADL states for every network-fetched source. `cloneGitRepo` additionally deletes the
+ * destination when git fails, so a purge-first version left an offline user with an empty
+ * slot where a working clone had been. Setting aside also replaces the slot wholesale
+ * (files from a previous clone cannot linger) and git needs an empty destination anyway.
  */
 export async function installKBFromGit(url: string, fs: FileSystemService): Promise<string> {
   const source: KBSource = { kind: 'git', url }
   const cachePath = getSourceCachePath(source)
 
-  // Replace the slot wholesale so files from a previous clone cannot linger
-  await cacheManager.purgeSlot(source, fs)
+  const hadCache = await cacheManager.backupCachedKB(source, fs)
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
-  cloneGitRepo(url, cachePath)
-  // The dataset is what we cache; the clone's history is not.
-  await fs.rm(join(cachePath, '.git'), { recursive: true, force: true })
-  return cachePath
+  try {
+    cloneGitRepo(url, cachePath)
+    // The dataset is what we cache; the clone's history is not.
+    await fs.rm(join(cachePath, '.git'), { recursive: true, force: true })
+    if (hadCache) await cacheManager.removeBackupKB(source, fs)
+    return cachePath
+  } catch (err) {
+    if (hadCache) await cacheManager.restoreCachedKB(source, fs)
+    throw err
+  }
 }
 
 // Helper: finalize installation, normalize and return dataset root

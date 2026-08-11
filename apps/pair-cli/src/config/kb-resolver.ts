@@ -67,11 +67,15 @@ async function downloadKBIfNeeded(options: {
     ensureKBAvailableFn = ensureKBAvailable,
   } = options
 
-  if (DIAG) console.error(`[diag] Checking KB cache for version ${version}`)
-  const cached = await isKBCachedFn(version, fsService)
-
-  if (!cached && DIAG) {
-    console.error(`[diag] KB not cached, downloading...`)
+  // Probed ONLY under PAIR_DIAG: the answer feeds a `[diag]` line and nothing else —
+  // `ensureKBAvailable` inspects the slot itself and is called either way. Unconditionally
+  // it costs two existsSync + readFile + JSON.parse on the hot path of every command that
+  // reaches the fallback resolver, in exchange for no behaviour.
+  if (DIAG) {
+    console.error(`[diag] Checking KB cache for version ${version}`)
+    if (!(await isKBCachedFn(version, fsService))) {
+      console.error(`[diag] KB not cached, downloading...`)
+    }
   }
 
   const kbPath = await ensureKBAvailableFn(version, {

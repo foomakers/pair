@@ -1,4 +1,4 @@
-import { basename, join, posix, win32 } from 'path'
+import { basename, isAbsolute, join, posix, win32 } from 'path'
 import { homedir } from 'os'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
@@ -52,9 +52,14 @@ export function officialSource(version: string): KBSource {
 }
 
 /**
- * Absolute under EITHER convention — `path.isAbsolute` follows the host platform, so on
- * POSIX it calls `C:\kb\acme.zip` relative and the caller would join it onto the cwd,
- * producing a bogus path and a bogus slot.
+ * Absolute under EITHER convention, for a SOURCE path only — `path.isAbsolute` follows the
+ * host platform, so on POSIX it calls `C:\kb\acme.zip` relative and the caller would join
+ * it onto the cwd, producing a bogus path and a bogus slot.
+ *
+ * Deliberately NOT used for the cache root: there the dual check is backwards. Accepting a
+ * foreign-convention path as a source only stops a join; accepting it as the ROOT means
+ * `join('C:\\cache\\kb', '0.4.3')` — a relative path on POSIX — prefixes every slot. See
+ * `getCacheRoot`, which uses the host's own `isAbsolute`.
  */
 function isAbsolutePath(rawPath: string): boolean {
   return posix.isAbsolute(rawPath) || win32.isAbsolute(rawPath)
@@ -159,11 +164,16 @@ export function cacheSlotKey(source: KBSource): string {
  * slot with `rm -rf`. `PAIR_KB_CACHE_DIR=.cache/kb` would resolve slots against the
  * process cwd, so `pair install --source x.zip` run inside a repository would create and
  * then recursively delete directories inside that repository.
+ *
+ * Absolute is judged by the HOST convention (`path.isAbsolute`), not by "either
+ * convention" the way a source path is: on POSIX, `C:\cache\kb` is a relative NAME, so
+ * `join` would produce `C:\cache\kb/0.4.3` and reopen exactly the hole above under a
+ * different spelling.
  */
 export function getCacheRoot(): string {
   const override = process.env['PAIR_KB_CACHE_DIR']?.trim()
   if (!override) return join(homedir(), '.pair', 'kb')
-  if (!isAbsolutePath(override)) {
+  if (!isAbsolute(override)) {
     throw new Error(
       `PAIR_KB_CACHE_DIR must be an absolute path (got "${override}") — cache slots are deleted recursively and must never resolve against the current directory`,
     )

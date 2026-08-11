@@ -5,7 +5,12 @@ import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
 import { getSourceCachePath, localKBSource, officialSource, type KBSource } from './cache-slot-key'
 import urlUtils from './url-utils'
-import { installKB, installKBFromLocalZip, type InstallerDeps } from './kb-installer'
+import {
+  installKB,
+  installKBFromGit,
+  installKBFromLocalZip,
+  type InstallerDeps,
+} from './kb-installer'
 
 export interface KBManagerDeps {
   httpClient: HttpClientService
@@ -37,7 +42,7 @@ function resolveSource(version: string, deps: KBManagerDeps): KBSource {
   if (local.kind === 'directory') {
     throw new Error(
       `A local KB directory is used in place, not cached: ${local.path}. ` +
-        'Resolve it with resolveDatasetRoot({ resolution: "local" }) instead of ensureKBAvailable.',
+        'Pass it as `--source <dir>` rather than `--url`.',
     )
   }
   return local
@@ -94,15 +99,30 @@ async function installFromSource(
   const installerDeps = buildInstallerDeps(deps)
   const fs = deps.fs
 
-  // Dispatch on the ALREADY-RESOLVED identity, never on a second look at the raw string:
-  // the slot a source owns and the installer it is routed to must agree (US-395).
-  if (source.kind === 'zip') return installKBFromLocalZip(version, source.path, fs, deps.skipVerify)
+  const download = (downloadUrl: string): Promise<string> =>
+    installKB(version, cachePath, downloadUrl, {
+      fs,
+      ...installerDeps,
+      ...(deps.retryOptions ? { retryOptions: deps.retryOptions } : {}),
+    })
 
-  const downloadUrl =
-    source.kind === 'remote' ? source.url : urlUtils.buildGithubReleaseUrl(version)
-  return installKB(version, cachePath, downloadUrl, {
-    fs,
-    ...installerDeps,
-    ...(deps.retryOptions ? { retryOptions: deps.retryOptions } : {}),
-  })
+  // Dispatch on the ALREADY-RESOLVED identity, never on a second look at the raw string:
+  // the slot a source owns and the installer it is routed to must agree (US-395). The
+  // switch is EXHAUSTIVE and the `never` default is the point of it — the earlier
+  // "zip, else download" shape sent any future `KBSource` kind to the OFFICIAL KB's
+  // release zip, written into that source's slot: a cross-source write with no signal.
+  switch (source.kind) {
+    case 'zip':
+      return installKBFromLocalZip(version, source.path, fs, deps.skipVerify)
+    case 'remote':
+      return download(source.url)
+    case 'official':
+      return download(urlUtils.buildGithubReleaseUrl(version))
+    case 'git':
+      return installKBFromGit(source.url, fs)
+    default: {
+      const unreachable: never = source
+      throw new Error(`Unhandled KB source kind: ${JSON.stringify(unreachable)}`)
+    }
+  }
 }
