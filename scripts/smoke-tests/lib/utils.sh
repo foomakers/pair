@@ -19,6 +19,37 @@ log_succ() { echo -e "${GREEN}[PASS]${NC} $1"; }
 log_fail() { echo -e "${RED}[FAIL]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
+# --- Runner outcome vocabulary (story #400) ---------------------------------
+# A listed scenario has THREE possible states before it is ever executed. The
+# runner used to know two answers — passed, or FAILED — so a scenario that could
+# not run at all (`coverage-gate.sh`, committed mode 644) reported `Permission
+# denied` -> FAIL, indistinguishable from a real assertion failure. It sat dead
+# for weeks. Deciding the state up front is what keeps "cannot run" from ever
+# being reported as "ran and failed" again.
+#
+# These read the FILESYSTEM, which is the right question at run time. The
+# COMMITTED mode is a different question, guarded at the commit level by
+# packages/dev-tools/src/quality-gates/smoke-scenario-modes.ts (`git ls-files -s`).
+
+# file_mode <path> — octal mode, portably (GNU stat, then BSD stat).
+# Prints nothing for a path that does not exist, instead of a stat error.
+file_mode() {
+  [ -e "$1" ] || return 0
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%OLp' "$1" 2>/dev/null
+}
+
+# scenario_state <path> — RUNNABLE | MISSING | NOT_EXECUTABLE
+scenario_state() {
+  local script="$1"
+  if [ ! -f "$script" ]; then
+    echo "MISSING"
+  elif [ ! -x "$script" ]; then
+    echo "NOT_EXECUTABLE"
+  else
+    echo "RUNNABLE"
+  fi
+}
+
 # Setup a clean test workspace
 setup_workspace() {
   local name=$1

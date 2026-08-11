@@ -8,6 +8,11 @@ SCENARIOS_DIR="$(dirname "$0")/scenarios"
 TMP_DIR=""
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
+# Shared helpers. Only `scenario_state` / `file_mode` are used here (the runner's
+# outcome vocabulary, #400); sourcing defines functions and colours, it runs nothing.
+# shellcheck source=./lib/utils.sh
+source "$(dirname "$0")/lib/utils.sh"
+
 # Help function
 usage() {
   echo "Usage: $0 [--binary <path>] [--kb-source <path>] [--cleanup] [--ci] [--offline-only]"
@@ -231,12 +236,42 @@ is_offline_safe() {
   [ "${val:-true}" = "true" ]
 }
 
+# Outcomes: PASS | FAIL | MISSING | NOT EXECUTABLE (story #400).
+#
+# MISSING and NOT EXECUTABLE are both "the scenario never ran", and they are kept
+# apart from FAIL — and from each other — because the remedy differs and because a
+# collapsed vocabulary is what hid `coverage-gate.sh` (committed 644, reported as a
+# generic FAIL) for weeks. The state is decided by `scenario_state` in lib/utils.sh,
+# so the runner and the tests that assert this behaviour read the same function.
+#
+# Check-only (ADL 2026-07-31): the runner reports the mode and NEVER chmods it. A
+# runner that repaired the tree would turn a broken commit into a green local run.
 run_scenario() {
   local script="$1"
   local name=$(basename "$script")
+  local state mode
   echo "---------------------------------------------------"
+
+  state="$(scenario_state "$script")"
+  if [ "$state" = "MISSING" ]; then
+    echo -e "\033[0;31m[MISSING]\033[0m $name — listed for this run but not present in $SCENARIOS_DIR"
+    FAILED_TESTS+=("$name (missing)")
+    echo "| $name | ⚠️ MISSING |" >> "$REPORT_FILE"
+    return
+  fi
+  if [ "$state" = "NOT_EXECUTABLE" ]; then
+    mode="$(file_mode "$script")"
+    echo -e "\033[0;31m[NOT EXECUTABLE]\033[0m $name — mode $mode; the runner cannot execute it"
+    echo "  This is NOT an assertion failure: the scenario never ran."
+    echo "  Fix the COMMITTED mode (a local chmod alone leaves the commit at $mode):"
+    echo "    chmod +x $script && git update-index --chmod=+x scripts/smoke-tests/scenarios/$name"
+    FAILED_TESTS+=("$name (not executable, mode $mode)")
+    echo "| $name | 🚫 NOT EXECUTABLE (mode $mode) |" >> "$REPORT_FILE"
+    return
+  fi
+
   echo "Running Scenario: $name"
-  
+
   # Run in subshell
   if "$script"; then
     echo -e "\033[0;32m[PASS]\033[0m $name"
@@ -250,40 +285,22 @@ run_scenario() {
 
 # Find and run scenarios
 if [ "$IS_CI" = "true" ]; then
-  # Explicit list of CI-safe smoke tests
-  # We exclude any future tests that might require external resources or internet if strictly air-gapped
-  CI_TESTS=(
-    "install-basic.sh"
-    "package.sh"
-    "00-create-install-package.sh"
-    "bundle-content.sh"
-    "links.sh"
-    "lifecycle-kb.sh"
-    "validate-config.sh"
-    "kb-validate.sh"
-    "source-resolution.sh"
-    "install-preconditions.sh"
-    "scaffold-kb.sh"
-    "default-resolution.sh"
-    "tier-aware-gate.sh"
-    "coverage-gate.sh"
-    "pr-state-flow.sh"
-    "format-ignore-delegation.sh"
-  )
-  
+  # The CI-safe list and the reasons for every exclusion live in ONE place,
+  # lib/ci-tests.sh, which scenarios/runner-outcomes.sh audits: every scenario is
+  # either in CI_TESTS or in CI_EXCLUDED with a reason, and every listed name is a
+  # file that exists. Keeping the array here made "CI_TESTS" a claim nobody checked.
+  # shellcheck source=./lib/ci-tests.sh
+  source "$(dirname "$0")/lib/ci-tests.sh"
+
   for t in "${CI_TESTS[@]}"; do
     script="$SCENARIOS_DIR/$t"
-    if [ -f "$script" ]; then
-        if [ "$OFFLINE_ONLY" = "true" ] && ! is_offline_safe "$script"; then
-          echo "  Skipping (not offline-safe): $t"
-          continue
-        fi
-        run_scenario "$script"
-    else
-        echo -e "\033[0;31m[ERROR]\033[0m CI Test not found: $t"
-        FAILED_TESTS+=("$t (missing)")
-        echo "| $t | ⚠️ MISSING |" >> "$REPORT_FILE"
+    if [ -f "$script" ] && [ "$OFFLINE_ONLY" = "true" ] && ! is_offline_safe "$script"; then
+      echo "  Skipping (not offline-safe): $t"
+      continue
     fi
+    # A listed-but-absent or listed-but-unexecutable scenario is reported by
+    # run_scenario as MISSING / NOT EXECUTABLE — never as a plain FAIL.
+    run_scenario "$script"
   done
 else
   # Default: Run all discovered scenarios
