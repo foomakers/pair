@@ -7,8 +7,9 @@ import {
   buildTestResponse,
   toIncomingMessage,
 } from '@pair/content-ops'
-import { installKB, installKBFromLocalZip } from './kb-installer'
+import { installKB, installKBFromGit, installKBFromLocalZip } from './kb-installer'
 import { getSourceCachePath } from './cache-slot-key'
+import * as gitClone from './git-clone'
 
 // A local source owns a slot keyed by its own identity, not by the CLI version (US-395)
 const zipSlot = (path: string) => getSourceCachePath({ kind: 'zip', path })
@@ -108,6 +109,87 @@ describe('KB Installer', () => {
     })
 
     expect(result).toBe(cachePath)
+  })
+
+  /**
+   * US-395 review round 3: `installKB` serves the official download AND `--url <remote zip>`.
+   * The local-ZIP path unwraps an archive whose content sits under a single root directory
+   * (`normalizeExtractedKB`); this one did not, so an external KB packaged that way gave a
+   * dataset root one level too high — inside the source-identity model this story defines.
+   */
+  it('unwraps a downloaded ZIP nested under a single root directory', async () => {
+    const version = '0.4.3'
+    const downloadUrl = 'https://acme.example.com/acme-kb.zip'
+    const cachePath = getSourceCachePath({ kind: 'remote', url: downloadUrl })
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const httpClient = new MockHttpClientService()
+
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(join(targetPath, 'acme-kb-1.0.0', 'manifest.json'), '{"name":"acme-kb"}')
+      await fs.writeFile(join(targetPath, 'acme-kb-1.0.0', '.pair', 'knowledge', 'a.md'), '# a')
+    })
+
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    const result = await installKB(version, cachePath, downloadUrl, { httpClient, fs })
+
+    expect(result).toBe(cachePath)
+    expect(fs.existsSync(join(cachePath, '.pair', 'knowledge', 'a.md'))).toBe(true)
+    expect(fs.existsSync(join(cachePath, 'acme-kb-1.0.0'))).toBe(false)
+  })
+})
+
+/**
+ * US-395 review round 3 — the ADL's invariant "a slot is never deleted before its
+ * replacement is in hand" must hold for the git path too: it purged the slot and only then
+ * cloned, and `cloneGitRepo` rm -rf's the destination on failure, so an offline/auth error
+ * left the user with an empty slot where a working clone had been.
+ */
+describe('KB Installer - installKBFromGit', () => {
+  it('keeps the previous clone when the new clone fails', async () => {
+    const url = 'https://github.com/acme/kb.git#v1.0.0'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(slot, 'manifest.json')]: '{"name":"acme-kb"}',
+        [join(slot, '.pair', 'knowledge', 'index.md')]: '# working clone',
+      },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
+      throw new Error('Git clone failed: network unreachable')
+    })
+
+    await expect(installKBFromGit(url, fs)).rejects.toThrow(/Git clone failed/)
+
+    expect(await fs.readFile(join(slot, '.pair', 'knowledge', 'index.md'))).toBe('# working clone')
+    expect(fs.existsSync(`${slot}.bak`)).toBe(false)
+  })
+
+  it('replaces the slot wholesale on a successful clone, leaving no backup behind', async () => {
+    const url = 'https://github.com/acme/kb.git'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      { [join(slot, '.pair', 'knowledge', 'stale.md')]: '# from a previous clone' },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {})
+
+    const result = await installKBFromGit(url, fs)
+
+    expect(result).toBe(slot)
+    expect(fs.existsSync(join(slot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
+    expect(fs.existsSync(`${slot}.bak`)).toBe(false)
   })
 })
 

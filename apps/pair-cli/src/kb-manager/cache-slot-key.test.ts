@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { homedir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -132,14 +132,9 @@ describe('cache-slot-key — one location, one slot (path canonicalization)', ()
   })
 })
 
+// `vitest.setup.ts` deletes PAIR_KB_CACHE_DIR before EVERY test, so a suite that sets it
+// needs no save/restore of its own — the setup file owns the variable.
 describe('cache-slot-key — key → path mapping', () => {
-  const originalCacheDir = process.env['PAIR_KB_CACHE_DIR']
-
-  afterEach(() => {
-    if (originalCacheDir === undefined) delete process.env['PAIR_KB_CACHE_DIR']
-    else process.env['PAIR_KB_CACHE_DIR'] = originalCacheDir
-  })
-
   it('maps a key to a slot under the cache root', () => {
     expect(getCachedKBPath('0.2.0')).toBe(officialSlot('0.2.0'))
   })
@@ -187,9 +182,20 @@ describe('cache-slot-key — key → path mapping', () => {
     expect(() => getCacheRoot()).toThrow(/PAIR_KB_CACHE_DIR/)
   })
 
-  it('accepts a Windows absolute override', () => {
+  /**
+   * The cache ROOT is judged by the HOST convention, unlike a `--source` path. On POSIX,
+   * `C:\cache\kb` is a RELATIVE name: `join('C:\\cache\\kb', '0.4.3')` gives
+   * `C:\cache\kb/0.4.3`, which resolves against the process cwd — the same hazard as
+   * `.cache/kb` one test above, so it gets the same answer.
+   */
+  it('judges the override by the HOST convention, not by either convention', () => {
     process.env['PAIR_KB_CACHE_DIR'] = 'C:\\cache\\kb'
-    expect(getCacheRoot()).toBe('C:\\cache\\kb')
+    if (process.platform === 'win32') {
+      expect(getCacheRoot()).toBe('C:\\cache\\kb')
+    } else {
+      expect(() => getCacheRoot()).toThrow(/PAIR_KB_CACHE_DIR/)
+      expect(() => getCacheRoot()).toThrow(/absolute/)
+    }
   })
 
   it('refuses a key that climbs out of the cache root', () => {

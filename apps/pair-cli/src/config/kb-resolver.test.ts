@@ -68,6 +68,81 @@ describe('Release context always downloads KB (no bundled dataset)', () => {
     expect(result).not.toContain('bundle-cli/dataset')
     expect(mockEnsure).toHaveBeenCalled()
   })
+
+  /**
+   * `isKBCached` is a DIAGNOSTIC predicate: its result is consumed only to decide whether
+   * to print a `[diag]` line. Serving a contaminated or half-written slot is prevented by
+   * `ensureKBAvailable`'s own `inspectSlot`. With `PAIR_DIAG` off — the default — the
+   * probe (existsSync + readFile + JSON.parse on the slot's manifest) is pure cost on the
+   * hot path of every command that reaches the fallback resolver, so it is not run.
+   */
+  it('does not probe the cache when diagnostics are off (the probe is diagnostic-only)', async () => {
+    const previousDiag = process.env['PAIR_DIAG']
+    delete process.env['PAIR_DIAG']
+
+    const moduleDir = '/opt/pair-cli'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: '@foomakers/pair-cli',
+          version: '0.4.1',
+        }),
+      },
+      moduleDir,
+      moduleDir,
+    )
+    const isCached = vi.fn().mockResolvedValue(false)
+
+    try {
+      await getKnowledgeHubDatasetPathWithFallback({
+        fsService: fs,
+        httpClient: new MockHttpClientService(),
+        version: '0.4.1',
+        ensureKBAvailableFn: vi.fn().mockResolvedValue('/cached/kb/0.4.1'),
+        isKBCachedFn: isCached,
+      })
+
+      expect(isCached).not.toHaveBeenCalled()
+    } finally {
+      if (previousDiag === undefined) delete process.env['PAIR_DIAG']
+      else process.env['PAIR_DIAG'] = previousDiag
+    }
+  })
+
+  it('probes the cache when PAIR_DIAG is on (the [diag] line needs the answer)', async () => {
+    const previousDiag = process.env['PAIR_DIAG']
+    process.env['PAIR_DIAG'] = '1'
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const moduleDir = '/opt/pair-cli'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: '@foomakers/pair-cli',
+          version: '0.4.1',
+        }),
+      },
+      moduleDir,
+      moduleDir,
+    )
+    const isCached = vi.fn().mockResolvedValue(false)
+
+    try {
+      await getKnowledgeHubDatasetPathWithFallback({
+        fsService: fs,
+        httpClient: new MockHttpClientService(),
+        version: '0.4.1',
+        ensureKBAvailableFn: vi.fn().mockResolvedValue('/cached/kb/0.4.1'),
+        isKBCachedFn: isCached,
+      })
+
+      expect(isCached).toHaveBeenCalledWith('0.4.1', fs)
+    } finally {
+      consoleErrorSpy.mockRestore()
+      if (previousDiag === undefined) delete process.env['PAIR_DIAG']
+      else process.env['PAIR_DIAG'] = previousDiag
+    }
+  })
 })
 
 describe('kb-resolver', () => {

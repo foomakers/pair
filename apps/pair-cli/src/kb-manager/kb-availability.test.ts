@@ -470,6 +470,23 @@ describe('KB manager integration - a local directory is not a fetchable source',
       }),
     ).rejects.toThrow(/used in place, not cached/)
 
+    // The message a user can act on names the FLAG, not the internal functions: this error
+    // reaches the terminal through KnowledgeHubSetupError.
+    await expect(
+      ensureKBAvailable('local-test', {
+        httpClient: new MockHttpClientService(),
+        fs,
+        customUrl: datasetPath,
+      }),
+    ).rejects.toThrow(/--source/)
+    await expect(
+      ensureKBAvailable('local-test', {
+        httpClient: new MockHttpClientService(),
+        fs,
+        customUrl: datasetPath,
+      }),
+    ).rejects.not.toThrow(/resolveDatasetRoot|ensureKBAvailable/)
+
     // nothing was written under the cache root for it
     expect(fs.existsSync(join(homedir(), '.pair', 'kb', 'external'))).toBe(false)
   })
