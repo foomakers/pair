@@ -236,6 +236,61 @@ Runs after architecture and tech-stack are adopted (Step 3.1) — both are prere
 
 **Quick mode**: both composed `map-*` skills carry their own **unconditional** developer-approval round (`/pair-capability-map-subdomains` Step 3 "Approve or adjust?", `/pair-capability-map-contexts` Step 4 the same), so composing them plainly would emit two more questions inside a depth that asks none — the same collision as the assess-\* family in Step 2.2, in a different surface. Quick mode therefore **accepts each proposed delta as-is** and reports the catalogs once in the Step 4.3 summary; every entry stays an ordinary adoption file the developer can edit afterwards. This is a **disclosed per-adopter deviation** — see [quick-mode-defaults.md](./quick-mode-defaults.md) § Disclosed deviations. **One exception survives**: `/pair-capability-map-contexts` HALTs on an unbalanced + volatile relationship offered with neither mitigation nor acceptance, and quick mode does **not** suppress that — accepting it silently would write a domain model recording a coupling risk nobody judged. That single gate is the one place Phase 3.5 can still ask in quick mode.
 
+## Phase 3.6: Classification Delta (optional, opt-in)
+
+Runs **after Phase 3.5**: the subdomains and bounded contexts just mapped are what the criticality rows are proposed *from*, so the developer confirms a list instead of inventing one. Earlier in the flow there is no domain model to read.
+
+`tech/risk-matrix.md` holds up to three independent sections (quality-model §6). `## Tag Projection` is `/pair-capability-classify`'s own — it self-proposes that section on its first run (§5) and this phase **leaves it untouched**. The other two — `## Criticality Table` (§3.1) and `## Overrides` (§4) — have no guided authoring path anywhere else: this phase is it.
+
+**Absence stays legitimate.** The file is optional by design: absent, classification resolves entirely from KB defaults and nothing fails (quality-model §6, D21). This phase exists to make the delta easy to author, **never to make it expected** — declining is a fully supported outcome, no Definition of Done may come to require these sections, and the offer says so out loud.
+
+**Schema lives in the model, not here.** Both sections' shape is defined in the [quality model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) — §3.1 (the service/domain criticality dimension), §4 (per-tier reviewer count and SLA), §6 (the delta file itself) — with a filled-in example at [risk-matrix-example.md](../../../.pair/knowledge/assets/risk-matrix-example.md). This phase **never restates** either schema: a second copy would drift from the model that owns it.
+
+**Write path**: this phase writes the confirmed sections itself, with the same **propose-then-write-if-confirmed** / config-registry pattern `/pair-capability-classify` uses for its `## Tag Projection` section (quality-model §5, `/pair-capability-classify` Step 5). That is registry state, not adoption *decision* content, so it **does not route through `/pair-capability-record-decision`** — exactly as `/pair-capability-classify`'s own section write does not.
+
+**Interview style**: recommendation-first, **one recommendation at a time** (the `/pair-capability-grill` sync style, applied inline — the question set is fixed and short, so nothing is composed).
+
+### Step 3.6.1: Criticality Table (optional)
+
+1. **Check**: does `tech/risk-matrix.md` already contain a `## Criticality Table` section?
+2. **Skip**: if it does, the table is already authored — **do not re-propose** it (idempotent, mirroring the §5 "skip if present" rule). Report `already authored` and move to Step 3.6.2.
+3. **Check — parse**: the file exists but is malformed (unparseable table, unknown keys)? The §6 resolution already warns and falls back to KB defaults, so **report that** and skip both steps of this phase. **Never rewrite** a file over a parse this phase does not trust.
+4. **Act — build the candidate rows** (never a blank list):
+   - **Phase 3.5 ran**: the mapped subdomains and bounded contexts are the candidate rows. Each carries a **recommended** criticality and the **reason** for it, read from what 3.5 already recorded — a `core` subdomain, or a context several others depend on, is recommended higher than a `generic` one. The developer **confirms or edits**; nothing is invented on their behalf.
+   - **Phase 3.5 skipped, or its catalogs are empty**: degrade to the repository itself — workspace packages, deployables, top-level services — as the candidate rows, offered without a recommendation.
+   - **No distinct services or domains at all**: offer the whole project as a single scope. **An empty table is a valid answer**, and resolves to KB defaults.
+5. **Act**: present the candidates and ask, one recommendation at a time:
+
+   > **Service/domain criticality (optional).**
+   > From your domain model I would record: `[row]` — `[recommended criticality]`, because `[reason]`.
+   > Skipping is fully supported: with no table this dimension resolves to the KB default for every service (quality-model §3.1).
+   >
+   > Confirm this row, edit it, or skip the table entirely?
+
+6. **Act — on confirmation**: write `## Criticality Table` into `tech/risk-matrix.md` in the shape the model defines (§6), carrying **only the confirmed rows**. File absent ⇒ create it with only the confirmed sections — never a copy of the example asset. Any existing `## Tag Projection` is left untouched.
+7. **Act — on decline or skip**: **nothing is written**. Classification degrades to KB defaults (quality-model §3.1, D21) and setup continues — this step never blocks.
+8. **Verify**: either the section exists with the confirmed rows, or nothing was written — and either way the outcome (`authored` / `declined` / `already authored`) is carried into the Step 4.3 summary.
+
+**Quick mode**: this step **asks nothing and writes nothing** — no safe default exists for a project's criticality map, so the resolved default is "no delta, KB defaults apply"; the skip is reported once in the Step 4.3 summary ([quick-mode-defaults.md](./quick-mode-defaults.md)).
+
+### Step 3.6.2: Overrides (optional)
+
+1. **Check**: does `tech/risk-matrix.md` already contain an `## Overrides` section?
+2. **Skip**: present ⇒ already authored, and **never re-proposed**. Report it and move to Phase 4.
+3. **Act**: offer the two override families the model defines, one recommendation at a time — the **threshold** overrides for the other risk dimensions (§3.1, e.g. shared paths that must classify at least yellow whatever the diff size) and the optional **per-tier reviewer count / SLA** overrides (§4). Recommend keeping each at its KB default:
+
+   > **Classification overrides (optional).**
+   > Any path or threshold that should always classify higher than its size suggests? And do the per-tier reviewer counts and SLAs of the quality model (§4) match how this team actually reviews?
+   > Keeping both empty is the recommended answer — the KB defaults then apply unchanged.
+   >
+   > Add an override, or keep the KB defaults?
+
+4. **Act — on confirmation**: write the confirmed entries into `## Overrides` in the key shape the model defines (§4/§6) — same write path as Step 3.6.1, same file, `## Tag Projection` untouched.
+5. **Act — on decline**: nothing is written; the KB thresholds (§3.1) and the KB per-tier reviewer/SLA defaults (§4) apply. Never blocks.
+6. **Verify**: the outcome is recorded for the Step 4.3 summary.
+
+**Quick mode**: this step **asks nothing and writes nothing**, for the same reason as Step 3.6.1 — reported once in the Step 4.3 summary ([quick-mode-defaults.md](./quick-mode-defaults.md)).
+
 ## Phase 4: Finalization
 
 ### Step 4.1: Consistency Verification
@@ -287,6 +342,7 @@ BOOTSTRAP COMPLETE:
 │   └── way-of-working.md:  [generated | existing | skipped]
 ├── Quality Gates:   [N gates configured — standard + custom]
 ├── Domain Model:    [subdomains: N | contexts: N | skipped — not installed]
+├── Classification:  [criticality: N rows, overrides: N | declined | already authored | skipped — quick mode | skipped — file malformed]
 ├── PM Tool:         [configured via /setup-pm | already configured]
 ├── Decisions:       [N decisions recorded (ADR: X, ADL: Y)]
 └── Status:          [Complete | Partial — details]
@@ -312,6 +368,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 4. **Quality gates**: detects existing Custom Gate Registry entries, skips Step 3.2.
 5. **PM tool**: detects existing configuration in way-of-working, confirms and skips.
 6. **Decisions**: existing ADL/ADR entries are not re-created.
+7. **Classification delta**: checks `tech/risk-matrix.md` section by section — an existing `## Criticality Table` or `## Overrides` is reported as already authored and never re-proposed (Phase 3.6).
 
 Phase completion is detected via output file existence — never re-does completed work.
 
@@ -326,6 +383,8 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
 - **/record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/pair-capability-record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
 - **/map-subdomains or /pair-capability-map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
+- **Quality model doc not installed** (Phase 3.6): skip the phase with a warning — the model owns the schema of both sections, so there is nothing to author a delta against. Never blocks.
+- **`tech/risk-matrix.md` present but malformed** (Phase 3.6): report it and write nothing — the §6 resolution already warns and falls back to KB defaults; the file is not rewritten over a parse the phase does not trust.
 - **No TTY (CI, piped stdin)**: guided cannot run — warn and run `$mode: quick` instead, never hang on input that cannot arrive. If a still-asked decision (PM tool, undetectable stack) is then unresolvable → **HALT**.
 
 ## Notes

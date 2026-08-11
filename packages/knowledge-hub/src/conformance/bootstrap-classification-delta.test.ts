@@ -143,7 +143,9 @@ describe('write path reuses classify’s self-write, not /record-decision (AC2)'
   it('writes to tech/risk-matrix.md and creates it with the confirmed sections only', () => {
     const c = body()
     expect(c).toContain('risk-matrix.md')
-    expect(c.toLowerCase()).toMatch(/never a (full )?copy of the example|only the confirmed section/)
+    expect(c.toLowerCase()).toMatch(
+      /never a (full )?copy of the example|only the confirmed section/,
+    )
   })
 
   it('owns two sections and leaves classify’s Tag Projection untouched', () => {
@@ -167,7 +169,8 @@ describe('the flow is opt-in and never blocks (AC3)', () => {
   })
 
   it('adds no HALT condition of its own', () => {
-    const halt = datasetSkill().split('## HALT Conditions')[1] ?? ''
+    // the HALT list itself, not everything that follows it
+    const halt = (datasetSkill().split('## HALT Conditions')[1] ?? '').split(/^## /m)[0]
     expect(halt.toLowerCase()).not.toMatch(/criticality|risk-matrix/)
   })
 
