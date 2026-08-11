@@ -1,15 +1,11 @@
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
-import {
-  cleanupFile,
-  validateKBStructure,
-  normalizeExtractedKB,
-  copyDirectoryContents,
-} from '@pair/content-ops'
+import { cleanupFile, normalizeExtractedKB } from '@pair/content-ops'
 import { downloadWithRetry } from './download-manager'
 import cacheManager from './cache-manager'
 import { getSourceCachePath, resolveSourcePath, type KBSource } from './cache-slot-key'
+import { cloneGitRepo } from './git-clone'
 import checksumManager from './checksum-manager'
 import formatDownloadError from './error-formatter'
 import { announceDownload, announceSuccess } from './download-ui'
@@ -117,44 +113,25 @@ export async function installKB(
   }
 }
 
-export async function installKBFromLocalDirectory(
-  version: string,
-  dirPath: string,
-  fs: FileSystemService,
-): Promise<string> {
-  // Slot keyed by source identity, never by CLI version: an external directory must not
-  // land in the official KB's slot (US-395). The caller has already classified this path
-  // as a directory (`localKBSource`); the slot derives from the same resolved path, so
-  // both sides land on the same slot.
-  const resolvedDirPath = resolveSourcePath(dirPath, fs)
-  const source: KBSource = { kind: 'directory', path: resolvedDirPath }
+/**
+ * Clones a git source into the slot its URL owns.
+ *
+ * The slot lifecycle (purge → create → populate) lives HERE, with every other source
+ * form's, instead of in the config layer: slot mechanics duplicated outside the module
+ * that owns slots is exactly the shape that produced the contamination US-395 fixes.
+ */
+export async function installKBFromGit(url: string, fs: FileSystemService): Promise<string> {
+  const source: KBSource = { kind: 'git', url }
   const cachePath = getSourceCachePath(source)
 
-  // Validate directory exists
-  if (!fs.existsSync(resolvedDirPath)) {
-    throw new Error(`Directory not found: ${resolvedDirPath}`)
-  }
-
-  // Replace the slot wholesale so files from a previous install cannot linger
+  // Replace the slot wholesale so files from a previous clone cannot linger
   await cacheManager.purgeSlot(source, fs)
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
-  try {
-    await copyDirectoryContents(fs, resolvedDirPath, cachePath)
-
-    // Validate KB structure
-    const kbStructureValid = await validateKBStructure(cachePath, fs)
-    if (!kbStructureValid) {
-      throw new Error('Invalid KB structure')
-    }
-
-    announceSuccess(version, cachePath)
-    return cachePath
-  } catch (error) {
-    const err = error as Error
-    if (shouldPreserveError(err)) throw err
-    throw new Error(`Failed to install KB from local directory: ${err.message}`)
-  }
+  cloneGitRepo(url, cachePath)
+  // The dataset is what we cache; the clone's history is not.
+  await fs.rm(join(cachePath, '.git'), { recursive: true, force: true })
+  return cachePath
 }
 
 // Helper: finalize installation, normalize and return dataset root
@@ -218,4 +195,4 @@ export async function installKBFromLocalZip(
   }
 }
 
-export default { installKB, installKBFromLocalZip, installKBFromLocalDirectory }
+export default { installKB, installKBFromLocalZip, installKBFromGit }

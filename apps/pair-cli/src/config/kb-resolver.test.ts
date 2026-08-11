@@ -171,6 +171,25 @@ describe('resolveDatasetRoot', () => {
     expect(result).toBe('/external/kb-dataset')
   })
 
+  /**
+   * US-395 review round 2: the cache-strategy table used to claim a directory source was
+   * copied into `~/.pair/kb/external/dir-<name>-<hash>/`. It never was — it is read in
+   * place, so edits to it change the next install's result. Asserted, not just documented.
+   */
+  it('local directory resolution creates no cache slot — the directory is used in place', async () => {
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+    fs.mkdirSync('/external/kb-dataset')
+    await fs.writeFile('/external/kb-dataset/AGENTS.md', '# Agents')
+
+    const result = await resolveDatasetRoot(fs, {
+      resolution: 'local',
+      path: '/external/kb-dataset',
+    })
+
+    expect(result).toBe('/external/kb-dataset')
+    expect(fs.existsSync(join(homedir(), '.pair', 'kb', 'external'))).toBe(false)
+  })
+
   it('local resolution resolves relative path to absolute', async () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
     fs.mkdirSync(`${cwd}/my-kb`)
@@ -266,7 +285,7 @@ describe('resolveDatasetRoot', () => {
 
   it('git resolution keys the cache on the git source, never on cliVersion (US-395)', async () => {
     const gitClone = await import('#kb-manager/git-clone')
-    const cache = await import('#kb-manager')
+    const cache = await import('#kb-manager/cache-slot-key')
 
     vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {})
 

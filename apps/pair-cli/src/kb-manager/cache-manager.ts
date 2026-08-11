@@ -62,7 +62,15 @@ export async function purgeSlot(source: KBSource, fs: FileSystemService): Promis
   await fs.rm(getSourceCachePath(source), { recursive: true, force: true })
 }
 
-/** True when the official KB for `version` is cached AND not contaminated (AC3/AC5). */
+/**
+ * True when the official KB for `version` is cached AND not contaminated (AC3/AC5).
+ *
+ * DIAGNOSTIC PREDICATE, not a gate: its only production caller (`config/kb-resolver.ts`)
+ * uses it to decide whether to print a `[diag]` line, then calls `ensureKBAvailable`
+ * unconditionally. Serving a contaminated slot is prevented by `ensureKBAvailable`'s own
+ * `inspectSlot` call, not by this function — which is why this one may safely swallow
+ * errors and return false.
+ */
 export async function isKBCached(version: string, fs: FileSystemService): Promise<boolean> {
   try {
     const state = await inspectSlot(officialSource(version), fs)

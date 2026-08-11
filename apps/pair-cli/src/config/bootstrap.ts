@@ -1,6 +1,6 @@
 import { FileSystemService, HttpClientService, isRemoteUrl, validateUrl } from '@pair/content-ops'
 import { getKnowledgeHubDatasetPath, getKnowledgeHubDatasetPathWithFallback } from './kb-resolver'
-import { validateCliOptions } from '#kb-manager/cli-options'
+import { validateCliOptions } from '#kb-manager'
 import { isDiagEnabled } from '#diagnostics'
 import { DatasetAccessError, DatasetNotFoundError, KnowledgeHubSetupError } from './errors'
 

@@ -49,11 +49,10 @@ describe('cache-slot-key — source-identity keying (US-395)', () => {
     expect(a).not.toBe(b)
   })
 
-  it('gives every source form its own slot (AC4)', () => {
+  it('gives every slot-owning source form its own slot (AC4)', () => {
     const keys = [
       cacheSlotKey(officialSource('0.2.0')),
       cacheSlotKey({ kind: 'zip', path: '/kb/acme.zip' }),
-      cacheSlotKey({ kind: 'directory', path: '/kb/acme' }),
       cacheSlotKey({ kind: 'git', url: 'https://github.com/acme/kb.git' }),
       cacheSlotKey({ kind: 'remote', url: 'https://cdn.example.com/acme.zip' }),
     ]

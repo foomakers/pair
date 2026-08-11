@@ -5,12 +5,7 @@ import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
 import { getSourceCachePath, localKBSource, officialSource, type KBSource } from './cache-slot-key'
 import urlUtils from './url-utils'
-import {
-  installKB,
-  installKBFromLocalDirectory,
-  installKBFromLocalZip,
-  type InstallerDeps,
-} from './kb-installer'
+import { installKB, installKBFromLocalZip, type InstallerDeps } from './kb-installer'
 
 export interface KBManagerDeps {
   httpClient: HttpClientService
@@ -26,6 +21,11 @@ export interface KBManagerDeps {
  * Identity of the KB this call installs — the official KB when no `customUrl` is given,
  * otherwise the custom source itself. The slot follows the identity, so an external
  * source can never occupy the official KB's slot (US-395).
+ *
+ * A local ZIP is accepted (its slot is its resolved path); a local DIRECTORY is not, and
+ * that is a real boundary rather than a missing case: a directory source is read in place
+ * by `resolveDatasetRoot`, never fetched into a slot, so there is nothing here to make
+ * "available". Rejecting it keeps the two layers from disagreeing silently.
  */
 function resolveSource(version: string, deps: KBManagerDeps): KBSource {
   const sourceUrl = deps.customUrl
@@ -33,7 +33,14 @@ function resolveSource(version: string, deps: KBManagerDeps): KBSource {
   if (detectSourceType(sourceUrl, deps.fs) === SourceType.REMOTE_URL) {
     return { kind: 'remote', url: sourceUrl }
   }
-  return localKBSource(sourceUrl, deps.fs)
+  const local = localKBSource(sourceUrl, deps.fs)
+  if (local.kind === 'directory') {
+    throw new Error(
+      `A local KB directory is used in place, not cached: ${local.path}. ` +
+        'Resolve it with resolveDatasetRoot({ resolution: "local" }) instead of ensureKBAvailable.',
+    )
+  }
+  return local
 }
 
 function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
@@ -90,7 +97,6 @@ async function installFromSource(
   // Dispatch on the ALREADY-RESOLVED identity, never on a second look at the raw string:
   // the slot a source owns and the installer it is routed to must agree (US-395).
   if (source.kind === 'zip') return installKBFromLocalZip(version, source.path, fs, deps.skipVerify)
-  if (source.kind === 'directory') return installKBFromLocalDirectory(version, source.path, fs)
 
   const downloadUrl =
     source.kind === 'remote' ? source.url : urlUtils.buildGithubReleaseUrl(version)

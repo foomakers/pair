@@ -447,8 +447,13 @@ describe('KB manager integration - custom URL', () => {
   })
 })
 
-describe('KB manager integration - local directory paths via customUrl', () => {
-  it('should handle local directory paths via customUrl', async () => {
+/**
+ * A local DIRECTORY owns no cache slot: `resolveDatasetRoot` reads it in place. Routing
+ * one here would have to invent a slot to copy it into — the two layers would then
+ * disagree about where that KB lives, which is the class of defect US-395 exists to fix.
+ */
+describe('KB manager integration - a local directory is not a fetchable source', () => {
+  it('refuses a local directory instead of copying it into a cache slot', async () => {
     const datasetPath = '/local/kb/dataset'
 
     const seed: Record<string, string> = {}
@@ -457,14 +462,16 @@ describe('KB manager integration - local directory paths via customUrl', () => {
 
     const fs = new InMemoryFileSystemService(seed, '/', '/')
 
-    const httpClient = new MockHttpClientService()
-    const result = await ensureKBAvailable('local-test', {
-      httpClient,
-      fs: fs,
-      customUrl: datasetPath,
-    })
+    await expect(
+      ensureKBAvailable('local-test', {
+        httpClient: new MockHttpClientService(),
+        fs,
+        customUrl: datasetPath,
+      }),
+    ).rejects.toThrow(/used in place, not cached/)
 
-    expect(result).toBeDefined()
+    // nothing was written under the cache root for it
+    expect(fs.existsSync(join(homedir(), '.pair', 'kb', 'external'))).toBe(false)
   })
 })
 
@@ -537,13 +544,16 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     expect(httpClient.getUrls()).toHaveLength(0)
   })
 
-  it('should re-install from local path when cache exists (AC-4)', async () => {
-    const localPath = '/local/kb/dataset'
+  it('should re-install from a local ZIP without serving the official cache (AC-4)', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const localZip = '/local/kb/acme-kb.zip'
     const fs = new InMemoryFileSystemService(
       {
         [expectedCachePath + '/manifest.json']: '{"version": "0.2.0"}',
-        [localPath + '/AGENTS.md']: 'local agents',
-        [localPath + '/.pair/knowledge/index.md']: '# Local KB',
+        [localZip]: createValidZipData({
+          'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+          '.pair/knowledge/index.md': '# Local KB',
+        }),
       },
       '/',
       '/',
@@ -554,13 +564,18 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     const result = await ensureKBAvailable(testVersion, {
       httpClient,
       fs,
-      customUrl: localPath,
+      customUrl: localZip,
+      skipVerify: true,
     })
 
-    // Should have installed from local path, not returned stale cache
-    expect(result).toBeDefined()
-    // No HTTP calls for local path
+    // Installed from the local ZIP's own slot, not the official cache it must not touch
+    expect(result).toBe(getSourceCachePath({ kind: 'zip', path: localZip }))
+    expect(result).not.toBe(expectedCachePath)
+    expect(await fs.readFile(expectedCachePath + '/manifest.json')).toBe('{"version": "0.2.0"}')
+    // No HTTP calls for a local path
     expect(httpClient.getUrls()).toHaveLength(0)
+
+    consoleLogSpy.mockRestore()
   })
 
   it('should restore the source slot when remote customUrl download fails (AC-5)', async () => {
@@ -773,8 +788,8 @@ describe('KB Manager - one identity per source, whatever the extension case (US-
 
     expect(result).toBe(getSourceCachePath({ kind: 'zip', path: zipPath }))
     expect(fs.existsSync(join(result, '.pair', 'knowledge', 'acme.md'))).toBe(true)
-    // no orphan directory slot was created for the same archive
-    expect(fs.existsSync(getSourceCachePath({ kind: 'directory', path: zipPath }))).toBe(false)
+    // exactly one slot exists for this archive — no orphan from a second classification
+    expect(await fs.readdir(join(homedir(), '.pair', 'kb', 'external'))).toHaveLength(1)
 
     consoleLogSpy.mockRestore()
   })

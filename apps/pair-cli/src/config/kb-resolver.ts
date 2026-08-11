@@ -1,18 +1,13 @@
 import { join, dirname } from 'path'
-import { rmSync } from 'fs'
 import { FileSystemService, HttpClientService, validateKBStructure } from '@pair/content-ops'
 import { findPackageJsonPath } from './discovery'
 import {
   isKBCached,
   ensureKBAvailable,
-  ensureCacheDirectory,
-  getSourceCachePath,
+  installKBFromGit,
+  installKBFromLocalZip,
   localKBSource,
-  purgeSlot,
-  type KBSource,
 } from '#kb-manager'
-import { installKBFromLocalZip } from '#kb-manager/kb-installer'
-import { cloneGitRepo } from '#kb-manager/git-clone'
 import { isDiagEnabled } from '#diagnostics'
 
 /**
@@ -137,17 +132,6 @@ export interface DatasetResolveOptions {
   isTTY?: boolean | undefined
 }
 
-async function resolveGitDataset(fs: FileSystemService, url: string): Promise<string> {
-  // Source-identity slot, never the official KB's version slot (US-395)
-  const source: KBSource = { kind: 'git', url }
-  const cachePath = getSourceCachePath(source)
-  await purgeSlot(source, fs)
-  await ensureCacheDirectory(cachePath, fs)
-  cloneGitRepo(url, cachePath)
-  rmSync(join(cachePath, '.git'), { recursive: true, force: true })
-  return cachePath
-}
-
 async function resolveLocalDataset(
   fs: FileSystemService,
   path: string,
@@ -156,6 +140,8 @@ async function resolveLocalDataset(
 ): Promise<string> {
   // ZIP-vs-directory is classified in ONE place (`localKBSource`), so this dispatch and
   // the cache slot the installer writes can never disagree — `KB.ZIP` included (US-395).
+  // A ZIP is extracted into its own cache slot; a DIRECTORY is used IN PLACE — no copy,
+  // no slot, so edits to it are picked up by the next install.
   const source = localKBSource(path, fs)
   const resolved = source.path
   if (source.kind === 'zip') {
@@ -219,7 +205,9 @@ export async function resolveDatasetRoot(
     }
 
     case 'git':
-      return resolveGitDataset(fs, config.url)
+      // Pure dispatch: the git slot's lifecycle lives in kb-manager, with every other
+      // source form's (US-395 review round 2).
+      return installKBFromGit(config.url, fs)
 
     case 'local':
       return resolveLocalDataset(fs, config.path, version, config.skipVerify)

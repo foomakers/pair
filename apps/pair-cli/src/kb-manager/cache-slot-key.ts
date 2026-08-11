@@ -29,16 +29,23 @@ export const OFFICIAL_KB_NAME = 'knowledge-base'
 /** Directory under the cache root that holds every non-official source's slot. */
 export const EXTERNAL_NAMESPACE = 'external'
 
-/** Identity of the KB source a cache slot belongs to. */
+/**
+ * Identity of a KB source that OWNS a cache slot. A local directory is deliberately not
+ * here: it is used in place, never copied into the cache (see `LocalKBSource`), so it has
+ * no identity to key a slot with.
+ */
 export type KBSource =
   | { kind: 'official'; version: string }
   | { kind: 'remote'; url: string }
   | { kind: 'git'; url: string }
   | { kind: 'zip'; path: string }
-  | { kind: 'directory'; path: string }
 
-/** A source that lives on this machine's filesystem (the two forms `--source` accepts). */
-export type LocalKBSource = Extract<KBSource, { kind: 'zip' | 'directory' }>
+/**
+ * A `--source` path on this machine, classified. A ZIP is extracted into its own slot
+ * (hence it is also a `KBSource`); a DIRECTORY is read in place — the CLI never copies it
+ * into the cache, so it owns no slot and edits to it are picked up by the next install.
+ */
+export type LocalKBSource = { kind: 'zip'; path: string } | { kind: 'directory'; path: string }
 
 export function officialSource(version: string): KBSource {
   return { kind: 'official', version }
@@ -53,12 +60,36 @@ function isAbsolutePath(rawPath: string): boolean {
   return posix.isAbsolute(rawPath) || win32.isAbsolute(rawPath)
 }
 
+/** `/`, `C:\`, `\\` — a root has nothing to strip; `''` is not a path. */
+const ROOT_LIKE = /^([\\/]+|[a-zA-Z]:[\\/]*)$/
+
+function stripTrailingSeparator(path: string): string {
+  if (ROOT_LIKE.test(path)) return path
+  return path.replace(/[\\/]+$/, '') || path
+}
+
+/**
+ * ONE filesystem location must map to ONE slot: `/kb/acme.zip`, `/kb/./acme.zip` and
+ * `/kb/../kb/acme.zip` are the same file, and `--source /kb/` is the same directory as
+ * `--source /kb`. Without canonicalization each spelling hashes to its own slot — a full
+ * extra copy of the KB on disk and a needless re-extract. Normalized with the rules of
+ * whichever convention called the path absolute, so a Windows path is not mangled by the
+ * POSIX normalizer. (Distinct from #429, which is path-vs-content identity: two different
+ * paths to the same bytes stay two slots, deliberately.)
+ */
+function canonicalize(path: string): string {
+  const normalized = posix.isAbsolute(path) ? posix.normalize(path) : win32.normalize(path)
+  return stripTrailingSeparator(normalized)
+}
+
 /**
  * Resolves a source path against the INJECTED cwd, so the caller that installs and the
  * caller that inspects the cache always derive the same slot for the same source.
  */
 export function resolveSourcePath(rawPath: string, fs: FileSystemService): string {
-  return isAbsolutePath(rawPath) ? rawPath : join(fs.currentWorkingDirectory(), rawPath)
+  if (isAbsolutePath(rawPath)) return canonicalize(rawPath)
+  // `join` normalizes as a side effect but keeps a trailing separator.
+  return stripTrailingSeparator(join(fs.currentWorkingDirectory(), rawPath))
 }
 
 /**
@@ -117,28 +148,50 @@ export function cacheSlotKey(source: KBSource): string {
       return `${EXTERNAL_NAMESPACE}/url-${labelFromUrl(source.url)}-${shortHash(`remote:${source.url}`)}`
     case 'zip':
       return `${EXTERNAL_NAMESPACE}/zip-${labelFromPath(source.path)}-${shortHash(`zip:${source.path}`)}`
-    case 'directory':
-      return `${EXTERNAL_NAMESPACE}/dir-${labelFromPath(source.path)}-${shortHash(`dir:${source.path}`)}`
   }
 }
 
 /**
- * Root of the KB cache. `PAIR_KB_CACHE_DIR` (documented in the CLI configuration
- * reference) overrides it with an absolute path; otherwise `~/.pair/kb`.
+ * Root of the KB cache: `~/.pair/kb`, or `PAIR_KB_CACHE_DIR` when set.
+ *
+ * The override must be ABSOLUTE and must not climb with `..`, and that is enforced here
+ * rather than documented: this value prefixes every slot path, and `purgeSlot` deletes a
+ * slot with `rm -rf`. `PAIR_KB_CACHE_DIR=.cache/kb` would resolve slots against the
+ * process cwd, so `pair install --source x.zip` run inside a repository would create and
+ * then recursively delete directories inside that repository.
  */
 export function getCacheRoot(): string {
   const override = process.env['PAIR_KB_CACHE_DIR']?.trim()
-  return override ? override : join(homedir(), '.pair', 'kb')
+  if (!override) return join(homedir(), '.pair', 'kb')
+  if (!isAbsolutePath(override)) {
+    throw new Error(
+      `PAIR_KB_CACHE_DIR must be an absolute path (got "${override}") — cache slots are deleted recursively and must never resolve against the current directory`,
+    )
+  }
+  if (hasParentSegment(override)) {
+    throw new Error(`PAIR_KB_CACHE_DIR must not contain ".." segments (got "${override}")`)
+  }
+  return override
+}
+
+/** True when any segment of the path is `..` (either separator convention). */
+function hasParentSegment(path: string): boolean {
+  return path.split(/[\\/]+/).includes('..')
 }
 
 /**
  * Absolute path of a cache slot from its key (the official KB's key is its version).
- * An empty key would resolve to the cache ROOT, which `purgeSlot` would then delete —
- * so it is rejected rather than normalized away.
+ * An empty key would resolve to the cache ROOT, and a `..` segment would resolve OUTSIDE
+ * it — both are then deleted by `purgeSlot`, so both are rejected rather than normalized
+ * away. Guarding here covers every key producer, including the official version segment
+ * (today the CLI's own package version, tomorrow whatever calls this).
  */
 export function getCachedKBPath(key: string): string {
   const slot = key.trim()
   if (!slot) throw new Error('Cache slot key must not be empty (it would target the cache root)')
+  if (hasParentSegment(slot)) {
+    throw new Error(`Cache slot key must not escape the cache root with ".." (got "${key}")`)
+  }
   return join(getCacheRoot(), slot)
 }
 

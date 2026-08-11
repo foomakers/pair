@@ -7,12 +7,11 @@ import {
   buildTestResponse,
   toIncomingMessage,
 } from '@pair/content-ops'
-import { installKB, installKBFromLocalZip, installKBFromLocalDirectory } from './kb-installer'
+import { installKB, installKBFromLocalZip } from './kb-installer'
 import { getSourceCachePath } from './cache-slot-key'
 
 // A local source owns a slot keyed by its own identity, not by the CLI version (US-395)
 const zipSlot = (path: string) => getSourceCachePath({ kind: 'zip', path })
-const dirSlot = (path: string) => getSourceCachePath({ kind: 'directory', path })
 
 describe('KB Installer', () => {
   it('downloads and installs when checksum absent', async () => {
@@ -300,124 +299,6 @@ describe('KB Installer - installKBFromLocalZip', () => {
   })
 })
 
-describe('KB Installer - installKBFromLocalDirectory', () => {
-  it('should reject when directory contains only manifest.json', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/path/manifest-only-dir'
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, 'manifest.json')]: '{}',
-      },
-      '/',
-      '/',
-    )
-
-    // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
-      'Invalid KB structure',
-    )
-  })
-
-  it('should accept when directory contains manifest.json and another file', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/path/manifest-plus-dir'
-    const expectedCachePath = dirSlot(dirPath)
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, 'manifest.json')]: '{}',
-        [join(dirPath, 'AGENTS.md')]: 'agents content',
-      },
-      '/',
-      '/',
-    )
-
-    // Act
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    // Assert
-    expect(result).toBe(expectedCachePath)
-    expect(fs.existsSync(`${expectedCachePath}/manifest.json`)).toBe(true)
-    expect(fs.existsSync(`${expectedCachePath}/AGENTS.md`)).toBe(true)
-  })
-
-  it('should install KB from absolute path local directory and return cachePath', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/absolute/path/kb'
-    const expectedCachePath = dirSlot(dirPath)
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
-        [join(dirPath, 'AGENTS.md')]: 'agents content',
-      },
-      '/',
-      '/',
-    )
-
-    // Act
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    // Assert — datasetRoot must be cachePath, not cachePath/.pair
-    expect(result).toBe(expectedCachePath)
-  })
-
-  it('should install KB from relative path local directory and return cachePath', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = './relative/kb'
-    // fs.currentWorkingDirectory() returns '/' so resolve('/', './relative/kb') = '/relative/kb'
-    const resolvedDirPath = '/relative/kb'
-    const expectedCachePath = dirSlot(resolvedDirPath)
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(resolvedDirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
-        [join(resolvedDirPath, 'AGENTS.md')]: 'agents content',
-      },
-      '/',
-      '/',
-    )
-
-    // Act
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    // Assert — datasetRoot must be cachePath, not cachePath/.pair
-    expect(result).toBe(expectedCachePath)
-  })
-
-  it('should throw error if directory does not exist', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/nonexistent/kb'
-    const fs = new InMemoryFileSystemService({}, '/', '/')
-
-    // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
-      'Directory not found: /nonexistent/kb',
-    )
-  })
-
-  it('should validate KB structure after copy', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/path/kb'
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, 'some-file.txt')]: 'content',
-        // No .pair/ or AGENTS.md
-      },
-      '/',
-      '/',
-    )
-
-    // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
-      'Invalid KB structure',
-    )
-  })
-})
-
 /**
  * BUG #05: auto-download KB path coverage
  *
@@ -544,31 +425,6 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
     expect(fs.existsSync(join(result, '.skills'))).toBe(true)
   })
 
-  it('installKBFromLocalDirectory returns cachePath when dir has root-level registries beside .pair/', async () => {
-    const version = '0.4.1'
-    const dirPath = '/source/kb'
-    const cachePath = dirSlot(dirPath)
-
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, '.pair/knowledge/test.md')]: '# Test',
-        [join(dirPath, '.github/ci.yml')]: 'ci',
-        [join(dirPath, 'AGENTS.md')]: '# AGENTS',
-        [join(dirPath, '.skills/next/SKILL.md')]: '# /next',
-      },
-      '/',
-      '/',
-    )
-
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    expect(result).toBe(cachePath)
-    expect(fs.existsSync(join(result, '.pair', 'knowledge'))).toBe(true)
-    expect(fs.existsSync(join(result, '.github'))).toBe(true)
-    expect(fs.existsSync(join(result, 'AGENTS.md'))).toBe(true)
-    expect(fs.existsSync(join(result, '.skills'))).toBe(true)
-  })
-
   it('installKB (remote download) returns cachePath when extract has root-level registries beside .pair/', async () => {
     vi.clearAllMocks()
 
@@ -664,22 +520,6 @@ describe('US-395: an external source never lands in the official KB cache slot',
       false,
     )
     expect(result.startsWith(officialSlot)).toBe(false)
-  })
-
-  it('leaves the official slot untouched when installing an external directory', async () => {
-    const version = '0.4.3'
-    const officialSlot = join(homedir(), '.pair', 'kb', version)
-    const dirPath = '/sources/acme-kb'
-    const fs = populatedOfficialCache(version, {
-      [`${dirPath}/AGENTS.md`]: '# acme agents',
-      [`${dirPath}/.pair/knowledge/acme.md`]: '# acme',
-    })
-
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    expect(result).not.toBe(officialSlot)
-    expect(await fs.readFile(`${officialSlot}/manifest.json`)).toBe(OFFICIAL_MANIFEST)
-    expect(fs.existsSync(join(result, 'AGENTS.md'))).toBe(true)
   })
 
   it('re-installing the same source replaces the slot instead of merging stale files', async () => {
