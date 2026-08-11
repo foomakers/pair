@@ -96,6 +96,43 @@ describe('cache-slot-key — source-identity keying (US-395)', () => {
   })
 })
 
+/**
+ * One filesystem location must yield ONE slot. Every spurious slot is a full extra copy
+ * of a KB on disk plus a needless re-extract — distinct from the accepted path-vs-content
+ * trade-off (#429): here the SAME path expression failed to canonicalize.
+ */
+describe('cache-slot-key — one location, one slot (path canonicalization)', () => {
+  const fs = new InMemoryFileSystemService({}, '/work', '/work')
+
+  it('collapses `.` and `..` segments in an absolute path', () => {
+    const plain = resolveSourcePath('/downloads/acme.zip', fs)
+    expect(resolveSourcePath('/downloads/./acme.zip', fs)).toBe(plain)
+    expect(resolveSourcePath('/downloads/../downloads/acme.zip', fs)).toBe(plain)
+  })
+
+  it('strips a trailing separator, so `--source /kb/` and `/kb` share one slot', () => {
+    expect(resolveSourcePath('/kb/', fs)).toBe('/kb')
+    expect(cacheSlotKey({ kind: 'zip', path: resolveSourcePath('/kb/acme.zip/', fs) })).toBe(
+      cacheSlotKey({ kind: 'zip', path: resolveSourcePath('/kb/acme.zip', fs) }),
+    )
+  })
+
+  it('canonicalizes the relative branch too (trailing slash after join)', () => {
+    expect(resolveSourcePath('../acme-kb/', fs)).toBe('/acme-kb')
+    expect(resolveSourcePath('./dist/kb.zip', fs)).toBe('/work/dist/kb.zip')
+  })
+
+  it('canonicalizes a Windows path with the Windows rules, not the POSIX ones', () => {
+    expect(resolveSourcePath('C:\\kb\\..\\kb\\acme.zip', fs)).toBe('C:\\kb\\acme.zip')
+    expect(resolveSourcePath('C:\\kb\\', fs)).toBe('C:\\kb')
+  })
+
+  it('leaves a filesystem root intact instead of stripping it to nothing', () => {
+    expect(resolveSourcePath('/', fs)).toBe('/')
+    expect(resolveSourcePath('C:\\', fs)).toBe('C:\\')
+  })
+})
+
 describe('cache-slot-key — key → path mapping', () => {
   const originalCacheDir = process.env['PAIR_KB_CACHE_DIR']
 
@@ -133,5 +170,32 @@ describe('cache-slot-key — key → path mapping', () => {
     expect(getCacheRoot()).toBe(join(homedir(), '.pair', 'kb'))
     delete process.env['PAIR_KB_CACHE_DIR']
     expect(getCacheRoot()).toBe(join(homedir(), '.pair', 'kb'))
+  })
+
+  /**
+   * The cache root feeds every slot path, and `purgeSlot` deletes a slot recursively.
+   * A relative override would resolve slots against the process cwd, so `pair install`
+   * inside a repository would create AND recursively delete directories in it.
+   */
+  it('refuses a relative PAIR_KB_CACHE_DIR instead of resolving slots against the cwd', () => {
+    process.env['PAIR_KB_CACHE_DIR'] = '.cache/kb'
+    expect(() => getCacheRoot()).toThrow(/PAIR_KB_CACHE_DIR/)
+    expect(() => getCacheRoot()).toThrow(/absolute/)
+  })
+
+  it('refuses a PAIR_KB_CACHE_DIR that climbs out with `..`', () => {
+    process.env['PAIR_KB_CACHE_DIR'] = '/var/cache/../../etc'
+    expect(() => getCacheRoot()).toThrow(/PAIR_KB_CACHE_DIR/)
+  })
+
+  it('accepts a Windows absolute override', () => {
+    process.env['PAIR_KB_CACHE_DIR'] = 'C:\\cache\\kb'
+    expect(getCacheRoot()).toBe('C:\\cache\\kb')
+  })
+
+  it('refuses a key that climbs out of the cache root', () => {
+    expect(() => getCachedKBPath('../../etc')).toThrow(/cache root/)
+    expect(() => getCachedKBPath('external/../../etc')).toThrow(/cache root/)
+    expect(() => getSourceCachePath(officialSource('../evil'))).toThrow(/cache root/)
   })
 })
