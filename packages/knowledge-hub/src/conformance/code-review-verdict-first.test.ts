@@ -200,10 +200,12 @@ describe('code-review-template — root/dataset structural parity (#228)', () =>
   // in the mirror still fails, it just has to match the TRANSFORMED body. The
   // shared `assertKbMirrorMatches` (same helper the whole-tree KB mirror guard
   // uses) is what fails, with a message naming what it compares.
+  //
+  // Called directly rather than wrapped in `expect().not.toThrow()`, so vitest's
+  // failure headline IS the guard's message (the wrapper truncates it inside
+  // "expected [Function] to not throw an error but '...' was thrown").
   it('equals the TRANSFORM of its dataset source, not the raw dataset (#393)', () => {
     const transform = buildKbMirrorTransform(DATASET_SKILLS)
-    expect(() =>
-      assertKbMirrorMatches(TEMPLATE_KB_REL, transform(TEMPLATE_DATASET), TEMPLATE_MIRROR),
-    ).not.toThrow()
+    assertKbMirrorMatches(TEMPLATE_KB_REL, transform(TEMPLATE_DATASET), TEMPLATE_MIRROR)
   })
 })

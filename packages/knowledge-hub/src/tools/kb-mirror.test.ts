@@ -3,7 +3,9 @@ import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import {
   buildKbMirrorTransform,
+  kbDatasetPaths,
   kbDatasetMarkdownPaths,
+  kbDatasetNonMarkdownPaths,
   assertKbMirrorMatches,
   isFrozenUntransformed,
   KB_DATASET_REL,
@@ -36,12 +38,20 @@ const captureThrownMessage = (fn: () => void): string => {
 
 const transform = buildKbMirrorTransform(DATASET_SKILLS)
 const KB_FILES = kbDatasetMarkdownPaths(DATASET_KB)
+const KB_NON_MD_FILES = kbDatasetNonMarkdownPaths(DATASET_KB)
 
 /**
  * Data-driven mirror-equality guard for the WHOLE KB tree (#393 AC1/AC5): for
- * every markdown file the dataset contributes, the root `.pair/knowledge/<rel>`
- * copy must equal the REAL `pair update` transform of its dataset source — not
- * the source itself.
+ * every file the dataset contributes, the root `.pair/knowledge/<rel>` copy must
+ * equal the REAL `pair update` transform of its dataset source — not the source
+ * itself.
+ *
+ * Markdown and non-markdown are both covered, because the `knowledge` registry
+ * ships both: the content rewrites only walk markdown, so for the non-markdown
+ * files (the `assets/*.sh` gate scripts and `gitleaks-example.toml`) the transform
+ * is the identity by construction and `expected` IS the source. Same helper, same
+ * failure format — a hand-edited `assets/pr-state.sh` mirror now fails here
+ * instead of shipping unnoticed.
  *
  * The case list is derived from the dataset at collection time, so a new KB file
  * is covered with no test edit and no count is encoded anywhere.
@@ -51,13 +61,24 @@ describe('KB dataset -> root mirror equality for every KB file (data-driven) (#3
     expect(KB_FILES.length).toBeGreaterThan(0)
     expect(KB_FILES).toContain('guidelines/collaboration/templates/code-review-template.md')
     expect(KB_FILES).toContain('skills-guide.md')
+    // ...and the non-markdown half of the same registry is enumerated too, so the
+    // "whole tree" claim is not markdown-only.
+    expect(KB_NON_MD_FILES.length).toBeGreaterThan(0)
+    expect(KB_NON_MD_FILES).toContain('assets/pr-state.sh')
+    // the two partitions are exactly the tree, nothing dropped between them
+    expect([...KB_FILES, ...KB_NON_MD_FILES].sort()).toEqual(kbDatasetPaths(DATASET_KB))
   })
 
   it.each(KB_FILES)('root mirror for %s equals the real transform of its dataset source', rel => {
-    expect(() =>
-      assertKbMirrorMatches(rel, transform(datasetContent(rel)), mirrorContent(rel)),
-    ).not.toThrow()
+    assertKbMirrorMatches(rel, transform(datasetContent(rel)), mirrorContent(rel))
   })
+
+  it.each(KB_NON_MD_FILES)(
+    'root mirror for non-markdown %s is byte-equal to its dataset source (transform is identity)',
+    rel => {
+      assertKbMirrorMatches(rel, datasetContent(rel), mirrorContent(rel))
+    },
+  )
 })
 
 /**
@@ -73,13 +94,12 @@ describe('KB dataset -> root mirror equality for every KB file (data-driven) (#3
  */
 describe('KB mirror — no file is frozen in an untransformed state (AC5) (#393)', () => {
   it('lists no KB mirror that is byte-identical to a source the transform would change', () => {
-    const frozen = KB_FILES.filter(rel =>
-      isFrozenUntransformed(
-        datasetContent(rel),
-        mirrorContent(rel),
-        transform(datasetContent(rel)),
-      ),
-    )
+    const frozen = KB_FILES.filter(rel => {
+      // one read per file: `datasetContent(rel)` used to be called twice per
+      // candidate inside this predicate alone.
+      const src = datasetContent(rel)
+      return isFrozenUntransformed(src, mirrorContent(rel), transform(src))
+    })
     expect(frozen).toEqual([])
   })
 })
@@ -91,14 +111,63 @@ describe('KB mirror — no file is frozen in an untransformed state (AC5) (#393)
  * `/pair-capability-pair-capability-assess-cost`.
  */
 describe('KB mirror transform is idempotent (#393)', () => {
-  it.each(KB_FILES)('re-transforming the installed output of %s is a no-op', rel => {
-    const once = transform(datasetContent(rel))
+  // ONE case over the whole corpus, not one per file: idempotence is a property of
+  // the transform, not of any individual file, so 441 `it` blocks bought nothing
+  // but collection cost. Concatenating keeps every real input in the assertion —
+  // any file that double-prefixed would still fail here.
+  it('re-transforming the installed output of the whole KB corpus is a no-op', () => {
+    const once = transform(KB_FILES.map(datasetContent).join('\n'))
     expect(transform(once)).toBe(once)
   })
 
   it('is a no-op on content with no skill references at all', () => {
     const plain = '# Title\n\nNo slash commands here, only prose.\n'
     expect(transform(plain)).toBe(plain)
+  })
+})
+
+/**
+ * The two-op composition in `buildKbMirrorTransform` is the COMPLETE `pair update`
+ * transform for this registry only because the `knowledge` registry declares no
+ * naming transform. Pin that, as the sibling `skill-md-mirror` pins
+ * `SKILL_COPY_OPTS`: if the registry later gains `flatten`/`prefix`, the real
+ * pipeline both renames paths AND stops rewriting skill references entirely
+ * (`applySkillRefsToNonSkillRegistries` skips any registry with flatten/prefix),
+ * so `transform(dataset)` would no longer equal `pair update`'s output and the
+ * guard above would go permanently red with no satisfiable mirror — the deadlock
+ * this story removed, reintroduced one level up. Failing HERE attributes it to the
+ * registry change instead of blaming the mirror.
+ */
+describe('the KB guard stays pinned to the pair-cli knowledge registry (#393)', () => {
+  const registry = (
+    JSON.parse(readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8')) as {
+      asset_registries: Record<
+        string,
+        {
+          source: string
+          behavior: string
+          flatten?: boolean
+          prefix?: string
+          targets: { path: string; mode: string; transform?: unknown }[]
+        }
+      >
+    }
+  ).asset_registries.knowledge
+
+  it('declares no flatten/prefix, so the skill-ref + link-path pair IS the whole transform', () => {
+    expect(registry.flatten).toBeUndefined()
+    expect(registry.prefix).toBeUndefined()
+    // no per-target content transform either (the `agents` registry's `claude`
+    // prefix transform is what one would look like)
+    for (const target of registry.targets) expect(target.transform).toBeUndefined()
+  })
+
+  it('reads the dataset from, and asserts against, the registry-declared source and target', () => {
+    expect(KB_DATASET_REL.endsWith(registry.source)).toBe(true)
+    expect(registry.targets.map(t => t.path)).toContain(KB_MIRROR_REL)
+    // 'mirror' behavior: the installed tree is meant to be the dataset's image,
+    // which is what makes whole-tree equality the right assertion here.
+    expect(registry.behavior).toBe('mirror')
   })
 })
 
@@ -112,7 +181,10 @@ describe('assertKbMirrorMatches — failure paths and message (#393)', () => {
   const expected = 'line one\nline two\nline three\n'
 
   it('passes when the mirror equals the transform output', () => {
-    expect(() => assertKbMirrorMatches(REL, expected, expected)).not.toThrow()
+    // called directly, not wrapped in `expect().not.toThrow()`: vitest then reports
+    // the guard's own message as the failure headline instead of truncating it
+    // inside "expected [Function] to not throw an error but '...' was thrown".
+    assertKbMirrorMatches(REL, expected, expected)
   })
 
   it('throws when the mirror has drifted', () => {
@@ -145,6 +217,18 @@ describe('assertKbMirrorMatches — failure paths and message (#393)', () => {
     )
     expect(message).toContain('-line two')
     expect(message).toContain('+DRIFT')
+  })
+
+  it('states the OTHER comparison for a non-markdown file — byte-equality IS the invariant', () => {
+    const message = captureThrownMessage(() =>
+      assertKbMirrorMatches('assets/pr-state.sh', expected, 'drifted\n'),
+    )
+    expect(message).toContain('COMPARED')
+    expect(message).toContain('byte for byte')
+    expect(message).toContain('NOT markdown')
+    expect(message).toContain('byte-equality IS the invariant')
+    // and must NOT teach the markdown rule here, where it is false
+    expect(message).not.toContain('is itself the drift')
   })
 
   it('reports a missing mirror as missing, with the regenerate hint (not as drift)', () => {
