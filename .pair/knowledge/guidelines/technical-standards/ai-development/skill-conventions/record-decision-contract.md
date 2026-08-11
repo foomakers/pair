@@ -31,7 +31,7 @@ which writes `content` into its owned section of `target` (a heading-scoped merg
 
 ## Standard "Verify" line (end of Path A/B in the resolution cascade, and end of the assessment step)
 
-> **Verify**: Proposal emitted. Persistence is performed by the caller via `/record-decision(content, target, decision-metadata)`, never by this skill.
+> **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Standard Composition Interface shape
 

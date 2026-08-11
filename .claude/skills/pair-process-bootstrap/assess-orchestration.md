@@ -13,7 +13,7 @@ Disclosed from [SKILL.md](./SKILL.md) Step 2.2 — only reached when at least on
 7. `/pair-capability-assess-methodology` → proposes methodology section of `way-of-working.md`
 8. `/pair-capability-assess-pm` → proposes PM section of `way-of-working.md` (delegates to `/pair-capability-setup-pm` when installed)
 
-After each assessment (or after collecting the batch), compose `/record-decision(content, target, decision-metadata)` to persist the proposal and record the ADR/ADL. `/pair-capability-assess-pm` persists via `/pair-capability-setup-pm` when that skill is installed; otherwise `/pair-process-bootstrap` persists its proposal via `/pair-capability-record-decision` like the others.
+After each assessment (or after collecting the batch), compose `/pair-capability-record-decision(content, target, decision-metadata)` to persist the proposal and record the ADR/ADL. `/pair-capability-assess-pm` persists via `/pair-capability-setup-pm` when that skill is installed; otherwise `/pair-process-bootstrap` persists its proposal via `/pair-capability-record-decision` like the others.
 
 **Section ownership** (each assess-\* proposal owns its section; `/pair-capability-record-decision` preserves the rest on write):
 

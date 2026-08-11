@@ -54,10 +54,20 @@ function escapeRegex(s: string): string {
 /**
  * Builds a boundary-aware, single-line regex matching `/name` for a given skill name.
  * Boundary characters (before): start-of-line, whitespace, backtick, double-quote, (, |
- * Boundary characters (after): end-of-line, whitespace, backtick, double-quote, ), |, , . : ; ! ? ]
+ * Boundary characters (after): end-of-line, whitespace, backtick, double-quote, (, ), |, , . : ; ! ? ]
+ *
+ * `(` is an after-boundary because the KB documents skill contracts in CALL
+ * form — `/record-decision(content, target, decision-metadata)`. Before #393 it
+ * was missing, so that notation was the one shape of live invocation the
+ * rewriter walked past: the installed corpora shipped a command name no
+ * reader's assistant exposes, silently and forever (mirror equality still held,
+ * since the dataset carried the same un-prefixed text). Only names present in
+ * the map are ever rewritten, so `/unmapped(args)` is untouched, and the result
+ * is idempotent (`/pair-capability-record-decision(` has no `/` before the
+ * short name).
  */
 function buildReferenceRegex(name: string): RegExp {
-  return new RegExp(`(?<=^|[\\s\`"(|])\\/${escapeRegex(name)}(?=$|[\\s\`")|,.:;!?\\]])`, 'g')
+  return new RegExp(`(?<=^|[\\s\`"(|])\\/${escapeRegex(name)}(?=$|[\\s\`"()|,.:;!?\\]])`, 'g')
 }
 
 /** Detects a fenced code block delimiter line (```/~~~, up to 3 leading spaces, optional info string). */
