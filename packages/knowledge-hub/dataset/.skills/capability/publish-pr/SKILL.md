@@ -1,7 +1,7 @@
 ---
 name: publish-pr
 description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. Standalone — driven by a handoff/checkpoint, not by /implement having run in the same session. Composed by /implement's closing phase (Step 3.3); reused by hotfix and automation loops. Composes /verify-quality, /checkpoint, /write-issue."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -30,6 +30,7 @@ Take a completed story branch to a review-ready pull request in one standalone s
 | `$story`     | No       | Story ID. If omitted, resolved from the handoff, then from the branch name (`<branch-format>` → `#<id>`). Unresolvable ⇒ **HALT** (AC edge case). |
 | `$handoff`   | No       | Path to a handoff/checkpoint document. Default: `.pair/working/checkpoints/<story-id>.md`. Missing ⇒ gather minimal state from branch + story, then proceed (business rule). |
 | `$scope`     | No       | Forwarded to `/verify-quality` as its `$scope` (default `all`).                                                  |
+| `$assignee`  | No       | Who the **pull request** is assigned to. Resolved by **the same cascade** `/write-issue` Step 6b applies to an item — argument, then the adoption's `default-assignee`, then none with a warning. Unresolvable ⇒ the PR is still published, unassigned (**never a HALT**). |
 
 ## Adoption Inputs (read deterministically)
 
@@ -38,6 +39,7 @@ Two sibling sections cover git concerns and the split is deliberate: **`## Merge
 - **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Merge Strategy`** — the same section the merge consumers read (`/review` Phase 6): `Method` (`squash` | `merge` | `rebase`, **default `squash`**) and the `Commit format` ([commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md)). Recorded on the PR as the intended merge strategy; **squash happens at merge, never here** (AC2). `branch-format` (to parse the branch id) comes from the [branch template](../../../.pair/knowledge/guidelines/collaboration/templates/branch-template.md).
 - **way-of-working.md → `## Git Workflow`** — `code-host` (the tool owning branches/PRs) and `base-branch` (default `main`; **a `base-branch` declared under `## Merge Strategy`, where this skill's ≤ 0.4.1 versions documented it, is still honored** — the resolution order is single-sourced in the convention's **`base-branch` resolution** — the same order `/implement` applies, so the two readers cannot disagree on the target branch). **`code-host` absent ⇒ code host = PM tool** (single-tool; the zero-configuration default, not a degradation), and the same tool named in both places is treated exactly as omitted. Resolution, the PM↔code-host routing table, and the cross-linking convention live in one place: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) — this skill states only which side each operation is on.
 - **way-of-working.md → `## State Mapping`** — board-column ↔ canonical-macrostate mapping (see [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Omitted ⇒ canonical names assumed.
+- **way-of-working.md → `## Assignment`** — `default-assignee`, the fallback when no `$assignee` is passed. **One rule, two callers**: the schema and the cascade live once, in the [resolution convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md), and both this skill (the PR, a **code-host** write) and `/write-issue` (the item, a **PM-tool** write) read them from there rather than each defining their own. Omitted ⇒ no default; the PR is published unassigned with a warning.
 
 ## Algorithm
 
@@ -86,11 +88,16 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 
 ### Phase 4: Create/Update PR, Propagate Tags, Ready-for-Review, Board State (AC1, AC4)
 
+**No write is assumed here either** — the rule `/write-issue` states for items holds for a PR: **every write is re-read back**, and this skill reports what the read returned, never what the call reported. A PR is created, assigned and labelled in one command whose success says nothing about which of the three actually landed.
+
 1. **Check**: Does a PR already exist for this branch on the code host?
-2. **Act — create or update (one PR per story):**
+2. **Act — create or update (one PR per story), assignee included:**
    - **No PR** → create it targeting `base-branch` on the code host.
-   - **PR exists** → update its body and tags in place (edge case) — never open a second PR.
-3. **Act — tag propagation (copy, not analysis):** copy the story's estimated **classification tags** (e.g. risk/size labels) to the PR verbatim. This is a copy — the authoritative re-classification happens in review (G6). If the story carries **no classification tags**, create the PR without tags and note it in the output (projection may be inactive, D17) (edge case).
+   - **PR exists** → update its body, tags and assignee in place (edge case) — never open a second PR.
+   - **The assignee is resolved by the same cascade the item write uses** — `$assignee`, else the adoption's `default-assignee` (`## Assignment`), else none. **One rule, two callers**: `/write-issue` Step 6b owns the cascade and this skill applies it unchanged, so the two cannot diverge (a cascade applied on one side only is the half-applied state this contract exists to remove). Set it **on the create/update call itself, never as a follow-up step**, with the code host's own mechanic (the implementation guide carries the flag — never invent one).
+   - **A pull request's author is not its assignee.** The host fills `author` from the token and leaves `assignees` empty, and an assignee-filtered view reads `assignees` — which is why PRs published before this contract were open, green and invisible on the board.
+   - **Nothing resolvable, or a login the host rejects** ⇒ publish the PR **unassigned** and warn that it is **invisible in an assignee-filtered view** — **never a HALT**: the PR is the work, and a bookkeeping field must not sink it.
+3. **Act — tag propagation (copy, not analysis):** copy the story's estimated **classification tags** to the PR verbatim, **`risk:*` included**. This is a copy — the authoritative re-classification happens in review (G6). The `risk:*` labels are not cosmetic: the gate matrix and the tier requirements resolve from the PR's tier, and an untagged PR resolves **fail-safe** red, so dropping them silently costs a wrong tier on top of a filtered-out board row. If the story carries **no classification tags**, create the PR without tags and note it in the output (projection may be inactive, D17) (edge case). Then **re-read the pull request** just written — body, assignee, labels, base, draft state — and report **what the read returned**: a label the host silently dropped (never provisioned in the repository) or an assignee it refused is a **finding**, never an assumed success because the command exited 0.
 4. **Act — code-host routing (AC4):** the PR is created/updated on the **code host**, the board state (step 7) is written on the **PM tool** — per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). When `code-host` is absent (or names the PM tool) both resolve to the same tool and the split is invisible. When they differ, fill the pr-template's conditional `Refs: <issue-id>` slot (Phase 3 step 2) — the PM tool's own item id, copied verbatim.
 5. **Check — does a back-link apply at all?** Resolve `code host` vs `pm-tool` **before touching the PM item**: the same tool (or an alias of it — identifier equality) ⇒ **skip this entire step here and now**, report `n-a (single tool)`, and go to step 6. The host already links PR and item natively, so there is nothing to post *and nothing to look for*. Gating at the head of the step rather than inside its Act is deliberate: on the default single-tool configuration this step performs **no PM-item read at all**, so publishing stays byte-identical to the pre-`code-host` behavior (AC1).
    **Check (split active) — back-link already present?** Read the PM item's existing comments (link field where the tool has one instead) and look for one containing this PR's URL.
@@ -106,8 +113,8 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 
    Never compose `/write-issue` in write mode for the back-link: write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown with the link. If the **item id is not found**, or the PM tool errors, keep the PR (it is valid work) and warn with the manual-link instruction (edge case) — comment mode warns rather than HALTing for exactly this reason, so the documented non-blocking behavior holds through the composition.
 6. **Act — ready-for-review:** mark the PR ready for review (not draft) on the code host; if the host supports an explicit ready command (e.g. `gh pr ready`), use it.
-7. **Act — board state:** update the story's board state on the **PM tool** via the `## State Mapping` (canonical target: `Review`), using `/write-issue` (default write mode, `$status: Review`) when installed. If `/write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready. PR state itself is never mirrored onto the board.
-8. **Verify**: A single ready-for-review PR exists on the code host, tags reflect the story (or their absence is noted), the cross-link exists in both directions when the tools differ — **exactly one** back-link comment, whether this run posted it or found it (or the missing back-link is reported) — and the board state is updated (or the failure is reported).
+7. **Act — board state:** update the story's board state on the **PM tool** via the `## State Mapping` (canonical target: `Review`), using `/write-issue` (default write mode, `$status: Review`) when installed. That composition carries its **membership precedes state** invariant with it (its Step 7b: membership → a read that confirms it → the state field), so an item that is not in the tracked view is put there and *confirmed* before the state is written, and an unconfirmable membership surfaces here as its HALT with the reason — **reported, never absorbed into a green publish**. If `/write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready. PR state itself is never mirrored onto the board.
+8. **Verify**: A single ready-for-review PR exists on the code host and **a read of it** shows the assignee (or the unassigned warning) and the story's tags, the cross-link exists in both directions when the tools differ — **exactly one** back-link comment, whether this run posted it or found it (or the missing back-link is reported) — and the board state is confirmed updated (or the failure is reported).
 
 ### Phase 5: Enter the PR State Flow & Dispatch the Review (AC1)
 
@@ -144,7 +151,8 @@ PUBLISH-PR REPORT:
 ├── Gate:       [PASS | HALTED — N gates failing]
 ├── Base:       [base-branch — squash on merge: yes|no]
 ├── PR:         [#PR-number — URL — Created | Updated]
-├── Tags:       [copied: label, label | none on story — PR created without tags]
+├── Tags:       [copied and confirmed by read: label, label | none on story — PR created without tags | dropped by host: label — finding]
+├── Assignee:   [login — confirmed by read | none — WARNING: PR invisible in an assignee-filtered view]
 ├── Code host:  [same as PM tool | <host> (board updates → PM tool)]
 ├── Cross-link: [n-a (single tool) | Refs: <issue-id> + PR URL posted on <item> | already linked — comment present, not re-posted | back-link failed — manual link needed]
 ├── Conditional: [Services to Release: N deployable packages / n-a | Screenshots: UI touched / n-a]
@@ -184,6 +192,8 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **No `code-host` declared**: code host = PM tool (single-tool) — the zero-configuration default, not a degradation; the cross-link step is skipped entirely.
 - **Back-link cannot be written** (item id not found, PM tool error, no comment mechanism, or `/write-issue` unavailable and no guide command): keep the PR, warn with the manual-link instruction; the `Refs:` line in the body still links PR → item. This is a warning by design, never a HALT.
 - **No classification tags on the story**: create the PR without tags and note it (edge case) — never invent tags.
+- **No assignee resolvable** (no `$assignee`, no `default-assignee`, or the host rejects the login): publish the PR **unassigned** and warn that it is invisible in an assignee-filtered view — a genuine degrade, **never a HALT**. The same cascade, and the same non-blocking outcome, as the item write.
+- **A write the host reports as applied but a read does not show** (a tag, the assignee, ready-for-review): report it as a finding on the corresponding output row and continue. The PR exists and is what matters; what must never happen is reporting the unapplied write as done.
 - **`/checkpoint` not installed**: gather state from branch + story directly (Phase 0).
 - **`/write-issue` not installed**: skip the board-state update, warn, leave the PR ready.
 - **Nested subagent dispatch unavailable** (Phase 5 — the common case: this skill is itself running in `/implement`'s handoff subagent and the harness forbids a second level): return `Review: review-dispatch-required — /review $pr=<n>` and let the **caller** dispatch (`/implement` Step 3.3). This is the primary path when nested, not a degradation — the review still runs, one frame up, on a clean context.

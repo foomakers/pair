@@ -67,10 +67,18 @@ function normalize(markdown: string): string {
  * That constraint is deliberate: it also keeps the guard from going green on a
  * mere name mention instead of the rule.
  */
-function skillCorpora(category: string, name: string): { corpus: string; content: string }[] {
+function skillCorpora(
+  category: string,
+  name: string,
+): { skill: string; corpus: string; content: string }[] {
   return [
-    { corpus: 'dataset', content: read(join(DATASET, `.skills/${category}/${name}/SKILL.md`)) },
     {
+      skill: name,
+      corpus: 'dataset',
+      content: read(join(DATASET, `.skills/${category}/${name}/SKILL.md`)),
+    },
+    {
+      skill: name,
       corpus: 'generated root',
       content: read(join(REPO_ROOT, `.claude/skills/pair-${category}-${name}/SKILL.md`)),
     },
@@ -78,6 +86,7 @@ function skillCorpora(category: string, name: string): { corpus: string; content
 }
 
 const writeIssueCases = skillCorpora('capability', 'write-issue')
+const publishPrCases = skillCorpora('capability', 'publish-pr')
 
 /**
  * The body of the section whose heading starts with `headingPrefix` at `level`,
@@ -314,7 +323,80 @@ describe('/write-issue — a board that cannot express the macrostate (#403 AC6)
   )
 })
 
+describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC7)', () => {
+  it.each(publishPrCases)('$corpus: declares $$assignee in the Arguments table', ({ content }) => {
+    expect(content).toMatch(/^\|\s*`\$assignee`\s*\|/m)
+  })
+
+  it.each(publishPrCases)(
+    '$corpus: resolves the assignee through the SAME cascade as the item writer',
+    ({ content }) => {
+      // One rule, two callers. The adoption rule names BOTH skills in one sentence;
+      // applying it in one and not the other is exactly how this half went untracked
+      // from 2026-07-31 until a review found it (PRs #404, #405, #406, #408 were all
+      // born unassigned). A divergent second cascade here would re-create that state.
+      const body = normalize(content)
+      expect(body).toContain('the same cascade')
+      expect(body).toContain('one rule, two callers')
+    },
+  )
+
+  it.each(publishPrCases)(
+    "$corpus: states that a pull request's author is not its assignee",
+    ({ content }) => {
+      // The precise mechanic that made PRs invisible: `gh pr create` sets the author,
+      // and an assignee-filtered view reads `assignees`.
+      expect(normalize(content)).toContain("a pull request's author is not its assignee")
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: names the risk tags the tag propagation must carry',
+    ({ content }) => {
+      // #406 was published without its story's `risk:*` labels, which this skill's own
+      // Phase 5 tier resolution depends on — so the gap cost a fail-safe-red tier, not
+      // only board visibility.
+      const body = normalize(content)
+      expect(body).toContain('risk:')
+      expect(body).toContain('fail-safe')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: re-reads the PR after writing it and reports the read (AC8)',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('re-read the pull request')
+      expect(body).toContain('what the read returned')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: an unresolvable assignee never blocks the publish',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('never a halt')
+      expect(body).toContain('invisible in an assignee-filtered view')
+    },
+  )
+
+  it.each(publishPrCases)('$corpus: reports the assignee in its output shape', ({ content }) => {
+    // The report is the only place a human sees the difference between "assigned"
+    // and "assumed assigned", so the row is part of the contract, not decoration.
+    expect(content).toMatch(/├── Assignee:/)
+  })
+})
+
 describe('no write is assumed — every write is re-read back (#403 AC8)', () => {
+  it.each([...writeIssueCases, ...publishPrCases])(
+    '$skill/$corpus: both writers state the rule (no divergence between them)',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('no write is assumed')
+      expect(body).toContain('every write is re-read back')
+    },
+  )
+
   it.each(writeIssueCases)('$corpus: states the rule as a general invariant', ({ content }) => {
     const body = normalize(content)
     expect(body).toContain('no write is assumed')
