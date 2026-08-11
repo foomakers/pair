@@ -248,7 +248,7 @@ Runs **after Phase 3.5**: the subdomains and bounded contexts just mapped are wh
 
 **Write path**: this phase writes the confirmed sections itself, with the same **propose-then-write-if-confirmed** / config-registry pattern `/classify` uses for its `## Tag Projection` section (quality-model §5, `/classify` Step 5). That is registry state, not adoption *decision* content, so it **does not route through `/record-decision`** — exactly as `/classify`'s own section write does not.
 
-**Interview style**: recommendation-first, **one recommendation at a time** (the `/grill` sync style, applied inline — the question set is fixed and short, so nothing is composed).
+**Interview style**: recommendation-first, **one recommendation at a time** (the `/grill` sync style, applied inline — the question set is fixed and short, so nothing is composed). With **no TTY** there is nothing to interview: bootstrap already downgrades to quick (see Resolution Depth), so the quick-mode behaviour of both steps below applies — nothing asked, nothing written.
 
 ### Step 3.6.1: Criticality Table (optional)
 

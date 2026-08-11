@@ -226,6 +226,15 @@ describe('quick mode asks nothing and writes nothing (AC7)', () => {
     expect(doc.toLowerCase()).toMatch(/fabricat|guess|invent/)
   })
 
+  // guided needs a TTY, and bootstrap downgrades to quick without one — so the
+  // CI/piped-stdin case must resolve to "nothing asked, nothing written" HERE
+  // too, not to a phase that hangs on a question it cannot receive an answer to.
+  it('resolves the no-TTY case through the same quick-mode behaviour', () => {
+    const body = phaseBody(datasetSkill()).toLowerCase()
+    expect(body).toMatch(/no tty/)
+    expect(body).toMatch(/quick/)
+  })
+
   it('does not add the delta to the still-asked list — quick adds zero questions', () => {
     const stillAsked = datasetDefaults().split('## Still asked in quick mode')[1] ?? ''
     expect(stillAsked.split('## ')[0].toLowerCase()).not.toMatch(/criticality/)
