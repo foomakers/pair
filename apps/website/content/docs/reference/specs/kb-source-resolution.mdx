@@ -192,6 +192,9 @@ When `requiresDownload: true` for URL sources:
 3. **Download KB** — GET request with progress tracking
 4. **Validate SHA256** — Verify integrity (if checksum available)
 5. **Extract to cache** — Store in the source's own slot (see Cache Strategy below)
+6. **Unwrap a single root directory** — an archive whose content sits under one top-level
+   folder (`acme-kb-1.0.0/.pair/…`) is lifted to the slot root, so the dataset root is the
+   slot itself whichever way the archive was packaged. Same normalization as a local ZIP.
 
 ### Cache Strategy
 
@@ -224,6 +227,13 @@ A slot whose `manifest.json` names a different KB than the one expected is treat
 is set aside first, not deleted, so a failing re-fetch (offline, 5xx) leaves the previous
 content in place instead of no cache at all. A slot with no `manifest.json` at all is
 treated as an aborted download and re-fetched too.
+
+**A fetched slot is never deleted before its replacement is in hand.** Every source whose
+content comes over the network — the official download, `--url`, a git clone — sets its
+slot aside before it writes, and puts it back when the fetch throws. A local ZIP is the one
+exception, and deliberately: its source is a file you still have, so re-running the command
+is the recovery, and replacing the slot wholesale is what keeps a previous KB's files from
+lingering next to the new one.
 
 **Scope of the self-heal:** the official slot is keyed by CLI version, so detection only
 applies to the slot of the CLI version you are running. A slot polluted by an **older**
