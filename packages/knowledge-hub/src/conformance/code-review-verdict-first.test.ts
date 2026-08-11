@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { buildKbMirrorTransform, assertKbMirrorMatches } from '../tools/kb-mirror'
+import {
+  buildMirrorTransform,
+  assertMirrorMatches,
+  KB_MIRROR_REGISTRY,
+} from '../tools/mirror-guard'
 
 // Conformance guard for #228: the code-review template is verdict-first (D22, R6.6)
 // and carries the seven required assessment sections — input validation, output
@@ -198,14 +202,19 @@ describe('code-review-template — root/dataset structural parity (#228)', () =>
   //
   // The protection it was introduced for is preserved in full: a body-only drift
   // in the mirror still fails, it just has to match the TRANSFORMED body. The
-  // shared `assertKbMirrorMatches` (same helper the whole-tree KB mirror guard
+  // shared `assertMirrorMatches` (same helper the whole-tree KB mirror guard
   // uses) is what fails, with a message naming what it compares.
   //
   // Called directly rather than wrapped in `expect().not.toThrow()`, so vitest's
   // failure headline IS the guard's message (the wrapper truncates it inside
   // "expected [Function] to not throw an error but '...' was thrown").
   it('equals the TRANSFORM of its dataset source, not the raw dataset (#393)', () => {
-    const transform = buildKbMirrorTransform(DATASET_SKILLS)
-    assertKbMirrorMatches(TEMPLATE_KB_REL, transform(TEMPLATE_DATASET), TEMPLATE_MIRROR)
+    const transform = buildMirrorTransform(DATASET_SKILLS)
+    assertMirrorMatches(
+      KB_MIRROR_REGISTRY,
+      TEMPLATE_KB_REL,
+      transform(TEMPLATE_DATASET),
+      TEMPLATE_MIRROR,
+    )
   })
 })
