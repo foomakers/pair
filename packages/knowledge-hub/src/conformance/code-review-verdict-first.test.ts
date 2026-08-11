@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { buildKbMirrorTransform, assertKbMirrorMatches } from '../tools/kb-mirror'
 
 // Conformance guard for #228: the code-review template is verdict-first (D22, R6.6)
 // and carries the seven required assessment sections — input validation, output
@@ -26,6 +27,9 @@ const MIRROR_TEMPLATES = join(
 )
 const DATASET_HOWTO = join(__dirname, '../../dataset/.pair/knowledge/how-to')
 const MIRROR_HOWTO = join(__dirname, '../../../../.pair/knowledge/how-to')
+
+/** KB-relative identity of the template, as the KB mirror guard addresses it. */
+const TEMPLATE_KB_REL = 'guidelines/collaboration/templates/code-review-template.md'
 
 const TEMPLATE_DATASET = readFileSync(join(DATASET_TEMPLATES, 'code-review-template.md'), 'utf-8')
 const TEMPLATE_MIRROR = readFileSync(join(MIRROR_TEMPLATES, 'code-review-template.md'), 'utf-8')
@@ -182,10 +186,24 @@ describe('code-review-template — root/dataset structural parity (#228)', () =>
     expect(headings(TEMPLATE_MIRROR).length).toBe(headings(TEMPLATE_DATASET).length)
   })
 
-  // Count parity proves structure, not content. The PR declares the two files an
-  // identical mirror — enforce that fully with byte-equality (analogous to the
-  // skills-guide-mirror byte-equality guard), so a body-only drift can't slip past.
-  it('is byte-identical between root and dataset (identical-mirror invariant)', () => {
-    expect(TEMPLATE_MIRROR).toBe(TEMPLATE_DATASET)
+  // Count parity proves structure, not content. Content equality is asserted
+  // against the TRANSFORM of the dataset, never against the dataset itself (#393):
+  // `pair update` rewrites every skill reference in the installed KB
+  // (`/assess-cost` -> `/pair-capability-assess-cost`), so the byte-equality
+  // this guard originally carried was asserting that no transform exists. It held
+  // only because this file was the ONE mirror in the whole KB tree left
+  // untransformed — i.e. it froze the defect (an installed template naming
+  // commands the reader's assistant does not expose) into an invariant, and turned
+  // every `pair update` run into a red test.
+  //
+  // The protection it was introduced for is preserved in full: a body-only drift
+  // in the mirror still fails, it just has to match the TRANSFORMED body. The
+  // shared `assertKbMirrorMatches` (same helper the whole-tree KB mirror guard
+  // uses) is what fails, with a message naming what it compares.
+  it('equals the TRANSFORM of its dataset source, not the raw dataset (#393)', () => {
+    const transform = buildKbMirrorTransform(DATASET_SKILLS)
+    expect(() =>
+      assertKbMirrorMatches(TEMPLATE_KB_REL, transform(TEMPLATE_DATASET), TEMPLATE_MIRROR),
+    ).not.toThrow()
   })
 })
