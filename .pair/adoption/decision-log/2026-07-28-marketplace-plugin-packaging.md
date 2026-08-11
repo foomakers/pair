@@ -100,6 +100,8 @@ What is decided about it, because each part is a place it could have gone wrong:
 
 Verified by unit tests on both paths plus a smoke scenario driving the real packaged CLI (transform path, plain path, invalid config). **The scenario is a manual gate, not a CI guarantee**: `scripts/smoke-tests/` is run by `pnpm smoke-tests` and by no workflow — the same reach limitation `assert_pinned_bug` documents, tracked in #400. It was run against this branch and passes; nothing re-runs it on the next change.
 
+> **Update (2026-08-11, story #400):** no longer true. The smoke suite's CI-safe list runs on every pull request (`smoke` job in `ci.yml`), and `registry-exclude.sh` is in it — measured 0.8s, offline-safe. The scenario is now re-run on every change.
+
 ## Alternatives Considered
 
 - **A slim plugin directory (`plugin/skills/*`) with symlinks into `.claude/skills/`**: Rejected. Copies less into the cache, but symlinks break on Windows clones without symlink support, and the skills' `.pair/knowledge/` pointers would dangle (the symlinked skill dir would not carry the KB).

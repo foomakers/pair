@@ -177,8 +177,9 @@ jobs:
   # PARALLEL to `build`, as its own status check: a red here says "a real-CLI
   # scenario broke", which is a different diagnosis from a red unit/lint gate.
   #
-  # MEASURED COST (AC6): 1m58s wall clock for the 18-scenario CI-safe list, CLI
-  # packaging included (2026-08-11, local run of `run-all.sh --ci --cleanup`; 67s was
+  # MEASURED COST (AC6): 1m40s–1m58s wall clock over two full local runs of
+  # `run-all.sh --ci --cleanup` for the 18-scenario CI-safe list, CLI packaging
+  # included (2026-08-11; 67s was
   # measured at refinement for 16 scenarios, before this story added
   # registry-exclude.sh ~1s and no-dataset-in-artifacts.sh ~12s, removed the
   # network-dependent default-resolution.sh, and made coverage-gate.sh — 38s, the

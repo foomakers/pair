@@ -211,9 +211,11 @@ assert_output_contains() {
 # "the pinned bug appears FIXED — update this assertion" instead of looking like an
 # unexplained smoke regression, so nobody has to reverse-engineer the red run.
 #
-# Reach: this suite is NOT run by any GitHub workflow today — it fires only when someone
-# runs `pnpm smoke-tests` (or a single scenario) locally. A pinned assertion is therefore a
-# manual gate, not a CI guarantee; the gap is tracked in foomakers/pair#400.
+# Reach (since #400): the CI-safe list (lib/ci-tests.sh) runs on every pull request, in the
+# `smoke` job of ci.yml. A pinned assertion inside one of those scenarios is a CI guarantee —
+# a pinned bug fixed upstream turns the PR red with the message below, instead of waiting for
+# someone to run the suite by hand. In a scenario listed in CI_EXCLUDED it remains a manual
+# gate, which is why exclusions carry a recorded reason.
 assert_pinned_bug() {
   local issue="$1"
   local description="$2"

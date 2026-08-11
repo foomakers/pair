@@ -5,8 +5,27 @@ This test suite is designed to verify the correct behavior of the `pair` CLI in 
 ## Structure
 
 - **`run-all.sh`**: Main runner script. It handles environment setup, discovering available tests, and executing them sequentially.
-- **`lib/`**: Contains shared utility functions (`utils.sh`) for assertions, logging, and workspace management.
+- **`lib/`**: Contains shared utility functions (`utils.sh`) for assertions, logging, and workspace management, plus **`ci-tests.sh`** — the CI-safe list and the recorded reason for every exclusion.
 - **`scenarios/`**: Contains scripts for individual use cases. Every `.sh` file here is automatically executed by the runner.
+
+### Outcomes (story #400)
+
+Each scenario ends in exactly one of four states, and the last three all fail the run:
+
+| Outcome            | Meaning                                            | What to do                                                                       |
+| ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| ✅ `PASS`          | The scenario ran and its assertions held           | —                                                                                |
+| ❌ `FAIL`          | The scenario ran and an assertion failed           | Read its log in the run's temp dir                                               |
+| 🚫 `NOT EXECUTABLE` | The file exists but has no `+x` bit — it never ran | `chmod +x <file> && git update-index --chmod=+x <file>` (the **committed** mode)  |
+| ⚠️ `MISSING`       | Listed for the run, absent from `scenarios/`       | Fix the list in `lib/ci-tests.sh`, or restore the file                           |
+
+`NOT EXECUTABLE` exists because collapsing it into `FAIL` is what hid `coverage-gate.sh` for weeks: it was committed mode `644`, so every run reported `Permission denied` as an assertion failure. The **committed** mode of every scenario is guarded independently by a unit test (`packages/dev-tools/src/quality-gates/smoke-scenario-modes.ts`) which reads `git ls-files -s`, not the filesystem. Neither the runner nor CI ever repairs a mode — they report it (see the check-only ADL, `2026-07-31-pre-push-gate-is-check-only.md`).
+
+### Which scenarios run in CI
+
+`run-all.sh --ci` runs the list in **`lib/ci-tests.sh`**, and that list is the one the `smoke` job of `.github/workflows/ci.yml` executes on every pull request.
+
+The rule: **CI runs every scenario that declares `OFFLINE_SAFE=true`.** A scenario stays out only if it declares `OFFLINE_SAFE=false` (network- or release-dependent) or, exceptionally, with a tracking issue in its reason — recorded in `CI_EXCLUDED` next to the list. `scenarios/runner-outcomes.sh` fails if a scenario is in neither array, so a new scenario cannot join the suite and quietly never run in CI.
 
 > **Note:** The runner sanitizes some `npm_config_*` environment variables (e.g. `npm_config_cleanup_unused_catalogs`, `npm_config_catalog`) before executing scenarios. These keys can surface from pnpm workspace config entries and may trigger noisy "Unknown env config" warnings from `npm`. Clearing them ensures consistent and quiet smoke-test runs across CI and local environments.
 

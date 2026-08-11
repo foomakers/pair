@@ -72,7 +72,7 @@ The "Merge" column only bites when `Review enforcement` is `enabled` (above). Di
 | Order | Gate         | Command                           | Scope Key | Required | Description                                     |
 | ----- | ------------ | --------------------------------- | --------- | -------- | ----------------------------------------------- |
 | 1     | Quality Gate | `pnpm quality-gate`               | quality   | Yes      | build, test, formatting check (never fix)       |
-| 2     | Smoke tests  | `pnpm smoke-tests`                | testing   | Yes      | smoke test to check all e2e cli release process |
+| 2     | Smoke tests  | `pnpm smoke-tests`                | testing   | Yes      | e2e CLI/release scenarios; the CI-safe list (`--ci`, `scripts/smoke-tests/lib/ci-tests.sh`) runs on every PR as the `smoke` job (#400) |
 | 3     | E2E tests    | `pnpm --filter @pair/website e2e` | testing   | Yes      | Playwright E2E tests (builds + starts Next.js)  |
 
 ---
