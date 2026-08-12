@@ -363,3 +363,118 @@ describe('cache-manager — contamination detection (US-395 AC5)', () => {
     expect(fs.existsSync(slot + '/.pair/knowledge/foreign.md')).toBe(false)
   })
 })
+
+/**
+ * US-395 (absorbed #428) — a slot is populated ATOMICALLY: extraction lands in a
+ * `<slot>.tmp-<pid>-<n>` stage next to the slot and is renamed onto it only when
+ * complete (same filesystem ⇒ atomic). A concurrent reader therefore sees the slot
+ * either absent (⇒ re-fetch) or complete — never half-written. Orphaned stages left
+ * by a dead process are swept on the next install; a LIVE process's stage is not.
+ */
+describe('cache-manager — atomic slot population (US-395/#428)', () => {
+  const slot = '/cache/kb/external/zip-abc123abc123'
+
+  // No real pid this large exists on either platform (Linux pid_max 4194304, macOS 99998),
+  // so a stage named with it is definitionally orphaned.
+  const DEAD_PID = 999999999
+
+  it('populates a STAGE next to the slot; the slot appears only complete', async () => {
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    let stageSeen = ''
+
+    const result = await cacheManager.writeSlotAtomically(slot, fs, async stage => {
+      stageSeen = stage
+      expect(stage).not.toBe(slot)
+      expect(stage.startsWith(`${slot}.tmp-${process.pid}-`)).toBe(true)
+      // The slot itself must not exist while the stage is being written
+      expect(fs.existsSync(slot)).toBe(false)
+      await fs.writeFile(`${stage}/manifest.json`, '{"name":"acme-kb"}')
+      await fs.writeFile(`${stage}/.pair/knowledge/index.md`, '# acme')
+    })
+
+    expect(result).toBe(slot)
+    expect(await fs.readFile(`${slot}/manifest.json`)).toBe('{"name":"acme-kb"}')
+    expect(fs.existsSync(`${slot}/.pair/knowledge/index.md`)).toBe(true)
+    expect(fs.existsSync(stageSeen)).toBe(false)
+  })
+
+  it('a failing populate leaves NO slot and NO stage behind, and rethrows the original error', async () => {
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    await expect(
+      cacheManager.writeSlotAtomically(slot, fs, async stage => {
+        await fs.writeFile(`${stage}/half-written.md`, 'partial')
+        throw new Error('Corrupted ZIP: unexpected end of archive')
+      }),
+    ).rejects.toThrow('Corrupted ZIP: unexpected end of archive')
+
+    expect(fs.existsSync(slot)).toBe(false)
+    const parentEntries = await fs.readdir('/cache/kb/external')
+    expect(parentEntries.filter(e => e.name.includes('.tmp-'))).toHaveLength(0)
+  })
+
+  it('sweeps an orphaned stage left by a DEAD process before populating (AC #428)', async () => {
+    const orphan = `${slot}.tmp-${DEAD_PID}-0`
+    const fs = new InMemoryFileSystemService(
+      { [`${orphan}/half-written.md`]: 'from an interrupted extraction' },
+      '/',
+      '/',
+    )
+
+    await cacheManager.writeSlotAtomically(slot, fs, async stage => {
+      await fs.writeFile(`${stage}/manifest.json`, '{}')
+    })
+
+    expect(fs.existsSync(orphan)).toBe(false)
+    expect(fs.existsSync(`${slot}/manifest.json`)).toBe(true)
+  })
+
+  it('leaves a LIVE process stage alone (a concurrent install is not an orphan)', async () => {
+    const concurrent = `${slot}.tmp-${process.pid}-zz`
+    const fs = new InMemoryFileSystemService(
+      { [`${concurrent}/manifest.json`]: '{"name":"in-flight"}' },
+      '/',
+      '/',
+    )
+
+    await cacheManager.writeSlotAtomically(slot, fs, async stage => {
+      await fs.writeFile(`${stage}/manifest.json`, '{}')
+    })
+
+    expect(fs.existsSync(`${concurrent}/manifest.json`)).toBe(true)
+  })
+
+  it('replaces an occupied slot WHOLE — a concurrent winner is superseded, never merged', async () => {
+    const fs = new InMemoryFileSystemService(
+      { [`${slot}/stale-from-other-process.md`]: 'stale' },
+      '/',
+      '/',
+    )
+
+    await cacheManager.writeSlotAtomically(slot, fs, async stage => {
+      await fs.writeFile(`${stage}/manifest.json`, '{}')
+    })
+
+    expect(fs.existsSync(`${slot}/manifest.json`)).toBe(true)
+    expect(fs.existsSync(`${slot}/stale-from-other-process.md`)).toBe(false)
+  })
+
+  it('retries the swap once when the rename loses a race, then propagates a real failure', async () => {
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const realRename = fs.rename.bind(fs)
+    let failures = 1
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (failures > 0) {
+        failures--
+        throw new Error('ENOTEMPTY: directory not empty')
+      }
+      return realRename(from, to)
+    })
+
+    await cacheManager.writeSlotAtomically(slot, fs, async stage => {
+      await fs.writeFile(`${stage}/manifest.json`, '{}')
+    })
+
+    expect(fs.existsSync(`${slot}/manifest.json`)).toBe(true)
+  })
+})
