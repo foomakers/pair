@@ -318,6 +318,80 @@ describe('handleMirrorCleanup', () => {
     // No files should be removed since destination is empty
     await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
   })
+
+  // ── Recursive cleanup (#426, absorbed into #393) ──────────────────────────
+  // The comparison used to stop at the TOP level: a directory present on both sides was
+  // kept and never looked inside, so a file removed from the dataset survived every
+  // `pair update` forever. Measured cost: two how-to guides deleted from the dataset in
+  // #246 were still installed ~5 months later and were advertised by `.pair/llms.txt`,
+  // so agents were pointed at guides the KB no longer ships.
+  it('removes a stale file NESTED under a directory that exists on both sides', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/04-orphan.md': 'stale',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/how-to/04-orphan.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/how-to/01-keep.md')).resolves.toBe(true)
+  })
+
+  it('does not blow away a directory present on BOTH sides', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/01-keep.md': 'keep',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    // The shared directory must survive as a directory, with its shared content intact.
+    await expect(fileService.exists('/dataset/dest/how-to')).resolves.toBe(true)
+    await expect(fileService.exists('/dataset/dest/how-to/01-keep.md')).resolves.toBe(true)
+  })
+
+  it('removes a stale file nested TWO levels deep', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/a/b/keep.md': 'keep',
+        '/dataset/dest/a/b/keep.md': 'keep',
+        '/dataset/dest/a/b/orphan.md': 'stale',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/a/b/orphan.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/a/b/keep.md')).resolves.toBe(true)
+  })
+
+  it('still removes a top-level entry absent from the source (unchanged behaviour)', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/gone/nested.md': 'stale',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/gone/nested.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/keep.md')).resolves.toBe(true)
+  })
 })
 
 describe('handleMirrorCleanup - error handling', () => {

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { rewriteSkillReferences, rewriteSkillLinkPaths } from '@pair/content-ops'
 import {
   collectSkillDirs,
   buildDatasetSkillNameMap,
@@ -108,38 +107,19 @@ describe('skills-guide.md dataset <-> root mirror consistency (critical sections
   )
 })
 
-/**
- * Whole-file coverage: applies the REAL content-ops transform
- * (`rewriteSkillReferences` + `rewriteSkillLinkPaths`) — the exact pair the
- * `pair update` pipeline runs — to the ENTIRE dataset content, with NO manual
- * exceptions. The dataset file is authored to be transform-correct (prefixed
- * Composition Pattern diagram; slash-free self-referential "Unprefixed dataset
- * command names" phrases), so this reproduces the root mirror byte-for-byte.
- * If the root mirror has drifted ANYWHERE — not just on the 5 anchored
- * paragraphs above — this fails.
- *
- * On failure, check the targeted-anchor tests above first: if one of them
- * also fails, its message pinpoints the paragraph directly. If only this
- * test fails, the drift is somewhere else in the file — regenerate the root
- * mirror with `node apps/pair-cli/dist/cli.js update` (or, if the dataset
- * itself has a transform-incorrect span, fix the dataset so the mechanical
- * transform reproduces the intended installed output).
- */
-describe('skills-guide.md dataset <-> root mirror consistency (whole file)', () => {
-  it('root mirror is byte-for-byte reproducible from the dataset via the real content-ops transform', () => {
-    const datasetContent = readFileSync(DATASET_SKILLS_GUIDE, 'utf-8')
-    const rootContent = readFileSync(ROOT_MIRROR_SKILLS_GUIDE, 'utf-8')
-    const skillNameMap = buildDatasetSkillNameMap(SKILLS_DIR)
-    const linkPathMap = buildSkillLinkPathMap(SKILLS_DIR)
-
-    const reconstructed = rewriteSkillLinkPaths(
-      rewriteSkillReferences(datasetContent, skillNameMap),
-      linkPathMap,
-    )
-
-    // If this fails, `.pair/knowledge/skills-guide.md` has drifted from the
-    // canonical dataset file's real transform output. Regenerate the root
-    // mirror via `pair update`.
-    expect(reconstructed).toBe(rootContent)
-  })
-})
+// WHOLE-FILE equality for `skills-guide.md` is NOT asserted here.
+//
+// It used to be (a `reconstructed === rootContent` case at the end of this
+// file), but #393's `mirror-guard.test.ts` now enumerates every file the
+// `knowledge` registry ships — `skills-guide.md` among them — and compares each
+// against the real install output. Keeping a local copy would be a SECOND
+// definition of the same invariant, composed by hand from the same two ops:
+// one drift would fail in two files, and the two compositions could drift apart
+// (they already differ once the install grows a per-target op, as it does for
+// `AGENTS.md`/`CLAUDE.md`). The ADL
+// `.pair/adoption/decision-log/2026-08-11-a-mirror-guard-compares-the-transform.md`
+// makes "one definition of what a mirror is compared against" the rule.
+//
+// What stays here is what is UNIQUE to this file: the anchored-paragraph cases
+// above, whose failure names the exact paragraph that drifted — a whole-file
+// diff cannot. Owner of whole-file equality: `mirror-guard.test.ts`.

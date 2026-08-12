@@ -4,7 +4,7 @@ import { join } from 'path'
 import {
   buildMirrorTransform,
   assertMirrorMatches,
-  KB_MIRROR_REGISTRY,
+  KB_MIRROR,
 } from '../tools/mirror-guard'
 
 // Conformance guard for #228: the code-review template is verdict-first (D22, R6.6)
@@ -211,7 +211,7 @@ describe('code-review-template — root/dataset structural parity (#228)', () =>
   it('equals the TRANSFORM of its dataset source, not the raw dataset (#393)', () => {
     const transform = buildMirrorTransform(DATASET_SKILLS)
     assertMirrorMatches(
-      KB_MIRROR_REGISTRY,
+      KB_MIRROR,
       TEMPLATE_KB_REL,
       transform(TEMPLATE_DATASET),
       TEMPLATE_MIRROR,

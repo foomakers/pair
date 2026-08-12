@@ -105,7 +105,19 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
 }
 
 /**
- * Handles mirror behavior cleanup for directories
+ * Handles mirror behavior cleanup for directories.
+ *
+ * RECURSIVE by necessity (#426, absorbed into #393). The comparison used to stop at the
+ * top level: an entry present on BOTH sides was kept and never looked inside, so a file
+ * removed from the dataset survived every `pair update` forever. Measured cost — two
+ * how-to guides deleted from the dataset in #246 were still installed at the repo root
+ * ~5 months later, and `.pair/llms.txt` advertised them, so agents were pointed at
+ * guides the KB no longer ships.
+ *
+ * A directory present on both sides is therefore DESCENDED INTO rather than kept
+ * wholesale; only an entry absent from the source is removed, exactly as before. That
+ * asymmetry is the whole point: `rm -r` on a shared directory would delete content the
+ * source still has.
  */
 export async function handleMirrorCleanup(
   fileService: FileSystemService,
@@ -113,15 +125,27 @@ export async function handleMirrorCleanup(
   destPath: string,
 ) {
   const destEntries = await fileService.readdir(destPath).catch(() => [])
-  const srcNames = new Set((await fileService.readdir(srcPath).catch(() => [])).map(e => e.name))
+  const srcEntries = await fileService.readdir(srcPath).catch(() => [])
+  const srcByName = new Map(srcEntries.map(e => [e.name, e]))
 
   for (const de of destEntries) {
-    if (!srcNames.has(de.name)) {
+    const src = srcByName.get(de.name)
+
+    if (!src) {
+      // Absent from the source: remove it, whatever it is.
       const toRemove = join(destPath, de.name)
       if (fileService.rm) {
         await fileService.rm(toRemove, { recursive: true, force: true })
         logger.info(`Mirror: removed ${toRemove}`)
       }
+      continue
+    }
+
+    // Present on both sides. If both are directories, the stale entries may be INSIDE —
+    // recurse. Anything else (a file the source also has, or a type mismatch we do not
+    // adjudicate here) is left to the copy step that follows.
+    if (de.isDirectory?.() && src.isDirectory?.()) {
+      await handleMirrorCleanup(fileService, join(srcPath, de.name), join(destPath, de.name))
     }
   }
 }

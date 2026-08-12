@@ -1,7 +1,8 @@
 /**
- * Mirror-equality helpers for the `pair update` registries whose install
- * REWRITES the content it copies — today the root `.pair/knowledge` KB tree and
- * the `.github/agents` agent files.
+ * Mirror-equality helpers for every `pair update` TARGET whose install REWRITES
+ * the content it copies — today the root `.pair/knowledge` KB tree, the
+ * `.github/agents` agent files, and the two root files generated from
+ * `dataset/AGENTS.md` (`AGENTS.md` and `CLAUDE.md`).
  *
  * THE RULE THIS MODULE ENCODES (#393): **a mirror guard compares the OUTPUT of
  * the transform, never the source** — `expect(mirror).toBe(transform(dataset))`.
@@ -12,6 +13,12 @@
  * `.github/agents/**` (the `github` registry), then rewrites, in every copied
  * markdown file, the `/command` skill references (`/assess-security` →
  * `/pair-capability-assess-security`) and the `.skills/**` SKILL.md link paths.
+ *
+ * The unit guarded here is a (dataset source → installed copy) PAIR, not a
+ * registry: one registry can install the same source at several targets under
+ * DIFFERENT ops. `agents` does exactly that — `AGENTS.md` and `CLAUDE.md` are
+ * both generated from `dataset/AGENTS.md`, the second through a `claude` naming
+ * transform — so it contributes two guarded mirrors, not one.
  *
  * That is not a theory about the corpus, it is its measured shape (2026-08-11):
  * the transform CHANGES 42 of the 441 KB markdown files — the ones carrying a
@@ -39,7 +46,8 @@
  * dataset source is never asserted — it is not drift.
  */
 import { readdirSync } from 'fs'
-import { join, relative, sep } from 'path'
+import { basename, join, relative, sep } from 'path'
+import { stripAllMarkers, applyTransformCommands } from '@pair/content-ops'
 import {
   buildDatasetSkillNameMap,
   buildSkillLinkPathMap,
@@ -52,28 +60,49 @@ import {
 import { diffSkillMd } from './skill-md-mirror'
 
 /**
- * One `pair update` registry this module guards: where its content comes from,
- * where it is installed, and the `asset_registries` key that declares both.
+ * One (dataset source → installed copy) pair this module guards: where the
+ * content comes from, where `pair update` installs it, the `asset_registries`
+ * key that declares both, and the per-target ops the install applies on top of
+ * the shared skill-reference rewrite.
  *
  * `key` is load-bearing, not decoration: the guard's tests read that entry of
  * `apps/pair-cli/config.json` and pin the assumptions the comparison rests on
  * (no `flatten`/`prefix` — `applySkillRefsToNonSkillRegistries` skips those
- * registries entirely — no per-target content transform, `behavior: "mirror"`).
+ * registries entirely — `behavior: "mirror"`, and a target whose declared
+ * naming transform is exactly the `namingPrefix` modeled below).
  */
-export interface MirrorRegistry {
+export interface GuardedMirror {
   /** Key under `asset_registries` in `apps/pair-cli/config.json`. */
   readonly key: string
-  /** Repo-relative root of the canonical source tree. */
+  /** Repo-relative canonical source: a directory root, or a single file. */
   readonly datasetRel: string
-  /** Repo-relative root of the installed tree. */
+  /** Repo-relative installed path: a directory root, or a single file. */
   readonly mirrorRel: string
+  /**
+   * Whether the registry's declared `source` is a directory or a single file.
+   *
+   * NOT cosmetic: `postCopyOps` (apps/pair-cli/src/registry/operations.ts) runs
+   * `stripMarkersFromTarget` only when the target is NOT a directory, so a
+   * single-file registry's install also strips `<!-- @... -->` markers, and a
+   * directory registry's never does. `buildInstallTransform` models exactly
+   * that.
+   */
+  readonly sourceKind: 'directory' | 'file'
+  /**
+   * The `transform.prefix` this target declares (`claude` for `CLAUDE.md`), or
+   * `undefined` for a target copied verbatim. Applied by
+   * `applyTransformCommands` BEFORE the markers are stripped, which is the
+   * order `writeSecondaryTarget` uses.
+   */
+  readonly namingPrefix?: string
 }
 
 /** The knowledge base: `dataset/.pair/knowledge/**` → `.pair/knowledge/**`. */
-export const KB_MIRROR_REGISTRY: MirrorRegistry = {
+export const KB_MIRROR: GuardedMirror = {
   key: 'knowledge',
   datasetRel: 'packages/knowledge-hub/dataset/.pair/knowledge',
   mirrorRel: '.pair/knowledge',
+  sourceKind: 'directory',
 }
 
 /**
@@ -83,41 +112,79 @@ export const KB_MIRROR_REGISTRY: MirrorRegistry = {
  * Same relationship as the KB tree — `behavior: "mirror"`, no flatten/prefix,
  * so the identical skill-ref + link-path rewrite runs over its markdown — and
  * therefore the same frozen/drifted failure mode. Added to this module (#393
- * review round 3) rather than left to a follow-up: the only registry-specific
+ * review round 3) rather than left to a follow-up: the only mirror-specific
  * inputs are the two paths above.
  */
-export const GITHUB_AGENTS_MIRROR_REGISTRY: MirrorRegistry = {
+export const GITHUB_AGENTS_MIRROR: GuardedMirror = {
   key: 'github',
   datasetRel: 'packages/knowledge-hub/dataset/.github',
   mirrorRel: '.github',
+  sourceKind: 'directory',
 }
 
 /**
- * Every registry whose installed copy is `transform(dataset)` rather than
+ * The repo-root `AGENTS.md`, generated from `dataset/AGENTS.md` verbatim —
+ * plus, because the registry's source is a single FILE, a marker-stripping pass
+ * the two directory registries above never see.
+ *
+ * Added in review round 4: this pair was previously excluded from the guard for
+ * a reason that only held for its sibling (`CLAUDE.md`'s naming transform),
+ * leaving two root files with this story's exact frozen/drifted failure mode
+ * unguarded — a hand-edit or a stray `pnpm format` there was silent.
+ */
+export const AGENTS_MD_MIRROR: GuardedMirror = {
+  key: 'agents',
+  datasetRel: 'packages/knowledge-hub/dataset/AGENTS.md',
+  mirrorRel: 'AGENTS.md',
+  sourceKind: 'file',
+}
+
+/**
+ * The repo-root `CLAUDE.md`: the SAME `dataset/AGENTS.md` source, installed
+ * through the `claude` naming transform (`applyTransformCommands` resolves the
+ * `<!-- @claude-* -->` marker commands) and then stripped of markers.
+ *
+ * The reason two mirrors can share one source and still be compared
+ * independently: the ops are per TARGET, not per registry.
+ */
+export const CLAUDE_MD_MIRROR: GuardedMirror = {
+  key: 'agents',
+  datasetRel: 'packages/knowledge-hub/dataset/AGENTS.md',
+  mirrorRel: 'CLAUDE.md',
+  sourceKind: 'file',
+  namingPrefix: 'claude',
+}
+
+/**
+ * Every mirror whose installed copy is `transform(dataset)` rather than
  * `dataset`. A new one belongs here, not in a new guard: the data-driven suite
  * iterates this list.
  *
- * NOT the whole registry list on purpose. `adoption` is `behavior: "add"`
- * (seeded once, then owned by the adopting project — divergence is the point),
- * `agents` carries a per-target naming transform, and `skills` declares
- * flatten+prefix, which makes the pipeline skip the skill-ref rewrite for it
- * altogether (that pair is guarded by `skill-md-mirror`).
+ * NOT the whole registry list on purpose, and the two exclusions are asserted
+ * in the suite rather than argued here: `adoption` is `behavior: "add"` (seeded
+ * once, then owned by the adopting project — divergence is the point), and
+ * `skills` declares flatten+prefix, which makes the pipeline skip
+ * `applySkillRefsToNonSkillRegistries` for it altogether (that pair is guarded
+ * by `skill-md-mirror`).
  */
-export const REWRITTEN_MIRROR_REGISTRIES: readonly MirrorRegistry[] = [
-  KB_MIRROR_REGISTRY,
-  GITHUB_AGENTS_MIRROR_REGISTRY,
+export const GUARDED_MIRRORS: readonly GuardedMirror[] = [
+  KB_MIRROR,
+  GITHUB_AGENTS_MIRROR,
+  AGENTS_MD_MIRROR,
+  CLAUDE_MD_MIRROR,
 ]
 
 /** The mirror transform: dataset content → installed content. */
 export type MirrorTransform = (text: string) => string
 
 /**
- * Builds the REAL mirror transform from the dataset's `.skills/` tree — the
- * `/command` reference rewrite plus the SKILL.md link-path rewrite `pair update`
- * applies to every markdown file of a non-skills registry.
+ * Builds the REAL skill-reference transform from the dataset's `.skills/` tree —
+ * the `/command` reference rewrite plus the SKILL.md link-path rewrite
+ * `pair update` applies to every markdown file of a non-skills registry.
  *
  * Built once per guard run (the name/link maps are derived from a full walk of
- * `.skills/`), then applied per file.
+ * `.skills/`), then applied per file. This is the shared half of the install;
+ * `buildInstallTransform` wraps it in the per-target ops.
  *
  * PER FILE, never over a concatenation of files: `rewriteSkillReferences`
  * carries fenced-code-block state line by line to the end of the string it is
@@ -128,6 +195,36 @@ export function buildMirrorTransform(skillsDir: string): MirrorTransform {
   const skillNameMap = buildDatasetSkillNameMap(skillsDir)
   const linkPathMap = buildSkillLinkPathMap(skillsDir)
   return text => applyKnownMirrorTransforms(text, skillNameMap, linkPathMap)
+}
+
+/**
+ * The COMPLETE install transform for one mirror and one of its files: what
+ * `pair update` writes, given the dataset bytes.
+ *
+ * Composed in pipeline order, each op present only when the pipeline runs it:
+ *
+ * 1. `applyTransformCommands(text, namingPrefix)` — only for a target declaring
+ *    a naming transform (`writeSecondaryTarget`).
+ * 2. `stripAllMarkers` — only when the registry source is a single FILE, since
+ *    `postCopyOps` calls `stripMarkersFromTarget` on non-directory targets only.
+ *    Modeling this is what let `AGENTS.md` and `CLAUDE.md` join the guard: their
+ *    installed bytes equal `skillRefs(stripAllMarkers(...))`, NOT
+ *    `skillRefs(dataset)`, so a guard without this op would have demanded a
+ *    mirror the pipeline never writes.
+ * 3. `skillRefs` — the shared rewrite above, and MARKDOWN ONLY: the content
+ *    rewrites walk `.md`, so for `assets/*.sh` the transform is the identity and
+ *    byte-equality with the source is the invariant.
+ */
+export function buildInstallTransform(
+  mirror: GuardedMirror,
+  skillRefs: MirrorTransform,
+): (relPath: string, source: string) => string {
+  return (relPath, source) => {
+    let out = source
+    if (mirror.namingPrefix !== undefined) out = applyTransformCommands(out, mirror.namingPrefix)
+    if (mirror.sourceKind === 'file') out = stripAllMarkers(out)
+    return isMarkdownPath(relPath) ? skillRefs(out) : out
+  }
 }
 
 /**
@@ -157,27 +254,39 @@ export function datasetPaths(datasetDir: string): string[] {
 }
 
 /**
- * The markdown files a dataset tree contributes — the ones `pair update` runs
- * the content rewrites over, hence the ones whose mirror is compared against
- * `transform(source)`.
+ * Every file ONE guarded mirror contributes, as entry paths relative to its
+ * dataset root — the keys every comparison below is done under.
+ *
+ * A single-FILE mirror contributes exactly one entry, its own basename, so the
+ * file and directory cases share the whole data-driven suite instead of growing
+ * a second one. `datasetPathOf` / `mirrorPathOf` resolve an entry back to a real
+ * path in either shape.
  */
-export function datasetMarkdownPaths(datasetDir: string): string[] {
-  return datasetPaths(datasetDir).filter(isMarkdown)
+export function mirrorEntries(mirror: GuardedMirror, repoRoot: string): string[] {
+  return mirror.sourceKind === 'file'
+    ? [basename(mirror.datasetRel)]
+    : datasetPaths(join(repoRoot, mirror.datasetRel))
+}
+
+/** Repo-relative path of an entry's dataset source. */
+export function datasetPathOf(mirror: GuardedMirror, relPath: string): string {
+  return mirror.sourceKind === 'file' ? mirror.datasetRel : join(mirror.datasetRel, relPath)
+}
+
+/** Repo-relative path of an entry's installed copy. */
+export function mirrorPathOf(mirror: GuardedMirror, relPath: string): string {
+  return mirror.sourceKind === 'file' ? mirror.mirrorRel : join(mirror.mirrorRel, relPath)
 }
 
 /**
- * The NON-markdown files a dataset tree contributes (today: three `assets/*.sh`
- * gate scripts and `assets/gitleaks-example.toml` under the KB). They are
- * shipped by the same registry and were previously unguarded — the content
- * rewrites skip them, so the transform is the identity by construction and
- * their mirror must be byte-equal to the source. Enumerated separately,
- * asserted by the same helper.
+ * Markdown is the corpus the install-time content rewrites walk. Everything
+ * else a registry ships (today: three `assets/*.sh` gate scripts and
+ * `assets/gitleaks-example.toml` under the KB) is copied verbatim, so there the
+ * transform is the identity and byte-equality with the source IS the invariant.
  */
-export function datasetNonMarkdownPaths(datasetDir: string): string[] {
-  return datasetPaths(datasetDir).filter(rel => !isMarkdown(rel))
+export function isMarkdownPath(rel: string): boolean {
+  return rel.endsWith('.md')
 }
-
-const isMarkdown = (rel: string): boolean => rel.endsWith('.md')
 
 /**
  * Asserts one installed mirror file equals the transform of its dataset source.
@@ -201,13 +310,13 @@ const isMarkdown = (rel: string): boolean => rel.endsWith('.md')
  * `actual` is `undefined` iff the installed mirror file does not exist.
  */
 export function assertMirrorMatches(
-  registry: MirrorRegistry,
+  mirror: GuardedMirror,
   datasetRelPath: string,
   expected: string,
   actual: string | undefined,
 ): void {
-  const mirrorPath = join(registry.mirrorRel, datasetRelPath)
-  const datasetPath = join(registry.datasetRel, datasetRelPath)
+  const mirrorPath = mirrorPathOf(mirror, datasetRelPath)
+  const datasetPath = datasetPathOf(mirror, datasetRelPath)
   if (actual === undefined) {
     throw new Error(
       `Mirror missing for dataset file '${datasetRelPath}': ${mirrorPath} does not exist. ` +
@@ -215,11 +324,23 @@ export function assertMirrorMatches(
     )
   }
   if (actual !== expected) {
-    const compared = isMarkdown(datasetRelPath)
+    // The extra install-time ops are named too, so the reader of a failure can
+    // reproduce `expected` from the source by hand instead of guessing which
+    // half of the pipeline the mirror is out of step with.
+    const extraOps = [
+      mirror.namingPrefix !== undefined
+        ? `the '${mirror.namingPrefix}' naming transform (its <!-- @${mirror.namingPrefix}-* --> marker commands are resolved)`
+        : undefined,
+      mirror.sourceKind === 'file'
+        ? `marker stripping (a single-FILE registry goes through postCopyOps -> stripMarkersFromTarget)`
+        : undefined,
+    ].filter((op): op is string => op !== undefined)
+    const alsoApplies = extraOps.length > 0 ? ` This target's install ALSO applies ${extraOps.join(', then ')}.` : ''
+    const compared = isMarkdownPath(datasetRelPath)
       ? `COMPARED: the installed mirror vs. TRANSFORM(dataset source) — NOT vs. the raw dataset ` +
         `source ${datasetPath}. This corpus is transformed on install ('/short-name' -> ` +
         `'/pair-<category>-<name>', plus '.skills/**' SKILL.md link paths), so a mirror that is ` +
-        `byte-identical to its dataset source is itself the drift, not the invariant.`
+        `byte-identical to its dataset source is itself the drift, not the invariant.${alsoApplies}`
       : `COMPARED: the installed mirror vs. its dataset source ${datasetPath} byte for byte. This ` +
         `file is NOT markdown, and the install-time content rewrites walk '.md' only, so here ` +
         `the transform is the identity and byte-equality IS the invariant.`

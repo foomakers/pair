@@ -1,17 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
+import { stripAllMarkers, applyTransformCommands } from '@pair/content-ops'
 import {
   buildMirrorTransform,
-  datasetPaths,
-  datasetMarkdownPaths,
-  datasetNonMarkdownPaths,
+  buildInstallTransform,
+  mirrorEntries,
+  datasetPathOf,
+  mirrorPathOf,
+  isMarkdownPath,
   assertMirrorMatches,
   isFrozenUntransformed,
-  REWRITTEN_MIRROR_REGISTRIES,
-  KB_MIRROR_REGISTRY,
-  GITHUB_AGENTS_MIRROR_REGISTRY,
-  type MirrorRegistry,
+  GUARDED_MIRRORS,
+  KB_MIRROR,
+  GITHUB_AGENTS_MIRROR,
+  AGENTS_MD_MIRROR,
+  CLAUDE_MD_MIRROR,
+  type GuardedMirror,
 } from './mirror-guard'
 
 // packages/knowledge-hub/src/tools -> repo root
@@ -46,6 +51,27 @@ const REGISTRY_CONFIG = (
 ).asset_registries
 
 /**
+ * Resolves a guarded mirror's `asset_registries` entry, or FAILS BY NAME.
+ *
+ * Deliberately not `REGISTRY_CONFIG[key]!`: this runs at module scope (the
+ * fixtures are built at collection), so a renamed or removed registry key —
+ * precisely the change the pin tests below exist to attribute — would otherwise
+ * kill collection with `Cannot read properties of undefined (reading 'include')`
+ * before a single test runs, blaming nothing and never reaching the explanatory
+ * assertions.
+ */
+const registryConfigFor = (key: string): RegistryConfigJson => {
+  const config = REGISTRY_CONFIG[key]
+  if (!config) {
+    throw new Error(
+      `registry '${key}' is not declared in apps/pair-cli/config.json — GUARDED_MIRRORS is out of sync ` +
+        `(declared registries: ${Object.keys(REGISTRY_CONFIG).join(', ')})`,
+    )
+  }
+  return config
+}
+
+/**
  * The registry's declared `include` narrowing, as posix path prefixes without
  * the leading '/'. `pair update` copies only these subtrees, so enumerating
  * anything outside them would demand a mirror the pipeline never writes (the
@@ -53,19 +79,31 @@ const REGISTRY_CONFIG = (
  * grow a sibling directory tomorrow).
  */
 const includedPrefixes = (key: string): string[] | undefined =>
-  REGISTRY_CONFIG[key]!.include?.map(p => p.replace(/^\//, '').replace(/\/$/, ''))
+  registryConfigFor(key).include?.map(p => p.replace(/^\//, '').replace(/\/$/, ''))
 
+/**
+ * THE membership predicate — one definition, used both by the fixture (to
+ * narrow what is enumerated) and by the pin test (to assert nothing outside the
+ * declared subtrees is enumerated). Two near-identical predicates had drifted
+ * apart once already: an entry whose path EQUALS a prefix would have been
+ * enumerated by one and rejected by the other, failing the pin with a message
+ * about un-included sibling directories.
+ *
+ * An `include` entry is always a directory prefix, so membership is
+ * "under the prefix" — the prefix path itself is a directory and never an
+ * enumerated file.
+ */
 const isIncluded = (key: string, rel: string): boolean => {
   const prefixes = includedPrefixes(key)
   if (!prefixes) return true
-  return prefixes.some(prefix => rel === prefix || rel.startsWith(`${prefix}/`))
+  return prefixes.some(prefix => rel.startsWith(`${prefix}/`))
 }
 
 /**
- * Everything the data-driven guard needs for ONE registry: its file partition
- * and, per markdown file, the dataset source plus the transform output computed
- * ONCE, here at module scope (i.e. at collection, which no `testTimeout`
- * bounds).
+ * Everything the data-driven guard needs for ONE guarded mirror: its file
+ * partition and, per entry, the dataset source plus the full install output
+ * computed ONCE, here at module scope (i.e. at collection, which no
+ * `testTimeout` bounds).
  *
  * `rewriteSkillReferences` is O(lines x skills) — every non-fenced line is
  * matched against one compiled pattern per installed skill — so a full pass
@@ -77,63 +115,65 @@ const isIncluded = (key: string, rel: string): boolean => {
  * consumer put the two aggregate tests over vitest's default 5s per-test budget
  * on CI's slower runners.
  */
-interface RegistryFixture {
-  registry: MirrorRegistry
-  datasetDir: string
-  mirrorDir: string
-  /** markdown files, relative to the dataset root, `include`-narrowed */
+interface MirrorFixture {
+  mirror: GuardedMirror
+  /** `<registry key> -> <installed path>`, the suite's per-mirror title */
+  label: string
+  /** markdown entries, relative to the dataset root, `include`-narrowed */
   markdown: string[]
-  /** non-markdown files, relative to the dataset root, `include`-narrowed */
+  /** non-markdown entries, relative to the dataset root, `include`-narrowed */
   nonMarkdown: string[]
-  /** the whole `include`-narrowed tree — exactly `markdown` + `nonMarkdown` */
+  /** the whole `include`-narrowed entry list — exactly `markdown` + `nonMarkdown` */
   all: string[]
   source: (rel: string) => string
   /** installed content, or `undefined` when the mirror file is genuinely absent */
-  mirror: (rel: string) => string | undefined
-  /** precomputed `{ source, expected }` for a dataset markdown file */
+  installed: (rel: string) => string | undefined
+  /** precomputed `{ source, expected }` for any entry of this mirror */
   expectedFor: (rel: string) => { source: string; expected: string }
 }
 
-const buildFixture = (registry: MirrorRegistry): RegistryFixture => {
-  const datasetDir = join(REPO_ROOT, registry.datasetRel)
-  const mirrorDir = join(REPO_ROOT, registry.mirrorRel)
-  const keep = (rel: string): boolean => isIncluded(registry.key, rel)
-
-  const markdown = datasetMarkdownPaths(datasetDir).filter(keep)
-  const nonMarkdown = datasetNonMarkdownPaths(datasetDir).filter(keep)
-  const source = (rel: string): string => readFileSync(join(datasetDir, rel), 'utf-8')
+const buildFixture = (mirror: GuardedMirror): MirrorFixture => {
+  const all = mirrorEntries(mirror, REPO_ROOT).filter(rel => isIncluded(mirror.key, rel))
+  const source = (rel: string): string =>
+    readFileSync(join(REPO_ROOT, datasetPathOf(mirror, rel)), 'utf-8')
+  // the FULL per-target install: naming transform + marker strip + skill refs,
+  // each applied only where `pair update` applies it (see buildInstallTransform)
+  const install = buildInstallTransform(mirror, transform)
 
   const expected = new Map(
-    markdown.map(rel => {
+    all.map(rel => {
       const src = source(rel)
-      return [rel, { source: src, expected: transform(src) }] as const
+      return [rel, { source: src, expected: install(rel, src) }] as const
     }),
   )
 
   return {
-    registry,
-    datasetDir,
-    mirrorDir,
-    markdown,
-    nonMarkdown,
-    all: datasetPaths(datasetDir).filter(keep),
+    mirror,
+    label: `${mirror.key} -> ${mirror.mirrorRel}`,
+    markdown: all.filter(isMarkdownPath),
+    nonMarkdown: all.filter(rel => !isMarkdownPath(rel)),
+    all,
     source,
-    mirror: rel => {
-      const p = join(mirrorDir, rel)
+    installed: rel => {
+      const p = join(REPO_ROOT, mirrorPathOf(mirror, rel))
       return existsSync(p) ? readFileSync(p, 'utf-8') : undefined
     },
     expectedFor: rel => {
       const hit = expected.get(rel)
-      if (!hit)
-        throw new Error(`no precomputed transform for '${rel}' — not a dataset markdown file`)
+      if (!hit) throw new Error(`no precomputed install output for '${rel}' — not a dataset entry`)
       return hit
     },
   }
 }
 
-const FIXTURES: RegistryFixture[] = REWRITTEN_MIRROR_REGISTRIES.map(buildFixture)
-const kb = FIXTURES.find(f => f.registry.key === KB_MIRROR_REGISTRY.key)!
-const githubAgents = FIXTURES.find(f => f.registry.key === GITHUB_AGENTS_MIRROR_REGISTRY.key)!
+const FIXTURES: MirrorFixture[] = GUARDED_MIRRORS.map(buildFixture)
+const fixtureFor = (m: GuardedMirror): MirrorFixture => {
+  const hit = FIXTURES.find(f => f.mirror === m)
+  if (!hit) throw new Error(`no fixture for '${m.key} -> ${m.mirrorRel}'`)
+  return hit
+}
+const kb = fixtureFor(KB_MIRROR)
+const githubAgents = fixtureFor(GITHUB_AGENTS_MIRROR)
 
 /**
  * Generous explicit budget for the whole-corpus assertions. The default 5s is
@@ -144,17 +184,21 @@ const githubAgents = FIXTURES.find(f => f.registry.key === GITHUB_AGENTS_MIRROR_
 const CORPUS_TEST_TIMEOUT_MS = 30_000
 
 /**
- * Data-driven mirror-equality guard for the WHOLE tree of EVERY rewritten
- * registry (#393 AC1/AC5): for every file the dataset contributes, the
- * installed copy must equal the REAL `pair update` transform of its dataset
- * source — not the source itself.
+ * Data-driven mirror-equality guard for EVERY guarded (dataset → installed)
+ * pair (#393 AC1/AC5): for every file the dataset contributes, the installed
+ * copy must equal the REAL `pair update` install of its dataset source — not
+ * the source itself.
  *
- * Two registries share this suite because they share the relationship: the
- * `knowledge` and `github` registries are both `behavior: "mirror"` with no
- * flatten/prefix, so `applySkillRefsToNonSkillRegistries` runs the identical
- * skill-ref + link-path rewrite over both. Only the two paths differ, so
- * guarding `.github/agents/**` here costs a list entry rather than a second
- * guard that would drift from this one.
+ * Four mirrors share this suite because they share the relationship: an install
+ * that REWRITES what it copies. `knowledge` and `github` are `behavior:
+ * "mirror"` directories with no flatten/prefix, so
+ * `applySkillRefsToNonSkillRegistries` runs the identical skill-ref +
+ * link-path rewrite over both; `agents` contributes its two TARGETS —
+ * `AGENTS.md` and `CLAUDE.md`, both generated from `dataset/AGENTS.md` — whose
+ * installs add marker stripping and, for `CLAUDE.md`, the `claude` naming
+ * transform. `buildInstallTransform` is what makes them one suite: only the
+ * per-target op set differs, so each mirror costs a list entry rather than a
+ * second guard that would drift from this one.
  *
  * Markdown and non-markdown are both covered, because the `knowledge` registry
  * ships both: the content rewrites only walk markdown, so for the non-markdown
@@ -167,9 +211,9 @@ const CORPUS_TEST_TIMEOUT_MS = 30_000
  * covered with no test edit and no count is encoded anywhere.
  */
 describe.each(FIXTURES)(
-  'dataset -> installed mirror equality for every file of the $registry.key registry (data-driven) (#393)',
+  'dataset -> installed mirror equality for every file of $label (data-driven) (#393)',
   fixture => {
-    const { registry, markdown, nonMarkdown, all, source, mirror, expectedFor } = fixture
+    const { mirror, markdown, nonMarkdown, all, source, installed, expectedFor } = fixture
 
     it('discovers dataset files directly from disk (no hardcoded count)', () => {
       expect(markdown.length).toBeGreaterThan(0)
@@ -177,14 +221,19 @@ describe.each(FIXTURES)(
       expect([...markdown, ...nonMarkdown].sort()).toEqual(all)
     })
 
-    it.each(markdown)('mirror for %s equals the real transform of its dataset source', rel => {
-      assertMirrorMatches(registry, rel, expectedFor(rel).expected, mirror(rel))
+    it.each(markdown)('mirror for %s equals the real install of its dataset source', rel => {
+      assertMirrorMatches(mirror, rel, expectedFor(rel).expected, installed(rel))
     })
 
     it.each(nonMarkdown)(
       'mirror for non-markdown %s is byte-equal to its dataset source (transform is identity)',
       rel => {
-        assertMirrorMatches(registry, rel, source(rel), mirror(rel))
+        // stated as the SOURCE, not as `expectedFor(rel)`, because that is the
+        // claim: the install-time rewrites walk '.md' only. The first line pins
+        // that the modeled install agrees, so the two can never say different
+        // things about the same file.
+        expect(expectedFor(rel).expected).toBe(source(rel))
+        assertMirrorMatches(mirror, rel, source(rel), installed(rel))
       },
     )
 
@@ -203,10 +252,10 @@ describe.each(FIXTURES)(
       'lists no mirror that is byte-identical to a source the transform would change (AC5)',
       () => {
         const frozen = markdown.filter(rel => {
-          // source + transform output both come from the module-scope fixture:
+          // source + install output both come from the module-scope fixture:
           // this sweep does no transforming of its own, only mirror reads.
           const { source: src, expected } = expectedFor(rel)
-          return isFrozenUntransformed(src, mirror(rel), expected)
+          return isFrozenUntransformed(src, installed(rel), expected)
         })
         expect(frozen).toEqual([])
       },
@@ -234,8 +283,8 @@ describe.each(FIXTURES)(
         // case below). Filtering instead of comparing two arrays keeps the failure
         // naming the offending FILES rather than an array index.
         const notFixedPoints = markdown.filter(rel => {
-          const installed = expectedFor(rel).expected
-          return transform(installed) !== installed
+          const output = expectedFor(rel).expected
+          return transform(output) !== output
         })
         expect(notFixedPoints).toEqual([])
       },
@@ -244,14 +293,28 @@ describe.each(FIXTURES)(
   },
 )
 
-describe('the guarded registries are the ones this comparison is valid for (#393)', () => {
-  it('covers the KB and the GitHub agent files, and nothing whose install renames', () => {
-    expect(REWRITTEN_MIRROR_REGISTRIES.map(r => r.key)).toEqual(['knowledge', 'github'])
-    // the excluded registries, and WHY each is excluded — asserted, not asserted
-    // in prose: `adoption` is seeded-then-owned, `agents`/`skills` rename.
+describe('the guarded mirrors are the ones this comparison is valid for (#393)', () => {
+  it('covers every rewritten install target, and the exclusions are the asserted ones', () => {
+    expect(GUARDED_MIRRORS.map(m => `${m.key}:${m.mirrorRel}`)).toEqual([
+      'knowledge:.pair/knowledge',
+      'github:.github',
+      'agents:AGENTS.md',
+      'agents:CLAUDE.md',
+    ])
+    // The excluded registries, and WHY each is excluded — asserted, not argued
+    // in prose. Only two are left, and neither reason is about renaming:
+    // `adoption` is seeded-then-owned (divergence is the point) and `skills`
+    // flattens, which makes the pipeline skip the skill-ref rewrite for it
+    // (that pair is guarded by `skill-md-mirror`).
     expect(REGISTRY_CONFIG.adoption!.behavior).toBe('add')
-    expect(REGISTRY_CONFIG.agents!.targets.some(t => t.transform !== undefined)).toBe(true)
     expect(REGISTRY_CONFIG.skills!.flatten).toBe(true)
+    // ...and every OTHER declared registry is guarded, so a new rewritten
+    // registry cannot be added to config.json and silently stay unguarded.
+    const guardedKeys = new Set(GUARDED_MIRRORS.map(m => m.key))
+    expect(Object.keys(REGISTRY_CONFIG).filter(k => !guardedKeys.has(k)).sort()).toEqual([
+      'adoption',
+      'skills',
+    ])
   })
 
   it('guards the three .github agent files the github registry ships', () => {
@@ -265,51 +328,119 @@ describe('the guarded registries are the ones this comparison is valid for (#393
     expect(kb.markdown).toContain('skills-guide.md')
     expect(kb.nonMarkdown).toContain('assets/pr-state.sh')
   })
+
+  /**
+   * The two root files, and the two ops that separate their installed bytes
+   * from `skillRefs(dataset)`. These are asserted HERE rather than trusted from
+   * the on-disk comparison, because on-disk equality alone cannot tell a
+   * correctly modeled install apart from a mirror that happens to match: the
+   * real blocker for `AGENTS.md` was never the `claude` naming transform (that
+   * target declares none) but the marker strip a single-FILE registry gets from
+   * `postCopyOps` -> `stripMarkersFromTarget`.
+   */
+  describe('the two root files generated from dataset/AGENTS.md', () => {
+    const datasetAgents = readFileSync(
+      join(REPO_ROOT, AGENTS_MD_MIRROR.datasetRel),
+      'utf-8',
+    ) as string
+
+    it('are one source installed at two targets, under different ops', () => {
+      expect(AGENTS_MD_MIRROR.datasetRel).toBe(CLAUDE_MD_MIRROR.datasetRel)
+      expect(AGENTS_MD_MIRROR.namingPrefix).toBeUndefined()
+      expect(CLAUDE_MD_MIRROR.namingPrefix).toBe('claude')
+      expect(AGENTS_MD_MIRROR.sourceKind).toBe('file')
+      expect(CLAUDE_MD_MIRROR.sourceKind).toBe('file')
+      // one entry each — the entry key of a single-file mirror is its basename
+      expect(fixtureFor(AGENTS_MD_MIRROR).all).toEqual(['AGENTS.md'])
+      expect(fixtureFor(CLAUDE_MD_MIRROR).all).toEqual(['AGENTS.md'])
+    })
+
+    it('carries the markers whose stripping is the real reason a naive guard fails', () => {
+      // if this ever stops holding, the marker op below is no longer load-bearing
+      // and the exclusion story in mirror-guard.ts must be re-derived, not copied
+      expect(datasetAgents).toMatch(/<!--\s*@claude-/)
+      expect(stripAllMarkers(datasetAgents)).not.toBe(datasetAgents)
+    })
+
+    it('installs AGENTS.md as skillRefs(stripAllMarkers(source)) — NOT skillRefs(source)', () => {
+      const install = buildInstallTransform(AGENTS_MD_MIRROR, transform)
+      expect(install('AGENTS.md', datasetAgents)).toBe(transform(stripAllMarkers(datasetAgents)))
+      // the naive composition the guard would have used without the marker op
+      expect(install('AGENTS.md', datasetAgents)).not.toBe(transform(datasetAgents))
+    })
+
+    it('installs CLAUDE.md through the naming transform FIRST, then the marker strip', () => {
+      const install = buildInstallTransform(CLAUDE_MD_MIRROR, transform)
+      expect(install('AGENTS.md', datasetAgents)).toBe(
+        transform(stripAllMarkers(applyTransformCommands(datasetAgents, 'claude'))),
+      )
+      // the two targets genuinely differ, so one mirror cannot stand in for both
+      expect(install('AGENTS.md', datasetAgents)).not.toBe(
+        buildInstallTransform(AGENTS_MD_MIRROR, transform)('AGENTS.md', datasetAgents),
+      )
+    })
+  })
 })
 
 /**
- * The two-op composition in `buildMirrorTransform` is the COMPLETE `pair update`
- * transform for these registries only because neither declares a naming
- * transform. Pin that, as the sibling `skill-md-mirror` pins `SKILL_COPY_OPTS`:
- * if a registry later gains `flatten`/`prefix`, the real pipeline both renames
- * paths AND stops rewriting skill references entirely
- * (`applySkillRefsToNonSkillRegistries` skips any registry with flatten/prefix),
- * so `transform(dataset)` would no longer equal `pair update`'s output and the
- * guard above would go permanently red with no satisfiable mirror — the deadlock
- * this story removed, reintroduced one level up. Failing HERE attributes it to
- * the registry change instead of blaming the mirror.
+ * `buildInstallTransform` is the COMPLETE `pair update` install for these
+ * mirrors only under the config each one is modeled against. Pin that, as the
+ * sibling `skill-md-mirror` pins `SKILL_COPY_OPTS`: if a registry later gains
+ * `flatten`/`prefix`, the real pipeline both renames paths AND stops rewriting
+ * skill references entirely (`applySkillRefsToNonSkillRegistries` skips any
+ * registry with flatten/prefix), so the modeled install would no longer equal
+ * `pair update`'s output and the guard above would go permanently red with no
+ * satisfiable mirror — the deadlock this story removed, reintroduced one level
+ * up. Failing HERE attributes it to the registry change instead of blaming the
+ * mirror.
  */
 describe.each(FIXTURES)(
-  'the $registry.key guard stays pinned to its pair-cli registry declaration (#393)',
-  ({ registry, all }) => {
-    const config = REGISTRY_CONFIG[registry.key]!
+  'the $label guard stays pinned to its pair-cli registry declaration (#393)',
+  ({ mirror, all }) => {
+    const config = registryConfigFor(mirror.key)
+    const target = config.targets.find(t => t.path === mirror.mirrorRel)
 
-    it('declares no flatten/prefix, so the skill-ref + link-path pair IS the whole transform', () => {
+    it('declares no flatten/prefix, so the skill-ref + link-path pair IS the content rewrite', () => {
       expect(config.flatten).toBeUndefined()
       expect(config.prefix).toBeUndefined()
-      // no per-target content transform either (the `agents` registry's `claude`
-      // prefix transform is what one would look like)
-      for (const target of config.targets) expect(target.transform).toBeUndefined()
+    })
+
+    it('declares exactly the per-target naming transform the guard models', () => {
+      // the ONLY per-target content op the model knows about is
+      // `transform.prefix`; anything else appearing here means the installed
+      // bytes are produced by an op `buildInstallTransform` does not run.
+      expect(target?.transform).toEqual(
+        mirror.namingPrefix === undefined ? undefined : { prefix: mirror.namingPrefix },
+      )
+    })
+
+    it('has the source KIND the marker-strip op is switched on', () => {
+      // `postCopyOps` runs `stripMarkersFromTarget` only when the installed
+      // target is NOT a directory, so this flag decides an op, not a path shape.
+      const datasetPath = join(REPO_ROOT, mirror.datasetRel)
+      expect(statSync(datasetPath).isDirectory()).toBe(mirror.sourceKind === 'directory')
     })
 
     it('reads the dataset from, and asserts against, the registry-declared source and target', () => {
-      expect(registry.datasetRel.endsWith(config.source)).toBe(true)
-      expect(config.targets.map(t => t.path)).toContain(registry.mirrorRel)
-      // 'mirror' behavior: the installed tree is meant to be the dataset's image,
+      expect(mirror.datasetRel.endsWith(config.source)).toBe(true)
+      expect(config.targets.map(t => t.path)).toContain(mirror.mirrorRel)
+      // 'mirror' behavior: the installed copy is meant to be the dataset's image,
       // which is what makes whole-tree equality the right assertion here.
       expect(config.behavior).toBe('mirror')
     })
 
     it('enumerates only what the registry declares it copies (`include` honored)', () => {
-      const prefixes = includedPrefixes(registry.key)
+      const prefixes = includedPrefixes(mirror.key)
       if (!prefixes) {
         expect(config.include).toBeUndefined()
         return
       }
       // every enumerated path sits under a declared include prefix — an
       // un-included sibling directory added to the dataset must NOT be demanded
-      // of the mirror, since `pair update` never copies it
-      for (const rel of all) expect(prefixes.some(p => rel.startsWith(`${p}/`))).toBe(true)
+      // of the mirror, since `pair update` never copies it. Uses THE membership
+      // predicate the fixture narrowed with, so the two cannot disagree about
+      // an edge case and blame it on a sibling directory.
+      for (const rel of all) expect(isIncluded(mirror.key, rel)).toBe(true)
     })
   },
 )
@@ -323,7 +454,7 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
   const REL = 'guidelines/collaboration/templates/code-review-template.md'
   const expected = 'line one\nline two\nline three\n'
   const assertKb = (rel: string, exp: string, actual: string | undefined): void =>
-    assertMirrorMatches(KB_MIRROR_REGISTRY, rel, exp, actual)
+    assertMirrorMatches(KB_MIRROR, rel, exp, actual)
 
   it('passes when the mirror equals the transform output', () => {
     // called directly, not wrapped in `expect().not.toThrow()`: vitest then reports
@@ -348,8 +479,8 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
 
   it('names both the mirror path and the dataset path, and the regenerate remedy', () => {
     const message = captureThrownMessage(() => assertKb(REL, expected, 'drifted\n'))
-    expect(message).toContain(join(KB_MIRROR_REGISTRY.mirrorRel, REL))
-    expect(message).toContain(join(KB_MIRROR_REGISTRY.datasetRel, REL))
+    expect(message).toContain(join(KB_MIRROR.mirrorRel, REL))
+    expect(message).toContain(join(KB_MIRROR.datasetRel, REL))
     expect(message).toContain("Regenerate with 'pair update'")
     expect(message).toContain('never hand-edit the mirror')
   })
@@ -357,7 +488,7 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
   it('names the paths of the registry it was given, not the KB by default', () => {
     const rel = 'agents/product-manager.agent.md'
     const message = captureThrownMessage(() =>
-      assertMirrorMatches(GITHUB_AGENTS_MIRROR_REGISTRY, rel, expected, 'drifted\n'),
+      assertMirrorMatches(GITHUB_AGENTS_MIRROR, rel, expected, 'drifted\n'),
     )
     expect(message).toContain(join('.github', rel))
     expect(message).toContain(join('packages/knowledge-hub/dataset/.github', rel))
