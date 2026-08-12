@@ -805,7 +805,9 @@ describe('KB Manager - contaminated official slot self-heals (US-395 AC5)', () =
     const result = await ensureKBAvailable(testVersion, { httpClient, fs })
 
     expect(result).toBe(officialSlot)
-    expect(await fs.readFile(officialSlot + '/.pair/knowledge/official.md')).toBe('official content')
+    expect(await fs.readFile(officialSlot + '/.pair/knowledge/official.md')).toBe(
+      'official content',
+    )
     expect(fs.existsSync(officialSlot + '/.pair/knowledge/foreign.md')).toBe(false)
 
     consoleLogSpy.mockRestore()

@@ -1,5 +1,5 @@
 import { join } from 'path'
-import type { FileSystemService } from '@pair/content-ops'
+import { logger as log, type FileSystemService } from '@pair/content-ops'
 import {
   expectedManifestName,
   getCachedKBPath,
@@ -112,11 +112,28 @@ export async function restoreCachedKB(source: KBSource, fs: FileSystemService): 
   }
 }
 
+/**
+ * Discards the set-aside slot once the install that replaced it has SUCCEEDED. BEST-EFFORT
+ * by contract, for two reasons that both end in "a cleanup must not undo the work it is
+ * cleaning up after":
+ *
+ * - `force` — the `existsSync` guard is check-then-act, and a concurrent install of the
+ *   same source (#428) can delete the `.bak` in between; without `force`, `rm` then throws
+ *   ENOENT for a state that is exactly what this function wanted.
+ * - the catch — a leftover `.bak` is inert (the next `backupCachedKB` overwrites it),
+ *   while a throw here propagates into the caller's failure path, which RESTORES the
+ *   backup: the KB just installed correctly would be deleted and the previous slot — a
+ *   contaminated one, in the AC5 self-heal — put back, over an unrelated fs error
+ *   (EPERM/EBUSY from an antivirus handle on a just-renamed tree, on Windows).
+ */
 export async function removeBackupKB(source: KBSource, fs: FileSystemService): Promise<void> {
   const cachePath = getSourceCachePath(source)
   const backupPath = cachePath + BACKUP_SUFFIX
-  if (fs.existsSync(backupPath)) {
-    await fs.rm(backupPath, { recursive: true })
+  if (!fs.existsSync(backupPath)) return
+  try {
+    await fs.rm(backupPath, { recursive: true, force: true })
+  } catch (err) {
+    log.debug(`Could not remove the previous KB cache at ${backupPath}: ${String(err)}`)
   }
 }
 

@@ -80,14 +80,20 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
   // must leave the user with the cache they had, not with no cache at all.
   const hadCache = await cacheManager.backupCachedKB(source, fs)
 
+  let result: string
   try {
-    const result = await installFromSource(version, source, cachePath, deps)
-    if (hadCache) await cacheManager.removeBackupKB(source, fs)
-    return result
+    result = await installFromSource(version, source, cachePath, deps)
   } catch (err) {
     if (hadCache) await cacheManager.restoreCachedKB(source, fs)
     throw err
   }
+
+  // OUTSIDE the try on purpose: the catch RESTORES the backup, so a cleanup failure inside
+  // it would delete the KB just installed correctly and reinstate the previous slot — the
+  // contaminated one, in the AC5 self-heal above. (`removeBackupKB` is best-effort too;
+  // this is the structural half of the same invariant.)
+  if (hadCache) await cacheManager.removeBackupKB(source, fs)
+  return result
 }
 
 async function installFromSource(

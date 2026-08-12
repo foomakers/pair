@@ -26,8 +26,12 @@ import { gitCacheKey } from './git-clone'
 /** `name` carried by the manifest.json of the KB published by this project. */
 export const OFFICIAL_KB_NAME = 'knowledge-base'
 
-/** Directory under the cache root that holds every non-official source's slot. */
-export const EXTERNAL_NAMESPACE = 'external'
+/**
+ * Directory under the cache root that holds every non-official source's slot. Module-private:
+ * nothing outside derives a slot path by hand (that is what `getSourceCachePath` is for), and
+ * the tests assert the literal `external/` layout a user sees on disk.
+ */
+const EXTERNAL_NAMESPACE = 'external'
 
 /**
  * Identity of a KB source that OWNS a cache slot. A local directory is deliberately not
@@ -116,14 +120,19 @@ function shortHash(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 12)
 }
 
-/** Filesystem-safe, human-readable fragment used to make a slot recognizable. */
+/**
+ * Filesystem-safe, human-readable fragment used to make a slot recognizable. The trailing
+ * separators are stripped AFTER the truncation as well: cutting at 32 characters can land
+ * on a `-` or `.` and produce `zip-some-long-label--<hash>`, which defeats the only reason
+ * the label exists (a user reading `~/.pair/kb/external/` should recognize the slot).
+ */
 function label(value: string): string {
   const cleaned = value
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/-{2,}/g, '-')
     .replace(/^[-.]+|[-.]+$/g, '')
-  return (cleaned || 'kb').slice(0, 32)
+  return cleaned.slice(0, 32).replace(/[-.]+$/, '') || 'kb'
 }
 
 function labelFromPath(path: string): string {
@@ -191,10 +200,11 @@ function hasParentSegment(path: string): boolean {
 
 /**
  * Absolute path of a cache slot from its key (the official KB's key is its version).
- * An empty key would resolve to the cache ROOT, and a `..` segment would resolve OUTSIDE
- * it — both are then deleted by `purgeSlot`, so both are rejected rather than normalized
- * away. Guarding here covers every key producer, including the official version segment
- * (today the CLI's own package version, tomorrow whatever calls this).
+ * An empty key would resolve to the cache ROOT, a `..` segment OUTSIDE it, and the bare
+ * `external` namespace to the PARENT of every external slot — each is then deleted by
+ * `purgeSlot`, so each is rejected rather than normalized away. Guarding here covers every
+ * key producer, including the official version segment (today the CLI's own package
+ * version, tomorrow whatever calls this).
  */
 export function getCachedKBPath(key: string): string {
   const slot = key.trim()
@@ -202,7 +212,18 @@ export function getCachedKBPath(key: string): string {
   if (hasParentSegment(slot)) {
     throw new Error(`Cache slot key must not escape the cache root with ".." (got "${key}")`)
   }
+  if (isNamespaceItself(slot)) {
+    throw new Error(
+      `Cache slot key must not be the "${EXTERNAL_NAMESPACE}" namespace itself (got "${key}") — that directory holds every external slot`,
+    )
+  }
   return join(getCacheRoot(), slot)
+}
+
+/** True when the key names the external namespace DIRECTORY rather than a slot inside it. */
+function isNamespaceItself(slot: string): boolean {
+  const segments = slot.split(/[\\/]+/).filter(Boolean)
+  return segments.length === 1 && segments[0] === EXTERNAL_NAMESPACE
 }
 
 /** Absolute path of the cache slot owned by a source. */

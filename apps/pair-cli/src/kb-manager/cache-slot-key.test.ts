@@ -219,9 +219,7 @@ describe('cache-slot-key — key → path mapping', () => {
   })
 
   it('still accepts a slot INSIDE the namespace', () => {
-    expect(getCachedKBPath('external/zip-acme-abc123')).toBe(
-      join(externalRoot, 'zip-acme-abc123'),
-    )
+    expect(getCachedKBPath('external/zip-acme-abc123')).toBe(join(externalRoot, 'zip-acme-abc123'))
     expect(() => getSourceCachePath({ kind: 'zip', path: '/kb/acme.zip' })).not.toThrow()
   })
 })

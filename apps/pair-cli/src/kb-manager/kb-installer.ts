@@ -145,12 +145,15 @@ export async function installKBFromGit(url: string, fs: FileSystemService): Prom
     cloneGitRepo(url, cachePath)
     // The dataset is what we cache; the clone's history is not.
     await fs.rm(join(cachePath, '.git'), { recursive: true, force: true })
-    if (hadCache) await cacheManager.removeBackupKB(source, fs)
-    return cachePath
   } catch (err) {
     if (hadCache) await cacheManager.restoreCachedKB(source, fs)
     throw err
   }
+
+  // OUTSIDE the try: the catch RESTORES the set-aside clone, so a cleanup failure there
+  // would delete the clone that just succeeded and put the stale one back.
+  if (hadCache) await cacheManager.removeBackupKB(source, fs)
+  return cachePath
 }
 
 // Helper: finalize installation, normalize and return dataset root
