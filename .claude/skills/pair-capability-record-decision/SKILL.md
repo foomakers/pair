@@ -225,7 +225,7 @@ When invoked **independently**:
 
 - **Same topic + same date (ADL)**: If a file `YYYY-MM-DD-<topic>.md` already exists and the developer chose "create new," append an incremented suffix: `YYYY-MM-DD-<topic>-2.md`.
 - **Same topic (DDR)**: Sequential numbering already guarantees a distinct filename (`ddr-NNN-<topic>.md`) — no suffix needed even if the same topic recurs.
-- **Repeated analysis on the same topic (analysis-log)**: never updated in place — always creates a new record so history is preserved (AC2); apply the same-day suffix rule above if the date+topic collide. The adoption summary, in contrast, is always replaced with the latest analysis' findings, never appended to.
+- **Repeated analysis on the same topic (analysis-log)**: never updated in place — always creates a new record so history is preserved; apply the same-day suffix rule above if the date+topic collide. The adoption summary, in contrast, is always replaced with the latest analysis' findings, never appended to.
 - **Adoption file doesn't exist**: Create it with the decision content as the initial entry. Warn the developer that a new adoption file was created.
 - **Context map absent (DDR)**: The DDR is still recorded; the skill offers to create a minimal `context-map.md` with just the affected rule (see Step 4).
 - **No clearly pertinent adoption file for an analysis summary**: Ask the developer where the current-state summary belongs instead of guessing — never invent a target file (Step 4).

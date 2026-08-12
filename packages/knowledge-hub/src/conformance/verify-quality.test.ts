@@ -764,9 +764,9 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(SKILL).not.toMatch(/out of scope for this skill/i)
   })
 
-  it('ships no story-local (ACn) markers — the corpus installs into downstream projects with no referent', () => {
-    expect(SKILL).not.toMatch(/\(AC\d\)/)
-  })
+  // The (ACn) marker ban moved to conformance/story-local-markers.test.ts, which asserts it
+  // over EVERY skill file in both corpora. Kept here as a per-artifact copy it let 40 markers
+  // survive in 11 other skills — a per-artifact guard only ever sees its own artifact.
 })
 
 describe('review Step 2.1 — forwards the PR under review to verify-quality (#382)', () => {

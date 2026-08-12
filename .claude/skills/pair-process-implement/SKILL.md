@@ -38,7 +38,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 ### Step 0.0: Resume Probe (checkpoint) — NEVER SKIP
 
-The opening phase re-reads the checkpoint so an interrupted story resumes exactly where it stopped (AC2). This runs first, before loading the story, so completed tasks are never re-done.
+The opening phase re-reads the checkpoint so an interrupted story resumes exactly where it stopped. This runs first, before loading the story, so completed tasks are never re-done.
 
 1. **Check**: Is `/pair-capability-checkpoint` installed AND does a checkpoint exist for this story (`.pair/working/checkpoints/<story-id>.md`)?
 2. **Skip**: If no checkpoint exists → this is a fresh start. Proceed to Step 0.1 (normal one-shot flow — no regression, AC4).
@@ -298,14 +298,14 @@ The checkpoint is the boundary artifact (R4.2) and the **input contract for `/pa
 2. **Verify**: The checkpoint file exists and captures the completed story state (all tasks done, branch, decisions). This file — not this session's memory — is what the PR is built from.
 3. **Act — if `/pair-capability-checkpoint` is not installed**: synthesize the handoff inline (branch, tasks done, decisions, ACs) and pass it directly to `/pair-capability-publish-pr` as `$handoff`; note the absence in the output.
 
-### Step 3.3: Publish the PR via a Handoff-Only Subagent (AC1)
+### Step 3.3: Publish the PR via a Handoff-Only Subagent
 
 The PR is produced on a **guaranteed-clean context**: a fresh subagent whose entire prompt is the handoff, nothing from this session. This is mechanical isolation (D23) — an **anonymous** subagent, **no named role**. A skill cannot `/clear` its own context (D7), so the reset is achieved by delegating to a subagent.
 
 1. **Check**: Is subagent spawning available in this tool/environment?
 2. **Act — primary path (subagent)**: Spawn an **anonymous subagent** whose prompt is the **handoff document only** — the checkpoint contents (or the path `.pair/working/checkpoints/<story-id>.md`) plus a single instruction: run `/pair-capability-publish-pr $story=<story-id> $handoff=.pair/working/checkpoints/<story-id>.md`. Pass **no other session context** — the subagent's context is the handoff and nothing else (clean context / fresh context reset within one execution, R4.1). The subagent runs `/pair-capability-publish-pr` (gate → PR → tags → ready-for-review → board) and returns the PR number/URL and board result.
-3. **Act — degraded inline path (AC3)**: If subagent spawning is **unavailable** (tool/environment cannot spawn one — subagent spawning unavailable), do NOT skip the split: the checkpoint is already written (Step 3.2), then compose `/pair-capability-publish-pr` **inline** in the current session (`$story`, `$handoff` = the checkpoint). **Note the degradation in the output** (`Context: degraded — inline publish, no subagent reset`). Behavior is otherwise equivalent to the primary path.
-4. **Act — dispatch the review (AC1 of #234; this session is the actor)**: `/pair-capability-publish-pr` Phase 5 registers the `pair-review` check as **pending** (merge blocked from t0) but cannot spawn the review subagent from inside the handoff subagent — nested dispatch is commonly forbidden — so it returns **`Review: review-dispatch-required — /pair-process-review $pr=<n>`**. When that signal comes back, **this top-level session** spawns the anonymous review subagent (a sibling of the publish subagent, not a nested one), prompt = the PR reference plus the bounded instruction:
+3. **Act — degraded inline path**: If subagent spawning is **unavailable** (tool/environment cannot spawn one — subagent spawning unavailable), do NOT skip the split: the checkpoint is already written (Step 3.2), then compose `/pair-capability-publish-pr` **inline** in the current session (`$story`, `$handoff` = the checkpoint). **Note the degradation in the output** (`Context: degraded — inline publish, no subagent reset`). Behavior is otherwise equivalent to the primary path.
+4. **Act — dispatch the review (this session is the actor)**: `/pair-capability-publish-pr` Phase 5 registers the `pair-review` check as **pending** (merge blocked from t0) but cannot spawn the review subagent from inside the handoff subagent — nested dispatch is commonly forbidden — so it returns **`Review: review-dispatch-required — /pair-process-review $pr=<n>`**. When that signal comes back, **this top-level session** spawns the anonymous review subagent (a sibling of the publish subagent, not a nested one), prompt = the PR reference plus the bounded instruction:
 
    ```text
    Run /review $pr=<number> $dispatched=true.

@@ -64,7 +64,7 @@ Quick mode reduces the questions to the genuinely-defaultable ones; it does not 
 
 Everything else in the table above resolves without a question **once the PRD exists**. If one of the two still-asked decisions can neither be resolved from the cascade nor asked (quick mode with no TTY), bootstrap HALTs and names the input to pass explicitly — see SKILL.md.
 
-## Same files, same format as guided (AC4)
+## Same files, same format as guided
 
 Every file quick mode writes is a normal adoption file, in the same location and the same format guided mode would have produced for the same values: `.pair/adoption/tech/*.md`, the Custom Gate Registry in `way-of-working.md`, ADLs/ADRs via `/record-decision`. There is **no quick-mode-only** file, marker, or format — a default installed by quick mode is edited exactly like any other adopted decision, and re-running a phase (or `/record-decision` on that topic) supersedes it.
 
