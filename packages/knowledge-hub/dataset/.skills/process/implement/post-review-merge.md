@@ -41,10 +41,10 @@ This is the author-side merge path, and it carries the **same** precondition as 
 
 ### Step 4.4: Update Story & Parents
 
-1. **Act**: Update user story status to "Done" on the **PM tool** — state transitions always happen there, never on the code host (resolve the item id from the PR's `Refs: <issue-id>` cross-link when the two tools differ).
-2. **Act**: Check parent epic — if ALL stories in the epic are Done, update epic status to "Done".
-3. **Act**: Check parent initiative — if ALL epics in the initiative are Done, update initiative status to "Done".
-4. **Verify**: Story and parent hierarchy updated recursively.
+1. **Act**: Update user story status to "Done" on the **PM tool** — state transitions always happen there, never on the code host (resolve the item id from the PR's `Refs: <issue-id>` cross-link when the two tools differ). Every state write here follows the order the item writer states once and this step applies unchanged — **membership, then a read that confirms it, then the state field** (`/write-issue` Step 7b): a state field cannot be written on an item the tracked view does not hold, and the add that puts it there can exit 0 having done nothing. The invariant is applied **by reference**, never re-derived.
+2. **Act**: Check parent epic — if ALL stories in the epic are Done, update epic status to "Done", under the same order.
+3. **Act**: Check parent initiative — if ALL epics in the initiative are Done, update initiative status to "Done", under the same order.
+4. **Verify**: A **read** of the story — and of each parent this run transitioned — shows `Done`. Report **what the read observed**, never what the calls returned: nobody re-runs the merge phase, so a state this step reports without reading is terminal.
 
 ### Step 4.5: Clean Up the Checkpoint
 

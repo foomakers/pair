@@ -458,6 +458,74 @@ describe('/write-issue — the report is what a read observed (#403 AC8)', () =>
   )
 })
 
+describe('post-review-merge Step 4.4 — the terminal state writes obey the same two rules', () => {
+  // Step 4.4 writes THREE states directly (story, parent epic, parent initiative) and its
+  // Verify used to read "Story and parent hierarchy updated recursively" — i.e. it trusted
+  // the calls. The same `gh project item-*` class of call reproduced three times exiting 0
+  // with no effect, so a merged story could be reported Done while the board still showed
+  // In Progress. Worse than Step 0.1b: nobody re-runs the merge phase, so it is terminal.
+  // skillCorpora reads a skill's SKILL.md; this rule lives in a SUB-DOCUMENT, so the pair
+  // is built explicitly. Reading SKILL.md instead would have passed vacuously — Step 0.1b
+  // carries the same by-reference sentence, so the assertion would have been satisfied by
+  // the wrong file.
+  const mergeCases = [
+    {
+      corpus: 'dataset',
+      content: read(join(DATASET, '.skills/process/implement/post-review-merge.md')),
+    },
+    {
+      corpus: 'generated root',
+      content: read(join(REPO_ROOT, '.claude/skills/pair-process-implement/post-review-merge.md')),
+    },
+  ]
+
+  it.each(mergeCases)(
+    '$corpus: applies membership -> confirming read -> state by reference',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('membership, then a read that confirms it, then the state field')
+      expect(body).toContain('by reference')
+    },
+  )
+
+  it.each(mergeCases)(
+    '$corpus: verifies by READING, and says why it is terminal',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('what the read observed')
+      expect(body).toContain('nobody re-runs the merge phase')
+      // The trusting wording must be gone, not merely accompanied.
+      expect(body).not.toContain('story and parent hierarchy updated recursively')
+    },
+  )
+})
+
+describe('/publish-pr — the board state is written directly, never by composing write mode', () => {
+  // Maintainer decision, 2026-08-12. This PR shipped two contracts for one operation:
+  // step 7 said the board state was written by composing the item writer in DEFAULT WRITE
+  // MODE, while /implement Step 0.1b and ADL decision 11 — in the same diff — said that is
+  // never the route for a state-only change, because write mode is a full-body overwrite
+  // and would replace the story's AC/DoD/task breakdown. An agent following step 7 either
+  // HALTed on the missing $type (rendering `Board: not updated` on every publish, a
+  // permanent failure dressed as a documented skip) or destroyed the body.
+  //
+  // Resolved in favour of the rule the PR already stated twice: publish-pr writes the state
+  // directly, applying membership -> confirming read -> state field BY REFERENCE.
+  it.each(publishPrCases)(
+    '$corpus: step 7 applies the invariant by reference and does not compose write mode',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('by reference')
+      expect(body).toContain('membership, then a read that confirms it, then the state field')
+      // The losing shape must be gone, not merely outnumbered.
+      expect(body).not.toContain('default write mode for the board state')
+      expect(body).not.toMatch(
+        /board state[^.]{0,80}using `\/[a-z-]*write-issue` \(default write mode\)/,
+      )
+    },
+  )
+})
+
 describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC7)', () => {
   it.each(publishPrCases)('$corpus: declares $$assignee in the Arguments table', ({ content }) => {
     expect(content).toMatch(/^\|\s*`\$assignee`\s*\|/m)
