@@ -109,15 +109,23 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
  *
  * RECURSIVE by necessity (#426, absorbed into #393). The comparison used to stop at the
  * top level: an entry present on BOTH sides was kept and never looked inside, so a file
- * removed from the dataset survived every `pair update` forever. Measured cost — two
- * how-to guides deleted from the dataset in #246 were still installed at the repo root
- * ~5 months later, and `.pair/llms.txt` advertised them, so agents were pointed at
- * guides the KB no longer ships.
+ * removed from the source survived every mirror run forever. A directory present on both
+ * sides is therefore DESCENDED INTO rather than kept wholesale; only an entry absent from
+ * the source is removed, exactly as before. That asymmetry is the whole point: `rm -r` on
+ * a shared directory would delete content the source still has.
  *
- * A directory present on both sides is therefore DESCENDED INTO rather than kept
- * wholesale; only an entry absent from the source is removed, exactly as before. That
- * asymmetry is the whole point: `rm -r` on a shared directory would delete content the
- * source still has.
+ * SCOPE — read before citing this as a `pair update` fix. This function runs on the
+ * content-ops library path only (`copyPathOps` / `movePathOps` → `performDirectoryCopy`,
+ * gated on `behavior: 'mirror'`). The CLI's registry install does NOT reach it: for a
+ * registry without flatten/prefix — which is every `behavior: "mirror"` registry shipped —
+ * `doCopyAndUpdateLinks` goes to the CLI-local `copyDirectory`
+ * (`apps/pair-cli/src/registry/operations.ts`) → `copyDirHelper`, a pure source→target
+ * copy that deletes nothing. Measured on this branch: a top-level AND a nested orphan
+ * planted under `.pair/knowledge/**` both survive `pair update`. So the two how-to guides
+ * deleted from the dataset in #246 and still installed ~5 months later were removed BY
+ * HAND in #393; wiring cleanup onto the install path is an open product decision (it makes
+ * `pair update` delete an adopter's own files under a mirror target, with no dry-run) and
+ * is recorded as such in `.pair/adoption/decision-log/2026-08-11-a-mirror-guard-compares-the-transform.md`.
  */
 export async function handleMirrorCleanup(
   fileService: FileSystemService,
