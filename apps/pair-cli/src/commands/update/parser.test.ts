@@ -105,3 +105,31 @@ describe('parseUpdateCommand', () => {
     })
   })
 })
+
+/**
+ * US-395 review round 12 — same rule as install: a program-level `--url` names the source
+ * when the command names none, so `pair update --url <mirror>` updates from the mirror
+ * instead of silently updating from the official KB.
+ */
+describe('US-395: the program-level --url names the source when --source does not', () => {
+  it('resolves a remote --url as a remote source', () => {
+    const config = parseUpdateCommand({ url: 'https://mirror.internal/kb.zip' })
+
+    expect(config).toEqual({
+      command: 'update',
+      kb: true,
+      resolution: 'remote',
+      url: 'https://mirror.internal/kb.zip',
+      offline: false,
+    })
+  })
+
+  it('lets an explicit --source outrank --url', () => {
+    const config = parseUpdateCommand({
+      source: '/local/kb',
+      url: 'https://mirror.internal/kb.zip',
+    })
+
+    expect(config.resolution).toBe('local')
+  })
+})

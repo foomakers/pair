@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseTargetAndSource, validateCommandOptions } from './cli'
+import { namedSource, parseTargetAndSource, validateCommandOptions } from './cli'
 
 describe('cli config - parsing', () => {
   it('parseTargetAndSource returns nulls for missing args', () => {
@@ -54,5 +54,42 @@ describe('cli config - validation', () => {
         offline: true,
       })
     }).toThrow('Cannot use --offline with git repository source')
+  })
+})
+
+/**
+ * US-395 review round 12: the program-level `--url` names a source, so it must reach the
+ * SAME resolution the command's own `--source` reaches. It used to work by side effect
+ * (bootstrap wrote the custom archive into the official KB's slot, which default resolution
+ * then served); source-identity keying ended that, and without this rule `--url` resolves
+ * nothing at all.
+ */
+describe('cli config - namedSource (the source a command must resolve)', () => {
+  it('returns the command --source when given', () => {
+    expect(namedSource({ source: '/local/kb' })).toBe('/local/kb')
+  })
+
+  it('falls back to the program-level --url when the command names no source', () => {
+    expect(namedSource({ url: 'https://mirror.internal/kb.zip' })).toBe(
+      'https://mirror.internal/kb.zip',
+    )
+  })
+
+  it('lets an explicit --source outrank --url (the more specific flag wins)', () => {
+    expect(namedSource({ source: '/local/kb', url: 'https://mirror.internal/kb.zip' })).toBe(
+      '/local/kb',
+    )
+  })
+
+  it('keeps an empty --source empty so its validation error still fires', () => {
+    expect(namedSource({ source: '', url: 'https://mirror.internal/kb.zip' })).toBe('')
+  })
+
+  it('ignores an empty --url', () => {
+    expect(namedSource({ url: '' })).toBeUndefined()
+  })
+
+  it('returns undefined when neither is given', () => {
+    expect(namedSource({})).toBeUndefined()
   })
 })

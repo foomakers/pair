@@ -1,8 +1,14 @@
 import { describe, expect, beforeEach, test, vi } from 'vitest'
 import { handleInstallCommand } from './handler'
+import { parseInstallCommand } from './parser'
 import type { InstallCommandConfig } from './parser'
 import { createTestFs } from '#test-utils'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import {
+  buildTestResponse,
+  InMemoryFileSystemService,
+  MockHttpClientService,
+  toIncomingMessage,
+} from '@pair/content-ops'
 
 /**
  * #186: config override via options.config
@@ -1262,5 +1268,75 @@ describe('install — skills registry secondary (symlink) targets', () => {
     const symlinks = fs.getSymlinks()
     expect(symlinks.has(`${cwd}/.github/skills`)).toBe(true)
     expect(symlinks.has(`${cwd}/.cursor/skills`)).toBe(true)
+  })
+})
+
+/**
+ * US-395 review round 12 — END TO END, from the flags as Commander hands them over to the
+ * bytes on disk. The global `--url` was consumed ONLY by the bootstrap pre-flight: the
+ * install command itself parsed to `resolution: 'default'`, so once cache slots became
+ * source-keyed the mirror archive landed in a slot nothing read and the OFFICIAL KB was
+ * downloaded and installed instead. A monorepo dataset is seeded on purpose — it is what
+ * `resolution: 'default'` serves, so this test fails LOUDLY (with the dataset's content)
+ * rather than vacuously if `--url` is ever disconnected again.
+ */
+describe('US-395: `pair install --url <mirror>` installs what the mirror served', () => {
+  const cwd = '/project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+  const url = 'https://mirror.internal/kb.zip'
+
+  let fs: InMemoryFileSystemService
+  let httpClient: MockHttpClientService
+
+  beforeEach(() => {
+    fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            'test-registry': {
+              source: 'test-registry',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+              description: 'Test registry',
+            },
+          },
+        }),
+        [`${datasetSrc}/test-registry/file1.md`]: '# Content from the official KB',
+      },
+      cwd,
+      cwd,
+    )
+    httpClient = new MockHttpClientService()
+    vi.restoreAllMocks()
+  })
+
+  test('downloads the url and installs its content, not the default KB', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/test-registry/file1.md`, '# Content from the mirror')
+    })
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    // Exactly what cli.ts hands the parser for `pair install --url <mirror>`:
+    // the program-level options merged under the command's own.
+    await handleInstallCommand(parseInstallCommand({ url }), fs, { httpClient })
+
+    expect(httpClient.getUrls()[0]).toBe(url)
+    expect(await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)).toBe(
+      '# Content from the mirror',
+    )
+
+    consoleLogSpy.mockRestore()
   })
 })
