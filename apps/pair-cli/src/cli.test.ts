@@ -441,3 +441,35 @@ describe('US-395 round 14: the global --log-level actually takes effect', () => 
     expect(getLogLevel()).toBe('DEBUG')
   })
 })
+
+describe('US-395 round 15: `pair --help` does not advertise --no-kb as working', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  /**
+   * `--no-kb` is inert: its only consumers sit behind the KB pre-flight, which never runs
+   * (see `runKbPreflight`'s banner). The CLI reference now says so; `--help` is the same
+   * promise made in the place users read first, so it must not read "Skip knowledge base
+   * download" while `pair install --no-kb` installs a KB anyway.
+   */
+  it('the --no-kb help line marks it a no-op instead of promising a skip', async () => {
+    const { runCli } = await import('./cli.js')
+    let help = ''
+    vi.spyOn(process.stdout, 'write').mockImplementation(chunk => {
+      help += String(chunk)
+      return true
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runCli(['node', 'pair', '--help'], {
+      fs: new InMemoryFileSystemService({}, '/tmp', '/tmp'),
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    const noKbLine = help.split('\n').find(line => line.includes('--no-kb')) ?? ''
+    expect(noKbLine).not.toBe('')
+    expect(noKbLine).toMatch(/no-op/i)
+    expect(noKbLine).not.toMatch(/Skip knowledge base download/)
+  })
+})
