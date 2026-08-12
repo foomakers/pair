@@ -236,6 +236,68 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
   })
 }
 
+/**
+ * Apply the program-level `--log-level` (or its legacy `--verbose` alias).
+ *
+ * It runs BEFORE any pre-flight guard, deliberately: it is a program-level flag, so it must
+ * take effect for every command — including the KB-producing ones the pre-flight skips, and
+ * including every command at all while `runKbPreflight` stays unreachable. It used to live
+ * BELOW those guards, so `pair <cmd> --log-level debug` silently did nothing and the only
+ * level ever applied was the module-level default (US-395 review round 14). A command-level
+ * `--log-level` (`package`, `update-link`) is applied later in that handler and still wins.
+ */
+function applyGlobalLogLevel(prog: Command): void {
+  const globalOptions = prog.opts<{ logLevel?: string; verbose?: boolean }>()
+  if (globalOptions.verbose && !globalOptions.logLevel) {
+    // map legacy verbose flag to debug level
+    globalOptions.logLevel = 'debug'
+  }
+  if (globalOptions.logLevel) {
+    setLogLevel(globalOptions.logLevel)
+  }
+}
+
+/**
+ * ⚠️ THIS FUNCTION NEVER RUNS PAST ITS FIRST LINE — deliberately, not accidentally.
+ *
+ * Commander invokes a program-level hook as `callback(hookedCommand, actionCommand)`, so
+ * `thisCommand` IS `prog` for EVERY subcommand and the first guard always returns. The KB
+ * pre-flight (`bootstrapEnvironment`) therefore never runs from the CLI, and with it
+ * `validateCliOptions` (so `--no-kb` is inert) and the dataset accessibility probe.
+ *
+ * Left standing rather than repaired or deleted in US-395: reviving it makes every
+ * KB-requiring command resolve — and potentially download — a KB before it runs, on top of
+ * install/update's own resolution, i.e. a second fetch of the same source. That is a
+ * behaviour change with its own blast radius, decided at the merge gate, not slipped into a
+ * fix round. See the ADL
+ * `.pair/adoption/decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md`
+ * ("The KB pre-flight (`bootstrapEnvironment`) never runs"). A named source reaches the
+ * command through the PARSERS (`namedSource` in `config/cli.ts`), not through here.
+ */
+async function runKbPreflight(args: {
+  prog: Command
+  thisCommand: Command
+  actionCommand: Command
+  ctx: { fsService: FileSystemService; httpClient: HttpClientService; version: string }
+}): Promise<void> {
+  const { prog, thisCommand, actionCommand, ctx } = args
+
+  // Skip bootstrap for root command (no subcommand matched) — always true, see above
+  if (thisCommand === prog) return
+
+  // Skip bootstrap for KB-producing commands (package, scaffold-kb) — they don't need a KB
+  if (!requiresKbBootstrap(actionCommand.name())) return
+
+  const options = thisCommand.opts<{ url?: string; kb: boolean }>()
+  await bootstrapEnvironment({
+    fsService: ctx.fsService,
+    httpClient: ctx.httpClient,
+    version: ctx.version,
+    url: options.url,
+    kb: options.kb,
+  })
+}
+
 function attachPreActionHook(
   prog: Command,
   ctx: { fsService: FileSystemService; httpClient: HttpClientService; version: string },
@@ -248,30 +310,9 @@ function attachPreActionHook(
       console.log(`  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`)
     }
 
-    // Skip bootstrap for root command (no subcommand matched)
-    if (thisCommand === prog) return
+    applyGlobalLogLevel(prog)
 
-    // Skip bootstrap for KB-producing commands (package, scaffold-kb) — they don't need a KB
-    if (!requiresKbBootstrap(actionCommand.name())) return
-
-    // Apply global log level or legacy --verbose alias if provided
-    const globalOptions = prog.opts<{ logLevel?: string; verbose?: boolean }>()
-    if (globalOptions.verbose && !globalOptions.logLevel) {
-      // map legacy verbose flag to debug level
-      globalOptions.logLevel = 'debug'
-    }
-    if (globalOptions.logLevel) {
-      setLogLevel(globalOptions.logLevel)
-    }
-
-    const options = thisCommand.opts<{ url?: string; kb: boolean }>()
-    await bootstrapEnvironment({
-      fsService: ctx.fsService,
-      httpClient: ctx.httpClient,
-      version: ctx.version,
-      url: options.url,
-      kb: options.kb,
-    })
+    await runKbPreflight({ prog, thisCommand, actionCommand, ctx })
   })
 }
 

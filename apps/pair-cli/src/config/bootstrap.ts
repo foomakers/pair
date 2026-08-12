@@ -7,6 +7,19 @@ import { DatasetAccessError, DatasetNotFoundError, KnowledgeHubSetupError } from
 /**
  * Main entry point for application bootstrap.
  * Validates options and ensures the Knowledge Hub dataset is ready for use.
+ *
+ * ⚠️ UNREACHABLE FROM THE CLI TODAY — read this before changing anything below.
+ * The only production caller is `cli.ts`'s `preAction` hook, and its `thisCommand === prog`
+ * guard is always true (Commander invokes a program-level hook as
+ * `callback(hookedCommand, actionCommand)`), so nothing in this file executes on a real
+ * `pair <command>` invocation. Everything here is therefore covered by unit tests ONLY —
+ * a green suite in this file says nothing about user-visible behaviour. Consequences:
+ * `--no-kb` is inert, and `--url` reaches the command through the parsers
+ * (`namedSource` in `config/cli.ts`), never through this pre-flight.
+ * Whether to revive it (and pay for every command resolving a KB before it runs, a second
+ * fetch alongside install/update's own) is the open decision recorded in
+ * `.pair/adoption/decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md`
+ * ("The KB pre-flight (`bootstrapEnvironment`) never runs"). US-395 review rounds 13-14.
  */
 export async function bootstrapEnvironment(options: {
   fsService: FileSystemService
@@ -93,18 +106,9 @@ function shouldSkipKBDownload(
     return true
   }
 
-  // A NAMED source is answered here and never falls through to the monorepo shortcut below:
-  // a local path is used in place (nothing to download), a remote URL must reach identity
-  // resolution — the same rule as `getKnowledgeHubDatasetPathWithFallback`, one layer further
-  // in. Letting a remote `--url` fall through short-circuited this pre-flight BEFORE the
-  // resolver was ever called, so in a development checkout the typed URL resolved to the
-  // local dataset with nothing but a `[diag]` line to say so.
-  if (customUrl) {
-    if (!isRemoteUrl(customUrl)) {
-      if (isDiagEnabled()) console.error(`[diag] Using local path: ${customUrl}`)
-      return true
-    }
-    return false
+  if (customUrl && !isRemoteUrl(customUrl)) {
+    if (isDiagEnabled()) console.error(`[diag] Using local path: ${customUrl}`)
+    return true
   }
 
   if (fsService && hasLocalDataset(fsService)) {
@@ -118,12 +122,6 @@ function shouldSkipKBDownload(
 /**
  * Verify that the Knowledge Hub dataset is accessible
  * Skips check for local custom URLs; validates accessibility for default/remote sources
- *
- * SCOPE, so this is not read as a second resolution: it only ever checks the path
- * `getKnowledgeHubDatasetPath` yields (the packaged/monorepo dataset). Which source is in
- * play was decided in step 2 — a remote `--url` resolves to its own cache slot there and a
- * failed download has already thrown — so this check is a readability probe of the bundled
- * dataset, never a statement about the source that was chosen.
  *
  * @param fsService - FileSystemService for dataset path resolution
  * @param customUrl - Custom URL from CLI (optional, skips check if local path)
