@@ -3,6 +3,8 @@ title: CLI Commands
 description: Complete reference for all pair-cli commands with syntax, options, and examples.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout'
+
 Complete reference for all `pair-cli` commands with syntax, options, and examples.
 
 **Quick Navigation:**
@@ -521,7 +523,17 @@ Options available for all commands:
 | `--version`           | Display CLI version                                    |
 | `--log-level <level>` | Set global logging level (trace, debug, info, warn, error) |
 | `--url <url\|path>`   | KB source for whichever command runs, used when that command names no `--source` (which outranks it); resolves exactly like `--source` — same identity, same cache slot |
-| `--no-kb`             | Skip knowledge base download                           |
+| `--no-kb`             | **Currently a no-op** — see the note below              |
+
+<Callout type="warn">
+  **`--no-kb` does nothing today.** It was meant to skip the knowledge base download, but its only
+  consumer is the CLI's KB pre-flight (`bootstrapEnvironment`), and that pre-flight is unreachable —
+  a guard in the `preAction` hook always returns before it. `pair install --no-kb` still resolves and
+  installs a KB. The flag stays registered (dropping it would break scripts that pass it), but it
+  changes no behaviour. Whether to revive the pre-flight or retire the flag is an open decision —
+  see the ADL entry _"The KB pre-flight (`bootstrapEnvironment`) never runs"_. `--log-level` and
+  `--verbose` are **not** affected: they are applied before that guard and do take effect.
+</Callout>
 
 ---
 
