@@ -6,7 +6,10 @@ import {
   MockHttpClientService,
   NodeHttpClientService,
   toIncomingMessage,
+  getLogLevel,
+  setLogLevel,
 } from '@pair/content-ops'
+import { MIN_LOG_LEVEL } from './diagnostics'
 
 describe('CLI command registration', () => {
   it('install command is registered', () => {
@@ -392,5 +395,49 @@ describe('US-395: the program-level --url reaches the command', () => {
     // run at all — see the ADL consequence "the KB pre-flight never runs".
     expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
     expect(await fs.readFile(`${root}/.pair/knowledge/README.md`)).toBe('# Content from the mirror')
+  })
+})
+
+describe('US-395 round 14: the global --log-level actually takes effect', () => {
+  afterEach(() => {
+    setLogLevel(MIN_LOG_LEVEL)
+    vi.restoreAllMocks()
+  })
+
+  /**
+   * The `--log-level`/`--verbose` handling used to sit BELOW the pre-flight guards in the
+   * `preAction` hook, and the first of those guards (`thisCommand === prog`) is always true
+   * — Commander invokes a program-level hook as `(hookedCommand, actionCommand)`, so
+   * `thisCommand` IS the program for every subcommand. The result: `pair <cmd> --log-level
+   * debug` silently did nothing, and the only level ever applied was the module-level
+   * default. It is a program-level flag, so it must apply to EVERY command.
+   */
+  it('pair --log-level debug applies the level before the command runs', async () => {
+    const { runCli } = await import('./cli.js')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    // validate-config throws (no config file) but preAction has already run by then.
+    await runCli(['node', 'pair', '--log-level', 'debug', 'validate-config'], {
+      fs,
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    expect(getLogLevel()).toBe('DEBUG')
+  })
+
+  it('the legacy --verbose alias maps to debug for a KB-producing command too', async () => {
+    const { runCli } = await import('./cli.js')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    await runCli(['node', 'pair', '--verbose', 'package', '--source-dir', '/nope'], {
+      fs,
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    expect(getLogLevel()).toBe('DEBUG')
   })
 })
