@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { createHash } from 'crypto'
 import { join } from 'path'
 import { homedir, tmpdir } from 'os'
 import {
@@ -11,8 +12,15 @@ import { installKB, installKBFromGit, installKBFromLocalZip } from './kb-install
 import { getSourceCachePath } from './cache-slot-key'
 import * as gitClone from './git-clone'
 
-// A local source owns a slot keyed by its own identity, not by the CLI version (US-395)
-const zipSlot = (path: string) => getSourceCachePath({ kind: 'zip', path })
+// A local source owns a slot keyed by its own identity, not by the CLI version (US-395).
+// The identity of a ZIP is its CONTENT (#429): the helper hashes the serialized in-memory
+// archive exactly the way `zipKBSource` hashes the bytes on disk (latin1 = byte-identical).
+const zipSlot = (zipFileContent: string) =>
+  getSourceCachePath({
+    kind: 'zip',
+    path: '/any.zip',
+    contentHash: createHash('sha256').update(Buffer.from(zipFileContent, 'latin1')).digest('hex'),
+  })
 
 describe('KB Installer', () => {
   it('downloads and installs when checksum absent', async () => {
@@ -333,13 +341,13 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = '/absolute/path/kb.zip'
-    const expectedCachePath = zipSlot(zipPath)
 
     // Create valid ZIP content in InMemoryFS format (JSON serialized)
     const zipContent = {
       '.pair/knowledge/test.md': 'extracted content',
       'manifest.json': JSON.stringify({ version: '0.2.0' }),
     }
+    const expectedCachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService(
       {
@@ -363,13 +371,13 @@ describe('KB Installer - installKBFromLocalZip', () => {
     const zipPath = './downloads/kb.zip'
     // relative paths resolve against the INJECTED cwd ('/'), not process.cwd()
     const resolvedZipPath = '/downloads/kb.zip'
-    const expectedCachePath = zipSlot(resolvedZipPath)
 
     // Create valid ZIP content
     const zipContent = {
       'AGENTS.md': 'extracted content',
       'manifest.json': JSON.stringify({ version: '0.2.0' }),
     }
+    const expectedCachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService(
       {
@@ -425,13 +433,13 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange - Simulates ZIP created by `pair package` which has .zip-temp/ root
     const version = '0.2.0'
     const zipPath = '/path/kb.zip'
-    const cachePath = zipSlot(zipPath)
 
     // Create valid ZIP with .zip-temp root directory structure
     const zipContent = {
       '.zip-temp/.pair/knowledge/test.md': 'test content',
       '.zip-temp/manifest.json': JSON.stringify({ version: '0.2.0' }),
     }
+    const cachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService(
       {
@@ -473,13 +481,14 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = '/path/manifest-plus.zip'
-    const cachePath = zipSlot(zipPath)
+    const zipData = JSON.stringify({ 'manifest.json': '{}', 'AGENTS.md': 'agents' })
+    const cachePath = zipSlot(zipData)
 
     // Pre-populate extraction output so extractZip (test path) results in both files
     const fs = new InMemoryFileSystemService(
       {
         // ZIP exists (content not used by extract when fs param is provided),
-        [zipPath]: JSON.stringify({ 'manifest.json': '{}', 'AGENTS.md': 'agents' }),
+        [zipPath]: zipData,
         // Simulate extraction output already present
         [`${cachePath}/manifest.json`]: '{}',
         [`${cachePath}/AGENTS.md`]: 'agents',
@@ -615,7 +624,6 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
   it('installKBFromLocalZip returns cachePath when ZIP has root-level registries beside .pair/', async () => {
     const version = '0.4.1'
     const zipPath = '/path/kb-full.zip'
-    const cachePath = zipSlot(zipPath)
 
     // Full dataset structure matching real knowledge-base-0.4.1.zip
     const zipContent = {
@@ -626,6 +634,7 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
       '.skills/capability/next/SKILL.md': '# /next',
       'manifest.json': JSON.stringify({ version }),
     }
+    const cachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService({ [zipPath]: JSON.stringify(zipContent) }, '/', '/')
 

@@ -15,6 +15,10 @@ import {
 const officialSlot = (version: string) => join(homedir(), '.pair', 'kb', version)
 const externalRoot = join(homedir(), '.pair', 'kb', 'external')
 
+/** A zip KBSource for keying tests — content-keyed since #429, so a hash is part of it. */
+const zipSource = (path: string, contentHash = 'c'.repeat(64)) =>
+  ({ kind: 'zip', path, contentHash }) as const
+
 /**
  * US-395 — a cache slot belongs to ONE source.
  * Keying by CLI version alone let `install --source <zip>` extract an external KB
@@ -27,32 +31,36 @@ describe('cache-slot-key — source-identity keying (US-395)', () => {
   })
 
   it('never puts an external ZIP in the official slot (AC1)', () => {
-    const slot = getSourceCachePath({ kind: 'zip', path: '/downloads/acme-kb-1.0.0.zip' })
+    const slot = getSourceCachePath(zipSource('/downloads/acme-kb-1.0.0.zip'))
     expect(slot).not.toBe(officialSlot('0.2.0'))
     expect(slot.startsWith(externalRoot)).toBe(true)
   })
 
-  it('keeps the external slot human-readable (source label in the slot name)', () => {
-    const slot = getSourceCachePath({ kind: 'zip', path: '/downloads/acme-kb-1.0.0.zip' })
+  it('keeps a URL slot human-readable (source label in the slot name)', () => {
+    const slot = getSourceCachePath({
+      kind: 'remote',
+      url: 'https://cdn.example.com/acme-kb-1.0.0.zip',
+    })
     expect(slot).toContain('acme-kb-1.0.0')
   })
 
   it('resolves the same source to the same slot (no unbounded cache growth)', () => {
-    const a = cacheSlotKey({ kind: 'zip', path: '/downloads/acme-kb-1.0.0.zip' })
-    const b = cacheSlotKey({ kind: 'zip', path: '/downloads/acme-kb-1.0.0.zip' })
+    const a = cacheSlotKey(zipSource('/downloads/acme-kb-1.0.0.zip'))
+    const b = cacheSlotKey(zipSource('/downloads/acme-kb-1.0.0.zip'))
     expect(a).toBe(b)
   })
 
   it('does not collapse two sources that declare the same name and version (AC4)', () => {
-    const a = cacheSlotKey({ kind: 'zip', path: '/team-a/dist/kb-1.0.0.zip' })
-    const b = cacheSlotKey({ kind: 'zip', path: '/team-b/dist/kb-1.0.0.zip' })
+    // Same declared metadata, same file name, DIFFERENT bytes — the story's edge case.
+    const a = cacheSlotKey(zipSource('/team-a/dist/kb-1.0.0.zip', 'a'.repeat(64)))
+    const b = cacheSlotKey(zipSource('/team-b/dist/kb-1.0.0.zip', 'b'.repeat(64)))
     expect(a).not.toBe(b)
   })
 
   it('gives every slot-owning source form its own slot (AC4)', () => {
     const keys = [
       cacheSlotKey(officialSource('0.2.0')),
-      cacheSlotKey({ kind: 'zip', path: '/kb/acme.zip' }),
+      cacheSlotKey(zipSource('/kb/acme.zip')),
       cacheSlotKey({ kind: 'git', url: 'https://github.com/acme/kb.git' }),
       cacheSlotKey({ kind: 'remote', url: 'https://cdn.example.com/acme.zip' }),
     ]
@@ -109,11 +117,11 @@ describe('cache-slot-key — one location, one slot (path canonicalization)', ()
     expect(resolveSourcePath('/downloads/../downloads/acme.zip', fs)).toBe(plain)
   })
 
-  it('strips a trailing separator, so `--source /kb/` and `/kb` share one slot', () => {
+  it('strips a trailing separator, so `--source /kb/` and `/kb` name one location', () => {
     expect(resolveSourcePath('/kb/', fs)).toBe('/kb')
-    expect(cacheSlotKey({ kind: 'zip', path: resolveSourcePath('/kb/acme.zip/', fs) })).toBe(
-      cacheSlotKey({ kind: 'zip', path: resolveSourcePath('/kb/acme.zip', fs) }),
-    )
+    // A ZIP's SLOT no longer depends on its path (content-keyed, #429), but the resolved
+    // path is still what error messages name and what the extractor reads — one spelling.
+    expect(resolveSourcePath('/kb/acme.zip/', fs)).toBe(resolveSourcePath('/kb/acme.zip', fs))
   })
 
   it('canonicalizes the relative branch too (trailing slash after join)', () => {
@@ -154,7 +162,7 @@ describe('cache-slot-key — key → path mapping', () => {
     process.env['PAIR_KB_CACHE_DIR'] = '/custom/kb-cache'
     expect(getCacheRoot()).toBe('/custom/kb-cache')
     expect(getCachedKBPath('0.2.0')).toBe(join('/custom/kb-cache', '0.2.0'))
-    expect(getSourceCachePath({ kind: 'zip', path: '/downloads/acme.zip' })).toContain(
+    expect(getSourceCachePath(zipSource('/downloads/acme.zip'))).toContain(
       join('/custom/kb-cache', 'external'),
     )
   })
@@ -219,8 +227,10 @@ describe('cache-slot-key — key → path mapping', () => {
   })
 
   it('still accepts a slot INSIDE the namespace', () => {
-    expect(getCachedKBPath('external/zip-acme-abc123')).toBe(join(externalRoot, 'zip-acme-abc123'))
-    expect(() => getSourceCachePath({ kind: 'zip', path: '/kb/acme.zip' })).not.toThrow()
+    expect(getCachedKBPath('external/zip-abc123abc123')).toBe(
+      join(externalRoot, 'zip-abc123abc123'),
+    )
+    expect(() => getSourceCachePath(zipSource('/kb/acme.zip'))).not.toThrow()
   })
 })
 
@@ -232,9 +242,12 @@ describe('cache-slot-key — key → path mapping', () => {
  */
 describe('cache-slot-key — slot label readability', () => {
   it('does not leave a dangling separator when a long source name is truncated', () => {
-    const path = `/downloads/${'a'.repeat(31)}-trailing-cut-here.zip`
-    const slotName = getSourceCachePath({ kind: 'zip', path }).split(/[\\/]/).pop() ?? ''
-    const label = slotName.replace(/^zip-/, '').replace(/-[0-9a-f]{12}$/, '')
+    const url = `https://cdn.example.com/${'a'.repeat(31)}-trailing-cut-here.zip`
+    const slotName =
+      getSourceCachePath({ kind: 'remote', url })
+        .split(/[\\/]/)
+        .pop() ?? ''
+    const label = slotName.replace(/^url-/, '').replace(/-[0-9a-f]{12}$/, '')
 
     expect(label).not.toMatch(/[-.]$/)
     expect(slotName).not.toContain('--')

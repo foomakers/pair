@@ -10,6 +10,7 @@ import {
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
 import { downloadStagingName, getSourceCachePath, OFFICIAL_KB_NAME } from './cache-slot-key'
+import { zipKBSource } from './zip-source'
 import { buildGithubReleaseUrl } from './url-utils'
 
 // Helper to create valid ZIP data for InMemoryFileSystemService
@@ -591,7 +592,7 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     })
 
     // Installed from the local ZIP's own slot, not the official cache it must not touch
-    expect(result).toBe(getSourceCachePath({ kind: 'zip', path: localZip }))
+    expect(result).toBe(getSourceCachePath(await zipKBSource(localZip, fs)))
     expect(result).not.toBe(expectedCachePath)
     expect(await fs.readFile(expectedCachePath + '/manifest.json')).toBe('{"version": "0.2.0"}')
     // No HTTP calls for a local path
@@ -926,7 +927,7 @@ describe('KB Manager - one identity per source, whatever the extension case (US-
       skipVerify: true,
     })
 
-    expect(result).toBe(getSourceCachePath({ kind: 'zip', path: zipPath }))
+    expect(result).toBe(getSourceCachePath(await zipKBSource(zipPath, fs)))
     expect(fs.existsSync(join(result, '.pair', 'knowledge', 'acme.md'))).toBe(true)
     // exactly one slot exists for this archive — no orphan from a second classification
     expect(await fs.readdir(join(homedir(), '.pair', 'kb', 'external'))).toHaveLength(1)

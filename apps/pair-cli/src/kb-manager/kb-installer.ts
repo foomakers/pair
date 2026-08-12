@@ -4,12 +4,8 @@ import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/c
 import { cleanupFile, normalizeExtractedKB } from '@pair/content-ops'
 import { downloadWithRetry } from './download-manager'
 import cacheManager from './cache-manager'
-import {
-  downloadStagingName,
-  getSourceCachePath,
-  resolveSourcePath,
-  type KBSource,
-} from './cache-slot-key'
+import { downloadStagingName, getSourceCachePath, type KBSource } from './cache-slot-key'
+import { zipKBSource } from './zip-source'
 import { cloneGitRepo } from './git-clone'
 import checksumManager from './checksum-manager'
 import formatDownloadError from './error-formatter'
@@ -188,17 +184,13 @@ export async function installKBFromLocalZip(
   skipVerify = false,
 ): Promise<string> {
   // Slot keyed by source identity, never by CLI version: an external ZIP must not land
-  // in the official KB's slot (US-395). The caller has already classified this path as a
-  // ZIP (`localKBSource`); the slot derives from the same resolved path, so both sides
-  // land on the same slot.
-  const resolvedZipPath = resolveSourcePath(zipPath, fs)
-  const source: KBSource = { kind: 'zip', path: resolvedZipPath }
+  // in the official KB's slot (US-395). The identity is the archive's CONTENT (#429):
+  // `zipKBSource` resolves the path AND hashes the bytes, so the same archive copied to
+  // two directories lands on ONE slot and two different archives can never share one.
+  // (It also throws the canonical "ZIP file not found" when the path does not exist.)
+  const source = await zipKBSource(zipPath, fs)
+  const resolvedZipPath = source.path
   const cachePath = getSourceCachePath(source)
-
-  // Validate ZIP file exists
-  if (!fs.existsSync(resolvedZipPath)) {
-    throw new Error(`ZIP file not found: ${resolvedZipPath}`)
-  }
 
   // Verify package integrity (unless skipped)
   const { logger: log } = await import('@pair/content-ops')

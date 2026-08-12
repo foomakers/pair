@@ -1,4 +1,4 @@
-import { basename, isAbsolute, join, posix, win32 } from 'path'
+import { isAbsolute, join, posix, win32 } from 'path'
 import { homedir } from 'os'
 import { createHash } from 'crypto'
 import type { FileSystemService } from '@pair/content-ops'
@@ -15,12 +15,16 @@ import { gitCacheKey } from './git-clone'
  * manifest and contaminating every other project on the machine.
  *
  * Layout:
- *   <cacheRoot>/<version>/                  official KB only
- *   <cacheRoot>/external/<kind>-<label>-<hash>/   one slot per external source
+ *   <cacheRoot>/<version>/                        official KB only
+ *   <cacheRoot>/external/url-<label>-<hash12>/    one slot per remote-URL source
+ *   <cacheRoot>/external/git-<hash>/              one slot per git url#ref
+ *   <cacheRoot>/external/zip-<contentHash12>/     one slot per local-ZIP CONTENT (#429)
  *
  * Disk: one slot per distinct external source. Slots are plain directories with no
  * hidden state — `rm -rf <cacheRoot>/external` is always safe and the next install
- * re-populates. Automatic eviction is deliberately out of scope (see the US-395 ADL).
+ * re-populates. Live slots are never auto-evicted (no LRU/TTL); stale leftovers —
+ * old CLI versions, pre-#395 git clones, `.bak`/`.discarded-*`/orphaned `.tmp-*` —
+ * are removed by `pair kb-cache prune` (see `cache-inventory.ts` and the US-395 ADL).
  */
 
 /** `name` carried by the manifest.json of the KB published by this project. */
@@ -42,7 +46,12 @@ export type KBSource =
   | { kind: 'official'; version: string }
   | { kind: 'remote'; url: string }
   | { kind: 'git'; url: string }
-  | { kind: 'zip'; path: string }
+  /**
+   * A local ZIP's identity is its CONTENT — `contentHash` is the lowercase-hex sha256
+   * of the archive's bytes, produced ONLY by `zipKBSource` (byte-mode read, #429). The
+   * path is kept for messages and for the extraction source, never for the slot key.
+   */
+  | { kind: 'zip'; path: string; contentHash: string }
 
 /**
  * A `--source` path on this machine, classified. A ZIP is extracted into its own slot
@@ -80,11 +89,11 @@ function stripTrailingSeparator(path: string): string {
 /**
  * ONE filesystem location must map to ONE slot: `/kb/acme.zip`, `/kb/./acme.zip` and
  * `/kb/../kb/acme.zip` are the same file, and `--source /kb/` is the same directory as
- * `--source /kb`. Without canonicalization each spelling hashes to its own slot — a full
- * extra copy of the KB on disk and a needless re-extract. Normalized with the rules of
- * whichever convention called the path absolute, so a Windows path is not mangled by the
- * POSIX normalizer. (Distinct from #429, which is path-vs-content identity: two different
- * paths to the same bytes stay two slots, deliberately.)
+ * `--source /kb`. Without canonicalization each spelling of a URL-less source resolves
+ * to its own location. Normalized with the rules of whichever convention called the path
+ * absolute, so a Windows path is not mangled by the POSIX normalizer. (A ZIP's slot no
+ * longer depends on its path at all — content-keyed since #429 — but the canonical path
+ * is still what error messages name and what the extractor reads.)
  */
 function canonicalize(path: string): string {
   const normalized = posix.isAbsolute(path) ? posix.normalize(path) : win32.normalize(path)
@@ -135,10 +144,6 @@ function label(value: string): string {
   return cleaned.slice(0, 32).replace(/[-.]+$/, '') || 'kb'
 }
 
-function labelFromPath(path: string): string {
-  return label(basename(path).replace(/\.zip$/i, ''))
-}
-
 function labelFromUrl(url: string): string {
   const withoutQuery = url.split(/[?#]/)[0] ?? url
   const lastSegment = withoutQuery.split('/').filter(Boolean).pop() ?? url
@@ -161,7 +166,11 @@ export function cacheSlotKey(source: KBSource): string {
     case 'remote':
       return `${EXTERNAL_NAMESPACE}/url-${labelFromUrl(source.url)}-${shortHash(`remote:${source.url}`)}`
     case 'zip':
-      return `${EXTERNAL_NAMESPACE}/zip-${labelFromPath(source.path)}-${shortHash(`zip:${source.path}`)}`
+      // CONTENT-keyed (#429): the same archive at two paths is ONE slot, and two
+      // archives with different bytes can never share one. No path-derived label —
+      // a label would re-smuggle the path into the identity; `pair kb-cache list`
+      // is where a slot gets its human-readable name (from its manifest).
+      return `${EXTERNAL_NAMESPACE}/zip-${source.contentHash.slice(0, 12)}`
   }
 }
 

@@ -5,6 +5,7 @@ import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
 import { getSourceCachePath, localKBSource, officialSource, type KBSource } from './cache-slot-key'
 import urlUtils from './url-utils'
+import { zipKBSource } from './zip-source'
 import {
   installKB,
   installKBFromGit,
@@ -27,12 +28,14 @@ export interface KBManagerDeps {
  * otherwise the custom source itself. The slot follows the identity, so an external
  * source can never occupy the official KB's slot (US-395).
  *
- * A local ZIP is accepted (its slot is its resolved path); a local DIRECTORY is not, and
- * that is a real boundary rather than a missing case: a directory source is read in place
- * by `resolveDatasetRoot`, never fetched into a slot, so there is nothing here to make
- * "available". Rejecting it keeps the two layers from disagreeing silently.
+ * A local ZIP is accepted — its identity is its CONTENT hash (`zipKBSource`, #429), which
+ * is why this function is async: deriving the identity reads the archive's bytes. A local
+ * DIRECTORY is not accepted, and that is a real boundary rather than a missing case: a
+ * directory source is read in place by `resolveDatasetRoot`, never fetched into a slot,
+ * so there is nothing here to make "available". Rejecting it keeps the two layers from
+ * disagreeing silently.
  */
-function resolveSource(version: string, deps: KBManagerDeps): KBSource {
+async function resolveSource(version: string, deps: KBManagerDeps): Promise<KBSource> {
   const sourceUrl = deps.customUrl
   if (!sourceUrl) return officialSource(version)
   if (detectSourceType(sourceUrl, deps.fs) === SourceType.REMOTE_URL) {
@@ -45,7 +48,7 @@ function resolveSource(version: string, deps: KBManagerDeps): KBSource {
         'Pass it as `--source <dir>` rather than `--url`.',
     )
   }
-  return local
+  return zipKBSource(local.path, deps.fs)
 }
 
 function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
@@ -60,7 +63,7 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
 
 export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
   const fs = deps.fs
-  const source = resolveSource(version, deps)
+  const source = await resolveSource(version, deps)
   const cachePath = getSourceCachePath(source)
 
   if (!deps.customUrl) {

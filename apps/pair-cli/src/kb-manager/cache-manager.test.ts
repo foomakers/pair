@@ -332,7 +332,7 @@ describe('cache-manager — contamination detection (US-395 AC5)', () => {
   })
 
   it('trusts an external slot, which declares no expected manifest name', async () => {
-    const source = { kind: 'zip' as const, path: '/downloads/acme-kb.zip' }
+    const source = { kind: 'zip' as const, path: '/downloads/acme-kb.zip', contentHash: 'c'.repeat(64) }
     const slot = getSourceCachePath(source)
     const fs = new InMemoryFileSystemService({ [slot + '/AGENTS.md']: '# acme' }, '/', '/')
     expect(await inspectSlot(source, fs)).toEqual({ status: 'ready' })
