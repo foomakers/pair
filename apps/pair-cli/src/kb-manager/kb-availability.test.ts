@@ -9,7 +9,8 @@ import {
   type FileSystemService,
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
-import { getSourceCachePath, OFFICIAL_KB_NAME } from './cache-slot-key'
+import { downloadStagingName, getSourceCachePath, OFFICIAL_KB_NAME } from './cache-slot-key'
+import { buildGithubReleaseUrl } from './url-utils'
 
 // Helper to create valid ZIP data for InMemoryFileSystemService
 function createValidZipData(files: Record<string, string>): string {
@@ -214,7 +215,11 @@ describe('KB Manager - ZIP cleanup', () => {
 
     const testVersion = '0.2.0'
     const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
-    const expectedZipPath = join(tmpdir(), `kb-${testVersion}.zip`)
+    // The staging file is keyed by the SOURCE url, not by the CLI version alone (round 5)
+    const expectedZipPath = join(
+      tmpdir(),
+      downloadStagingName(testVersion, buildGithubReleaseUrl(testVersion)),
+    )
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))

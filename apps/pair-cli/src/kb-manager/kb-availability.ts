@@ -84,6 +84,10 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
   try {
     result = await installFromSource(version, source, cachePath, deps)
   } catch (err) {
+    // The restore is a cleanup, and a cleanup must not replace the diagnosis it follows:
+    // an EBUSY/EPERM here would surface instead of "Network error downloading KB… check
+    // connectivity" or the 404 carrying the manual-download URL, and the user would lose
+    // the only actionable message they had. The ORIGINAL error is always the one rethrown.
     if (hadCache) await cacheManager.restoreCachedKB(source, fs)
     throw err
   }

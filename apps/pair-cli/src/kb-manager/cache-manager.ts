@@ -2,7 +2,6 @@ import { join } from 'path'
 import { logger as log, type FileSystemService } from '@pair/content-ops'
 import {
   expectedManifestName,
-  getCachedKBPath,
   getSourceCachePath,
   officialSource,
   type KBSource,
@@ -103,12 +102,49 @@ export async function backupCachedKB(source: KBSource, fs: FileSystemService): P
   return false
 }
 
+/**
+ * Puts the set-aside slot back after a failed install. Two properties, both of them the
+ * same rule as `removeBackupKB` — a cleanup must neither undo nor speak over the work it
+ * follows — applied to the other half of the sequence:
+ *
+ * - **rename-first, delete afterwards.** Deleting the half-written slot first and only then
+ *   renaming the backup back means a failing recursive delete (EBUSY/EPERM on a just-written
+ *   tree) leaves BOTH the `.bak` and the half-written slot on disk — and the next install's
+ *   `backupCachedKB` deletes that `.bak` to make room, so a second failure hands the user
+ *   the half-written slot and no backup at all. The invariant is the opposite: a failing
+ *   re-fetch must leave the user with the cache they had, not with none.
+ * - **BEST-EFFORT by contract.** Both call sites run this inside a `catch` whose error is
+ *   the one the user needs ("Network error downloading KB… check connectivity", a 404 with
+ *   the manual-download URL). A throw here would replace that diagnosis with an unrelated fs
+ *   message, so the failure is logged and swallowed and the ORIGINAL error is rethrown.
+ *   Callers therefore never need a try/catch of their own — the rule lives in one place.
+ */
 export async function restoreCachedKB(source: KBSource, fs: FileSystemService): Promise<void> {
   const cachePath = getSourceCachePath(source)
   const backupPath = cachePath + BACKUP_SUFFIX
-  if (fs.existsSync(backupPath)) {
-    await fs.rm(cachePath, { recursive: true, force: true })
+  if (!fs.existsSync(backupPath)) return
+
+  try {
+    let discarded: string | null = null
+    if (fs.existsSync(cachePath)) {
+      discarded = `${cachePath}.discarded-${Date.now().toString(36)}`
+      await fs.rename(cachePath, discarded)
+    }
+
     await fs.rename(backupPath, cachePath)
+
+    if (discarded) await discard(discarded, fs)
+  } catch (err) {
+    log.debug(`Could not restore the previous KB cache at ${cachePath}: ${String(err)}`)
+  }
+}
+
+/** Deletes a directory this module has already replaced; a leftover copy is inert. */
+async function discard(path: string, fs: FileSystemService): Promise<void> {
+  try {
+    await fs.rm(path, { recursive: true, force: true })
+  } catch (err) {
+    log.debug(`Could not remove the superseded KB cache at ${path}: ${String(err)}`)
   }
 }
 
@@ -130,15 +166,10 @@ export async function removeBackupKB(source: KBSource, fs: FileSystemService): P
   const cachePath = getSourceCachePath(source)
   const backupPath = cachePath + BACKUP_SUFFIX
   if (!fs.existsSync(backupPath)) return
-  try {
-    await fs.rm(backupPath, { recursive: true, force: true })
-  } catch (err) {
-    log.debug(`Could not remove the previous KB cache at ${backupPath}: ${String(err)}`)
-  }
+  await discard(backupPath, fs)
 }
 
 export default {
-  getCachedKBPath,
   inspectSlot,
   purgeSlot,
   isKBCached,

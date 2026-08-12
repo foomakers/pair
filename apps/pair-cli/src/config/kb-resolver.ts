@@ -107,8 +107,16 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
   } = options
   const DIAG = isDiagEnabled()
 
-  const localPath = await tryMonorepoDatasetPath(fsService, DIAG)
-  if (localPath) return localPath
+  // The monorepo shortcut is the fallback for the DEFAULT source only. An explicit
+  // `--url` names a source, and a named source always reaches identity resolution (AC4):
+  // resolving it to the local monorepo dataset would ignore what the user typed with no
+  // warning — the same class of surprise as the slot contamination this story fixes, and
+  // the reason the `--url` path used to be exercisable only in a released binary
+  // (`--source` and `--git` are honoured in a checkout; this one was the odd one out).
+  if (!customUrl) {
+    const localPath = await tryMonorepoDatasetPath(fsService, DIAG)
+    if (localPath) return localPath
+  }
 
   return downloadKBIfNeeded({
     version,

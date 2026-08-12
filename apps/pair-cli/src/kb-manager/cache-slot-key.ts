@@ -166,6 +166,25 @@ export function cacheSlotKey(source: KBSource): string {
 }
 
 /**
+ * Name of the temporary file a download is STAGED into before it is extracted — keyed by
+ * the source URL, like every slot in this module, and never by the CLI version alone.
+ *
+ * `installKB` serves the official release AND `--url <remote zip>`, so a version-keyed
+ * staging file is shared by two different sources at the same CLI version. That is not only
+ * a concurrency window: `resume-manager.shouldResume()` decides to resume from the
+ * existence and SIZE of `<staging>.partial` alone, with no binding to the URL that produced
+ * those bytes, then issues `Range: bytes=<n>-` against the NEW url. Interrupt an official
+ * download and run `pair install --url https://acme…/kb.zip` at the same version, and the
+ * acme body is appended to the official KB's bytes and finalized as one archive.
+ *
+ * The version stays in the name because it is what makes a stray file in the temp directory
+ * recognizable; the hash is what makes it unique.
+ */
+export function downloadStagingName(version: string, downloadUrl: string): string {
+  return `kb-${cleanVersion(version)}-${shortHash(`download:${downloadUrl}`)}.zip`
+}
+
+/**
  * Root of the KB cache: `~/.pair/kb`, or `PAIR_KB_CACHE_DIR` when set.
  *
  * The override must be ABSOLUTE and must not climb with `..`, and that is enforced here
@@ -242,6 +261,7 @@ export default {
   localKBSource,
   resolveSourcePath,
   cacheSlotKey,
+  downloadStagingName,
   getCacheRoot,
   getCachedKBPath,
   getSourceCachePath,

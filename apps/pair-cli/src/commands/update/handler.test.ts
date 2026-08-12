@@ -3,7 +3,12 @@ import { handleUpdateCommand } from './handler'
 import type { UpdateCommandConfig } from './parser'
 import { handleInstallCommand } from '../install/handler'
 import type { InstallCommandConfig } from '../install/parser'
-import { InMemoryFileSystemService, MockHttpClientService } from '@pair/content-ops'
+import {
+  buildTestResponse,
+  InMemoryFileSystemService,
+  MockHttpClientService,
+  toIncomingMessage,
+} from '@pair/content-ops'
 
 describe('handleUpdateCommand - integration with in-memory services', () => {
   let fs: InMemoryFileSystemService
@@ -162,22 +167,43 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     expect(content).toBe('# New Content')
   })
 
-  test('supports remote resolution by calling getKnowledgeHubDatasetPathWithFallback', async () => {
-    const cfg = await import('#config')
-    vi.spyOn(cfg, 'getKnowledgeHubDatasetPathWithFallback').mockResolvedValue(datasetSrc)
+  /**
+   * US-395 review round 5: an explicit `--url` is no longer outranked by a monorepo dataset,
+   * so this case now really downloads. It used to pass while asserting nothing about the
+   * URL — the spy on `getKnowledgeHubDatasetPathWithFallback` never intercepted anything
+   * (`resolveDatasetRoot` calls it inside its own module) and the monorepo dataset seeded in
+   * `beforeEach` produced the expected content whatever the url was.
+   */
+  test('supports remote resolution by updating from what the url served', async () => {
+    const url = 'https://example.com/kb.zip'
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/test-registry/file1.md`, '# Content from the url')
+    })
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
 
     const config: UpdateCommandConfig = {
       command: 'update',
       resolution: 'remote',
-      url: 'https://example.com/kb.zip',
+      url,
       kb: true,
       offline: false,
     }
 
     await handleUpdateCommand(config, fs, { httpClient })
 
+    expect(httpClient.getUrls()[0]).toBe(url)
     const content = await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)
-    expect(content).toBe('# New Content')
+    expect(content).toBe('# Content from the url')
+
+    consoleLogSpy.mockRestore()
   })
 
   test('continues update when fs.readdir returns empty entries while PAIR_DIAG=1', async () => {

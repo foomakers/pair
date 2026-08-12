@@ -4,7 +4,12 @@ import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/c
 import { cleanupFile, normalizeExtractedKB } from '@pair/content-ops'
 import { downloadWithRetry } from './download-manager'
 import cacheManager from './cache-manager'
-import { getSourceCachePath, resolveSourcePath, type KBSource } from './cache-slot-key'
+import {
+  downloadStagingName,
+  getSourceCachePath,
+  resolveSourcePath,
+  type KBSource,
+} from './cache-slot-key'
 import { cloneGitRepo } from './git-clone'
 import checksumManager from './checksum-manager'
 import formatDownloadError from './error-formatter'
@@ -95,7 +100,11 @@ export async function installKB(
   options: InstallOptions,
 ): Promise<string> {
   const cleanVersion = version.startsWith('v') ? version.slice(1) : version
-  const zipPath = join(tmpdir(), `kb-${cleanVersion}.zip`)
+  // Staged under a name keyed by the SOURCE, never by the CLI version alone: this function
+  // serves both the official release and `--url <remote zip>`, and a shared staging file
+  // lets one source's bytes reach another's install through the resume logic (which decides
+  // to resume from `<staging>.partial`'s size alone). See `downloadStagingName`.
+  const zipPath = join(tmpdir(), downloadStagingName(version, downloadUrl))
 
   announceDownload(version, downloadUrl)
 
@@ -146,6 +155,9 @@ export async function installKBFromGit(url: string, fs: FileSystemService): Prom
     // The dataset is what we cache; the clone's history is not.
     await fs.rm(join(cachePath, '.git'), { recursive: true, force: true })
   } catch (err) {
+    // `restoreCachedKB` is best-effort by contract: a fs error inside this cleanup must not
+    // replace the actionable clone failure ("Git clone failed: network unreachable") that
+    // brought us here. The ORIGINAL error is the one rethrown.
     if (hadCache) await cacheManager.restoreCachedKB(source, fs)
     throw err
   }

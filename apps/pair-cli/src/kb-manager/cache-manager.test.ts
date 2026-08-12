@@ -3,7 +3,12 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import cacheManager, { inspectSlot, purgeSlot } from './cache-manager'
-import { getSourceCachePath, OFFICIAL_KB_NAME, officialSource } from './cache-slot-key'
+import {
+  getCachedKBPath,
+  getSourceCachePath,
+  OFFICIAL_KB_NAME,
+  officialSource,
+} from './cache-slot-key'
 
 const officialSlot = (version: string) => join(homedir(), '.pair', 'kb', version)
 
@@ -158,7 +163,7 @@ describe('cache-manager', () => {
 
   it('ensureCacheDirectory creates directory', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    const path = cacheManager.getCachedKBPath('0.2.0')
+    const path = getCachedKBPath('0.2.0')
     await cacheManager.ensureCacheDirectory(path, fs)
     expect(fs.existsSync(path)).toBe(true)
   })
