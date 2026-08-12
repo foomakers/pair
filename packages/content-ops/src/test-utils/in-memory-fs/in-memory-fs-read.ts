@@ -9,6 +9,14 @@ export function readFileSync(state: InMemoryFsState, path: string): string {
   return file
 }
 
+/**
+ * Byte-mode read mirroring the real service (US-395/#429). Binary content is stored
+ * latin1-encoded by `writeFileBinary`, so latin1 is what reverses it byte-for-byte.
+ */
+export function readFileBytes(state: InMemoryFsState, path: string): Buffer {
+  return Buffer.from(readFileSync(state, path), 'latin1')
+}
+
 export function existsSync(state: InMemoryFsState, path: string): boolean {
   const resolvedPath = state.resolvePath(path)
   return state.files.has(resolvedPath) || state.dirs.has(resolvedPath)
