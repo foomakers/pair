@@ -88,3 +88,27 @@ describe('in-memory-fs-read', () => {
     })
   })
 })
+
+/**
+ * US-395 (absorbed #429) — the double must round-trip bytes the same way the real
+ * service does, or a content-hash computed in a test is not the hash production computes.
+ */
+describe('readFileBytes (byte-mode read, US-395/#429)', () => {
+  it('round-trips the bytes written with writeFileBinary', async () => {
+    const fs = createFs()
+    const bytes = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x80, 0xff, 0xfe, 0x81])
+    await fs.writeFileBinary('/blob.bin', bytes)
+
+    const read = await fs.readFileBytes('/blob.bin')
+
+    expect(Buffer.isBuffer(read)).toBe(true)
+    expect(read.equals(bytes)).toBe(true)
+  })
+
+  it('throws File not found like the text-mode read', async () => {
+    const fs = createFs()
+    await expect(fs.readFileBytes('/nonexistent.bin')).rejects.toThrow(
+      'File not found: /nonexistent.bin',
+    )
+  })
+})
