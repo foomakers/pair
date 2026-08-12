@@ -522,6 +522,18 @@ describe('/publish-pr — the board state is written directly, never by composin
       expect(body).not.toMatch(
         /board state[^.]{0,80}using `\/[a-z-]*write-issue` \(default write mode\)/,
       )
+      // ...and gone from the WHOLE step, not merely from its lead sentence. The first
+      // version of this guard checked only the two phrases above and passed while the
+      // bullets underneath still read "compose with $status: Review", "the composed
+      // skill's documented skip" and "The composition carries its invariant with it" —
+      // certifying a half-fix as complete. A guard that reads one sentence of a step
+      // cannot speak for the step.
+      expect(body).not.toContain('compose with $status: review')
+      // NOTE: two further probes were drafted here — "the composed skill's documented
+      // skip" and "the composition carries" — and REMOVED after checking that neither can
+      // ever match the normalized text (normalize strips ` * _, so the on-disk phrasing
+      // does not survive as written). An assertion that cannot fail is worse than none: it
+      // is counted as coverage. The one probe kept above was verified RED by injection.
     },
   )
 })
