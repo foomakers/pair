@@ -40,7 +40,8 @@ Maps this project's GitHub Projects board columns to the 5 canonical macrostates
 ## Quality Gates
 
 - `pnpm quality-gate` is the adopted project-level quality gate command.
-- Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting and markdown lint in **check mode** (`format:check`), plus a guard that the gate stays check-mode (`gate:composition`).
+- Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting and markdown lint in **check mode** (`format:check`), plus a guard that the gate stays check-mode (`gate:composition`) and the smoke-scenario mode guard (`smoke-modes:check`).
+- **A guard whose only caller is a turbo task is not enforced.** `turbo ts:check test lint` are cacheable with package-scoped inputs, so a change OUTSIDE the guard's package replays a cached PASS and the guard never executes. A guard over repo-wide state therefore gets a thin CLI and a **root gate step** (`hygiene:check`, `smoke-modes:check`, `docs:staleness`, `skills:conformance`), which run unconditionally — a unit test alone is the enforcement point only for logic whose inputs live inside its own package (#400).
 - **No step reachable from the gate writes files**: the gate reports, `pnpm format` / `pnpm lint:fix` fix deliberately. `gate:composition` enforces this through an **explicit offender list** — the two formatters, eslint autofix, and the repo's write scripts (`sync-version`, `test:perf`) — so **adding a new write-mode script to this repo means adding it to that list**; a differently named writer passes the guard green. See ADL [2026-07-31-pre-push-gate-is-check-only.md](../decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 - **Pre-merge tiering**: `disabled` (default) — every PR runs the full pre-merge check suite. Set to `enabled` to opt into risk-tier-scoped pre-merge checks (lighter checks on lower-risk PRs) per [tier-aware-pipeline.md](../../knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md); `/pair-capability-setup-gates` reads this flag before generating the pipeline.
 - **Review enforcement**: `disabled` (default) — the pair review **runs and publishes its verdict**, but nothing it says blocks a merge: `pair-review` and `pair-explicit-approval` are not required status checks, and the 🔴 explicit-approval rule is advisory. Set to `enabled` to make them required and the rule binding, per [pr-states.md](../../knowledge/guidelines/collaboration/project-management-tool/pr-states.md); `/pair-capability-setup-gates` reads this flag before touching branch protection, and `/pair-process-bootstrap` asks for it when no decision exists. Disabled is the default deliberately: a review that blocks by default turns a first install into a repository nobody can merge into — on a single-maintainer repo the 🔴 non-author approval is unobtainable outright. The tier requirements themselves (reviewer count, SLA, checklist depth, whether 🔴 needs explicit approval) are redefinable in this file; that the review **runs** is not.
@@ -69,11 +70,13 @@ The "Merge" column only bites when `Review enforcement` is `enabled` (above). Di
 
 ### Custom Gate Registry
 
-| Order | Gate         | Command                           | Scope Key | Required | Description                                     |
-| ----- | ------------ | --------------------------------- | --------- | -------- | ----------------------------------------------- |
-| 1     | Quality Gate | `pnpm quality-gate`               | quality   | Yes      | build, test, formatting check (never fix)       |
-| 2     | Smoke tests  | `pnpm smoke-tests`                | testing   | Yes      | e2e CLI/release scenarios; the CI-safe list (`--ci`, `scripts/smoke-tests/lib/ci-tests.sh`) runs on every PR as the `smoke` job (#400) |
-| 3     | E2E tests    | `pnpm --filter @pair/website e2e` | testing   | Yes      | Playwright E2E tests (builds + starts Next.js)  |
+Gate 2 runs a **subset** in CI: the `smoke` job in `ci.yml` runs `run-all.sh --ci`, i.e. the CI-safe list declared in [`scripts/smoke-tests/lib/ci-tests.sh`](../../../scripts/smoke-tests/lib/ci-tests.sh) — the full suite is the local `pnpm smoke-tests` command in the table. Membership is an enforced rule with recorded exceptions (#400, ADL [2026-08-11-smoke-suite-runs-in-ci-pre-merge.md](../decision-log/2026-08-11-smoke-suite-runs-in-ci-pre-merge.md)).
+
+| Order | Gate         | Command                           | Scope Key | Required | Description                                    |
+| ----- | ------------ | --------------------------------- | --------- | -------- | ---------------------------------------------- |
+| 1     | Quality Gate | `pnpm quality-gate`               | quality   | Yes      | build, test, formatting check (never fix)      |
+| 2     | Smoke tests  | `pnpm smoke-tests`                | testing   | Yes      | e2e CLI/release scenarios; CI-safe list per PR |
+| 3     | E2E tests    | `pnpm --filter @pair/website e2e` | testing   | Yes      | Playwright E2E tests (builds + starts Next.js) |
 
 ---
 

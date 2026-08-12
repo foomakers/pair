@@ -64,6 +64,20 @@ export const MUST_BE_EXECUTABLE = {
   runner: 'scripts/smoke-tests/run-all.sh',
   /** The tree handed to `git ls-files`; `lib/`, `fixtures/` and docs live here too. */
   tree: 'scripts/smoke-tests',
+  /**
+   * The release scripts, guarded for the SAME reason (#431). `release.yml` used to run
+   * `chmod +x scripts/workflows/release/<script>.sh` before executing each one, and
+   * `website-preview-deploy.yml` a ninth — which MASKS the committed mode exactly the way
+   * this guard exists to prevent: a script committed `644` would run green in CI forever
+   * and fail for anyone executing it directly, which is the condition `coverage-gate.sh`
+   * sat in for weeks.
+   *
+   * Only `*.sh` DIRECTLY in this folder is executable. `README.md` and the
+   * `fixtures/sample-project/` files (`index.js`, `package.json`) are committed `644` and
+   * must STAY that way — they are read, never run. A guard that demanded the whole tree be
+   * executable would be wrong about them.
+   */
+  releaseDir: 'scripts/workflows/release/',
 } as const
 
 export interface IndexEntry {
@@ -130,9 +144,14 @@ export function parseGitIndexEntries(lsFilesOutput: string): IndexEntry[] {
  */
 export function requiresExecutableBit(path: string): boolean {
   if (path === MUST_BE_EXECUTABLE.runner) return true
-  if (!path.startsWith(MUST_BE_EXECUTABLE.scenariosDir)) return false
-  const name = path.slice(MUST_BE_EXECUTABLE.scenariosDir.length)
-  return name.endsWith(SCENARIO_EXTENSION) && !name.includes('/')
+  // Both guarded folders share one rule: a `*.sh` DIRECTLY inside is executed, anything
+  // deeper (a fixture tree) or of another extension (a README) is read.
+  for (const dir of [MUST_BE_EXECUTABLE.scenariosDir, MUST_BE_EXECUTABLE.releaseDir]) {
+    if (!path.startsWith(dir)) continue
+    const name = path.slice(dir.length)
+    return name.endsWith(SCENARIO_EXTENSION) && !name.includes('/')
+  }
+  return false
 }
 
 /** Every runnable file whose staged mode is not exactly `100755`, in index order. */
@@ -199,10 +218,16 @@ export function checkSmokeScenarioModes(lsFilesOutput: string): ModeCheckResult 
  * remedy that matches no file.
  */
 export function readSmokeTestsIndex(): string {
-  return execFileSync('git', ['ls-files', '-s', '-z', '--', MUST_BE_EXECUTABLE.tree], {
-    cwd: REPO_ROOT,
-    encoding: 'utf-8',
-  })
+  // BOTH guarded trees, or the guard is decorative for whichever it omits. Extending
+  // `requiresExecutableBit` alone was not enough: this read is what the repo-level check
+  // sees, so a release script staged 644 stayed invisible and the guard passed — the
+  // "passes because it saw nothing" failure this module's own empty-index branch exists
+  // against, reintroduced one level up.
+  return execFileSync(
+    'git',
+    ['ls-files', '-s', '-z', '--', MUST_BE_EXECUTABLE.tree, MUST_BE_EXECUTABLE.releaseDir],
+    { cwd: REPO_ROOT, encoding: 'utf-8' },
+  )
 }
 
 /** Checks this repo's staged (index) smoke-test modes. */

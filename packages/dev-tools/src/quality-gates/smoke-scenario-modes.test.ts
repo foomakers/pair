@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 
 import {
   EXECUTABLE_MODE,
@@ -234,6 +236,70 @@ describe('the guard runs against THIS repo, not only against fixtures (#400)', (
   // RED before this story: `scenarios/coverage-gate.sh` is committed 100644, so
   // one of the 16 CI-listed scenarios could not run at all.
   it('every tracked smoke scenario in this repo is executable by its staged git mode', () => {
+    const result = checkThisRepoSmokeScenarioModes()
+    expect(result.ok, result.message).toBe(true)
+  })
+})
+
+// ── The release scripts are guarded for the same reason (#431) ──────────────
+// `release.yml` ran `chmod +x scripts/workflows/release/<script>.sh` before executing each
+// of nine scripts, which MASKS the committed mode: a script committed 644 would run green
+// in CI forever and fail for anyone executing it directly — the condition
+// `coverage-gate.sh` sat in for weeks. The chmod lines are gone; this guard replaces them.
+describe('requiresExecutableBit covers the release scripts too (#431)', () => {
+  it('a *.sh directly in the release folder must be executable', () => {
+    expect(requiresExecutableBit('scripts/workflows/release/publish-npm.sh')).toBe(true)
+    expect(requiresExecutableBit('scripts/workflows/release/deploy-website.sh')).toBe(true)
+  })
+
+  // The load-bearing negatives: this folder also holds documentation and a fixture project
+  // that are committed 644 ON PURPOSE. A guard that demanded the whole tree be executable
+  // would be wrong about them, and "fixing" their modes would be a real regression.
+  it('documentation and fixtures in the same folder must NOT require the bit', () => {
+    expect(requiresExecutableBit('scripts/workflows/release/README.md')).toBe(false)
+    expect(
+      requiresExecutableBit('scripts/workflows/release/fixtures/sample-project/index.js'),
+    ).toBe(false)
+    expect(
+      requiresExecutableBit('scripts/workflows/release/fixtures/sample-project/package.json'),
+    ).toBe(false)
+  })
+
+  it('a *.sh nested deeper than the folder itself is not executed, so not required', () => {
+    expect(requiresExecutableBit('scripts/workflows/release/fixtures/helper.sh')).toBe(false)
+  })
+
+  it('a release script staged 644 is reported as an offender', () => {
+    const offenders = findNonExecutable([
+      { mode: '100644', path: 'scripts/workflows/release/publish-npm.sh' },
+      { mode: '100755', path: 'scripts/workflows/release/deploy-website.sh' },
+      { mode: '100644', path: 'scripts/workflows/release/README.md' },
+    ])
+    expect(offenders.map(o => o.path)).toEqual(['scripts/workflows/release/publish-npm.sh'])
+  })
+
+  it('no workflow chmods a repo-committed release script any more', () => {
+    const root = join(__dirname, '../../../..')
+    for (const wf of ['release.yml', 'website-preview-deploy.yml']) {
+      const yml = readFileSync(join(root, '.github/workflows', wf), 'utf8')
+      const offending = yml
+        .split('\n')
+        .filter(l => !l.trimStart().startsWith('#'))
+        .filter(l => /chmod\s+\+x\s+scripts\/workflows\/release\//.test(l))
+      expect(offending, `${wf} must not chmod its own committed scripts`).toEqual([])
+    }
+  })
+})
+
+describe('the repo-level check actually READS the release tree (#431)', () => {
+  // Without this the widened predicate is decorative: the real check reads an index that
+  // never contained a release path, so every release script passed by not being looked at.
+  it('the real index read includes the release scripts', () => {
+    const entries = parseGitIndexEntries(readSmokeTestsIndex())
+    expect(entries.some(e => e.path === 'scripts/workflows/release/publish-npm.sh')).toBe(true)
+  })
+
+  it('every tracked release script in this repo is executable by its staged git mode', () => {
     const result = checkThisRepoSmokeScenarioModes()
     expect(result.ok, result.message).toBe(true)
   })
