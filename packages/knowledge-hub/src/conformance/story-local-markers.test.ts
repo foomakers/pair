@@ -22,10 +22,18 @@ const REPO_ROOT = join(__dirname, '../../../..')
 
 const ROOTS = [DATASET_SKILLS, MIRROR_SKILLS]
 
-// Story-local criterion reference: `(AC1)`, `(AC12)`, `(AC1, AC4)`, `(AC3, AC4, AC5)`.
-// Deliberately NOT matched: prose that merely contains "AC" (`ACL`, `ACCEPTED`), and a
-// parenthetical that explains rather than cites (`(this session is the actor)`).
-const MARKER = /\(AC\d+(?:,\s*AC\d+)*\)/g
+// ANY story-local criterion reference, in any spelling. The first version matched only a
+// parenthetical containing nothing but the marker — `(AC1)`, `(AC1, AC4)` — and seven other
+// spellings shipped straight past it: `### Phase 1: Quality Gate (BLOCKING — AC5)`,
+// `this is the AC4 signal`, `(decision Q5, AC2)`, `the action AC1 requires`. The guard then
+// manufactured false confidence, which is exactly what its own docstring blames the old
+// per-artifact assertion for.
+//
+// A bare word-boundary `ACn` is safe here: a grep over both corpora finds no legitimate
+// `AC<digit>` token — every occurrence was a story citation. Prose containing "AC" as part of
+// a longer word (`ACL`, `ACCEPTED`) does not match, and a parenthetical that explains rather
+// than cites (`(this session is the actor)`) is untouched.
+const MARKER = /\bAC\d+\b/g
 
 function markdownFilesIn(dir: string): string[] {
   let entries: string[]

@@ -41,7 +41,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 The opening phase re-reads the checkpoint so an interrupted story resumes exactly where it stopped. This runs first, before loading the story, so completed tasks are never re-done.
 
 1. **Check**: Is `/checkpoint` installed AND does a checkpoint exist for this story (`.pair/working/checkpoints/<story-id>.md`)?
-2. **Skip**: If no checkpoint exists → this is a fresh start. Proceed to Step 0.1 (normal one-shot flow — no regression, AC4).
+2. **Skip**: If no checkpoint exists → this is a fresh start. Proceed to Step 0.1 (normal one-shot flow — no regression).
 3. **Act**: Compose `/checkpoint $mode=resume` (pass `$story` — the story id from the invocation, see [Arguments](#arguments); if absent it is detected from the branch). Use the parsed state — branch, tasks done, key decisions, remaining todos — to skip re-analysis and jump straight to the **first pending task** in Phase 2, **without repeating** completed tasks.
 4. **Act — edge cases** (resolve before continuing):
    - **Checkpoint exists but its branch is missing** (checkpoint says branch X, repo has none): **HALT** and report the divergence. Do not guess a branch.

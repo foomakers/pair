@@ -54,7 +54,7 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 3. **Verify**: Story ID resolved AND the branch is known. If the story id cannot be resolved from handoff or branch → **HALT**: "Cannot resolve story id — pass `$story` explicitly." (edge case).
 4. **Act**: If no handoff document exists, gather minimal state directly: branch (`git branch --show-current`), commits since base, and the story's ACs/tags from the PM tool. Note in the output that no handoff was found.
 
-### Phase 1: Quality Gate (BLOCKING — AC5)
+### Phase 1: Quality Gate (BLOCKING)
 
 1. **Act**: Compose `/verify-quality` with `$scope` (default `all`). This is a local pre-flight, not a replacement for CI (CI stays authoritative, #210).
 2. **Check**: Did every required gate pass?
