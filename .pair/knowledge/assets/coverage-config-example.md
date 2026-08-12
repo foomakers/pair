@@ -11,7 +11,7 @@ Two kinds of value, in one parseable `key=value` block (order-independent; lines
 - **`target.default`** — the fallback target for any type without its own `target.<type>` line.
 - **`exclude`** — glob(s) for genuinely untestable surface (generated files, config). This is **applied by the adopter to their own coverage tool's config** — the gate does **not** read it and the pipeline snippet does **not** pass it. It is recorded here as the single place the exclusion intent is documented; wiring it into the coverage tool (e.g. istanbul `exclude`, vitest `coverage.exclude`) is the adopter's step.
 
-The `<type>` is the touched code's type — `backend`, `frontend`, `shared`, or whatever your stack distinguishes; the pipeline passes the type matching the code under test so per-type targets apply (AC5).
+The `<type>` is the touched code's type — `backend`, `frontend`, `shared`, or whatever your stack distinguishes; the pipeline passes the type matching the code under test so per-type targets apply.
 
 ## Persistence: the baseline is human-committed
 

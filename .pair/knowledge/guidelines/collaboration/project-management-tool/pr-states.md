@@ -63,7 +63,7 @@ Merge blocking is **mechanical**. Three required-check layers sit on the protect
 | Review | **`pair-review`** — the check the review flow publishes on the head commit (on GitHub a **commit status**, which the agent's own token can write; the Checks API cannot — see the implementation guide) | always | conclusion is `failure` (CHANGES-REQUESTED) **or** still `pending`/absent (review never ran, crashed, or was skipped) |
 | Explicit approval | **`pair-explicit-approval`** — a deterministic host job that verifies a human approval exists on the current head when the tier demands it | always (auto-passes below 🔴) | tier is 🔴 (or untagged ⇒ 🔴) and no human approval is recorded on the current head |
 
-Three properties of the explicit-approval layer are **host-agnostic invariants**, not GitHub trivia — an implementation that misses any one of them silently voids AC4:
+Three properties of the explicit-approval layer are **host-agnostic invariants**, not GitHub trivia — an implementation that misses any one of them silently voids the 🔴 human-approval guarantee:
 
 - **It runs from a trusted ref.** The job's code (and any shared projection it reads) comes from the **target branch**, never from the pull request's own tree. Otherwise the change under review can rewrite the check that authorizes it and self-grant the 🔴 approval — an authorization control defined by the thing it authorizes is not a control.
 - **Its verdict is pinned to the head commit** the host's protection actually evaluates, on **every** re-evaluation — including the one triggered by the approval itself. A verdict recorded against any other commit leaves a 🔴 PR blocked *after* the human approves.
@@ -71,14 +71,14 @@ Three properties of the explicit-approval layer are **host-agnostic invariants**
 
 ### What the two checks prove
 
-The two layers are **not** equally strong, and conflating them is how AC4 gets quietly lost:
+The two layers are **not** equally strong, and conflating them is how the human-approval guarantee gets quietly lost:
 
 | Check | Control type | Guarantee |
 | --- | --- | --- |
 | `pair-review` | **anti-accident** | A review that never ran, crashed, or was skipped leaves the context absent/pending, and the host blocks the merge. It is published with the same credentials the authoring/reviewing agent holds, so **it is forgeable by any principal with write access, by construction** — it proves "the review was not silently skipped", never "an independent party approved". |
 | `pair-explicit-approval` | **authorization** | The 🔴 human approval is asserted by a deterministic job the pull request cannot modify, publishing a producer-pinned context — so the reviewing agent cannot grant it. Fully unforgeable only in the host's App/check-run form (see the implementation guide's residuals, and ADR-018 Option 4 — deferred, [#398](https://github.com/foomakers/pair/issues/398)). |
 
-Because `pair-review` is a **required status check** (R5.7), the review **cannot be skipped**: a PR with no review check, a failed one, or one still pending is not mergeable on the code host — not by convention, but by branch protection. That is a guarantee about *skipping*, not about *identity*: the check does not prove who published the verdict. The identity half is `pair-explicit-approval`'s job at 🔴 (AC4/D10), which is why the flow keeps two checks instead of one (ADR-018).
+Because `pair-review` is a **required status check** (R5.7), the review **cannot be skipped**: a PR with no review check, a failed one, or one still pending is not mergeable on the code host — not by convention, but by branch protection. That is a guarantee about *skipping*, not about *identity*: the check does not prove who published the verdict. The identity half is `pair-explicit-approval`'s job at 🔴 (D10), which is why the flow keeps two checks instead of one (ADR-018).
 
 **The `pr-state:*` label is a view, not the authority.** The flow keeps exactly one of `pr-state:to-be-reviewed` / `pr-state:ready-to-merge` / `pr-state:not-approved` on the PR so humans and `pair-next`-style automation can filter at a glance. A label is never the thing that permits a merge: editing or forging a label cannot enable a merge, because branch protection evaluates the required checks and ignores labels entirely. If a label and the checks ever disagree, the checks win and the next evaluation re-labels.
 
@@ -101,7 +101,7 @@ Host mechanics — how the check run is published, the exact branch-protection p
 
 | Actor | Responsibility |
 | --- | --- |
-| `/pair-capability-publish-pr` | Creates the PR, propagates the story's classification tags, registers `pair-review` as **pending**, labels the PR `pr-state:to-be-reviewed`, and triggers the review in a clean-context subagent (AC1) |
+| `/pair-capability-publish-pr` | Creates the PR, propagates the story's classification tags, registers `pair-review` as **pending**, labels the PR `pr-state:to-be-reviewed`, and triggers the review in a clean-context subagent |
 | `/pair-process-review` | Produces the judgment verdict in the native review, publishes the `pair-review` check conclusion (`review_check_conclusion`), computes the state (`resolve_pr_state`), swaps the `pr-state:*` label, and refuses to merge unless `merge_allowed` passes |
 | `/pair-process-implement` Phase 4 | The **other** merge path (the author re-invoked after an approving review): runs the *same* precondition as `/pair-process-review`'s — re-synthesize the current signals, `merge_allowed`, HALT otherwise — before merging. "At least one approval" is **not** the condition; a 🔴 PR with an approving verdict and no explicit human approval must not merge here either |
 | `/pair-capability-setup-gates` | Wires `pair-review` + `pair-explicit-approval` as required checks on the protected branch alongside the gate jobs, or reports degraded mode |

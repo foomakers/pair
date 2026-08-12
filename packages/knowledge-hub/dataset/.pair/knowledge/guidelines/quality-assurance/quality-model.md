@@ -165,7 +165,7 @@ Active: risk
 | No file, or Tag Projection proposal not yet answered | absent, or missing `## Tag Projection` | Matrix computed and written to the story/PR body per §3.1 defaults; no tags emitted — `classify` proposes the Tag Projection declaration on its next run |
 | Tag Projection declared, `risk` active | `## Tag Projection` → `Active: risk` | `risk:*` tag applied to the story/PR alongside the body matrix; `classify` never re-proposes |
 | Tag Projection explicitly opted out | `## Tag Projection` → `Active: none` | Matrix written to the body; no tags applied; `classify` never re-proposes |
-| File present, service listed | `payments: High` | `payments` resolves to red for that dimension, overriding the Medium default (AC3) |
+| File present, service listed | `payments: High` | `payments` resolves to red for that dimension, overriding the Medium default |
 | File present, service **not** listed | table has other entries only | Conservative High (red) for that dimension, not the absent-file Medium default |
 | File present but malformed | unparseable | Warn, fall back to KB defaults as if absent (including no tag emission) |
 
