@@ -98,7 +98,13 @@ function shouldSkipKBDownload(
     return true
   }
 
-  if (fsService && hasLocalDataset(fsService)) {
+  // The monorepo shortcut is for the DEFAULT source only — a named source always reaches
+  // identity resolution (same rule as `getKnowledgeHubDatasetPathWithFallback`, one layer
+  // further in). Without the `customUrl` clause this pre-flight short-circuits BEFORE the
+  // resolver is ever called, so in a development checkout `--url https://…` resolved to the
+  // local dataset with nothing but a `[diag]` line to say so. A non-remote `customUrl`
+  // already returned at the check above, so this only affects remote URLs.
+  if (fsService && !(customUrl && isRemoteUrl(customUrl)) && hasLocalDataset(fsService)) {
     if (isDiagEnabled()) console.error('[diag] Using local dataset')
     return true
   }
@@ -109,6 +115,12 @@ function shouldSkipKBDownload(
 /**
  * Verify that the Knowledge Hub dataset is accessible
  * Skips check for local custom URLs; validates accessibility for default/remote sources
+ *
+ * SCOPE, so this is not read as a second resolution: it only ever checks the path
+ * `getKnowledgeHubDatasetPath` yields (the packaged/monorepo dataset). Which source is in
+ * play was decided in step 2 — a remote `--url` resolves to its own cache slot there and a
+ * failed download has already thrown — so this check is a readability probe of the bundled
+ * dataset, never a statement about the source that was chosen.
  *
  * @param fsService - FileSystemService for dataset path resolution
  * @param customUrl - Custom URL from CLI (optional, skips check if local path)

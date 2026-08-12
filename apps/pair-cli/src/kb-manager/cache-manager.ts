@@ -118,25 +118,56 @@ export async function backupCachedKB(source: KBSource, fs: FileSystemService): P
  *   the manual-download URL). A throw here would replace that diagnosis with an unrelated fs
  *   message, so the failure is logged and swallowed and the ORIGINAL error is rethrown.
  *   Callers therefore never need a try/catch of their own — the rule lives in one place.
+ *
+ * Best-effort is not the same as silent, and the difference is the whole invariant. When the
+ * rename back cannot be made to work, the user's only good copy is at `<slot>.bak` — a name
+ * nothing points them at — while the slot itself is gone: indistinguishable, from their side,
+ * from having lost the cache. So the give-up path is a **warning naming the recoverable copy
+ * and where to move it**, not a debug line, and it is only reached after the old order
+ * (delete the half-written slot outright, then retry) has been tried too, so a transient hold
+ * on the set-aside rename is not terminal.
  */
 export async function restoreCachedKB(source: KBSource, fs: FileSystemService): Promise<void> {
   const cachePath = getSourceCachePath(source)
   const backupPath = cachePath + BACKUP_SUFFIX
   if (!fs.existsSync(backupPath)) return
 
+  let setAside: string | null = null
   try {
-    let discarded: string | null = null
     if (fs.existsSync(cachePath)) {
-      discarded = `${cachePath}.discarded-${Date.now().toString(36)}`
-      await fs.rename(cachePath, discarded)
+      setAside = supersededPath(cachePath)
+      await fs.rename(cachePath, setAside)
     }
-
     await fs.rename(backupPath, cachePath)
-
-    if (discarded) await discard(discarded, fs)
   } catch (err) {
-    log.debug(`Could not restore the previous KB cache at ${cachePath}: ${String(err)}`)
+    try {
+      // Second chance in the OLD order: whatever is still occupying the slot is deleted
+      // outright and the rename retried once. A recursive delete and a rename fail on
+      // different things (a held handle on one tree vs. the other), so the retry is not a
+      // repeat of the same attempt.
+      await fs.rm(cachePath, { recursive: true, force: true })
+      await fs.rename(backupPath, cachePath)
+    } catch {
+      log.warn(
+        `Could not restore the previous KB cache (${String(err)}). Your previous copy is ` +
+          `kept at ${backupPath} — move it back to ${cachePath} to recover it.`,
+      )
+      return
+    }
   }
+
+  if (setAside) await discard(setAside, fs)
+}
+
+/**
+ * Name for a copy this module is about to replace. Monotonic within the process on top of
+ * the timestamp: `Date.now()` alone is millisecond-resolution, so two restores of the same
+ * source in one millisecond collided on the rename and both took the give-up path. (Two
+ * concurrent PROCESSES on one source remain out of scope — #428.)
+ */
+let supersededCount = 0
+function supersededPath(cachePath: string): string {
+  return `${cachePath}.discarded-${Date.now().toString(36)}-${(supersededCount++).toString(36)}`
 }
 
 /** Deletes a directory this module has already replaced; a leftover copy is inert. */
