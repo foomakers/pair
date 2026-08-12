@@ -182,9 +182,10 @@ export function checkSmokeScenarioModes(lsFilesOutput: string): ModeCheckResult 
     return {
       ok: false,
       message:
-        `No runnable smoke-test file found in the git index under ` +
-        `\`${MUST_BE_EXECUTABLE.scenariosDir}\` (or \`${MUST_BE_EXECUTABLE.runner}\`).\n` +
-        `Either the tree moved and this guard now checks nothing, or the index was not read.`,
+        `No runnable script found in the git index under ` +
+        `\`${MUST_BE_EXECUTABLE.scenariosDir}\`, \`${MUST_BE_EXECUTABLE.releaseDir}\` ` +
+        `(or \`${MUST_BE_EXECUTABLE.runner}\`).\n` +
+        `Either a tree moved and this guard now checks nothing, or the index was not read.`,
     }
   }
 
@@ -193,10 +194,12 @@ export function checkSmokeScenarioModes(lsFilesOutput: string): ModeCheckResult 
     return {
       ok: false,
       message:
-        `${offenders.length} smoke-test file(s) are staged NON-EXECUTABLE (git index):\n` +
+        `${offenders.length} tracked script(s) are staged NON-EXECUTABLE (git index):\n` +
         offenders.map(o => `  ${o.path} (mode ${o.mode}, expected ${EXECUTABLE_MODE})`).join('\n') +
-        `\n\nThe runner cannot execute them: the scenario is listed, looks covered, and never\n` +
-        `asserts anything (that is how \`coverage-gate.sh\` sat dead for weeks — #400).\n` +
+        `\n\nNothing can execute them as committed. A smoke scenario in that state is listed,\n` +
+        `looks covered and never asserts anything (that is how \`coverage-gate.sh\` sat dead\n` +
+        `for weeks — #400); a release script in that state runs in CI only because some\n` +
+        `workflow chmods it first, and fails for everyone else (#431).\n` +
         `The mode is read from the git index, not the filesystem, so a locally executable\n` +
         `file whose staged mode is 644 still fails here — deliberately.\n` +
         `This guard reports the mode and never fixes it; run:\n${remedyFor(offenders)}`,
@@ -205,7 +208,7 @@ export function checkSmokeScenarioModes(lsFilesOutput: string): ModeCheckResult 
 
   return {
     ok: true,
-    message: `${runnable.length} smoke-test files are staged ${EXECUTABLE_MODE}.`,
+    message: `${runnable.length} tracked scripts are staged ${EXECUTABLE_MODE}.`,
   }
 }
 

@@ -225,6 +225,26 @@ describe('checkSmokeScenarioModes reports actionably (#400)', () => {
     expect(r.ok).toBe(false)
     expect(r.message).toContain(MUST_BE_EXECUTABLE.scenariosDir)
   })
+
+  // The guard covers two trees (#431), so a renamed RELEASE folder must be as
+  // visible as a renamed scenarios folder — naming only one tree would let the
+  // other move silently.
+  it('the saw-nothing failure names every guarded tree', () => {
+    const r = checkSmokeScenarioModes(entry('100644', 'scripts/smoke-tests/README.md'))
+    expect(r.message).toContain(MUST_BE_EXECUTABLE.releaseDir)
+  })
+
+  // A release script is not a smoke-test scenario: calling it one, and telling the
+  // reader "the runner cannot execute them", names a mechanism that does not exist
+  // for `scripts/workflows/release/` and hides the real consequence (#431).
+  it('names a release-script offender without calling it a smoke-test scenario', () => {
+    const r = checkSmokeScenarioModes(entry('100644', 'scripts/workflows/release/publish-npm.sh'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('scripts/workflows/release/publish-npm.sh')
+    expect(r.message).toContain('100644')
+    expect(r.message).not.toMatch(/smoke-test file/)
+    expect(r.message).toMatch(/release script/)
+  })
 })
 
 describe('the guard runs against THIS repo, not only against fixtures (#400)', () => {
