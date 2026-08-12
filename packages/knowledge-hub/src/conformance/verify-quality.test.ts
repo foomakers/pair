@@ -426,6 +426,21 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     )
   })
 
+  it('the PR read consumes the NORMALIZED identifier, not the raw `$pr`', () => {
+    // `PR_NUM` is normalized structurally *because* tail parsing is wrong for
+    // `…/pull/420/files` and `…/pull/420#issuecomment-98765`, and the Arguments table
+    // promises both forms are accepted — but the read that must survive them passed the RAW
+    // value, so a documented-as-accepted input fail-safes 🔴 with "unreadable — nonexistent
+    // identifier, or the code host is not reachable": a parsing problem misreported as an
+    // unreachable host, which the step's own Fail-safe bullet forbids. Normalization already
+    // falls back to `$pr` verbatim when nothing is recognized, so `$PR_NUM` is never empty
+    // when `$pr` was supplied.
+    expect(step15Code).toMatch(/read_pr "\$PR_NUM"/)
+    expect(step15Code, 'the read must not consume the un-normalized `$pr`').not.toMatch(
+      /read_pr "\$pr"/,
+    )
+  })
+
   it('point 1 carries the code-host routing qualification, like every other host read in the step', () => {
     // GitHub-only field names (`headRefName`/`headRefOid`) with no substitution pointer
     // leave a non-GitHub host nothing to route against: the read fails and a perfectly
@@ -507,6 +522,56 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // and the modes that read no tag at all keep their arms
     expect(sourceRow).toMatch(/n\/a \(tiering disabled/)
     expect(sourceRow).toMatch(/fail-safe — no source resolved/)
+  })
+
+  it('AC5 — no `Tree:` arm can render an empty `PR_NUM` (`PR # unreadable`)', () => {
+    // `unknown` is reachable on the no-`$pr` path — `PR_NUM` is initialized to "" and only
+    // the `$pr` normalization block writes it, so a failed current-branch read whose stderr
+    // is not "no pull requests found" (unauthenticated, offline, rate-limited, remote not on
+    // the code host) renders `Tree: unknown — PR # unreadable`. Point 1 now makes that read
+    // on EVERY run including the default `Pre-merge tiering: disabled`, so the malformed row
+    // is the common case there. `TIER_SOURCE` already handles the same state with a
+    // numberless arm (`current-branch PR unreadable`); the Tree row must too.
+    const out = section(SKILL, '## Output Format')
+    const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
+    const arms = (treeRow.match(/\[(.*)\]$/) as RegExpMatchArray)[1].split(' | ')
+    const unknownArms = arms.filter(a => /^unknown/.test(a))
+    expect(unknownArms.length, `the \`unknown\` value needs both spellings: ${treeRow}`).toBe(2)
+    expect(
+      unknownArms.some(a => /PR #N/.test(a)),
+      'the numbered spelling (a `$pr` was normalized) must stay',
+    ).toBe(true)
+    expect(
+      unknownArms.some(a => !/#/.test(a)),
+      'the numberless spelling (no `$pr`, `PR_NUM` never assigned) is missing',
+    ).toBe(true)
+    // and the rendering paragraph must state the two-state rule, not just the Output Format
+    expect(step15).toMatch(/`PR_NUM`[^.\n]{0,80}empty|empty[^.\n]{0,40}`PR_NUM`/)
+  })
+
+  it('AC5 — every arm of the `Tier source:` row is ASSIGNED, never improvised prose', () => {
+    // The step's contract is that both rows are "resolved variables, not improvised prose",
+    // and `TIER_SOURCE` is initialized to the fail-safe attribution precisely so no arm can
+    // render stale. The tag-free modes (`tiering disabled` — the DEFAULT this repo runs —
+    // and the matrix-not-found fallback) must therefore ASSIGN their value, not merely ask
+    // for it in prose: otherwise an agent rendering the variable it was told to resolve
+    // prints `fail-safe — no source resolved` on a run that never attempted a tier read.
+    const render = (v: string) =>
+      v
+        .replace(/\$PR_NUM/g, 'N')
+        .replace(/\$story/g, 'ID')
+        .replace(/\\\$/g, '$')
+    // read the WHOLE step (prose arms included), not just its fenced code
+    const assigned = new Set(
+      [...step15.matchAll(/TIER_SOURCE="([^"]+)"/g)].map(m => render(m[1] as string)),
+    )
+    expect(assigned).toContain('n/a (tiering disabled — no tag read)')
+    expect(assigned).toContain('n/a (matrix fallback — no tag read)')
+    const out = section(SKILL, '## Output Format')
+    const sourceRow = (out.match(/^├── Tier source:.*$/m) as RegExpMatchArray)[0].replace(/`/g, '')
+    const arms = new Set((sourceRow.match(/\[(.*)\]$/) as RegExpMatchArray)[1].split(' | '))
+    // exact correspondence in BOTH directions: no unassigned arm, no unrendered assignment
+    expect(arms, `Tier source: arms ≠ assigned TIER_SOURCE values`).toEqual(assigned)
   })
 
   it('AC5 — report rows are column-aligned: every value bracket sits at the same offset', () => {
@@ -594,6 +659,24 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
     // on evidence the same step just declared advisory (a red local run over other code).
     expect(step21).toMatch(/authoritative/i)
     expect(step21).toMatch(/findings only|only[^.\n]*findings/i)
+  })
+
+  it('the authoritative/advisory split keys on the RESOLVED `Tree:` value, never on the ⚠️ glyph', () => {
+    // ⚠️ is rendered by `mismatch` ALONE (the `ahead` arm was split out deliberately: it is
+    // the normal pre-push state and warning on it would train the reader to ignore the ⚠️).
+    // A rule keyed on the glyph therefore reads `ahead` — the state the implement→review→fix
+    // loop produces on EVERY locally committed, not-yet-pushed fix — as authoritative, and
+    // feeds a local green over code the PR does not contain to the Step 5.4 synthesis:
+    // `ready-to-merge` on gates CI never saw. `unknown` is the same hole with no glyph either.
+    expect(step21, 'the rule must name the `match` arm as the authoritative one').toMatch(/`match`/)
+    for (const arm of ['ahead', 'mismatch', 'unknown', 'none']) {
+      expect(step21, `Step 2.1 must name \`${arm}\` as advisory`).toMatch(new RegExp(`\`${arm}\``))
+    }
+    // the banned round-3 spelling: the trigger stated as the glyph
+    expect(step21, 'the advisory trigger must not be the ⚠️ glyph').not.toMatch(/`Tree: ⚠️`/)
+    // …and the cap must key on the same resolved value, not on a second phrasing
+    const cap = step21.slice(step21.indexOf('caps the verdict'))
+    expect(cap, 'the verdict cap must key on the same `match` arm').toMatch(/`match`/)
   })
 
   it('the tag read is qualified by the Tag Projection declaration, not promised unconditionally', () => {
