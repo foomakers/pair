@@ -286,11 +286,17 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // `$story` (the refinement tier — an under-check anywhere else, D17).
     expect(step15).toMatch(/no pull requests found/i)
     expect(reasons).toContain('current-branch PR unreadable — the code host is not reachable')
-    // the no-PR message is the ONLY thing that raises the pre-publish flag …
+    // Exactly two states may raise the pre-publish flag, and neither is a bare failed read:
+    // the host's no-PR MESSAGE, and no code-host remote at all (provably no PR — the read
+    // was skipped, not failed). A third raiser would hand the story card's REFINEMENT tier
+    // to a run whose PR may exist and may carry a raised tag.
     const noPrFlagLines = step15Code.split('\n').filter(l => /NO_PR_ON_BRANCH=1/.test(l))
-    expect(noPrFlagLines.length).toBe(1)
+    expect(noPrFlagLines.length, `unexpected NO_PR_ON_BRANCH raisers: ${noPrFlagLines}`).toBe(2)
     expect(step15Code).toMatch(
       /no pull requests found'?\s*"\$PR_ERR"[\s\S]{0,200}NO_PR_ON_BRANCH=1/,
+    )
+    expect(step15Code, 'the other raiser is the no-remote guard').toMatch(
+      /\[ -z "\$\(git remote\)" \][\s\S]{0,200}NO_PR_ON_BRANCH=1/,
     )
     // … and the story-card read is nested under that flag, not under a bare failure arm
     expect(step15Code).toMatch(/NO_PR_ON_BRANCH" = "1"[\s\S]{0,400}gh issue view/)
@@ -406,8 +412,19 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     ).toBeLessThan(prGuardAt)
   })
 
-  it('the PR-read temp file is released even if a later arm exits early', () => {
-    expect(step15Code).toMatch(/trap 'rm -f "\$PR_ERR"'/)
+  it('the PR-read temp file is released WITHOUT taking over the caller shell EXIT trap', () => {
+    // `trap … EXIT` is a shell GLOBAL. Installing one here (and then clearing it with
+    // `trap - EXIT`) silently discards the cleanup handler a caller — or a wrapper that
+    // sources this snippet — already owns: the snippet would take ownership of state it
+    // does not own, for a file it releases on the very next line anyway. No arm of the
+    // read chain can exit early (a failing command in an `if` condition does not exit
+    // even under `set -e`), so the explicit release is sufficient.
+    expect(step15Code, 'the temp file must still be released explicitly').toMatch(
+      /rm -f "\$PR_ERR"/,
+    )
+    expect(step15Code, 'no shell-global EXIT trap may be installed or cleared').not.toMatch(
+      /\btrap\b/,
+    )
   })
 
   it('a `$pr` given as a URL is normalized to a bare number before it is rendered', () => {
@@ -520,19 +537,89 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(guardAt).toBeGreaterThan(-1)
     expect(readAt).toBeGreaterThan(-1)
     expect(guardAt, 'the guard must sit before the read it skips').toBeLessThan(readAt)
-    // …and the skipped path resolves the honest relation, not a mismatch it never established
+    // …and the skipped path resolves the honest relation, not a mismatch it never
+    // established — and not `unknown` either, which claims a read that was attempted and
+    // failed (see the dedicated state below).
     expect(
       lines.slice(guardAt, readAt).join('\n'),
-      'the skipped path must resolve TREE_MATCH=unknown',
-    ).toMatch(/TREE_MATCH=unknown/)
+      'the skipped path must resolve its own TREE_MATCH value',
+    ).toMatch(/TREE_MATCH=no-remote/)
+  })
+
+  it('the skipped read is its OWN state: no remote ⇒ pre-publish, so `$story` still resolves the tier', () => {
+    // Regression guard on the short-circuit above. It skipped the read but left
+    // `NO_PR_ON_BRANCH=0`, and point 3 nests the story-card arm under that flag — so in a
+    // repository with no code-host remote a supplied `$story` was silently ignored and
+    // resolution fell to the final `else`, reporting `current-branch PR unreadable — the
+    // code host is not reachable` for a read that was never attempted, against a host that
+    // is not CONFIGURED rather than unreachable (the Fail-safe bullet forbids exactly that
+    // misattribution). Two consequences: a freshly bootstrapped project with no remote yet
+    // lost the `$story` pre-publish fallback AC3 requires (widen-only, but the fallback
+    // exists precisely for the pre-publish case, and a repo with no code host has by
+    // definition no PR), and the `$pr` arm rendered `PR #N unreadable` for a read that
+    // never happened. No remote ⇒ provably no PR ⇒ the pre-publish shape.
+    const lines = step15Code.split('\n')
+    const guardAt = lines.findIndex(l => /\[ -z "\$\(git remote\)" \]/.test(l))
+    expect(guardAt, 'the no-remote guard must be present').toBeGreaterThan(-1)
+    const guardArm = lines.slice(guardAt, guardAt + 6).join('\n')
+    expect(guardArm, 'no remote ⇒ no PR: the pre-publish flag must be raised here').toMatch(
+      /NO_PR_ON_BRANCH=1/,
+    )
+    expect(guardArm, 'the skipped read is not the failed read').not.toMatch(/TREE_MATCH=unknown/)
+    expect(guardArm, 'the state must be distinguishable downstream').toMatch(/NO_CODE_HOST=1/)
+    // …and downstream it renders as itself: its own reason on the `$pr` arm (which point 3
+    // still tests FIRST, so a named PR keeps its own arm) and its own `Tier source:` value
+    // on the sourceless arm.
+    expect(step15Code, 'the flag must be consumed, not just set').toMatch(/NO_CODE_HOST" = "1"/)
+    expect(step15Code).toMatch(/elif \[ -n "\$pr" \]/)
+    const noHostReasons = reasons.filter(r => /no code-host remote/i.test(r))
+    expect(
+      noHostReasons.length,
+      `the missing-configuration state needs its own reason(s): ${reasons.join(' | ')}`,
+    ).toBeGreaterThanOrEqual(2)
+    const sources = [...step15.matchAll(/TIER_SOURCE="([^"]+)"/g)].map(m => m[1] as string)
+    expect(sources.some(s => /no code-host remote/i.test(s))).toBe(true)
+  })
+
+  it('the names Steps 2–6 consume are assigned on EVERY arm, the tag-free modes included', () => {
+    // `TIER` and `ACTIVE_SUITES` decide which suites actually run and are read OUTSIDE this
+    // step (Step 4: "run only the test suites in ACTIVE_SUITES"; Step 1.5's own Verify).
+    // Two arms skip the tier read entirely — tiering `disabled` (the default) and the
+    // matrix-not-found fallback — and describe the WIDEST set in prose; leaving the
+    // variables unassigned there lets a previous run's `ACTIVE_SUITES="install lint type
+    // build"` survive in the shell, so an agent following Step 4 literally runs a NARROWER
+    // set than the arm demands: the same silent narrow the LABELS fix removed.
+    const initBlock = step15Code.slice(0, step15Code.indexOf('if [ -n "$pr" ]'))
+    expect(initBlock, 'TIER must be initialized in the hoisted block').toMatch(/^\s*TIER=/m)
+    expect(initBlock, 'ACTIVE_SUITES must be initialized to the widest set').toMatch(
+      /^\s*ACTIVE_SUITES=all\b/m,
+    )
+    // …and explicitly (re-)assigned on both tag-free arms, where the prose promises the full set
+    const disabledArm = step15.slice(
+      step15.indexOf('**`disabled` (the default)'),
+      step15.indexOf('**`enabled`**'),
+    )
+    expect(disabledArm).toMatch(/ACTIVE_SUITES=all\b/)
+    expect(disabledArm).toMatch(/TIER=/)
+    const fallbackArm = step15.slice(step15.indexOf('matrix/KB not found'))
+    expect(fallbackArm).toMatch(/ACTIVE_SUITES=all\b/)
+    expect(fallbackArm).toMatch(/TIER=/)
+    // and the consumer must know the sentinel means "every adopted gate", not a suite named `all`
+    const step4 = section(SKILL, '### Step 4: Test Gate (tier-scoped)')
+    expect(step4).toMatch(/ACTIVE_SUITES/)
+    expect(step4, 'Step 4 must define the `all` sentinel it can now read').toMatch(
+      /`all`[^\n]*(every|full)|sentinel/i,
+    )
   })
 
   it('AC5 — every resolved TREE_MATCH value has a rendering arm in the Output Format', () => {
     // No improvised rows: the values the snippet can assign and the arms the report
     // enumerates are the same set, so a pre-publish run never claims to match a PR that
     // does not exist and an unreadable PR never renders as a mismatch.
-    const assigned = new Set([...step15Code.matchAll(/TREE_MATCH=(\w+)/g)].map(m => m[1]))
-    expect(assigned).toEqual(new Set(['match', 'ahead', 'mismatch', 'unknown', 'none']))
+    const assigned = new Set([...step15Code.matchAll(/TREE_MATCH=([\w-]+)/g)].map(m => m[1]))
+    expect(assigned).toEqual(
+      new Set(['match', 'ahead', 'mismatch', 'unknown', 'none', 'no-remote']),
+    )
     const out = section(SKILL, '## Output Format')
     const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
     expect(treeRow).toMatch(/matches PR #N's head/)
@@ -540,6 +627,9 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(treeRow).toMatch(/⚠️ NOT PR #N's head/)
     expect(treeRow).toMatch(/unknown — PR #N unreadable/)
     expect(treeRow).toMatch(/no PR on this branch/)
+    expect(treeRow, 'the SKIPPED read needs its own arm, distinct from the failed one').toMatch(
+      /no code-host remote/,
+    )
     // …and the LOCAL side of every arm that renders it pins a COMMIT. `git rev-parse
     // --abbrev-ref HEAD` is a BRANCH NAME on an attached checkout — the common
     // review-from-`main` and stale-branch shapes, i.e. precisely the `mismatch` cases — so a
@@ -548,7 +638,13 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(out, '`<tree>` must be defined as a commit-pinned value').toMatch(
       /`<tree>`[^\n]*@<sha7>/,
     )
-    for (const arm of ['matches PR', 'ahead of PR', '⚠️ NOT PR', 'no PR on this branch']) {
+    for (const arm of [
+      'matches PR',
+      'ahead of PR',
+      '⚠️ NOT PR',
+      'no PR on this branch',
+      'no code-host remote',
+    ]) {
       const armText = (treeRow.match(/\[(.*)\]$/) as RegExpMatchArray)[1]
         .split(' | ')
         .find(a => a.includes(arm)) as string
@@ -641,8 +737,25 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(new Set(offsets).size, `misaligned report rows: ${offsets.join(',')}`).toBe(1)
   })
 
-  it('AC6 — the argument is optional and additive: callers that omit it are unchanged', () => {
+  it('AC6 — the argument is optional and additive: the composition CONTRACT is what is unchanged', () => {
     expect(SKILL).toMatch(/optional[^\n]*additive|additive[^\n]*optional/i)
+    // "callers that omit it are unchanged" full stop overclaims. In the DEFAULT
+    // `Pre-merge tiering: disabled` mode point 1's read is unconditional and
+    // tier-independent, so the omitting callers (/implement's per-task gate,
+    // /publish-pr's pre-flight) now pay one code-host round trip where pre-#382 that mode
+    // made no host read at all, and their report gains a `Tree:` row. What is unchanged is
+    // the composition CONTRACT (PASS/FAIL shape, precedence), not the run.
+    const args = section(SKILL, '## Arguments')
+    const prRow = args.split('\n').find(l => /^\|\s*`\$pr`/.test(l)) as string
+    expect(prRow, 'the `$pr` row must be found').toBeTruthy()
+    expect(prRow, 'the claim must name what is unchanged: the composition contract').toMatch(
+      /contract/i,
+    )
+    expect(prRow, 'and disclose the one added read + where it is skipped').toMatch(
+      /round trip|host read|added read/i,
+    )
+    expect(prRow).toMatch(/`Tree:`/)
+    expect(prRow).toMatch(/skipped|no[- ]remote|no code-host/i)
   })
 
   it('the stale boundary note is gone — no "PR number is never needed", no "belongs to /review"', () => {
@@ -753,6 +866,25 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
     // …and the cap must key on the same resolved value, not on a second phrasing
     const cap = step21.slice(step21.indexOf('caps the verdict'))
     expect(cap, 'the verdict cap must key on the same `match` arm').toMatch(/`match`/)
+  })
+
+  it('Step 2.1 Verify reads as a decision PROCEDURE, not one paragraph carrying seven rules', () => {
+    // The Verify item carries seven distinct executable rules (authoritative-vs-advisory
+    // keyed on the resolved `Tree:` value; the named CI read; narrowing to the required
+    // contexts; the pair-* exclusion and why; the unprotected-branch fallback; the
+    // no-conclusion ⇒ `Gates: pending` arm; which signal caps the verdict; the post-2.1
+    // raise ⇒ re-run). Delivered as one ~600-word bullet the executing agent has to extract
+    // an ordered procedure from prose, and the failure mode is a clause skipped at runtime:
+    // dropping the pair-* exclusion alone makes `ready-to-merge` unreachable by construction.
+    const verify = step21.slice(step21.indexOf('4. **Verify**'))
+    const longest = Math.max(...verify.split('\n').map(l => l.split(/\s+/).filter(Boolean).length))
+    expect(longest, 'no single line may carry the whole procedure').toBeLessThan(150)
+    // one rule per line — sub-bullets, and/or a table keyed by the resolved `Tree:` value
+    const ruleLines = verify.split('\n').filter(l => /^\s*(- \*\*|\| )/.test(l))
+    expect(
+      ruleLines.length,
+      `expected one line per rule in Step 2.1 Verify, got ${ruleLines.length}`,
+    ).toBeGreaterThanOrEqual(6)
   })
 
   it('the tag read is qualified by the Tag Projection declaration, not promised unconditionally', () => {
