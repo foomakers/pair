@@ -3,7 +3,8 @@ import { logger, createMirrorConstraintError, createError } from '../observabili
 import { validatePaths } from '../file-system/file-validations'
 import { SyncOptions } from './SyncOptions'
 import { FileSystemService } from '../file-system'
-import { Behavior, validateMirrorConstraints } from './behavior'
+import { Behavior, normalizeKey, resolveBehavior, validateMirrorConstraints } from './behavior'
+import { isExcluded } from '../file-system/file-operations'
 import { processPathSubstitution } from './link-batch-processor'
 
 /**
@@ -126,17 +127,72 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
  * HAND in #393; wiring cleanup onto the install path is an open product decision (it makes
  * `pair update` delete an adopter's own files under a mirror target, with no dry-run) and
  * is recorded as such in `.pair/adoption/decision-log/2026-08-11-a-mirror-guard-compares-the-transform.md`.
+ *
+ * OWNERSHIP — required now that the walk is recursive. The copy step decides, at EVERY
+ * depth, what it installs: an `exclude`d entry is dropped as if it were never in the
+ * source, and an entry resolving to `add` or `skip` is left alone (for `add`, target-only
+ * files are the entire point of the semantics). A delete pass that descends the shared
+ * tree without the same knowledge deletes MORE than the copy would install — adopter
+ * content, under a subtree the registry does not own. `ownership` carries that context;
+ * omitting it keeps the pre-#393 semantics (everything under the mirror root is owned),
+ * which is what the plain `mirror` registries shipped today mean.
+ *
+ * Reachability, so the next reader does not over-trust either half: `exclude` under a
+ * mirror root is fully reachable from config and is pinned end-to-end in
+ * `copy-directory.test.ts`. `add`/`skip` under a mirror root is NOT reachable through a
+ * validated registry today — `validateMirrorConstraints` rejects a non-mirror descendant
+ * of a `mirror` key — so that half is defense-in-depth for direct callers of this
+ * exported function and for any future relaxation of that constraint. It is pinned at the
+ * unit level rather than through the copy path for exactly that reason.
  */
+export type MirrorCleanupOwnership = {
+  /** Source-relative entries the registry never installs. Needs `excludeRoot`. */
+  exclude?: string[]
+  /** The registry source root `exclude` entries resolve against. */
+  excludeRoot?: string
+  /** Per-path behavior overrides, same map the copy step resolves against. */
+  folderBehavior?: Record<string, Behavior>
+  /** Behavior when no override matches. Defaults to `overwrite` (owned). */
+  defaultBehavior?: Behavior
+  /** Root the `folderBehavior` keys are relative to. Without it, behavior is not resolved. */
+  datasetRoot?: string
+}
+
+/**
+ * Whether the registry owns this source path — i.e. whether the copy step would install
+ * it. Mirrors `copyDirEntry`'s two short-circuits (exclusion first, then behavior), so
+ * cleanup can never delete what the copy would have left in place. `add` counts as
+ * not-owned unconditionally here: the caller only ever asks about a path that EXISTS in
+ * the target, which is exactly the case where the copy returns early.
+ */
+function registryOwns(srcEntryPath: string, ownership: MirrorCleanupOwnership): boolean {
+  const { exclude, excludeRoot, folderBehavior, defaultBehavior, datasetRoot } = ownership
+
+  if (excludeRoot && isExcluded(relative(excludeRoot, srcEntryPath), exclude)) return false
+  if (!datasetRoot) return true
+
+  const rel = normalizeKey(relative(datasetRoot, srcEntryPath))
+  const behavior = resolveBehavior(rel, folderBehavior, defaultBehavior ?? 'overwrite')
+  return behavior !== 'add' && behavior !== 'skip'
+}
+
 export async function handleMirrorCleanup(
   fileService: FileSystemService,
   srcPath: string,
   destPath: string,
+  ownership: MirrorCleanupOwnership = {},
 ) {
   const destEntries = await fileService.readdir(destPath).catch(() => [])
   const srcEntries = await fileService.readdir(srcPath).catch(() => [])
   const srcByName = new Map(srcEntries.map(e => [e.name, e]))
 
   for (const de of destEntries) {
+    // Not ours: neither removed nor descended into. The target side is the adopter's here.
+    if (!registryOwns(join(srcPath, de.name), ownership)) {
+      logger.info(`Mirror: left ${join(destPath, de.name)} untouched (not owned by the registry)`)
+      continue
+    }
+
     const src = srcByName.get(de.name)
 
     if (!src) {
@@ -153,7 +209,12 @@ export async function handleMirrorCleanup(
     // recurse. Anything else (a file the source also has, or a type mismatch we do not
     // adjudicate here) is left to the copy step that follows.
     if (de.isDirectory?.() && src.isDirectory?.()) {
-      await handleMirrorCleanup(fileService, join(srcPath, de.name), join(destPath, de.name))
+      await handleMirrorCleanup(
+        fileService,
+        join(srcPath, de.name),
+        join(destPath, de.name),
+        ownership,
+      )
     }
   }
 }

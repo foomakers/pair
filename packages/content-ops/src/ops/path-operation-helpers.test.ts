@@ -23,9 +23,13 @@ vi.mock('../file-system/file-validations', () => ({
   validatePaths: vi.fn(),
 }))
 
-vi.mock('./behavior', () => ({
-  validateMirrorConstraints: vi.fn(),
-}))
+// Only the constraint validator is stubbed. `resolveBehavior`/`normalizeKey` are pure and
+// are what the cleanup uses to decide ownership — stubbing them would make the ownership
+// tests below assert against a fiction instead of against the resolution the copy step runs.
+vi.mock('./behavior', async () => {
+  const actual = await vi.importActual<typeof import('./behavior')>('./behavior')
+  return { ...actual, validateMirrorConstraints: vi.fn() }
+})
 
 vi.mock('./link-batch-processor', () => ({
   processPathSubstitution: vi.fn(),
@@ -391,6 +395,137 @@ describe('handleMirrorCleanup', () => {
 
     await expect(fileService.exists('/dataset/dest/gone/nested.md')).resolves.toBe(false)
     await expect(fileService.exists('/dataset/dest/keep.md')).resolves.toBe(true)
+  })
+
+  // ── Ownership: "a target-only path the registry does not own is left untouched" ──
+  // Recursion made the delete path reach the whole shared tree, so it must know what the
+  // copy step knows: `exclude` (the subtree is treated as if it were never in the source)
+  // and per-entry `folderBehavior` (`add`/`skip` — where target-only files are the point).
+  // Deleting more than the copy would install is the failure mode these pin.
+  it('leaves a target-only entry under an EXCLUDED source subtree untouched', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/vendor/theirs.md': 'not ours',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      exclude: ['vendor'],
+      excludeRoot: '/dataset/src',
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+    })
+
+    await expect(fileService.exists('/dataset/dest/vendor/theirs.md')).resolves.toBe(true)
+  })
+
+  it('does not descend into an excluded subtree present on both sides', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/vendor/a.md': 'a',
+        '/dataset/dest/vendor/a.md': 'a',
+        '/dataset/dest/vendor/theirs.md': 'not ours',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      exclude: ['vendor'],
+      excludeRoot: '/dataset/src',
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+    })
+
+    await expect(fileService.exists('/dataset/dest/vendor/theirs.md')).resolves.toBe(true)
+  })
+
+  it('leaves a target-only entry whose resolved behavior is `add` untouched', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/local/notes.md': 'authored by the adopter',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { 'src/local': 'add' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/local/notes.md')).resolves.toBe(true)
+  })
+
+  it('leaves a target-only entry whose resolved behavior is `skip` untouched', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/local/notes.md': 'authored by the adopter',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { 'src/local': 'skip' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/local/notes.md')).resolves.toBe(true)
+  })
+
+  it('leaves a NESTED target-only file untouched when its resolved behavior is `add`', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/shared/keep.md': 'keep',
+        '/dataset/dest/shared/keep.md': 'keep',
+        '/dataset/dest/shared/adopter.md': 'authored by the adopter',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { 'src/shared/adopter.md': 'add' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/shared/adopter.md')).resolves.toBe(true)
+    await expect(fileService.exists('/dataset/dest/shared/keep.md')).resolves.toBe(true)
+  })
+
+  it('still removes an orphan the registry DOES own when an ownership context is given', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/04-orphan.md': 'stale',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      exclude: ['vendor'],
+      excludeRoot: '/dataset/src',
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { src: 'mirror' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/how-to/04-orphan.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/how-to/01-keep.md')).resolves.toBe(true)
   })
 })
 
