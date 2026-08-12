@@ -394,7 +394,16 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // …and it must name a COMMIT when detached: `git rev-parse --abbrev-ref HEAD` yields the
     // literal string "HEAD" there, while both renderings promise a commit — and a detached
     // checkout is the canonical independent-review/CI shape this contract targets.
-    expect(step15Code).toMatch(/\[ "\$LOCAL_REF" = HEAD \][\s\S]{0,120}git rev-parse --short HEAD/)
+    expect(step15Code).toMatch(
+      /\[ "\$LOCAL_REF" = HEAD \][\s\S]{0,120}(git rev-parse --short HEAD|\$LOCAL_SHA)/,
+    )
+    // the short sha is resolved ONCE and reused, since the `mismatch`/`ahead` arms pin the
+    // local tree to a commit on an ATTACHED checkout too
+    expect(step15Code).toMatch(/LOCAL_SHA="\$\(git rev-parse --short HEAD\)"/)
+    expect(
+      step15Code.indexOf('LOCAL_SHA='),
+      'LOCAL_SHA must be hoisted above the `$pr` guard like LOCAL_REF',
+    ).toBeLessThan(prGuardAt)
   })
 
   it('the PR-read temp file is released even if a later arm exits early', () => {
@@ -410,11 +419,22 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // URL) and yields the WRONG number for `…/pull/420#issuecomment-98765`.
     expect(step15Code).toMatch(/pull\|pull-requests\|merge_requests/)
     expect(step15Code).not.toMatch(/grep -oE '\[0-9\]\+\$'/)
-    // a bare number still passes through, anchored at BOTH ends
-    expect(step15Code).toMatch(/grep -oE '\^\[0-9\]\+\$'/)
+    // The accepted input list — every form this corpus writes a PR reference in:
+    //   `420`, `#420`, `…/pull/420`, `…/pull/420/files`, `…/pull/420#issuecomment-98765`
+    // `#420` is the spelling used in prose and issue references everywhere here, and it must
+    // NOT fall through to the verbatim echo: the unreadable arms would then render the
+    // malformed `PR ##420 unreadable`, and a non-GitHub host that rejects `#N` would
+    // fail-safe 🔴 blaming an unreachable host for a parsing problem.
+    // A bare number still passes through, anchored at BOTH ends, with an OPTIONAL leading `#`
+    // that is stripped.
+    expect(step15Code).toMatch(/grep -oE '\^#\?\[0-9\]\+\$'/)
+    expect(step15Code, 'the leading `#` must be stripped, not echoed').toMatch(/tr -d '#'/)
     // and the Arguments table says which forms are recognized
     const args = section(SKILL, '## Arguments')
     expect(args).toMatch(/pull\/<n>|`pull\/`/)
+    expect(args, 'the `#N` spelling must be documented as accepted').toMatch(
+      /`#420`|`#<n>`|leading `#`/i,
+    )
     const reasonStrings = [...step15Code.matchAll(/REASON="([^"]*)"/g)].map(m => m[1] as string)
     const prReasons = reasonStrings.filter(r => /\bPR\b/.test(r) && /\$/.test(r))
     expect(prReasons.length).toBeGreaterThan(0)
@@ -485,6 +505,28 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(step15).toMatch(/TREE_MATCH=unknown/)
   })
 
+  it('the round trip is SKIPPED when it cannot pay — no code-host remote ⇒ no read', () => {
+    // Point 1's read is unconditional and runs BEFORE the tiering flag, so on the `disabled`
+    // DEFAULT (this repo's configuration, and the documented adopter default) every
+    // invocation pays a code-host round trip whose labels are then discarded — and
+    // /implement composes this skill once per task, so an offline, rate-limited or
+    // remote-less session pays a network failure timeout on every task gate. The cheap
+    // short-circuit costs one conditional and the `unknown` arm already handles the outcome
+    // (it changes no gate), which is the skill's Graceful Degradation posture elsewhere.
+    expect(step15Code, 'the read must be guarded by a remote check').toMatch(/git remote/)
+    const lines = step15Code.split('\n')
+    const guardAt = lines.findIndex(l => /git remote/.test(l))
+    const readAt = lines.findIndex(l => /read_pr "\$PR_NUM"/.test(l))
+    expect(guardAt).toBeGreaterThan(-1)
+    expect(readAt).toBeGreaterThan(-1)
+    expect(guardAt, 'the guard must sit before the read it skips').toBeLessThan(readAt)
+    // …and the skipped path resolves the honest relation, not a mismatch it never established
+    expect(
+      lines.slice(guardAt, readAt).join('\n'),
+      'the skipped path must resolve TREE_MATCH=unknown',
+    ).toMatch(/TREE_MATCH=unknown/)
+  })
+
   it('AC5 — every resolved TREE_MATCH value has a rendering arm in the Output Format', () => {
     // No improvised rows: the values the snippet can assign and the arms the report
     // enumerates are the same set, so a pre-publish run never claims to match a PR that
@@ -498,6 +540,21 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(treeRow).toMatch(/⚠️ NOT PR #N's head/)
     expect(treeRow).toMatch(/unknown — PR #N unreadable/)
     expect(treeRow).toMatch(/no PR on this branch/)
+    // …and the LOCAL side of every arm that renders it pins a COMMIT. `git rev-parse
+    // --abbrev-ref HEAD` is a BRANCH NAME on an attached checkout — the common
+    // review-from-`main` and stale-branch shapes, i.e. precisely the `mismatch` cases — so a
+    // row reading "the suites ran against main" names the code that was NOT run and leaves
+    // the reader unable to tell which code WAS. It is a commit question on both sides.
+    expect(out, '`<tree>` must be defined as a commit-pinned value').toMatch(
+      /`<tree>`[^\n]*@<sha7>/,
+    )
+    for (const arm of ['matches PR', 'ahead of PR', '⚠️ NOT PR', 'no PR on this branch']) {
+      const armText = (treeRow.match(/\[(.*)\]$/) as RegExpMatchArray)[1]
+        .split(' | ')
+        .find(a => a.includes(arm)) as string
+      expect(armText, `the "${arm}" arm must render the commit-pinned <tree>`).toContain('<tree>')
+    }
+    expect(step15Code, 'the local sha is resolved once, as a variable').toMatch(/LOCAL_TREE=/)
   })
 
   it('AC5 — the tier SOURCE is resolved by the snippet too, with one arm per resolved value', () => {
@@ -652,6 +709,25 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
     expect(step21).toMatch(/success/)
     expect(step21).toMatch(/to-be-reviewed/)
     expect(step21).toMatch(/never[^.\n]*ready-to-merge|ready-to-merge[^.\n]*never/i)
+    // …and the SET it reads is MECHANICAL gate checks only. The branch protection's required
+    // set also holds `pair-review` (registered PENDING at t0 by /publish-pr and concluded
+    // only in THIS flow's Step 5.4) and `pair-explicit-approval` (failing at 🔴 until a human
+    // approves): `resolve_pr_state <gates> <review> <tier> <explicit_approval>` already
+    // carries both on SEPARATE axes, so folding them into `gates` double-counts them and —
+    // because pr-state.sh short-circuits on `gates != pass` — makes `ready-to-merge`
+    // unreachable BY CONSTRUCTION on every advisory arm, i.e. on the loop's normal state.
+    expect(step21, 'the two pair-* contexts must be excluded BY NAME').toMatch(/`pair-review`/)
+    expect(step21).toMatch(/`pair-explicit-approval`/)
+    expect(step21).toMatch(
+      /exclud\w*[^.\n]{0,160}`pair-review`|`pair-review`[^.\n]{0,160}exclud\w*/i,
+    )
+    // A repository with NO branch protection is the documented non-blocking degraded
+    // configuration (pr-states.md), and "the required set is the branch protection's"
+    // resolves to nothing there — so the fallback must be DEFINED, not improvised.
+    expect(step21, 'the no-branch-protection fallback must be defined').toMatch(
+      /no branch protection|not protected|unprotected/i,
+    )
+    expect(step21).toMatch(/Gates: pending/)
   })
 
   it('disambiguates WHICH gate signal caps the verdict — the advisory run contributes findings only', () => {
