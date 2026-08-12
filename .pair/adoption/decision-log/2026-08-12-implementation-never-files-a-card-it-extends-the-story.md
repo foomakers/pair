@@ -60,7 +60,7 @@ This binds the `implement-batch` reviewer and fixer prompts, `/pair-process-revi
 
 - [way-of-working.md](../tech/way-of-working.md) — a policy bullet next to "PR granularity — one PR per story (default)" states the ban and points here. Done in the same change as this record.
 - `.claude/workflows/implement-batch.js` — the reviewer and fixer prompts carry the ban ("DO NOT FILE NEW ISSUES", no `/pair-capability-write-issue`, no "tracked separately"), pinned by tests in `implement-batch.test.mjs`. That prompt change is the orchestrator's own change and lands with it, **not** in PR #424 — this record is the decision, not its enforcement point.
-- `/pair-process-review` — the "Deferred to #\<number\>" instruction must stop offering to file the card it defers to; only an existing number may be cited.
+- `/pair-process-review` — the deferral instruction stops offering to file the card it defers to; only an existing number may be cited. Its enforcement point is Phase 4.2 Step 5 (the tech-debt promotion step), rewritten in **both** copies — dataset source and installed mirror — and pinned by `implementation-never-files-a-card.test.ts`. Done in the same change as this record: an Active policy may not ship next to the instruction that violates it.
 
 ## References
 
