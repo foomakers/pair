@@ -225,8 +225,11 @@ somewhere before they can be read.
 A slot whose `manifest.json` names a different KB than the one expected is treated as
 **contaminated**: it is discarded and re-fetched rather than served. The contaminated slot
 is set aside first, not deleted, so a failing re-fetch (offline, 5xx) leaves the previous
-content in place instead of no cache at all. A slot with no `manifest.json` at all is
-treated as an aborted download and re-fetched too.
+content in place instead of no cache at all. A slot of the **official** KB with no
+`manifest.json` at all is treated as an aborted download and re-fetched too. External slots
+declare no expected manifest name — there is nothing to compare against, so they are not
+inspected: every `--source`/`--url` install re-installs into its own slot regardless of
+what the slot already holds.
 
 **A fetched slot is never deleted before its replacement is in hand.** Every source whose
 content comes over the network — the official download, `--url`, a git clone — sets its
