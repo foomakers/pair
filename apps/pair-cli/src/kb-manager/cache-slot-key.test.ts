@@ -240,3 +240,31 @@ describe('cache-slot-key — slot label readability', () => {
     expect(slotName).not.toContain('--')
   })
 })
+
+/**
+ * US-395 (absorbed #429) — a local ZIP slot is keyed by the archive's CONTENT, not by
+ * its path. Path keying gave the same archive copied to two directories two slots (two
+ * full KB copies on disk, and `kb-info` listing two entries for what the user considers
+ * one KB); content keying collapses them and still keeps different bytes apart.
+ */
+describe('cache-slot-key — a local ZIP is keyed by content (US-395/#429)', () => {
+  const hashA = 'a'.repeat(64)
+  const hashB = 'b'.repeat(64)
+
+  it('resolves the same archive at two different paths to ONE slot (AC: content-keyed)', () => {
+    const a = cacheSlotKey({ kind: 'zip', path: '/team-a/dist/kb.zip', contentHash: hashA })
+    const b = cacheSlotKey({ kind: 'zip', path: '/backups/renamed-copy.zip', contentHash: hashA })
+    expect(a).toBe(b)
+  })
+
+  it('keeps two archives with different bytes apart, whatever they are named', () => {
+    const a = cacheSlotKey({ kind: 'zip', path: '/kb/acme.zip', contentHash: hashA })
+    const b = cacheSlotKey({ kind: 'zip', path: '/kb/acme.zip', contentHash: hashB })
+    expect(a).not.toBe(b)
+  })
+
+  it('keeps ZIP slots in the external namespace with the zip- prefix', () => {
+    const key = cacheSlotKey({ kind: 'zip', path: '/kb/acme.zip', contentHash: hashA })
+    expect(key).toBe(`external/zip-${hashA.slice(0, 12)}`)
+  })
+})
