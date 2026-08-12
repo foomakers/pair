@@ -252,7 +252,10 @@ it follows**: the set-aside copy is moved back first and the half-written one di
 afterwards (so a failing delete cannot cost you both), and a failure of that housekeeping
 is logged rather than raised — the error you see is the one that actually stopped the
 install ("Network error downloading KB…", a 404 with the manual-download URL), never an
-unrelated filesystem message from the recovery.
+unrelated filesystem message from the recovery. Should the recovery itself fail (a held
+handle on the directory, on Windows), it is retried the other way round first; if that fails
+too you get a **warning naming the copy it kept** and the path to move it back to, so your
+previous KB is never left recoverable-but-unnamed at `<slot>.bak`.
 
 **Scope of the self-heal:** the official slot is keyed by CLI version, so detection only
 applies to the slot of the CLI version you are running. A slot polluted by an **older**
@@ -261,14 +264,18 @@ that older version's directory and is never read again — abandoned, not discar
 
 **Disk:** one slot per distinct source. Slots are plain directories with no hidden state —
 `rm -rf ~/.pair/kb/external` is always safe, and the next install re-populates what it
-needs. There is no automatic eviction. Three leftovers `rm -rf ~/.pair/kb/external` does
+needs. There is no automatic eviction. Four leftovers `rm -rf ~/.pair/kb/external` does
 **not** cover, all safe to delete by hand:
 
-| Leftover                     | Left by                                                    |
-| ---------------------------- | ---------------------------------------------------------- |
-| `~/.pair/kb/<old-version>/`  | an older CLI, possibly polluted by a pre-fix `--source`      |
-| `~/.pair/kb/git-<hash>/`     | a git `--source` clone from before the `external/` namespace |
-| `~/.pair/kb/<version>.bak`   | an install that was interrupted mid-write                    |
+| Leftover                            | Left by                                                      |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `~/.pair/kb/<old-version>/`         | an older CLI, possibly polluted by a pre-fix `--source`        |
+| `~/.pair/kb/git-<hash>/`            | a git `--source` clone from before the `external/` namespace   |
+| `~/.pair/kb/<version>.bak`          | an install that was interrupted mid-write                      |
+| `~/.pair/kb/<version>.discarded-*`  | an install whose recovery could not delete the half-written slot — a full KB tree |
+
+An external slot's own `.discarded-*` sits under `external/` and is already covered by the
+`rm -rf` above; only the official slot's spelling needs stating.
 
 ## Configuration
 
