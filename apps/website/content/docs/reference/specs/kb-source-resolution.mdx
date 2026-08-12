@@ -15,6 +15,11 @@ KB source is resolved in the following order (highest to lowest priority):
 2. **Monorepo default** — `packages/knowledge-hub/dataset` (when running from monorepo)
 3. **GitHub release auto-download** — Latest release from configured repository
 
+The monorepo default is the fallback for the **default** source only: a source you name
+explicitly always wins, `--url <remote zip>` included. In a development checkout that URL
+is downloaded and cached under its own slot rather than silently replaced by the local
+dataset — which is also what makes the `--url` path exercisable outside a released binary.
+
 ### Decision Tree
 
 ```text
@@ -189,7 +194,11 @@ When `requiresDownload: true` for URL sources:
 
 1. **HEAD request** — Fetch URL metadata
 2. **Fetch checksum** — Download `.sha256` checksum file
-3. **Download KB** — GET request with progress tracking
+3. **Download KB** — GET request with progress tracking, staged in a temporary file named
+   after the **source URL** (`kb-{version}-{hash}.zip` under the system temp directory).
+   An interrupted download leaves a `.partial` file that the next run of the **same** URL
+   resumes; two different sources never share a staging file, so one source's bytes can
+   never be resumed into another source's archive.
 4. **Validate SHA256** — Verify integrity (if checksum available)
 5. **Extract to cache** — Store in the source's own slot (see Cache Strategy below)
 6. **Unwrap a single root directory** — an archive whose content sits under one top-level
@@ -237,6 +246,13 @@ slot aside before it writes, and puts it back when the fetch throws. A local ZIP
 exception, and deliberately: its source is a file you still have, so re-running the command
 is the recovery, and replacing the slot wholesale is what keeps a previous KB's files from
 lingering next to the new one.
+
+Putting the slot back is itself a **cleanup, and a cleanup never undoes or hides the work
+it follows**: the set-aside copy is moved back first and the half-written one discarded
+afterwards (so a failing delete cannot cost you both), and a failure of that housekeeping
+is logged rather than raised — the error you see is the one that actually stopped the
+install ("Network error downloading KB…", a 404 with the manual-download URL), never an
+unrelated filesystem message from the recovery.
 
 **Scope of the self-heal:** the official slot is keyed by CLI version, so detection only
 applies to the slot of the CLI version you are running. A slot polluted by an **older**
