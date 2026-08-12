@@ -311,10 +311,11 @@ describe('the guarded mirrors are the ones this comparison is valid for (#393)',
     // ...and every OTHER declared registry is guarded, so a new rewritten
     // registry cannot be added to config.json and silently stay unguarded.
     const guardedKeys = new Set(GUARDED_MIRRORS.map(m => m.key))
-    expect(Object.keys(REGISTRY_CONFIG).filter(k => !guardedKeys.has(k)).sort()).toEqual([
-      'adoption',
-      'skills',
-    ])
+    expect(
+      Object.keys(REGISTRY_CONFIG)
+        .filter(k => !guardedKeys.has(k))
+        .sort(),
+    ).toEqual(['adoption', 'skills'])
   })
 
   it('guards the three .github agent files the github registry ships', () => {

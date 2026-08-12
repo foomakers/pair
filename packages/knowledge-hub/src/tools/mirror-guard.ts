@@ -335,7 +335,8 @@ export function assertMirrorMatches(
         ? `marker stripping (a single-FILE registry goes through postCopyOps -> stripMarkersFromTarget)`
         : undefined,
     ].filter((op): op is string => op !== undefined)
-    const alsoApplies = extraOps.length > 0 ? ` This target's install ALSO applies ${extraOps.join(', then ')}.` : ''
+    const alsoApplies =
+      extraOps.length > 0 ? ` This target's install ALSO applies ${extraOps.join(', then ')}.` : ''
     const compared = isMarkdownPath(datasetRelPath)
       ? `COMPARED: the installed mirror vs. TRANSFORM(dataset source) — NOT vs. the raw dataset ` +
         `source ${datasetPath}. This corpus is transformed on install ('/short-name' -> ` +

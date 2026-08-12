@@ -1,11 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import {
-  buildMirrorTransform,
-  assertMirrorMatches,
-  KB_MIRROR,
-} from '../tools/mirror-guard'
+import { buildMirrorTransform, assertMirrorMatches, KB_MIRROR } from '../tools/mirror-guard'
 
 // Conformance guard for #228: the code-review template is verdict-first (D22, R6.6)
 // and carries the seven required assessment sections — input validation, output
@@ -210,11 +206,6 @@ describe('code-review-template — root/dataset structural parity (#228)', () =>
   // "expected [Function] to not throw an error but '...' was thrown").
   it('equals the TRANSFORM of its dataset source, not the raw dataset (#393)', () => {
     const transform = buildMirrorTransform(DATASET_SKILLS)
-    assertMirrorMatches(
-      KB_MIRROR,
-      TEMPLATE_KB_REL,
-      transform(TEMPLATE_DATASET),
-      TEMPLATE_MIRROR,
-    )
+    assertMirrorMatches(KB_MIRROR, TEMPLATE_KB_REL, transform(TEMPLATE_DATASET), TEMPLATE_MIRROR)
   })
 })
