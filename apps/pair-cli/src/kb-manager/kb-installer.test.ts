@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { join } from 'path'
-import { homedir } from 'os'
+import { homedir, tmpdir } from 'os'
 import {
   InMemoryFileSystemService,
   MockHttpClientService,
@@ -51,6 +51,55 @@ describe('KB Installer', () => {
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ KB v0.2.0 installed'))
 
     consoleLogSpy.mockRestore()
+  })
+
+  /**
+   * US-395 review round 5: `installKB` serves the OFFICIAL release AND `--url <remote zip>`,
+   * so a staging file named after the CLI version alone is shared by two different sources
+   * at the same version — the exact keying this story abolishes, one layer lower.
+   *
+   * It is not merely a concurrency window: `resume-manager.shouldResume()` decides to resume
+   * from the existence and SIZE of `<staging>.partial` alone, with no binding to the URL
+   * that produced those bytes, and then issues `Range: bytes=<n>-` against the NEW url. An
+   * interrupted official download followed by `pair install --url https://acme…/kb.zip` at
+   * the same CLI version would append the acme body onto the official KB's bytes and
+   * finalize the hybrid as one archive.
+   */
+  it('stages a download under a name keyed by the source URL, not by the CLI version alone', async () => {
+    const version = '0.2.0'
+    const staged: string[] = []
+
+    const stageOne = async (downloadUrl: string): Promise<void> => {
+      const fs = new InMemoryFileSystemService({}, '/', '/')
+      vi.spyOn(fs, 'extractZip').mockImplementation(async (zipPath, targetPath) => {
+        staged.push(zipPath)
+        await fs.writeFile(join(targetPath, 'manifest.json'), JSON.stringify({ version }))
+      })
+      const httpClient = new MockHttpClientService()
+      httpClient.setRequestResponses([
+        toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+      ])
+      httpClient.setGetResponses([
+        toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+        toIncomingMessage(buildTestResponse(404)),
+      ])
+      await installKB(version, getSourceCachePath({ kind: 'remote', url: downloadUrl }), downloadUrl, {
+        httpClient,
+        fs,
+      })
+    }
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await stageOne(
+      `https://github.com/foomakers/pair/releases/download/v${version}/knowledge-base-${version}.zip`,
+    )
+    await stageOne('https://acme.example/acme-kb.zip')
+    consoleLogSpy.mockRestore()
+
+    expect(staged).toHaveLength(2)
+    // Two sources, two staging files — neither is the version-keyed path they used to share
+    expect(staged[0]).not.toBe(staged[1])
+    expect(staged).not.toContain(join(tmpdir(), `kb-${version}.zip`))
   })
 
   it('preserves extraction errors and cleans up zip', async () => {
@@ -230,6 +279,47 @@ describe('KB Installer - installKBFromGit', () => {
     expect(result).toBe(slot)
     expect(await fs.readFile(join(slot, '.pair', 'knowledge', 'fresh.md'))).toBe('# fresh clone')
     expect(fs.existsSync(join(slot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
+  })
+
+  /**
+   * Round 5, the RESTORE half of the same invariant: the restore runs inside the `catch`,
+   * so if it throws, its fs error REPLACES the actionable one the user needs ("Git clone
+   * failed: network unreachable"). A cleanup must not undo the work it follows — and it
+   * must not hide why that work failed either.
+   */
+  it('reports the clone failure, not a failure of the restore that follows it', async () => {
+    const url = 'https://github.com/acme/kb.git#v3.0.0'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(slot, 'manifest.json')]: '{"name":"acme-kb"}',
+        [join(slot, '.pair', 'knowledge', 'index.md')]: '# working clone',
+      },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
+      throw new Error('Git clone failed: network unreachable')
+    })
+    const realRm = fs.rm.bind(fs)
+    vi.spyOn(fs, 'rm').mockImplementation(async (path, options) => {
+      // the recursive delete of the half-written slot, inside the restore, fails
+      if (path === slot) {
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      }
+      return realRm(path, options)
+    })
+
+    let err: Error | undefined
+    try {
+      await installKBFromGit(url, fs)
+    } catch (e) {
+      err = e as Error
+    }
+
+    expect(err?.message).toMatch(/Git clone failed/)
+    expect(err?.message).not.toMatch(/EBUSY/)
   })
 })
 

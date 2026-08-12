@@ -78,6 +78,36 @@ describe('cache-manager', () => {
     expect(fs.existsSync(cachePath + '.bak')).toBe(false)
   })
 
+  /**
+   * Round 5: the restore used to DELETE the half-written slot and only then rename the
+   * backup back. When that recursive delete fails (the same Windows antivirus/indexer case
+   * as `removeBackupKB`), the good `.bak` AND the half-written slot both survive — and the
+   * next install's `backupCachedKB` deletes the `.bak` to make room, so a second failure
+   * leaves the user with the half-written slot and no backup at all. The ADL's invariant is
+   * "a failing re-fetch must leave the user with the cache they had, not with none", so the
+   * backup is moved back FIRST and the half-written copy discarded afterwards, best-effort.
+   */
+  it('restoreCachedKB puts the backup back even when the half-written slot cannot be deleted', async () => {
+    const cachePath = officialSlot('0.2.0')
+    const fs = new InMemoryFileSystemService(
+      {
+        [cachePath + '/partial.md']: 'half-written download',
+        [cachePath + '.bak/manifest.json']: '{"name":"knowledge-base"}',
+      },
+      '/',
+      '/',
+    )
+    vi.spyOn(fs, 'rm').mockRejectedValue(
+      Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }),
+    )
+
+    await expect(cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)).resolves.toBeUndefined()
+
+    expect(await fs.readFile(cachePath + '/manifest.json')).toBe('{"name":"knowledge-base"}')
+    expect(fs.existsSync(cachePath + '/partial.md')).toBe(false)
+    expect(fs.existsSync(cachePath + '.bak')).toBe(false)
+  })
+
   it('restoreCachedKB is no-op when no backup exists', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     await cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)

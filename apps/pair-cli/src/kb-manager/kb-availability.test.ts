@@ -627,6 +627,53 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     expect(fs.existsSync(expectedCachePath + '/manifest.json')).toBe(true)
   })
 
+  /**
+   * Round 5, the RESTORE half of the "a cleanup must not undo the work it follows" rule:
+   * the restore runs inside the `catch`, so a fs error thrown there REPLACES the only
+   * actionable diagnosis the user had (the HTTP failure that started this) with an
+   * unrelated message. The original error is always the one rethrown.
+   */
+  it('reports the download failure, not a failure of the restore that follows it', async () => {
+    const failingUrl = 'https://failing.example.com/kb.zip'
+    const sourceSlot = remoteSlot(failingUrl)
+    const fs = new InMemoryFileSystemService(
+      {
+        [sourceSlot + '/manifest.json']: '{"name":"acme-kb"}',
+        [sourceSlot + '/.pair/knowledge/test.md']: 'cached content',
+      },
+      '/',
+      '/',
+    )
+
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      // the restore's rename (`.bak` back into place) fails; setting aside still works
+      if (from.endsWith('.bak')) {
+        throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+      }
+      return realRename(from, to)
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '0' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(404)),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    let err: Error | undefined
+    try {
+      await ensureKBAvailable(testVersion, { httpClient, fs, customUrl: failingUrl })
+    } catch (e) {
+      err = e as Error
+    }
+
+    expect(err?.message).not.toMatch(/EPERM/)
+    expect(err?.message).toMatch(/404|download/i)
+  })
+
   it('should download from different customUrl even when cache exists (AC-2)', async () => {
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 

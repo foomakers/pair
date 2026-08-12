@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { homedir } from 'os'
 import { join } from 'path'
-import { InMemoryFileSystemService, MockHttpClientService } from '@pair/content-ops'
+import {
+  buildTestResponse,
+  InMemoryFileSystemService,
+  MockHttpClientService,
+  toIncomingMessage,
+} from '@pair/content-ops'
 import {
   getKnowledgeHubDatasetPath,
   getKnowledgeHubDatasetPathWithFallback,
@@ -180,6 +185,41 @@ describe('kb-resolver', () => {
     expect(result).toBe(`${cwd}/packages/knowledge-hub/dataset`)
   })
 
+  /**
+   * US-395 review round 5 / AC4 — "the cache location is derived from the source identity,
+   * for ANY source form". The monorepo shortcut ran BEFORE `customUrl` was ever consulted,
+   * so in a dev checkout an explicit `--url` resolved silently to the local monorepo dataset:
+   * the one named source form that never reached identity resolution at all. `--source` and
+   * `--git` are honoured in a checkout; `--url` was the odd one out, and its end-to-end path
+   * was therefore only ever exercised in a released binary.
+   */
+  it('an explicit --url is not outranked by the monorepo dataset', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/packages/knowledge-hub/package.json`]: '{}',
+        [`${cwd}/packages/knowledge-hub/dataset/index.md`]: 'data',
+      },
+      cwd,
+      cwd,
+    )
+    const mockEnsure = vi.fn().mockResolvedValue('/cache/external/url-acme-kb-abc123')
+
+    const result = await getKnowledgeHubDatasetPathWithFallback({
+      fsService: fs,
+      httpClient: new MockHttpClientService(),
+      version: '1.0.0',
+      customUrl: 'https://acme.example/acme-kb.zip',
+      ensureKBAvailableFn: mockEnsure,
+      isKBCachedFn: async () => false,
+    })
+
+    expect(result).toBe('/cache/external/url-acme-kb-abc123')
+    expect(mockEnsure).toHaveBeenCalledWith(
+      '1.0.0',
+      expect.objectContaining({ customUrl: 'https://acme.example/acme-kb.zip' }),
+    )
+  })
+
   it('getKnowledgeHubDatasetPathWithFallback triggers download if local missing', async () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
     const mockEnsure = vi.fn().mockResolvedValue('/cached/path')
@@ -214,8 +254,15 @@ describe('resolveDatasetRoot', () => {
     expect(result).toBe(`${cwd}/packages/knowledge-hub/dataset`)
   })
 
-  it('remote resolution delegates to getKnowledgeHubDatasetPathWithFallback', async () => {
-    // Provide local dataset so fallback resolves without network
+  /**
+   * Round 5: this used to assert the opposite — a monorepo dataset outranking the `--url`
+   * the user typed. That was the assertion of convenience ("resolves without network"), and
+   * it pinned the one dispatch where a named source form never reached identity resolution
+   * (AC4). The URL is now honoured in a checkout too, which is also what makes the `--url`
+   * path exercisable outside a released binary.
+   */
+  it('remote resolution honours the url even inside a monorepo checkout', async () => {
+    const url = 'https://example.com/kb.zip'
     const fs = new InMemoryFileSystemService(
       {
         [`${cwd}/packages/knowledge-hub/package.json`]: '{}',
@@ -224,13 +271,30 @@ describe('resolveDatasetRoot', () => {
       cwd,
       cwd,
     )
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(join(targetPath, 'manifest.json'), JSON.stringify({ name: 'acme-kb' }))
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const result = await resolveDatasetRoot(
       fs,
-      { resolution: 'remote', url: 'https://example.com/kb.zip' },
-      { cliVersion: '1.0.0', httpClient: new MockHttpClientService() },
+      { resolution: 'remote', url },
+      { cliVersion: '1.0.0', httpClient },
     )
-    expect(result).toBe(`${cwd}/packages/knowledge-hub/dataset`)
+
+    expect(result).not.toBe(`${cwd}/packages/knowledge-hub/dataset`)
+    expect(httpClient.getUrls()[0]).toBe(url)
+
+    consoleLogSpy.mockRestore()
   })
 
   it('local resolution returns resolved absolute path for valid directory', async () => {
