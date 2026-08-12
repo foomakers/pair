@@ -32,6 +32,7 @@ export const kbInfoCommandMetadata = {
     'With a package-path: reads manifest.json from the KB package ZIP without extracting full content',
     "Without a package-path: compares the project's installed KB version against the current one",
     'Version check is metadata-only — never performs migration',
+    'The program-level --url is the source when --source is absent; --source outranks it',
     'Exit code 0: success (including drift/unknown/unavailable); 1: error',
   ],
 } as const

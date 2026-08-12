@@ -12,20 +12,31 @@ Technical specification for the Knowledge Base (KB) source resolution algorithm 
 KB source is resolved in the following order (highest to lowest priority):
 
 1. **CLI flag `--source <url|path>`** — Explicit user-provided source
-2. **Monorepo default** — `packages/knowledge-hub/dataset` (when running from monorepo)
-3. **GitHub release auto-download** — Latest release from configured repository
+2. **Program-level flag `--url <url|path>`** — Used as the source when the command names no
+   `--source`; `--source` outranks it
+3. **Monorepo default** — `packages/knowledge-hub/dataset` (when running from monorepo)
+4. **GitHub release auto-download** — Latest release from configured repository
 
 The monorepo default is the fallback for the **default** source only: a source you name
 explicitly always wins, `--url <remote zip>` included. In a development checkout that URL
 is downloaded and cached under its own slot rather than silently replaced by the local
 dataset — which is also what makes the `--url` path exercisable outside a released binary.
 
+`--url` and `--source` name a source in exactly the same way: `pair install --url X` and
+`pair install --source X` resolve the same identity, download into the same cache slot and
+install the same bytes. The only difference is scope — `--url` is declared on the program,
+so it applies to whichever subcommand runs (`install`, `update`, `kb-info`), while
+`--source` belongs to one command and therefore wins where both are given. That equivalence
+is a rule, not a coincidence: a slot is keyed by source identity, so a flag that names a
+source without reaching resolution would fetch into a slot nothing reads and serve the
+official KB instead — silently a different KB than the one the user typed.
+
 ### Decision Tree
 
 ```text
                   KB Source Resolution
                          |
-                 --source provided?
+            --source (or --url) provided?
                 /                  \
               YES                   NO
                |                     |
