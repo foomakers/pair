@@ -191,6 +191,46 @@ describe('KB Installer - installKBFromGit', () => {
     expect(fs.existsSync(join(slot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
     expect(fs.existsSync(`${slot}.bak`)).toBe(false)
   })
+
+  /**
+   * Same invariant as `ensureKBAvailable`: discarding the set-aside clone happens after the
+   * new clone is on disk, so its failure must not reach the `catch` that RESTORES the old
+   * one — that would delete the fresh clone and reinstate the stale one over an unrelated
+   * fs error (EPERM/EBUSY on a just-renamed tree).
+   */
+  it('keeps a successful clone when discarding the set-aside one fails', async () => {
+    const url = 'https://github.com/acme/kb.git#v2.0.0'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(slot, 'manifest.json')]: '{"name":"acme-kb"}',
+        [join(slot, '.pair', 'knowledge', 'stale.md')]: '# from a previous clone',
+      },
+      '/',
+      '/',
+    )
+
+    let cloned = false
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
+      // `cloneGitRepo` is synchronous; the in-memory write lands before the promise settles
+      void fs.writeFile(join(slot, '.pair', 'knowledge', 'fresh.md'), '# fresh clone')
+      cloned = true
+    })
+
+    const realRm = fs.rm.bind(fs)
+    vi.spyOn(fs, 'rm').mockImplementation(async (path, options) => {
+      if (cloned && path.endsWith('.bak')) {
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      }
+      return realRm(path, options)
+    })
+
+    const result = await installKBFromGit(url, fs)
+
+    expect(result).toBe(slot)
+    expect(await fs.readFile(join(slot, '.pair', 'knowledge', 'fresh.md'))).toBe('# fresh clone')
+    expect(fs.existsSync(join(slot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
+  })
 })
 
 describe('KB Installer - installKBFromLocalZip', () => {

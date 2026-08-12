@@ -754,6 +754,64 @@ describe('KB Manager - contaminated official slot self-heals (US-395 AC5)', () =
     consoleWarnSpy.mockRestore()
   })
 
+  /**
+   * The backup is discarded AFTER the install has succeeded, so a failure to delete the
+   * `.bak` must not reach the `catch` that RESTORES it: restoring here would delete the KB
+   * just downloaded correctly and put the contaminated slot back — undoing the AC5 self-heal
+   * and reporting an unrelated fs error. (EPERM/EBUSY from an antivirus handle on a
+   * just-renamed tree is the concrete Windows trigger.)
+   */
+  it('keeps a successful re-download when discarding the old slot fails', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [officialSlot + '/manifest.json']: JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        [officialSlot + '/.pair/knowledge/foreign.md']: 'foreign content',
+      },
+      '/',
+      '/',
+    )
+
+    let installed = false
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(
+        join(targetPath, 'manifest.json'),
+        JSON.stringify({ name: OFFICIAL_KB_NAME, version: testVersion }),
+      )
+      await fs.writeFile(join(targetPath, '.pair', 'knowledge', 'official.md'), 'official content')
+      installed = true
+    })
+
+    const realRm = fs.rm.bind(fs)
+    vi.spyOn(fs, 'rm').mockImplementation(async (path, options) => {
+      // only the post-install cleanup of the set-aside slot fails
+      if (installed && path.endsWith('.bak')) {
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      }
+      return realRm(path, options)
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
+
+    expect(result).toBe(officialSlot)
+    expect(await fs.readFile(officialSlot + '/.pair/knowledge/official.md')).toBe('official content')
+    expect(fs.existsSync(officialSlot + '/.pair/knowledge/foreign.md')).toBe(false)
+
+    consoleLogSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
+  })
+
   it('serves the cache without downloading when the slot holds the official KB', async () => {
     const fs = new InMemoryFileSystemService(
       {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { homedir } from 'os'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
@@ -93,6 +93,37 @@ describe('cache-manager', () => {
   it('removeBackupKB is no-op when no backup exists', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     await cacheManager.removeBackupKB(officialSource('0.2.0'), fs)
+  })
+
+  /**
+   * The `existsSync` guard is a check-then-act: a concurrent install of the same source
+   * (deferred to #428) can delete the `.bak` in between, and Node's `rm` without `force`
+   * then throws ENOENT — an error on a cleanup whose goal (no `.bak` on disk) has been
+   * reached. The mock encodes Node's own rule so the assertion is about behaviour, not
+   * about the option object.
+   */
+  it('removeBackupKB tolerates a .bak that vanishes between the check and the delete', async () => {
+    const cachePath = officialSlot('0.2.0')
+    const fs = new InMemoryFileSystemService({ [cachePath + '.bak/manifest.json']: '{}' }, '/', '/')
+    vi.spyOn(fs, 'rm').mockImplementation(async (_path, options) => {
+      if (!options?.force) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+
+    await expect(cacheManager.removeBackupKB(officialSource('0.2.0'), fs)).resolves.toBeUndefined()
+  })
+
+  /**
+   * Discarding the backup is the LAST step of a successful install: a leftover `.bak` is
+   * inert (the next `backupCachedKB` overwrites it) while a thrown error aborts a install
+   * that already succeeded. Windows makes this concrete — an antivirus/indexer handle on a
+   * just-renamed tree yields EPERM/EBUSY.
+   */
+  it('removeBackupKB never throws when the delete itself fails (EBUSY)', async () => {
+    const cachePath = officialSlot('0.2.0')
+    const fs = new InMemoryFileSystemService({ [cachePath + '.bak/manifest.json']: '{}' }, '/', '/')
+    vi.spyOn(fs, 'rm').mockRejectedValue(Object.assign(new Error('EBUSY'), { code: 'EBUSY' }))
+
+    await expect(cacheManager.removeBackupKB(officialSource('0.2.0'), fs)).resolves.toBeUndefined()
   })
 
   it('ensureCacheDirectory creates directory', async () => {

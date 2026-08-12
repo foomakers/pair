@@ -203,4 +203,42 @@ describe('cache-slot-key — key → path mapping', () => {
     expect(() => getCachedKBPath('external/../../etc')).toThrow(/cache root/)
     expect(() => getSourceCachePath(officialSource('../evil'))).toThrow(/cache root/)
   })
+
+  /**
+   * `external` is the namespace DIRECTORY, not a slot: a key equal to it resolves to the
+   * parent of every external slot, which `purgeSlot` would then delete recursively — every
+   * cached external KB on the machine, from one bad key. Same class of hazard as the empty
+   * key and the `..` segment above, so it gets the same answer rather than being left to
+   * "no caller does that today".
+   */
+  it('refuses the external NAMESPACE as a key (it is the parent of every external slot)', () => {
+    expect(() => getCachedKBPath('external')).toThrow(/namespace/)
+    expect(() => getCachedKBPath('external/')).toThrow(/namespace/)
+    expect(() => getCachedKBPath(' external ')).toThrow(/namespace/)
+    expect(() => getSourceCachePath(officialSource('external'))).toThrow(/namespace/)
+  })
+
+  it('still accepts a slot INSIDE the namespace', () => {
+    expect(getCachedKBPath('external/zip-acme-abc123')).toBe(
+      join(externalRoot, 'zip-acme-abc123'),
+    )
+    expect(() => getSourceCachePath({ kind: 'zip', path: '/kb/acme.zip' })).not.toThrow()
+  })
+})
+
+/**
+ * The label exists so a user inspecting `~/.pair/kb/external/` can tell what a slot is.
+ * Truncation used to run AFTER the separator strip, so a long enough name could end on a
+ * `-` or `.` and produce `zip-some-label--<hash>` — cosmetic, but it defeats the only
+ * reason the label is there.
+ */
+describe('cache-slot-key — slot label readability', () => {
+  it('does not leave a dangling separator when a long source name is truncated', () => {
+    const path = `/downloads/${'a'.repeat(31)}-trailing-cut-here.zip`
+    const slotName = getSourceCachePath({ kind: 'zip', path }).split(/[\\/]/).pop() ?? ''
+    const label = slotName.replace(/^zip-/, '').replace(/-[0-9a-f]{12}$/, '')
+
+    expect(label).not.toMatch(/[-.]$/)
+    expect(slotName).not.toContain('--')
+  })
 })
