@@ -24,4 +24,16 @@ describe('commandRegistry', () => {
       expect(typeof entry.metadata).toBe('object')
     }
   })
+
+  // A closed limitation left in `--help` tells users a delivered feature is broken:
+  // `--source <zip>` is cached in its own source-keyed slot, never the official KB's
+  // (foomakers/pair#395), so the ZIP form is equivalent to the git and path forms.
+  it('no command help text still claims the #395 ZIP limitation', () => {
+    for (const key of Object.keys(commandRegistry)) {
+      const entry = commandRegistry[key as keyof typeof commandRegistry]
+      const helpText = JSON.stringify(entry.metadata)
+      expect(helpText).not.toMatch(/not yet equivalent/)
+      expect(helpText).not.toMatch(/pair#395/)
+    }
+  })
 })
