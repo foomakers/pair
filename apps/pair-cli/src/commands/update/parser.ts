@@ -1,5 +1,5 @@
 import { isGitUrl, isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
-import { validateCommandOptions } from '#config/cli'
+import { namedSource, validateCommandOptions } from '#config/cli'
 
 /**
  * Discriminated union for update command with default resolution
@@ -59,6 +59,8 @@ export type UpdateCommandConfig =
 
 interface ParseUpdateOptions {
   source?: string
+  /** Program-level `--url`; used as the source when `--source` is absent (see `namedSource`). */
+  url?: string
   offline?: boolean
   kb?: boolean
   config?: string
@@ -86,7 +88,8 @@ function resolveSourceConfig(
 /**
  * Parse update command options into UpdateCommandConfig.
  *
- * Determines resolution strategy based on source parameter:
+ * Determines resolution strategy based on the named source — `--source`, or the
+ * program-level `--url` when `--source` is absent:
  * - No source: default resolution (uses configured defaults)
  * - Git URL (git@, *.git, ssh://git@): git clone resolution
  * - Remote URL (http/https): remote resolution
@@ -96,8 +99,10 @@ export function parseUpdateCommand(
   options: ParseUpdateOptions,
   args: string[] = [],
 ): UpdateCommandConfig {
-  validateCommandOptions('update', options)
-  const { source, offline = false, kb = true } = options
+  // Same rule as install: the program-level `--url` names a source (US-395).
+  const source = namedSource(options)
+  validateCommandOptions('update', { ...options, ...(source !== undefined && { source }) })
+  const { offline = false, kb = true } = options
   const target = args[0]
   if (!source) {
     return {

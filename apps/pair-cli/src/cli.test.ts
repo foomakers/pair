@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { Command } from 'commander'
-import { InMemoryFileSystemService, NodeHttpClientService } from '@pair/content-ops'
+import {
+  buildTestResponse,
+  InMemoryFileSystemService,
+  MockHttpClientService,
+  NodeHttpClientService,
+  toIncomingMessage,
+} from '@pair/content-ops'
 
 describe('CLI command registration', () => {
   it('install command is registered', () => {
@@ -310,5 +316,81 @@ describe('CLI INIT_CWD wiring', () => {
 
     // "." resolves via fs.cwd() = packageDir
     expect(fs.existsSync(`${packageDir}/.pair/knowledge/README.md`)).toBe(true)
+  })
+})
+
+/**
+ * US-395 review round 12 — the wiring, from argv to disk. `--url` is declared on the
+ * PROGRAM, so it only reaches a command through the global/command option merge in
+ * `registerCommandFromMetadata`; that merge is what makes the flag a named source rather
+ * than a value only the bootstrap pre-flight ever reads.
+ */
+describe('US-395: the program-level --url reaches the command', () => {
+  const root = '/url-wiring'
+  const originalInitCwd = process.env['INIT_CWD']
+
+  beforeEach(() => {
+    // INIT_CWD wins over the positional target (see the wiring describe above), and the
+    // suite inherits one from pnpm — the update would then look for targets in the real
+    // repo instead of the in-memory project.
+    delete process.env['INIT_CWD']
+  })
+
+  afterEach(() => {
+    if (originalInitCwd !== undefined) process.env['INIT_CWD'] = originalInitCwd
+    vi.restoreAllMocks()
+  })
+
+  it('pair update --url <mirror> updates from the mirror, not from the local dataset', async () => {
+    const { runCli } = await import('./cli.js')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${root}/package.json`]: JSON.stringify({ name: 'monorepo' }),
+        [`${root}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${root}/packages/knowledge-hub/dataset/.pair/knowledge/README.md`]:
+          '# Content from the local dataset',
+        [`${root}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+              description: 'KB',
+            },
+          },
+        }),
+        [`${root}/.pair/knowledge/README.md`]: '# old',
+      },
+      root,
+      root,
+    )
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/.pair/knowledge/README.md`, '# Content from the mirror')
+    })
+
+    const url = 'https://mirror.internal/kb.zip'
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    await runCli(['node', 'pair', 'update', '--url', url, '.'], { fs, httpClient })
+
+    // Exactly one fetch of the mirror (plus its checksum): the pre-flight hook does not
+    // run at all — see the ADL consequence "the KB pre-flight never runs".
+    expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
+    expect(await fs.readFile(`${root}/.pair/knowledge/README.md`)).toBe('# Content from the mirror')
   })
 })

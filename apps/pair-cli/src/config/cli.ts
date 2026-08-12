@@ -1,6 +1,29 @@
 import { isGitUrl, isRemoteUrl } from '@pair/content-ops'
 
 /**
+ * The KB source a command must resolve: its own `--source`, or the program-level `--url`
+ * when the command names none.
+ *
+ * ONE rule, in ONE place, for every command that resolves a KB (install, update, kb-info):
+ * a named source travels through the command config's `resolution`, so what the pre-flight
+ * fetches and what the command reads can never be two different KBs (US-395). `--url` used
+ * to reach resolution only by side effect — the pre-flight wrote the custom archive into
+ * the OFFICIAL KB's cache slot, which default resolution then served. Source-identity
+ * keying ended that side effect, and without this rule the flag would name a source nothing
+ * reads: the official KB downloaded and installed instead, silently, and no install at all
+ * behind the firewall the mirror existed for.
+ *
+ * Precedence: the command's own `--source` wins — it is the more specific flag, and the
+ * program-level one applies to every subcommand. An EMPTY `--source` is returned as-is so
+ * its "cannot be empty" validation still fires; an empty `--url` is treated as absent,
+ * matching the pre-flight's own `url && …` guard.
+ */
+export function namedSource(options: { source?: string; url?: string }): string | undefined {
+  if (options.source !== undefined) return options.source
+  return options.url || undefined
+}
+
+/**
  * Common CLI options validation.
  * Checks for consistency between related flags (e.g., offline vs remote).
  */

@@ -79,7 +79,10 @@ export async function runCli(
     .name(chalk.blue(pkg.name))
     .description(pkg.description)
     .version(pkg.version)
-    .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
+    .option(
+      '--url <url|path>',
+      'KB source used when a command names no --source (overrides default GitHub release)',
+    )
     .option('-l, --log-level <level>', 'Set minimum log level (debug|info|warn|error)')
     .option('-v, --verbose', 'Enable verbose logging (deprecated; use --log-level debug)')
     .option('--no-kb', 'Skip knowledge base download')

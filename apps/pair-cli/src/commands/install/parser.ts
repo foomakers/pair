@@ -1,4 +1,4 @@
-import { validateCommandOptions } from '#config/cli'
+import { namedSource, validateCommandOptions } from '#config/cli'
 import { isGitUrl, isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
 
 /**
@@ -72,6 +72,8 @@ export type InstallCommandConfig =
 
 interface ParseInstallOptions {
   source?: string
+  /** Program-level `--url`; used as the source when `--source` is absent (see `namedSource`). */
+  url?: string
   offline?: boolean
   kb?: boolean
   skipVerify?: boolean
@@ -122,7 +124,8 @@ function resolveInstallSourceConfig(
 /**
  * Parse install command options into InstallCommandConfig.
  *
- * Determines resolution strategy based on source parameter:
+ * Determines resolution strategy based on the named source — `--source`, or the
+ * program-level `--url` when `--source` is absent:
  * - No source: default resolution (uses monorepo dataset or release ZIP)
  * - Git URL (git@, *.git, ssh://git@): git clone resolution
  * - Remote URL (http/https): remote resolution
@@ -132,11 +135,15 @@ export function parseInstallCommand(
   options: ParseInstallOptions,
   args: string[] = [],
 ): InstallCommandConfig {
-  validateCommandOptions('install', options)
+  // The program-level `--url` names a source exactly like `--source` does (US-395), so it
+  // is resolved BEFORE validation — `--offline --url ./kb.zip` is the same command as
+  // `--offline --source ./kb.zip`.
+  const source = namedSource(options)
+  validateCommandOptions('install', { ...options, ...(source !== undefined && { source }) })
   if (options.listTargets) {
     return { command: 'install', resolution: 'list-targets' }
   }
-  const { source, offline = false, kb = true, skipVerify = false } = options
+  const { offline = false, kb = true, skipVerify = false } = options
   const target = args[0]
   if (!source) {
     return {
