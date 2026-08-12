@@ -820,6 +820,12 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
     expect(step21).toMatch(/gh pr checks/)
     expect(step21).toMatch(/routing table|way-of-working-pm-resolution/i)
     expect(step21).toMatch(/success/)
+    // …and the SET's OWN read is named too: `gh pr checks` reports which checks ran, not
+    // which ones branch protection REQUIRES. Unnamed, an agent on a PROTECTED repo cannot
+    // resolve the narrowed set and silently drops to the unprotected fallback ("every
+    // non-`pair-*` check"), which then reports gates non-green on an advisory failing check.
+    expect(step21, 'the required-set read must be named').toMatch(/required_status_checks/)
+    expect(step21, 'and an unreadable required set IS the fallback trigger').toMatch(/404|403/)
     expect(step21).toMatch(/to-be-reviewed/)
     expect(step21).toMatch(/never[^.\n]*ready-to-merge|ready-to-merge[^.\n]*never/i)
     // …and the SET it reads is MECHANICAL gate checks only. The branch protection's required
