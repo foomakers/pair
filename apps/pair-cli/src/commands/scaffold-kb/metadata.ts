@@ -44,8 +44,8 @@ export const scaffoldKbMetadata = {
     'Switching --host leaves the previous host files in place: the report names them',
     'Idempotent: re-running keeps authored KB content and asks before regenerating its own files',
     'Refuses to scaffold into a configured project (.pair/adoption/ present), even with --force',
-    'Consumers install with: install --source <git-url-or-path>',
-    '--source <zip> is not yet equivalent (shares the KB cache slot — foomakers/pair#395)',
+    'Consumers install with: install --source <git-url-or-path-or-zip>',
+    'A fetched source gets its own cache slot: the ZIP form equals the git and path forms',
     'Human-facing report only: no --json output (interactive command; ask if you need it)',
   ],
 } as const
