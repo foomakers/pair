@@ -93,18 +93,21 @@ function shouldSkipKBDownload(
     return true
   }
 
-  if (customUrl && !isRemoteUrl(customUrl)) {
-    if (isDiagEnabled()) console.error(`[diag] Using local path: ${customUrl}`)
-    return true
+  // A NAMED source is answered here and never falls through to the monorepo shortcut below:
+  // a local path is used in place (nothing to download), a remote URL must reach identity
+  // resolution — the same rule as `getKnowledgeHubDatasetPathWithFallback`, one layer further
+  // in. Letting a remote `--url` fall through short-circuited this pre-flight BEFORE the
+  // resolver was ever called, so in a development checkout the typed URL resolved to the
+  // local dataset with nothing but a `[diag]` line to say so.
+  if (customUrl) {
+    if (!isRemoteUrl(customUrl)) {
+      if (isDiagEnabled()) console.error(`[diag] Using local path: ${customUrl}`)
+      return true
+    }
+    return false
   }
 
-  // The monorepo shortcut is for the DEFAULT source only — a named source always reaches
-  // identity resolution (same rule as `getKnowledgeHubDatasetPathWithFallback`, one layer
-  // further in). Without the `customUrl` clause this pre-flight short-circuits BEFORE the
-  // resolver is ever called, so in a development checkout `--url https://…` resolved to the
-  // local dataset with nothing but a `[diag]` line to say so. A non-remote `customUrl`
-  // already returned at the check above, so this only affects remote URLs.
-  if (fsService && !(customUrl && isRemoteUrl(customUrl)) && hasLocalDataset(fsService)) {
+  if (fsService && hasLocalDataset(fsService)) {
     if (isDiagEnabled()) console.error('[diag] Using local dataset')
     return true
   }
