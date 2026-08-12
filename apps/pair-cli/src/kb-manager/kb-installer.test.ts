@@ -83,10 +83,15 @@ describe('KB Installer', () => {
         toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
         toIncomingMessage(buildTestResponse(404)),
       ])
-      await installKB(version, getSourceCachePath({ kind: 'remote', url: downloadUrl }), downloadUrl, {
-        httpClient,
-        fs,
-      })
+      await installKB(
+        version,
+        getSourceCachePath({ kind: 'remote', url: downloadUrl }),
+        downloadUrl,
+        {
+          httpClient,
+          fs,
+        },
+      )
     }
 
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
