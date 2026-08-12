@@ -113,6 +113,109 @@ describe('cache-manager', () => {
     expect(fs.existsSync(cachePath + '.bak')).toBe(false)
   })
 
+  /**
+   * Round 6: rename-first closed the data-loss chain, but the residual failure was
+   * user-INVISIBLE. If the second rename (`.bak` back into the slot) throws, the slot does
+   * not exist — it was just moved aside — so the user is left with no cache while their only
+   * good copy sits at `<slot>.bak`, named nowhere they will see it (`log.debug` is off by
+   * default). A transient hold must not be terminal either: the old order (delete the
+   * half-written slot outright, then retry the rename) is tried before giving up.
+   */
+  it('restoreCachedKB retries in the old order when the rename back fails once', async () => {
+    const cachePath = officialSlot('0.2.0')
+    const fs = new InMemoryFileSystemService(
+      {
+        [cachePath + '/partial.md']: 'half-written download',
+        [cachePath + '.bak/manifest.json']: '{"name":"knowledge-base"}',
+      },
+      '/',
+      '/',
+    )
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const realRename = fs.rename.bind(fs)
+    let backupRenames = 0
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (from.endsWith('.bak') && ++backupRenames === 1) {
+        throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+      }
+      return realRename(from, to)
+    })
+
+    await cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)
+
+    expect(await fs.readFile(cachePath + '/manifest.json')).toBe('{"name":"knowledge-base"}')
+    expect(fs.existsSync(cachePath + '.bak')).toBe(false)
+    expect(consoleWarnSpy).not.toHaveBeenCalled()
+    consoleWarnSpy.mockRestore()
+  })
+
+  /**
+   * Round 6, the invariant the ADL bolds — "a failing re-fetch must leave the user with the
+   * cache they had". When the restore cannot complete at all, the copy is still there, but
+   * under a name the user has no reason to look at: the failure must be WARNED, and the
+   * warning must name both the recoverable copy and where to move it back to.
+   */
+  it('restoreCachedKB warns and names the recoverable copy when it cannot put the backup back', async () => {
+    const cachePath = officialSlot('0.2.0')
+    const fs = new InMemoryFileSystemService(
+      {
+        [cachePath + '/partial.md']: 'half-written download',
+        [cachePath + '.bak/manifest.json']: '{"name":"knowledge-base"}',
+      },
+      '/',
+      '/',
+    )
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (from.endsWith('.bak')) {
+        throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+      }
+      return realRename(from, to)
+    })
+
+    await expect(cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)).resolves.toBeUndefined()
+
+    // The good copy survives — nothing deleted it — and the user is TOLD where it is
+    expect(await fs.readFile(cachePath + '.bak/manifest.json')).toBe('{"name":"knowledge-base"}')
+    const warned = consoleWarnSpy.mock.calls.map(c => String(c[0])).join('\n')
+    expect(warned).toContain(cachePath + '.bak')
+    expect(warned).toContain(cachePath)
+    consoleWarnSpy.mockRestore()
+  })
+
+  /**
+   * Round 6: the set-aside name used millisecond resolution alone, so two restores of the
+   * same source inside one millisecond collided on the rename and took the silent path.
+   */
+  it('restoreCachedKB gives each set-aside copy a distinct name within the same millisecond', async () => {
+    const cachePath = officialSlot('0.2.0')
+    const seed = () =>
+      new InMemoryFileSystemService(
+        {
+          [cachePath + '/partial.md']: 'half-written download',
+          [cachePath + '.bak/manifest.json']: '{"name":"knowledge-base"}',
+        },
+        '/',
+        '/',
+      )
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+    const setAsidePaths: string[] = []
+
+    for (const fs of [seed(), seed()]) {
+      const realRename = fs.rename.bind(fs)
+      vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+        if (to.includes('.discarded-')) setAsidePaths.push(to)
+        return realRename(from, to)
+      })
+      await cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)
+    }
+
+    expect(setAsidePaths).toHaveLength(2)
+    expect(setAsidePaths[0]).not.toBe(setAsidePaths[1])
+    vi.mocked(Date.now).mockRestore()
+  })
+
   it('restoreCachedKB is no-op when no backup exists', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     await cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)

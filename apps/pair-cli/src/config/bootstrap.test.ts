@@ -106,6 +106,34 @@ describe('config bootstrap', () => {
     ).rejects.toThrow(DatasetAccessError)
   })
 
+  /**
+   * US-395 round 6 — a named source always reaches identity resolution, and the bootstrap
+   * pre-flight is one layer further out than the resolver round 5 repaired. In a development
+   * checkout the local-dataset shortcut ran regardless of `--url`, so `pair <cmd> --url
+   * https://…` short-circuited here and the typed URL was silently ignored (a `[diag]` line
+   * is not a warning: `PAIR_DIAG` is off by default).
+   */
+  it('does not let the monorepo dataset outrank an explicit remote --url', async () => {
+    const remoteUrl = 'https://acme.example/acme-kb.zip'
+    vi.mocked(resolver.getKnowledgeHubDatasetPath).mockReturnValue(`${cwd}/dataset`)
+    vi.mocked(resolver.getKnowledgeHubDatasetPathWithFallback).mockResolvedValue(
+      `${cwd}/downloaded`,
+    )
+    const fs = new InMemoryFileSystemService({ [`${cwd}/dataset/index.md`]: 'data' }, cwd, cwd)
+
+    await bootstrapEnvironment({
+      fsService: fs,
+      httpClient: new MockHttpClientService(),
+      version,
+      kb: true,
+      url: remoteUrl,
+    })
+
+    expect(resolver.getKnowledgeHubDatasetPathWithFallback).toHaveBeenCalledWith(
+      expect.objectContaining({ customUrl: remoteUrl }),
+    )
+  })
+
   it('skips accessibility check for local customUrl', async () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd) // Empty FS
     const client = new MockHttpClientService()

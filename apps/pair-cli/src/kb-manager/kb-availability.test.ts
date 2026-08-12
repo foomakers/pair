@@ -650,6 +650,7 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
       '/',
     )
 
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const realRename = fs.rename.bind(fs)
     vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
       // the restore's rename (`.bak` back into place) fails; setting aside still works
@@ -677,6 +678,16 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
 
     expect(err?.message).not.toMatch(/EPERM/)
     expect(err?.message).toMatch(/404|download/i)
+
+    // Round 6 — and the invariant the ADL bolds still holds in THIS run: the cache the user
+    // had is not gone, and it is not left nameless either. A swallowed failure that leaves
+    // the only good copy at `<slot>.bak` with nothing but a debug line (off by default) is
+    // indistinguishable, from the user's side, from having lost it.
+    expect(await fs.readFile(sourceSlot + '.bak/manifest.json')).toBe('{"name":"acme-kb"}')
+    const warned = consoleWarnSpy.mock.calls.map(c => String(c[0])).join('\n')
+    expect(warned).toContain(sourceSlot + '.bak')
+    expect(warned).toContain(sourceSlot)
+    consoleWarnSpy.mockRestore()
   })
 
   it('should download from different customUrl even when cache exists (AC-2)', async () => {
