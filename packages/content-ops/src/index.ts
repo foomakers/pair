@@ -70,6 +70,10 @@ export {
   type PathMappingEntry,
 } from './ops/link-rewriter'
 export { movePathOps } from './ops/movePathOps'
+// Exported so the CLI registry install can run the same mirror cleanup the library's own
+// copy path runs. Without it `pair update` copies but never deletes, and a file removed
+// from the dataset survives every update — the defect #426 recorded.
+export { handleMirrorCleanup, type MirrorCleanupOwnership } from './ops/path-operation-helpers'
 export {
   stripAllMarkers,
   applyTransformCommands,

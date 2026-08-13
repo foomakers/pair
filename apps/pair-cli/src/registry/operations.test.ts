@@ -35,6 +35,79 @@ describe('registry operations', () => {
     expect(await fs.exists('/dataset/dst/file2.md')).toBe(true)
   })
 
+  // ── Mirror cleanup runs on THIS path, not only in the library (#426) ────────
+  // The recursion landed in content-ops but `pair update` never called it: the registry
+  // copy falls through to `copyDirHelper`, a pure source->dest copy that deletes nothing.
+  // Four unit tests passed by calling `handleMirrorCleanup` directly, which is how the
+  // defect came to be believed fixed. These go through `doCopyAndUpdateLinks` — the
+  // function the CLI actually invokes.
+  it('doCopyAndUpdateLinks removes a target file the source no longer ships', async () => {
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/keep.md': '# Keep',
+        '/dataset/dst/keep.md': '# Keep',
+        '/dataset/dst/ORPHAN.md': '# Removed from the dataset months ago',
+        '/dataset/dst/how-to/99-stale.md': '# Nested orphan under a shared directory',
+        '/dataset/src/how-to/01-live.md': '# Still shipped',
+        '/dataset/dst/how-to/01-live.md': '# Still shipped',
+      },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'mirror' },
+    })
+
+    expect(await fs.exists('/dataset/dst/ORPHAN.md')).toBe(false)
+    expect(await fs.exists('/dataset/dst/how-to/99-stale.md')).toBe(false)
+    expect(await fs.exists('/dataset/dst/how-to/01-live.md')).toBe(true)
+    expect(await fs.exists('/dataset/dst/keep.md')).toBe(true)
+  })
+
+  it('doCopyAndUpdateLinks leaves an EXCLUDED subtree alone', async () => {
+    // `exclude` means "as if it were never in the source" — so cleanup must not read the
+    // absence of a source entry as permission to delete the target one.
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/keep.md': '# Keep',
+        '/dataset/dst/keep.md': '# Keep',
+        '/dataset/dst/private/theirs.md': '# The registry does not own this',
+      },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'mirror', exclude: ['private'] },
+    })
+
+    expect(await fs.exists('/dataset/dst/private/theirs.md')).toBe(true)
+  })
+
+  it('doCopyAndUpdateLinks deletes nothing when the registry behavior is not mirror', async () => {
+    const fs = createTestFs(
+      {},
+      { '/dataset/src/keep.md': '# Keep', '/dataset/dst/theirs.md': '# Target-only' },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'add' },
+    })
+
+    expect(await fs.exists('/dataset/dst/theirs.md')).toBe(true)
+  })
+
   it('returns skillNameMap when flatten+prefix produces skill renames', async () => {
     const fs = new InMemoryFileSystemService(
       {

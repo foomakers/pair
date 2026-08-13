@@ -200,7 +200,14 @@ export async function handleMirrorCleanup(
       const toRemove = join(destPath, de.name)
       if (fileService.rm) {
         await fileService.rm(toRemove, { recursive: true, force: true })
-        logger.info(`Mirror: removed ${toRemove}`)
+        // WARN, not info: this is the one place `pair update` DELETES from the target tree.
+        // `.pair/knowledge/` is a mirror — `customization/templates.mdx` states that edits
+        // there are lost on the next update and that customization belongs in
+        // `.pair/adoption/` — but a deletion the operator cannot see in the output is
+        // indistinguishable from data loss, whatever the docs say.
+        logger.warn(
+          `Mirror: removed ${toRemove} (not in the source; customize via .pair/adoption/)`,
+        )
       }
       continue
     }

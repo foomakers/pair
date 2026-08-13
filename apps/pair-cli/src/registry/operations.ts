@@ -1,4 +1,5 @@
 import {
+  handleMirrorCleanup,
   copyDirHelper,
   copyDirectoryWithTransforms,
   copyFileHelper,
@@ -99,15 +100,29 @@ async function copyDirectory(
     })
   }
 
-  await copyDirHelper(
-    buildCopyDirHelperContext({
-      fsService,
-      srcPath,
-      tgtPath,
-      datasetRoot,
-      ...(options && { options }),
-    }),
-  )
+  const helperCtx = buildCopyDirHelperContext({
+    fsService,
+    srcPath,
+    tgtPath,
+    datasetRoot,
+    ...(options && { options }),
+  })
+
+  // A `mirror` registry deletes what the dataset no longer ships — and until now that only
+  // happened on the content-ops generic copy path, never on `pair update`. `copyDirHelper`
+  // is a pure source->dest copy, so a file removed from the dataset survived every update
+  // forever: two how-to guides dropped in #246 were still installed ~5 months later and were
+  // still advertised by `.pair/llms.txt`, pointing agents at guides the KB no longer ships.
+  //
+  // The ownership context is the SAME object the copy below uses, so cleanup and copy can
+  // never disagree about what the registry owns: `handleMirrorCleanup` refuses to touch an
+  // `exclude`d path, or one whose resolved behavior is `add` or `skip` — the cases where a
+  // target-only file is the point, and the adopter's to keep.
+  if (options?.defaultBehavior === 'mirror') {
+    await handleMirrorCleanup(fsService, srcPath, tgtPath, helperCtx)
+  }
+
+  await copyDirHelper(helperCtx)
   return {}
 }
 
