@@ -935,6 +935,32 @@ describe('the ADL — the decision of record describes the contract that shipped
     expect(seven).toContain('omitting $status')
   })
 
+  it('decision 8 scopes membership to every write-mode write, not to creates', () => {
+    // ROUND 7. Decision 15 widened membership from creates to every write-mode write and
+    // Step 7b shipped that wording — but decision 8, eight lines earlier and the item
+    // *titled* "Membership does not depend on `$status`", still said the beats run "on
+    // every create". A maintainer reconstructing the rule from the record therefore landed
+    // on the create-only scoping decision 15 exists to remove, i.e. the #384/#372 hole on
+    // the UPDATE path (`/refine-story`'s `Draft → Ready` on a pre-board story, and the
+    // no-`$status` off-board repair path). Same "one rule, two statements" defect this
+    // round-4 block fixed for decision 7 — positive and negative, so it cannot come back.
+    const eight = decision(8)
+    expect(eight).toContain('every write-mode write')
+    expect(eight).not.toContain('on every create')
+    // The widening statement must still be there for the pair to mean anything, and the
+    // two must say the same thing.
+    expect(decision(15)).toContain('every write-mode write')
+  })
+
+  it('no decision in the ADL scopes the membership beats to creates', () => {
+    // Whole-section sweep, so the create-only shape cannot move to a neighbouring decision
+    // the way the composition shape moved from the caller to the callee to the KB.
+    // Decision 15's "always on a create ... equally on an update" is the allowed wording.
+    const decisions = normalize(section(adl, 'Decision', 2))
+    expect(decisions).not.toContain('on every create')
+    expect(decisions).toContain('equally on an update')
+  })
+
   it('no decision in the ADL routes a state-only change through the item writer', () => {
     // Whole-section sweep, so the shape cannot move to a neighbouring decision.
     const decisions = normalize(section(adl, 'Decision', 2))
