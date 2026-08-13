@@ -17,6 +17,41 @@ export const meta = {
   ],
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// THE CONTRACT (#219 AC7) — what `pair-loop` (#250) codes against.
+// Stable. A rename here breaks a caller this repo cannot see, so treat every name
+// below as public API.
+//
+// INPUT  args = {
+//   cards: [{                     // `stories` is the accepted pair-era alias; never both
+//     id, title, branch,          // required — id+title feed prompts, branch feeds worktree add
+//     base?,                      // the branch this card STACKS on (default: pipeline.baseBranch)
+//     notes?,                     // scope directive threaded into implement + PR
+//     prNumber?,                  // resume an existing PR straight into the review<->fix loop
+//   }],
+//   maxParallelism?,              // integer >= 1; absent = unbounded fan-out
+//   severityFloor?,               // findings below it are carried, not fixed
+//   model?,                       // fable | haiku | sonnet | opus
+//   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS
+// }
+//
+// MUTEX is the CALLER's precondition, not this engine's guarantee: it drives what it is
+// given, in parallel. Declaring which cards may run together is `pair-loop`'s dependency
+// analysis, because only the caller knows the file sets.
+//
+// RETURN {
+//   contracts: [{ name, status }],
+//   batch:     [{ id, status, prNumber?, findings?, acceptedFindings?, story, ... }],
+//   died:      [id],              // cards that never returned anything
+//   note,                         // says what actually happened, incl. total failure
+// }
+//   status ∈ ready-for-merge | escalate
+//          | failed-implement | failed-pr | failed-review | failed-fix
+//
+// NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is #250's
+// concern, never this engine's.
+// ═══════════════════════════════════════════════════════════════════════════
+
 // ── Model / effort policy ──────────────────────────────────────────────────
 // MODEL is set per ROLE in each agent's frontmatter (.claude/agents/*.md): the
 // stable default — implementer & reviewer -> opus, contract-generator -> haiku.
@@ -74,8 +109,17 @@ function parseBatchArgs(raw) {
       )
     }
   }
-  // A bare array is unambiguous — read it as the story list.
-  if (Array.isArray(a)) a = { stories: a }
+  // A bare array is unambiguous — read it as the card list.
+  if (Array.isArray(a)) a = { cards: a }
+  // `cards` is the generalized contract name (#219 AC7); `stories` is the pair-era alias,
+  // kept working so no existing caller breaks. Both present is an ERROR rather than a
+  // preference: silently picking one would drive a batch the caller did not describe.
+  if (a && typeof a === 'object' && Array.isArray(a.cards) && Array.isArray(a.stories))
+    throw new Error(
+      `implement-batch: \`args\` carries both \`cards\` and \`stories\`. They are the same field — ` +
+        `\`cards\` is the current name, \`stories\` the accepted alias. Pass exactly one.`,
+    )
+  if (a && typeof a === 'object' && Array.isArray(a.cards) && !('stories' in a)) a = { ...a, stories: a.cards }
   if (!a || typeof a !== 'object' || !Array.isArray(a.stories))
     throw new Error(
       `implement-batch: \`args\` must be { stories: [...] } (or a bare array of stories). Received: ` +
@@ -812,7 +856,9 @@ const results = await boundedParallel(
   STORIES.map((s) => () => driveStory(s)),
   MAX_PARALLELISM,
 )
-const batch = results.filter(Boolean)
+// `id` is lifted to the top of each row: #250 reads it positionally-independently, and
+// reaching into `row.story.id` would couple the caller to this engine's internal shape.
+const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
 // The note must describe what ACTUALLY happened. The previous version stated
 // "PRs are ready-for-merge or escalated" unconditionally — so a run whose stories
 // ALL died (every agent stalled out, `parallel` returning six nulls) reported an

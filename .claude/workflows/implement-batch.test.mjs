@@ -1644,3 +1644,55 @@ test('US-219 AC6: under a cap, results keep INPUT order and a dead card does not
   assert.deepStrictEqual(result.died, ['301'], 'the dead card was not reported')
   assert.strictEqual(result.batch.length, 3, 'a dead card took the others down with it')
 })
+
+// ── US-219 T4 / AC7 — the contract pair-loop codes against ─────────────────
+// #250 consumes this shape. It is pinned here rather than only documented, because a
+// return field that quietly changes name breaks a caller that this repo cannot see.
+
+test('US-219 AC7: `cards` is the contract key, and `stories` still works', async () => {
+  const dispatch = stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } })
+  const viaCards = await runWorkflow({ args: { cards: [STORY] }, dispatch })
+  const viaStories = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+  assert.strictEqual(viaCards.result.batch.length, 1, '`cards` was not accepted')
+  assert.strictEqual(viaStories.result.batch.length, 1, '`stories` (the pair-era name) stopped working')
+})
+
+test('US-219 AC7: passing BOTH cards and stories throws instead of picking one', async () => {
+  // Silently preferring one would run a batch the caller did not describe.
+  await assert.rejects(
+    () => runWorkflow({ args: { cards: [STORY], stories: [STORY] }, dispatch: stdDispatch({}) }),
+    /both `cards` and `stories`/,
+  )
+})
+
+test('US-219 AC7: every batch row carries the documented per-card fields', async () => {
+  const { result } = await runWorkflow({
+    args: { cards: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const STATUSES = new Set([
+    'ready-for-merge', 'escalate',
+    'failed-implement', 'failed-pr', 'failed-review', 'failed-fix',
+  ])
+  for (const row of result.batch) {
+    assert.strictEqual(row.id, STORY.id, 'row is missing the top-level `id` pair-loop reads')
+    assert.ok(STATUSES.has(row.status), `status "${row.status}" is outside the documented set`)
+  }
+})
+
+test('US-219 AC7: the batch-level shape is exactly the four documented keys', async () => {
+  const { result } = await runWorkflow({
+    args: { cards: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  for (const k of ['contracts', 'batch', 'died', 'note'])
+    assert.ok(k in result, `batch-level key \`${k}\` is missing`)
+  assert.ok(Array.isArray(result.batch) && Array.isArray(result.died) && Array.isArray(result.contracts))
+  assert.strictEqual(typeof result.note, 'string')
+})
+
+test('US-219 AC7: an explicitly empty card list stays a legal no-op', async () => {
+  const { result, calls } = await runWorkflow({ args: { cards: [] }, dispatch: stdDispatch({}) })
+  assert.strictEqual(calls.length, 0, 'an empty batch spawned agents')
+  assert.match(result.note, /Empty batch/)
+})
