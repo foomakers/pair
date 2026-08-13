@@ -900,14 +900,16 @@ describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an execut
     for (const arm of ['match', 'ahead', 'mismatch', 'unknown', 'none', 'no-remote']) {
       expect(smoke, `the \`${arm}\` arm must be executed`).toContain(`${arm} "$TREE_MATCH"`)
     }
-    // and it is registered in run-all.sh's `pnpm smoke-tests` list — a scenario that is not
-    // listed is never run by anything. Registration is the precondition, NOT an automated
-    // trigger: no workflow invokes that script today (#400 owns the CI wiring), which the
-    // next test pins so the record cannot overstate it again.
+    // and it is registered in run-all.sh's `--ci` scenario list (the `CI_TESTS` array).
+    // That list is NOT why a gate/local run executes it: `pnpm smoke-tests` is
+    // `run-all.sh --cleanup`, which leaves `IS_CI=false` and takes the branch that globs
+    // `scenarios/*.sh` — so the scenario runs because the FILE EXISTS. What membership buys
+    // is inclusion in the CI-safe subset `run-all.sh --ci` runs, the entry point #400 will
+    // wire; it is a precondition, NOT an automated trigger today, which the next test pins.
     const runAll = readFileSync(RUN_ALL_PATH, 'utf-8')
     expect(
       runAll,
-      "the scenario must be registered in run-all.sh's `pnpm smoke-tests` list",
+      "the scenario must be registered in run-all.sh's `--ci` scenario list (`CI_TESTS`)",
     ).toContain('"pr-tree-resolve.sh"')
     expect(smoke, 'and it must be offline-safe — it stubs the host read').toContain(
       'OFFLINE_SAFE=true',
@@ -945,8 +947,18 @@ describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an execut
     if (!suiteRuns) {
       // …and it must say where the registration actually lives, plus who owns the wiring, so a
       // reader does not infer regression protection from the word "registered" alone.
-      expect(adl, 'the ADL must name the list the scenario is registered in').toMatch(
-        /pnpm smoke-tests|run-all\.sh/,
+      // Round 13 (Major): naming *a* list was not enough — the record named the wrong one.
+      // `CI_TESTS` is read only under `--ci` (run-all.sh:252); `pnpm smoke-tests` never
+      // consults it and globs every scenario instead. A reader wiring CI per this record must
+      // not be sent to `pnpm smoke-tests`, so the ADL has to name `CI_TESTS`/`--ci` AND say
+      // the gate command does not consult it.
+      expect(adl, 'the ADL must name the list the scenario is registered in').toMatch(/`CI_TESTS`/)
+      expect(
+        adl,
+        'the ADL must state that `pnpm smoke-tests` does not consult that list (it globs scenarios/)',
+      ).toMatch(/does not consult/)
+      expect(adl, 'the ADL must name the entry point that DOES read it: `run-all.sh --ci`').toMatch(
+        /run-all\.sh --ci|`--ci`/,
       )
       expect(adl, 'the ADL must state that no workflow invokes it yet').toMatch(
         /no workflow[^\n]*invoke/i,
