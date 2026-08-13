@@ -208,9 +208,11 @@ A skill encountering such an item resolves it as "not in the tracked view" and i
 | ---------------- | ----------------------------------------------------------------------------------------------------- |
 | `/pair-capability-write-issue`   | Resolves a target macrostate (`$status`) to a board state before writing the board field (Writing rule above) |
 | `/pair-next`          | Resolves each item's board state to a macrostate before evaluating its cascade conditions (Reading rule above); applies the Readiness Fallback for Draft vs. Ready |
-| `/pair-process-refine-story`  | Produces `Ready` — writes it through `/pair-capability-write-issue`                                                  |
-| `/pair-process-implement`     | Produces `In Progress` / `Review` — writes through `/pair-capability-write-issue`                                    |
-| `/pair-process-review`        | Produces `Done` on merge — writes through `/pair-capability-write-issue`                                             |
+| `/pair-process-refine-story`  | Produces `Ready` — writes it through `/pair-capability-write-issue` (it passes `$status` **and** renders a full body in the same call, so write mode is the right route) |
+| `/pair-process-implement`     | Produces `In Progress` / `Review` — **writes the board field directly**, applying `/pair-capability-write-issue` Step 7b (membership → a read that confirms it → the state field) **by reference** |
+| `/pair-process-review`        | Produces `Done` on merge — **writes the board field directly**, same application of Step 7b **by reference** (its terminal writes cover the story and its parent hierarchy) |
+
+**Why the last two do not compose the item writer:** a **state-only** change must not go through write mode — write mode is a **full-body overwrite**, so it would re-render the item and replace its AC/DoD/task breakdown (and, called without `$content`/`$type`, HALT instead). The ordering invariant is still single-sourced in `/pair-capability-write-issue` Step 7b; these callers **apply it by reference** and resolve `## State Mapping` themselves. A caller that renders the body anyway — refinement — composes as before.
 
 Rollout across the rest of the skill catalog happens organically in the stories that touch each skill — `/pair-capability-write-issue` and `/pair-next` are the first adopters.
 

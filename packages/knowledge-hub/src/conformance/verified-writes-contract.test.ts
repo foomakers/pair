@@ -93,6 +93,22 @@ const implementCases = skillCorpora('process', 'implement')
 const ROUTING_CONVENTION =
   '.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md'
 const WOW = '.pair/adoption/tech/way-of-working.md'
+/**
+ * The KB authority on state writes — the document `/write-issue` Step 6 and Step 7b point
+ * at for state resolution, i.e. the file an agent reaches when it needs to know HOW a
+ * transition is written. It is in the corpora for the same reason the two skills are: a
+ * rule stated in the skills and contradicted here is not one rule, and the contradiction
+ * wins wherever the reader lands first.
+ */
+const CANONICAL_STATES =
+  '.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md'
+/**
+ * The ADL is the decision of record for this contract — the artifact a maintainer reads to
+ * reconstruct WHY the skills are shaped this way. Root-only by construction:
+ * `.pair/adoption/**` is user-owned (registry behavior `add`), so there is no dataset copy
+ * to mirror.
+ */
+const NO_WRITE_IS_ASSUMED_ADL = '.pair/adoption/decision-log/2026-08-11-no-write-is-assumed.md'
 
 /** A KB file's two copies — the dataset source and the installed root mirror. */
 const kbCorpora = (rel: string): { corpus: string; content: string }[] => [
@@ -101,6 +117,7 @@ const kbCorpora = (rel: string): { corpus: string; content: string }[] => [
 ]
 
 const conventionCases = kbCorpora(ROUTING_CONVENTION)
+const canonicalStatesCases = kbCorpora(CANONICAL_STATES)
 
 /**
  * The body of the section whose heading starts with `headingPrefix` at `level`,
@@ -599,6 +616,118 @@ describe('/publish-pr — the board state is written directly, never by composin
       expect(body).toContain('the direct board write cannot complete')
     },
   )
+})
+
+describe('canonical-states.md — the KB authority agrees with the skills that write state', () => {
+  // ROUND 4. Rounds 2 and 3 removed the write-mode composition from the two SKILLS, and
+  // every probe was scoped to skill corpora plus the resolution convention. The losing
+  // shape therefore survived in the file the skills DEFER TO: this document's `Integration
+  // with Skills` table still said `/implement` "writes through /write-issue" for
+  // `In Progress`/`Review` and `/review` the same for `Done` on merge.
+  //
+  // Reachable, not theoretical: Step 6 and Step 7b point an agent HERE to resolve a state,
+  // so an agent following this table for a state-only change composes write mode with no
+  // `$content`/`$type` and either HALTs on the missing `$type` (rendering `Board: not
+  // updated` on every transition — a permanent failure dressed as a documented skip) or
+  // overwrites the story body, destroying AC/DoD/task breakdown. That is the exact route
+  // the rest of this file forbids, reproduced in the KB.
+  //
+  // The rows are located by the macrostate they PRODUCE, never by skill name: the root
+  // mirror rewrites every name (`/implement` → `/pair-process-implement`), so a
+  // name-anchored probe would only ever hold in one corpus.
+  const integrationRows = (content: string): string[] =>
+    section(content, 'Integration with Skills', 2)
+      .split('\n')
+      .filter(line => line.trimStart().startsWith('|'))
+      .map(normalize)
+
+  it.each(canonicalStatesCases)(
+    '$corpus: the state-only writers write the board field directly, applying Step 7b by reference',
+    ({ content }) => {
+      const rows = integrationRows(content)
+      const directWriters = rows.filter(
+        row =>
+          row.includes('produces in progress / review') || row.includes('produces done on merge'),
+      )
+      // Both rows must be FOUND — otherwise a renamed/removed row would let the negative
+      // assertions below pass over an empty list.
+      expect(directWriters).toHaveLength(2)
+      for (const row of directWriters) {
+        expect(row).toContain('writes the board field directly')
+        expect(row).toContain('by reference')
+        // No routing through the item writer for a state-only change. Matched on
+        // `through /` rather than a skill name so it holds in both corpora and catches
+        // any writer being put in front of the board field.
+        expect(row).not.toContain('through /')
+      }
+    },
+  )
+
+  it.each(canonicalStatesCases)(
+    '$corpus: the refinement row still routes through the item writer (the valid composition)',
+    ({ content }) => {
+      // The one row that must NOT change: refinement does pass `$status` and does render a
+      // full body in the same call, so write mode is the right route for it. A fix that
+      // flattened all three rows to "direct" would be a different defect.
+      const refinement = integrationRows(content).filter(row => row.includes('produces ready'))
+      expect(refinement).toHaveLength(1)
+      expect(refinement[0]).toContain('writes it through /')
+    },
+  )
+})
+
+describe('the ADL — the decision of record describes the contract that shipped', () => {
+  // ROUND 4, second half. The ADL is NEW in this PR, so it is not an append-only historical
+  // record: decision 7 still described the composition rounds 2/3 removed ("resolves
+  // `## State Mapping` before composing the board write and omits `$status`"), which the
+  // shipped contract contradicts twice — the publisher writes the field directly, and there
+  // is no `$status` parameter on the direct path to omit (this file even asserts
+  // `not.toContain('omit $status from the step-7 composition')` for that reason). It also
+  // contradicted its OWN decision 11 two paragraphs later. The highest-authority document
+  // was the last place the losing shape survived.
+  const adl = read(join(REPO_ROOT, NO_WRITE_IS_ASSUMED_ADL))
+
+  /** One numbered decision item from `## Decision`, normalized; '' when absent (reddens). */
+  const decision = (n: number): string => {
+    const lines = section(adl, 'Decision', 2).split('\n')
+    const start = lines.findIndex(line => line.startsWith(`${n}. `))
+    if (start === -1) return ''
+    const after = lines.slice(start + 1)
+    const stop = after.findIndex(line => /^\d+\. /.test(line))
+    return normalize(
+      (stop === -1 ? [lines[start], ...after] : [lines[start], ...after.slice(0, stop)]).join('\n'),
+    )
+  }
+
+  it('decision 7 states the publisher resolves the mapping itself and writes no state field', () => {
+    const seven = decision(7)
+    expect(seven).toContain('resolves ## state mapping')
+    expect(seven).toContain('writes no state field at all')
+    // The membership beats are NOT skipped with the state field — the whole point of the
+    // separation established in decision 8.
+    expect(seven).toContain('membership is still established and confirmed')
+    // The removed route, in the two shapes it was written in.
+    expect(seven).not.toContain('before composing the board write')
+    expect(seven).not.toContain('omits $status when no board state maps to')
+  })
+
+  it('decision 7 keeps the caller-omits-$status rule where it still holds', () => {
+    // Deleting the rule would be as wrong as leaving it on the publisher: refinement is a
+    // real composing caller, and the item writer's own text pins "omitting is the caller's
+    // job, not this skill's".
+    const seven = decision(7)
+    expect(seven).toContain('refine-story')
+    expect(seven).toContain('omitting $status')
+  })
+
+  it('no decision in the ADL routes a state-only change through the item writer', () => {
+    // Whole-section sweep, so the shape cannot move to a neighbouring decision.
+    const decisions = normalize(section(adl, 'Decision', 2))
+    expect(decisions).not.toContain('composing the board write')
+    // Decision 11 is the statement of the rule; it must still be there for the sweep above
+    // to mean anything.
+    expect(decisions).toContain('write mode is a full-body overwrite')
+  })
 })
 
 describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC7)', () => {
