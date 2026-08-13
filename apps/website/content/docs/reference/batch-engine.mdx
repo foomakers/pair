@@ -1,0 +1,54 @@
+---
+title: Batch engine
+description: The workflow that drives a batch of cards to review-approved PRs — what installs, what runs it, and what happens under other tools.
+---
+
+`pair install` writes two directories that carry the batch engine:
+
+| Installed to          | What it is                                                                    |
+| --------------------- | ----------------------------------------------------------------------------- |
+| `.claude/workflows/`  | the orchestration workflows, including `implement-batch`                       |
+| `.claude/agents/`     | the agent definitions those workflows dispatch to                              |
+
+They install **unconditionally**, on every project, whatever tool you use.
+
+## Workflows are Claude-Code-specific
+
+The engine is a workflow script driven by Claude Code's orchestration primitives — it spawns
+subagents by type and runs their steps in parallel. No other tool executes it today.
+
+**Under any other tool the files are inert.** They are never read, never executed, and cost
+nothing but a few kilobytes on disk. Nothing errors, and no configuration turns them off.
+
+They install anyway rather than being gated on the tool detected at install time, because that
+detection is a snapshot: a user who adopts Claude Code later would need a full re-install rather
+than an `update` to acquire files that were always harmless to have.
+
+## The degraded path
+
+Without a workflow runtime you drive the same lifecycle by hand, one card at a time. The
+per-step skills are the same ones the engine composes, and they work standalone under any tool:
+
+1. `/pair-process-implement` — implement the card, test-first, on its own branch
+2. `/pair-capability-publish-pr` — open or update the PR, run the tier-resolved gate
+3. `/pair-process-review` — review it independently, from the acceptance criteria and the diff
+4. `/pair-process-implement` again — apply the findings, then re-review
+
+What you lose is the orchestration, not the process: parallelism across cards, the isolated
+worktree per card, the audit log that survives a context reset, and the convergence rule that
+decides when a card is done.
+
+## Merge is always the human gate
+
+No configuration enables an autonomous merge. The engine stops at a review-approved PR and
+reports it; the decision to merge is yours, on every path — convergence, escalation, or failure.
+
+## Configuring it
+
+The engine ships with pair's own values as defaults, so it runs in a pair-shaped project with no
+configuration. A project whose skills, worktree root or base branch differ passes
+`args.pipeline` to override them per key; anything left unmentioned keeps its default.
+
+An unknown key, an empty override, or a `maxParallelism` below 1 is rejected loudly rather than
+ignored — a discarded setting would run the batch on values you did not choose while reporting
+success.

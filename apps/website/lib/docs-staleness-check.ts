@@ -356,6 +356,34 @@ export function checkCatalogSync(allSkills: string[], catalog: string): string[]
   return errors
 }
 
+
+/**
+ * Check: the batch-engine page names the directories the registries actually install.
+ *
+ * AC8 asks for a note "derived from the dataset rather than hand-copied". The prose is
+ * hand-written, but the FACTS it states — which paths appear in an adopter's repo — are
+ * read from `config.json` here, so renaming a registry target without touching the page
+ * fails the gate instead of leaving a doc that points at a directory nobody gets.
+ */
+export function checkBatchEnginePaths(registries: Record<string, { targets: { path: string }[] }>, doc: string): string[] {
+  const errors: string[] = []
+  for (const name of ['workflows', 'agent-definitions']) {
+    const reg = registries[name]
+    if (!reg) {
+      errors.push(`asset_registries."${name}" is gone but batch-engine.mdx still documents it`)
+      continue
+    }
+    for (const t of reg.targets) {
+      // Documented with or without the trailing slash — the path is the fact, not its spelling.
+      const bare = t.path.replace(/\/$/, '')
+      if (!doc.includes(bare)) {
+        errors.push(`batch-engine.mdx does not mention "${t.path}", where the "${name}" registry installs`)
+      }
+    }
+  }
+  return errors
+}
+
 /** Check 3: every command dir has an anchor in commands.mdx. */
 export function checkCommandAnchors(commandDirs: string[], commandsDoc: string): string[] {
   const errors: string[] = []
@@ -526,6 +554,8 @@ function checkPaths(root: string) {
     // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
     // repo root: the marketplace entry's `source` points there.
     PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
+    BATCH_ENGINE_FILE: join(DOCS_DIR, 'reference/batch-engine.mdx'),
+    CLI_CONFIG: join(root, 'apps/pair-cli/config.json'),
   }
 }
 
@@ -559,6 +589,18 @@ export function runAllChecks(root: string): RunResult {
 
   // Check 2: catalog sync (both directions)
   const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
+  // The batch-engine page states WHERE `pair install` puts the engine. That claim is read
+  // back from the registries rather than trusted, so renaming a target without touching the
+  // page fails here instead of leaving a doc pointing at a directory nobody gets.
+  if (existsSync(paths.BATCH_ENGINE_FILE)) {
+    const cliConfig = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
+      asset_registries: Record<string, { targets: { path: string }[] }>
+    }
+    errors.push(
+      ...checkBatchEnginePaths(cliConfig.asset_registries, readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8')),
+    )
+  }
+
   errors.push(...checkCatalogSync(allSkills, catalog))
 
   // Check 2c: catalog row CONTENT (Command + Description) single-sourced from the dataset
