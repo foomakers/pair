@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { logger as log, type FileSystemService } from '@pair/content-ops'
 import {
   expectedManifestName,
@@ -200,6 +200,97 @@ export async function removeBackupKB(source: KBSource, fs: FileSystemService): P
   await discard(backupPath, fs)
 }
 
+/** `<slot>.tmp-<pid>-<n>`: the pid is what the orphan sweep interrogates; the counter keeps two stages of one slot in one process apart. */
+const STAGE_INFIX = '.tmp-'
+let stageCount = 0
+function stagePathFor(slotPath: string): string {
+  return `${slotPath}${STAGE_INFIX}${process.pid}-${(stageCount++).toString(36)}`
+}
+
+/**
+ * True when `pid` is a running process. Signal 0 performs the permission check without
+ * sending anything; EPERM means the process exists but belongs to someone else — alive
+ * for our purposes. Any other failure (ESRCH, ERANGE) means no such process.
+ */
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+/**
+ * Removes stages of THIS slot left by processes that no longer exist (an interrupted
+ * extraction, #428 AC). A live process's stage is a concurrent install in flight, not an
+ * orphan — deleting it would yank the directory out from under a running extraction.
+ */
+async function sweepOrphanedStages(slotPath: string, fs: FileSystemService): Promise<void> {
+  const parent = dirname(slotPath)
+  if (!fs.existsSync(parent)) return
+  const prefix = `${basename(slotPath)}${STAGE_INFIX}`
+  for (const entry of await fs.readdir(parent)) {
+    if (!entry.name.startsWith(prefix)) continue
+    const pid = Number.parseInt(entry.name.slice(prefix.length), 10)
+    if (Number.isNaN(pid) || !isProcessAlive(pid)) {
+      await discard(join(parent, entry.name), fs)
+    }
+  }
+}
+
+/**
+ * Populates a slot ATOMICALLY (US-395/#428): `populate` writes into a `<slot>.tmp-<pid>-<n>`
+ * stage next to the slot (same filesystem, so the swap is a single `rename`), and the slot
+ * is renamed into existence only once the stage is COMPLETE. A concurrent reader therefore
+ * sees the slot either absent (⇒ re-fetch) or whole — never half-written, which is what the
+ * earlier purge-then-extract-in-place sequence exposed to every other process on the machine.
+ *
+ * - Orphaned stages from DEAD processes are swept first; a live process's stage is left
+ *   alone (see `sweepOrphanedStages`).
+ * - A failing `populate` removes its own stage and rethrows the ORIGINAL error: nothing new
+ *   exists, nothing old was touched.
+ * - An occupied slot is replaced WHOLE at swap time. `rename` onto a non-empty directory
+ *   fails (ENOTEMPTY), so the swap deletes the occupant and retries once — the loser of a
+ *   same-slot race supersedes the winner's identical content instead of merging with it.
+ */
+export async function writeSlotAtomically(
+  slotPath: string,
+  fs: FileSystemService,
+  populate: (stagePath: string) => Promise<void>,
+): Promise<string> {
+  await sweepOrphanedStages(slotPath, fs)
+
+  const stage = stagePathFor(slotPath)
+  await fs.mkdir(stage, { recursive: true })
+  try {
+    await populate(stage)
+    await swapStageOntoSlot(stage, slotPath, fs)
+  } catch (err) {
+    await discard(stage, fs)
+    throw err
+  }
+  return slotPath
+}
+
+/** The atomic swap: delete-then-rename only when the plain rename cannot win. */
+async function swapStageOntoSlot(
+  stage: string,
+  slotPath: string,
+  fs: FileSystemService,
+): Promise<void> {
+  if (fs.existsSync(slotPath)) await fs.rm(slotPath, { recursive: true, force: true })
+  try {
+    await fs.rename(stage, slotPath)
+  } catch {
+    // Lost a race: another process re-created the slot between the rm and the rename
+    // (ENOTEMPTY/EEXIST/EPERM depending on platform). Its content is the same source's —
+    // slots are content/identity-keyed — but a merge is still not a swap, so replace whole.
+    await fs.rm(slotPath, { recursive: true, force: true })
+    await fs.rename(stage, slotPath)
+  }
+}
+
 export default {
   inspectSlot,
   purgeSlot,
@@ -208,4 +299,5 @@ export default {
   backupCachedKB,
   restoreCachedKB,
   removeBackupKB,
+  writeSlotAtomically,
 }

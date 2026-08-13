@@ -55,16 +55,31 @@ async function doInstallSteps(
     )
   }
 
-  await fs.extractZip(zipPath, cachePath)
-  // UNWRAP a ZIP whose content sits under a single root directory, exactly as the local-ZIP
-  // path does: `installKB` serves the official download AND `--url <remote zip>`, and an
-  // external KB packaged that way otherwise yields a dataset root one level too high.
-  // Unwrap only — a `false` result is NOT raised as an error here: this path has never
-  // validated the downloaded structure, and turning a structure check into a hard failure
-  // on the official download is a behaviour change with no defect behind it (the local-ZIP
-  // path does throw, because its caller handed us the archive and can fix it).
-  await normalizeExtractedKB(cachePath, fs)
+  await extractIntoSlot(zipPath, cachePath, fs)
   await cleanupFile(zipPath, fs)
+}
+
+/**
+ * Extraction is ATOMIC (#428): the archive is unpacked into a `<slot>.tmp-<pid>` stage and
+ * renamed onto the slot whole, so a concurrent process never reads a half-written slot. The
+ * unwrap runs on the stage for the same reason.
+ */
+async function extractIntoSlot(
+  zipPath: string,
+  cachePath: string,
+  fs: FileSystemService,
+): Promise<void> {
+  await cacheManager.writeSlotAtomically(cachePath, fs, async stage => {
+    await fs.extractZip(zipPath, stage)
+    // UNWRAP a ZIP whose content sits under a single root directory, exactly as the local-ZIP
+    // path does: `installKB` serves the official download AND `--url <remote zip>`, and an
+    // external KB packaged that way otherwise yields a dataset root one level too high.
+    // Unwrap only — a `false` result is NOT raised as an error here: this path has never
+    // validated the downloaded structure, and turning a structure check into a hard failure
+    // on the official download is a behaviour change with no defect behind it (the local-ZIP
+    // path does throw, because its caller handed us the archive and can fix it).
+    await normalizeExtractedKB(stage, fs)
+  })
 }
 
 function shouldPreserveError(err: Error): boolean {
@@ -105,7 +120,6 @@ export async function installKB(
   announceDownload(version, downloadUrl)
 
   const { fs } = options
-  await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
     await doInstallSteps(downloadUrl, zipPath, cachePath, options)
@@ -136,20 +150,25 @@ export async function installKB(
  * The old clone is SET ASIDE, not purged, before the new one is fetched — the invariant
  * the ADL states for every network-fetched source. `cloneGitRepo` additionally deletes the
  * destination when git fails, so a purge-first version left an offline user with an empty
- * slot where a working clone had been. Setting aside also replaces the slot wholesale
- * (files from a previous clone cannot linger) and git needs an empty destination anyway.
+ * slot where a working clone had been.
+ *
+ * The clone itself lands in the atomic stage (#428): git writes file-by-file, so cloning
+ * straight into the slot exposed a half-written tree to every concurrent reader. The stage
+ * also gives git the empty destination it requires, and the swap replaces the slot
+ * wholesale (files from a previous clone cannot linger).
  */
 export async function installKBFromGit(url: string, fs: FileSystemService): Promise<string> {
   const source: KBSource = { kind: 'git', url }
   const cachePath = getSourceCachePath(source)
 
   const hadCache = await cacheManager.backupCachedKB(source, fs)
-  await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
-    cloneGitRepo(url, cachePath)
-    // The dataset is what we cache; the clone's history is not.
-    await fs.rm(join(cachePath, '.git'), { recursive: true, force: true })
+    await cacheManager.writeSlotAtomically(cachePath, fs, async stage => {
+      cloneGitRepo(url, stage)
+      // The dataset is what we cache; the clone's history is not.
+      await fs.rm(join(stage, '.git'), { recursive: true, force: true })
+    })
   } catch (err) {
     // `restoreCachedKB` is best-effort by contract: a fs error inside this cleanup must not
     // replace the actionable clone failure ("Git clone failed: network unreachable") that
@@ -161,19 +180,6 @@ export async function installKBFromGit(url: string, fs: FileSystemService): Prom
   // OUTSIDE the try: the catch RESTORES the set-aside clone, so a cleanup failure there
   // would delete the clone that just succeeded and put the stale one back.
   if (hadCache) await cacheManager.removeBackupKB(source, fs)
-  return cachePath
-}
-
-// Helper: finalize installation, normalize and return dataset root
-async function finalizeZipInstall(
-  version: string,
-  cachePath: string,
-  fs: FileSystemService,
-): Promise<string> {
-  const ok = await normalizeExtractedKB(cachePath, fs)
-  if (!ok) throw new Error('Invalid KB structure')
-
-  announceSuccess(version, cachePath)
   return cachePath
 }
 
@@ -207,13 +213,18 @@ export async function installKBFromLocalZip(
     log.warn('Skipping package verification (--skip-verify)')
   }
 
-  // Replace the slot wholesale so files from a previous install cannot linger
-  await cacheManager.purgeSlot(source, fs)
-  await cacheManager.ensureCacheDirectory(cachePath, fs)
-
   try {
-    await fs.extractZip(resolvedZipPath, cachePath)
-    return await finalizeZipInstall(version, cachePath, fs)
+    // Atomic populate (#428): extraction and the structure check both run on the stage,
+    // and the slot is replaced WHOLE by the swap — which is also what keeps files from a
+    // previous install of this source from lingering (the purge-first sequence this
+    // replaces exposed an empty-then-half-written slot to concurrent readers).
+    await cacheManager.writeSlotAtomically(cachePath, fs, async stage => {
+      await fs.extractZip(resolvedZipPath, stage)
+      const ok = await normalizeExtractedKB(stage, fs)
+      if (!ok) throw new Error('Invalid KB structure')
+    })
+    announceSuccess(version, cachePath)
+    return cachePath
   } catch (error) {
     const err = error as Error
     if (shouldPreserveError(err)) throw err

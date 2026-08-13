@@ -21,7 +21,9 @@ export async function zipKBSource(rawPath: string, fs: FileSystemService): Promi
   if (!fs.existsSync(path)) {
     throw new Error(`ZIP file not found: ${path}`)
   }
-  const contentHash = createHash('sha256').update(await fs.readFileBytes(path)).digest('hex')
+  const contentHash = createHash('sha256')
+    .update(await fs.readFileBytes(path))
+    .digest('hex')
   return { kind: 'zip', path, contentHash }
 }
 

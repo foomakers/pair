@@ -243,10 +243,7 @@ describe('cache-slot-key — key → path mapping', () => {
 describe('cache-slot-key — slot label readability', () => {
   it('does not leave a dangling separator when a long source name is truncated', () => {
     const url = `https://cdn.example.com/${'a'.repeat(31)}-trailing-cut-here.zip`
-    const slotName =
-      getSourceCachePath({ kind: 'remote', url })
-        .split(/[\\/]/)
-        .pop() ?? ''
+    const slotName = getSourceCachePath({ kind: 'remote', url }).split(/[\\/]/).pop() ?? ''
     const label = slotName.replace(/^url-/, '').replace(/-[0-9a-f]{12}$/, '')
 
     expect(label).not.toMatch(/[-.]$/)

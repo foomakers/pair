@@ -56,6 +56,8 @@ describe('zip-source — content identity of a local ZIP (US-395/#429)', () => {
 
   it('names a missing archive the way the installer always has', async () => {
     const fs = new InMemoryFileSystemService({}, '/work', '/work')
-    await expect(zipKBSource('/nope/kb.zip', fs)).rejects.toThrow('ZIP file not found: /nope/kb.zip')
+    await expect(zipKBSource('/nope/kb.zip', fs)).rejects.toThrow(
+      'ZIP file not found: /nope/kb.zip',
+    )
   })
 })

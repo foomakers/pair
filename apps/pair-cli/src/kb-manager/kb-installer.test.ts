@@ -273,9 +273,11 @@ describe('KB Installer - installKBFromGit', () => {
     )
 
     let cloned = false
-    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
-      // `cloneGitRepo` is synchronous; the in-memory write lands before the promise settles
-      void fs.writeFile(join(slot, '.pair', 'knowledge', 'fresh.md'), '# fresh clone')
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation((_url, dest) => {
+      // The clone lands in the atomic STAGE it is handed (#428), not in the slot; the swap
+      // renames it into place. `cloneGitRepo` is synchronous; the in-memory write lands
+      // before the promise settles.
+      void fs.writeFile(join(dest, '.pair', 'knowledge', 'fresh.md'), '# fresh clone')
       cloned = true
     })
 

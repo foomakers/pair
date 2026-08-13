@@ -244,7 +244,15 @@ describe('KB Manager - ZIP cleanup', () => {
       /Corrupted ZIP/,
     )
 
-    expect(extractZipSpy).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
+    // Extraction targets the ATOMIC STAGE beside the slot, never the slot itself (#428):
+    // a failed extraction leaves neither stage nor slot behind.
+    expect(extractZipSpy).toHaveBeenCalledWith(
+      expectedZipPath,
+      expect.stringContaining(`${expectedCachePath}.tmp-`),
+    )
+    const stagePath = extractZipSpy.mock.calls[0]![1]
+    expect(fs.existsSync(stagePath)).toBe(false)
+    expect(fs.existsSync(expectedCachePath)).toBe(false)
   })
 })
 
