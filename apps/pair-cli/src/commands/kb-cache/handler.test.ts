@@ -11,11 +11,16 @@ import type { KbCacheCommandConfig } from './parser'
 
 const ROOT = '/cache/kb'
 
+// No real pid this large exists on either platform (Linux pid_max 4194304, macOS 99998),
+// so a stage named with it is definitionally orphaned — same convention as cache-manager's
+// suite. A literal pid would make these tests depend on what else runs on the machine.
+const DEAD_PID = 999999999
+
 const SLOTS = [
   `${ROOT}/0.4.3`, // current — must survive
   `${ROOT}/0.3.9`, // superseded official
-  `${ROOT}/0.4.3.bak`, // interrupted install
-  `${ROOT}/0.4.3.tmp-4821-0`, // abandoned stage
+  `${ROOT}/0.4.3.bak`, // interrupted install, its slot is back ⇒ reclaimable
+  `${ROOT}/0.4.3.tmp-${DEAD_PID}-0`, // abandoned stage
   `${ROOT}/git-deadbeef`, // pre-#395 clone at root
   `${ROOT}/external/zip-8ae362dc47aa`, // external — must survive
   `${ROOT}/external/git-a1b2c3`, // external — must survive
@@ -101,5 +106,61 @@ describe('handleKbCacheCommand', () => {
     const code = await handleKbCacheCommand(cfg('list'), fs, { version: '0.4.3' })
 
     expect(code).toBe(1)
+  })
+})
+
+/**
+ * US-395 round 18 — the cache is machine-wide BY DEFINITION, so `prune` in project B runs
+ * while project A's `pair install` is halfway through the same directory.
+ * `cache-manager.sweepOrphanedStages` already refuses to touch a stage whose pid is alive.
+ * Prune classified every stage and every `.bak` as garbage from the NAME alone, so it would
+ * `rm -rf` A's extraction mid-flight and, worse, the `.bak` that is A's only way back —
+ * leaving the user with no cache at all. That is the loss this PR's invariant forbids.
+ */
+describe('handleKbCacheCommand — an install in flight is not garbage', () => {
+  // A stage owned by THIS process: alive by construction, on any platform.
+  const LIVE_STAGE = `${ROOT}/external/zip-8ae362dc47aa.tmp-${process.pid}-0`
+  // A backup whose slot has been moved aside and not put back yet.
+  const IN_FLIGHT_BAK = `${ROOT}/external/url-acme-99887766.bak`
+  const ORPHAN_STAGE = `${ROOT}/0.3.9.tmp-${DEAD_PID}-0`
+
+  beforeEach(() => vi.stubEnv('PAIR_KB_CACHE_DIR', ROOT))
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('spares a live stage and a backup whose slot is not back yet, and still sweeps a dead one', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${ROOT}/0.4.3/manifest.json`]: '{"name":"kb"}',
+        [`${LIVE_STAGE}/half-written.md`]: 'extracting right now',
+        [`${IN_FLIGHT_BAK}/manifest.json`]: '{"name":"acme-kb"}',
+        [`${ORPHAN_STAGE}/half-written.md`]: 'abandoned by a crash',
+      },
+      '/module',
+      '/project',
+    )
+
+    const code = await handleKbCacheCommand(cfg('prune'), fs, { version: '0.4.3' })
+
+    expect(code).toBe(0)
+    expect(fs.existsSync(LIVE_STAGE), 'a live install lost its stage').toBe(true)
+    expect(fs.existsSync(IN_FLIGHT_BAK), 'the only copy of that KB was deleted').toBe(true)
+    expect(fs.existsSync(ORPHAN_STAGE), 'a dead pid stage is still reclaimable').toBe(false)
+  })
+
+  it('reclaims a backup once its slot is back — the install finished, the copy is redundant', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${ROOT}/0.4.3/manifest.json`]: '{"name":"kb"}',
+        [`${ROOT}/external/url-acme-99887766/manifest.json`]: '{"name":"acme-kb"}',
+        [`${IN_FLIGHT_BAK}/manifest.json`]: '{"name":"acme-kb"}',
+      },
+      '/module',
+      '/project',
+    )
+
+    await handleKbCacheCommand(cfg('prune'), fs, { version: '0.4.3' })
+
+    expect(fs.existsSync(IN_FLIGHT_BAK)).toBe(false)
+    expect(fs.existsSync(`${ROOT}/external/url-acme-99887766/manifest.json`)).toBe(true)
   })
 })

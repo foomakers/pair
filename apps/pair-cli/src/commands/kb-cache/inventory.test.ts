@@ -65,6 +65,39 @@ describe('stalenessOf — what prune may delete', () => {
   })
 })
 
+/**
+ * US-395 round 18 — the cache is machine-wide, so `prune` runs while another project's
+ * install may be halfway through the same directory. `cache-manager.sweepOrphanedStages`
+ * already refuses to touch a stage whose pid is alive, for exactly that reason; prune had
+ * no such check and would `rm -rf` a live extraction mid-flight, and with it the `.bak`
+ * that is the interrupted install's ONLY way back — the loss the PR's own invariant
+ * ("never deletes what it cannot refetch") forbids.
+ */
+describe('stalenessOf — an install in flight owns its stage and its backup', () => {
+  const CURRENT = '0.4.3'
+
+  it('spares a stage whose owning process is still alive', () => {
+    expect(
+      stalenessOf({ ...entry('0.4.3.tmp-1-0', 'stage'), inFlight: true }, CURRENT),
+    ).toBeUndefined()
+  })
+
+  it('spares a backup with no sibling slot — it is the only copy of that KB', () => {
+    expect(
+      stalenessOf({ ...entry('0.4.3.bak', 'backup'), inFlight: true }, CURRENT),
+    ).toBeUndefined()
+  })
+
+  it('still prunes a stage and a backup that no live install owns', () => {
+    expect(stalenessOf({ ...entry('0.4.3.tmp-1-0', 'stage'), inFlight: false }, CURRENT)).toMatch(
+      /abandoned/,
+    )
+    expect(stalenessOf({ ...entry('0.4.3.bak', 'backup'), inFlight: false }, CURRENT)).toMatch(
+      /backup/,
+    )
+  })
+})
+
 describe('stalenessOf — fail-safe when the current version is unknown', () => {
   // The dispatcher passes `opts.cliVersion ?? ''`. Comparing names against '' would make
   // EVERY official slot prunable, the running CLI's included — a cleanup command that

@@ -52,6 +52,8 @@ describe('config bootstrap', () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
     const client = new MockHttpClientService()
 
+    // The accessibility check must judge the path step 2 RESOLVED (`${cwd}/downloaded`),
+    // not the bundled dataset path it probed before deciding to download.
     await expect(
       bootstrapEnvironment({
         fsService: fs,
@@ -60,9 +62,56 @@ describe('config bootstrap', () => {
         kb: true,
         url: undefined,
       }),
-    ).rejects.toThrow(DatasetNotFoundError)
+    ).rejects.toThrow(`${cwd}/downloaded`)
 
     expect(resolver.getKnowledgeHubDatasetPathWithFallback).toHaveBeenCalled()
+  })
+
+  /**
+   * US-395 round 18 — the shape of a RELEASED install, which no other test here has.
+   *
+   * In a published package `@pair/knowledge-hub` is a SIBLING of `pair-cli` under
+   * `node_modules/@pair/` (npm hoisting, and pnpm's flat symlink layout too), never nested
+   * under the CLI's own package directory, and `postbuild.js` bundles no dataset — so
+   * `getKnowledgeHubDatasetPath` THROWS rather than returning a missing path. Every fixture
+   * above seeds a monorepo layout, which is why reviving the pre-flight could ship with a
+   * green suite while `pair install` aborted for every real user: the download populated the
+   * cache slot and the final check then probed the bundled path that does not exist.
+   */
+  it('succeeds in a released layout, where no bundled dataset path can even be resolved', async () => {
+    vi.mocked(resolver.getKnowledgeHubDatasetPath).mockImplementation(() => {
+      throw new Error('Unable to find @pair/knowledge-hub package')
+    })
+    const slot = '/home/u/.pair/kb/1.0.0'
+    vi.mocked(resolver.getKnowledgeHubDatasetPathWithFallback).mockResolvedValue(slot)
+
+    const fs = new InMemoryFileSystemService({ [`${slot}/manifest.json`]: '{}' }, cwd, cwd)
+    const client = new MockHttpClientService()
+
+    await expect(
+      bootstrapEnvironment({
+        fsService: fs,
+        httpClient: client,
+        version,
+        kb: true,
+        url: undefined,
+      }),
+    ).resolves.toBeUndefined()
+  })
+
+  it('rejects --url together with --no-kb (the pre-flight validates options again)', async () => {
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+    const client = new MockHttpClientService()
+
+    await expect(
+      bootstrapEnvironment({
+        fsService: fs,
+        httpClient: client,
+        version,
+        kb: false,
+        url: 'https://mirror.internal/kb.zip',
+      }),
+    ).rejects.toThrow(/Cannot use --url and --no-kb together/)
   })
 
   it('skips KB setup when kb is false', async () => {
