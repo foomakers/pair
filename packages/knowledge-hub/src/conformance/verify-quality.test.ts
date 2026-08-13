@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, existsSync, readdirSync } from 'fs'
 import { dirname, join, resolve } from 'path'
 
 // Conformance home for dataset/.skills/capability/verify-quality/SKILL.md.
@@ -837,6 +837,12 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
 describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an executable asset (#382)', () => {
   const INSTALLED_PATH = join(__dirname, '../../../../.pair/knowledge/assets/pr-tree-resolve.sh')
   const SMOKE_PATH = join(__dirname, '../../../../scripts/smoke-tests/scenarios/pr-tree-resolve.sh')
+  const RUN_ALL_PATH = join(__dirname, '../../../../scripts/smoke-tests/run-all.sh')
+  const WORKFLOWS_DIR = join(__dirname, '../../../../.github/workflows')
+  const ADL_PATH = join(
+    __dirname,
+    '../../../../.pair/adoption/decision-log/2026-08-13-tree-resolution-ships-as-an-executable-asset.md',
+  )
 
   it('ships next to its siblings in BOTH knowledge trees, byte-equal', () => {
     // The skill's link resolves to the DATASET copy from the dataset skill and to the
@@ -894,17 +900,59 @@ describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an execut
     for (const arm of ['match', 'ahead', 'mismatch', 'unknown', 'none', 'no-remote']) {
       expect(smoke, `the \`${arm}\` arm must be executed`).toContain(`${arm} "$TREE_MATCH"`)
     }
-    // and it runs in CI, where a scenario that is not listed never runs at all
-    const runAll = readFileSync(
-      join(__dirname, '../../../../scripts/smoke-tests/run-all.sh'),
-      'utf-8',
-    )
-    expect(runAll, 'the scenario must be registered in the CI list').toContain(
-      '"pr-tree-resolve.sh"',
-    )
+    // and it is registered in run-all.sh's `pnpm smoke-tests` list — a scenario that is not
+    // listed is never run by anything. Registration is the precondition, NOT an automated
+    // trigger: no workflow invokes that script today (#400 owns the CI wiring), which the
+    // next test pins so the record cannot overstate it again.
+    const runAll = readFileSync(RUN_ALL_PATH, 'utf-8')
+    expect(
+      runAll,
+      "the scenario must be registered in run-all.sh's `pnpm smoke-tests` list",
+    ).toContain('"pr-tree-resolve.sh"')
     expect(smoke, 'and it must be offline-safe — it stubs the host read').toContain(
       'OFFLINE_SAFE=true',
     )
+  })
+
+  it('the record claims only the enforcement that exists: registered ≠ run in CI (#400)', () => {
+    // Round 12 (Major): the round-10 record said the scenario was "registered in the CI list",
+    // i.e. that the extraction bought EXECUTED behavior where nine rounds had only grepped
+    // text. `CI_TESTS` is an array name inside run-all.sh — no workflow invokes that script and
+    // `pnpm quality-gate` (the pre-push hook's whole content) does not include `pnpm
+    // smoke-tests`. The suite IS a required custom gate in this repo's adoption, so a
+    // verify-quality run executes the scenario; nothing MECHANICAL does, so a break in the
+    // arms blocks no merge (#400 owns the wiring). The claim, not the registration, was the
+    // defect: this reads reality instead of pinning a wording, so when #400 lands the
+    // stronger claim becomes allowed by the same assertion.
+    const workflows = readdirSync(WORKFLOWS_DIR)
+      .filter(f => /\.ya?ml$/.test(f))
+      .map(f => readFileSync(join(WORKFLOWS_DIR, f), 'utf-8'))
+      .join('\n')
+    const gateEntry = readFileSync(join(__dirname, '../../../../package.json'), 'utf-8')
+    const suiteRuns =
+      /smoke-tests\/run-all\.sh|pnpm (?:run )?smoke-tests/.test(workflows) ||
+      /"quality-gate":[^\n]*smoke-tests/.test(gateEntry)
+
+    const adl = readFileSync(ADL_PATH, 'utf-8')
+    const claimsCiEnforcement = /\bCI[- ](?:list|registered|enforced)\b|runs? in CI/i.test(adl)
+    expect(
+      claimsCiEnforcement,
+      suiteRuns
+        ? 'the suite now runs automatically — the ADL may say so'
+        : 'nothing invokes run-all.sh, so the ADL must not present the scenario as CI-enforced',
+    ).toBe(suiteRuns)
+
+    if (!suiteRuns) {
+      // …and it must say where the registration actually lives, plus who owns the wiring, so a
+      // reader does not infer regression protection from the word "registered" alone.
+      expect(adl, 'the ADL must name the list the scenario is registered in').toMatch(
+        /pnpm smoke-tests|run-all\.sh/,
+      )
+      expect(adl, 'the ADL must state that no workflow invokes it yet').toMatch(
+        /no workflow[^\n]*invoke/i,
+      )
+      expect(adl, 'the ADL must point at the story that owns the CI wiring').toMatch(/#400/)
+    }
   })
 })
 
