@@ -22,10 +22,11 @@ import { gitCacheKey } from './git-clone'
  *
  * Disk: one slot per distinct external source. Slots are plain directories with no
  * hidden state — `rm -rf <cacheRoot>/external` is always safe and the next install
- * re-populates. Automatic eviction is deliberately not implemented (no LRU/TTL,
- * tracked as #427); stale leftovers — old CLI versions, pre-#395 git clones,
- * `.bak`/`.discarded-*`/orphaned `.tmp-*` — are all safe to delete by hand
- * (see the US-395 ADL).
+ * re-populates. Automatic eviction is deliberately not implemented (no LRU/TTL); the
+ * explicit `pair kb-cache list` / `prune` reclaims the stale leftovers instead — old CLI
+ * versions, pre-#395 git clones, and abandoned `.bak`/`.tmp-*` — sparing every `external/`
+ * slot and anything an install in flight owns (`commands/kb-cache/inventory.ts`).
+ * `.discarded-*` is left to the user. See the US-395 ADL and the source-resolution spec.
  */
 
 /** `name` carried by the manifest.json of the KB published by this project. */

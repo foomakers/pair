@@ -88,10 +88,10 @@ function isUrl(source: string): boolean {
 ```typescript
 function isLocalPath(source: string): boolean {
   return (
-    source.startsWith('/') ||          // Absolute Unix path
-    source.startsWith('./') ||         // Relative path
-    source.startsWith('../') ||        // Relative parent path
-    /^[A-Za-z]:[/\\]/.test(source)    // Windows absolute path
+    source.startsWith('/') || // Absolute Unix path
+    source.startsWith('./') || // Relative path
+    source.startsWith('../') || // Relative parent path
+    /^[A-Za-z]:[/\\]/.test(source) // Windows absolute path
   )
 }
 ```
@@ -131,6 +131,7 @@ When the source is a Git URL:
 4. **Cleanup** — remove the clone's `.git` directory, leaving the dataset
 
 Auth strategy:
+
 - **Default**: git inherits system auth (SSH keys, credential manager, `gh auth`)
 - **Override**: `PAIR_GIT_TOKEN` env var injects token into HTTPS URLs
 
@@ -143,10 +144,7 @@ interface KbSource {
   requiresDownload: boolean
 }
 
-async function resolveKbSource(options: {
-  source?: string
-  offline?: boolean
-}): Promise<KbSource> {
+async function resolveKbSource(options: { source?: string; offline?: boolean }): Promise<KbSource> {
   // Precedence 1: Explicit --source flag
   if (options.source) {
     if (isUrl(options.source)) {
@@ -188,16 +186,16 @@ async function resolveKbSource(options: {
 
 ## Error Catalog
 
-| Code | Error | Exit | Cause | Resolution |
-| ---- | ----- | ---- | ----- | ---------- |
-| E001 | Offline without source | 1 | `--offline` without `--source` | Provide `--source` |
-| E002 | Offline with remote URL | 1 | `--offline` with HTTP URL | Use local path |
-| E003 | Source path not found | 1 | `--source` points to missing path | Verify path |
-| E004 | Invalid source format | 1 | Source is neither URL nor path | Use valid format |
-| E005 | Download network error | 2 | Network failure | Check connectivity |
-| E006 | Checksum validation failed | 2 | SHA256 mismatch | Retry download |
-| E007 | Auto-download in offline | 1 | No source + offline mode | Provide local source |
-| E008 | Git clone failed | 2 | Clone error (auth, network, missing git) | Check git config, set `PAIR_GIT_TOKEN`, or use SSH |
+| Code | Error                      | Exit | Cause                                    | Resolution                                         |
+| ---- | -------------------------- | ---- | ---------------------------------------- | -------------------------------------------------- |
+| E001 | Offline without source     | 1    | `--offline` without `--source`           | Provide `--source`                                 |
+| E002 | Offline with remote URL    | 1    | `--offline` with HTTP URL                | Use local path                                     |
+| E003 | Source path not found      | 1    | `--source` points to missing path        | Verify path                                        |
+| E004 | Invalid source format      | 1    | Source is neither URL nor path           | Use valid format                                   |
+| E005 | Download network error     | 2    | Network failure                          | Check connectivity                                 |
+| E006 | Checksum validation failed | 2    | SHA256 mismatch                          | Retry download                                     |
+| E007 | Auto-download in offline   | 1    | No source + offline mode                 | Provide local source                               |
+| E008 | Git clone failed           | 2    | Clone error (auth, network, missing git) | Check git config, set `PAIR_GIT_TOKEN`, or use SSH |
 
 ## Download Process
 
@@ -277,29 +275,41 @@ that older version's directory and is never read again — abandoned, not discar
 
 **Disk:** one slot per distinct source. Slots are plain directories with no hidden state —
 `rm -rf ~/.pair/kb/external` is always safe, and the next install re-populates what it
-needs. There is no automatic eviction. Four leftovers `rm -rf ~/.pair/kb/external` does
-**not** cover, all safe to delete by hand:
+needs. There is no automatic eviction (no LRU, no TTL): growth is proportional to the number
+of KBs you install, not to how often you install them. Use `pair kb-cache list` to see what
+is there and `pair kb-cache prune` (add `--dry-run` first) to reclaim what is dead. Four
+leftovers `rm -rf ~/.pair/kb/external` does **not** cover, all safe to delete by hand:
 
-| Leftover                            | Left by                                                      |
-| ----------------------------------- | ------------------------------------------------------------ |
-| `~/.pair/kb/<old-version>/`         | an older CLI, possibly polluted by a pre-fix `--source`        |
-| `~/.pair/kb/git-<hash>/`            | a git `--source` clone from before the `external/` namespace   |
-| `~/.pair/kb/<version>.bak`          | an install that was interrupted mid-write                      |
-| `~/.pair/kb/<version>.discarded-*`  | an install whose recovery could not delete the half-written slot — a full KB tree |
+| Leftover                           | Left by                                                                           | `prune`                         |
+| ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------- |
+| `~/.pair/kb/<old-version>/`        | an older CLI, possibly polluted by a pre-fix `--source`                           | reclaimed                       |
+| `~/.pair/kb/git-<hash>/`           | a git `--source` clone from before the `external/` namespace                      | reclaimed                       |
+| `~/.pair/kb/<version>.bak`         | an install that was interrupted mid-write                                         | reclaimed once its slot is back |
+| `~/.pair/kb/<version>.discarded-*` | an install whose recovery could not delete the half-written slot — a full KB tree | by hand                         |
 
 An external slot's own `.discarded-*` sits under `external/` and is already covered by the
 `rm -rf` above; only the official slot's spelling needs stating.
+
+**What `prune` never deletes.** The KB cache is shared by every project on the machine, so
+prune is deliberately timid: your running CLI version's official slot (the KB the next
+command reads), **every** `external/` slot (one per source you chose — the CLI does not
+retain the URL or the archive, so deleting one is not undone by re-running an install),
+anything it cannot classify, and anything an install currently in flight owns. That last one
+covers two shapes: a `<slot>.tmp-<pid>-<n>` stage whose process is still alive, and a
+`<slot>.bak` whose slot has not come back yet — that backup is the only copy of that KB.
+`list` marks both as kept, so a leftover-shaped entry that survives a prune is not a bug.
+With no CLI version resolvable, prune spares every official slot rather than guess.
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable              | Description                         | Default               |
-| --------------------- | ----------------------------------- | --------------------- |
-| `PAIR_KB_CACHE_DIR`   | Override the KB cache root. Must be ABSOLUTE and free of `..` segments — rejected otherwise, because slots are deleted recursively | `~/.pair/kb` |
-| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL  | GitHub latest release  |
-| `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos | Not set      |
-| `PAIR_DIAG`           | Enable diagnostic logging            | `0` (disabled)        |
+| Variable              | Description                                                                                                                        | Default               |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `PAIR_KB_CACHE_DIR`   | Override the KB cache root. Must be ABSOLUTE and free of `..` segments — rejected otherwise, because slots are deleted recursively | `~/.pair/kb`          |
+| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL                                                                                                | GitHub latest release |
+| `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos                                                                         | Not set               |
+| `PAIR_DIAG`           | Enable diagnostic logging                                                                                                          | `0` (disabled)        |
 
 ---
 

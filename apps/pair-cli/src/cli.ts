@@ -85,10 +85,11 @@ export async function runCli(
     )
     .option('-l, --log-level <level>', 'Set minimum log level (debug|info|warn|error)')
     .option('-v, --verbose', 'Enable verbose logging (deprecated; use --log-level debug)')
-    // Currently a no-op: `kb === false` is read only behind the KB pre-flight, which never
-    // runs (see `runKbPreflight`). Kept registered so scripts passing it don't break, and
-    // said out loud here so `--help` doesn't promise a skip the CLI doesn't perform.
-    .option('--no-kb', 'Currently a no-op (was: skip knowledge base download)')
+    // Live again since the pre-flight was revived (see `runKbPreflight`): `kb === false`
+    // skips the pre-flight KB resolution for `install`/`update`. It cannot be combined with
+    // `--url` — naming a source and refusing to fetch it is a contradiction, and
+    // `validateCliOptions` rejects it.
+    .option('--no-kb', 'Skip the knowledge base download (cannot be combined with --url)')
     // Prevent Commander from calling process.exit() automatically
     .exitOverride()
     .configureHelp({ sortSubcommands: true })

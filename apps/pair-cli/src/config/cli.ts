@@ -7,8 +7,9 @@ import { isGitUrl, isRemoteUrl } from '@pair/content-ops'
  * ONE rule, in ONE place, for every command that resolves a KB (install, update, kb-info):
  * a named source travels through the command config's `resolution`, so the source the user
  * NAMES and the source the command READS are decided once and are the same one (US-395).
- * This is the only live consumer of `--url`: the KB pre-flight that used to read it is
- * unreachable (see `config/bootstrap.ts`'s entry-point note). `--url` used to reach
+ * This is the channel that decides WHICH KB a command installs. The KB pre-flight
+ * (`config/bootstrap.ts`) reads `--url` too, but only to warm the cache before the command
+ * runs — it no longer decides anything, which is the point of the split. `--url` used to reach
  * resolution only by side effect — the pre-flight wrote the custom archive into the
  * OFFICIAL KB's cache slot, which default resolution then served. Source-identity keying
  * ended that side effect, and without this rule the flag would name a source nothing reads:

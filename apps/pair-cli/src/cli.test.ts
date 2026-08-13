@@ -442,18 +442,19 @@ describe('US-395 round 14: the global --log-level actually takes effect', () => 
   })
 })
 
-describe('US-395 round 15: `pair --help` does not advertise --no-kb as working', () => {
+describe('US-395 round 18: `pair --help` describes what --no-kb actually does', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
   /**
-   * `--no-kb` is inert: its only consumers sit behind the KB pre-flight, which never runs
-   * (see `runKbPreflight`'s banner). The CLI reference now says so; `--help` is the same
-   * promise made in the place users read first, so it must not read "Skip knowledge base
-   * download" while `pair install --no-kb` installs a KB anyway.
+   * Round 15 pinned this line as a NO-OP, which was true then: `--no-kb`'s only consumers sat
+   * behind a pre-flight that never ran. Round 17 revived the pre-flight, so the flag takes
+   * effect again — and the pinned assertion then locked the wrong text in, telling users in
+   * the place they read first that a working flag does nothing. It must describe the real
+   * effect, and name the combination that is now rejected (`--url` + `--no-kb`).
    */
-  it('the --no-kb help line marks it a no-op instead of promising a skip', async () => {
+  it('the --no-kb help line describes the skip, not a no-op', async () => {
     const { runCli } = await import('./cli.js')
     let help = ''
     vi.spyOn(process.stdout, 'write').mockImplementation(chunk => {
@@ -469,8 +470,10 @@ describe('US-395 round 15: `pair --help` does not advertise --no-kb as working',
 
     const noKbLine = help.split('\n').find(line => line.includes('--no-kb')) ?? ''
     expect(noKbLine).not.toBe('')
-    expect(noKbLine).toMatch(/no-op/i)
-    expect(noKbLine).not.toMatch(/Skip knowledge base download/)
+    expect(noKbLine).not.toMatch(/no-op/i)
+    expect(noKbLine).toMatch(/skip the knowledge base download/i)
+    // The `--url` conflict sits on the wrapped continuation line, so assert on the block.
+    expect(help).toMatch(/cannot\s+be combined with --url/)
   })
 })
 
