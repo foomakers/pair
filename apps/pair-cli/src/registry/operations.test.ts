@@ -91,6 +91,48 @@ describe('registry operations', () => {
     expect(await fs.exists('/dataset/dst/private/theirs.md')).toBe(true)
   })
 
+  // The three cases above hand-build `{ defaultBehavior: 'mirror' }`, which is NOT what the
+  // CLI feeds in: `update/handler.ts` calls `buildCopyOptions(registryConfig)`, and that
+  // rewrites `defaultBehavior` to `'skip'` for a mirror registry declaring `include` —
+  // i.e. the shipped `github` registry. So the options must come from `buildCopyOptions`
+  // over the REAL config, or the gate is tested through a shape production never produces.
+  it('doCopyAndUpdateLinks cleans a mirror registry whose mirror lives in folderBehavior', async () => {
+    // Verbatim `github` registry from apps/pair-cli/config.json.
+    const githubRegistry: RegistryConfig = {
+      source: '.github',
+      behavior: 'mirror',
+      include: ['/agents'],
+      description: 'GitHub workflows and configuration files',
+      flatten: false,
+      targets: [{ path: '.github', mode: 'canonical' }],
+    }
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/.github/agents/live.agent.md': '# Still shipped',
+        '/project/.github/agents/live.agent.md': '# Still shipped',
+        '/project/.github/agents/RETIRED.agent.md': '# Dropped from the dataset',
+        // Owned by the adopter: `include: ["/agents"]` leaves everything else at `skip`.
+        '/project/.github/workflows/my-ci.yml': 'name: my-ci',
+        '/project/.github/ISSUE_TEMPLATE/bug.md': '# Bug',
+      },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: '/dataset/.github',
+      target: '/project/.github',
+      datasetRoot: '/dataset',
+      options: buildCopyOptions(githubRegistry),
+    })
+
+    expect(await fs.exists('/project/.github/agents/RETIRED.agent.md')).toBe(false)
+    expect(await fs.exists('/project/.github/agents/live.agent.md')).toBe(true)
+    // Not owned by the registry — cleanup must not descend here at all.
+    expect(await fs.exists('/project/.github/workflows/my-ci.yml')).toBe(true)
+    expect(await fs.exists('/project/.github/ISSUE_TEMPLATE/bug.md')).toBe(true)
+  })
+
   it('doCopyAndUpdateLinks deletes nothing when the registry behavior is not mirror', async () => {
     const fs = createTestFs(
       {},

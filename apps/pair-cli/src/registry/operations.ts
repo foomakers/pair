@@ -76,6 +76,35 @@ function buildCopyDirHelperContext(ctx: {
   }
 }
 
+/**
+ * Whether this registry mirrors ANY path — the top-level `behavior: "mirror"`, or a
+ * per-folder override that resolves to `mirror`.
+ *
+ * The distinction is load-bearing, not defensive: `buildCopyOptions` (below) REWRITES
+ * `defaultBehavior` to `'skip'` for a mirror registry that declares `include`, moving the
+ * mirror into `folderBehavior`. The shipped `github` registry is exactly that shape
+ * (`include: ["/agents"]`), and `update/handler.ts` feeds `buildCopyOptions`' output
+ * straight in — so gating cleanup on the raw `defaultBehavior` skipped cleanup for the one
+ * registry whose mirror is expressed per folder, and an agent file retired from
+ * `dataset/.github/agents/` stayed installed in an adopting project forever.
+ *
+ * Widening the gate does NOT widen the blast radius: the bound lives in
+ * `handleMirrorCleanup`'s ownership check, which resolves each entry's behavior through the
+ * same `folderBehavior` map. Under `.github` that makes `agents` owned (`mirror`) and
+ * `workflows` / `ISSUE_TEMPLATE` / `skills` not owned (`skip`) — never removed, never even
+ * descended into.
+ *
+ * `folderBehavior` is only ever emitted by `buildCopyOptions` alongside `defaultBehavior:
+ * 'skip'`, so "mirrors any path" cannot widen cleanup past the included folders from a
+ * config-built registry; a hand-built options object mixing an owned default with a mirror
+ * subfolder would be cleaned across that default, which is the ownership resolution's
+ * answer, not this predicate's.
+ */
+function mirrorsAnyPath(options?: SyncOptions): boolean {
+  if (options?.defaultBehavior === 'mirror') return true
+  return Object.values(options?.folderBehavior ?? {}).includes('mirror')
+}
+
 async function copyDirectory(
   fsService: FileSystemService,
   ctx: {
@@ -114,11 +143,12 @@ async function copyDirectory(
   // forever: two how-to guides dropped in #246 were still installed ~5 months later and were
   // still advertised by `.pair/llms.txt`, pointing agents at guides the KB no longer ships.
   //
-  // The ownership context is the SAME object the copy below uses, so cleanup and copy can
+  // Gate on the EFFECTIVE behavior (see `mirrorsAnyPath`), never on the raw default. The
+  // ownership context is the SAME object the copy below uses, so cleanup and copy can
   // never disagree about what the registry owns: `handleMirrorCleanup` refuses to touch an
   // `exclude`d path, or one whose resolved behavior is `add` or `skip` — the cases where a
   // target-only file is the point, and the adopter's to keep.
-  if (options?.defaultBehavior === 'mirror') {
+  if (mirrorsAnyPath(options)) {
     await handleMirrorCleanup(fsService, srcPath, tgtPath, helperCtx)
   }
 
