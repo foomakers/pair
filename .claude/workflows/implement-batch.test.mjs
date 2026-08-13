@@ -23,9 +23,21 @@ async function runWorkflow({ args, dispatch }) {
     calls.push({ prompt, opts })
     return dispatch(prompt, opts)
   }
-  const parallel = fns => Promise.all(fns.map(f => f()))
-  const result = await new AsyncFunction('args', 'agent', 'parallel', SRC)(args, agent, parallel)
-  return { result, calls }
+  // Mirrors the real primitive's contract: "a thunk that throws (or whose agent errors)
+  // resolves to null in the result array — the call itself never rejects". The earlier
+  // stub let a throw propagate, which is why the total-failure path (six stalled agents,
+  // six nulls) had no test: it was unreachable from here.
+  const parallel = fns => Promise.all(fns.map(f => Promise.resolve().then(f).catch(() => null)))
+  const logs = []
+  const log = m => logs.push(m)
+  const result = await new AsyncFunction(
+    'args',
+    'agent',
+    'parallel',
+    'log',
+    SRC,
+  )(args, agent, parallel, log)
+  return { result, calls, logs }
 }
 
 // Happy-path stub: dispatch on agentType/phase; contract behavior injectable.
@@ -102,8 +114,12 @@ test('reviewer prompt pins the nonActionable-is-not-a-scope-filter correction', 
     rev.prompt.includes('originally stated scope'),
     'reviewer prompt keeps the scope-filter correction',
   )
+  // Matches either wording of the same ADL clause: the original "NOT by itself a reason"
+  // and the stronger "is NOT a reason: fix it here" that came with the no-new-cards rule.
+  // The invariant being pinned is the ADL's, not one particular sentence — but it must stay
+  // at least as strict, so a future edit cannot weaken it back into a scope filter.
   assert.ok(
-    rev.prompt.includes('NOT by itself a reason'),
+    /originally stated scope is NOT (a reason|by itself a reason)/.test(rev.prompt),
     'reviewer prompt keeps the "not a reason to mark nonActionable" clause',
   )
 })
@@ -123,7 +139,9 @@ test('per-step effort + PR model override are wired into agent opts', async () =
   const rev = calls.find(c => c.opts.agentType === 'reviewer')
   assert.equal(contract.opts.effort, 'low')
   assert.equal(impl.opts.effort, 'high')
-  assert.equal(rev.opts.effort, 'xhigh')
+  // Was 'xhigh' until the reviewer's reasoning gaps started outrunning the supervisor's
+  // 180s window on large diffs — see the pacing test below for the measurement.
+  assert.equal(rev.opts.effort, 'high')
   assert.equal(pr.opts.model, 'sonnet', 'PR step overrides model to sonnet')
   assert.equal(pr.opts.effort, 'medium')
 })
@@ -479,14 +497,24 @@ test('#373 finding 1: resume, NO log + first review already on PR, round-0 ESCAL
   const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
   assert.equal(result.batch[0].status, 'escalate')
   const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
-  assert.equal(reviews.length, 1, 'round-0 only (escalates immediately)')
+  // TWO reviews, not one: `needsHumanDecision` no longer escalates immediately. It now buys
+  // ONE fix round first — measured cost of the old behaviour was six consecutive rounds
+  // across two stories that produced reviews and zero commits, because the flag skipped the
+  // fixer entirely. The escalation is DEFERRED by a round, never dropped: the flag is
+  // remembered, so the second time it stands the story escalates exactly as before.
+  assert.equal(reviews.length, 2, 'one fix round is spent before honouring the request')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('fix:')), 'the fixer DID run on the actionable findings')
   assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 is SILENT (first review already on PR)')
   const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
   assert.ok(flush, 'a resume-path round-0 escalation STILL posts a flush (finding 1: no silent escalation)')
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open actionable findings')
-  assert.ok(/No prior review working log exists/i.test(flush.prompt), 'no-log arm: escalates from inline findings, not from a (missing) log')
-  assert.ok(!flush.prompt.includes('Read the review log'), 'no-log arm does not instruct reading a non-existent log (best-effort)')
-  assert.ok(!flush.prompt.includes('Do NOT delete the log'), 'no-log arm has no log to keep as an anchor')
+  // The no-log arm no longer applies HERE: the deferred-escalation fix round runs first and
+  // the fixer writes the working log, so by flush time an anchor exists. That is the correct
+  // outcome — the arm itself is still exercised by the MAX_FIX_ROUNDS escalation test, where
+  // no fix round precedes it. What this test still pins is the finding-1 invariant: a
+  // resume-path escalation is never SILENT.
+  assert.ok(flush.prompt.includes('Read the review log'), 'after a fix round there IS a log to anchor to')
+  assert.ok(flush.prompt.includes('Do NOT delete the log'), 'the log is kept as the continuation anchor')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'escalation never synthesizes')
 })
 
@@ -728,4 +756,690 @@ test('meta is a pure literal — no expression can make the workflow silently un
     `meta contains non-literal syntax (residue: ${JSON.stringify(residue.slice(0, 80))}). ` +
       'Every value must be a single literal — no concatenation, no template literals, no calls.',
   )
+})
+
+// ── Autonomy hardening: dead-agent handling + stacked bases ─────────────────
+// Three properties that decide how many stories reach a review-approved PR without
+// a human: a dead reviewer must not read as an approval, a dead authoring step must
+// not lose the story, and a textual mutex must be resolvable at authoring time.
+
+test('a DEAD reviewer is NOT a clean review: the story fails loudly instead of converging to ready-for-merge', async () => {
+  // The regression: `agent()` returns null when the reviewer dies, `review?.findings ?? []`
+  // yielded zero findings, the convergence test read that as "nothing actionable remains"
+  // and the batch reported ready-for-merge — a PR that was never reviewed, labelled approved.
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') return null // dies on both the call and its retry
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    return { fixed: true }
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+
+  assert.equal(result.batch[0].status, 'failed-review', 'a dead reviewer never yields ready-for-merge')
+  assert.equal(result.batch[0].prNumber, 7, 'the PR handle is still surfaced so the human can pick it up')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no convergence synthesis on a failed review')
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.equal(reviews.length, 2, 'the review step is retried exactly once before giving up')
+})
+
+test('a dead authoring step is retried once and the story continues (a 180s supervisor kill no longer costs the card)', async () => {
+  let implCalls = 0
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.phase === 'Implement') return ++implCalls === 1 ? null : { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+  const { result, calls, logs } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+
+  assert.equal(implCalls, 2, 'implement is attempted twice')
+  assert.equal(result.batch[0].status, 'ready-for-merge', 'the story survives one dead step')
+  assert.ok(
+    calls.some(c => c.opts.label === 'impl:#292 retry'),
+    'the retry is labelled distinctly so it is visible in the progress tree',
+  )
+  assert.ok(logs.some(m => /retrying once/.test(m)), 'the retry is narrated, never silent')
+})
+
+test('a story with `base` stacks on that branch: worktree forks from it and the PR targets it, not main', async () => {
+  const stacked = { id: '396', title: 'T', branch: 'feat/#396-x', base: 'feature/US-395-cache-keying' }
+  const { calls } = await runWorkflow({
+    args: { stories: [stacked] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+
+  const impl = calls.find(c => c.opts.phase === 'Implement')
+  assert.ok(
+    impl.prompt.includes('-B feat/#396-x feature/US-395-cache-keying'),
+    'the worktree forks from the base branch, not origin/main',
+  )
+  assert.ok(!impl.prompt.includes('-B feat/#396-x origin/main'), 'origin/main is not used as the fork point')
+  assert.ok(/STACKED on/.test(impl.prompt), 'the implementer is told it is stacked')
+  assert.ok(
+    /must NOT be reverted, duplicated or re-implemented/.test(impl.prompt),
+    'the implementer is warned not to re-do the base story work already in its history',
+  )
+  const pr = calls.find(c => c.opts.phase === 'PR')
+  assert.ok(
+    /target `feature\/US-395-cache-keying` as the PR base branch/.test(pr.prompt),
+    'the PR targets the base branch so the diff shows only this story',
+  )
+})
+
+test('no `base` keeps the existing behaviour byte-for-byte (origin/main, no stacking language)', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const impl = calls.find(c => c.opts.phase === 'Implement')
+  assert.ok(impl.prompt.includes('-B feat/#292-x origin/main'), 'unstacked stories still fork from origin/main')
+  assert.ok(!/STACKED on/.test(impl.prompt), 'no stacking language leaks into an unstacked story')
+})
+
+test('MAX_FIX_ROUNDS allows three autonomous fix rounds before escalating', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.label?.startsWith('flush:')) return 'flushed'
+    return { fixed: true }
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+
+  assert.equal(result.batch[0].status, 'escalate')
+  const fixes = calls.filter(c => c.opts.label?.startsWith('fix:'))
+  assert.equal(fixes.length, 3, 'three fix rounds run before the human is involved')
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.equal(reviews.length, 4, 'first review + one re-review per fix round')
+})
+
+// ── Every step goes through the Pair skill that owns it ─────────────────────
+// The workflow must COMPOSE the skills, never re-implement what they do. The
+// regression this guards: the open-PR step used to say "push the branch and open
+// the PR using the PR template", which produced a PR that silently skipped most of
+// /pair-capability-publish-pr — no `pr-state:*` label, classification tags not
+// copied, no PR-URL back-link on the story, board state left behind. Observed on 5
+// of 6 PRs in a real batch.
+test('the open-PR step composes /pair-capability-publish-pr instead of hand-rolling the PR', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const pr = calls.find(c => c.opts.phase === 'PR')
+  assert.ok(pr.prompt.includes('/pair-capability-publish-pr'), 'the PR step invokes the publish-pr skill')
+  assert.ok(/Do NOT hand-roll the PR/.test(pr.prompt), 'hand-rolling is explicitly forbidden')
+  for (const owned of ['pr-state:', 'classification tags', 'back-link', 'board state'])
+    assert.ok(pr.prompt.includes(owned), `the prompt names "${owned}" as owned by the skill, so a reader cannot mistake it for optional`)
+  // The one place where composing publish-pr could collide with this orchestrator:
+  // publish-pr normally dispatches the review itself. Running inside a subagent it
+  // emits `review-dispatch-required` instead — the prompt must say so, or the
+  // implementer treats the signal as a failure and improvises a nested review.
+  assert.ok(/review-dispatch-required/.test(pr.prompt), 'the expected non-nesting signal is named')
+  assert.ok(/Do NOT dispatch or run a review yourself/.test(pr.prompt), 'the implementer is barred from reviewing its own work')
+})
+
+test('the implement and fix steps name the skills that own gating and decisions', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
+  let round = 0
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    return { fixed: true }
+  }
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+
+  const impl = calls.find(c => c.opts.phase === 'Implement')
+  assert.ok(impl.prompt.includes('/pair-process-implement'), 'implement follows the process skill')
+  assert.ok(impl.prompt.includes('/pair-capability-verify-quality'), 'the gate is the skill, not an improvised command')
+  assert.ok(impl.prompt.includes('/pair-capability-record-decision'), 'decisions are recorded via the skill, not left in commit messages')
+  assert.ok(impl.prompt.includes('/pair-capability-checkpoint $mode=write'), 'the handoff is written via the checkpoint skill')
+
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix, 'a fix round ran')
+  for (const skill of [
+    '/pair-process-implement',
+    '/pair-capability-verify-quality',
+    '/pair-capability-record-decision',
+    '/pair-capability-publish-pr',
+  ])
+    assert.ok(fix.prompt.includes(skill), `the fix step composes ${skill}`)
+  assert.ok(
+    /in sync with the NEW head commit/.test(fix.prompt),
+    'the fix step re-publishes so the PR describes the post-fix head, not the pre-fix state',
+  )
+})
+
+test('the review step is the review PROCESS skill, and the reviewer is never asked to fix or merge', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.ok(rev.prompt.includes('/pair-process-review'), 'the review follows the process skill')
+  assert.ok(rev.prompt.includes('Do NOT read .pair/working/'), 'the reviewer stays blind to the authoring handoff')
+})
+
+// ── Debts are resolved in place, never spun out into new cards ──────────────
+// The regression this pins: the reviewer prompt used to say "file one via
+// /pair-capability-write-issue if none exists yet" for deferred findings. One batch
+// produced SIX new tech-debt issues (#426-#431) out of six PRs — findings that had been
+// reviewed, understood and then parked. A finding filed as a card is a finding nobody
+// fixes, and it turns a reviewed PR into unreviewed backlog.
+test('the reviewer is forbidden from filing issues and told to resolve debts in this PR', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'reviewer').prompt
+  assert.ok(/DO NOT FILE NEW ISSUES/.test(rev), 'the ban is stated, in the imperative')
+  assert.ok(
+    !/file one via \/pair-capability-write-issue/.test(rev),
+    'the old "file one if none exists yet" instruction is gone — this is the exact string that produced #426-#431',
+  )
+  assert.ok(/never invoke \/pair-capability-write-issue/i.test(rev), 'the skill that files issues is named and forbidden')
+  assert.ok(/resolved IN PLACE, in this same PR/.test(rev), 'the replacement behaviour is stated positively')
+  // An existing card may still be cited — the ban is on CREATING, not on referencing.
+  assert.ok(/do not create one/i.test(rev), 'citing an already-tracked story stays allowed')
+  // The escape hatch must not re-open the door: an oversized finding stays actionable and
+  // goes to the human, rather than being converted into a card by the agent.
+  assert.ok(/leave it ACTIONABLE/.test(rev), 'an oversized finding stays actionable instead of becoming a card')
+  assert.ok(/not yours to pre-empt by filing a card/.test(rev), 'the carve-out decision is the human\'s')
+})
+
+test('the fix step is likewise barred from deferring a finding into a new issue', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
+  let round = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:')).prompt
+  assert.ok(/Fix them IN PLACE, in this PR/.test(fix), 'the fixer resolves in place')
+  assert.ok(/do NOT file a follow-up issue/.test(fix), 'the fixer cannot file a follow-up either')
+  assert.ok(/do NOT invoke \/pair-capability-write-issue/.test(fix), 'the issue-filing skill is named and forbidden')
+  assert.ok(
+    /the human decides at the merge gate, not a new card/.test(fix),
+    'an oversized remainder goes to the human, not to the backlog',
+  )
+})
+
+// ── A run that drove nothing must not report success ───────────────────────
+// Observed: two workflows were launched concurrently on a saturated machine, every
+// implementer stalled past the supervisor's window, `parallel` returned six nulls,
+// and the run reported `batch: []` under the sentence "PRs are ready-for-merge or
+// escalated" — success-shaped output for a run that advanced nothing. Same failure
+// class as #401 (empty input reported as a completed batch), reached through total
+// execution failure instead.
+test('total failure is reported as failure, and names the stories that died', async () => {
+  const stories = [
+    { id: '1', title: 'a', branch: 'b1' },
+    { id: '2', title: 'b', branch: 'b2' },
+  ]
+  const { result } = await runWorkflow({
+    args: { stories },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      // A stalled agent is killed by the supervisor: the thunk throws, and `parallel`
+      // resolves it to null. This is the shape the real run produced.
+      throw new Error('agent stalled on all 6 attempts (no progress for 180000ms each)')
+    },
+  })
+  assert.deepEqual(result.batch, [], 'nothing completed')
+  assert.deepEqual(result.died, ['1', '2'], 'the dead stories are named, so the run is actionable')
+  assert.match(result.note, /NOTHING COMPLETED/, 'the note leads with the failure')
+  assert.doesNotMatch(
+    result.note,
+    /^PRs are ready-for-merge/,
+    'it must not open with the success sentence',
+  )
+  assert.match(result.note, /worktrees is intact/, 'it says committed work survived')
+})
+
+test('a partial run reports the ratio and names only the stories that died', async () => {
+  const stories = [
+    { id: '1', title: 'a', branch: 'b1' },
+    { id: '2', title: 'b', branch: 'b2' },
+  ]
+  const { result } = await runWorkflow({
+    args: { stories },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (prompt.includes('story #2')) throw new Error('agent stalled') // one story dies throughout
+      if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch.length, 1)
+  assert.deepEqual(result.died, ['2'])
+  assert.match(result.note, /1\/2 stories returned a result/)
+  assert.match(result.note, /1 failed outright and advanced nothing/)
+})
+
+test('an explicitly empty batch still reads as a deliberate no-op, not a failure', async () => {
+  const { result } = await runWorkflow({ args: { stories: [] }, dispatch: stdDispatch({}) })
+  assert.deepEqual(result.batch, [])
+  assert.deepEqual(result.died, [])
+  assert.match(result.note, /Empty batch/)
+  assert.doesNotMatch(result.note, /NOTHING COMPLETED/, 'an empty request is not a failed run')
+})
+
+// ── Review cadence: the supervisor cannot tell a long think from a hang ─────
+// Measured failure: at effort 'xhigh' on a 22-file / 1600-line diff, the reviewer's
+// reasoning between two tool calls exceeded the 180s no-visible-progress window and it
+// was killed mid-read. Transcripts showed ordinary work (40+ turns, plain cat/sed) right
+// up to `[Request interrupted by user]` — a cadence problem, not a stuck command. Six
+// retries then repeated a task that never fit the window, because each restarts the
+// review from scratch.
+test('the reviewer runs at high effort, not xhigh, and is told to work in short observable steps', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.equal(rev.opts.effort, 'high', 'xhigh reasoning gaps outrun the supervisor window')
+  assert.match(rev.prompt, /PACING \(mandatory/, 'the pacing contract is stated')
+  // The measurement that matters: the window is on TEXT, not on tool calls. A prompt that
+  // says "do not leave gaps between tool calls" aims at the wrong target — the killed
+  // reviewer was calling sed every ~5s and died anyway.
+  assert.match(rev.prompt, /180 seconds without emitting a TEXT MESSAGE/, 'the real limit is named')
+  assert.match(rev.prompt, /Tool calls do NOT count as progress/, 'the common misreading is pre-empted')
+  assert.match(rev.prompt, /after EVERY file you inspect, write ONE SHORT LINE/, 'the required behaviour is concrete')
+  assert.match(rev.prompt, /never read two files in a row without speaking in between/i, 'the failure mode is named')
+  assert.match(rev.prompt, /silence is fatal/, 'the rule ends unambiguously')
+  assert.match(rev.prompt, /--name-only/, 'it starts by enumerating the files so progress is observable from the first step')
+})
+
+test('the fix step keeps high effort — it was never the step that stalled', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
+  let round = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(calls.find(c => c.opts.label?.startsWith('fix:')).opts.effort, 'high')
+  assert.equal(calls.find(c => c.opts.phase === 'Implement').opts.effort, 'high')
+})
+
+// ── Severity floor: making the loop terminable without hiding anything ──────
+// Measured: three PRs, three fix rounds each, findings GREW (4→5, 4→7, 4→3). Convergence
+// needs zero actionable findings, so one Minor on markdown prose keeps the cycle open
+// forever — and markdown prose yields Minors without limit. The floor lets the loop close
+// while carrying every unblocked finding to the human.
+const MINOR = { location: 'a.md:1', severity: 'Minor', description: 'wording', recommendation: 'reword' }
+const MAJOR = { location: 'b.ts:2', severity: 'Major', description: 'real', recommendation: 'fix' }
+
+test('with a Major floor, Minor-only findings converge and are carried to the gate, not discarded', async () => {
+  const { result, calls } = await runWorkflow({
+    args: { severityFloor: 'Major', stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: validContract() },
+      review: { verdict: 'Rework', findings: [MINOR, MINOR] },
+    }),
+  })
+  const b = result.batch[0]
+  assert.equal(b.status, 'ready-for-merge', 'Minors below the floor no longer block convergence')
+  assert.equal(b.acceptedFindings.length, 2, 'both are carried to the human, not dropped')
+  assert.match(
+    b.acceptedFindings[0].disposition,
+    /Below severity floor \(Major\)/,
+    'the disposition says we chose not to block — distinct from the reviewer judging it by-design',
+  )
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('fix:')), 'no fix round is spent on sub-floor findings')
+})
+
+test('a finding AT or ABOVE the floor still blocks and still drives a fix round', async () => {
+  let round = 0
+  const { result, calls } = await runWorkflow({
+    args: { severityFloor: 'Major', stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer')
+        return round++ === 0 ? { verdict: 'Rework', findings: [MAJOR, MINOR] } : { verdict: 'Approved', findings: [MINOR] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix, 'the Major drove a fix round')
+  assert.ok(fix.prompt.includes('b.ts:2'), 'the fixer got the Major')
+  assert.ok(!fix.prompt.includes('a.md:1'), 'the sub-floor Minor was not sent to the fixer')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+test('without a floor nothing changes: every actionable finding still blocks', async () => {
+  const { result } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: validContract() },
+      review: { verdict: 'Rework', findings: [MINOR] },
+    }),
+  })
+  assert.equal(result.batch[0].status, 'escalate', 'a lone Minor still blocks when no floor is asked for')
+})
+
+test('an unknown severity blocks regardless of the floor (fail safe), and a bad floor throws', async () => {
+  const { result } = await runWorkflow({
+    args: { severityFloor: 'Major', stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: validContract() },
+      review: { verdict: 'Rework', findings: [{ location: 'x:1', severity: 'Weird', description: 'd' }] },
+    }),
+  })
+  assert.equal(result.batch[0].status, 'escalate', 'an unrecognised severity is treated as blocking')
+
+  await assert.rejects(
+    () => runWorkflow({ args: { severityFloor: 'Whatever', stories: [STORY] }, dispatch: stdDispatch({}) }),
+    /unknown severityFloor/,
+    'a typo in the floor must throw, not silently disable blocking',
+  )
+})
+
+// ── Options must survive a JSON-string `args` ───────────────────────────────
+// Real bug: the runtime can hand this script `args` as a JSON STRING. parseBatchArgs
+// normalized it, but severityFloor was read off the RAW value, where
+// `typeof args === 'object'` is false — so the floor was silently ignored and a batch ran
+// with Minors still blocking while the caller believed the floor was in force. Observed on
+// a live run: three PRs escalated on Minor-only findings under `severityFloor: 'Major'`.
+test('severityFloor is honoured whether args arrives as an object or as a JSON string', async () => {
+  const story = { id: '1', title: 't', branch: 'b' }
+  const minorOnly = stdDispatch({
+    contractResult: { status: 'cache-hit', contract: validContract() },
+    review: { verdict: 'Rework', findings: [{ location: 'a.md:1', severity: 'Minor', description: 'd' }] },
+  })
+  for (const [shape, args] of [
+    ['object', { severityFloor: 'Major', stories: [story] }],
+    ['JSON string', JSON.stringify({ severityFloor: 'Major', stories: [story] })],
+  ]) {
+    const { result } = await runWorkflow({ args, dispatch: minorOnly })
+    assert.equal(result.batch[0].status, 'ready-for-merge', `floor must apply with args as ${shape}`)
+    assert.equal(result.batch[0].acceptedFindings.length, 1, `the Minor is carried to the gate (${shape})`)
+  }
+})
+
+test('a bad severityFloor throws even when args is a JSON string', async () => {
+  await assert.rejects(
+    () => runWorkflow({ args: JSON.stringify({ severityFloor: 'Nope', stories: [{ id: '1', title: 't', branch: 'b' }] }), dispatch: stdDispatch({}) }),
+    /unknown severityFloor/,
+    'a typo must not be swallowed by the string path either',
+  )
+})
+
+// ── needsHumanDecision buys one fix round before escalating ─────────────────
+// Measured: a reviewer raising the flag skipped the fixer ENTIRELY, so four consecutive
+// rounds on one story and two on another produced review after review and zero commits —
+// the orchestrator writing detailed fix instructions for an agent never invoked. A
+// reviewer raising it says "one of these needs a human", not "none can be fixed".
+test('needsHumanDecision spends one fix round first, then escalates if it still stands', async () => {
+  const f = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
+  let round = 0
+  const { result, calls, logs } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer') { round++; return { verdict: 'Rework', findings: [f], needsHumanDecision: true } }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      if (opts.label?.startsWith('flush:')) return 'flushed'
+      return { fixed: true }
+    },
+  })
+  assert.ok(calls.some(c => c.opts.label?.startsWith('fix:')), 'a fix round runs despite the flag')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'exactly ONE — the request is honoured on its second occurrence')
+  assert.equal(result.batch[0].status, 'escalate', 'the escalation is deferred, never dropped')
+  assert.ok(logs.some(m => /asked for a human decision/.test(m)), 'the deferral is narrated')
+})
+
+test('a flag raised only AFTER a fix round still escalates on that round', async () => {
+  const f = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
+  let round = 0
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer')
+        return { verdict: 'Rework', findings: [f], needsHumanDecision: round++ > 0 }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      if (opts.label?.startsWith('flush:')) return 'flushed'
+      return { fixed: true }
+    },
+  })
+  // Round 0 has no flag → normal fix. Round 1 raises it → one more fix round, then escalate.
+  assert.equal(result.batch[0].status, 'escalate')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 2)
+})
+
+test('args.model routes implement, review and fix; absent, each agent keeps its frontmatter tier', async () => {
+  const f = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
+  let n = 0
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') return n++ === 0 ? { verdict: 'Rework', findings: [f] } : { verdict: 'Approved', findings: [] }
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    return { fixed: true }
+  }
+  const { calls } = await runWorkflow({ args: { model: 'fable', stories: [STORY] }, dispatch })
+  for (const label of ['impl:', 'rev:', 'fix:'])
+    assert.equal(
+      calls.find(c => c.opts.label?.startsWith(label)).opts.model,
+      'fable',
+      `${label} runs on the requested model`,
+    )
+
+  const { calls: bare } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.ok(!('model' in bare.find(c => c.opts.label?.startsWith('impl:')).opts), 'no override without one asked for')
+})
+
+test('an unknown model throws instead of silently running the wrong tier', async () => {
+  await assert.rejects(
+    () => runWorkflow({ args: { model: 'gpt', stories: [STORY] }, dispatch: stdDispatch({}) }),
+    /unknown model "gpt"/,
+  )
+})
+
+// ── Text shape: the artifacts this loop produces are read again, many times ──
+// The PR body is re-read by every reviewer and every fixer of the cycle; the working log by
+// the escalate-flush and the final synthesis. Prose that restates the diff is paid on each of
+// those reads. These pin the rule where it is actually consumed — a prompt clause that
+// silently stops being interpolated is indistinguishable from one that was never written.
+
+// One round with a finding, then clean: exercises PR + review + fix + synth in a single run.
+const shapeDispatch = () => {
+  let rev = 0
+  return (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') {
+      rev++
+      return rev === 1
+        ? { verdict: 'Rework', findings: [{ location: 'a.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }] }
+        : { verdict: 'Approved', findings: [] }
+    }
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.label?.startsWith('synth:')) return 'posted'
+    return { fixed: true }
+  }
+}
+
+test('the text-shape rule reaches the prompts whose output gets re-read', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
+  const pr = calls.find(c => c.opts.phase === 'PR')
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
+  for (const [name, c] of [['PR', pr], ['review', rev], ['synthesis', synth]]) {
+    assert.ok(c, `no ${name} call`)
+    assert.ok(c.prompt.includes('TEXT SHAPE (mandatory)'), `${name} prompt lost the shape rule`)
+  }
+})
+
+test('the shape rule protects evidence: it forbids narration, never the failure case', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
+  const review = calls.find(c => c.opts.agentType === 'reviewer').prompt
+  // A rule that merely said "be brief" would trade a review round for a few words. The
+  // asymmetry — cut narration, keep the failure case and the proof — IS the rule.
+  assert.ok(review.includes('KEEP AT FULL LENGTH'), 'the keep-clause is gone')
+  assert.ok(review.includes('CONCRETE FAILURE CASE'), 'the failure case is no longer protected')
+  assert.ok(review.includes('EVIDENCE it is real'), 'the evidence clause is gone')
+  assert.ok(review.includes('Cut narration, never evidence'), 'the asymmetry is gone')
+})
+
+test('the fix step carries the shape rule — it is the only step that rewrites the PR body mid-cycle', async () => {
+  // Measured regression: the first run of this rule left PR bodies BIGGER (#423 16.2k -> 17.6k
+  // tokens). A resumed cycle passes `prNumber`, which skips the PR step entirely, so the rule
+  // sat on a prompt that never ran while the fix step re-invoked publish-pr without it and
+  // each round appended another section.
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix, 'no fix call')
+  assert.ok(fix.prompt.includes('TEXT SHAPE (mandatory)'), 'the fix step lost the shape rule')
+  assert.ok(
+    fix.prompt.includes('do not append a round-by-round history'),
+    'nothing stops the PR body from growing one section per round',
+  )
+})
+
+test('the fix step logs a round as table rows, not a paragraph per finding', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix, 'no fix call')
+  assert.ok(fix.prompt.includes('COMPACT TABLE'), 'the log round is not constrained to a table')
+  assert.ok(
+    fix.prompt.includes('severity | location | what changed | commit'),
+    'the columns are gone — without them "table" is unspecified',
+  )
+})
+
+test('the convergence synthesis stays COMPLETE while becoming a table', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
+  const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
+  assert.ok(synth, 'no synthesis call')
+  assert.ok(synth.prompt.includes('ONE MARKDOWN TABLE'), 'synthesis is not a table')
+  // Compression must never become truncation: this comment is the merge-gate reader's whole
+  // view of the cycle, so a dropped finding is a finding nobody sees.
+  assert.ok(synth.prompt.includes('EVERY finding recorded across ALL runs'), 'completeness lost')
+  assert.ok(synth.prompt.includes('no silent truncation'), 'the anti-truncation clause is gone')
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// US-219 T1 — pins on the behaviour the generalization must not lose.
+//
+// These run BEFORE the refactor, deliberately. Every one of them passes today;
+// their job is to fail the moment a step of the generalization drops something
+// the current engine guarantees. A refactor that keeps the tests green but
+// loses the guarantee is exactly what a pin like this exists to prevent.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// AC5 — merge is the human gate, on EVERY path.
+// Not "the happy path does not merge": no execution path may, including the ones
+// reached by escalation and by a dead agent. Asserted over every dispatched prompt
+// and every returned status, so a new step cannot quietly acquire the authority.
+test('US-219 AC5: no dispatched prompt ever instructs a merge, on any path', async () => {
+  const paths = [
+    { name: 'convergence', reviews: [{ verdict: 'Approved', findings: [] }] },
+    {
+      name: 'fix then converge',
+      reviews: [
+        { verdict: 'Rework', findings: [{ location: 'a.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }] },
+        { verdict: 'Approved', findings: [] },
+      ],
+    },
+    {
+      name: 'escalation (never converges)',
+      reviews: Array.from({ length: 8 }, () => ({
+        verdict: 'Rework',
+        findings: [{ location: 'a.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }],
+      })),
+    },
+  ]
+
+  for (const path of paths) {
+    let i = 0
+    const { calls, result } = await runWorkflow({
+      args: { stories: [STORY] },
+      dispatch: (prompt, opts) => {
+        if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (opts.agentType === 'reviewer') return path.reviews[Math.min(i++, path.reviews.length - 1)]
+        if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+        if (opts.phase === 'PR') return { prNumber: 7 }
+        return { fixed: true }
+      },
+    })
+
+    for (const c of calls) {
+      // The engine says "Do NOT merge" in prose; what must never appear is an
+      // INSTRUCTION to merge. Match the imperative, not the word.
+      assert.ok(
+        !/\b(?:please\s+)?merge (?:the|this|it)\b(?![^.]*\bnot\b)/i.test(c.prompt.replace(/Do NOT merge\.?/gi, '')),
+        `${path.name}: ${c.opts.label} was told to merge`,
+      )
+    }
+    for (const row of result.batch ?? [])
+      assert.notStrictEqual(row.status, 'merged', `${path.name}: a card reported itself merged`)
+  }
+})
+
+// AC5 — the authoring steps carry the prohibition explicitly, not by omission.
+// A step that simply never mentions merging is one prompt edit away from doing it;
+// the ban has to be written where the agent reads it.
+test('US-219 AC5: every step that can push carries an explicit no-merge instruction', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  for (const phase of ['Implement', 'PR']) {
+    const c = calls.find(x => x.opts.phase === phase)
+    assert.ok(c, `no ${phase} call`)
+    assert.match(c.prompt, /do not merge/i, `${phase} lost its explicit no-merge instruction`)
+  }
+})
+
+// AC4 — one fresh subagent per card per step (ADR-017 §3). Context isolation is an
+// architectural invariant, so the pin is on the SHAPE of the dispatch: N distinct
+// agent() calls, never one context handed a second story to iterate over.
+test('US-219 AC4: each step is its own subagent call, and no call carries two stories', async () => {
+  const two = [STORY, { ...STORY, id: '293', branch: 'feature/US-293-other' }]
+  const { calls } = await runWorkflow({
+    args: { stories: two },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+
+  const work = calls.filter(c => c.opts.agentType !== 'contract-generator')
+  assert.ok(work.length >= 4, 'expected at least implement+PR per story')
+
+  for (const c of work) {
+    const mentioned = two.filter(s => c.prompt.includes(`#${s.id}`) || c.prompt.includes(s.branch))
+    assert.ok(
+      mentioned.length <= 1,
+      `${c.opts.label} names ${mentioned.length} stories — a shared context, not a fresh one`,
+    )
+  }
+
+  // Distinct labels per (story, step): a reused label would mean a reused agent.
+  const labels = work.map(c => c.opts.label)
+  assert.strictEqual(new Set(labels).size, labels.length, `duplicate labels: ${labels.join(', ')}`)
 })

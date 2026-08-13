@@ -99,10 +99,87 @@ function parseBatchArgs(raw) {
       )
     return { ...s, id }
   })
-  return stories
+  // Return the NORMALIZED container, not just the list. Reading a second option off the
+  // raw `args` was a real bug: the runtime can hand this script a JSON STRING, and
+  // `typeof args === 'object'` is false for it — so `args.severityFloor` came back
+  // undefined and the floor was silently ignored while the caller believed it was set.
+  // A batch ran with Minors still blocking and reported escalation as if the floor had
+  // been honoured. Every option must be read from the parsed object, once.
+  return { stories, severityFloor: a.severityFloor, model: a.model }
 }
-const STORIES = parseBatchArgs(args)
-const MAX_FIX_ROUNDS = 2
+const PARSED = parseBatchArgs(args)
+const STORIES = PARSED.stories
+
+// ── Severity floor: what BLOCKS convergence, versus what is carried to the human ──
+// Measured failure. Three PRs went through three autonomous fix rounds each and their
+// findings GREW: #425 4→5, #423 4→7 (with a new Critical), #420 4→3. Convergence requires
+// ZERO actionable findings, so a single Minor keeps the loop open — and on markdown skill
+// files the supply of Minors is effectively inexhaustible (duplicated rationale between a
+// skill and its ADL, a wording ambiguity, an assertion that cannot fail independently).
+// Each round also enlarges the diff, creating fresh surface for the next round to read.
+// The loop therefore cannot terminate by fixing, only by exhausting MAX_FIX_ROUNDS.
+//
+// `severityFloor` names the lowest severity that BLOCKS. Findings below it are NOT
+// discarded and NOT silently accepted: they are carried to the merge gate in
+// `acceptedFindings` with `disposition: 'Below severity floor'`, so the human sees every
+// one and decides. Absent → every actionable finding blocks (the previous behaviour), so
+// nothing changes for a caller that does not ask for a floor.
+const SEVERITY_RANK = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 }
+const rankOf = (s) => SEVERITY_RANK[String(s ?? '').trim().toLowerCase()] ?? 3 // unknown severity blocks: fail safe
+function parseFloor(raw) {
+  const v = String(raw ?? '').trim()
+  if (!v) return null
+  const r = SEVERITY_RANK[v.toLowerCase()]
+  if (!r)
+    throw new Error(
+      `implement-batch: unknown severityFloor ${JSON.stringify(v)}. Use one of: ` +
+        `${[...new Set(Object.keys(SEVERITY_RANK))].join(', ')} — or omit it so every actionable finding blocks.`,
+    )
+  return { name: v, rank: r }
+}
+const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
+
+// `args.model` overrides the model for every AUTHORING and REVIEW agent in the run —
+// implement, PR, fix, review. Absent, each agent keeps the tier its frontmatter declares
+// (implementer/reviewer -> opus). Validated against the known set so a typo cannot be
+// swallowed: an ignored override runs the whole batch on the wrong tier while the caller
+// believes otherwise, and the result is indistinguishable from an honoured one.
+const BATCH_MODEL = (() => {
+  const v = String(PARSED.model ?? '').trim()
+  if (!v) return undefined
+  const known = ['fable', 'haiku', 'sonnet', 'opus']
+  if (!known.includes(v))
+    throw new Error(`implement-batch: unknown model ${JSON.stringify(v)}; expected one of ${known.join(' | ')}.`)
+  return v
+})()
+// Applied to an opts object without disturbing a step's own deliberate override.
+const withModel = (opts) => (BATCH_MODEL ? { ...opts, model: BATCH_MODEL } : opts)
+// Rounds of autonomous fix<->re-review before escalating to a human. Raised from 2:
+// an escalation costs a human round-trip (read the flush, decide, re-run the batch),
+// which is strictly more expensive than one more opus fix round — and the observed
+// escalations were dominated by long tails of minor findings that a third round
+// clears. Beyond 3 the loop is usually not converging for a reason a fourth round
+// won't fix either (a design disagreement), and `needsHumanDecision` already exits
+// early for that case.
+const MAX_FIX_ROUNDS = 3
+
+// ── Step retry ─────────────────────────────────────────────────────────────
+// `agent()` returns null when the subagent dies on a terminal error or is killed
+// by the supervisor (180s without visible progress — a cold `pnpm install` or an
+// unscoped `pnpm quality-gate` in a fresh worktree qualifies). Without a retry a
+// single such death takes the whole story out of the run: driveStory returns
+// `failed-*` and the card ends the batch with no PR at all, even though the
+// worktree still holds every committed task. Each authoring step is re-entrant by
+// construction (persistent worktree + checkpoint + committed work), so a second
+// attempt RESUMES rather than restarts. One retry only: a step that dies twice is
+// a real failure, not a timeout, and further opus rounds only delay the rest of
+// the batch.
+async function agentRetry(prompt, opts) {
+  const first = await agent(prompt, opts)
+  if (first) return first
+  log(`${opts.label}: step returned nothing (agent died or returned an invalid shape) — retrying once`)
+  return agent(prompt, { ...opts, label: `${opts.label} retry` })
+}
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -279,6 +356,24 @@ const REVIEW_SCHEMA = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
 const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
 const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
+// ── Text shape (token cost) ────────────────────────────────────────────
+// Every artifact this loop produces is READ AGAIN: the PR body by each reviewer, each
+// fixer and the analysis agent; the log by the escalate-flush and the final synthesis.
+// Prose that restates the diff is paid on every one of those reads and carries nothing the
+// reader cannot get from the diff itself. What DOES earn its tokens is the part a reader
+// cannot reconstruct: the concrete failure case, and the evidence it is real. So the rule is
+// schematic-but-complete, never merely "shorter" — drop the narration, keep inputs -> wrong
+// output, keep the proof. Compressing evidence costs an extra review round (~250k tokens),
+// which dwarfs every word saved.
+const TEXT_SHAPE =
+  'TEXT SHAPE (mandatory): write schematically, not in prose. Tables and one-line bullets over paragraphs. ' +
+  'NEVER restate what the diff already shows (no file-by-file narration, no "I then changed X to Y"), ' +
+  'never re-explain context the reader already has, no preamble, no summary of the summary, no praise. ' +
+  'KEEP AT FULL LENGTH the two things a reader cannot reconstruct: the CONCRETE FAILURE CASE ' +
+  '(specific inputs/state -> the wrong output or the loss that follows) and the EVIDENCE it is real ' +
+  '(what you ran, what it printed). Cut narration, never evidence.'
+
+
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 
@@ -289,8 +384,20 @@ const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 // whole chain (implement/PR/fix share it) so the untracked checkpoint under
 // .pair/working/ survives context resets. The reviewer stays read-only (gh-based,
 // no branch switch) so it needs no worktree. Worktrees are cleaned up after merge.
+// `story.base` (optional, default `origin/main`) is the branch this story STACKS on.
+// It exists to dissolve a purely TEXTUAL mutex — two stories editing different lines
+// of the same file (`ci.yml`, root `package.json` scripts, a shared SKILL.md). Branching
+// the second story off the FIRST story's branch instead of main means the conflict is
+// resolved once, at authoring time, instead of becoming a merge conflict the human hits
+// at the gate. It does NOT let the two run concurrently: a stacked story must start from
+// a COMPLETE base, so the base story has to be PR-ready first. What it buys is that the
+// base does not have to be MERGED — the whole stack is merged in order, in one human
+// gate, instead of one gate per link in the chain.
+// Use it only for textual mutexes on small, low-risk bases: if review forces a change in
+// the base, every stacked child rebases.
 function wtClause(story) {
-  return `ISOLATION (mandatory): do ALL git/file work inside a dedicated worktree at \`../pair-worktrees/${story.id}\` — create-or-reuse it: \`git worktree add ../pair-worktrees/${story.id} -B ${story.branch} origin/main\` on first setup, or \`git worktree add ../pair-worktrees/${story.id} ${story.branch}\` if the branch already has commits; if the path already exists, just \`cd\` into it. NEVER modify the repo's main working tree and NEVER switch its branch.`
+  const base = String(story.base ?? '').trim() || 'origin/main'
+  return `ISOLATION (mandatory): do ALL git/file work inside a dedicated worktree at \`../pair-worktrees/${story.id}\` — create-or-reuse it: \`git worktree add ../pair-worktrees/${story.id} -B ${story.branch} ${base}\` on first setup, or \`git worktree add ../pair-worktrees/${story.id} ${story.branch}\` if the branch already has commits; if the path already exists, just \`cd\` into it. NEVER modify the repo's main working tree and NEVER switch its branch.${base === 'origin/main' ? '' : ` This story is STACKED on \`${base}\`: that branch is its base, so its commits are already in your history and must NOT be reverted, duplicated or re-implemented — only ADD your own work on top. When you open the PR, target \`${base}\` as the PR base branch, not \`main\`, so the diff shows only this story's change.`}`
 }
 
 // Reviewer isolation: read-only inspection in a DETACHED throwaway worktree pinned
@@ -334,15 +441,15 @@ async function driveStory(story) {
 
   if (!resuming) {
     // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
-    const impl = await agent(
-      `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following /pair-process-implement, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Run scoped quality gates. On completion write the story checkpoint via /pair-capability-checkpoint $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
-      { agentType: 'implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA },
+    const impl = await agentRetry(
+      `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following /pair-process-implement, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with /pair-capability-verify-quality (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with /pair-capability-record-decision rather than leaving it in a commit message. On completion write the story checkpoint via /pair-capability-checkpoint $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
+      withModel({ agentType: 'implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
     )
     if (!impl) return { story, status: 'failed-implement' }
 
     // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
-    pr = await agent(
-      `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (/pair-capability-checkpoint $mode=resume) — do not re-derive. Push the branch and open the PR for \`${story.branch}\` using the PR template. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. Return the PR number. Do NOT merge.`,
+    pr = await agentRetry(
+      `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (/pair-capability-checkpoint $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **/pair-capability-publish-pr**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
       { agentType: 'implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
     )
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
@@ -451,6 +558,9 @@ async function driveStory(story) {
     firstReviewPosted = probe?.firstReviewPosted === true
   }
   let round = 0
+  // Remembers a reviewer's human-decision request across the one fix round we now spend
+  // before honouring it, so the escalation is deferred by a round rather than dropped.
+  let humanDecisionPending = false
   let prevFindings = []
   let accepted = []
   // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
@@ -466,18 +576,62 @@ async function driveStory(story) {
     // in-flight log AND no first-review comment already on the PR. Either signal makes
     // round-0 a SILENT re-review, so a PR never accrues a second first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
-    const review = await agent(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
+    const review = await agentRetry(
+      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff origin/main...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke /pair-capability-write-issue, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
             ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`
             : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`} Return findings and a verdict.`,
-      { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'xhigh', schema: REVIEW_SCHEMA },
+      // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a
+      // stuck command: transcript timing showed the reviewer issuing a tool call every ~5s
+      // (97 events, mean gap 4.9s, max 49s — zero gaps over 180s) yet still killed, because
+      // the supervisor's window measures TEXT MESSAGES, not tool calls, and the agent had gone
+      // 200s without writing a sentence while reading files. The real fix is the PACING clause
+      // in the prompt (speak after every file). 'high' is kept only as margin — a lower effort
+      // shortens the silent stretches between utterances — so if a future change makes the
+      // narration reliable, restoring 'xhigh' is legitimate: it costs review depth, which is
+      // the whole point of this gate. Do not read this line as "xhigh causes stalls".
+      withModel({ agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
     )
-    const findings = review?.findings ?? []
-    const actionable = findings.filter((f) => !f.nonActionable)
-    accepted = findings.filter((f) => f.nonActionable)
+    // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent
+    // dies, and `review?.findings ?? []` then yields zero findings — which the
+    // convergence test below reads as "nothing actionable remains" and returns
+    // `ready-for-merge`. That is the worst possible failure direction: a PR that was
+    // never actually reviewed is handed to the human labelled as review-approved, and
+    // on a FIRST round it is also missing the first-review comment that would make the
+    // absence visible. Distinguish "reviewed, found nothing" from "did not review":
+    // only the former may converge.
+    if (!review)
+      return { story, prNumber: pr.prNumber, status: 'failed-review', round, reviewLog: cycleHasRemediation ? reviewLog : undefined }
+    const findings = review.findings ?? []
+    const allActionable = findings.filter((f) => !f.nonActionable)
+    // Below the floor: still reported, still shown to the human, just not blocking. Marked
+    // with a disposition so the merge gate can tell "we chose not to block on this" from
+    // "the reviewer judged it by-design", which are different statements.
+    const belowFloor = SEVERITY_FLOOR ? allActionable.filter((f) => rankOf(f.severity) < SEVERITY_FLOOR.rank) : []
+    const actionable = SEVERITY_FLOOR ? allActionable.filter((f) => rankOf(f.severity) >= SEVERITY_FLOOR.rank) : allActionable
+    accepted = [
+      ...findings.filter((f) => f.nonActionable),
+      ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
+    ]
+    if (belowFloor.length)
+      log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
     // Converge once nothing actionable remains (by-design findings don't block).
     if (actionable.length === 0) break
-    if (round >= MAX_FIX_ROUNDS || review?.needsHumanDecision) {
+    // `needsHumanDecision` used to escalate IMMEDIATELY, skipping the fixer entirely — even
+    // when the findings were ordinary and already decided. Measured cost: four consecutive
+    // rounds on one story and two on another produced review after review and ZERO commits,
+    // because the reviewer raised the flag and the loop went straight to the flush. The
+    // orchestrator was writing detailed fix instructions for an agent that was never invoked.
+    //
+    // A reviewer raising it is saying "one of these needs a human", not "none of these can be
+    // fixed". So spend ONE fix round on the findings first, then escalate if the reviewer
+    // still says so. `humanDecisionPending` remembers the request across that round, so the
+    // escalation still happens — it is deferred by one round, not dropped. On the second
+    // occurrence we stop: a flag raised again after a fix round is a genuine disagreement.
+    const wantsHuman = review?.needsHumanDecision === true
+    if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
+      humanDecisionPending = true
+      log(`${tag} r${round}: reviewer asked for a human decision — spending one fix round on the ${actionable.length} finding(s) first, then escalating if it still stands`)
+    } else if (round >= MAX_FIX_ROUNDS || wantsHuman) {
       // #373 finding 1: emit a PR-visible escalation UNLESS this run's round-0 ALREADY posted
       // the first review (`first === true`) carrying these same findings. The gap this closes:
       // a SILENT re-review that escalates with no log — a resumed PR whose prior first review
@@ -503,9 +657,9 @@ async function driveStory(story) {
     cycleHasRemediation = true
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
-    const fix = await agent(
-      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (/pair-capability-checkpoint $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Commit and push. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent): list each finding and exactly what changed to resolve it, with commit refs. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
-      { agentType: 'implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA },
+    const fix = await agentRetry(
+      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (/pair-capability-checkpoint $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke /pair-capability-write-issue, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. Follow /pair-process-implement for the change itself (test-first where a finding describes a defect), verify with /pair-capability-verify-quality (tier-resolved — do not improvise a gate command), and record any decision a finding forces with /pair-capability-record-decision. Commit and push. Then re-invoke **/pair-capability-publish-pr**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
+      withModel({ agentType: 'implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
     // its path in the return so the human / next resume can find (and clean) it.
@@ -530,7 +684,7 @@ async function driveStory(story) {
   // clean (fresh cycle, no remediation), the first-review comment stands alone — nothing to do.
   if (cycleHasRemediation)
     await agent(
-      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: map EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) to how it was resolved (with commit refs), list any accepted/non-actionable findings with their dispositions (${JSON.stringify(accepted)}), and state the final verdict (review clean). THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments, any manual out-of-band rework/re-review comments, AND any earlier final-remediation/synthesis comment left by a prior convergence of this same cycle (a converged-but-unmerged PR that was re-run, found new findings and re-converged — do NOT minimize the first review comment) — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
+      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: render EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) as ONE MARKDOWN TABLE — columns \`round | severity | location | resolution | commit\` — one row per finding, one line per row. Then a second short table for the accepted/non-actionable findings and their dispositions (${JSON.stringify(accepted)}), and the final verdict (review clean) as a single line. ${TEXT_SHAPE} This comment is the merge-gate reader's entire view of the cycle, so it must stay COMPLETE — no finding dropped, no silent truncation; if one does not fit a row, give it a single line beneath the table. THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments, any manual out-of-band rework/re-review comments, AND any earlier final-remediation/synthesis comment left by a prior convergence of this same cycle (a converged-but-unmerged PR that was re-run, found new findings and re-converged — do NOT minimize the first review comment) — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
       { agentType: 'implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
     )
 
@@ -540,10 +694,26 @@ async function driveStory(story) {
 
 // ── Fan-out over the mutex-safe batch ────────────────────────────────────
 const results = await parallel(STORIES.map((s) => () => driveStory(s)))
+const batch = results.filter(Boolean)
+// The note must describe what ACTUALLY happened. The previous version stated
+// "PRs are ready-for-merge or escalated" unconditionally — so a run whose stories
+// ALL died (every agent stalled out, `parallel` returning six nulls) reported an
+// empty batch under a success-shaped sentence, indistinguishable from a completed
+// one. That is the same failure class #401 fixed for empty INPUT, reached instead
+// through total execution failure: a batch that drove nothing must say so.
+const died = STORIES.length - batch.length
+const note = !STORIES.length
+  ? 'Empty batch — nothing was requested, nothing was run.'
+  : !batch.length
+    ? `NOTHING COMPLETED: all ${STORIES.length} stories failed before returning a result (agents stalled or errored). No PR advanced in this run. Committed work in the per-story worktrees is intact — re-run to resume; check the machine's load first, since a stall means agents could not show progress within the supervisor's window.`
+    : `${batch.length}/${STORIES.length} stories returned a result${died ? ` — ${died} failed outright and advanced nothing` : ''}. PRs are ready-for-merge or escalated; check each status. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.`
 return {
   // Contract provenance per template — `fallback-loose` is the logged signal
   // that a contract could not be derived and the loose skeleton was used (AC4).
   contracts: contracts.map(({ name, status }) => ({ name, status })),
-  batch: results.filter(Boolean),
-  note: 'PRs are ready-for-merge or escalated. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.',
+  batch,
+  // Stories that never returned anything, named so a failed run is actionable
+  // rather than merely empty.
+  died: STORIES.filter((s) => !batch.some((b) => b.story?.id === s.id)).map((s) => s.id),
+  note,
 }
