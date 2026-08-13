@@ -11,6 +11,7 @@ import type { KbValidateCommandConfig } from './kb-validate/parser'
 import type { KbVerifyCommandConfig } from './kb-verify/parser'
 import type { KbInfoCommandConfig } from './kb-info/parser'
 import type { ScaffoldKbCommandConfig } from './scaffold-kb/parser'
+import type { KbCacheCommandConfig } from './kb-cache/parser'
 
 export type {
   InstallCommandConfig,
@@ -20,6 +21,7 @@ export type {
   ValidateConfigCommandConfig,
   KbValidateCommandConfig,
   KbVerifyCommandConfig,
+  KbCacheCommandConfig,
   KbInfoCommandConfig,
   ScaffoldKbCommandConfig,
 }
@@ -52,6 +54,9 @@ import { kbInfoCommandMetadata } from './kb-info/metadata'
 import { parseScaffoldKbCommand } from './scaffold-kb/parser'
 import { handleScaffoldKbCommand } from './scaffold-kb/handler'
 import { scaffoldKbMetadata } from './scaffold-kb/metadata'
+import { parseKbCacheCommand } from './kb-cache/parser'
+import { handleKbCacheCommand } from './kb-cache/handler'
+import { kbCacheCommandMetadata } from './kb-cache/metadata'
 
 export {
   handleInstallCommand,
@@ -87,11 +92,17 @@ export type CommandConfig =
   | KbInfoCommandConfig
   | ValidateConfigCommandConfig
   | ScaffoldKbCommandConfig
+  | KbCacheCommandConfig
 
 /**
  * Command registry mapping command names to their parse/handle/metadata functions.
  */
 export const commandRegistry = {
+  'kb-cache': {
+    parse: parseKbCacheCommand,
+    handle: handleKbCacheCommand,
+    metadata: kbCacheCommandMetadata,
+  },
   install: {
     parse: parseInstallCommand,
     handle: handleInstallCommand,

@@ -243,8 +243,7 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
  * Apply the program-level `--log-level` (or its legacy `--verbose` alias).
  *
  * It runs BEFORE any pre-flight guard, deliberately: it is a program-level flag, so it must
- * take effect for every command — including the KB-producing ones the pre-flight skips, and
- * including every command at all while `runKbPreflight` stays unreachable. It used to live
+ * take effect for every command — including the ones the pre-flight allow-list skips. It used to live
  * BELOW those guards, so `pair <cmd> --log-level debug` silently did nothing and the only
  * level ever applied was the module-level default (US-395 review round 14). A command-level
  * `--log-level` (`package`, `update-link`) is applied later in that handler and still wins.

@@ -21,7 +21,14 @@ describe('requiresKbBootstrap', () => {
   // Inverted to an ALLOW-list for that reason: a command added tomorrow must opt IN to the
   // network, rather than inherit it by not being remembered here.
   it('does NOT bootstrap for commands that only read local state', () => {
-    for (const cmd of ['kb-info', 'kb-validate', 'kb-verify', 'validate-config', 'update-link'])
+    for (const cmd of [
+      'kb-info',
+      'kb-validate',
+      'kb-verify',
+      'validate-config',
+      'update-link',
+      'kb-cache',
+    ])
       expect(requiresKbBootstrap(cmd), `${cmd} must not trigger a KB download`).toBe(false)
   })
 

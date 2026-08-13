@@ -15,6 +15,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [package](#package) — Package KB content into ZIP
 - [scaffold-kb](#scaffold-kb) — Scaffold an external KB repository
 - [kb-info](#kb-info) — Display package metadata, or check installed vs current KB version
+- [kb-cache](#kb-cache) — Inspect and reclaim the shared KB cache
 - [kb-verify](#kb-verify) — Verify KB package integrity
 - [kb validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
@@ -308,6 +309,70 @@ pair kb-info --source /path/to/kb
 ```
 
 ---
+
+## kb-cache
+
+Inspect and reclaim the shared KB cache — the machine-wide directory where `install` and
+`update` keep downloaded knowledge bases so repeated runs do not re-fetch them.
+
+### Usage
+
+```bash
+pair kb-cache [list|prune] [options]
+```
+
+### Arguments
+
+| Argument  | Description                                                            |
+| --------- | ---------------------------------------------------------------------- |
+| `list`    | Show every cache slot with its kind, size and label (default action)   |
+| `prune`   | Remove the slots that are safe to remove                               |
+
+### Options
+
+| Option                | Description                                                    |
+| --------------------- | --------------------------------------------------------------- |
+| `--dry-run`           | `prune` only: report what would be removed and delete nothing  |
+| `--json`              | Output the inventory or the prune result as JSON               |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error)               |
+
+### What prune removes — and what it never removes
+
+`prune` removes only slots that a later `install`/`update` can recreate:
+
+- **backup** — a `.bak` slot left behind by an interrupted install
+- **stage** — an abandoned `.tmp-*` staging directory
+- **legacy-git** — a pre-`external/` git clone at the cache root
+- **official** — KB slots for CLI versions other than the one running
+
+It never removes:
+
+- **external KBs** (`external/`) — fetched from a URL the CLI does not retain, so deleting one
+  is not undoable by re-running an install
+- **every official slot when the running version cannot be resolved** — rather than compare
+  against an empty version and delete the KB currently in use
+
+A cache root that exists but cannot be read is reported as an error, not as an empty cache, and
+a prune that fails to remove part of what it identified exits non-zero instead of reporting a
+clean sweep.
+
+This command reads the cache only — it never downloads a KB.
+
+### Examples
+
+```bash
+# Show what the cache holds
+pair kb-cache
+
+# See what prune would reclaim, without deleting
+pair kb-cache prune --dry-run
+
+# Reclaim the stale slots
+pair kb-cache prune
+
+# Machine-readable inventory
+pair kb-cache list --json
+```
 
 ## kb-verify
 

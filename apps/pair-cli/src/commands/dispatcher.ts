@@ -64,6 +64,12 @@ function dispatchKbCommand(
       return dispatchWithExitCode(() => commandRegistry['kb-verify'].handle(config, fs))
     case 'kb-info':
       return dispatchWithExitCode(() => commandRegistry['kb-info'].handle(config, fs, opts))
+    case 'kb-cache':
+      // `version` decides which official slot prune SPARES, so a missing one must not
+      // silently make every official slot prunable — including the running CLI's own.
+      return dispatchWithExitCode(() =>
+        commandRegistry['kb-cache'].handle(config, fs, { version: opts.cliVersion ?? '' }),
+      )
   }
 }
 
