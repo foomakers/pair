@@ -1,11 +1,11 @@
 ---
 title: "v0.4 → v0.5: Canonical States + Domain Modeling"
-description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, the map-subdomains/map-contexts process-to-capability rename, and the classification / risk-matrix capability.
+description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, the map-subdomains/map-contexts process-to-capability rename, the classification / risk-matrix capability, and mirror cleanup on `pair update`.
 ---
 
-This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain-modeling capability rename, and the classification / risk-matrix capability.
+This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain-modeling capability rename, the classification / risk-matrix capability, and the one change in this jump that **deletes files**: mirror cleanup on `pair update`.
 
-Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243) · [Classification & risk matrix (#233)](https://github.com/foomakers/pair/issues/233)
+Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243) · [Classification & risk matrix (#233)](https://github.com/foomakers/pair/issues/233) · [Mirror cleanup on the CLI path (#393)](https://github.com/foomakers/pair/issues/393)
 
 ## Changed
 
@@ -58,9 +58,39 @@ To turn the matrix into **chromatic tags** on your cards and PRs (`risk:green|ye
 
 Full model — dimensions, tiers, tag projection, and the `tech/risk-matrix.md` schema — in [Quality Model](/docs/reference/quality-model).
 
+### `pair update` now deletes what the Knowledge Base no longer ships
+
+**This is the only change in this jump that removes files. Read it before your next update.**
+
+Until v0.4, `pair update` only ever *wrote*: it copied the Knowledge Base over your project and left everything else where it was. A file the KB had retired upstream stayed installed forever. pair's own repository carried two how-to guides for ~5 months after they were dropped from the dataset — still listed in `.pair/llms.txt`, so agents kept being pointed at guidance the KB no longer shipped.
+
+From v0.5, the registries declared as **mirrors** clean up after themselves, at every depth of the tree:
+
+| Tree | Registry | What update does now |
+| --- | --- | --- |
+| `.pair/knowledge/**` | `knowledge` (mirror) | copies the KB, then removes any installed file the dataset does not contain |
+| `.github/agents/**` | `github` (mirror) | same, for that subdirectory only |
+
+Every removal is announced on stderr — a deletion you cannot see in the output is indistinguishable from data loss:
+
+```text
+⚠️ Mirror: removed .pair/knowledge/how-to/04-how-to-define-subdomains.md (not in the source; customize via .pair/adoption/)
+```
+
+**Nothing outside those two trees is touched.** `.pair/adoption/` is an `add` registry — your decisions there are never overwritten and never deleted. The rest of `.github/` (your workflows, your issue templates), `.pair/working/`, and your application code are outside every mirror and are not candidates for removal.
+
+#### If you have hand-edited files under `.pair/knowledge/`
+
+Two cases, and only the second one is new:
+
+- **You edited a file that still exists upstream** — unchanged from v0.4: the copy overwrites it and your edit is lost.
+- **You *added* a file there, or edited one that has since been retired upstream** — it is now **deleted**, where in v0.4 it survived indefinitely. This is the case to handle before you update.
+
+`.pair/knowledge/` in a consuming project is installed output, not source: it belongs to the registry, and every update reasserts that. Project-specific standards belong in `.pair/adoption/` ([Customize for Your Team](/docs/customization/team), [Customize Templates](/docs/customization/templates)); organization-wide standards belong in the central KB repository you package from ([Quickstart: Organization](/docs/getting-started/quickstart-org)), where `.pair/knowledge/` *is* authored source. Step 4 of the prompt below snapshots the mirror trees into `.pair/working/` before you update, so nothing is lost while you re-home it.
+
 ## Prompt
 
-Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches files under `.pair/adoption/` — never `.pair/knowledge/`, skill files, or application code. Safe to re-run.
+Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches files under `.pair/adoption/` and `.pair/working/` — never `.pair/knowledge/`, skill files, or application code. Safe to re-run.
 
 ```text
 You are migrating this project's `.pair/` structure to pair's canonical-states
@@ -99,9 +129,35 @@ only if not already done, and report what you skipped.
    until then the matrix is written without tags. Skip if
    `tech/risk-matrix.md` already exists.
 
-4. Summarize what you created or changed versus what was already in place, and
+4. (Mirror cleanup) From v0.5, `pair update` DELETES files under
+   `.pair/knowledge/` and `.github/agents/` that the Knowledge Base no longer
+   ships — including files this project added there itself. Do the snapshot
+   BEFORE the next update runs.
+   a. If `.pair/working/pre-v0.5-mirror-snapshot/REPORT.md` already exists, this
+      step is complete — skip it entirely and report it as skipped.
+   b. If `.pair/working/pre-v0.5-mirror-snapshot/` does not exist, create it and
+      COPY into it (copy, never move) whichever of `.pair/knowledge/` and
+      `.github/agents/` exist, preserving relative paths. If the directory
+      already exists, leave its contents exactly as they are — it is the
+      pre-update state, and re-copying after an update would overwrite the only
+      evidence of what was removed.
+   c. Ask the operator to run their usual pair update (`pair update` /
+      `pair-cli update`) and to tell you when it has finished. Do not install or
+      invoke pair yourself if it is not already available, and do not delete
+      anything under `.pair/knowledge/` or `.github/agents/` on your own.
+   d. Once the update has run, list every file that exists in the snapshot and
+      no longer exists in the live tree — those are the removals. For each,
+      classify it with the operator: retired upstream (nothing to do), or
+      authored by this project (re-home its content under `.pair/adoption/` for
+      a project-specific standard, or into the organization's central KB
+      repository for an org-wide one).
+   e. Write `.pair/working/pre-v0.5-mirror-snapshot/REPORT.md`: one line per
+      removed file — path, verdict, and where it was re-homed. This file is the
+      marker that makes step 4 idempotent, so write it only when (d) is done.
+
+5. Summarize what you created or changed versus what was already in place, and
    confirm with `git status` (or equivalent) that only files under
-   `.pair/adoption/` were touched.
+   `.pair/adoption/` and `.pair/working/` were touched.
 ```
 
 ## Verify
@@ -110,7 +166,10 @@ only if not already done, and report what you skipped.
 - [ ] If your board has a legacy `Refined` column, you either mapped it to `Ready` (kept the name) or renamed the column to `Ready` (and left it out of the mapping) — not both, not neither
 - [ ] Your own `.pair/adoption/` docs have no remaining literal references to `/pair-process-map-subdomains`, `/pair-process-map-contexts`, or `.skills/process/map-*` — updated to the `-capability-`/`capability/` equivalents if any were found
 - [ ] Classification needs no action to work (it runs on KB defaults); if you want risk tags, `.pair/adoption/tech/risk-matrix.md` has a `## Tag Projection` section — or you've chosen to let `/classify` propose it on its first run
-- [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/`
+- [ ] `.pair/working/pre-v0.5-mirror-snapshot/` holds the **pre-update** copy of `.pair/knowledge/` (and `.github/agents/`, if you have it), and its `REPORT.md` accounts for every file the update removed
+- [ ] Each ⚠️ `Mirror: removed …` line in the update output matches a line in `REPORT.md` — one that doesn't means something you own was living inside a mirror tree
+- [ ] Nothing this project authored is left under `.pair/knowledge/` — project standards live in `.pair/adoption/`, organization standards in your central KB repository
+- [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/` and `.pair/working/`
 - [ ] Re-running the prompt makes no further changes — a second run reports each step as skipped
 
 If you're several versions behind, run the earlier pages in the [Migrations index](/docs/migrations) first, then this one.
