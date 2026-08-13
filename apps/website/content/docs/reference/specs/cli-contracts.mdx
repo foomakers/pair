@@ -33,7 +33,7 @@ export interface CommandOptions {
 }
 
 export interface CliOptions {
-  url?: string // --source <url|path>
+  url?: string // --url <url|path>
   kb: boolean // --no-kb flag (true=download, false=offline)
 }
 ```
@@ -43,6 +43,11 @@ export interface CliOptions {
 `validateCliOptions`. Both were dead through 0.4.3 — the pre-flight was unreachable, so
 `pair install --no-kb` installed a KB anyway and the conflict never fired. See the
 [`--no-kb` note in the CLI reference](/docs/reference/cli/commands).
+
+The conflict is checked in the CLI hook (`runKbPreflight`), **above** the pre-flight's own
+skip, and `bootstrapEnvironment` takes no `url`: a named source — `--source`, `--git`, `--url`,
+local or remote — skips the pre-flight entirely, because the command fetches that source itself
+into its own cache slot. A pre-flight that also warmed it downloaded the same archive twice.
 
 ### Install Command
 

@@ -17,6 +17,7 @@ import {
 } from '@pair/content-ops'
 import { bootstrapEnvironment } from './config'
 import { namedSource } from './config/cli'
+import { validateCliOptions } from '#kb-manager'
 import { runDiagnostics, isDiagEnabled, MIN_LOG_LEVEL } from './diagnostics'
 
 // Helper type-guard to keep positional args typed as string[]
@@ -283,6 +284,15 @@ function applyGlobalLogLevel(prog: Command): void {
  * Its own function because the answer depends on the ACTION command's options while the hook
  * reads the PROGRAM's: keeping the three cases named and together is what stops a fourth flag
  * from being added to `install` and silently inheriting a KB download it has no use for.
+ *
+ * It must be fed the MERGED option set — the same value the parsers see through
+ * `namedSource` — not the action command's alone. `--url` is declared on the PROGRAM, so
+ * `actionCommand.opts()` never carries it (commander@11: for both `pair install --url X` and
+ * `pair --url X install`, `url` lands on the program's opts and the subcommand's are `{}`), and
+ * with the command's set alone this predicate could not see a named remote source: the
+ * pre-flight warmed `external/url-…` and the command re-fetched the same archive into the same
+ * slot — 2 full downloads per remote `install|update --url` in a released layout. Same
+ * predicate as the resolver and the parsers is not enough; it has to be the same INPUT too.
  */
 function preflightSkipReason(cmd: {
   source?: string
@@ -306,6 +316,33 @@ function preflightSkipReason(cmd: {
   return named !== undefined ? 'named-source' : undefined
 }
 
+/**
+ * The one option set the pre-flight decides on: the ACTION command's flags with the program's
+ * merged over them, `--source`/`--url` precedence applied exactly as `namedSource` applies it.
+ *
+ * Both sets are needed and neither alone is enough. `thisCommand` is the PROGRAM for a
+ * program-level `preAction` hook, so it carries only the program's flags (`--url`, `--no-kb`);
+ * every flag that names the command's own source — `--source`, `--offline`, `--list-targets` —
+ * is declared on the SUBCOMMAND and is invisible there. Reading only the program's set made the
+ * revived pre-flight fetch the official KB for `install --source … --offline` (round 19);
+ * reading only the command's made it fetch a remote `--url` the command then fetched again
+ * (round 21). Merging here is what leaves ONE value for every reader below.
+ */
+function preflightOptions(
+  prog: Command,
+  actionCommand: Command,
+): { source?: string; url?: string; offline?: boolean; listTargets?: boolean; kb: boolean } {
+  const progOptions = prog.opts<{ url?: string; kb: boolean }>()
+  const cmdOptions = actionCommand.opts<{
+    source?: string
+    url?: string
+    offline?: boolean
+    listTargets?: boolean
+  }>()
+  const url = cmdOptions.url ?? progOptions.url
+  return { ...cmdOptions, ...(url !== undefined && { url }), kb: progOptions.kb }
+}
+
 async function runKbPreflight(args: {
   prog: Command
   thisCommand: Command
@@ -327,32 +364,29 @@ async function runKbPreflight(args: {
   // Only KB-consuming commands resolve a KB (allow-list — see bootstrap-policy).
   if (!requiresKbBootstrap(actionCommand.name())) return
 
-  // Read BOTH option sets. `thisCommand` is the PROGRAM for a program-level `preAction` hook,
-  // so it carries only the program's flags (`--url`, `--no-kb`); every flag that names the
-  // command's own source — `--source`, `--offline`, `--list-targets` — is declared on the
-  // SUBCOMMAND and is invisible there. Reading only the program's set is what made the revived
-  // pre-flight fetch the official KB for `install --source … --offline`, i.e. break the one
-  // flag whose entire purpose is to touch no network.
-  const progOptions = thisCommand.opts<{ url?: string; kb: boolean }>()
-  const cmdOptions = actionCommand.opts<{
-    source?: string
-    url?: string
-    offline?: boolean
-    listTargets?: boolean
-  }>()
+  const options = preflightOptions(thisCommand, actionCommand)
 
-  const skip = preflightSkipReason(cmdOptions)
+  // ABOVE the skip, deliberately, and the ONLY place this rule is enforced now. `--url` +
+  // `--no-kb` is incoherent whatever the pre-flight decides next, and its rejection used to fire
+  // only as a SIDE EFFECT of the pre-flight running on into `bootstrapEnvironment` — so making
+  // `--url` a skip reason (as it must be: a named source is fetched by the command) would
+  // silently delete an error `--help`, the CLI reference, the contracts spec and the ADL all
+  // document.
+  validateCliOptions({ ...(options.url && { url: options.url }), kb: options.kb })
+
+  const skip = preflightSkipReason(options)
   if (skip !== undefined) {
     if (isDiagEnabled()) console.error(`[pair:diag] Skipping KB pre-flight (${skip})`)
     return
   }
 
+  // No source to pass on: reaching here means none was named, so the only KB to warm is the
+  // official one (see `bootstrapEnvironment`).
   await bootstrapEnvironment({
     fsService: ctx.fsService,
     httpClient: ctx.httpClient,
     version: ctx.version,
-    url: cmdOptions.url ?? progOptions.url,
-    kb: progOptions.kb,
+    kb: options.kb,
   })
 }
 

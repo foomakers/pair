@@ -1,6 +1,5 @@
-import { FileSystemService, HttpClientService, isRemoteUrl, validateUrl } from '@pair/content-ops'
+import { FileSystemService, HttpClientService } from '@pair/content-ops'
 import { getKnowledgeHubDatasetPath, getKnowledgeHubDatasetPathWithFallback } from './kb-resolver'
-import { validateCliOptions } from '#kb-manager'
 import { isDiagEnabled } from '#diagnostics'
 import { DatasetAccessError, DatasetNotFoundError, KnowledgeHubSetupError } from './errors'
 
@@ -22,11 +21,18 @@ function diag(message: string): void {
  * always true (a program-level hook is invoked as `callback(hookedCommand, actionCommand)`),
  * so nothing here ever executed on a real `pair <command>`. Reviving it means:
  * - `--no-kb` skips the pre-flight fetch again, so it is no longer a no-op;
- * - `--url` together with `--no-kb` is REJECTED (`validateCliOptions`), where the dead
- *   pre-flight silently accepted it;
+ * - `--url` together with `--no-kb` is REJECTED, where the dead pre-flight silently accepted
+ *   it — at the hook now (`runKbPreflight`), because a NAMED source makes the pre-flight skip
+ *   and a validation below the skip would never run;
  * - only `install` and `update` reach this at all — the exemption list was inverted to an
  *   allow-list (`commands/bootstrap-policy.ts`) so waking the hook up does not make every
  *   read-only command reach for the network.
+ *
+ * It warms the OFFICIAL KB and nothing else. It takes no `url`: any named source — `--source`,
+ * `--git`, `--url`, local or remote — makes the hook skip this entirely, because the command
+ * fetches that source itself into its own identity-keyed slot. Passing a `url` down here is
+ * what made a remote `--url` download the whole archive TWICE (round 21): warmed here, then
+ * re-fetched by `ensureKBAvailable`, which never inspects an external slot.
  *
  * The blast radius is every `install`/`update` invocation, so the two steps below must
  * agree on ONE path: step 3 checks what step 2 resolved, never a path of its own. Probing
@@ -42,20 +48,16 @@ export async function bootstrapEnvironment(options: {
   fsService: FileSystemService
   httpClient: HttpClientService
   version: string
-  url: string | undefined
   kb: boolean
 }): Promise<void> {
-  const { fsService, httpClient, version, url, kb } = options
+  const { fsService, httpClient, version, kb } = options
 
-  // 1. Validate CLI input options formally
-  validateCliOptions({ ...(url && { url }), kb })
-
-  // 2. Ensure a KB is available — bundled, already cached, or downloaded — and keep WHICH
+  // 1. Ensure a KB is available — bundled, already cached, or downloaded — and keep WHICH
   //    path answered. `undefined` means "nothing to check": the fetch was skipped on
-  //    purpose (--no-kb, or a local --url the command resolves itself).
-  const datasetPath = await resolveDatasetForPreflight({ fsService, httpClient, version, url, kb })
+  //    purpose (--no-kb).
+  const datasetPath = await resolveDatasetForPreflight({ fsService, httpClient, version, kb })
 
-  // 3. Final accessibility check, on the path step 2 actually resolved.
+  // 2. Final accessibility check, on the path step 1 actually resolved.
   if (datasetPath !== undefined) {
     checkDatasetAccessible(fsService, datasetPath)
   }
@@ -65,30 +67,27 @@ export async function bootstrapEnvironment(options: {
  * Resolve the dataset the pre-flight is responsible for, and return the path it landed on.
  *
  * Returning the path (rather than a "did we skip" boolean) is the whole point: the previous
- * shape decided with `shouldSkipKBDownload` and then re-derived a path in step 3 from
- * `getKnowledgeHubDatasetPath`, i.e. the BUNDLED dataset. The two disagree in exactly the
- * case that matters — a released install, where the download populates `~/.pair/kb/<version>/`
- * and no bundled dataset exists at all — so step 3 threw on a fetch that had just succeeded.
+ * shape decided with `shouldSkipKBDownload` and then re-derived a path in the accessibility
+ * step from `getKnowledgeHubDatasetPath`, i.e. the BUNDLED dataset. The two disagree in exactly
+ * the case that matters — a released install, where the download populates
+ * `~/.pair/kb/<version>/` and no bundled dataset exists at all — so the check threw on a fetch
+ * that had just succeeded.
  *
- * Order is load-bearing and unchanged: `--no-kb` first, then a local `--url` (a path the
- * command reads directly), then the bundled/monorepo dataset, then the network.
+ * Order is load-bearing: `--no-kb` first, then the bundled/monorepo dataset, then the network.
+ * The `--url` branches that used to sit between them are gone with the parameter (see
+ * `bootstrapEnvironment`): the hook skips this function outright for a named source, so a
+ * custom URL could only be re-fetched here, never served.
  */
 async function resolveDatasetForPreflight(options: {
   fsService: FileSystemService
   httpClient: HttpClientService
   version: string
-  url: string | undefined
   kb: boolean
 }): Promise<string | undefined> {
-  const { fsService, httpClient, version, url, kb } = options
+  const { fsService, httpClient, version, kb } = options
 
   if (kb === false) {
     diag('Skipping KB download (--no-kb flag set)')
-    return undefined
-  }
-
-  if (url && !isRemoteUrl(url)) {
-    diag(`Using local path: ${url}`)
     return undefined
   }
 
@@ -99,14 +98,12 @@ async function resolveDatasetForPreflight(options: {
   }
 
   diag('Local dataset not available, using KB manager')
-  if (url) validateAndLogCustomUrl(url)
 
   try {
     return await getKnowledgeHubDatasetPathWithFallback({
       fsService,
       version,
       httpClient,
-      ...(url !== undefined && { customUrl: url }),
     })
   } catch (err) {
     throw new KnowledgeHubSetupError(err instanceof Error ? err.message : String(err), err)
@@ -130,17 +127,6 @@ function bundledDatasetPath(fsService: FileSystemService): string | undefined {
   } catch {
     return undefined
   }
-}
-
-/**
- * Validate custom URL format and log for diagnostics
- *
- * @param customUrl - URL to validate
- * @throws Error if URL format is invalid
- */
-function validateAndLogCustomUrl(customUrl: string): void {
-  validateUrl(customUrl)
-  diag(`Using custom URL: ${customUrl}`)
 }
 
 /**

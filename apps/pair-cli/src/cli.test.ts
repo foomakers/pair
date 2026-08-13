@@ -391,8 +391,12 @@ describe('US-395: the program-level --url reaches the command', () => {
 
     await runCli(['node', 'pair', 'update', '--url', url, '.'], { fs, httpClient })
 
-    // Exactly one fetch of the mirror (plus its checksum): the pre-flight hook does not
-    // run at all — see the ADL consequence "the KB pre-flight never runs".
+    // Exactly one fetch of the mirror (plus its checksum) — by the COMMAND. The comment here
+    // used to say the pre-flight "does not run at all", which stopped being true when round 17
+    // revived it; what carries this assertion is that `--url` names a source, so the pre-flight
+    // skips (and, before that skip existed, this fixture's bundled monorepo dataset
+    // short-circuited it — which is why the released-shape twin of this test lives below and is
+    // the one that can actually detect a double download).
     expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
     expect(await fs.readFile(`${root}/.pair/knowledge/README.md`)).toBe('# Content from the mirror')
   })
@@ -529,7 +533,7 @@ describe('Commander preAction argument convention (the assumption the KB pre-fli
 // through to the network. Every existing fixture seeds a monorepo dataset and the smoke suite
 // runs `dist` from inside the monorepo, so the bundled branch short-circuits in both — which is
 // why a suite of 1144 tests never saw this.
-describe('US-395 round 19: the KB pre-flight never fetches a KB the command will not use', () => {
+describe('US-395 rounds 19+21: the KB pre-flight never fetches a KB the command will not use', () => {
   const root = '/released'
 
   afterEach(() => {
@@ -652,6 +656,109 @@ describe('US-395 round 19: the KB pre-flight never fetches a KB the command will
     // The help text, commands.mdx and the ADL all promise this now. The pre-flight honours the
     // flag, but the command path resolves its dataset independently — so the promise held only
     // as far as the first of the two readers.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  /**
+   * The `--url` hole in the round-19 suite: it covered `--source`, `--offline`,
+   * `--list-targets` and `--no-kb`, and `--url` is the ONE named-source form declared on the
+   * PROGRAM rather than on the subcommand. `actionCommand.opts()` therefore never carries it
+   * (verified with commander@11: for both `pair install --url X` and `pair --url X install`,
+   * `url` lands on the program's opts and `cmd.opts()` is `{}`), so the skip predicate could
+   * not observe it and the pre-flight warmed a slot the command then re-fetched — 2 full
+   * archive downloads per remote `install|update --url`.
+   *
+   * The pre-existing single-fetch assertion (`update --url`, above) did NOT catch this: its
+   * fixture seeds a bundled monorepo dataset, which short-circuits the pre-flight before it
+   * reaches the network. Only a released shape can tell the two apart.
+   */
+  const remoteUrlFixture = () => {
+    const fs = releasedFs()
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/.pair/knowledge/README.md`, '# Content from the mirror')
+    })
+    const httpClient = new MockHttpClientService()
+    const ok = () => toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const body = () =>
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'))
+    // Deliberately enough responses for TWO full downloads: starving the mock would make the
+    // second download fail instead of being counted, and the assertion below must fail on the
+    // URL list, where the evidence is.
+    httpClient.setRequestResponses([ok(), ok(), ok(), ok()])
+    httpClient.setGetResponses([
+      body(),
+      body(),
+      body(),
+      body(),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+    return { fs, httpClient }
+  }
+
+  it('install --url <remote zip> downloads the archive exactly once', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const url = 'https://mirror.internal/kb.zip'
+    const { fs, httpClient } = remoteUrlFixture()
+
+    await runCli(['node', 'pair', 'install', '--url', url, '.'], { fs, httpClient }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
+  })
+
+  it('update --url <remote zip> downloads the archive exactly once, in a released shape too', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const url = 'https://mirror.internal/kb.zip'
+    const { fs, httpClient } = remoteUrlFixture()
+
+    await runCli(['node', 'pair', 'update', '--url', url, '.'], { fs, httpClient }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
+  })
+
+  it('install --url <local zip> issues no request at all', async () => {
+    // Keeps at the CLI layer the coverage the removed `bootstrapEnvironment` `url` parameter had
+    // ("skips accessibility check for local customUrl"): a local `--url` must reach no network,
+    // and now that is because the hook skips the pre-flight, not because a branch inside it
+    // returns early.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs({ [`${root}/acme-kb.zip`]: 'PK-fake-zip' })
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/.pair/knowledge/README.md`, '# from the archive')
+    })
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--url', `${root}/acme-kb.zip`, '.'], {
+      fs,
+      httpClient,
+    }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('--url together with --no-kb is rejected before anything is fetched', async () => {
+    // The rejection is documented in `--help`, the CLI reference and the ADL. It used to fire
+    // only as a SIDE EFFECT of the pre-flight running to step 1; once `--url` makes the
+    // pre-flight skip (named source), the validation has to sit above the skip or the
+    // documented error silently disappears.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await expect(
+      runCli(
+        ['node', 'pair', 'install', '--url', 'https://mirror.internal/kb.zip', '--no-kb', '.'],
+        {
+          fs,
+          httpClient,
+        },
+      ),
+    ).rejects.toThrow(/Cannot use --url and --no-kb together/)
     expect(httpClient.getUrls()).toEqual([])
   })
 })

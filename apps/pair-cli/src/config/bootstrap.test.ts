@@ -37,7 +37,6 @@ describe('config bootstrap', () => {
       httpClient: client,
       version,
       kb: true,
-      url: undefined,
     })
 
     expect(resolver.getKnowledgeHubDatasetPathWithFallback).not.toHaveBeenCalled()
@@ -59,7 +58,6 @@ describe('config bootstrap', () => {
       httpClient: client,
       version,
       kb: true,
-      url: undefined,
     })
     await expect(failure).rejects.toThrow(DatasetNotFoundError)
     await expect(failure).rejects.toThrow(`${cwd}/downloaded`)
@@ -94,25 +92,18 @@ describe('config bootstrap', () => {
         httpClient: client,
         version,
         kb: true,
-        url: undefined,
       }),
     ).resolves.toBeUndefined()
   })
 
-  it('rejects --url together with --no-kb (the pre-flight validates options again)', async () => {
-    const fs = new InMemoryFileSystemService({}, cwd, cwd)
-    const client = new MockHttpClientService()
-
-    await expect(
-      bootstrapEnvironment({
-        fsService: fs,
-        httpClient: client,
-        version,
-        kb: false,
-        url: 'https://mirror.internal/kb.zip',
-      }),
-    ).rejects.toThrow(/Cannot use --url and --no-kb together/)
-  })
+  /**
+   * The `--url` + `--no-kb` rejection used to be asserted HERE, on a `url` parameter this
+   * function no longer takes: any named source makes the hook skip the pre-flight (round 21),
+   * so a guard below the skip would never fire and the parameter could only cause a second
+   * download of the source the command fetches itself. The rule now lives where the flags are
+   * read — `runKbPreflight`, covered in `cli.test.ts` end to end, and in `cli-options.test.ts`
+   * as a unit.
+   */
 
   it('skips KB setup when kb is false', async () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
@@ -123,7 +114,6 @@ describe('config bootstrap', () => {
       httpClient: client,
       version,
       kb: false,
-      url: undefined,
     })
 
     expect(resolver.getKnowledgeHubDatasetPathWithFallback).not.toHaveBeenCalled()
@@ -150,24 +140,21 @@ describe('config bootstrap', () => {
         httpClient: client,
         version,
         kb: true,
-        url: undefined,
       }),
     ).rejects.toThrow(DatasetAccessError)
   })
 
-  it('skips accessibility check for local customUrl', async () => {
-    const fs = new InMemoryFileSystemService({}, cwd, cwd) // Empty FS
+  it('warms the OFFICIAL KB only — it is given no source to warm', async () => {
+    // The counterpart of the removed `url` parameter: whatever the user named, this layer
+    // resolves the default dataset. A local `--url` used to return early here; it now never
+    // arrives, because the hook skips the pre-flight for any named source.
+    vi.mocked(resolver.getKnowledgeHubDatasetPath).mockReturnValue(`${cwd}/dataset`)
+    const fs = new InMemoryFileSystemService({ [`${cwd}/dataset/index.md`]: 'data' }, cwd, cwd)
     const client = new MockHttpClientService()
 
-    await bootstrapEnvironment({
-      fsService: fs,
-      httpClient: client,
-      version,
-      kb: true,
-      url: '/some/local/path', // Not starting with http
-    })
+    await bootstrapEnvironment({ fsService: fs, httpClient: client, version, kb: true })
 
-    // Should pass even if FS is empty because it skips check for local customUrl
-    expect(resolver.getKnowledgeHubDatasetPath).not.toHaveBeenCalled()
+    expect(vi.mocked(resolver.getKnowledgeHubDatasetPathWithFallback).mock.calls).toEqual([])
+    expect(resolver.getKnowledgeHubDatasetPath).toHaveBeenCalled()
   })
 })
