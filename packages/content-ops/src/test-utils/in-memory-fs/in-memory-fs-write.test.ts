@@ -85,6 +85,37 @@ describe('in-memory-fs-write', () => {
       expect(fs.readFileSync('/newdir/file.txt')).toBe('content')
     })
 
+    /**
+     * The destination of a directory rename must be observable as a directory even when
+     * NOTHING lands directly under it. The moved-file loop registers `dirname(file)`, so a
+     * fixture with a direct child masked the defect: only a fixture whose files are all
+     * NESTED shows that the destination itself was registered as `<dest>/` (trailing slash)
+     * while `existsSync` matches exactly. A caller guarded by `if (!existsSync(dest)) return`
+     * — `restoreCachedKB`/`removeBackupKB` are exactly that shape — then no-ops, and the test
+     * asserting the restore passes VACUOUSLY.
+     */
+    it('registers the destination of a renamed directory whose files are all nested', async () => {
+      await fs.mkdir('/olddir', { recursive: true })
+      await fs.writeFile('/olddir/nested/deep/file.txt', 'content')
+
+      await fs.rename('/olddir', '/newdir')
+
+      expect(fs.existsSync('/newdir')).toBe(true)
+      expect(fs.existsSync('/newdir/nested')).toBe(true)
+      expect(fs.existsSync('/olddir')).toBe(false)
+      expect(fs.readFileSync('/newdir/nested/deep/file.txt')).toBe('content')
+    })
+
+    /** The same defect from the parent's side: `<dest>/` also listed as a second, phantom entry. */
+    it('lists a renamed directory exactly once in its parent', async () => {
+      await fs.mkdir('/parent/olddir', { recursive: true })
+      await fs.writeFile('/parent/olddir/file.txt', 'content')
+
+      await fs.rename('/parent/olddir', '/parent/newdir')
+
+      expect((await fs.readdir('/parent')).map(entry => entry.name)).toEqual(['newdir'])
+    })
+
     it('should throw error when renaming non-existent file', async () => {
       await expect(fs.rename('/nonexistent.txt', '/new.txt')).rejects.toThrow(
         'Path not found: /nonexistent.txt',

@@ -65,6 +65,35 @@ describe('cache-manager', () => {
     expect(fs.existsSync(cachePath + '.bak')).toBe(false)
   })
 
+  /**
+   * The story's hardest invariant — a failed re-fetch leaves the user's cache intact —
+   * asserted on a slot whose files are ALL NESTED, with nothing directly under it. Until
+   * the in-memory double's directory `rename` registered its destination slash-free, this
+   * shape made the round-trip pass VACUOUSLY: `<slot>.bak` read as absent, so both
+   * `restoreCachedKB` and `removeBackupKB` returned at their first line and the assertions
+   * held for the wrong reason. Fixtures needed a direct-child file to mean anything; this
+   * test exists so that convention can never silently come back.
+   */
+  it('backs up and restores a slot with no file directly under it', async () => {
+    const cachePath = officialSlot('0.2.0')
+    const fs = new InMemoryFileSystemService(
+      { [join(cachePath, '.pair', 'knowledge', 'guidelines', 'index.md')]: '# the user KB' },
+      '/',
+      '/',
+    )
+
+    expect(await cacheManager.backupCachedKB(officialSource('0.2.0'), fs)).toBe(true)
+    expect(fs.existsSync(cachePath)).toBe(false)
+    expect(fs.existsSync(cachePath + '.bak')).toBe(true)
+
+    await cacheManager.restoreCachedKB(officialSource('0.2.0'), fs)
+
+    expect(await fs.readFile(join(cachePath, '.pair', 'knowledge', 'guidelines', 'index.md'))).toBe(
+      '# the user KB',
+    )
+    expect(fs.existsSync(cachePath + '.bak')).toBe(false)
+  })
+
   it('restoreCachedKB replaces a half-written slot left by the failed install', async () => {
     const cachePath = officialSlot('0.2.0')
     const fs = new InMemoryFileSystemService(
@@ -332,7 +361,11 @@ describe('cache-manager — contamination detection (US-395 AC5)', () => {
   })
 
   it('trusts an external slot, which declares no expected manifest name', async () => {
-    const source = { kind: 'zip' as const, path: '/downloads/acme-kb.zip', contentHash: 'c'.repeat(64) }
+    const source = {
+      kind: 'zip' as const,
+      path: '/downloads/acme-kb.zip',
+      contentHash: 'c'.repeat(64),
+    }
     const slot = getSourceCachePath(source)
     const fs = new InMemoryFileSystemService({ [slot + '/AGENTS.md']: '# acme' }, '/', '/')
     expect(await inspectSlot(source, fs)).toEqual({ status: 'ready' })

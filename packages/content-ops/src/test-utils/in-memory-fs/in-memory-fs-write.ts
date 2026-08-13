@@ -83,29 +83,36 @@ export async function rename(
     return
   }
 
-  const oldPrefix = resolvedOldPath.endsWith('/') ? resolvedOldPath : resolvedOldPath + '/'
-  const newPrefix = resolvedNewPath.endsWith('/') ? resolvedNewPath : resolvedNewPath + '/'
+  renameDirectory(state, resolvedOldPath, resolvedNewPath)
+}
+
+/** Moves a directory's whole subtree — its files and every registered directory under it. */
+function renameDirectory(state: InMemoryFsState, oldDir: string, newDir: string): void {
+  const oldPrefix = oldDir.endsWith('/') ? oldDir : oldDir + '/'
+  const newPrefix = newDir.endsWith('/') ? newDir : newDir + '/'
+  const relativeTo = (path: string) => (path === oldDir ? '' : path.slice(oldPrefix.length))
 
   const toMove: Array<[string, string]> = []
   for (const key of Array.from(state.files.keys())) {
-    if (key === resolvedOldPath || key.startsWith(oldPrefix)) {
-      const rel = key === resolvedOldPath ? '' : key.slice(oldPrefix.length)
-      toMove.push([key, newPrefix + rel])
+    if (key === oldDir || key.startsWith(oldPrefix)) {
+      toMove.push([key, newPrefix + relativeTo(key)])
     }
   }
-  toMove.forEach(([k, v]) => {
-    const val = state.files.get(k)!
-    state.files.set(v, val)
-    state.files.delete(k)
-    state.dirs.add(dirname(v))
+  toMove.forEach(([from, to]) => {
+    state.files.set(to, state.files.get(from)!)
+    state.files.delete(from)
+    state.dirs.add(dirname(to))
   })
 
-  const dirToMove = Array.from(state.dirs).filter(
-    d => d === resolvedOldPath || d.startsWith(oldPrefix),
-  )
+  const dirToMove = Array.from(state.dirs).filter(d => d === oldDir || d.startsWith(oldPrefix))
   dirToMove.forEach(d => {
-    const rel = d === resolvedOldPath ? '' : d.slice(oldPrefix.length)
-    state.dirs.add(newPrefix + rel)
+    const rel = relativeTo(d)
+    // The destination ITSELF (rel === '') is registered slash-free: `newPrefix` always ends
+    // in '/', while `existsSync` is an exact match on the dir set — registering the prefix
+    // made the destination invisible unless a moved file happened to land directly under it
+    // (that case only worked because the file loop adds `dirname(file)`), and made the
+    // parent's listing show a phantom `<dest>/` entry beside the real one.
+    state.dirs.add(rel === '' ? newDir : newPrefix + rel)
     state.dirs.delete(d)
   })
 }
