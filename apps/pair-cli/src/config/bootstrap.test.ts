@@ -54,15 +54,15 @@ describe('config bootstrap', () => {
 
     // The accessibility check must judge the path step 2 RESOLVED (`${cwd}/downloaded`),
     // not the bundled dataset path it probed before deciding to download.
-    await expect(
-      bootstrapEnvironment({
-        fsService: fs,
-        httpClient: client,
-        version,
-        kb: true,
-        url: undefined,
-      }),
-    ).rejects.toThrow(`${cwd}/downloaded`)
+    const failure = bootstrapEnvironment({
+      fsService: fs,
+      httpClient: client,
+      version,
+      kb: true,
+      url: undefined,
+    })
+    await expect(failure).rejects.toThrow(DatasetNotFoundError)
+    await expect(failure).rejects.toThrow(`${cwd}/downloaded`)
 
     expect(resolver.getKnowledgeHubDatasetPathWithFallback).toHaveBeenCalled()
   })

@@ -5,6 +5,15 @@ import { isDiagEnabled } from '#diagnostics'
 import { DatasetAccessError, DatasetNotFoundError, KnowledgeHubSetupError } from './errors'
 
 /**
+ * One diagnostic line. Inlining the `isDiagEnabled()` guard at every call site put
+ * `resolveDatasetForPreflight` over the complexity ceiling with branches that carry no
+ * behaviour — logging is not a decision.
+ */
+function diag(message: string): void {
+  if (isDiagEnabled()) console.error(`[diag] ${message}`)
+}
+
+/**
  * Main entry point for application bootstrap.
  * Validates options and ensures the Knowledge Hub dataset is ready for use.
  *
@@ -74,22 +83,22 @@ async function resolveDatasetForPreflight(options: {
   const { fsService, httpClient, version, url, kb } = options
 
   if (kb === false) {
-    if (isDiagEnabled()) console.error('[diag] Skipping KB download (--no-kb flag set)')
+    diag('Skipping KB download (--no-kb flag set)')
     return undefined
   }
 
   if (url && !isRemoteUrl(url)) {
-    if (isDiagEnabled()) console.error(`[diag] Using local path: ${url}`)
+    diag(`Using local path: ${url}`)
     return undefined
   }
 
   const bundled = bundledDatasetPath(fsService)
   if (bundled) {
-    if (isDiagEnabled()) console.error('[diag] Using local dataset')
+    diag('Using local dataset')
     return bundled
   }
 
-  if (isDiagEnabled()) console.error('[diag] Local dataset not available, using KB manager')
+  diag('Local dataset not available, using KB manager')
   if (url) validateAndLogCustomUrl(url)
 
   try {
@@ -131,7 +140,7 @@ function bundledDatasetPath(fsService: FileSystemService): string | undefined {
  */
 function validateAndLogCustomUrl(customUrl: string): void {
   validateUrl(customUrl)
-  if (isDiagEnabled()) console.error(`[diag] Using custom URL: ${customUrl}`)
+  diag(`Using custom URL: ${customUrl}`)
 }
 
 /**
