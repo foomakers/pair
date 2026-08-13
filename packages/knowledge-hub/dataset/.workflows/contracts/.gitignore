@@ -1,0 +1,3 @@
+# Derived machine contracts (regenerable cache; ADR-016 (adr-016-ai-generated-template-contracts.md))
+*.contract.json
+*.draft.json
