@@ -1541,3 +1541,106 @@ test('US-219 AC1: a partial pipeline keeps the defaults it did not mention', asy
   assert.ok(all.includes('/pair-process-implement'), 'an unmentioned skill lost its default')
   assert.ok(all.includes('../pair-worktrees'), 'an unmentioned path lost its default')
 })
+
+// ── US-219 T3 / AC6 — bounded fan-out ──────────────────────────────────────
+// The cap has to be enforced INSIDE the workflow: the sandbox `parallel` primitive is an
+// unbounded `Promise.all` and cannot limit anything on its own. So the test measures the
+// real peak concurrency rather than trusting that the option was read — a cap that is
+// parsed and then ignored looks identical from the outside to one that works.
+
+/** Drives N stories and reports the highest number of them in flight at once. */
+async function peakConcurrency(stories, args = {}) {
+  let inFlight = 0
+  let peak = 0
+  const dispatch = async (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.phase === 'Implement') {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      await new Promise(r => setTimeout(r, 5))
+      inFlight--
+      return { gatesPassed: true, branch: 'b' }
+    }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+  const { result } = await runWorkflow({ args: { stories, ...args }, dispatch })
+  return { peak, result }
+}
+
+const manyStories = n =>
+  Array.from({ length: n }, (_, i) => ({
+    id: String(300 + i),
+    title: `story ${i}`,
+    branch: `feature/US-${300 + i}-x`,
+  }))
+
+test('US-219 AC6: maxParallelism caps how many cards are in flight at once', async () => {
+  const { peak, result } = await peakConcurrency(manyStories(6), { maxParallelism: 2 })
+  assert.ok(peak <= 2, `cap of 2 was exceeded — peak was ${peak}`)
+  assert.strictEqual(result.batch.length, 6, 'every card must still be driven, just not at once')
+})
+
+test('US-219 AC6: an absent cap keeps today unbounded fan-out', async () => {
+  // Existing callers must not silently change behaviour when this option lands.
+  const { peak } = await peakConcurrency(manyStories(6))
+  assert.strictEqual(peak, 6, `expected all 6 in flight, saw ${peak}`)
+})
+
+test('US-219 AC6: a cap of 0 or a negative/non-numeric value throws, never falls back to unbounded', async () => {
+  // The #401 failure direction: an option silently discarded runs the batch on settings the
+  // caller did not choose — and here the discarded setting is the one holding back load.
+  for (const bad of [0, -1, 'two', 1.5, null]) {
+    await assert.rejects(
+      () => peakConcurrency(manyStories(2), { maxParallelism: bad }),
+      /maxParallelism/,
+      `maxParallelism: ${JSON.stringify(bad)} was accepted`,
+    )
+  }
+})
+
+test('US-219 AC6: a cap larger than the batch is harmless', async () => {
+  const { peak, result } = await peakConcurrency(manyStories(3), { maxParallelism: 99 })
+  assert.strictEqual(peak, 3)
+  assert.strictEqual(result.batch.length, 3)
+})
+
+test('US-219 AC6: under a cap, results keep INPUT order and a dead card does not kill the batch', async () => {
+  // The batch maps results positionally back onto the story list, so an out-of-order return
+  // would attribute one card's outcome to another — a silent mix-up, not a crash. And a
+  // throwing thunk must resolve to null rather than reject, or one dead agent cancels the
+  // cards still in flight. Both are `parallel`'s contract; the bounded version must match it.
+  const order = []
+  const dispatch = async (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.phase === 'Implement') {
+      const id = (prompt.match(/#(\d{3})/) ?? [])[1]
+      // Later stories finish FIRST, so a naive push-on-completion would reverse the list.
+      await new Promise(r => setTimeout(r, id === '300' ? 15 : 1))
+      if (id === '301') throw new Error('agent died')
+      order.push(id)
+      return { gatesPassed: true, branch: 'b' }
+    }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+
+  const stories = manyStories(4)
+  const { result } = await runWorkflow({ args: { stories, maxParallelism: 2 }, dispatch })
+
+  assert.ok(order.length >= 2 && order[0] !== '300', 'the fixture did not actually finish out of order')
+
+  // The survivors keep INPUT order, not completion order.
+  const survivors = stories.map(s => s.id).filter(id => id !== '301')
+  assert.deepStrictEqual(
+    result.batch.map(r => r.story.id),
+    survivors,
+    'results were not realigned to the input order',
+  )
+  // The card whose agent threw is REPORTED, not silently missing: three completed, one named
+  // in `died`. A batch that just came back shorter would read as a smaller batch, not a loss.
+  assert.deepStrictEqual(result.died, ['301'], 'the dead card was not reported')
+  assert.strictEqual(result.batch.length, 3, 'a dead card took the others down with it')
+})

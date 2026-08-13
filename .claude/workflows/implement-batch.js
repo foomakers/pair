@@ -105,7 +105,7 @@ function parseBatchArgs(raw) {
   // undefined and the floor was silently ignored while the caller believed it was set.
   // A batch ran with Minors still blocking and reported escalation as if the floor had
   // been honoured. Every option must be read from the parsed object, once.
-  return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline }
+  return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
 }
 const PARSED = parseBatchArgs(args)
 
@@ -168,6 +168,49 @@ function resolvePipeline(raw) {
     reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate),
   }
 }
+
+// ── Bounded fan-out (#219 AC6) ─────────────────────────────────────────────
+// `pair-loop` derives a ceiling from `tech/automation.md` (ADR-017 §6) and passes it here.
+// The bound has to live in THIS file: the sandbox `parallel` primitive is an unbounded
+// `Promise.all`, so handing it N thunks starts N agents no matter what the caller asked for.
+//
+// Absent cap = today's behaviour, unbounded. That default is deliberate: every existing
+// caller keeps the fan-out it already has, so landing this option changes nobody's run.
+function parseMaxParallelism(raw) {
+  if (raw === undefined) return undefined
+  // Rejected rather than coerced. A cap that cannot be honoured must not silently become
+  // "no cap": the discarded setting is the one holding back load, so the failure would be a
+  // batch running at full width while the caller believes it is throttled (#401's shape).
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1)
+    throw new Error(
+      `implement-batch: \`args.maxParallelism\` must be an integer >= 1; received ${JSON.stringify(raw)}. ` +
+        `Omit it entirely for unbounded fan-out — it is never inferred from a bad value.`,
+    )
+  return raw
+}
+const MAX_PARALLELISM = parseMaxParallelism(PARSED.maxParallelism)
+
+// Runs `thunks` with at most `cap` in flight. Mirrors `parallel`'s contract exactly:
+// results stay in INPUT order, and a thunk that throws resolves to `null` instead of
+// rejecting the whole batch — one card dying must not cancel the others mid-flight.
+async function boundedParallel(thunks, cap) {
+  if (!cap || cap >= thunks.length) return parallel(thunks)
+  const results = new Array(thunks.length)
+  let next = 0
+  const worker = async () => {
+    while (next < thunks.length) {
+      const i = next++
+      try {
+        results[i] = await thunks[i]()
+      } catch {
+        results[i] = null
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: cap }, worker))
+  return results
+}
+
 const PIPELINE = resolvePipeline(PARSED.pipeline)
 const SK = PIPELINE.skills
 
@@ -765,7 +808,10 @@ async function driveStory(story) {
 }
 
 // ── Fan-out over the mutex-safe batch ────────────────────────────────────
-const results = await parallel(STORIES.map((s) => () => driveStory(s)))
+const results = await boundedParallel(
+  STORIES.map((s) => () => driveStory(s)),
+  MAX_PARALLELISM,
+)
 const batch = results.filter(Boolean)
 // The note must describe what ACTUALLY happened. The previous version stated
 // "PRs are ready-for-merge or escalated" unconditionally — so a run whose stories
