@@ -473,3 +473,43 @@ describe('US-395 round 15: `pair --help` does not advertise --no-kb as working',
     expect(noKbLine).not.toMatch(/Skip knowledge base download/)
   })
 })
+
+// ── The pre-flight hook must actually fire (US-395) ────────────────────────
+// It did not, for the whole life of the feature: `cli.ts` guarded on
+// `thisCommand === prog`, and Commander invokes a program-level hook as
+// `callback(hookedCommand, actionCommand)` — the hooked command IS the program for every
+// subcommand, so the guard always returned. `--no-kb` downloaded anyway, the
+// `--url`+`--no-kb` conflict was never rejected, and the accessibility probe never ran.
+//
+// The whole 1125-test suite stayed green with the guard broken, which is why this pins the
+// ARGUMENT CONVENTION itself rather than any of our own code: if Commander ever changed it,
+// the fix would silently invert.
+describe('Commander preAction argument convention (the assumption the KB pre-flight rests on)', () => {
+  it('passes the HOOKED command first and the ACTION command second', async () => {
+    const prog = new Command()
+    prog.exitOverride().name('pair')
+    let seen: { firstIsProg: boolean; secondIsProg: boolean; actionName: string } | undefined
+
+    prog.hook('preAction', (thisCommand, actionCommand) => {
+      seen = {
+        firstIsProg: thisCommand === prog,
+        secondIsProg: actionCommand === prog,
+        actionName: actionCommand.name(),
+      }
+    })
+    prog.command('install').action(() => {})
+
+    await prog.parseAsync(['node', 'pair', 'install'])
+
+    expect(seen, 'the hook must have fired at all').toBeDefined()
+    // This is the trap: guarding on the FIRST argument skips every subcommand.
+    expect(seen!.firstIsProg, 'first argument is the hooked command — always the program').toBe(
+      true,
+    )
+    expect(
+      seen!.secondIsProg,
+      'second argument is the command that matched — never the program',
+    ).toBe(false)
+    expect(seen!.actionName).toBe('install')
+  })
+})

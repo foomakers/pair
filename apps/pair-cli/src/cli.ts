@@ -261,21 +261,20 @@ function applyGlobalLogLevel(prog: Command): void {
 }
 
 /**
- * ⚠️ THIS FUNCTION NEVER RUNS PAST ITS FIRST LINE — deliberately, not accidentally.
+ * The KB pre-flight: resolve (and if needed download) a knowledge base before a
+ * KB-consuming command runs.
  *
- * Commander invokes a program-level hook as `callback(hookedCommand, actionCommand)`, so
- * `thisCommand` IS `prog` for EVERY subcommand and the first guard always returns. The KB
- * pre-flight (`bootstrapEnvironment`) therefore never runs from the CLI, and with it
- * `validateCliOptions` (so `--no-kb` is inert) and the dataset accessibility probe.
+ * It was dead code until now. Commander invokes a program-level hook as
+ * `callback(hookedCommand, actionCommand)`, so `thisCommand` IS `prog` for EVERY
+ * subcommand, and the old first guard — `if (thisCommand === prog) return` — always
+ * returned. The consequences were user-visible: `--no-kb` still downloaded a KB (the flag
+ * an air-gapped user reaches for), `validateCliOptions` never rejected `--url` together
+ * with `--no-kb`, and the dataset accessibility probe never ran.
  *
- * Left standing rather than repaired or deleted in US-395: reviving it makes every
- * KB-requiring command resolve — and potentially download — a KB before it runs, on top of
- * install/update's own resolution, i.e. a second fetch of the same source. That is a
- * behaviour change with its own blast radius, decided at the merge gate, not slipped into a
- * fix round. See the ADL
- * `.pair/adoption/decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md`
- * ("The KB pre-flight (`bootstrapEnvironment`) never runs"). A named source reaches the
- * command through the PARSERS (`namedSource` in `config/cli.ts`), not through here.
+ * Fixed in US-395 by testing the ACTION command instead, with the exemption list inverted
+ * to an allow-list (see `bootstrap-policy`) so waking the hook up does not make every
+ * read-only command reach for the network. `install` and `update` resolve a KB; nothing
+ * else does.
  */
 async function runKbPreflight(args: {
   prog: Command
@@ -285,10 +284,17 @@ async function runKbPreflight(args: {
 }): Promise<void> {
   const { prog, thisCommand, actionCommand, ctx } = args
 
-  // Skip bootstrap for root command (no subcommand matched) — always true, see above
-  if (thisCommand === prog) return
+  // Commander invokes a program-level `preAction` hook as `callback(hookedCommand,
+  // actionCommand)` — the FIRST argument is the command the hook was attached to, i.e. the
+  // program itself, for every subcommand. So the old guard here, `if (thisCommand === prog)
+  // return`, was always true and this entire pre-flight was dead code: `--no-kb` still
+  // downloaded a KB, `--log-level` was inert everywhere except two command-level flags, and
+  // `bootstrapEnvironment` never ran at all.
+  //
+  // The right test is on the ACTION command: skip only when no subcommand matched.
+  if (actionCommand === prog) return
 
-  // Skip bootstrap for KB-producing commands (package, scaffold-kb) — they don't need a KB
+  // Only KB-consuming commands resolve a KB (allow-list — see bootstrap-policy).
   if (!requiresKbBootstrap(actionCommand.name())) return
 
   const options = thisCommand.opts<{ url?: string; kb: boolean }>()
