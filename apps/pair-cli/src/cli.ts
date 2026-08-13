@@ -16,7 +16,8 @@ import {
   logger,
 } from '@pair/content-ops'
 import { bootstrapEnvironment } from './config'
-import { runDiagnostics, MIN_LOG_LEVEL } from './diagnostics'
+import { namedSource } from './config/cli'
+import { runDiagnostics, isDiagEnabled, MIN_LOG_LEVEL } from './diagnostics'
 
 // Helper type-guard to keep positional args typed as string[]
 function onlyStrings(arr: unknown[]): string[] {
@@ -276,6 +277,35 @@ function applyGlobalLogLevel(prog: Command): void {
  * read-only command reach for the network. `install` and `update` resolve a KB; nothing
  * else does.
  */
+/**
+ * Why the pre-flight must not run for this invocation, or `undefined` to proceed.
+ *
+ * Its own function because the answer depends on the ACTION command's options while the hook
+ * reads the PROGRAM's: keeping the three cases named and together is what stops a fourth flag
+ * from being added to `install` and silently inheriting a KB download it has no use for.
+ */
+function preflightSkipReason(cmd: {
+  source?: string
+  url?: string
+  offline?: boolean
+  listTargets?: boolean
+}): string | undefined {
+  // Reads local config and nothing else; a KB is of no use to it.
+  if (cmd.listTargets === true) return 'list-targets'
+  // The air-gapped path (`install --offline --source /local/kb`). A fetch here does not degrade
+  // the run, it FAILS it — and `validateCommandOptions` has not run yet, so an `--offline` with
+  // no source would otherwise download an entire KB before reporting the invocation invalid.
+  if (cmd.offline === true) return 'offline'
+  // A command that names its own source resolves it itself; warming the official slot downloads
+  // a KB the run never opens. Same predicate the resolver and the parsers use, so the three
+  // layers cannot disagree on what "named" means.
+  const named = namedSource({
+    ...(cmd.source !== undefined && { source: cmd.source }),
+    ...(cmd.url !== undefined && { url: cmd.url }),
+  })
+  return named !== undefined ? 'named-source' : undefined
+}
+
 async function runKbPreflight(args: {
   prog: Command
   thisCommand: Command
@@ -297,13 +327,32 @@ async function runKbPreflight(args: {
   // Only KB-consuming commands resolve a KB (allow-list — see bootstrap-policy).
   if (!requiresKbBootstrap(actionCommand.name())) return
 
-  const options = thisCommand.opts<{ url?: string; kb: boolean }>()
+  // Read BOTH option sets. `thisCommand` is the PROGRAM for a program-level `preAction` hook,
+  // so it carries only the program's flags (`--url`, `--no-kb`); every flag that names the
+  // command's own source — `--source`, `--offline`, `--list-targets` — is declared on the
+  // SUBCOMMAND and is invisible there. Reading only the program's set is what made the revived
+  // pre-flight fetch the official KB for `install --source … --offline`, i.e. break the one
+  // flag whose entire purpose is to touch no network.
+  const progOptions = thisCommand.opts<{ url?: string; kb: boolean }>()
+  const cmdOptions = actionCommand.opts<{
+    source?: string
+    url?: string
+    offline?: boolean
+    listTargets?: boolean
+  }>()
+
+  const skip = preflightSkipReason(cmdOptions)
+  if (skip !== undefined) {
+    if (isDiagEnabled()) console.error(`[pair:diag] Skipping KB pre-flight (${skip})`)
+    return
+  }
+
   await bootstrapEnvironment({
     fsService: ctx.fsService,
     httpClient: ctx.httpClient,
     version: ctx.version,
-    url: options.url,
-    kb: options.kb,
+    url: cmdOptions.url ?? progOptions.url,
+    kb: progOptions.kb,
   })
 }
 

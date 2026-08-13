@@ -97,6 +97,9 @@ async function setupUpdateContext(
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
     httpClient: options?.httpClient,
+    // `--no-kb` has to reach THIS reader too: the pre-flight honouring it only skips the warm
+    // fetch, and the command would otherwise download the KB the user just refused.
+    kb: (config as { kb?: boolean }).kb,
   })
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config

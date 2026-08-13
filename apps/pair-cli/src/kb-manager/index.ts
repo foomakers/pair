@@ -13,6 +13,7 @@ export { isKBCached, isStageOwnerAlive } from './cache-manager'
 // as a whole, which is the one job that cannot go through an install entry point. It reads a
 // root, it derives no slot — `getSourceCachePath` and friends stay private.
 export { getCacheRoot, localKBSource } from './cache-slot-key'
+export { cachedOfficialKBPath } from './kb-availability'
 export { installKBFromLocalZip, installKBFromGit } from './kb-installer'
 export { validateUrl } from '@pair/content-ops'
 export { validateCliOptions } from './cli-options'

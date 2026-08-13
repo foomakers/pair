@@ -2,6 +2,7 @@ import { join, dirname } from 'path'
 import { FileSystemService, HttpClientService, validateKBStructure } from '@pair/content-ops'
 import { findPackageJsonPath } from './discovery'
 import {
+  cachedOfficialKBPath,
   isKBCached,
   ensureKBAvailable,
   installKBFromGit,
@@ -138,6 +139,13 @@ export type DatasetResolvableConfig =
 
 /** Options accepted by resolveDatasetRoot. */
 export interface DatasetResolveOptions {
+  /**
+   * `false` when the caller passed `--no-kb`. The pre-flight already honours the flag, but it is
+   * only ONE of the two readers: the command path resolves its dataset independently through
+   * `resolveDatasetRoot`, so without this the flag skipped the warm fetch and the command
+   * downloaded anyway — the flag's help text, the CLI reference and the ADL all promise a skip.
+   */
+  kb?: boolean | undefined
   cliVersion?: string | undefined
   httpClient?: HttpClientService | undefined
   progressWriter?: { write(s: string): void } | undefined
@@ -173,7 +181,23 @@ async function resolveDefaultDataset(
   fs: FileSystemService,
   version: string,
   httpClient?: HttpClientService,
+  kb?: boolean,
 ): Promise<string> {
+  // `--no-kb` means "use what is already here", not "download quietly". Resolve from the
+  // bundled dataset or an already-populated cache slot, and if neither exists say so with the
+  // two ways out — rather than fetching the KB the user just refused.
+  if (kb === false) {
+    const bundled = await tryMonorepoDatasetPath(fs, isDiagEnabled())
+    if (bundled) return bundled
+    const cached = await cachedOfficialKBPath(version, fs)
+    if (cached) return cached
+    throw new Error(
+      `--no-kb was passed, so no KB was downloaded, and none is available locally ` +
+        `(no dataset bundled with the CLI, and no cached KB for version ${version}). ` +
+        `Either drop --no-kb to fetch it, or name a local KB with --source <path>.`,
+    )
+  }
+
   if (httpClient) {
     return getKnowledgeHubDatasetPathWithFallback({
       fsService: fs,
@@ -199,18 +223,20 @@ export async function resolveDatasetRoot(
   options?: DatasetResolveOptions,
 ): Promise<string> {
   const version = options?.cliVersion || '0.0.0'
+  const httpClient = options?.httpClient
+  const kb = options?.kb
 
   switch (config.resolution) {
     case 'default':
-      return resolveDefaultDataset(fs, version, options?.httpClient)
+      return resolveDefaultDataset(fs, version, httpClient, kb)
 
     case 'remote': {
-      if (!options?.httpClient) {
+      if (!httpClient) {
         throw new Error('Remote resolution requires httpClient')
       }
       return getKnowledgeHubDatasetPathWithFallback({
         fsService: fs,
-        httpClient: options.httpClient,
+        httpClient,
         version,
         customUrl: config.url,
       })

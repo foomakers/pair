@@ -1,5 +1,5 @@
 import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
-import { detectSourceType, logger as log, SourceType } from '@pair/content-ops'
+import { detectSourceType, logger as log, SourceType, validateKBStructure } from '@pair/content-ops'
 
 import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
@@ -138,4 +138,21 @@ async function installFromSource(
       throw new Error(`Unhandled KB source kind: ${JSON.stringify(unreachable)}`)
     }
   }
+}
+
+/**
+ * The path of an ALREADY-POPULATED official cache slot for `version`, or `undefined`.
+ *
+ * Exists for the `--no-kb` path: that flag means "use what is already here", so the resolver
+ * needs to ask whether a usable KB is on disk WITHOUT the fetch every other entry point in this
+ * module performs. It lives here rather than the resolver reaching for `getCachedKBPath`
+ * directly because slot mechanics stay inside the module that owns them (see index.ts).
+ */
+export async function cachedOfficialKBPath(
+  version: string,
+  fs: FileSystemService,
+): Promise<string | undefined> {
+  const path = getSourceCachePath(officialSource(version))
+  if (!fs.existsSync(path)) return undefined
+  return (await validateKBStructure(path, fs)) ? path : undefined
 }

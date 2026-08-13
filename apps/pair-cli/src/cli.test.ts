@@ -516,3 +516,142 @@ describe('Commander preAction argument convention (the assumption the KB pre-fli
     expect(seen!.actionName).toBe('install')
   })
 })
+
+// ── The pre-flight must not fetch what the command never uses (US-395 round 19) ──
+// Reviving the dead pre-flight (round 17) exposed a defect it had been hiding: the hook reads
+// `thisCommand.opts()`, which for a program-level `preAction` is the PROGRAM's option set. Every
+// flag that names the command's own source — `--source`, `--offline`, `--list-targets` — is
+// declared on the `install` SUBCOMMAND and is therefore invisible to it, so the pre-flight
+// resolves the official KB anyway.
+//
+// The fixture below is the RELEASED shape, and that is the whole point: it seeds no
+// `packages/knowledge-hub`, so `bundledDatasetPath` finds nothing and the pre-flight falls
+// through to the network. Every existing fixture seeds a monorepo dataset and the smoke suite
+// runs `dist` from inside the monorepo, so the bundled branch short-circuits in both — which is
+// why a suite of 1144 tests never saw this.
+describe('US-395 round 19: the KB pre-flight never fetches a KB the command will not use', () => {
+  const root = '/released'
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  /** A released install: a CLI with no dataset shipped beside it. */
+  const releasedFs = (extra: Record<string, string> = {}) =>
+    new InMemoryFileSystemService(
+      {
+        [`${root}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+              description: 'KB',
+            },
+          },
+        }),
+        ...extra,
+      },
+      root,
+      root,
+    )
+
+  const silence = () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  }
+
+  /**
+   * A client that ANSWERS (404) rather than hanging. A mock with an empty queue makes the
+   * download stall and the test fail on a timeout — which proves only that something blocked,
+   * not what was requested. Answering keeps the failure on the URL assertion, where the
+   * evidence is.
+   */
+  const answeringClient = () => {
+    const c = new MockHttpClientService()
+    const notFound = () => toIncomingMessage(buildTestResponse(404))
+    c.setRequestResponses([notFound(), notFound(), notFound(), notFound()])
+    c.setGetResponses([notFound(), notFound(), notFound(), notFound()])
+    return c
+  }
+
+  it('install --source <dir> --offline issues no request at all', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs({
+      [`${root}/local-kb/manifest.json`]: JSON.stringify({ name: 'local-kb' }),
+      [`${root}/local-kb/.pair/knowledge/README.md`]: '# local',
+    })
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--source', `${root}/local-kb`, '--offline', '.'], {
+      fs,
+      httpClient,
+    }).catch(() => {})
+
+    // `--offline` is documented as THE air-gapped path. A single request here means the flag
+    // fails for exactly the user it exists for.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --offline with no --source fails without downloading first', async () => {
+    // The pre-flight runs BEFORE the action handler, so `validateCommandOptions` has not yet
+    // rejected this combination. Without its own guard the run downloads an entire KB and only
+    // then reports that the invocation was invalid all along.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--offline', '.'], { fs, httpClient }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --source <dir> issues no request, with no --offline to help it', async () => {
+    // Kept separate from the --offline case on purpose: that test passes two flags, so it
+    // cannot tell which guard is carrying it. This one isolates the named-source rule.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs({
+      [`${root}/local-kb/manifest.json`]: JSON.stringify({ name: 'local-kb' }),
+      [`${root}/local-kb/.pair/knowledge/README.md`]: '# local',
+    })
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--source', `${root}/local-kb`, '.'], {
+      fs,
+      httpClient,
+    }).catch(() => {})
+
+    // The command reads this source directly; warming the official slot downloads an entire KB
+    // the run never opens.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --list-targets issues no request at all', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--list-targets'], { fs, httpClient }).catch(() => {})
+
+    // Listing targets reads local config only — it has no use for a KB.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --no-kb issues no request at all, on a cold cache', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--no-kb', '.'], { fs, httpClient }).catch(() => {})
+
+    // The help text, commands.mdx and the ADL all promise this now. The pre-flight honours the
+    // flag, but the command path resolves its dataset independently — so the promise held only
+    // as far as the first of the two readers.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+})
