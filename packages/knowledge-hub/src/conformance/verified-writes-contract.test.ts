@@ -110,6 +110,22 @@ const CANONICAL_STATES =
  */
 const NO_WRITE_IS_ASSUMED_ADL = '.pair/adoption/decision-log/2026-08-11-no-write-is-assumed.md'
 
+/**
+ * ROUND 5. The PM-tool **adapter guides** — the tool-specific documents every skill in this
+ * contract sends an agent to for the actual calls. Rounds 2-4 walked the rule down the
+ * reference chain (skills → convention → canonical-states) and stopped one level short: the
+ * adapter is the last document a reader lands on before typing a command, so a routing
+ * instruction contradicted here wins over every file above it.
+ */
+const PM_TOOL_GUIDES = '.pair/knowledge/guidelines/collaboration/project-management-tool'
+const GITHUB_ADAPTER = `${PM_TOOL_GUIDES}/github-implementation.md`
+const ADAPTER_GUIDES = [
+  GITHUB_ADAPTER,
+  `${PM_TOOL_GUIDES}/azure-devops-implementation.md`,
+  `${PM_TOOL_GUIDES}/filesystem-implementation.md`,
+  `${PM_TOOL_GUIDES}/linear-implementation.md`,
+]
+
 /** A KB file's two copies — the dataset source and the installed root mirror. */
 const kbCorpora = (rel: string): { corpus: string; content: string }[] => [
   { corpus: 'dataset', content: read(join(DATASET, rel)) },
@@ -118,6 +134,26 @@ const kbCorpora = (rel: string): { corpus: string; content: string }[] => [
 
 const conventionCases = kbCorpora(ROUTING_CONVENTION)
 const canonicalStatesCases = kbCorpora(CANONICAL_STATES)
+const githubAdapterCases = kbCorpora(GITHUB_ADAPTER)
+const adapterCases = ADAPTER_GUIDES.flatMap(rel =>
+  kbCorpora(rel).map(one => ({ guide: rel.slice(rel.lastIndexOf('/') + 1), ...one })),
+)
+
+/**
+ * The `/review` merge path's executing file. Its twin on the `/implement` side
+ * (`post-review-merge.md` Step 4.4) already carries the invariant; both are asserted here so
+ * the two merge paths cannot drift apart again.
+ */
+const reviewMergeCases = [
+  {
+    corpus: 'dataset',
+    content: read(join(DATASET, '.skills/process/review/merge-and-cascade.md')),
+  },
+  {
+    corpus: 'generated root',
+    content: read(join(REPO_ROOT, '.claude/skills/pair-process-review/merge-and-cascade.md')),
+  },
+]
 
 /**
  * The body of the section whose heading starts with `headingPrefix` at `level`,
@@ -141,6 +177,20 @@ function section(markdown: string, headingPrefix: string, level = 3): string {
   }
   return body.join('\n')
 }
+
+/** The normalized table rows of a section, header/separator rows included. */
+const tableRows = (markdown: string, headingPrefix: string, level = 2): string[] =>
+  section(markdown, headingPrefix, level)
+    .split('\n')
+    .filter(line => line.trimStart().startsWith('|'))
+    .map(normalize)
+
+/**
+ * `canonical-states.md`'s `Integration with Skills` rows. Located by the macrostate each row
+ * PRODUCES, never by skill name: the root mirror rewrites every name (`/implement` →
+ * `/pair-process-implement`), so a name-anchored probe would only ever hold in one corpus.
+ */
+const integrationRows = (content: string): string[] => tableRows(content, 'Integration with Skills')
 
 describe('/write-issue — $assignee is part of the parameter contract (#403 AC1)', () => {
   it.each(writeIssueCases)('$corpus: declares $$assignee in the Arguments table', ({ content }) => {
@@ -301,7 +351,7 @@ describe('/write-issue — membership precedes state, confirmed by a read (#403 
   })
 
   it.each(writeIssueCases)(
-    '$corpus: membership is established on every create, with or without $$status',
+    '$corpus: membership is established on every write-mode write — create AND update',
     ({ content }) => {
       // Gating membership behind `$status` leaves the MOST COMMON path uncovered: an
       // item filed with no requested transition (a follow-up task, a promoted tech-debt
@@ -309,11 +359,32 @@ describe('/write-issue — membership precedes state, confirmed by a read (#403 
       // explicit-membership tool as an issue that is not a board item — open, assigned,
       // green and absent from the board. That is #384/#372 verbatim, so the membership
       // beats must not depend on a macrostate having been requested.
+      //
+      // ROUND 5: scoping them to CREATES leaves the same hole one door down. The defect
+      // reproduces on an UPDATE — `/refine-story` writes Draft→Ready on an issue that
+      // already exists and may never have been added to the tracked view, and an update
+      // with no `$status` (the #384/#372 repair path itself) never establishes membership
+      // either. AC4/AC5's Given is not create-scoped, so neither is the rule.
       const body = boardSection(content)
       expect(body).toContain('membership is not a consequence of $status')
-      expect(body).toContain('run on every create')
+      expect(body).toContain('run on every write-mode write')
+      expect(body).toContain('always on a create')
+      expect(body).toContain('equally on an update')
       // …and the state field stays gated on Step 6, which is the half that IS conditional.
       expect(body).toContain('only when step 6 resolved a board state')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: the update path itself sends the reader to the membership step',
+    ({ content }) => {
+      // The preamble above is only reached by someone who already opened Step 7b. An
+      // agent following the UPDATE path in Step 7 reads its bullets and stops there, so
+      // the update bullet — which said only "if `$status` was provided, the board field
+      // is written in Step 7b" — is where membership went missing in practice.
+      const body = normalize(section(content, 'Step 7: Create or Update Issue'))
+      expect(body).toContain('step 7b runs on every update too')
+      expect(body).toContain('not only when $status was provided')
     },
   )
 
@@ -632,15 +703,8 @@ describe('canonical-states.md — the KB authority agrees with the skills that w
   // overwrites the story body, destroying AC/DoD/task breakdown. That is the exact route
   // the rest of this file forbids, reproduced in the KB.
   //
-  // The rows are located by the macrostate they PRODUCE, never by skill name: the root
-  // mirror rewrites every name (`/implement` → `/pair-process-implement`), so a
-  // name-anchored probe would only ever hold in one corpus.
-  const integrationRows = (content: string): string[] =>
-    section(content, 'Integration with Skills', 2)
-      .split('\n')
-      .filter(line => line.trimStart().startsWith('|'))
-      .map(normalize)
-
+  // The rows are located by the macrostate they PRODUCE, never by skill name (see
+  // `integrationRows` at the top of this file).
   it.each(canonicalStatesCases)(
     '$corpus: the state-only writers write the board field directly, applying Step 7b by reference',
     ({ content }) => {
@@ -672,6 +736,157 @@ describe('canonical-states.md — the KB authority agrees with the skills that w
       const refinement = integrationRows(content).filter(row => row.includes('produces ready'))
       expect(refinement).toHaveLength(1)
       expect(refinement[0]).toContain('writes it through /')
+    },
+  )
+})
+
+describe('the PM-tool adapter guides — the last document before the command agrees too', () => {
+  // ROUND 5. Rounds 2-4 fixed the two skills, then the resolution convention, then
+  // canonical-states.md — the reference chain, one link per round. The chain has one more
+  // link: the TOOL-SPECIFIC ADAPTER, which is where `/implement` Step 0.1b and
+  // `/write-issue` Step 7b send an agent for the actual call. github-implementation.md's
+  // `Common Transitions` table still said `Refined → In Progress` is triggered "via
+  // `/write-issue $status: In Progress`" — i.e. the write-mode route for a STATE-ONLY
+  // change, which either HALTs on the missing `$type` or overwrites the story body
+  // (AC/DoD/task breakdown). The adapter is the last thing read before a command is typed,
+  // so it wins over every corrected file above it.
+  //
+  // Rows are matched by the transition they describe, never by skill name — the root mirror
+  // rewrites every name, so a name-anchored probe would hold in one corpus only.
+  const transitionRows = (content: string): string[] =>
+    tableRows(content, 'Common Transitions', 4).filter(row => row.includes('→'))
+
+  /** Every table row in a guide that reads like a transition, wherever it lives. */
+  const transitionLikeRows = (content: string): string[] =>
+    content
+      .split('\n')
+      .filter(line => line.trimStart().startsWith('|'))
+      .map(normalize)
+      .filter(row => row.includes('→'))
+
+  it.each(githubAdapterCases)(
+    '$corpus: the state-only transitions do not route through the item writer',
+    ({ content }) => {
+      const stateOnly = transitionRows(content).filter(
+        row => row.includes('→ in progress') || row.includes('→ done'),
+      )
+      // Both rows must be FOUND, or a renamed heading would let the negatives below pass
+      // over an empty list — the vacuous-green failure this file rejects everywhere else.
+      expect(stateOnly).toHaveLength(2)
+      for (const row of stateOnly) {
+        // A state-only change carries no body to render, so no `$status` argument may
+        // appear on its route: `$status` only exists on the item writer's write mode.
+        expect(row).not.toContain('$status')
+      }
+    },
+  )
+
+  it.each(githubAdapterCases)(
+    '$corpus: the implementation transition states the direct write and applies Step 7b by reference',
+    ({ content }) => {
+      // Not merely "the losing route is gone": the row must say what the writer ACTUALLY
+      // does, or the next reader re-derives the composition from its absence.
+      const implementation = transitionRows(content).filter(row =>
+        row.includes('refined → in progress'),
+      )
+      expect(implementation).toHaveLength(1)
+      expect(implementation[0]).toContain('writes the board field directly')
+      expect(implementation[0]).toContain('by reference')
+    },
+  )
+
+  it.each(githubAdapterCases)(
+    '$corpus: the refinement transition still routes through the item writer (the valid composition)',
+    ({ content }) => {
+      // The row that must NOT change. Refinement passes `$status` AND renders a full body
+      // in the same call, so write mode is the right route for it — a fix that flattened
+      // every row to "direct" would be a different defect, and this pins it as one.
+      const refinement = transitionRows(content).filter(row => row.includes('todo → refined'))
+      expect(refinement).toHaveLength(1)
+      expect(refinement[0]).toContain('$status: ready')
+    },
+  )
+
+  it.each(adapterCases)(
+    '$guide ($corpus): no transition row routes a state-only change through the item writer',
+    ({ content }) => {
+      // The CLASS probe, over every adapter rather than the one that had the defect: the
+      // next tracker's guide is written by copying this table, and the round-5 finding is
+      // exactly what a copy of the old one would reintroduce.
+      for (const row of transitionLikeRows(content)) {
+        if (/→ (in progress|review|done)\b/.test(row)) expect(row).not.toContain('$status')
+      }
+    },
+  )
+
+  it('the class probe is not vacuous — some adapter still documents its transition routing', () => {
+    // A `for` loop over an empty list passes. If the tables are renamed or removed, this is
+    // the assertion that reddens instead of the guard silently covering nothing.
+    const rows = adapterCases.reduce((n, one) => n + transitionLikeRows(one.content).length, 0)
+    expect(rows).toBeGreaterThan(0)
+  })
+})
+
+describe('merge-and-cascade Step 6.4 — the review merge path carries the invariant it claims', () => {
+  // ROUND 5, third finding, and the one this PR introduced itself: round 4 rewrote
+  // canonical-states.md's `/review` row to "produces Done on merge — writes the board field
+  // directly, same application of Step 7b by reference", but the file that EXECUTES that row
+  // (merge-and-cascade.md Step 6.4) only closed the issue and cascaded the parents — no board
+  // field, no membership → confirming read → state order, no read-back in its Verify.
+  //
+  // Closing an issue is not a board transition: on GitHub Projects the item keeps whatever
+  // column it had, so the story reported Done sat in `In Progress` on the board. The twin
+  // path (`/implement`'s post-review-merge.md Step 4.4) was already brought under the rule,
+  // so the two merge paths had diverged — and terminal writes are the worst place for it:
+  // nobody re-runs the merge phase.
+  it.each(reviewMergeCases)(
+    '$corpus: applies membership -> confirming read -> state by reference',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('membership, then a read that confirms it, then the state field')
+      expect(body).toContain('by reference')
+    },
+  )
+
+  it.each(reviewMergeCases)(
+    '$corpus: the closure and the board state are two writes, not one',
+    ({ content }) => {
+      // The defect's root assumption. Both merge paths must say it, or an agent reads the
+      // close call as the state transition and skips the board write entirely.
+      const body = normalize(content)
+      expect(body).toContain('closing the issue does not move the board column')
+    },
+  )
+
+  it.each(reviewMergeCases)(
+    '$corpus: verifies by READING the story and each transitioned parent',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('what the read observed')
+      expect(body).toContain('nobody re-runs the merge phase')
+      expect(body).toContain('each parent this run transitioned')
+      // The trusting wording must be gone, not merely accompanied.
+      expect(body).not.toContain('story closed. epic and initiative updated if applicable.')
+    },
+  )
+
+  it.each(canonicalStatesCases)(
+    '$corpus: the KB row and the file that executes it cannot diverge',
+    ({ content }) => {
+      // The anti-divergence probe the previous four rounds lacked: a claim in the KB is
+      // asserted AGAINST the executing file, not on its own. If the Done row keeps claiming
+      // a direct board write, merge-and-cascade.md must carry it; if the design ever changes
+      // to "closure IS the Done signal", this row has to say so and this probe reddens until
+      // it does.
+      const doneRow = integrationRows(content).find(row => row.includes('produces done on merge'))
+      expect(doneRow).toBeDefined()
+      expect(doneRow).toContain('writes the board field directly')
+      for (const { content: executor } of reviewMergeCases) {
+        const body = normalize(executor)
+        expect(body).toContain('membership, then a read that confirms it, then the state field')
+        expect(body).toContain('by reference')
+        expect(body).toContain('what the read observed')
+      }
     },
   )
 })
