@@ -226,14 +226,32 @@ function isProcessAlive(pid: number): boolean {
  * extraction, #428 AC). A live process's stage is a concurrent install in flight, not an
  * orphan — deleting it would yank the directory out from under a running extraction.
  */
+/**
+ * Is the process that created this `<slot>.tmp-<pid>-<n>` stage still running?
+ *
+ * A live stage is an install IN FLIGHT — deleting it breaks a concurrent extraction. This is
+ * the ONE predicate for that question: the orphan sweep below and `kb-cache prune`
+ * (`commands/kb-cache/inventory.ts`) both call it, because a cleanup that is careful here and
+ * careless there is not careful at all — the cache is machine-wide, so the two run against
+ * the same directory from different projects.
+ *
+ * An unparseable pid reads as dead: the name is not one this CLI writes, so no live process
+ * of ours owns it.
+ */
+export function isStageOwnerAlive(stageName: string): boolean {
+  const at = stageName.lastIndexOf(STAGE_INFIX)
+  if (at < 0) return false
+  const pid = Number.parseInt(stageName.slice(at + STAGE_INFIX.length), 10)
+  return !Number.isNaN(pid) && isProcessAlive(pid)
+}
+
 async function sweepOrphanedStages(slotPath: string, fs: FileSystemService): Promise<void> {
   const parent = dirname(slotPath)
   if (!fs.existsSync(parent)) return
   const prefix = `${basename(slotPath)}${STAGE_INFIX}`
   for (const entry of await fs.readdir(parent)) {
     if (!entry.name.startsWith(prefix)) continue
-    const pid = Number.parseInt(entry.name.slice(prefix.length), 10)
-    if (Number.isNaN(pid) || !isProcessAlive(pid)) {
+    if (!isStageOwnerAlive(entry.name)) {
       await discard(join(parent, entry.name), fs)
     }
   }

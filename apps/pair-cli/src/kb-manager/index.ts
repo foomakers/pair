@@ -8,8 +8,11 @@
 // getCachedKBPath) are NOT public — slot mechanics stay inside the module that owns
 // slots, behind the install* entry points.
 export { ensureKBAvailable } from './kb-availability'
-export { isKBCached } from './cache-manager'
-export { localKBSource } from './cache-slot-key'
+export { isKBCached, isStageOwnerAlive } from './cache-manager'
+// `getCacheRoot` is the ONE public slot primitive: `kb-cache list/prune` inspects the cache
+// as a whole, which is the one job that cannot go through an install entry point. It reads a
+// root, it derives no slot — `getSourceCachePath` and friends stay private.
+export { getCacheRoot, localKBSource } from './cache-slot-key'
 export { installKBFromLocalZip, installKBFromGit } from './kb-installer'
 export { validateUrl } from '@pair/content-ops'
 export { validateCliOptions } from './cli-options'

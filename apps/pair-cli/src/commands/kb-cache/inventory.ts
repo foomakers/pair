@@ -1,6 +1,6 @@
 import { join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
-import { getCacheRoot } from '../../kb-manager/cache-slot-key'
+import { getCacheRoot, isStageOwnerAlive } from '#kb-manager'
 
 /**
  * What a cache entry IS, from its name alone.
@@ -31,6 +31,17 @@ export interface CacheEntry {
   size: number
   /** From the slot's own `manifest.json` when it has one — otherwise undefined. */
   label?: string
+  /**
+   * Evidence that an install IN FLIGHT owns this entry, so nothing may delete it.
+   *
+   * The name alone cannot tell an abandoned leftover from a live one, and the cache is
+   * machine-wide: project B's `prune` runs while project A's install is mid-extraction in
+   * the same directory. Two shapes carry that evidence — a `stage` whose pid is still alive
+   * (the same predicate `sweepOrphanedStages` uses), and a `.bak` whose slot is not back
+   * yet, which means the install is either still running or crashed between the set-aside
+   * and the swap. In both cases the `.bak` is the ONLY copy of that KB.
+   */
+  inFlight?: boolean
   /** Why `prune` would remove it, or undefined when it would keep it. */
   staleReason?: string
 }
@@ -55,8 +66,13 @@ export function classifyEntry(name: string, atRoot: boolean): EntryKind {
  * `currentVersion` is spared: it is the KB this CLI is about to use. Every other official
  * slot belongs to a version no longer installed. External slots are NEVER pruned — one per
  * source the user chose, and nothing here can tell which sources they still care about.
+ *
+ * `entry.inFlight` outranks the shape for the two kinds a running install owns (see the
+ * field): a stage and a backup are garbage only once nothing is using them.
  */
 export function stalenessOf(entry: CacheEntry, currentVersion: string): string | undefined {
+  if (entry.inFlight) return undefined
+
   switch (entry.kind) {
     case 'stage':
       return 'abandoned atomic stage from an interrupted install'
@@ -103,6 +119,19 @@ async function labelOf(fs: FileSystemService, slot: string): Promise<string | un
   }
 }
 
+/**
+ * Does a running install own this entry? See `CacheEntry.inFlight`.
+ *
+ * The `.bak` rule is the conservative half: a backup whose slot is absent is the only copy
+ * of that KB, whether the install is still running or died before the swap. Once the slot is
+ * back the backup is redundant — the install finished and only its cleanup failed.
+ */
+async function isInFlight(fs: FileSystemService, entry: CacheEntry): Promise<boolean> {
+  if (entry.kind === 'stage') return isStageOwnerAlive(entry.name)
+  if (entry.kind === 'backup') return !(await fs.exists(entry.path.slice(0, -'.bak'.length)))
+  return false
+}
+
 /** Every entry under the cache root, root level and `external/` alike. */
 export async function readCacheInventory(
   fs: FileSystemService,
@@ -127,6 +156,7 @@ export async function readCacheInventory(
       }
       const label = await labelOf(fs, path)
       if (label) entry.label = label
+      if (await isInFlight(fs, entry)) entry.inFlight = true
       const reason = stalenessOf(entry, currentVersion)
       if (reason) entry.staleReason = reason
       out.push(entry)

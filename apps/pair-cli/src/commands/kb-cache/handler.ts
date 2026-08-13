@@ -30,6 +30,9 @@ function renderList(entries: CacheEntry[]): void {
   for (const e of entries) {
     const bits = [e.kind.padEnd(10), human(e.size).padStart(9), e.name]
     if (e.label) bits.push(`(${e.label})`)
+    // Named explicitly: a leftover-shaped entry that prune keeps looks like a prune bug
+    // otherwise, and the operator would reach for `rm -rf` — the very deletion this spares.
+    if (e.inFlight) bits.push('— kept: an install is using it')
     if (e.staleReason) bits.push(`— stale: ${e.staleReason}`)
     logger.info(`  ${bits.join('  ')}`)
   }
