@@ -22,9 +22,10 @@ import { gitCacheKey } from './git-clone'
  *
  * Disk: one slot per distinct external source. Slots are plain directories with no
  * hidden state — `rm -rf <cacheRoot>/external` is always safe and the next install
- * re-populates. Live slots are never auto-evicted (no LRU/TTL); stale leftovers —
- * old CLI versions, pre-#395 git clones, `.bak`/`.discarded-*`/orphaned `.tmp-*` —
- * are removed by `pair kb-cache prune` (see `cache-inventory.ts` and the US-395 ADL).
+ * re-populates. Automatic eviction is deliberately not implemented (no LRU/TTL,
+ * tracked as #427); stale leftovers — old CLI versions, pre-#395 git clones,
+ * `.bak`/`.discarded-*`/orphaned `.tmp-*` — are all safe to delete by hand
+ * (see the US-395 ADL).
  */
 
 /** `name` carried by the manifest.json of the KB published by this project. */
@@ -168,8 +169,8 @@ export function cacheSlotKey(source: KBSource): string {
     case 'zip':
       // CONTENT-keyed (#429): the same archive at two paths is ONE slot, and two
       // archives with different bytes can never share one. No path-derived label —
-      // a label would re-smuggle the path into the identity; `pair kb-cache list`
-      // is where a slot gets its human-readable name (from its manifest).
+      // a label would re-smuggle the path into the identity; a slot's own
+      // `manifest.json` is what names it, when it has one.
       return `${EXTERNAL_NAMESPACE}/zip-${source.contentHash.slice(0, 12)}`
   }
 }

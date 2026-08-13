@@ -223,13 +223,15 @@ When `requiresDownload: true` for URL sources:
 | Source                      | Slot                                     |
 | --------------------------- | ---------------------------------------- |
 | Official KB (auto-download) | `~/.pair/kb/{version}/`                  |
-| `--source <zip>`            | `~/.pair/kb/external/zip-{name}-{hash}/` |
+| `--source <zip>`            | `~/.pair/kb/external/zip-{hash}/`        |
 | `--source <dir>`            | **none** — read in place                 |
 | `--source <git-url>`        | `~/.pair/kb/external/git-{hash}/`        |
 | `--url <remote-zip>`        | `~/.pair/kb/external/url-{name}-{hash}/` |
 
-The slot is derived from the **identity of the source** (its resolved path or URL), so two
-different sources never share a slot and the same source always reuses its own. Only the
+The slot is derived from the **identity of the source** (its resolved path or URL) — the ZIP
+and git forms carry no name, only the content/url hash; the remote-URL form is the only one
+that keeps a human-readable label. Two different sources never share a slot and the same
+source always reuses its own. Only the
 official KB writes the version-keyed slot — an external KB can never overwrite it or its
 `manifest.json` ([foomakers/pair#395](https://github.com/foomakers/pair/issues/395)). The
 root of every slot above is `~/.pair/kb` unless `PAIR_KB_CACHE_DIR` overrides it (which

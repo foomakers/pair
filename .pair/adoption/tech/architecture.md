@@ -15,7 +15,7 @@
 
 - KB dataset is distributed separately from CLI bundle as GitHub release artifact.
 - CLI auto-downloads KB on first run from GitHub releases (default) or custom URL.
-- KB cache location: `~/.pair/kb/{version}/` for the official KB, `~/.pair/kb/external/{kind}-{label}-{hash}/` for every other source that needs materializing (a `--source` directory is read in place and owns no slot; slot keyed by source identity — see the [2026-08-11 ADL](../decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md)).
+- KB cache location: `~/.pair/kb/{version}/` for the official KB, `~/.pair/kb/external/{kind}-{hash}/` for every other source that needs materializing (only the remote-URL form keeps a `{label}`: `~/.pair/kb/external/url-{label}-{hash}/`; a `--source` directory is read in place and owns no slot; slot keyed by source identity — see the [2026-08-11 ADL](../decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md)).
 - Fallback chain (default source only): monorepo dataset (checkout) → cache hit → default GitHub release. A source the user NAMES bypasses that chain and resolves to its own identity slot — `--source <path|url|git>`, or the program-level `--url` when the command names no `--source` (`--source` outranks it).
 - Version coordination: CLI version maps to KB version (e.g. CLI v0.2.0 → KB v0.2.0).
 

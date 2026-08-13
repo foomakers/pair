@@ -145,7 +145,8 @@ pair-cli install --source ./dist/acme-kb-1.0.0.zip --offline
 <Callout>
   **No external source ever writes the official KB's slot.** An external KB that has to
   be materialized first — a ZIP, a remote ZIP, a git clone — is cached under
-  `~/.pair/kb/external/<kind>-<label>-<hash>/`, never in the official KB's version slot
+  `~/.pair/kb/external/<kind>-<hash>/` (the remote-ZIP form also keeps a label:
+  `url-<label>-<hash>/`), never in the official KB's version slot
   (`~/.pair/kb/<cli-version>/`). A **local directory** is not cached at all: it is
   installed from in place, so editing it changes what the next install produces. Either
   way, installing an external KB in one project cannot change what any other project on
