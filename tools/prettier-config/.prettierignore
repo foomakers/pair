@@ -19,3 +19,15 @@ out/
 # The entries ABOVE stay: they are the floor for non-git contexts, where
 # `git rev-parse --show-toplevel` fails and the delegation silently no-ops. Do not
 # delete them expecting the delegation to cover them.
+
+# Shipped workflow artifacts (#219) — a BYTE-IDENTICAL mirror of `.claude/workflows/`,
+# which lives outside every package and is therefore formatted by nothing. Formatting only
+# this copy would break the mirror guard that makes the two one artifact. Same reason the
+# eslint config and the knowledge-hub vitest config exclude it: shipping a directory into a
+# package brought it under three tool scopes it was never under, and all three must agree.
+#
+# `**/` is load-bearing. This file's patterns resolve against THIS directory (git semantics,
+# see _ignore-args.sh), so a bare `dataset/.workflows/` would mean
+# `tools/prettier-config/dataset/.workflows/` — a path that does not exist, silently
+# matching nothing.
+**/dataset/.workflows/

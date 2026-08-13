@@ -73,7 +73,10 @@ describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset
     for (const name of listFiles(datasetDir)) {
       const source = readFileSync(join(datasetDir, name), 'utf-8')
       const live = readFileSync(join(installedDir, name), 'utf-8')
-      expect(live, `${installed}/${name} has drifted from the dataset — copy the dataset version`).toBe(source)
+      expect(
+        live,
+        `${installed}/${name} has drifted from the dataset — copy the dataset version`,
+      ).toBe(source)
     }
   })
 })
@@ -94,10 +97,15 @@ describe('US-219 AC3 — a workflow ships with the agents it dispatches to', () 
       const src = readFileSync(join(workflowsDir, file), 'utf-8')
       for (const m of src.matchAll(/agentType:\s*'([a-z-]+)'/g)) spawned.add(m[1]!)
     }
-    expect(spawned.size, 'no agentType found — the scan pattern stopped matching').toBeGreaterThan(0)
+    expect(spawned.size, 'no agentType found — the scan pattern stopped matching').toBeGreaterThan(
+      0,
+    )
 
     // `general-purpose` is a host built-in, not something this dataset ships.
     const missing = [...spawned].filter(t => t !== 'general-purpose' && !shipped.has(t))
-    expect(missing, `workflows spawn agent types the dataset does not ship: ${missing.join(', ')}`).toEqual([])
+    expect(
+      missing,
+      `workflows spawn agent types the dataset does not ship: ${missing.join(', ')}`,
+    ).toEqual([])
   })
 })

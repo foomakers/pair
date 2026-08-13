@@ -3,9 +3,7 @@
     "github": {
       "source": ".github",
       "behavior": "mirror",
-      "include": [
-        "/agents"
-      ],
+      "include": ["/agents"],
       "description": "GitHub workflows and configuration files",
       "targets": [
         {

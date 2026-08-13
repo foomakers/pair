@@ -356,7 +356,6 @@ export function checkCatalogSync(allSkills: string[], catalog: string): string[]
   return errors
 }
 
-
 /**
  * Check: the batch-engine page names the directories the registries actually install.
  *
@@ -365,7 +364,10 @@ export function checkCatalogSync(allSkills: string[], catalog: string): string[]
  * read from `config.json` here, so renaming a registry target without touching the page
  * fails the gate instead of leaving a doc that points at a directory nobody gets.
  */
-export function checkBatchEnginePaths(registries: Record<string, { targets: { path: string }[] }>, doc: string): string[] {
+export function checkBatchEnginePaths(
+  registries: Record<string, { targets: { path: string }[] }>,
+  doc: string,
+): string[] {
   const errors: string[] = []
   for (const name of ['workflows', 'agent-definitions']) {
     const reg = registries[name]
@@ -377,7 +379,9 @@ export function checkBatchEnginePaths(registries: Record<string, { targets: { pa
       // Documented with or without the trailing slash — the path is the fact, not its spelling.
       const bare = t.path.replace(/\/$/, '')
       if (!doc.includes(bare)) {
-        errors.push(`batch-engine.mdx does not mention "${t.path}", where the "${name}" registry installs`)
+        errors.push(
+          `batch-engine.mdx does not mention "${t.path}", where the "${name}" registry installs`,
+        )
       }
     }
   }
@@ -559,6 +563,22 @@ function checkPaths(root: string) {
   }
 }
 
+/**
+ * The batch-engine page states WHERE `pair install` puts the engine. That claim is read back
+ * from the registries rather than trusted, so renaming a target without touching the page
+ * fails here instead of leaving a doc pointing at a directory nobody gets.
+ */
+function batchEngineErrors(paths: { BATCH_ENGINE_FILE: string; CLI_CONFIG: string }): string[] {
+  if (!existsSync(paths.BATCH_ENGINE_FILE)) return []
+  const cliConfig = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
+    asset_registries: Record<string, { targets: { path: string }[] }>
+  }
+  return checkBatchEnginePaths(
+    cliConfig.asset_registries,
+    readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8'),
+  )
+}
+
 export function runAllChecks(root: string): RunResult {
   const paths = checkPaths(root)
   const { SKILLS_DIR, DOCS_DIR, HOW_TO_DIR } = paths
@@ -589,17 +609,7 @@ export function runAllChecks(root: string): RunResult {
 
   // Check 2: catalog sync (both directions)
   const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
-  // The batch-engine page states WHERE `pair install` puts the engine. That claim is read
-  // back from the registries rather than trusted, so renaming a target without touching the
-  // page fails here instead of leaving a doc pointing at a directory nobody gets.
-  if (existsSync(paths.BATCH_ENGINE_FILE)) {
-    const cliConfig = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
-      asset_registries: Record<string, { targets: { path: string }[] }>
-    }
-    errors.push(
-      ...checkBatchEnginePaths(cliConfig.asset_registries, readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8')),
-    )
-  }
+  errors.push(...batchEngineErrors(paths))
 
   errors.push(...checkCatalogSync(allSkills, catalog))
 

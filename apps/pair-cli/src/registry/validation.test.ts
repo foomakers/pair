@@ -497,9 +497,9 @@ describe('registry validation - targets', () => {
 })
 
 describe('US-219 — the workflow + agent registries are installable and reserved-path safe', () => {
-  const config = JSON.parse(
-    readFileSync(join(__dirname, '../../config.json'), 'utf-8'),
-  ) as { asset_registries: Record<string, RegistryConfig> }
+  const config = JSON.parse(readFileSync(join(__dirname, '../../config.json'), 'utf-8')) as {
+    asset_registries: Record<string, RegistryConfig>
+  }
 
   it('registers both the workflows and the agent execution layer', () => {
     // A workflow installed without the agent definitions its `agentType`s resolve to
