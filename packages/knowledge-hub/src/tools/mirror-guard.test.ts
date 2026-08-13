@@ -6,6 +6,9 @@ import {
   buildMirrorTransform,
   buildInstallTransform,
   mirrorEntries,
+  installedEntries,
+  orphanedMirrorEntries,
+  assertNoOrphanedMirrorEntries,
   datasetPathOf,
   mirrorPathOf,
   isMarkdownPath,
@@ -125,6 +128,14 @@ interface MirrorFixture {
   nonMarkdown: string[]
   /** the whole `include`-narrowed entry list — exactly `markdown` + `nonMarkdown` */
   all: string[]
+  /**
+   * what the INSTALLED tree contributes, in the same entry vocabulary and
+   * narrowed by the SAME `include` predicate — the other side of the set
+   * equality. Narrowing both sides with one predicate is load-bearing: the
+   * `github` target really does hold un-included siblings (`.github/workflows`,
+   * `.github/skills`) that `pair update` never writes from this registry.
+   */
+  installedAll: string[]
   source: (rel: string) => string
   /** installed content, or `undefined` when the mirror file is genuinely absent */
   installed: (rel: string) => string | undefined
@@ -153,6 +164,7 @@ const buildFixture = (mirror: GuardedMirror): MirrorFixture => {
     markdown: all.filter(isMarkdownPath),
     nonMarkdown: all.filter(rel => !isMarkdownPath(rel)),
     all,
+    installedAll: installedEntries(mirror, REPO_ROOT).filter(rel => isIncluded(mirror.key, rel)),
     source,
     installed: rel => {
       const p = join(REPO_ROOT, mirrorPathOf(mirror, rel))
@@ -213,7 +225,8 @@ const CORPUS_TEST_TIMEOUT_MS = 30_000
 describe.each(FIXTURES)(
   'dataset -> installed mirror equality for every file of $label (data-driven) (#393)',
   fixture => {
-    const { mirror, markdown, nonMarkdown, all, source, installed, expectedFor } = fixture
+    const { mirror, markdown, nonMarkdown, all, installedAll, source, installed, expectedFor } =
+      fixture
 
     it('discovers dataset files directly from disk (no hardcoded count)', () => {
       expect(markdown.length).toBeGreaterThan(0)
@@ -261,6 +274,37 @@ describe.each(FIXTURES)(
       },
       CORPUS_TEST_TIMEOUT_MS,
     )
+
+    /**
+     * The REVERSE direction (#393 review round 10) — without it the two sweeps
+     * above are blind to a whole drift class, because they enumerate DATASET
+     * files: a file that exists only under the installed target is asserted by
+     * nothing at all.
+     *
+     * That class is not hypothetical, it is the one THIS story removed by hand:
+     * `how-to/04-how-to-define-subdomains.md` and
+     * `05-how-to-define-bounded-contexts.md` were dropped from the dataset in
+     * #246 and were still installed at the repo root ~5 months later, indexed
+     * into `.pair/llms.txt` where agents read them. A hand-edit, a bad merge or
+     * a `pair update` run from an older dataset reopens it, and every other
+     * assertion in this file stays green while it does.
+     *
+     * Adding it makes the guard a set EQUALITY over entry paths, and it is
+     * DETECTION only — it reads two path lists, deletes nothing, and is
+     * therefore independent of the open product decision about wiring
+     * destructive cleanup onto `pair update` (mirror-guard ADL, OPEN RESIDUAL).
+     * Green on both directory mirrors when introduced: the dataset and installed
+     * path sets were already identical for `.pair/knowledge` and
+     * `.github/agents`, so this lands as a regression guard, not a red test.
+     *
+     * Single-FILE mirrors (`AGENTS.md`, `CLAUDE.md`) run it too and are
+     * trivially exempt — a target that IS the file has no room for an orphan —
+     * so the case list stays derived from `GUARDED_MIRRORS` with no special
+     * casing to keep in sync.
+     */
+    it('ships no installed file with no dataset source (reverse sweep)', () => {
+      assertNoOrphanedMirrorEntries(mirror, installedAll, all)
+    })
 
     /**
      * Edge case from the story: the regeneration runs many times over this
@@ -516,10 +560,144 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
     expect(message).not.toContain('is itself the drift')
   })
 
+  it('names the EXTRA install ops of a single-file target, in pipeline order', () => {
+    // the two directory mirrors above exercise none of these, so the sentence
+    // that lets a CLAUDE.md reader reproduce `expected` by hand was asserted by
+    // nothing — and it is the half of the message that differs per target
+    const message = captureThrownMessage(() =>
+      assertMirrorMatches(CLAUDE_MD_MIRROR, 'AGENTS.md', expected, 'drifted\n'),
+    )
+    expect(message).toContain("the 'claude' naming transform")
+    expect(message).toContain('marker stripping')
+    expect(message.indexOf('naming transform')).toBeLessThan(message.indexOf('marker stripping'))
+  })
+
+  it('names only the marker strip for the single-file target with no naming transform', () => {
+    const message = captureThrownMessage(() =>
+      assertMirrorMatches(AGENTS_MD_MIRROR, 'AGENTS.md', expected, 'drifted\n'),
+    )
+    expect(message).toContain('marker stripping')
+    expect(message).not.toContain('naming transform')
+  })
+
   it('reports a missing mirror as missing, with the regenerate hint (not as drift)', () => {
     expect(() => assertKb(REL, expected, undefined)).toThrow(
       /Mirror missing.*does not exist.*pair update/s,
     )
+  })
+})
+
+/**
+ * Drift-injection coverage for the REVERSE sweep, for the same reason the
+ * forward assertion has it: on disk the sweep only ever runs its happy path, so
+ * the failure — and above all its remedy sentence — is driven here.
+ */
+describe('assertNoOrphanedMirrorEntries — the reverse sweep (#393)', () => {
+  const dataset = ['how-to/01-a.md', 'how-to/02-b.md', 'assets/pr-state.sh']
+
+  it('reports nothing when the installed tree is exactly the dataset (order-independent)', () => {
+    // called directly rather than through `expect().not.toThrow()`, so a failure
+    // reports the guard's own message as the headline
+    assertNoOrphanedMirrorEntries(KB_MIRROR, [...dataset].reverse(), dataset)
+  })
+
+  it('reports nothing when the installed tree is a SUBSET — that is the forward guard job', () => {
+    // a dataset file missing from the mirror is the missing-mirror failure of
+    // `assertMirrorMatches`; reporting it here too would blame one defect twice
+    // in two vocabularies
+    assertNoOrphanedMirrorEntries(KB_MIRROR, ['how-to/01-a.md'], dataset)
+  })
+
+  it('lists an installed-only file — the class this story removed by hand', () => {
+    const orphan = 'how-to/04-how-to-define-subdomains.md'
+    const message = captureThrownMessage(() =>
+      assertNoOrphanedMirrorEntries(KB_MIRROR, [...dataset, orphan], dataset),
+    )
+    expect(message).toContain(join(KB_MIRROR.mirrorRel, orphan))
+    // the dataset-sourced files are NOT in the report
+    expect(message).not.toContain('how-to/01-a.md')
+  })
+
+  it('names both remedies — delete it, or add it to the dataset — and the regenerate step', () => {
+    const message = captureThrownMessage(() =>
+      assertNoOrphanedMirrorEntries(KB_MIRROR, [...dataset, 'ZZ-orphan.md'], dataset),
+    )
+    expect(message).toContain('DELETE it')
+    expect(message).toContain(`ADD it to the dataset under ${KB_MIRROR.datasetRel}`)
+    expect(message).toContain("'pair update'")
+    // states what it compared, like its forward sibling, so the reader cannot
+    // mistake it for the transform assertion
+    expect(message).toContain('COMPARED')
+    expect(message).toContain('reverse')
+  })
+
+  it('reports the WHOLE offending set, not the first one', () => {
+    const orphans = ['ZZ-a.md', 'nested/deep/ZZ-b.md']
+    const message = captureThrownMessage(() =>
+      assertNoOrphanedMirrorEntries(KB_MIRROR, [...dataset, ...orphans], dataset),
+    )
+    for (const rel of orphans) expect(message).toContain(join(KB_MIRROR.mirrorRel, rel))
+    expect(message).toContain('2 file(s)')
+  })
+
+  it('names the paths of the registry it was given, not the KB by default', () => {
+    const message = captureThrownMessage(() =>
+      assertNoOrphanedMirrorEntries(GITHUB_AGENTS_MIRROR, ['agents/ZZ.agent.md'], []),
+    )
+    expect(message).toContain(join('.github', 'agents/ZZ.agent.md'))
+    expect(message).not.toContain('.pair/knowledge')
+    // ...and does not claim THIS target is indexed into .pair/llms.txt, which is
+    // true of the KB tree only
+    expect(message).not.toContain('.pair/llms.txt')
+  })
+
+  it('tells the KB reader the extra consequence: an orphan there is indexed for agents', () => {
+    const message = captureThrownMessage(() =>
+      assertNoOrphanedMirrorEntries(KB_MIRROR, ['ZZ-orphan.md'], []),
+    )
+    expect(message).toContain('.pair/llms.txt')
+  })
+
+  it('sorts the orphan list, so the report is stable across filesystem walk order', () => {
+    expect(orphanedMirrorEntries(['b.md', 'a.md', 'how-to/01-a.md'], dataset)).toEqual([
+      'a.md',
+      'b.md',
+    ])
+  })
+})
+
+describe('installedEntries — the target side of the set equality (#393)', () => {
+  it('keys the installed KB tree exactly like the dataset side', () => {
+    // same vocabulary on both sides is what makes the two lists subtract; if the
+    // walk ever diverged (separators, recursion, sorting) every file would read
+    // as an orphan
+    const installed = installedEntries(KB_MIRROR, REPO_ROOT)
+    expect(installed).toContain('guidelines/collaboration/templates/code-review-template.md')
+    expect(installed).toContain('assets/pr-state.sh')
+    expect(installed).toEqual([...installed].sort())
+  })
+
+  it('walks the whole target, INCLUDING what the registry does not copy', () => {
+    // the narrowing is the caller's (`isIncluded`), not the walk's — and it is
+    // load-bearing here: `.github` really does hold subtrees this registry never
+    // writes, so a sweep without the narrowing would report them as orphans
+    const installed = installedEntries(GITHUB_AGENTS_MIRROR, REPO_ROOT)
+    expect(installed.some(rel => !isIncluded(GITHUB_AGENTS_MIRROR.key, rel))).toBe(true)
+    expect(installed.filter(rel => isIncluded(GITHUB_AGENTS_MIRROR.key, rel))).toEqual(
+      githubAgents.installedAll,
+    )
+  })
+
+  it('gives a single-FILE mirror its one entry, keyed by the dataset basename', () => {
+    expect(installedEntries(CLAUDE_MD_MIRROR, REPO_ROOT)).toEqual(['AGENTS.md'])
+    expect(installedEntries(AGENTS_MD_MIRROR, REPO_ROOT)).toEqual(['AGENTS.md'])
+  })
+
+  it('yields nothing for a target that does not exist (that is the forward failure)', () => {
+    const missing: GuardedMirror = { ...KB_MIRROR, mirrorRel: '.pair/knowledge-does-not-exist' }
+    expect(installedEntries(missing, REPO_ROOT)).toEqual([])
+    const missingFile: GuardedMirror = { ...CLAUDE_MD_MIRROR, mirrorRel: 'NO-SUCH-FILE.md' }
+    expect(installedEntries(missingFile, REPO_ROOT)).toEqual([])
   })
 })
 

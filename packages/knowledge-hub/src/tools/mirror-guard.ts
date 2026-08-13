@@ -41,11 +41,29 @@
  * pipeline FAILS this guard instead of being masked by a parallel
  * implementation.
  *
- * DIRECTIONAL (dataset → installed), like its `skill-md-mirror` sibling: the
- * enumeration is keyed by DATASET files, so an installed-only file with no
- * dataset source is never asserted — it is not drift.
+ * BOTH DIRECTIONS, and the second one is not optional here. The per-file
+ * comparison is keyed by DATASET files, so on its own it says nothing about a
+ * file that exists ONLY at the target. For a `behavior: "mirror"` registry that
+ * is drift, not a non-event: the target is meant to be the dataset's image, and
+ * an orphan there is read as if it were shipped content (the KB tree is indexed
+ * into `.pair/llms.txt`). This story removed two such files BY HAND — dropped
+ * from the dataset in #246, still installed ~5 months later. So
+ * `assertNoOrphanedMirrorEntries` sweeps the other way, over `installedEntries`,
+ * and the pair of directions is what makes the guard a set EQUALITY.
+ *
+ * That reverse sweep DETECTS; it does not delete. Whether `pair update` should
+ * itself remove an orphan under a mirror target is an open product decision
+ * (see the mirror-guard ADL's OPEN RESIDUAL) and an independent question — this
+ * module touches no adopter file either way, it prints the human remedy.
+ *
+ * The sibling `skill-md-mirror` stays one-directional, and its own ACCEPTED
+ * RESIDUAL (#384) says why the same sweep is not portable there as-is: its
+ * target `.claude/skills/` legitimately hosts whole root-only skills with no
+ * dataset source (`agent-browser`), so a reverse sweep there needs an exemption
+ * rule this one does not — `knowledge` and `github` install into targets the
+ * dataset fully owns.
  */
-import { readdirSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import { basename, join, relative, sep } from 'path'
 import { stripAllMarkers, applyTransformCommands } from '@pair/content-ops'
 import {
@@ -228,28 +246,33 @@ export function buildInstallTransform(
 }
 
 /**
- * EVERY file a dataset tree contributes, as sorted posix paths relative to
- * `datasetDir`. Derived from disk at collection time and recursive, so a newly
- * added file is guarded with no test edit and nothing anywhere encodes HOW MANY
- * files exist.
+ * EVERY file a tree contributes, as sorted posix paths relative to `root`.
+ * Derived from disk at collection time and recursive, so a newly added file is
+ * guarded with no test edit and nothing anywhere encodes HOW MANY files exist.
+ *
+ * Used for BOTH sides of the comparison — the dataset tree and the installed
+ * tree — deliberately through ONE walk: the two entry sets are only comparable
+ * if they are keyed identically (same recursion, same posix separators, same
+ * sort), and a second walk written for the installed side is exactly where that
+ * would drift.
  *
  * A PATH-ONLY walk on purpose: enumeration must not read contents (an earlier
  * version slurped all 445 files as utf-8 just to keep their names, which would
  * silently garble the first binary asset dropped under the dataset). The
  * caller reads the files it actually compares, once each.
  */
-export function datasetPaths(datasetDir: string): string[] {
+export function treePaths(root: string): string[] {
   const paths: string[] = []
 
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name)
       if (entry.isDirectory()) walk(full)
-      else paths.push(relative(datasetDir, full).split(sep).join('/'))
+      else paths.push(relative(root, full).split(sep).join('/'))
     }
   }
 
-  walk(datasetDir)
+  walk(root)
   return paths.sort()
 }
 
@@ -265,7 +288,93 @@ export function datasetPaths(datasetDir: string): string[] {
 export function mirrorEntries(mirror: GuardedMirror, repoRoot: string): string[] {
   return mirror.sourceKind === 'file'
     ? [basename(mirror.datasetRel)]
-    : datasetPaths(join(repoRoot, mirror.datasetRel))
+    : treePaths(join(repoRoot, mirror.datasetRel))
+}
+
+/**
+ * Every file ONE guarded mirror's INSTALLED tree contributes, keyed exactly like
+ * `mirrorEntries` — the same entry vocabulary, read from the target side instead
+ * of the dataset side, so the two lists subtract.
+ *
+ * A single-FILE mirror contributes its one entry when the installed file exists
+ * and nothing when it does not: there is no such thing as an orphan under a
+ * target that IS the file (a missing target is the `assertMirrorMatches`
+ * missing-mirror failure, not this class).
+ *
+ * A missing directory target yields the empty list rather than throwing — that
+ * is also `assertMirrorMatches`'s failure to report, per file, with the
+ * regenerate remedy; reporting it twice from two different angles would blame
+ * the same defect in two vocabularies.
+ */
+export function installedEntries(mirror: GuardedMirror, repoRoot: string): string[] {
+  const target = join(repoRoot, mirror.mirrorRel)
+  if (!existsSync(target)) return []
+  return mirror.sourceKind === 'file' ? [basename(mirror.datasetRel)] : treePaths(target)
+}
+
+/**
+ * The REVERSE of the guard's normal direction: installed entries with NO dataset
+ * source, sorted. Both lists must already be narrowed by the registry's declared
+ * `include`, or an un-copied sibling subtree of the target reads as an orphan.
+ */
+export function orphanedMirrorEntries(
+  installed: readonly string[],
+  dataset: readonly string[],
+): string[] {
+  const sourced = new Set(dataset)
+  return [...installed].filter(rel => !sourced.has(rel)).sort()
+}
+
+/**
+ * Asserts the installed tree contributes nothing the dataset does not — the
+ * REVERSE sweep (#393 review round 10).
+ *
+ * The dataset → installed direction alone cannot see this class: it enumerates
+ * DATASET files, so a file that exists only at the target is asserted by
+ * nothing. That is not hypothetical — it is the defect this very story removed
+ * BY HAND: `.pair/knowledge/how-to/04-how-to-define-subdomains.md` and
+ * `05-how-to-define-bounded-contexts.md` were dropped from the dataset in #246,
+ * still shipped ~5 months later, and were indexed into `.pair/llms.txt` where
+ * agents read them. Without this sweep the same class reopens silently on the
+ * next hand-edit, bad merge, or `pair update` from an older dataset.
+ *
+ * DETECTION, not deletion. It reads two path lists and touches no adopter file;
+ * it is independent of the still-open product decision about wiring destructive
+ * cleanup onto the CLI install path (see the mirror-guard ADL's OPEN RESIDUAL),
+ * which is about DELETING. The remedy it prints is the human one — remove the
+ * file, or give it a dataset source — precisely because the tool taking that
+ * action itself is the part not yet decided.
+ *
+ * Valid for a `behavior: "mirror"` registry, whose target is meant to be the
+ * dataset's IMAGE. It would be wrong for `behavior: "add"` (`adoption`), where a
+ * target-only file is the whole point — that registry is excluded from
+ * `GUARDED_MIRRORS`, and the exclusion is asserted in the suite.
+ */
+export function assertNoOrphanedMirrorEntries(
+  mirror: GuardedMirror,
+  installed: readonly string[],
+  dataset: readonly string[],
+): void {
+  const orphans = orphanedMirrorEntries(installed, dataset)
+  if (orphans.length === 0) return
+  // the indexing consequence is stated only where it is TRUE: `writeProjectLlmsTxt`
+  // indexes the KB tree, so an orphan there is not merely present, it is advertised
+  // to every agent reading `.pair/llms.txt` — which is how this story's two files
+  // survived ~5 months. Saying it for another registry's target would be a lie.
+  const alsoIndexed =
+    mirror.key === KB_MIRROR.key
+      ? ` — under this target it is even indexed into .pair/llms.txt`
+      : ''
+  throw new Error(
+    `Mirror ${mirror.mirrorRel} ships ${orphans.length} file(s) with NO dataset source:\n` +
+      `${orphans.map(rel => `  - ${mirrorPathOf(mirror, rel)}`).join('\n')}\n` +
+      `COMPARED: the installed tree vs. the files ${mirror.datasetRel} contributes (the reverse of ` +
+      `the per-file mirror equality above). A '${mirror.key}' registry target is the dataset's ` +
+      `IMAGE, so a file only the target has is drift: 'pair update' neither writes nor removes it, ` +
+      `and it goes on being read as if it were shipped content${alsoIndexed}.\n` +
+      `Remedy: DELETE it, or ADD it to the dataset under ${mirror.datasetRel} and regenerate with ` +
+      `'pair update'.`,
+  )
 }
 
 /** Repo-relative path of an entry's dataset source. */
