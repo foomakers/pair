@@ -791,6 +791,38 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(prRow).toMatch(/skipped|no[- ]remote|no code-host/i)
   })
 
+  it('AC6 — the disclosed COST is the one the code pays: per run, no cross-invocation reuse', () => {
+    // Round-11 finding. The asset comment and the record stated the residual timeout on an
+    // unreachable-but-CONFIGURED host as "Pay it ONCE per session, not per task", and the PR
+    // asked the merge gate to accept AC6's residual on the strength of that bound. Nothing
+    // implements it: `resolve_pr_tree` re-initializes every name and re-invokes `pr_view_json`
+    // on EVERY call (the smoke scenario pins one round trip PER CALL, not one per session),
+    // each gate invocation is a fresh shell, and /implement composes this skill once per task
+    // — so an offline session on a repo that HAS a remote pays the host command's default
+    // timeout on every task gate, not once. A bound nothing implements misinforms the merge
+    // decision, so the records state the real cost and name only mitigations that exist.
+    const claimsSessionBound =
+      /once per session|per session, not per task|reused by later invocations|may be reused|reuse[^\n]{0,40}later invocation/i
+    expect(TREE_RESOLVER, 'the asset may not promise reuse it does not implement').not.toMatch(
+      claimsSessionBound,
+    )
+    expect(SKILL, 'nor may the step the agent executes').not.toMatch(claimsSessionBound)
+    // Positive: the honest per-run cost, stated where the read is made and where the agent
+    // reads the rule.
+    expect(TREE_RESOLVER, 'the asset states the per-run cost at the read').toMatch(
+      /per run|every run|each run|per gate run/i,
+    )
+    expect(step15, 'and the step states the residual the executing agent pays').toMatch(
+      /per run|every run|each run|per gate run/i,
+    )
+    // …and the mitigation it points at is the IMPLEMENTED one: the `pr_view_json` override
+    // (bound at call time, so no fork of the asset) makes an offline session fail fast.
+    expect(step15, 'the offline mitigation must be the override that exists').toMatch(
+      /pr_view_json/,
+    )
+    expect(step15).toMatch(/offline|unreachable|rate[- ]limited/i)
+  })
+
   it('the stale boundary note is gone — no "PR number is never needed", no "belongs to /review"', () => {
     expect(SKILL).not.toMatch(/PR number is never needed/i)
     expect(SKILL).not.toMatch(/belongs to `?\/review`?/i)

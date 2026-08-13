@@ -133,8 +133,13 @@ resolve_pr_tree() {
   # Where the host command offers a request-timeout knob, set it in `pr_view_json`, so an
   # offline or rate-limited session fails fast instead of hanging on every task gate —
   # GitHub's `gh` exposes none, so on the reference host the residual cost of an
-  # unreachable (as opposed to unconfigured) host is `gh`'s own default timeout. Pay it
-  # ONCE per session, not per task.
+  # unreachable (as opposed to unconfigured) host is `gh`'s own default timeout, and it is
+  # paid on EVERY run: nothing here is memoized. Nothing here CAN be — each caller is a
+  # separate process (a task gate per task), so a shell-local cache would never span two of
+  # them, and a cached failure would have to be a state of its own (a skipped read is not a
+  # failed one) that goes stale the moment the host recovers. A session that must run
+  # against a configured but UNREACHABLE host installs its own fail-fast `pr_view_json`
+  # override (the substitution point documented at the top of this file) instead.
   if [ -z "$(git remote)" ]; then
     NO_CODE_HOST=1
     NO_PR_ON_BRANCH=1

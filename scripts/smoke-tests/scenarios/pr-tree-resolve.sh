@@ -142,6 +142,29 @@ contains "match row names the PR head" "matches PR #420's head (feature/US-382@$
 # The labels the ONE read already fetched feed the tier resolver — no second round trip.
 check "the labels feed resolve_tier"       yellow "$(resolve_tier "$PR_LABELS" 2>/dev/null)"
 
+# The cost the record STATES, executed: nothing is memoized between calls. Two calls make
+# two reads — so the price is one read per RUN (one host timeout per task gate when the host
+# is configured but unreachable), never "once per session". A record promising a bound this
+# loop disproves would be asking the merge gate to accept a cost nothing implements.
+: >"$CALL_LOG"
+stub_read "$HEAD_SHA" risk:yellow
+resolve_pr_tree ""
+resolve_pr_tree ""
+check "no memoization: two calls ⇒ two reads" 2 "$(wc -l <"$CALL_LOG" | tr -d ' ')"
+
+# …and the mitigation the skill DOES point at works: a session that must run against a
+# configured but unreachable host installs its own fail-fast `pr_view_json` (the resolver
+# binds the name at call time, so no fork of the asset) and lands on `unknown`, which
+# changes no gate.
+: >"$CALL_LOG"
+pr_view_json() {
+  printf 'fail-fast\n' >>"$CALL_LOG"
+  return 1
+}
+resolve_pr_tree '#420'
+check "fail-fast override ⇒ unknown, no host wait" unknown "$TREE_MATCH"
+check "…and the override is what ran" fail-fast "$(head -n1 "$CALL_LOG")"
+
 # Being ON the PR's branch is not being AT its head: the canonical pre-push state.
 stub_read "$PARENT_SHA" risk:yellow
 resolve_pr_tree ""
