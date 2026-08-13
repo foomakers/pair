@@ -1,3 +1,4 @@
+import type { Dirent } from 'fs'
 import { join, relative, basename, dirname } from 'path/posix'
 import { logger, createMirrorConstraintError, createError } from '../observability'
 import { validatePaths } from '../file-system/file-validations'
@@ -186,15 +187,78 @@ function registryOwns(srcEntryPath: string, ownership: MirrorCleanupOwnership): 
   return behavior !== 'add' && behavior !== 'skip'
 }
 
+/**
+ * Reads the source side of a cleanup pass, distinguishing "the source is not there" from
+ * "the source could not be read".
+ *
+ * FAILED READ ≠ EMPTY SOURCE. This walk is recursive and it DELETES from a real working
+ * tree, so swallowing the read (`catch(() => [])`) makes every owned entry of the target
+ * look absent from the source and removes it — announced, worst of all, as
+ * `⚠️ Mirror: removed … (not in the source)`, which blames a dataset retirement for what
+ * was an IO fault. One EACCES/EPERM/EIO/EMFILE on a subdirectory during `pair update`
+ * would take out the whole installed subtree, and the only recovery is the adopter's VCS
+ * (there is no `--dry-run`, no `--no-clean`, no install manifest).
+ *
+ * ENOENT is the one failure that says something about the MIRROR rather than about the
+ * filesystem: the source directory is gone, so its target must go too — the delete
+ * semantics this function has always had, kept deliberately. Everything else, including a
+ * rejection carrying no errno at all, means only "we do not know what the source holds",
+ * and the safe answer to not knowing is to delete nothing here. The caller proceeds with
+ * the copy either way: abstaining leaves stale files behind, which the next successful
+ * run cleans; guessing destroys files no run can bring back.
+ */
+async function readSourceForCleanup(
+  fileService: FileSystemService,
+  srcPath: string,
+): Promise<{ entries: Dirent[] } | { unreadable: string }> {
+  try {
+    return { entries: await fileService.readdir(srcPath) }
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : undefined
+    // A source that is genuinely gone still means the target is gone.
+    if (code === 'ENOENT') return { entries: [] }
+    return { unreadable: code ?? 'unknown' }
+  }
+}
+
+/**
+ * Removes a target entry the source no longer has, and says so at WARN.
+ *
+ * WARN, not info: this is the one place `pair update` DELETES from the target tree.
+ * `.pair/knowledge/` is a mirror — `customization/templates.mdx` states that edits there
+ * are lost on the next update and that customization belongs in `.pair/adoption/` — but a
+ * deletion the operator cannot see in the output is indistinguishable from data loss,
+ * whatever the docs say. Reaching this line therefore requires KNOWING the source does
+ * not have the entry; see `readSourceForCleanup` for why a failed read is not that.
+ */
+async function removeMirrorOrphan(fileService: FileSystemService, toRemove: string) {
+  if (!fileService.rm) return
+  await fileService.rm(toRemove, { recursive: true, force: true })
+  logger.warn(`Mirror: removed ${toRemove} (not in the source; customize via .pair/adoption/)`)
+}
+
 export async function handleMirrorCleanup(
   fileService: FileSystemService,
   srcPath: string,
   destPath: string,
   ownership: MirrorCleanupOwnership = {},
 ) {
+  const source = await readSourceForCleanup(fileService, srcPath)
+  if ('unreadable' in source) {
+    // WARN and skip THIS directory only — a sibling scope whose source reads fine is
+    // still cleaned, and the copy still runs. Names the path and the errno so the
+    // operator can tell an IO fault from a retirement.
+    logger.warn(
+      `Mirror: skipped cleanup of ${destPath} — could not read source ${srcPath} (${source.unreadable})`,
+    )
+    return
+  }
+
   const destEntries = await fileService.readdir(destPath).catch(() => [])
-  const srcEntries = await fileService.readdir(srcPath).catch(() => [])
-  const srcByName = new Map(srcEntries.map(e => [e.name, e]))
+  const srcByName = new Map(source.entries.map(e => [e.name, e]))
 
   for (const de of destEntries) {
     // Not ours: neither removed nor descended into. The target side is the adopter's here.
@@ -205,20 +269,9 @@ export async function handleMirrorCleanup(
 
     const src = srcByName.get(de.name)
 
+    // Absent from the source: remove it, whatever it is.
     if (!src) {
-      // Absent from the source: remove it, whatever it is.
-      const toRemove = join(destPath, de.name)
-      if (fileService.rm) {
-        await fileService.rm(toRemove, { recursive: true, force: true })
-        // WARN, not info: this is the one place `pair update` DELETES from the target tree.
-        // `.pair/knowledge/` is a mirror — `customization/templates.mdx` states that edits
-        // there are lost on the next update and that customization belongs in
-        // `.pair/adoption/` — but a deletion the operator cannot see in the output is
-        // indistinguishable from data loss, whatever the docs say.
-        logger.warn(
-          `Mirror: removed ${toRemove} (not in the source; customize via .pair/adoption/)`,
-        )
-      }
+      await removeMirrorOrphan(fileService, join(destPath, de.name))
       continue
     }
 

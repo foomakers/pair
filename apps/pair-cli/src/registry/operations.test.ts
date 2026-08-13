@@ -133,6 +133,52 @@ describe('registry operations', () => {
     expect(await fs.exists('/project/.github/ISSUE_TEMPLATE/bug.md')).toBe(true)
   })
 
+  // The wire above is the destructive one, so the failure mode that matters is tested HERE
+  // and not only on the helper: during `pair update`, a source subdirectory that cannot be
+  // READ (EACCES/EPERM/EIO/EMFILE, or one that becomes unreadable mid-run) must never be
+  // read as "the dataset retired everything under it" — that would delete the installed
+  // subtree out of the adopter's working tree, whose only recovery is their VCS.
+  it('doCopyAndUpdateLinks keeps the installed subtree when the source cannot be read', async () => {
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/keep.md': '# Keep',
+        '/dataset/src/how-to/01-live.md': '# Still shipped',
+        '/dataset/dst/keep.md': '# Keep',
+        '/dataset/dst/how-to/01-live.md': '# Still shipped',
+        '/dataset/dst/how-to/99-stale.md': '# Looks orphaned only because the read failed',
+        '/dataset/dst/ORPHAN.md': '# Genuinely retired, under a readable directory',
+      },
+      cwd,
+    )
+
+    // Unreadable at cleanup time, readable afterwards — cleanup runs before the copy, so
+    // this models the subdirectory that goes unreadable mid-run without breaking the copy.
+    const originalReaddir = fs.readdir.bind(fs)
+    let failed = false
+    fs.readdir = async (path: string) => {
+      if (path === '/dataset/src/how-to' && !failed) {
+        failed = true
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+      }
+      return originalReaddir(path)
+    }
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'mirror' },
+    })
+
+    expect(failed).toBe(true)
+    expect(await fs.exists('/dataset/dst/how-to/99-stale.md')).toBe(true)
+    expect(await fs.exists('/dataset/dst/how-to/01-live.md')).toBe(true)
+    // The rest of the tree is still cleaned, and the copy still ran.
+    expect(await fs.exists('/dataset/dst/ORPHAN.md')).toBe(false)
+    expect(await fs.exists('/dataset/dst/keep.md')).toBe(true)
+  })
+
   it('doCopyAndUpdateLinks deletes nothing when the registry behavior is not mirror', async () => {
     const fs = createTestFs(
       {},

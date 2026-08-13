@@ -530,29 +530,91 @@ describe('handleMirrorCleanup', () => {
 })
 
 describe('handleMirrorCleanup - error handling', () => {
-  it('should handle source directory read errors gracefully', async () => {
+  // ── A FAILED source read is not an EMPTY source ─────────────────────────────
+  // The walk is recursive and the target side is a real adopter's working tree, so
+  // `readdir(src).catch(() => [])` is the worst possible default: every owned entry of
+  // the target reads as "absent from the source" and is removed recursively, announced
+  // as `⚠️ Mirror: removed … (not in the source)` — an IO fault reported as a dataset
+  // retirement. Only ENOENT actually says something about the mirror ("the source is
+  // gone, so the target goes too"); EACCES/EPERM/EIO/EMFILE — or an error carrying no
+  // errno at all — say only that we do not know, and cleanup must abstain.
+  const errnoError = (code: string) => Object.assign(new Error(`${code}: readdir failed`), { code })
+
+  /** Make `readdir` reject for exactly one path, otherwise behave normally. */
+  const failReaddirFor = (path: string, error: Error) => {
+    const originalReaddir = fileService.readdir.bind(fileService)
+    fileService.readdir = vi.fn().mockImplementation(async (p: string) => {
+      if (p === path) throw error
+      return originalReaddir(p)
+    })
+  }
+
+  it('still removes a target entry when the source is genuinely absent (ENOENT)', async () => {
+    fileService = new InMemoryFileSystemService({ '/dataset/dest/extra.md': 'to remove' }, '/', '/')
+    vi.spyOn(fileService, 'rm')
+    failReaddirFor('/dataset/src', errnoError('ENOENT'))
+
+    await expect(
+      handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest'),
+    ).resolves.not.toThrow()
+
+    await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
+  })
+
+  it('leaves the target intact and warns when the source cannot be READ (EACCES)', async () => {
+    fileService = new InMemoryFileSystemService({ '/dataset/dest/extra.md': 'keep' }, '/', '/')
+    vi.spyOn(fileService, 'rm')
+    failReaddirFor('/dataset/src', errnoError('EACCES'))
+
+    await expect(
+      handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest'),
+    ).resolves.not.toThrow()
+
+    await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(true)
+    expect(fileService.rm).not.toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: skipped cleanup of /dataset/dest — could not read source /dataset/src (EACCES)',
+    )
+  })
+
+  it('treats a read failure carrying NO errno as unreadable, not as an empty source', async () => {
+    fileService = new InMemoryFileSystemService({ '/dataset/dest/extra.md': 'keep' }, '/', '/')
+    failReaddirFor('/dataset/src', new Error('Source not found'))
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(true)
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: skipped cleanup of /dataset/dest — could not read source /dataset/src (unknown)',
+    )
+  })
+
+  it('skips only the unreadable directory and keeps cleaning the rest of the tree', async () => {
     fileService = new InMemoryFileSystemService(
       {
-        '/dataset/dest/extra.md': 'to remove',
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/src/how-to/01-live.md': 'live',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/how-to/01-live.md': 'live',
+        '/dataset/dest/how-to/99-stale.md': 'orphan under the unreadable directory',
+        '/dataset/dest/ORPHAN.md': 'orphan under a readable directory',
       },
       '/',
       '/',
     )
+    failReaddirFor('/dataset/src/how-to', errnoError('EIO'))
 
-    // Mock readdir to throw for source
-    const originalReaddir = fileService.readdir.bind(fileService)
-    fileService.readdir = vi.fn().mockImplementation(async (path: string) => {
-      if (path === '/dataset/src') {
-        throw new Error('Source not found')
-      }
-      return originalReaddir(path)
-    })
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
 
-    // Should not throw and should still remove extra.md
-    await expect(
-      handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest'),
-    ).resolves.not.toThrow()
-    await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
+    // Unreadable subtree: untouched, including the entry that LOOKS like an orphan.
+    await expect(fileService.exists('/dataset/dest/how-to/99-stale.md')).resolves.toBe(true)
+    await expect(fileService.exists('/dataset/dest/how-to/01-live.md')).resolves.toBe(true)
+    // Readable sibling scope: cleaned exactly as before.
+    await expect(fileService.exists('/dataset/dest/ORPHAN.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/keep.md')).resolves.toBe(true)
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: skipped cleanup of /dataset/dest/how-to — could not read source /dataset/src/how-to (EIO)',
+    )
   })
 
   it('should handle destination directory read errors gracefully', async () => {
