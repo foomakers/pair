@@ -395,6 +395,20 @@ describe('handleMirrorCleanup', () => {
 
     await expect(fileService.exists('/dataset/dest/gone/nested.md')).resolves.toBe(false)
     await expect(fileService.exists('/dataset/dest/keep.md')).resolves.toBe(true)
+
+    // Every deletion is ANNOUNCED, at WARN. This is a declared property of the deletion
+    // decision (`2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`), not an
+    // implementation detail: the v0.4→v0.5 migration page tells the adopter to reconcile each
+    // `⚠️ Mirror: removed …` line against a pre-update snapshot, so both the text and the
+    // level are an adopter-facing contract. `logger.warn` is what renders the `⚠️` prefix
+    // (pinned in observability.test.ts), so asserting the level here pins the prefix too.
+    // Filesystem state alone cannot see a downgrade to `info`, a dropped
+    // `customize via .pair/adoption/` hint, or the line moving behind a verbosity flag — an
+    // irreversible delete would then happen silently in an adopter's working tree.
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: removed /dataset/dest/gone (not in the source; customize via .pair/adoption/)',
+    )
+    expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining('Mirror: removed'))
   })
 
   // ── Ownership: "a target-only path the registry does not own is left untouched" ──
@@ -421,6 +435,13 @@ describe('handleMirrorCleanup', () => {
     })
 
     await expect(fileService.exists('/dataset/dest/vendor/theirs.md')).resolves.toBe(true)
+    // "Left untouched" is reported, at info — this is the line that distinguishes a BOUNDED
+    // cleanup from one that never ran (a survivors-only check cannot tell them apart, which
+    // is how the `.github/agents` gap hid through several rounds). It is the execution
+    // evidence the PR cites, so it is asserted rather than assumed.
+    expect(logger.info).toHaveBeenCalledWith(
+      'Mirror: left /dataset/dest/vendor untouched (not owned by the registry)',
+    )
   })
 
   it('does not descend into an excluded subtree present on both sides', async () => {
