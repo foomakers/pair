@@ -517,11 +517,8 @@ describe('/publish-pr — the board state is written directly, never by composin
       const body = normalize(content)
       expect(body).toContain('by reference')
       expect(body).toContain('membership, then a read that confirms it, then the state field')
-      // The losing shape must be gone, not merely outnumbered.
-      expect(body).not.toContain('default write mode for the board state')
-      expect(body).not.toMatch(
-        /board state[^.]{0,80}using `\/[a-z-]*write-issue` \(default write mode\)/,
-      )
+      // The losing shape must be gone, not merely outnumbered. (The negative probes
+      // themselves live in the cross-file guard below — one shape, both files.)
       // ...and gone from the WHOLE step, not merely from its lead sentence. The first
       // version of this guard checked only the two phrases above and passed while the
       // bullets underneath still read "compose with $status: Review", "the composed
@@ -529,11 +526,77 @@ describe('/publish-pr — the board state is written directly, never by composin
       // certifying a half-fix as complete. A guard that reads one sentence of a step
       // cannot speak for the step.
       expect(body).not.toContain('compose with $status: review')
+      // The direct write takes no `$status` at all, so no instruction in this file may
+      // tell its reader to omit one — an omitted parameter only makes sense to a caller
+      // that is composing, which this skill no longer is for the board field.
+      expect(body).not.toContain('omit $status')
       // NOTE: two further probes were drafted here — "the composed skill's documented
       // skip" and "the composition carries" — and REMOVED after checking that neither can
       // ever match the normalized text (normalize strips ` * _, so the on-disk phrasing
       // does not survive as written). An assertion that cannot fail is worse than none: it
-      // is counted as coverage. The one probe kept above was verified RED by injection.
+      // is counted as coverage. The probes that survived live in the cross-file guard
+      // below and were verified RED by injection.
+    },
+  )
+
+  // ONE RULE, BOTH CALLERS. The negative probes above were applied to the PR publisher
+  // only, so the losing shape survived in the OTHER file: the item writer's Composition
+  // Interface still told its reader that "the board write (default write mode) is the
+  // second composition" — the exact route this same change classifies as body-destroying.
+  // A rule policed in one of the two files that state it is not policed at all, which is
+  // the divergence this story exists to remove. Every probe therefore runs on BOTH.
+  it.each([...writeIssueCases, ...publishPrCases])(
+    '$skill ($corpus): never describes the board state as a write-mode composition',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).not.toContain('default write mode for the board state')
+      // Backticks do not survive normalize(), so the pattern must not spell them — the
+      // first draft of this regex did, and could never match anything.
+      expect(body).not.toMatch(/board state[^.]{0,80}using \/[a-z-]*write-issue/)
+      expect(body).not.toMatch(/board write[^.]{0,40}\(default write mode\)/)
+      expect(body).not.toContain('is the second composition')
+      expect(body).not.toContain('compose with $status: review')
+      // No caller "omits `$status`" on the board path any more: the direct write has no
+      // such parameter to omit, and telling a reader to omit one points back at the
+      // composition route.
+      expect(body).not.toContain('omit $status from the step-7 composition')
+    },
+  )
+
+  it.each(writeIssueCases)(
+    '$corpus: the composition interface states the PR publisher writes the board field itself',
+    ({ content }) => {
+      // Not merely "the losing sentence is gone": the interface must say what the caller
+      // ACTUALLY does, or the next reader re-derives the composition from its absence.
+      const body = normalize(section(content, 'Composition Interface', 2))
+      expect(body).toContain('writes the board field directly')
+      expect(body).toContain('applying step 7b by reference')
+      // The still-valid $status caller keeps the rationale (refinement passes $status and
+      // renders a full body in the same call, so write mode is the right route for it).
+      expect(body).toContain("omitting is the caller's job, not this skill's")
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: the degradation section does not resurrect the skipped board write',
+    ({ content }) => {
+      // The step and the Composed Skills table were corrected first; the GRACEFUL
+      // DEGRADATION section was not, and still read "not installed: skip the board-state
+      // update, warn, leave the PR ready". That section is precisely what an agent reads
+      // when something is missing, so on any project without the item writer installed the
+      // board write was skipped whole — no membership beat, no confirming read, no state
+      // field — and the story shipped green, PR-ready and OFF the board: #384/#372
+      // verbatim, re-introduced by the skill's own degradation contract.
+      //
+      // The absence of the item writer can only affect the ONE composition that remains
+      // (the Phase 4 step 5 back-link comment). The board write is direct.
+      const body = normalize(section(content, 'Graceful Degradation', 2))
+      expect(body).not.toContain('not installed: skip the board-state update')
+      expect(body).toContain('the board write in step 7 is unaffected')
+      expect(body).toContain('still runs in full')
+      // The board write cannot HALT "as a composition" either — the reason belongs to this
+      // skill's own direct write, applying the item writer's beats by reference.
+      expect(body).toContain('the direct board write cannot complete')
     },
   )
 })
@@ -665,24 +728,27 @@ describe('/publish-pr — the PR carries an assignee and the story tags (#403 AC
   )
 })
 
-describe('/publish-pr — the board write it composes (#403 AC6)', () => {
+describe('/publish-pr — the board write it performs directly (#403 AC6)', () => {
   it.each(publishPrCases)(
-    '$corpus: resolves the state mapping BEFORE composing, and omits $$status when Review is unmapped',
+    '$corpus: resolves the state mapping FIRST, and writes no state field when Review is unmapped',
     ({ content }) => {
-      // The composed skill's D4 skip is expressed as "the caller omits `$status`". A
-      // caller that passes `Review` unconditionally makes the skip unreachable: on a
-      // minimal board (this project's own — no column maps to Review) the composition
-      // HALTs on every publish instead. AC6's "documented behaviour, not an error" only
-      // holds if the primary composing caller can honour it.
+      // The item writer's D4 skip is "no state field is written". A publisher that writes
+      // `Review` unconditionally makes the skip unreachable: on a minimal board (this
+      // project's own — no column maps to Review) it would either fail or write a wrong
+      // column on every publish. AC6's "documented behaviour, not an error" only holds if
+      // the direct writer resolves the mapping before it writes anything.
+      // Phrased as a WRITE, not as an omitted `$status`: there is no parameter to omit on
+      // the direct path, and saying otherwise points the reader back at the composition
+      // route this contract removed.
       const body = normalize(content)
       expect(body).toContain('resolve ## state mapping first')
-      expect(body).toContain('omit $status entirely')
+      expect(body).toContain('write no state field')
       expect(body).toContain('n-a — no review state on this board')
     },
   )
 
   it.each(publishPrCases)(
-    '$corpus: surfaces a composed board HALT instead of absorbing it',
+    '$corpus: surfaces a direct board HALT instead of absorbing it',
     ({ content }) => {
       // Phase 4 and Graceful Degradation covered only the membership HALT; a Step 6
       // macrostate HALT had nowhere to land, so it would have been reported as a green
