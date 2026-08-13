@@ -803,14 +803,8 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
 })
 
 describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an executable asset (#382)', () => {
-  const INSTALLED_PATH = join(
-    __dirname,
-    '../../../../.pair/knowledge/assets/pr-tree-resolve.sh',
-  )
-  const SMOKE_PATH = join(
-    __dirname,
-    '../../../../scripts/smoke-tests/scenarios/pr-tree-resolve.sh',
-  )
+  const INSTALLED_PATH = join(__dirname, '../../../../.pair/knowledge/assets/pr-tree-resolve.sh')
+  const SMOKE_PATH = join(__dirname, '../../../../scripts/smoke-tests/scenarios/pr-tree-resolve.sh')
 
   it('ships next to its siblings in BOTH knowledge trees, byte-equal', () => {
     // The skill's link resolves to the DATASET copy from the dataset skill and to the
@@ -834,9 +828,7 @@ describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an execut
     )
     // The extraction is only real if the step no longer carries a second copy: no PR read,
     // no compare, no rendering arms inlined next to the sourced ones.
-    expect(step15Inline, 'the PR read must not be inlined a second time').not.toMatch(
-      /gh pr view/,
-    )
+    expect(step15Inline, 'the PR read must not be inlined a second time').not.toMatch(/gh pr view/)
     expect(step15Inline, 'the commit compare belongs to the asset').not.toMatch(
       /git rev-parse HEAD/,
     )
