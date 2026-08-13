@@ -51,10 +51,13 @@
  * `assertNoOrphanedMirrorEntries` sweeps the other way, over `installedEntries`,
  * and the pair of directions is what makes the guard a set EQUALITY.
  *
- * That reverse sweep DETECTS; it does not delete. Whether `pair update` should
- * itself remove an orphan under a mirror target is an open product decision
- * (see the mirror-guard ADL's OPEN RESIDUAL) and an independent question — this
- * module touches no adopter file either way, it prints the human remedy.
+ * That reverse sweep DETECTS; it does not delete. `pair update` DOES delete an
+ * orphan under a mirror target since #393 (recorded in
+ * `.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`),
+ * but that is a separate mechanism on a separate tree: this module reads two
+ * path lists in THIS repo and touches no file, so a red guard here means a
+ * maintainer removes the file from source control — it is not a report that the
+ * tool already cleaned an adopter's copy.
  *
  * The sibling `skill-md-mirror` stays one-directional, and its own ACCEPTED
  * RESIDUAL (#384) says why the same sweep is not portable there as-is: its
@@ -338,12 +341,13 @@ export function orphanedMirrorEntries(
  * agents read them. Without this sweep the same class reopens silently on the
  * next hand-edit, bad merge, or `pair update` from an older dataset.
  *
- * DETECTION, not deletion. It reads two path lists and touches no adopter file;
- * it is independent of the still-open product decision about wiring destructive
- * cleanup onto the CLI install path (see the mirror-guard ADL's OPEN RESIDUAL),
- * which is about DELETING. The remedy it prints is the human one — remove the
- * file, or give it a dataset source — precisely because the tool taking that
- * action itself is the part not yet decided.
+ * DETECTION, not deletion. It reads two path lists in THIS repo and touches no
+ * file. `pair update` deleting an orphan in an adopting project is the separate,
+ * destructive mechanism wired in #393
+ * (`.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`);
+ * it cannot fix a red here, because this repo's installed trees ARE the source
+ * of truth being guarded. The remedy printed is therefore the human one — remove
+ * the file, or give it a dataset source and regenerate.
  *
  * Valid for a `behavior: "mirror"` registry, whose target is meant to be the
  * dataset's IMAGE. It would be wrong for `behavior: "add"` (`adoption`), where a

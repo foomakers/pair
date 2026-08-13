@@ -115,18 +115,28 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
  * the source is removed, exactly as before. That asymmetry is the whole point: `rm -r` on
  * a shared directory would delete content the source still has.
  *
- * SCOPE — read before citing this as a `pair update` fix. This function runs on the
- * content-ops library path only (`copyPathOps` / `movePathOps` → `performDirectoryCopy`,
- * gated on `behavior: 'mirror'`). The CLI's registry install does NOT reach it: for a
- * registry without flatten/prefix — which is every `behavior: "mirror"` registry shipped —
- * `doCopyAndUpdateLinks` goes to the CLI-local `copyDirectory`
- * (`apps/pair-cli/src/registry/operations.ts`) → `copyDirHelper`, a pure source→target
- * copy that deletes nothing. Measured on this branch: a top-level AND a nested orphan
- * planted under `.pair/knowledge/**` both survive `pair update`. So the two how-to guides
- * deleted from the dataset in #246 and still installed ~5 months later were removed BY
- * HAND in #393; wiring cleanup onto the install path is an open product decision (it makes
- * `pair update` delete an adopter's own files under a mirror target, with no dry-run) and
- * is recorded as such in `.pair/adoption/decision-log/2026-08-11-a-mirror-guard-compares-the-transform.md`.
+ * SCOPE — this function DELETES from a real adopter's working tree during `pair update`.
+ * Two callers: the content-ops library path (`copyPathOps` / `movePathOps` →
+ * `performDirectoryCopy`, on the resolved folder behavior) and, since #393, the CLI's
+ * registry install — `copyDirectory` in `apps/pair-cli/src/registry/operations.ts`, gated
+ * on `mirrorsAnyPath(options)` and handed the SAME ownership context the copy then uses.
+ * That covers both shipped directory mirrors: `.pair/knowledge/**` (`knowledge`) and
+ * `.github/agents/**` (`github`, whose `include: ["/agents"]` expresses the mirror in
+ * `folderBehavior`, leaving `.github/workflows` and friends at `skip` — not owned, never
+ * touched). So `pair update` now removes an installed file the dataset no longer ships,
+ * including one the adopter authored under a mirror target. That decision, its three
+ * non-negotiable properties and the deferred `--dry-run`/`--no-clean` affordance are
+ * recorded in
+ * `.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`.
+ *
+ * SUPERSEDED (kept as the reason this needs saying at all): before that wire, the CLI
+ * install did NOT reach this function — `copyDirHelper` is a pure source→target copy — so a
+ * top-level AND a nested orphan planted under `.pair/knowledge/**` both survived every
+ * `pair update`, measured on this branch. The two how-to guides deleted from the dataset in
+ * #246 and still installed ~5 months later were removed BY HAND in #393, and four unit tests
+ * calling this helper directly had made the defect look fixed. Test the gate through
+ * `doCopyAndUpdateLinks` with options built by `buildCopyOptions`, never through a
+ * hand-built options literal.
  *
  * OWNERSHIP — required now that the walk is recursive. The copy step decides, at EVERY
  * depth, what it installs: an `exclude`d entry is dropped as if it were never in the
