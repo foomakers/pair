@@ -176,18 +176,43 @@ const step15 = section(SKILL, '### Step 1.5: Resolve the Tier Gate Matrix (CI pa
 /** Every `REASON="…"` the resolution snippet assigns, in source order. */
 const reasons = [...step15.matchAll(/REASON="([^"]+)"/g)].map(m => m[1])
 
+// The tree/PR-state half of Step 1.5 SHIPS as an executable asset next to pr-state.sh and
+// tier-resolve.sh (#382, round 10): as markdown-only shell nothing could run it, so every
+// property below was asserted as TEXT and never once executed. Its behavior is executed by
+// scripts/smoke-tests/scenarios/pr-tree-resolve.sh (gate-tooling ADL 2026-07-13: shipped
+// shell is smoke-tested, never vitest-unit-tested); the invariants here stay CONTENT
+// invariants, now read from the file the step sources instead of from a fenced block.
+const TREE_RESOLVER_PATH = join(
+  __dirname,
+  '../../dataset/.pair/knowledge/assets/pr-tree-resolve.sh',
+)
+const TREE_RESOLVER = readFileSync(TREE_RESOLVER_PATH, 'utf-8')
+
 /**
- * Step 1.5's EXECUTABLE lines only — shell inside its fenced blocks, with `#`
- * comment lines and the surrounding prose dropped. Assertions about what the
- * snippet *decides on* run against this, so a comment that quotes a banned test
- * to explain why it is banned does not read as the test itself.
+ * EXECUTABLE lines only — `#` comment lines dropped. Assertions about what the resolution
+ * *decides on* run against this, so a comment that quotes a banned test to explain why it
+ * is banned does not read as the test itself.
  */
-const step15Code = [...step15.matchAll(/```bash\n([\s\S]*?)```/g)]
-  .map(m => m[1] as string)
-  .join('\n')
-  .split('\n')
-  .filter(l => !/^\s*#/.test(l))
-  .join('\n')
+const shellOf = (src: string): string =>
+  src
+    .split('\n')
+    .filter(l => !/^\s*#/.test(l))
+    .join('\n')
+
+/** The shell Step 1.5 still inlines: the TIER side (tag reads, sources, reasons). */
+const step15Inline = shellOf(
+  [...step15.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1] as string).join('\n'),
+)
+
+/**
+ * Step 1.5's whole executable surface, in EXECUTION order: the resolver it sources first,
+ * then the shell it still inlines. Ordering assertions (initialized-before-read, guard
+ * before the read it skips) therefore read the same sequence the agent runs.
+ */
+const step15Code = `${shellOf(TREE_RESOLVER)}\n${step15Inline}`
+
+/** Prose + the shipped shell — for invariants that may legitimately live in either. */
+const step15Surface = `${step15}\n${TREE_RESOLVER}`
 
 describe('verify-quality — optional $pr argument: which PR the tier is read from (#382)', () => {
   it('the Arguments table documents `$pr` as optional', () => {
@@ -230,7 +255,7 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(step15).toMatch(/has_risk_tag/)
     // One spelling of the rule on every branch that reads labels: each `LABELS=` read is
     // followed by at least one `has_risk_tag` test rather than an emptiness test.
-    const labelReads = (step15Code.match(/LABELS="\$\(/g) ?? []).length
+    const labelReads = step15Code.split('\n').filter(l => /(?:^|\s)LABELS="[^"]/.test(l)).length
     const tagTests = (step15Code.match(/has_risk_tag "\$LABELS"/g) ?? []).length
     expect(labelReads).toBeGreaterThanOrEqual(2)
     expect(tagTests).toBeGreaterThanOrEqual(labelReads)
@@ -284,7 +309,7 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // `gh pr view` exits non-zero for BOTH "no PR on this branch" and "host unreachable",
     // so the exit status alone cannot decide: only the no-PR message may fall through to
     // `$story` (the refinement tier — an under-check anywhere else, D17).
-    expect(step15).toMatch(/no pull requests found/i)
+    expect(step15Surface).toMatch(/no pull requests found/i)
     expect(reasons).toContain('current-branch PR unreadable — the code host is not reachable')
     // Exactly two states may raise the pre-publish flag, and neither is a bare failed read:
     // the host's no-PR MESSAGE, and no code-host remote at all (provably no PR — the read
@@ -322,10 +347,10 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // the test: a checkout on the PR's own branch at a different commit (stale, or ahead
     // with unpushed work) is not the PR's head, and a detached review worktree at the head
     // is — a name compare gets both wrong, in opposite directions.
-    expect(step15).toMatch(/headRefName/)
-    expect(step15).toMatch(/headRefOid/)
-    expect(step15).toMatch(/TREE_MATCH/)
-    expect(step15).toMatch(/detached/i)
+    expect(step15Surface).toMatch(/headRefName/)
+    expect(step15Surface).toMatch(/headRefOid/)
+    expect(step15Surface).toMatch(/TREE_MATCH/)
+    expect(step15Surface).toMatch(/detached/i)
     // The PROPERTY, not one banned spelling: EVERY `TREE_MATCH=match` in the step —
     // the `$pr` arm and the current-branch arm alike — must sit on a line that compares
     // `git rev-parse HEAD` to a head sha read from the PR. A bare `TREE_MATCH=match`
@@ -390,13 +415,18 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
   })
 
   it('`LOCAL_REF` is resolved for EVERY arm — the `none` and branch arms render it too', () => {
-    // Assigned inside `if [ -n "$pr" ]` it is empty on exactly the arms that interpolate
-    // it: the `none` row (fires when `$pr` was NOT supplied) and the branch-promoted row.
+    // Resolved under any conditional it is empty on exactly the arms that interpolate it:
+    // the `none` row (no PR on this branch), the `no-remote` row (the read never happened)
+    // and the branch-promoted row. It must therefore be resolved BEFORE the read that can
+    // fail — which is what `resolve_pr_tree` calling `local_tree` first guarantees.
     const localAt = step15Code.indexOf('LOCAL_REF=')
-    const prGuardAt = step15Code.indexOf('if [ -n "$pr" ]')
+    const readAt = step15Code.indexOf('pr_view_json "$PR_NUM"')
     expect(localAt).toBeGreaterThan(-1)
-    expect(prGuardAt).toBeGreaterThan(-1)
-    expect(localAt, 'LOCAL_REF must be hoisted above the `$pr` guard').toBeLessThan(prGuardAt)
+    expect(readAt).toBeGreaterThan(-1)
+    expect(localAt, 'the local tree must be resolved before the read').toBeLessThan(readAt)
+    expect(step15Code, 'and resolved unconditionally, at the top of the resolution').toMatch(
+      /local_tree[\s\S]{0,400}pr_view_json "\$PR_NUM"/,
+    )
     // …and it must name a COMMIT when detached: `git rev-parse --abbrev-ref HEAD` yields the
     // literal string "HEAD" there, while both renderings promise a commit — and a detached
     // checkout is the canonical independent-review/CI shape this contract targets.
@@ -408,8 +438,8 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(step15Code).toMatch(/LOCAL_SHA="\$\(git rev-parse --short HEAD\)"/)
     expect(
       step15Code.indexOf('LOCAL_SHA='),
-      'LOCAL_SHA must be hoisted above the `$pr` guard like LOCAL_REF',
-    ).toBeLessThan(prGuardAt)
+      'LOCAL_SHA must be resolved before the read, like LOCAL_REF',
+    ).toBeLessThan(readAt)
   })
 
   it('the PR-read temp file is released WITHOUT taking over the caller shell EXIT trap', () => {
@@ -472,9 +502,9 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // unreachable host, which the step's own Fail-safe bullet forbids. Normalization already
     // falls back to `$pr` verbatim when nothing is recognized, so `$PR_NUM` is never empty
     // when `$pr` was supplied.
-    expect(step15Code).toMatch(/read_pr "\$PR_NUM"/)
-    expect(step15Code, 'the read must not consume the un-normalized `$pr`').not.toMatch(
-      /read_pr "\$pr"/,
+    expect(step15Code).toMatch(/pr_view_json "\$PR_NUM"/)
+    expect(step15Code, 'the read must not consume the un-normalized identifier').not.toMatch(
+      /pr_view_json "\$(pr|PR_ARG)"/,
     )
   })
 
@@ -505,7 +535,10 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // PR must be pre-flag too: left in the tiering-enabled point, the ⚠️ arm is unreachable
     // in the DEFAULT `disabled` configuration — where the row would be the only thing
     // saying which code the full suite ran on.
-    const preFlag = step15Code.slice(0, step15Code.indexOf('source .pair/knowledge/assets'))
+    const preFlag = step15Code.slice(
+      0,
+      step15Code.indexOf('source .pair/knowledge/assets/tier-resolve.sh'),
+    )
     expect(preFlag, 'the branch (no-`$pr`) PR read must sit before the flag').toContain(
       'gh pr view --json',
     )
@@ -516,10 +549,10 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // Two calls cost two round trips AND, on the unreadable path, return empty and drive a
     // "NOT PR #N's head" row that asserts a mismatch the snippet could not know. One read
     // point serves both paths (`$pr` and the checked-out branch's own PR).
-    expect((step15Code.match(/read_pr /g) ?? []).length).toBe(1)
-    expect((step15Code.match(/gh pr view/g) ?? []).length).toBe(2) // the two arms of read_pr
-    expect(step15).toMatch(/--json labels,headRefName,headRefOid/)
-    expect(step15).toMatch(/TREE_MATCH=unknown/)
+    expect((step15Code.match(/pr_view_json "\$PR_NUM"/g) ?? []).length).toBe(1)
+    expect((step15Code.match(/gh pr view/g) ?? []).length).toBe(2) // the two arms of pr_view_json
+    expect(step15Surface).toMatch(/--json labels,headRefName,headRefOid/)
+    expect(step15Surface).toMatch(/TREE_MATCH=unknown/)
   })
 
   it('the round trip is SKIPPED when it cannot pay — no code-host remote ⇒ no read', () => {
@@ -533,7 +566,7 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     expect(step15Code, 'the read must be guarded by a remote check').toMatch(/git remote/)
     const lines = step15Code.split('\n')
     const guardAt = lines.findIndex(l => /git remote/.test(l))
-    const readAt = lines.findIndex(l => /read_pr "\$PR_NUM"/.test(l))
+    const readAt = lines.findIndex(l => /pr_view_json "\$PR_NUM"/.test(l))
     expect(guardAt).toBeGreaterThan(-1)
     expect(readAt).toBeGreaterThan(-1)
     expect(guardAt, 'the guard must sit before the read it skips').toBeLessThan(readAt)
@@ -571,7 +604,7 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // still tests FIRST, so a named PR keeps its own arm) and its own `Tier source:` value
     // on the sourceless arm.
     expect(step15Code, 'the flag must be consumed, not just set').toMatch(/NO_CODE_HOST" = "1"/)
-    expect(step15Code).toMatch(/elif \[ -n "\$pr" \]/)
+    expect(step15Code).toMatch(/elif \[ -n "\$PR_ARG" \]/)
     const noHostReasons = reasons.filter(r => /no code-host remote/i.test(r))
     expect(
       noHostReasons.length,
@@ -589,7 +622,7 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
     // variables unassigned there lets a previous run's `ACTIVE_SUITES="install lint type
     // build"` survive in the shell, so an agent following Step 4 literally runs a NARROWER
     // set than the arm demands: the same silent narrow the LABELS fix removed.
-    const initBlock = step15Code.slice(0, step15Code.indexOf('if [ -n "$pr" ]'))
+    const initBlock = step15Inline.slice(0, step15Inline.indexOf('has_risk_tag()'))
     expect(initBlock, 'TIER must be initialized in the hoisted block').toMatch(/^\s*TIER=/m)
     expect(initBlock, 'ACTIVE_SUITES must be initialized to the widest set').toMatch(
       /^\s*ACTIVE_SUITES=all\b/m,
@@ -769,6 +802,88 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
   // survive in 11 other skills — a per-artifact guard only ever sees its own artifact.
 })
 
+describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an executable asset (#382)', () => {
+  const INSTALLED_PATH = join(
+    __dirname,
+    '../../../../.pair/knowledge/assets/pr-tree-resolve.sh',
+  )
+  const SMOKE_PATH = join(
+    __dirname,
+    '../../../../scripts/smoke-tests/scenarios/pr-tree-resolve.sh',
+  )
+
+  it('ships next to its siblings in BOTH knowledge trees, byte-equal', () => {
+    // The skill's link resolves to the DATASET copy from the dataset skill and to the
+    // INSTALLED copy from the .claude/skills mirror; a drift between them would have an
+    // installed agent run different code than the one this suite and the smoke test read.
+    expect(existsSync(TREE_RESOLVER_PATH)).toBe(true)
+    expect(existsSync(INSTALLED_PATH), 'the installed KB must carry the asset too').toBe(true)
+    expect(readFileSync(INSTALLED_PATH, 'utf-8')).toBe(TREE_RESOLVER)
+    expect(TREE_RESOLVER.split('\n')[0]).toBe('#!/usr/bin/env bash')
+  })
+
+  it('the skill SOURCES it instead of restating the shell (one source, and a runnable one)', () => {
+    expect(step15).toContain('source .pair/knowledge/assets/pr-tree-resolve.sh')
+    expect(step15).toMatch(/resolve_pr_tree "\$pr"/)
+    expect(step15).toMatch(/render_tree_row/)
+    // …and the link the reader follows resolves from the skill file
+    const m = step15.match(/\]\(([^)]*pr-tree-resolve\.sh)\)/)
+    expect(m, 'the skill must LINK to the asset it sources').not.toBeNull()
+    expect(existsSync(resolve(dirname(SKILL_PATH), (m as RegExpMatchArray)[1] as string))).toBe(
+      true,
+    )
+    // The extraction is only real if the step no longer carries a second copy: no PR read,
+    // no compare, no rendering arms inlined next to the sourced ones.
+    expect(step15Inline, 'the PR read must not be inlined a second time').not.toMatch(
+      /gh pr view/,
+    )
+    expect(step15Inline, 'the commit compare belongs to the asset').not.toMatch(
+      /git rev-parse HEAD/,
+    )
+    expect(step15Inline, 'the tree arms belong to the asset').not.toMatch(/TREE_MATCH=/)
+  })
+
+  it('exposes the four entry points the step composes, and ONE overridable read', () => {
+    for (const fn of ['pr_view_json', 'normalize_pr_id', 'local_tree', 'resolve_pr_tree']) {
+      expect(TREE_RESOLVER).toContain(`${fn}()`)
+    }
+    expect(TREE_RESOLVER).toContain('render_tree_row()')
+    // The host substitution the routing table demands is a FUNCTION override, not a fork of
+    // the file: the default definition must not clobber one a caller already installed.
+    expect(TREE_RESOLVER).toMatch(/if ! command -v pr_view_json/)
+    expect(TREE_RESOLVER).toMatch(/way-of-working-pm-resolution/)
+    // …and it stays tag/state-only, like its two siblings (D18).
+    expect(TREE_RESOLVER).toMatch(/NO classification criteria|no criteria/i)
+    expect(TREE_RESOLVER).toMatch(/D18/)
+  })
+
+  it('its BEHAVIOR is executed by a smoke scenario, per the gate-tooling ADL', () => {
+    // Shipped shell is smoke-tested, never vitest-unit-tested (ADL 2026-07-13). The whole
+    // point of the extraction is that these arms can now RUN: a scenario that only grepped
+    // the file would leave the resolution exactly as unverified as the inline snippet was.
+    expect(existsSync(SMOKE_PATH), 'the smoke scenario must exist').toBe(true)
+    const smoke = readFileSync(SMOKE_PATH, 'utf-8')
+    expect(smoke, 'the scenario must SOURCE and RUN the asset').toMatch(
+      /source "\$RESOLVER"[\s\S]*resolve_pr_tree/,
+    )
+    // every value the resolver can assign is exercised, not just the happy one
+    for (const arm of ['match', 'ahead', 'mismatch', 'unknown', 'none', 'no-remote']) {
+      expect(smoke, `the \`${arm}\` arm must be executed`).toContain(`${arm} "$TREE_MATCH"`)
+    }
+    // and it runs in CI, where a scenario that is not listed never runs at all
+    const runAll = readFileSync(
+      join(__dirname, '../../../../scripts/smoke-tests/run-all.sh'),
+      'utf-8',
+    )
+    expect(runAll, 'the scenario must be registered in the CI list').toContain(
+      '"pr-tree-resolve.sh"',
+    )
+    expect(smoke, 'and it must be offline-safe — it stubs the host read').toContain(
+      'OFFLINE_SAFE=true',
+    )
+  })
+})
+
 describe('review Step 2.1 — forwards the PR under review to verify-quality (#382)', () => {
   const step21 = section(REVIEW, '### Step 2.1: Quality Gates')
 
@@ -847,6 +962,39 @@ describe('review Step 2.1 — forwards the PR under review to verify-quality (#3
       /no branch protection|not protected|unprotected/i,
     )
     expect(step21).toMatch(/Gates: pending/)
+  })
+
+  it('the `<base-branch>` placeholder in the required-set read is RESOLVABLE, not left to a guess', () => {
+    // `gh api "repos/{owner}/{repo}/branches/<base-branch>/protection/required_status_checks"`
+    // ships two placeholders of DIFFERENT kinds: `{owner}/{repo}` is the host command's own
+    // substitution, but `<base-branch>` is ours and nothing in the step says where its value
+    // comes from. An agent that guesses `main` reads the protection of a branch the PR may
+    // not target, and the 404 that follows is indistinguishable from "unprotected" — so the
+    // step silently drops to the unprotected fallback and treats an advisory non-required
+    // check as a red gate. The value has ONE resolution order already, single-sourced in
+    // way-of-working-pm-resolution.md; this step must point at it, never restate it.
+    expect(step21).toContain('<base-branch>')
+    const named = step21.slice(step21.indexOf('Name the SET'))
+    expect(named, 'the placeholder must name the key it resolves').toMatch(/`base-branch`/)
+    expect(named, 'and the ONE order that resolves it').toMatch(
+      /way-of-working-pm-resolution|`base-branch` resolution/,
+    )
+    // the pointer must resolve, and the target must actually own that order
+    const m = REVIEW.match(/\]\(([^)]*way-of-working-pm-resolution\.md)\)/)
+    expect(m).not.toBeNull()
+    const guidelinePath = resolve(
+      dirname(join(__dirname, '../../dataset/.skills/process/review/SKILL.md')),
+      (m as RegExpMatchArray)[1] as string,
+    )
+    expect(existsSync(guidelinePath)).toBe(true)
+    expect(
+      readFileSync(guidelinePath, 'utf-8'),
+      'the routing guideline must own the `base-branch` resolution order',
+    ).toMatch(/`base-branch` resolution/)
+    // …and the step must not invent a SECOND order (a hardcoded default is exactly that)
+    expect(named, 'no second default may be stated here').not.toMatch(
+      /defaults? to `?main`?|assume `?main`?/i,
+    )
   })
 
   it('disambiguates WHICH gate signal caps the verdict — the advisory run contributes findings only', () => {
