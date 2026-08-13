@@ -8,9 +8,11 @@
  *
  * This rule lived inside `verify-quality.test.ts` as a per-artifact assertion, which is why
  * 40 markers survived across 22 files in 11 other skills for months — a per-artifact guard
- * only ever sees its own artifact. It is asserted here over EVERY skill file in both skill
- * corpora AND every KB guideline/asset file in both knowledge corpora, so a marker
- * reintroduced anywhere fails, named with its file and line.
+ * only ever sees its own artifact. It is asserted here over EVERY shipped file in the four
+ * corpora — both skill corpora and both knowledge corpora — markdown or not: guideline
+ * pages, templates and asset scripts alike, so a marker reintroduced anywhere fails, named
+ * with its file and line. (Scanning `.md` only left the shipped asset script
+ * `assets/coverage-gate.sh` citing three criteria in both trees under a green suite.)
  *
  * The rule itself is documented for authors in the shared skill-conventions guidance:
  * `dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/story-local-markers.md`.
@@ -69,7 +71,14 @@ const MARKER = /\bAC\d+\b/g
 // stay legal everywhere (e.g. code-review-template.md's introduced-red-security rule).
 const REFERENT_CARRYING = /#\d+\/AC\d+\b/g
 
-function markdownFilesIn(dir: string): string[] {
+// EVERY shipped file, not just `.md`. The first corpus-wide version walked `.md` only, and
+// the shipped asset script `assets/coverage-gate.sh` kept three bare citations in BOTH
+// knowledge trees while the guard reported green — the same failure mode (a guard that sees
+// part of its stated scope manufactures confidence) this docstring blames the old
+// per-artifact assertion for. An extension allowlist would only move the blind spot to the
+// next non-`.md` asset added, so the walker takes everything and `offendersIn` skips only
+// what cannot be read as text.
+function shippedFilesIn(dir: string): string[] {
   let entries: string[]
   try {
     entries = readdirSync(dir)
@@ -78,8 +87,15 @@ function markdownFilesIn(dir: string): string[] {
   }
   return entries.flatMap(name => {
     const p = join(dir, name)
-    return statSync(p).isDirectory() ? markdownFilesIn(p) : name.endsWith('.md') ? [p] : []
+    return statSync(p).isDirectory() ? shippedFilesIn(p) : [p]
   })
+}
+
+// A binary file carries no citation a reader could follow and would decode to mojibake.
+// Nothing binary ships in these corpora today; this keeps the all-files walker safe if one
+// ever does, without granting an extension-shaped exemption.
+function isBinary(buf: Buffer): boolean {
+  return buf.subarray(0, 8000).includes(0)
 }
 
 function isAllowlisted(root: string, file: string): boolean {
@@ -88,7 +104,9 @@ function isAllowlisted(root: string, file: string): boolean {
 }
 
 function offendersIn(file: string): string[] {
-  const lines = readFileSync(file, 'utf8').split('\n')
+  const buf = readFileSync(file)
+  if (isBinary(buf)) return []
+  const lines = buf.toString('utf8').split('\n')
   return lines.flatMap((line, i) => {
     const hits = line.replace(REFERENT_CARRYING, '').match(MARKER)
     return hits ? [`${relative(REPO_ROOT, file)}:${i + 1} → ${hits.join(', ')}`] : []
@@ -97,13 +115,34 @@ function offendersIn(file: string): string[] {
 
 describe('story-local (ACn) markers — banned in every shipped skill and KB file', () => {
   const scanned = ROOTS.flatMap(root =>
-    markdownFilesIn(root).filter(file => !isAllowlisted(root, file)),
+    shippedFilesIn(root).filter(file => !isAllowlisted(root, file)),
   )
 
   it('finds files to check (the guard must not pass by seeing nothing)', () => {
     // Without this, a broken path would make the whole rule vacuously green — the same
     // failure mode as an assertion that cannot fail. Four corpora: well past 100 files.
     expect(scanned.length).toBeGreaterThan(100)
+  })
+
+  it('scans shipped non-markdown assets too, in every knowledge corpus that exists', () => {
+    // Pins the scope the docstring, the skill-conventions page and the ADL all claim. A
+    // `.md`-only walker let `assets/coverage-gate.sh` ship three bare citations in both
+    // trees while the suite stayed green; asserting a KNOWN non-`.md` shipped asset is in
+    // the scanned set makes that regression impossible to reintroduce silently.
+    const asset = 'assets/coverage-gate.sh'
+    const present = [DATASET_KNOWLEDGE, INSTALLED_KNOWLEDGE].filter(root => {
+      try {
+        return statSync(join(root, asset)).isFile()
+      } catch {
+        return false
+      }
+    })
+    expect(present.length, 'the pinned non-markdown asset is gone — repoint this test').toBe(2)
+    for (const root of present) {
+      expect(scanned, `non-markdown asset not scanned: ${join(root, asset)}`).toContain(
+        join(root, asset),
+      )
+    }
   })
 
   it('ships no story-local (ACn) marker anywhere in the corpus', () => {

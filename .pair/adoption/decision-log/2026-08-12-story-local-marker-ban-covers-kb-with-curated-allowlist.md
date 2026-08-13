@@ -18,7 +18,7 @@ Story #382's absorbed #430 scope bans story-local acceptance-criterion markers (
 
 ## Decision
 
-1. **Scope**: the guard scans all four corpora — `dataset/.skills`, `.claude/skills`, `dataset/.pair/knowledge`, `.pair/knowledge`. Skill roots have NO exemptions.
+1. **Scope**: the guard scans EVERY shipped file in all four corpora — `dataset/.skills`, `.claude/skills`, `dataset/.pair/knowledge`, `.pair/knowledge` — markdown or not (guideline pages, templates and asset scripts such as `assets/coverage-gate.sh`), skipping only files that are not readable as text. Skill roots have NO exemptions.
 2. **Exactly three shapes of `ACn` are legitimate**, and only in the knowledge corpora:
    - **template placeholders** (the token is the artifact's own structure): `epic-template.md`, `PRD_template.md`;
    - **worked examples** (the criteria are defined on the same page): `PRD_example.md`, `filesystem-implementation.md`;
@@ -30,12 +30,13 @@ Story #382's absorbed #430 scope bans story-local acceptance-criterion markers (
 
 - **File-level allowlist for `code-review-template.md` instead of the `#<story>/ACn` pattern**: rejected — a file-level exemption would also admit a future BARE citation added to that file; the pattern admits only the shape that carries its referent.
 - **Line-pinned allowlist (file:line)**: rejected — every guideline edit above a pinned line would shift it and break the guard on legitimate changes; per-file + staleness check is the stable granularity.
+- **An extension allowlist (`.md` + `.sh`) for the walker**: rejected — the first walker's `.md`-only filter is what let `coverage-gate.sh` ship citations under a green suite; an extension list moves the same blind spot to the next asset type added. The walker takes every file and skips only non-text content, so scope never lags the corpus.
 - **Documenting the ban only in the guard's docstring**: rejected — a test file is not authoring guidance; the next skill/KB author reads skill-conventions, not `src/conformance/`, and would learn the rule only from CI failure.
 
 ## Consequences
 
-- Reintroducing a story citation anywhere in the four corpora fails `story-local-markers.test.ts`, named with file and line.
-- The genuine citations were stripped in place (both trees): `pr-states.md` (the #234 criterion cites become the guarantees they stood for, e.g. "silently voids the 🔴 human-approval guarantee"), `quality-model.md`, `tier-aware-pipeline.md` (five, incl. the `(AC6)` on the deploy step), `coverage-config-example.md`.
+- Reintroducing a story citation in any shipped file of the four corpora — including a non-markdown asset script — fails `story-local-markers.test.ts`, named with file and line.
+- The genuine citations were stripped in place (both trees): `pr-states.md` (the #234 criterion cites become the guarantees they stood for, e.g. "silently voids the 🔴 human-approval guarantee"), `quality-model.md`, `tier-aware-pipeline.md` (five, incl. the `(AC6)` on the deploy step), `coverage-config-example.md`, and `assets/coverage-gate.sh` (three citations the first `.md`-only walker could not see).
 - Adding a NEW legitimate placeholder/example file requires a deliberate allowlist edit in the guard — a review-visible act, not a silent pass.
 
 ## Adoption Impact
