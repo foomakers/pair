@@ -689,6 +689,119 @@ describe('/publish-pr — the board state is written directly, never by composin
   )
 })
 
+describe('/publish-pr — BOTH back-link mechanisms confirm the post by a read (#403 AC8)', () => {
+  // ROUND 8. Phase 4 step 5 documents TWO mechanisms for the same write, and only one was
+  // inside AC8's invariant (every write a tool can report as successful without effect is
+  // re-read). The composed path (`$mode: comment`) confirms by reading the item's comments
+  // back and degrades to `Comment warned` (item writer, Step 7c Verify). The fallback —
+  // "not installed → write the comment directly through the PM tool's implementation guide"
+  // — declared no read at all.
+  //
+  // Reachable, not theoretical: a split-tool project (Linear backlog + GitHub code host)
+  // that does not install the item writer publishes the PR, posts the back-link with a
+  // comment API that exits 0 having created nothing, and reports
+  // `Cross-link: Refs: <id> + PR URL posted on <item>` — an unconfirmed claim about the ONLY
+  // link from the board to the PR, i.e. the "reported as done, never confirmed" class this
+  // whole story exists to close.
+  //
+  // Scoped to the step, so the assertions cannot be satisfied by the read-back sentences
+  // that live elsewhere in this file (the PR re-read in step 3, ready-for-review in step 6,
+  // the status/label reads in Phase 5).
+  const backLinkStep = (content: string): string => {
+    const phase = section(content, 'Phase 4', 3).split('\n')
+    const start = phase.findIndex(line => /^5\. /.test(line))
+    if (start === -1) return ''
+    const body: string[] = []
+    for (const line of phase.slice(start + 1)) {
+      if (/^6\. /.test(line)) break
+      body.push(line)
+    }
+    return body.join('\n')
+  }
+
+  /**
+   * The fallback bullet alone. Asserting against the whole step would go green on the
+   * COMPOSED branch's read-back — which is the divergence, not the fix.
+   */
+  const directBranch = (content: string): string => {
+    const lines = backLinkStep(content).split('\n')
+    const start = lines.findIndex(line => /^\s*- \*\*not installed\*\*/.test(line))
+    if (start === -1) return ''
+    const body: string[] = [lines[start]]
+    for (const line of lines.slice(start + 1)) {
+      if (line.trim() === '' || /^\s*- \*\*/.test(line)) break
+      body.push(line)
+    }
+    return normalize(body.join('\n'))
+  }
+
+  it.each(publishPrCases)(
+    '$corpus: the direct back-link post is read back, in the same words as the composed path',
+    ({ content }) => {
+      const branch = directBranch(content)
+      // Non-vacuity: the bullet must exist at all, or every assertion below is empty-string
+      // theatre.
+      expect(branch).toContain('not installed')
+      expect(branch).toContain("read the item's comments back")
+      // The `filesystem` tool's comments ARE a body section, so the read has to name it —
+      // otherwise "read the comments back" has no referent on the one tool where the item
+      // is a file.
+      expect(branch).toContain('activity log')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: an unconfirmed direct post is reported failed, never as posted',
+    ({ content }) => {
+      const branch = directBranch(content)
+      // The exact string the output shape already offers on the `Cross-link:` row — so the
+      // failure has a rendering and does not degrade into prose.
+      expect(branch).toContain('back-link failed — manual link needed')
+      expect(branch).toContain('never as posted')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: both mechanisms of the step declare their confirming read (anti-divergence)',
+    ({ content }) => {
+      // One assertion reading BOTH branches, so the two cannot drift apart again: whichever
+      // branch loses its read-back reddens this.
+      const step = backLinkStep(content)
+      expect(step).not.toBe('')
+      const body = normalize(step)
+      expect(body).toContain("confirms the post by reading the item's comments back")
+      expect(body).toContain("read the item's comments back")
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: the degradation bullet for a missing item writer says the same',
+    ({ content }) => {
+      // The degradation section is what an agent reads when the composition is absent —
+      // i.e. exactly the run that takes the direct branch. Silent here = silent where it
+      // matters most.
+      const body = normalize(section(content, 'Graceful Degradation', 2))
+      expect(body).toMatch(/not installed:[^.]*comment-mode back-link/)
+      expect(body).toContain("read the item's comments back to confirm it")
+      expect(body).toContain('never as posted')
+    },
+  )
+
+  it.each(publishPrCases)(
+    '$corpus: the Composed Skills row states the direct back-link is read back too',
+    ({ content }) => {
+      // Third place a reader lands on the fallback (the composition table is read BEFORE
+      // the phase that uses it). Rounds 3-5 were all one rule left standing in the file the
+      // fix did not open; the row is cheap to align and cheaper to probe.
+      const row = tableRows(content, 'Composed Skills').find(line =>
+        line.includes('back-link written directly'),
+      )
+      expect(row).toBeDefined()
+      expect(row).toContain('and read back to confirm it')
+    },
+  )
+})
+
 describe('canonical-states.md — the KB authority agrees with the skills that write state', () => {
   // ROUND 4. Rounds 2 and 3 removed the write-mode composition from the two SKILLS, and
   // every probe was scoped to skill corpora plus the resolution convention. The losing
@@ -950,6 +1063,19 @@ describe('the ADL — the decision of record describes the contract that shipped
     // The widening statement must still be there for the pair to mean anything, and the
     // two must say the same thing.
     expect(decision(15)).toContain('every write-mode write')
+  })
+
+  it('decision 17 puts the fallback back-link mechanism under the read-back rule', () => {
+    // ROUND 8. Decision 10 claims the invariant is "universal inside these two skills";
+    // the record must therefore carry the one place it was not — the fallback branch of
+    // the back-link step — or the next reader re-derives "the composed path reads back"
+    // as the whole rule, which is how the branch was written unguarded in the first place.
+    const seventeen = decision(17)
+    expect(seventeen).toContain('not installed')
+    expect(seventeen).toContain("read the item's comments back")
+    expect(seventeen).toContain('back-link failed — manual link needed')
+    // Decision 10 is the statement being widened; it must still be there.
+    expect(decision(10)).toContain('comment warned')
   })
 
   it('no decision in the ADL scopes the membership beats to creates', () => {
