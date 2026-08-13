@@ -105,9 +105,73 @@ function parseBatchArgs(raw) {
   // undefined and the floor was silently ignored while the caller believed it was set.
   // A batch ran with Minors still blocking and reported escalation as if the floor had
   // been honoured. Every option must be read from the parsed object, once.
-  return { stories, severityFloor: a.severityFloor, model: a.model }
+  return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline }
 }
 const PARSED = parseBatchArgs(args)
+
+// ── Pipeline configuration: what makes this engine reusable (#219 AC1) ─────
+// Every value here was a literal spelled `pair` somewhere in a prompt. They are now
+// resolved ONCE, with pair's own values as the defaults, so two things hold at the same
+// time: an adopter whose skills are named differently drives the same engine by passing
+// `args.pipeline`, and pair's own dogfood invocation keeps working with no configuration
+// at all — the defaults ARE what the script said before.
+//
+// Resolution is per-key, not all-or-nothing: a caller overriding one skill name keeps the
+// defaults for the rest. An all-or-nothing merge would make a partial config silently
+// blank the keys it did not mention, which is the shape of failure #401 was about.
+const PIPELINE_DEFAULTS = {
+  skills: {
+    implement: '/pair-process-implement',
+    publishPr: '/pair-capability-publish-pr',
+    review: '/pair-process-review',
+    verifyQuality: '/pair-capability-verify-quality',
+    checkpoint: '/pair-capability-checkpoint',
+    recordDecision: '/pair-capability-record-decision',
+    writeIssue: '/pair-capability-write-issue',
+  },
+  worktreeRoot: '../pair-worktrees',
+  auditLogDir: '.pair/working/reviews',
+  baseBranch: 'origin/main',
+  reviewTemplate: 'code-review-template.md',
+}
+
+function resolvePipeline(raw) {
+  if (raw === undefined || raw === null) return PIPELINE_DEFAULTS
+  if (typeof raw !== 'object' || Array.isArray(raw))
+    throw new Error(
+      `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
+        `Omit it entirely to run on pair's defaults.`,
+    )
+  const str = (v, key, fallback) => {
+    if (v === undefined) return fallback
+    const t = String(v).trim()
+    // An empty override is the dangerous case: it would interpolate as an empty string and
+    // produce `cd /` or a bare `git worktree add`. Reject it rather than fall back silently,
+    // so a caller who meant to configure something learns that they did not.
+    if (!t) throw new Error(`implement-batch: \`args.pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`)
+    return t
+  }
+  const skills = { ...PIPELINE_DEFAULTS.skills }
+  for (const [k, v] of Object.entries(raw.skills ?? {})) {
+    if (!(k in PIPELINE_DEFAULTS.skills))
+      throw new Error(
+        `implement-batch: unknown \`args.pipeline.skills.${k}\`; expected one of ${Object.keys(PIPELINE_DEFAULTS.skills).join(', ')}. ` +
+          `An unrecognised key would be dropped in silence and the run would use the default while the caller believed otherwise.`,
+      )
+    skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k])
+  }
+  return {
+    skills,
+    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot),
+    auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir),
+    baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch),
+    reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate),
+  }
+}
+const PIPELINE = resolvePipeline(PARSED.pipeline)
+const SK = PIPELINE.skills
+
+
 const STORIES = PARSED.stories
 
 // ── Severity floor: what BLOCKS convergence, versus what is carried to the human ──
@@ -184,7 +248,8 @@ async function agentRetry(prompt, opts) {
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
 // formats. The human-facing artifacts follow the KB templates, applied by the
-// agents: the PR body → `pr-template.md`, the review report → `code-review-template.md`
+// agents: the PR body → `pr-template.md`, the review report → the configured review
+// template (`code-review-template.md` by default)
 // (posted as a PR comment by the reviewer), the checkpoint → `checkpoint-template.md`.
 // Where a schema field overlaps a template field it MIRRORS the template's
 // vocabulary (single source of truth) so the machine contract and the human
@@ -206,7 +271,7 @@ const PR_SCHEMA = {
   required: ['prNumber'],
 }
 const LOOSE_REVIEW_SCHEMA = {
-  // Mirrors code-review-template.md: the `## Verdict`-line verdict options and the
+  // Mirrors the configured review template: the `## Verdict`-line verdict options and the
   // `Findings by severity` finding fields (File:Line / severity / description /
   // recommendation). The posted report is the artifact; this is the return value.
   // This is the loose FALLBACK skeleton: phase-0 (ensure-contract, below) derives an
@@ -215,7 +280,7 @@ const LOOSE_REVIEW_SCHEMA = {
   // used as-is so the run never breaks.
   type: 'object',
   properties: {
-    // Free string mirroring code-review-template.md's `## Verdict`-line options
+    // Free string mirroring the review template's `## Verdict`-line options
     // (APPROVED / CHANGES-REQUESTED / TECH-DEBT) — NOT enum-locked here, so a
     // template vocabulary change doesn't break validation.
     // Control flow keys on `nonActionable` + actionable count, never on specific
@@ -287,7 +352,7 @@ const PROBE_SCHEMA = {
 const CONTRACT_SPECS = [
   {
     name: 'code-review',
-    template: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
+    template: `.pair/knowledge/guidelines/collaboration/templates/${PIPELINE.reviewTemplate}`,
     contract: '.claude/workflows/contracts/code-review.contract.json',
     skeleton: LOOSE_REVIEW_SCHEMA,
     mirrors:
@@ -395,9 +460,16 @@ const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 // gate, instead of one gate per link in the chain.
 // Use it only for textual mutexes on small, low-risk bases: if review forces a change in
 // the base, every stacked child rebases.
+// The base a story branches off: its own `base` when it is STACKED, else the configured
+// default. One helper, because three prompts ask the question and a diff computed against
+// a different base than the branch was cut from silently reviews the wrong range.
+function baseOf(story) {
+  return String(story.base ?? '').trim() || PIPELINE.baseBranch
+}
+
 function wtClause(story) {
-  const base = String(story.base ?? '').trim() || 'origin/main'
-  return `ISOLATION (mandatory): do ALL git/file work inside a dedicated worktree at \`../pair-worktrees/${story.id}\` — create-or-reuse it: \`git worktree add ../pair-worktrees/${story.id} -B ${story.branch} ${base}\` on first setup, or \`git worktree add ../pair-worktrees/${story.id} ${story.branch}\` if the branch already has commits; if the path already exists, just \`cd\` into it. NEVER modify the repo's main working tree and NEVER switch its branch.${base === 'origin/main' ? '' : ` This story is STACKED on \`${base}\`: that branch is its base, so its commits are already in your history and must NOT be reverted, duplicated or re-implemented — only ADD your own work on top. When you open the PR, target \`${base}\` as the PR base branch, not \`main\`, so the diff shows only this story's change.`}`
+  const base = baseOf(story)
+  return `ISOLATION (mandatory): do ALL git/file work inside a dedicated worktree at \`${PIPELINE.worktreeRoot}/${story.id}\` — create-or-reuse it: \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} -B ${story.branch} ${base}\` on first setup, or \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} ${story.branch}\` if the branch already has commits; if the path already exists, just \`cd\` into it. NEVER modify the repo's main working tree and NEVER switch its branch.${base === PIPELINE.baseBranch ? '' : ` This story is STACKED on \`${base}\`: that branch is its base, so its commits are already in your history and must NOT be reverted, duplicated or re-implemented — only ADD your own work on top. When you open the PR, target \`${base}\` as the PR base branch, not \`main\`, so the diff shows only this story's change.`}`
 }
 
 // Reviewer isolation: read-only inspection in a DETACHED throwaway worktree pinned
@@ -405,7 +477,7 @@ function wtClause(story) {
 // collide with the authoring worktree (which holds it) or with other stories'
 // reviewers in a parallel batch — and it never touches the main checkout's branch.
 function revWtClause(story) {
-  const p = `../pair-worktrees/${story.id}-review`
+  const p = `${PIPELINE.worktreeRoot}/${story.id}-review`
   return `ISOLATION (mandatory, read-only): NEVER switch the main checkout's branch. Inspect the code in a DETACHED throwaway worktree pinned to the PR's current pushed head: \`git worktree remove --force ${p} 2>/dev/null; git fetch origin -q; git worktree add --detach ${p} origin/${story.branch}\`, then \`cd ${p}\`. Read the code there (the untracked checkpoint is absent here — good, stay blind to it). When finished, remove it: \`git worktree remove --force ${p}\`.`
 }
 
@@ -425,7 +497,7 @@ function flushMinimize(prNumber) {
 // Part B — the log/out-of-band CONVENTION + untracked-worktree-persistence note. Only meaningful
 // when a working log exists (a continuing cycle), so it is emitted only on the log-backed arms.
 function flushLogConvention(story) {
-  return `CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
+  return `CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`${PIPELINE.worktreeRoot}/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
 }
 
 // Full convention = minimize (Part A) + log/out-of-band note (Part B), for the log-backed arms.
@@ -442,14 +514,14 @@ async function driveStory(story) {
   if (!resuming) {
     // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
     const impl = await agentRetry(
-      `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following /pair-process-implement, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with /pair-capability-verify-quality (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with /pair-capability-record-decision rather than leaving it in a commit message. On completion write the story checkpoint via /pair-capability-checkpoint $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
+      `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following ${SK.implement}, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with ${SK.verifyQuality} (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with ${SK.recordDecision} rather than leaving it in a commit message. On completion write the story checkpoint via ${SK.checkpoint} $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
       withModel({ agentType: 'implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
     )
     if (!impl) return { story, status: 'failed-implement' }
 
     // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
     pr = await agentRetry(
-      `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (/pair-capability-checkpoint $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **/pair-capability-publish-pr**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
+      `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (${SK.checkpoint} $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **${SK.publishPr}**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
       { agentType: 'implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
     )
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
@@ -510,7 +582,7 @@ async function driveStory(story) {
   //      reviewer/fix agents are NOT edited by #373.)
   //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
   //    posting, and comment minimizing are all delegated to agents running in the worktree.
-  const reviewLog = `.pair/working/reviews/${story.id}.md`
+  const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
   // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
   // (invisible in rendered markdown → no visible noise). The continuation probe detects a
   // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
@@ -577,7 +649,7 @@ async function driveStory(story) {
     // round-0 a SILENT re-review, so a PR never accrues a second first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
     const review = await agentRetry(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff origin/main...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke /pair-capability-write-issue, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
+      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${baseOf(story)}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the ${PIPELINE.reviewTemplate} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${PIPELINE.reviewTemplate} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
             ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`
             : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`} Return findings and a verdict.`,
       // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a
@@ -658,7 +730,7 @@ async function driveStory(story) {
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
     const fix = await agentRetry(
-      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (/pair-capability-checkpoint $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke /pair-capability-write-issue, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. Follow /pair-process-implement for the change itself (test-first where a finding describes a defect), verify with /pair-capability-verify-quality (tier-resolved — do not improvise a gate command), and record any decision a finding forces with /pair-capability-record-decision. Commit and push. Then re-invoke **/pair-capability-publish-pr**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
+      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. Follow ${SK.implement} for the change itself (test-first where a finding describes a defect), verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
       withModel({ agentType: 'implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface

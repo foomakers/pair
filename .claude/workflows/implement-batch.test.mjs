@@ -1443,3 +1443,101 @@ test('US-219 AC4: each step is its own subagent call, and no call carries two st
   const labels = work.map(c => c.opts.label)
   assert.strictEqual(new Set(labels).size, labels.length, `duplicate labels: ${labels.join(', ')}`)
 })
+
+// ── US-219 T2 / AC1 — the engine stops being pair-shaped ───────────────────
+// Every value below is pair's today. The generalization must make each one a
+// DEFAULT rather than a literal, so an adopter with different skill names, a
+// different worktree root or a different base branch can drive the same engine.
+// The two directions are tested together on purpose: a config that is read but
+// whose defaults drifted breaks pair's own dogfood run, and defaults that are
+// right but never overridable ship an engine only pair can use.
+
+const PAIR_DEFAULTS = {
+  implement: '/pair-process-implement',
+  publishPr: '/pair-capability-publish-pr',
+  review: '/pair-process-review',
+  verifyQuality: '/pair-capability-verify-quality',
+  checkpoint: '/pair-capability-checkpoint',
+  worktreeRoot: '../pair-worktrees',
+  auditLog: '.pair/working/reviews',
+  baseBranch: 'origin/main',
+  reviewTemplate: 'code-review-template.md',
+}
+
+test('US-219 AC1: with no configuration, every pair default is still in the prompts', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const all = calls.map(c => c.prompt).join('\n')
+  for (const [key, value] of Object.entries(PAIR_DEFAULTS))
+    assert.ok(all.includes(value), `zero-config run lost the ${key} default (${value})`)
+})
+
+test('US-219 AC1: a caller-supplied pipeline replaces every pair literal', async () => {
+  const pipeline = {
+    skills: {
+      implement: '/acme-build',
+      publishPr: '/acme-open-pr',
+      review: '/acme-review',
+      verifyQuality: '/acme-gate',
+      checkpoint: '/acme-save',
+    },
+    worktreeRoot: '../acme-trees',
+    auditLogDir: '.acme/audit',
+    baseBranch: 'origin/trunk',
+    reviewTemplate: 'acme-review-format.md',
+  }
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY], pipeline },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const all = calls.map(c => c.prompt).join('\n')
+
+  for (const v of [...Object.values(pipeline.skills), '../acme-trees', '.acme/audit', 'origin/trunk', 'acme-review-format.md'])
+    assert.ok(all.includes(v), `configured value ${v} never reached a prompt`)
+
+  // And the pair values must be GONE — a config that is merely appended, leaving the
+  // hardcoded value in place, would send the agent two contradictory instructions.
+  for (const [key, value] of Object.entries(PAIR_DEFAULTS))
+    assert.ok(!all.includes(value), `pair's ${key} literal (${value}) survived the override`)
+})
+
+// A misconfigured pipeline must fail LOUDLY, like #401's card list. The failure mode
+// these prevent is the quiet one: the run proceeds on values the caller did not choose
+// and reports success, which is indistinguishable from a run that did what was asked.
+test('US-219 AC1: an unknown skill key throws instead of being dropped in silence', async () => {
+  await assert.rejects(
+    () => runWorkflow({ args: { stories: [STORY], pipeline: { skills: { implment: '/typo' } } }, dispatch: stdDispatch({}) }),
+    /unknown .*skills\.implment/,
+  )
+})
+
+test('US-219 AC1: an empty override throws rather than interpolating an empty string', async () => {
+  // `worktreeRoot: ''` would reach the shell as `git worktree add /292` — a path at the
+  // filesystem root. Falling back to the default would be just as wrong: the caller asked
+  // for something and would never learn the request was discarded.
+  await assert.rejects(
+    () => runWorkflow({ args: { stories: [STORY], pipeline: { worktreeRoot: '   ' } }, dispatch: stdDispatch({}) }),
+    /worktreeRoot.*is empty/,
+  )
+})
+
+test('US-219 AC1: a non-object pipeline throws and says how to opt out', async () => {
+  await assert.rejects(
+    () => runWorkflow({ args: { stories: [STORY], pipeline: 'defaults' }, dispatch: stdDispatch({}) }),
+    /must be an object/,
+  )
+})
+
+test('US-219 AC1: a partial pipeline keeps the defaults it did not mention', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY], pipeline: { skills: { review: '/acme-review' } } },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const all = calls.map(c => c.prompt).join('\n')
+  assert.ok(all.includes('/acme-review'), 'the one override did not apply')
+  // An all-or-nothing merge would have blanked these.
+  assert.ok(all.includes('/pair-process-implement'), 'an unmentioned skill lost its default')
+  assert.ok(all.includes('../pair-worktrees'), 'an unmentioned path lost its default')
+})
