@@ -49,6 +49,23 @@ export const meta = {
 //   `pipeline` key here would be configuration that cannot actually be honoured. Generalizing
 //   this workflow means generalizing the method, which is a separate decision, not a knob.
 
+// Every caller-facing object validates its key SET, not just the keys it recognises. Duplicated
+// verbatim from `pair-implement-batch.js` (same convention as `severityRankErrors`): these files
+// are sandbox scripts with NO imports, so a shared helper is not reachable — keep the two copies
+// together, and change them together. Here the hole was worse than on the sibling: the VERIFY
+// stage is keyed off the same fields a typo drops, so `fixstatusline` (one character) produced a
+// work prompt with no directive, a verify prompt asserting none, and the card in `ready` with
+// `verified: true` — the #401 shape, hidden behind the very stage built to catch it.
+function rejectUnknownKeys(obj, allowed, where) {
+  for (const k of Object.keys(obj ?? {}))
+    if (!allowed.includes(k))
+      throw new Error(
+        `refine-batch: unknown \`${where}.${k}\`; expected one of ${allowed.join(', ')}. ` +
+          `An unrecognised key would be dropped in silence and the run would use the default ` +
+          `while the caller believed otherwise.`,
+      )
+}
+
 function parseArgs(raw) {
   let a = raw
   if (typeof a === 'string') {
@@ -81,11 +98,38 @@ function parseArgs(raw) {
     return v
   }
   const batchModel = checkModel(a.model, '`args.model`')
+  const seenIds = new Map()
   const items = a.items.map((it, i) => {
     if (!it || typeof it !== 'object' || Array.isArray(it))
       throw new Error(`refine-batch: items[${i}] is not an object: ${JSON.stringify(it)}.`)
+    rejectUnknownKeys(it, ['id', 'mode', 'notes', 'breakdown', 'fixStatusLine', 'model'], `items[${i}]`)
     const id = String(it.id ?? '').trim().replace(/^#/, '')
     if (!id) throw new Error(`refine-batch: items[${i}] is missing id.`)
+    // Presence is not validity. `id` and `notes` are interpolated VERBATIM into the prompt of a
+    // `general-purpose` agent — a host built-in with UNRESTRICTED tools, `Bash` included — and
+    // `id` lands inside an instruction the agent then runs as `gh issue view <id>`. So a card
+    // value here carries the authority of the command line it reaches, exactly as on the sibling
+    // engine: `id: '218 --json body; gh pr merge 432 --squash'` reached the prompt and the agent
+    // label intact, and a `notes` carrying a backtick or a newline restructures the prompt around
+    // the READONLY clause it sits next to. Rejected rather than quoted: an escaped value still
+    // RUNS, and the caller who typed something that was never an issue ref never learns it.
+    const constrain = (value, key, ok, what) => {
+      const v = String(value ?? '').trim()
+      if (!v) return // absent/blank is handled above (required) or simply omitted from the prompt
+      if (!ok(v))
+        throw new Error(
+          `refine-batch: items[${i}] (#${id}) has ${key} ${JSON.stringify(v)}, which is not ${what}. ` +
+            `Card fields are interpolated verbatim into the prompt of a Bash-capable agent, so a value ` +
+            `carrying shell syntax or a path escape would EXECUTE rather than name a ${key}. Rejected, never quoted.`,
+        )
+    }
+    // Free prose, minus the two forms that become a COMMAND when an agent puts the value on a
+    // command line: backtick and `$(`. Newlines and control characters go too — they are what
+    // restructures a prompt. Punctuation, spaces and non-ASCII stay legal: a real note
+    // ("triage says #234/#390 already shipped this (gate≠review)") must keep working.
+    const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
+    constrain(id, 'id', v => /^[A-Za-z0-9._-]+$/.test(v) && !v.includes('..'), 'a single safe path segment (it reaches `gh issue view <id>`)')
+    constrain(it.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
     const mode = String(it.mode ?? 'classify').trim()
     if (!MODES.includes(mode))
       throw new Error(`refine-batch: items[${i}] (#${id}) has unknown mode ${JSON.stringify(mode)}; expected one of ${MODES.join(' | ')}.`)
@@ -97,8 +141,24 @@ function parseArgs(raw) {
       throw new Error(
         `refine-batch: items[${i}] (#${id}) sets breakdown on mode "${mode}" — task breakdown only follows a full refine.`,
       )
+    // Two items with the same id are two writers on the SAME issue body, dispatched
+    // concurrently: a `classify` and a `refine` race and the last write wins, silently. `failed`
+    // is computed by id match, so it reports neither of them correctly — a twin that died reads
+    // as having returned, because its surviving sibling answers for it.
+    if (seenIds.has(id))
+      throw new Error(
+        `refine-batch: items[${seenIds.get(id)}] and items[${i}] both carry id #${id}. ` +
+          `One card is one issue and one write — two items sharing an id would run two writers ` +
+          `on the same issue body and lose one of them. Pass each card once.`,
+      )
+    seenIds.set(id, i)
     return { ...it, id, mode, breakdown, model: checkModel(it.model, `items[${i}] (#${id})`) }
   })
+  // Read every option off the PARSED object, once, and validate the key set here too: the
+  // runtime can hand this script a JSON STRING, and an unknown top-level key was accepted in
+  // silence — `maxParallelism: 2` ran the batch completely unthrottled with no error and no
+  // effect, while the sibling engine throws on the same typo.
+  rejectUnknownKeys(a, ['items', 'model'], 'args')
   return { items, batchModel }
 }
 // `model` (per batch via `args.model`, per card via `item.model`) overrides the model for the
