@@ -11,7 +11,7 @@ export const meta = {
   // reports why. Keep every value here a single literal, however long the line gets
   // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds). Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; an unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
+    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds). Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
     { title: 'Implement', model: 'opus' },
@@ -44,8 +44,20 @@ export const meta = {
 //   model?,                       // fable | haiku | sonnet | opus
 //   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS (skill names,
 //                                 // worktreeRoot, auditLogDir, baseBranch, reviewTemplate,
-//                                 // maxFixRounds)
+//                                 // maxFixRounds). Its VALUES are validated by the SAME
+//                                 // predicates the card fields are: `baseBranch` is a git ref
+//                                 // (it is the default for `cards[i].base`, on the same command
+//                                 // line), `worktreeRoot`/`auditLogDir`/`reviewTemplate` are
+//                                 // relative paths of safe segments (one leading `..` at most),
+//                                 // `skills.*` are skill names. A pipeline default reaches the
+//                                 // same shell command text a card value does, so it carries the
+//                                 // same authority and gets the same check.
 // }
+//
+// PRESENT-BUT-EMPTY IS AN ERROR, at every level: `''` (or whitespace) on any string option —
+// `severityFloor`, `model`, any `pipeline` key — THROWS rather than being read as absent. The
+// three spellings of "unset" are the ones above; an empty string is a value the caller wrote,
+// and treating it as absent runs the batch on a setting nobody chose.
 //
 // UNSET OPTIONAL KEYS. Every `?` key above has ONE spelling for "not set": OMIT it, or set it
 // to `undefined` or `null`. All three mean ABSENT, on every optional key, at every level —
@@ -128,6 +140,47 @@ function rejectUnknownKeys(obj, allowed, where) {
       )
 }
 
+// ── The value predicates ───────────────────────────────────────────────────
+// MODULE scope, not per-card: the CARD fields and the PIPELINE defaults land on the SAME
+// command lines (`cards[i].base` and `pipeline.baseBranch` are the same `<base>` argument of
+// `git worktree add`; `cards[i].id` and `pipeline.worktreeRoot` are two halves of the one path
+// `git worktree remove --force` deletes). They lived inside the per-card `.map()` closure, so
+// `resolvePipeline` could not reach them and checked its values for "present and non-empty"
+// only — leaving `pipeline.baseBranch: 'origin/main; gh pr merge 432 --admin'` to render a
+// merge command, with the flag that bypasses branch protection, into the implement prompt.
+// One definition, both callers: a predicate the pipeline layer cannot reach is a predicate the
+// pipeline layer will reimplement more loosely.
+// Git ref charset. Never a leading `-` (the shell reads it as a flag) and never `..`
+// (a traversal in a path position, and illegal in a ref anyway).
+const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..')
+// Free prose, minus the two forms that become a COMMAND when an agent puts the value on a
+// command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
+// card title ("PR state flow (gate≠review) + …") must keep working.
+const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
+// Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
+// shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
+// worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
+// recoverable. Both passed the earlier charset test, which only forbade `..`. Same rule,
+// same spelling, in the sibling engine — held by the differential in the test file.
+const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
+// A RELATIVE directory/file path the agents `cd` into, create worktrees under and aim
+// `git worktree remove --force` at. Every component is a safe segment (so `;`, `&&`, spaces,
+// backticks and `$(` cannot survive), never absolute, never starting with `-`.
+// EXACTLY ONE leading `..` is legal, because pair's own default IS `../pair-worktrees` — the
+// worktree root is a SIBLING of the repository by design. Anything deeper is not: the point of
+// `isSegment` on `id` was that a `--force` remove must stay inside the root, and
+// `worktreeRoot: '../../../../tmp/evil'` re-opens exactly that, one component to the left.
+const isRelPath = v => {
+  const parts = v.split('/')
+  const rest = parts[0] === '..' ? parts.slice(1) : parts
+  return rest.length > 0 && rest.every(p => p !== '.' && p !== '..' && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))
+}
+// A skill NAME, as an agent is told to invoke it: an optional leading slash, then a name.
+// A name, never a sentence: `skills.implement: '/x and then gh pr merge 432 --squash'` is
+// rendered verbatim into the implement prompt as the process the agent must follow, so the
+// space is the giveaway — no legitimate skill reference carries one.
+const isSkillRef = v => /^\/?[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(v) && !v.includes('..')
+
 function parseBatchArgs(raw) {
   let a = raw
   if (typeof a === 'string') {
@@ -154,7 +207,14 @@ function parseBatchArgs(raw) {
       `implement-batch: \`args\` carries both \`cards\` and \`stories\`. They are the same field — ` +
         `\`cards\` is the current name, \`stories\` the accepted alias. Pass exactly one.`,
     )
-  if (a && typeof a === 'object' && Array.isArray(a.cards) && !('stories' in a)) a = { ...a, stories: a.cards }
+  // `Object.hasOwn` + the undefined/null test, not a bare `in`: the unset-optional rule of this
+  // contract holds HERE too. `in` counted an explicitly-undefined alias key as PRESENT, so
+  // `{ cards: [...], stories: undefined }` skipped the mapping and threw "`args` must be
+  // { stories: [...] }" — telling a caller who passed a list that no list was there, and naming
+  // the ALIAS rather than the key they used. Its mirror image (`{ stories, cards: undefined }`)
+  // worked, which is the asymmetry the rule exists to remove.
+  const hasStories = a && typeof a === 'object' && Object.hasOwn(a, 'stories') && a.stories !== undefined && a.stories !== null
+  if (a && typeof a === 'object' && Array.isArray(a.cards) && !hasStories) a = { ...a, stories: a.cards }
   if (!a || typeof a !== 'object' || !Array.isArray(a.stories))
     throw new Error(
       `implement-batch: \`args\` must be { stories: [...] } (or a bare array of stories). Received: ` +
@@ -221,19 +281,9 @@ function parseBatchArgs(raw) {
             `shell syntax or a path escape would EXECUTE rather than name a ${key}. Rejected, never quoted.`,
         )
     }
-    // Git ref charset. Never a leading `-` (the shell reads it as a flag) and never `..`
-    // (a traversal in a path position, and illegal in a ref anyway).
-    const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..')
-    // Free prose, minus the two forms that become a COMMAND when an agent puts the value on a
-    // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
-    // card title ("PR state flow (gate≠review) + …") must keep working.
-    const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
-    // Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
-    // shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
-    // worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
-    // recoverable. Both passed the earlier charset test, which only forbade `..`. Same rule,
-    // same spelling, in the sibling engine — held by the differential in the test file.
-    const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
+    // `isRef` / `isProse` / `isSegment` live at MODULE scope (see the block above
+    // `parseBatchArgs`): `resolvePipeline` validates its own values with the SAME predicates,
+    // because pipeline defaults and card fields land on the same command lines.
     constrain(id, 'id', isSegment, 'a single safe path segment (it becomes the worktree directory)')
     constrain(s.branch, 'branch', isRef, 'a valid git ref')
     constrain(s.base, 'base', isRef, 'a valid git ref')
@@ -282,12 +332,23 @@ function parseBatchArgs(raw) {
   // and the next option added beside these inherits the pattern with no whitelist to save it.
   // Checked HERE, at parse time, not where each is consumed: `severityFloor` is only rankable
   // after the contract dispatch, and a wrong TYPE should not wait on an agent to be reported.
-  for (const key of ['severityFloor', 'model'])
+  for (const key of ['severityFloor', 'model']) {
     if (a[key] !== undefined && a[key] !== null && typeof a[key] !== 'string')
       throw new Error(
         `implement-batch: \`args.${key}\` has ${key} of type ${Array.isArray(a[key]) ? 'array' : typeof a[key]}, which is not a string. ` +
           `It would be COERCED (an array joins on commas) into a value the caller never wrote. Pass a string, or omit the key.`,
       )
+    // An EMPTY string is a present value that says nothing, and it was read as ABSENT — the one
+    // spelling of "unset" this contract does NOT recognise, while `args.pipeline.<key>: ''` one
+    // function away throws for exactly the stated reason. The realistic caller is config-driven
+    // (`severityFloor: cfg.floor ?? ''`, or a JSON template rendering an unset key as `""`) and
+    // paid the full fix-round budget with every finding blocking, believing the floor was set.
+    if (typeof a[key] === 'string' && !a[key].trim())
+      throw new Error(
+        `implement-batch: \`args.${key}\` is empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
+          `An empty string is a value the caller wrote, and reading it as absent would run the batch on a setting nobody chose.`,
+      )
+  }
   return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
 }
 const PARSED = parseBatchArgs(args)
@@ -317,9 +378,11 @@ const PIPELINE_DEFAULTS = {
   baseBranch: 'origin/main',
   // A FULL path, not a basename. AC1 names "the code-review-template.md contract path" as
   // configuration, and an adopter whose KB root is not `.pair/knowledge/` (the CLI supports
-  // layout modes) could otherwise only reach their template with a `../../../..` traversal
-  // string — which then also rendered as the vocabulary label in the reviewer prompt. Path
-  // and label are now independent: the label is derived with `templateLabel()` below.
+  // layout modes) could otherwise not name their template at all — and the basename then also
+  // rendered as the vocabulary label in the reviewer prompt. Path and label are now
+  // independent: the label is derived with `templateLabel()` below. The path is repo-relative
+  // (one leading `..` at most, like every other path here): a template reachable only through a
+  // deep traversal is outside the repository, and the agent handed it has `Read`/`Write`.
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
   // Rounds of autonomous fix<->re-review before escalating to a human. Pair's 3 is measured
   // (see the rationale at MAX_FIX_ROUNDS below) and is the DEFAULT, not the rule: story
@@ -343,7 +406,12 @@ function resolvePipeline(raw) {
         `Omit it entirely to run on pair's defaults.`,
     )
   rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds'], 'args.pipeline')
-  const str = (v, key, fallback) => {
+  // Every value below is interpolated VERBATIM into the same command text `cards[i]` values
+  // are, so it is validated by the SAME predicates — `ok`/`what` are not optional. Presence is
+  // not validity here either: `baseBranch` is the `<base>` argument of `git worktree add`
+  // whenever a card does not carry its own, and `worktreeRoot` is the directory
+  // `git worktree remove --force <root>/<id>-review` deletes.
+  const str = (v, key, fallback, ok, what) => {
     // `null` is ABSENT here too, not a bad value — one spelling for an unset optional key
     // across the whole contract (see the contract block's "unset optional" rule).
     if (v === undefined || v === null) return fallback
@@ -358,18 +426,35 @@ function resolvePipeline(raw) {
     // produce `cd /` or a bare `git worktree add`. Reject it rather than fall back silently,
     // so a caller who meant to configure something learns that they did not.
     if (!t) throw new Error(`implement-batch: \`args.pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`)
+    if (!ok(t))
+      throw new Error(
+        `implement-batch: \`args.pipeline.${key}\` is ${JSON.stringify(t)}, which is not ${what}. ` +
+          `Pipeline values are interpolated verbatim into the shell commands the agents run — the same command lines the ` +
+          `card fields are validated for — so a value carrying shell syntax or a path escape would EXECUTE rather than ` +
+          `name a ${key}. Rejected, never quoted.`,
+      )
     return t
   }
+  // `args.pipeline` is type-checked; its nested object was not. `Object.keys(5)` is `[]`, so
+  // `rejectUnknownKeys` passed and `Object.entries(raw.skills ?? {})` yielded nothing: a
+  // `skills: 5` (or `true`, or `[]`) was ACCEPTED and pair's own skill names ran while the
+  // caller believed they had configured theirs — the discarded-setting failure (#401) on the
+  // one key whose entire purpose is that the adopter's skills are named differently.
+  if (raw.skills !== undefined && raw.skills !== null && (typeof raw.skills !== 'object' || Array.isArray(raw.skills)))
+    throw new Error(
+      `implement-batch: \`args.pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. ` +
+        `A non-object would be silently ignored and pair's own skill names would run instead. Omit the key to keep them deliberately.`,
+    )
   rejectUnknownKeys(raw.skills, Object.keys(PIPELINE_DEFAULTS.skills), 'args.pipeline.skills')
   const skills = { ...PIPELINE_DEFAULTS.skills }
   for (const [k, v] of Object.entries(raw.skills ?? {}))
-    skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k])
+    skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k], isSkillRef, 'a skill name as an agent invokes one — no spaces, no shell syntax, no `..`')
   return {
     skills,
-    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot),
-    auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir),
-    baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch),
-    reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate),
+    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot, isRelPath, 'a relative path built from safe segments (at most one leading `..`; it is the root a `--force` worktree remove is aimed at)'),
+    auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
+    baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, 'a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card\'s `base`)'),
+    reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
     maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
   }
 }

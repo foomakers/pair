@@ -568,6 +568,12 @@ const IMPL_SRC = readFileSync(new URL('./pair-implement-batch.js', import.meta.u
 // Extract each helper's SOURCE TEXT from an engine and evaluate the three together in
 // isolation. Extraction that silently missed would make the differential vacuously green,
 // so a miss is an assertion failure, not a skip.
+// The predicate patterns are INDENTATION-AGNOSTIC on purpose: the implement engine hoisted
+// `isRef`/`isProse`/`isSegment` to module scope so `resolvePipeline` can call the very same
+// functions (its values land on the same command lines), while the refine engine — which has
+// no `pipeline` — keeps them inside the per-card closure. Pinning the indentation would have
+// turned that legitimate move into an extraction miss, i.e. into a red differential for a
+// change that made the two engines MORE aligned, not less.
 function helpersOf(src, label) {
   const grab = (re, what) => {
     const m = src.match(re)
@@ -578,8 +584,8 @@ function helpersOf(src, label) {
     const i = 0, id = '218'
     ${grab(/^function rejectUnknownKeys[\s\S]*?^}$/m, 'rejectUnknownKeys')}
     ${grab(/^ {4}const constrain = [\s\S]*?^ {4}}$/m, 'constrain')}
-    ${grab(/^ {4}const isProse = .*$/m, 'isProse')}
-    ${grab(/^ {4}const isSegment = .*$/m, 'isSegment')}
+    ${grab(/^ *const isProse = .*$/m, 'isProse')}
+    ${grab(/^ *const isSegment = .*$/m, 'isSegment')}
     return { rejectUnknownKeys, constrain, isProse, isSegment }
   `)()
 }
