@@ -37,7 +37,7 @@ Invocable independently with an explicit `$scope` for ad hoc placement.
    - Initiatives: query PM tool or check adoption files
 3. **Act**: Resolve the working mode:
    - **DDD mode** — subdomain catalog exists, or PRD + initiatives are available for classification.
-   - **System-areas fallback** (AC3) — no subdomain catalog AND no PRD/initiatives. No DDD prerequisite is enforced; do not HALT. Proceed to Step 1 in fallback mode.
+   - **System-areas fallback** — no subdomain catalog AND no PRD/initiatives. No DDD prerequisite is enforced; do not HALT. Proceed to Step 1 in fallback mode.
 4. **Check**: Does `$scope` resolve to any item in the current context?
 5. **Skip**: If `$scope` resolves to nothing → report "no domain impact" and return control to the caller. No file changes.
 6. **Verify**: Mode and non-empty scope determined.

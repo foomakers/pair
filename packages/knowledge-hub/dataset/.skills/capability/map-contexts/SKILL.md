@@ -34,7 +34,7 @@ Invocable independently with an explicit `$scope` for ad hoc placement.
 2. **Check**: If not adopted, are subdomains defined ([`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain/) has `.md` files beyond README.md)?
 3. **Act**: Resolve the working mode:
    - **DDD mode** — bounded context catalog exists, or a subdomain catalog is available to map from.
-   - **System-areas fallback** (AC3) — no context catalog AND no subdomain catalog. No DDD prerequisite is enforced; do not HALT. Proceed to Step 1 in fallback mode, treating existing services/modules as the context boundary.
+   - **System-areas fallback** — no context catalog AND no subdomain catalog. No DDD prerequisite is enforced; do not HALT. Proceed to Step 1 in fallback mode, treating existing services/modules as the context boundary.
 4. **Check**: Does `$scope` resolve to any context/service in the current codebase or catalog?
 5. **Skip**: If `$scope` resolves to nothing → report "no domain impact" and return control to the caller. No file changes.
 6. **Verify**: Mode and non-empty scope determined. When in DDD mode, also load (best-effort, warn if missing): [architecture.md](../../../.pair/adoption/tech/architecture.md), [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md), [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md).

@@ -52,14 +52,14 @@ Every rule the skill applies is resolved through the same layered set, most-spec
 ### Step 3: Evaluate the Diff
 
 1. **Act**: For each file touched by the diff, classify against the rule set's Security relevance heuristic (quality-model.md §3.1): no security-sensitive surface (green) / security-adjacent — new external dependency, input validation on a non-critical path (yellow) / authn-authz, secrets-credentials, cryptography, PII, untrusted-input parsing (red).
-2. **Act**: For each finding, tag it **introduced** (new code/change in this diff) or **pre-existing** (surfaced, not a reason to block on its own — AC4 only fires on introduced vulnerabilities).
+2. **Act**: For each finding, tag it **introduced** (new code/change in this diff) or **pre-existing** (surfaced, not a reason to block on its own — the block signal only fires on introduced vulnerabilities).
 3. **Verify**: Every touched security-sensitive surface has a classification and a provenance tag (introduced/pre-existing).
 
 ### Step 4: Emit Review Verdict
 
 1. **Act**: Compute the overall verdict = highest severity among introduced findings (pre-existing findings are reported but don't raise the verdict past what introduced findings justify, consistent with the review floor in quality-model.md §3.2: this review pass may only raise the tier's Security relevance dimension, never lower a value the story's own refinement-time assessment already set).
 2. **Act**: Render the 1-line verdict + collapsed findings list (severity, rule/category, file:location) per Output Format below — output-only, no files written; this is embedded by the caller into the review body's five Security sections (D22 — verdict in ~1 line, details in `<details>`).
-3. **Verify**: Verdict emitted. If any **introduced** finding is red → flag explicitly for the caller: this is the AC4 signal that drives `/pair-process-review`'s CHANGES-REQUESTED decision (the decision itself stays `/pair-process-review`'s, per its own Step 5.2 table — this skill only reports the finding).
+3. **Verify**: Verdict emitted. If any **introduced** finding is red → flag explicitly for the caller: this is the signal that drives `/pair-process-review`'s CHANGES-REQUESTED decision (the decision itself stays `/pair-process-review`'s, per its own Step 5.2 table — this skill only reports the finding).
 
 ## Audit Mode (one-shot)
 

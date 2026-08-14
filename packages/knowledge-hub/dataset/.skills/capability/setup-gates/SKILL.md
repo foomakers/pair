@@ -155,7 +155,7 @@ The gate is only half the merge block. The judgment review must be **unskippable
    - `.husky/pre-commit` (or equivalent) — fast local checks (lint and/or type-check).
    - `.husky/pre-push` (or equivalent) — pre-push lint (at minimum the adopted lint command; may be the full quality-gate command).
    - Wire the install step (e.g. `"prepare": "husky install"`) into the root `package.json`.
-4. **Verify**: Run the adopted lint command — it passes out of the box (AC3). Confirm the hook files are executable and fire on a trial commit/push.
+4. **Verify**: Run the adopted lint command — it passes out of the box. Confirm the hook files are executable and fire on a trial commit/push.
 
 **Edge Cases:**
 

@@ -98,7 +98,7 @@ For each relationship, assign **all three** per the guideline:
 ### Step 7: Emit Review Verdict
 
 1. **Act**: Compute the overall verdict = highest severity among the diff's findings (a balanced diff → "balanced"). Render the 1-line verdict + collapsed `<details>` findings per Output Format — **output-only, no files written**. The caller (`/pair-process-review`) embeds it as the **Architecture** verdict-first row (1 line at top, details collapsed, D22).
-2. **Act**: If any finding is **critical** → flag it explicitly for the caller: this is the signal `/pair-process-review` factors into its major/critical severity flow (the merge decision stays `/pair-process-review`'s — this skill never blocks). A **significant/tolerable** finding in a low-volatility area is reported for **tech-debt promotion**, not blocking (AC2).
+2. **Act**: If any finding is **critical** → flag it explicitly for the caller: this is the signal `/pair-process-review` factors into its major/critical severity flow (the merge decision stays `/pair-process-review`'s — this skill never blocks). A **significant/tolerable** finding in a low-volatility area is reported for **tech-debt promotion**, not blocking.
 3. **Verify**: Verdict emitted; critical findings flagged; nothing written.
 
 ## Full Scope (one-shot audit)
@@ -171,7 +171,7 @@ When invoked **independently** (`/pair-capability-assess-coupling` on a branch, 
 - **No DDD artifacts** (no subdomain/boundedcontext): ask or estimate volatility, label it "estimated", complete the assessment — **never HALT** (consistent with #246 degradation).
 - **Capability absent in review**: `/pair-process-review` renders "not assessed" and proceeds (graceful degradation) — this skill has no say once uninstalled.
 - **Single-module project**: no cross-component integrations → verdict "balanced / not applicable", no noise findings.
-- **Unbalanced but stable** (low volatility): reported as **tolerable** → tech-debt, never blocks (AC2).
+- **Unbalanced but stable** (low volatility): reported as **tolerable** → tech-debt, never blocks.
 - **Structure-only signal** (a dependency count with no readable shared-knowledge surface): not a finding — a verdict on fewer than three dimensions is invalid (Step 3 verify).
 
 ## Graceful Degradation

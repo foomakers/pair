@@ -14,12 +14,15 @@
 #
 # Policy (story #282):
 #   - The guardrail blocks a REGRESSION below the committed baseline, at every
-#     tier — not "must hit X% absolute". Maintaining or improving passes (AC1/AC2).
+#     tier — not "must hit X% absolute". Coverage that holds or improves on the
+#     committed baseline passes.
 #   - Per-type targets (backend/frontend/shared/…) select the gradual goal for the
-#     touched code's type; below-target-but-not-below-baseline warns, never blocks (AC5).
+#     touched code's type; below-target-but-not-below-baseline warns, never blocks —
+#     the target is a direction to move in, only the baseline is enforced.
 #   - No baseline committed yet (or a missing/corrupt one) => the gate PRINTS an
 #     advisory suggestion to stderr and PASSES (bootstrap-only mode), rather than
-#     blocking everything at 0 (AC4). It does NOT persist the baseline itself.
+#     blocking every project that has not committed a baseline yet. It does NOT
+#     persist the baseline itself.
 #   - No coverage report measured => fail-safe: BLOCK at red, WARN at lower tiers,
 #     never a silent pass (edge case).
 #

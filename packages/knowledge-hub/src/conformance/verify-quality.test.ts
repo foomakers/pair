@@ -1,0 +1,1158 @@
+import { describe, it, expect } from 'vitest'
+import { readFileSync, existsSync, readdirSync } from 'fs'
+import { dirname, join, resolve } from 'path'
+
+// Conformance home for dataset/.skills/capability/verify-quality/SKILL.md.
+//
+// One file per TARGET artifact, not per introducing story (ADL 2026-07-18); each
+// story extends this file with its own `describe`. Caller-side assertions about a
+// skill that COMPOSES verify-quality live here too, next to the contract they
+// depend on — the corpus precedent is classify.test.ts / assess-security.test.ts,
+// which hold their own "/review composes X" describes rather than a second file.
+//
+// Story #259 — verify-quality integrated with the tier gate matrix (local = CI).
+// The skill must resolve the item/PR classification tags and run locally exactly
+// the checks the CI gate would run for that tier — reading TAGS + the KB gate
+// matrix only (D18), never classifying itself. These are content invariants on
+// the source-of-record SKILL.md (dataset), asserted the same way the rest of the
+// KB/skill corpus is tested (see quality-model.test.ts). The parity claim is
+// verified transitively, in two layers, by scripts/smoke-tests/scenarios/tier-aware-gate.sh
+// per the gate-tooling ADL (scripts are smoke-tested, not vitest-unit-tested):
+// (a) the smoke test asserts this SKILL.md *references* the shared tier-resolve.sh
+//     helper (resolve_tier / required_suites_for_tier / require_suite) — i.e. it
+//     composes the same resolver CI uses rather than re-implementing a matrix; and
+// (b) that helper's own tier/suite resolution is behaviorally *executed* there (the
+//     pre-existing #258 block). The skill is prose, so its resolution is not itself
+//     executed here — parity rests on it composing the behaviorally-tested helper.
+
+const SKILL_PATH = join(__dirname, '../../dataset/.skills/capability/verify-quality/SKILL.md')
+const SKILL = readFileSync(SKILL_PATH, 'utf-8')
+
+const RESOLVER = readFileSync(
+  join(__dirname, '../../dataset/.pair/knowledge/assets/tier-resolve.sh'),
+  'utf-8',
+)
+
+describe('verify-quality SKILL.md — tier gate matrix integration (#259)', () => {
+  it('frames itself as mirroring the CI gate for the resolved tier (local = CI)', () => {
+    expect(SKILL).toMatch(/gate matrix/i)
+    expect(SKILL).toMatch(/local[^\n]*\bCI\b|mirror[^\n]*\bCI\b|\bCI\b[^\n]*parity/i)
+  })
+
+  it('AC1 — 🟢 green runs base only (install + lint + type + build), same set CI would run', () => {
+    expect(SKILL).toMatch(/risk:green/)
+    // base spelled out as the green check set
+    expect(SKILL).toMatch(/install[^\n]*lint[^\n]*type[^\n]*build/i)
+  })
+
+  it('AC2 — the check set widens per tier: +unit from 🟡, +integration/E2E on 🔴', () => {
+    expect(SKILL).toMatch(/risk:yellow/)
+    expect(SKILL).toMatch(/risk:red/)
+    expect(SKILL).toMatch(/\bunit\b/)
+    expect(SKILL).toMatch(/integration/i)
+    expect(SKILL).toMatch(/e2e/i)
+  })
+
+  it('AC3 — fail-safe: no resolvable tags ⇒ full 🔴 set, stated explicitly in the report', () => {
+    expect(SKILL).toMatch(/fail-safe/i)
+    expect(SKILL).toMatch(/red/i)
+    // explicit report line, not a silent widening
+    expect(SKILL).toMatch(/no[^\n]*tag[\s\S]{0,120}(red|full)/i)
+  })
+
+  it('AC4 — any failing check ⇒ red verdict with the failing command output surfaced', () => {
+    expect(SKILL).toMatch(/failing command output|surface[^\n]*output|command output/i)
+    // Pin the behavioral linkage (failing check ⇒ red verdict ⇒ output surfaced):
+    // the red-verdict wording must co-occur with the failing-output phrase, so a
+    // future edit can't drop the "red verdict" half and still pass.
+    expect(SKILL).toMatch(
+      /red verdict[\s\S]{0,120}(failing command output|command output)|(failing command output|command output)[\s\S]{0,120}red verdict/i,
+    )
+  })
+
+  it('reads the risk:* tag from the PR, and pre-publish from the story card (never classifies)', () => {
+    expect(SKILL).toMatch(/gh pr view/)
+    expect(SKILL).toMatch(/story card|from the story/i)
+  })
+
+  it('contains NO classification criteria — reads tags + the KB matrix only (D18)', () => {
+    expect(SKILL).toMatch(/no classification criteria|contains no[^\n]*criteria/i)
+    expect(SKILL).toMatch(/D18/)
+  })
+
+  it('delegates tier + suite resolution to the shipped tier-resolve.sh helper (single source, not re-implemented)', () => {
+    expect(SKILL).toContain('tier-resolve.sh')
+    expect(SKILL).toContain('resolve_tier')
+    expect(SKILL).toContain('required_suites_for_tier')
+    expect(SKILL).toContain('require_suite')
+  })
+
+  it('preserves the opt-in tiering flag: tiering disabled ⇒ full suite (CI parity, current behavior)', () => {
+    expect(SKILL).toContain('Pre-merge tiering')
+    expect(SKILL).toMatch(/disabled[\s\S]{0,160}full suite|full suite[\s\S]{0,160}disabled/i)
+  })
+
+  it('a suite required by the tier but absent locally ⇒ explicit "suite missing — CI will fail", never a silent pass', () => {
+    expect(SKILL).toMatch(/suite missing|missing suite/i)
+    expect(SKILL).toMatch(/CI will fail/i)
+    expect(SKILL).toMatch(/not[^\n]*silent|never[^\n]*silent/i)
+  })
+
+  it('matrix/KB not found ⇒ falls back to all adopted gates with a notice', () => {
+    expect(SKILL).toMatch(/fall[- ]?back[\s\S]{0,160}(all[^\n]*gates|adopted gates)/i)
+    expect(SKILL).toMatch(/notice/i)
+  })
+
+  it('preserves idempotency (already-passing gates skipped) and adoption command overrides', () => {
+    expect(SKILL).toMatch(/already[- ]passing|not already passing|skip/i)
+    expect(SKILL).toMatch(/way-of-working/)
+  })
+
+  it('links to the matrix single source (quality-model §4) and the delivery wiring (tier-aware-pipeline)', () => {
+    const dir = dirname(SKILL_PATH)
+    const targets = ['quality-model.md', 'tier-aware-pipeline.md', 'tier-resolve.sh']
+    for (const t of targets) {
+      const m = SKILL.match(new RegExp(`\\]\\(([^)]*${t.replace('.', '\\.')})\\)`))
+      expect(m, `SKILL.md must link to ${t}`).not.toBeNull()
+      const linkPath = (m as RegExpMatchArray)[1] as string
+      expect(
+        existsSync(resolve(dir, linkPath.split('#')[0] as string)),
+        `link to ${t} must resolve`,
+      ).toBe(true)
+    }
+  })
+})
+
+describe('verify-quality — matrix parity with tier-resolve.sh (the executable source)', () => {
+  // The skill must not restate an independent matrix. The per-tier suite keys the
+  // helper exposes are the single source; the skill documents the increments and
+  // defers the mapping to required_suites_for_tier. Parity guard: the suite keys
+  // named in the helper are exactly the ones the skill's tier prose references.
+  const helperKeys = ['install', 'lint', 'type', 'build', 'unit', 'integration', 'e2e']
+
+  it('the helper exposes the four required-suite entry points the skill composes', () => {
+    for (const fn of ['resolve_tier', 'required_suites_for_tier', 'require_suite']) {
+      expect(RESOLVER).toContain(fn)
+    }
+  })
+
+  it('every suite key in the helper matrix is referenced by the skill (no drift)', () => {
+    for (const key of helperKeys) {
+      expect(SKILL.toLowerCase()).toContain(key)
+    }
+  })
+})
+
+// --- Story #382 — /review tells verify-quality WHICH PR to resolve the tier from. ---
+//
+// The forwarded thing is a PR IDENTIFIER, never a tier value: the code host's PR
+// labels stay the single source of truth (the same source CI gates on), so no
+// second source and no widen-only guard of its own is needed. Reusing `$story`
+// was the cheap option and is forbidden — the story card carries the REFINEMENT
+// tier, and review confirms-or-raises (D17), so a review-raised PR would run a
+// NARROWER set than CI: an under-check.
+//
+// The caller-side block below reads process/review/SKILL.md because the invariant
+// IS the composition contract of this skill (see the file header).
+
+const REVIEW = readFileSync(
+  join(__dirname, '../../dataset/.skills/process/review/SKILL.md'),
+  'utf-8',
+)
+
+/** The body of a `## `/`### ` section, up to the next heading of the same level. */
+const section = (doc: string, heading: string): string => {
+  const start = doc.indexOf(heading)
+  expect(start, `section not found: ${heading}`).toBeGreaterThan(-1)
+  const level = (heading.match(/^#+/) as RegExpMatchArray)[0]
+  const rest = doc.slice(start + heading.length)
+  const next = rest.search(new RegExp(`^${level} `, 'm'))
+  return next === -1 ? rest : rest.slice(0, next)
+}
+
+/** Step 1.5's body — where every tier/tree resolution rule lives. */
+const step15 = section(SKILL, '### Step 1.5: Resolve the Tier Gate Matrix (CI parity)')
+
+/** Every `REASON="…"` the resolution snippet assigns, in source order. */
+const reasons = [...step15.matchAll(/REASON="([^"]+)"/g)].map(m => m[1])
+
+// The tree/PR-state half of Step 1.5 SHIPS as an executable asset next to pr-state.sh and
+// tier-resolve.sh (#382, round 10): as markdown-only shell nothing could run it, so every
+// property below was asserted as TEXT and never once executed. Its behavior is executed by
+// scripts/smoke-tests/scenarios/pr-tree-resolve.sh (gate-tooling ADL 2026-07-13: shipped
+// shell is smoke-tested, never vitest-unit-tested); the invariants here stay CONTENT
+// invariants, now read from the file the step sources instead of from a fenced block.
+const TREE_RESOLVER_PATH = join(
+  __dirname,
+  '../../dataset/.pair/knowledge/assets/pr-tree-resolve.sh',
+)
+const TREE_RESOLVER = readFileSync(TREE_RESOLVER_PATH, 'utf-8')
+
+/**
+ * EXECUTABLE lines only — `#` comment lines dropped. Assertions about what the resolution
+ * *decides on* run against this, so a comment that quotes a banned test to explain why it
+ * is banned does not read as the test itself.
+ */
+const shellOf = (src: string): string =>
+  src
+    .split('\n')
+    .filter(l => !/^\s*#/.test(l))
+    .join('\n')
+
+/** The shell Step 1.5 still inlines: the TIER side (tag reads, sources, reasons). */
+const step15Inline = shellOf(
+  [...step15.matchAll(/```bash\n([\s\S]*?)```/g)].map(m => m[1] as string).join('\n'),
+)
+
+/**
+ * Step 1.5's whole executable surface, in EXECUTION order: the resolver it sources first,
+ * then the shell it still inlines. Ordering assertions (initialized-before-read, guard
+ * before the read it skips) therefore read the same sequence the agent runs.
+ */
+const step15Code = `${shellOf(TREE_RESOLVER)}\n${step15Inline}`
+
+/** Prose + the shipped shell — for invariants that may legitimately live in either. */
+const step15Surface = `${step15}\n${TREE_RESOLVER}`
+
+describe('verify-quality — optional $pr argument: which PR the tier is read from (#382)', () => {
+  it('the Arguments table documents `$pr` as optional', () => {
+    const args = section(SKILL, '## Arguments')
+    expect(args).toMatch(/\|\s*`\$pr`\s*\|\s*No\s*\|/)
+  })
+
+  it('AC2 — `$pr` names WHICH PR; the tier is read from that PR labels, never carried as a value', () => {
+    expect(SKILL).toMatch(/read, never carried|never a tier value|not a tier value/i)
+    expect(SKILL).toMatch(/`\$pr`[\s\S]{0,400}labels/)
+  })
+
+  it('states the resolution precedence explicitly: `$pr` → current-branch PR → `$story` → fail-safe', () => {
+    expect(SKILL).toMatch(
+      /`\$pr`[^\n]*→[^\n]*current-branch PR[^\n]*→[^\n]*`\$story`[^\n]*→[^\n]*fail-safe/i,
+    )
+  })
+
+  it('AC3 — the standalone on-branch and pre-publish paths are unchanged (no-arg PR read, then the story card)', () => {
+    expect(SKILL).toContain('gh pr view --json labels')
+    expect(SKILL).toContain('gh issue view')
+    expect(SKILL).toMatch(/no `\$pr`|without `\$pr`|`\$pr` (is )?(absent|omitted)/i)
+  })
+
+  it('AC4 — a passed PR with no resolvable tag ⇒ fail-safe 🔴, reason distinguishing "reachable, no tag" from "unreadable"', () => {
+    expect(SKILL).toMatch(/PR[^\n]*reachable[^\n]*no risk:\*/i)
+    expect(SKILL).toMatch(/PR[^\n]*unreadable/i)
+    expect(SKILL).toMatch(/fail-safe/)
+  })
+
+  it('AC4 — "no tag" is decided by TAG PRESENCE: label EMPTINESS decides nothing, on any branch', () => {
+    // Property, not spelling: emptiness of `$LABELS` must not be a decision anywhere in
+    // Step 1.5. An `[ -z "$LABELS" ]` / `[ -n "$LABELS" ]` test conflates three states —
+    // no PR, a PR with zero labels, and a failed read — so the common shape (pr-state:*/
+    // cost:*/type labels and no risk:*) would emit the generic fail-safe line the skill
+    // forbids, and a zero-label PR would fall through to the story card's refinement tier.
+    expect(step15Code).not.toMatch(/\[\s*-[zn]\s*"\$LABELS"\s*\]/)
+    // Secondary guard on today's spelling of the replacement.
+    expect(step15).toMatch(/grep -q '\^risk:'/)
+    expect(step15).toMatch(/has_risk_tag/)
+    // One spelling of the rule on every branch that reads labels: each `LABELS=` read is
+    // followed by at least one `has_risk_tag` test rather than an emptiness test.
+    const labelReads = step15Code.split('\n').filter(l => /(?:^|\s)LABELS="[^"]/.test(l)).length
+    const tagTests = (step15Code.match(/has_risk_tag "\$LABELS"/g) ?? []).length
+    expect(labelReads).toBeGreaterThanOrEqual(2)
+    expect(tagTests).toBeGreaterThanOrEqual(labelReads)
+  })
+
+  it('every variable the snippet READS is initialized in the step before first use', () => {
+    // The fail-safe design only holds if nothing can be read stale. This skill is
+    // idempotent by contract, so it is re-invoked in shells where a previous run's
+    // variables survive: an arm that falls through to `resolve_tier "$LABELS"` without
+    // assigning `LABELS` would resolve the PREVIOUS run's tier — a silent NARROW on
+    // exactly the paths whose purpose is to fail safe (D17 forbids the direction).
+    const lines = step15Code.split('\n')
+    const assignedAt = new Map<string, number>()
+    lines.forEach((l, i) => {
+      for (const m of l.matchAll(/(?:^|[\s;(])([A-Z][A-Z0-9_]*)=/g)) {
+        const name = m[1] as string
+        if (!assignedAt.has(name)) assignedAt.set(name, i)
+      }
+    })
+    const readBeforeAssigned: string[] = []
+    lines.forEach((l, i) => {
+      for (const m of l.matchAll(/\$\{?([A-Z][A-Z0-9_]*)\}?/g)) {
+        const name = m[1] as string
+        const at = assignedAt.get(name)
+        if (at === undefined || at > i) readBeforeAssigned.push(`${name} (line ${i + 1})`)
+      }
+    })
+    expect(
+      readBeforeAssigned,
+      `read before assignment in Step 1.5: ${readBeforeAssigned.join(', ')}`,
+    ).toEqual([])
+    // Pin the one the fall-through arms depend on, by spelling too.
+    expect(step15Code).toMatch(/^\s*LABELS=""/m)
+  })
+
+  it('AC4 — every resolution branch sets a DISTINCT reason; the generic line stays for the sourceless case', () => {
+    // The invariant the Fail-safe bullet states: six reachable failure states, six
+    // different messages. Uniqueness is asserted on the values, not on their wording, so
+    // a rephrase stays green while a copy-pasted duplicate (two states, one message) fails.
+    expect(reasons.length).toBeGreaterThanOrEqual(6)
+    expect(new Set(reasons).size, `duplicate REASON strings: ${reasons.join(' | ')}`).toBe(
+      reasons.length,
+    )
+    // and each of the three sources appears in both of its two states (reachable / unreadable)
+    for (const source of [/^PR #\$PR_NUM/, /current-branch PR/, /story card/]) {
+      expect(reasons.filter(r => source.test(r)).length).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('AC4 — an unreadable current-branch PR fails safe with its own reason, it never degrades to the story card', () => {
+    // `gh pr view` exits non-zero for BOTH "no PR on this branch" and "host unreachable",
+    // so the exit status alone cannot decide: only the no-PR message may fall through to
+    // `$story` (the refinement tier — an under-check anywhere else, D17).
+    expect(step15Surface).toMatch(/no pull requests found/i)
+    expect(reasons).toContain('current-branch PR unreadable — the code host is not reachable')
+    // Exactly two states may raise the pre-publish flag, and neither is a bare failed read:
+    // the host's no-PR MESSAGE, and no code-host remote at all (provably no PR — the read
+    // was skipped, not failed). A third raiser would hand the story card's REFINEMENT tier
+    // to a run whose PR may exist and may carry a raised tag.
+    const noPrFlagLines = step15Code.split('\n').filter(l => /NO_PR_ON_BRANCH=1/.test(l))
+    expect(noPrFlagLines.length, `unexpected NO_PR_ON_BRANCH raisers: ${noPrFlagLines}`).toBe(2)
+    expect(step15Code).toMatch(
+      /no pull requests found'?\s*"\$PR_ERR"[\s\S]{0,200}NO_PR_ON_BRANCH=1/,
+    )
+    expect(step15Code, 'the other raiser is the no-remote guard').toMatch(
+      /\[ -z "\$\(git remote\)" \][\s\S]{0,200}NO_PR_ON_BRANCH=1/,
+    )
+    // … and the story-card read is nested under that flag, not under a bare failure arm
+    expect(step15Code).toMatch(/NO_PR_ON_BRANCH" = "1"[\s\S]{0,400}gh issue view/)
+  })
+
+  it('a passed `$pr` never falls back to the story card — the refinement tier would be an under-check (D17)', () => {
+    expect(SKILL).toMatch(/`\$pr`[\s\S]{0,300}(never|not|NO)[\s\S]{0,80}story.card/i)
+    expect(SKILL).toMatch(/under-check/i)
+    expect(SKILL).toMatch(/D17/)
+  })
+
+  it('AC5 — the report states the tier SOURCE and the TREE the suites ran against, separately', () => {
+    const out = section(SKILL, '## Output Format')
+    expect(out).toMatch(/Tier source/i)
+    expect(out).toMatch(/Tree/i)
+    expect(SKILL).toMatch(
+      /tier[^.\n]*exact[\s\S]{0,200}tree|tree[^\n]*(differs|not)[\s\S]{0,200}(branch|PR)/i,
+    )
+  })
+
+  it('AC5 — the `Tree:` row is PRODUCED by Step 1.5, and the match test is a COMMIT compare in every case', () => {
+    // Without this the ⚠️ arm is not deterministically reachable. Branch NAMES cannot be
+    // the test: a checkout on the PR's own branch at a different commit (stale, or ahead
+    // with unpushed work) is not the PR's head, and a detached review worktree at the head
+    // is — a name compare gets both wrong, in opposite directions.
+    expect(step15Surface).toMatch(/headRefName/)
+    expect(step15Surface).toMatch(/headRefOid/)
+    expect(step15Surface).toMatch(/TREE_MATCH/)
+    expect(step15Surface).toMatch(/detached/i)
+    // The PROPERTY, not one banned spelling: EVERY `TREE_MATCH=match` in the step —
+    // the `$pr` arm and the current-branch arm alike — must sit on a line that compares
+    // `git rev-parse HEAD` to a head sha read from the PR. A bare `TREE_MATCH=match`
+    // promoted by BRANCH identity passes a spelling ban and still reports "matches PR
+    // #N's head" for a locally-committed-unpushed or stale checkout of that branch.
+    const lines = step15Code.split('\n')
+    const compare = /\[ "\$\(git rev-parse HEAD\)" = "\$PR_HEAD_SHA" \]/
+    const matchAt = lines.map((l, i) => (/TREE_MATCH=match\b/.test(l) ? i : -1)).filter(i => i >= 0)
+    expect(matchAt.length).toBeGreaterThan(0)
+    for (const i of matchAt) {
+      const window = lines.slice(Math.max(0, i - 2), i + 1).join('\n')
+      expect(
+        window,
+        `every TREE_MATCH=match must be guarded by the commit compare, got: ${lines[i]?.trim()}`,
+      ).toMatch(compare)
+    }
+    // and no branch-name equality decides anything, on either arm
+    expect(step15Code).not.toMatch(/\[ "\$LOCAL_REF" = "\$[A-Z_]*HEAD_REF" \]/)
+    // ONE name for the PR head sha across the whole step: the rendering spec interpolates
+    // `PR_HEAD_SHA`, so a second spelling on one arm renders an EMPTY sha in that arm's row.
+    const shaNames = new Set(
+      [...step15Code.matchAll(/\b([A-Z][A-Z0-9_]*HEAD_SHA)\b/g)].map(m => m[1]),
+    )
+    expect(shaNames, `one head-sha variable only, got: ${[...shaNames].join(', ')}`).toEqual(
+      new Set(['PR_HEAD_SHA']),
+    )
+  })
+
+  it('AC5 — "ahead of the PR head" is its OWN arm: the ⚠️ is reserved for stale/divergent trees', () => {
+    // `/implement` composes verify-quality after every task and `/publish-pr` runs it as a
+    // pre-flight — both on the story branch, BEFORE pushing. Once a PR exists, every such
+    // run is tree-different by construction; rendering ⚠️ on that expected state trains
+    // the reader to ignore the warning that means "the suites ran on OTHER code".
+    const lines = step15Code.split('\n')
+    const aheadAt = lines.map((l, i) => (/TREE_MATCH=ahead\b/.test(l) ? i : -1)).filter(i => i >= 0)
+    expect(aheadAt.length).toBeGreaterThan(0)
+    for (const i of aheadAt) {
+      const window = lines.slice(Math.max(0, i - 2), i + 1).join('\n')
+      expect(window, 'the ahead arm must be decided by ancestry, not by branch name').toMatch(
+        /git merge-base --is-ancestor "\$PR_HEAD_SHA" HEAD/,
+      )
+    }
+    // the ⚠️ belongs to `mismatch` only
+    const out = section(SKILL, '## Output Format')
+    const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
+    const arms = treeRow.split('|')
+    const warned = arms.filter(a => a.includes('⚠️'))
+    expect(warned.length).toBe(1)
+    expect(warned[0]).toMatch(/NOT PR #N's head/)
+    expect(arms.some(a => /ahead of PR #N's head/.test(a))).toBe(true)
+  })
+
+  it('AC5 — the current-branch arm reads the head sha too, and names the PR it reports on', () => {
+    // The standalone pre-push flow: a dev on the PR's own branch with unpushed commits is
+    // the CANONICAL pre-push state and is NOT the PR's head. That arm therefore needs
+    // `headRefOid` (to compare) and `number` (to render "PR #N") — a `--json labels` read
+    // can supply neither, so the arm could not even name the PR it claimed to match.
+    const branchRead = step15Code.match(/gh pr view --json [^\s]+/)
+    expect(branchRead, 'the current-branch read must be present').not.toBeNull()
+    expect((branchRead as RegExpMatchArray)[0]).toMatch(/headRefOid/)
+    expect((branchRead as RegExpMatchArray)[0]).toMatch(/number/)
+  })
+
+  it('`LOCAL_REF` is resolved for EVERY arm — the `none` and branch arms render it too', () => {
+    // Resolved under any conditional it is empty on exactly the arms that interpolate it:
+    // the `none` row (no PR on this branch), the `no-remote` row (the read never happened)
+    // and the branch-promoted row. It must therefore be resolved BEFORE the read that can
+    // fail — which is what `resolve_pr_tree` calling `local_tree` first guarantees.
+    const localAt = step15Code.indexOf('LOCAL_REF=')
+    const readAt = step15Code.indexOf('pr_view_json "$PR_NUM"')
+    expect(localAt).toBeGreaterThan(-1)
+    expect(readAt).toBeGreaterThan(-1)
+    expect(localAt, 'the local tree must be resolved before the read').toBeLessThan(readAt)
+    expect(step15Code, 'and resolved unconditionally, at the top of the resolution').toMatch(
+      /local_tree[\s\S]{0,400}pr_view_json "\$PR_NUM"/,
+    )
+    // …and it must name a COMMIT when detached: `git rev-parse --abbrev-ref HEAD` yields the
+    // literal string "HEAD" there, while both renderings promise a commit — and a detached
+    // checkout is the canonical independent-review/CI shape this contract targets.
+    expect(step15Code).toMatch(
+      /\[ "\$LOCAL_REF" = HEAD \][\s\S]{0,120}(git rev-parse --short HEAD|\$LOCAL_SHA)/,
+    )
+    // the short sha is resolved ONCE and reused, since the `mismatch`/`ahead` arms pin the
+    // local tree to a commit on an ATTACHED checkout too
+    expect(step15Code).toMatch(/LOCAL_SHA="\$\(git rev-parse --short HEAD\)"/)
+    expect(
+      step15Code.indexOf('LOCAL_SHA='),
+      'LOCAL_SHA must be resolved before the read, like LOCAL_REF',
+    ).toBeLessThan(readAt)
+  })
+
+  it('the PR-read temp file is released WITHOUT taking over the caller shell EXIT trap', () => {
+    // `trap … EXIT` is a shell GLOBAL. Installing one here (and then clearing it with
+    // `trap - EXIT`) silently discards the cleanup handler a caller — or a wrapper that
+    // sources this snippet — already owns: the snippet would take ownership of state it
+    // does not own, for a file it releases on the very next line anyway. No arm of the
+    // read chain can exit early (a failing command in an `if` condition does not exit
+    // even under `set -e`), so the explicit release is sufficient.
+    expect(step15Code, 'the temp file must still be released explicitly').toMatch(
+      /rm -f "\$PR_ERR"/,
+    )
+    expect(step15Code, 'no shell-global EXIT trap may be installed or cleared').not.toMatch(
+      /\btrap\b/,
+    )
+  })
+
+  it('a `$pr` given as a URL is normalized to a bare number before it is rendered', () => {
+    // The Arguments table accepts "number or URL", but every rendering assumes a number:
+    // the REASON strings say "PR #123 …" and the Output Format row is "PR #N".
+    expect(step15Code).toMatch(/PR_NUM=/)
+    // The number comes from the `pull/<n>` PATH SEGMENT, never from the string TAIL: a
+    // tail match yields nothing for `…/pull/420/files` (⇒ the reason renders the whole
+    // URL) and yields the WRONG number for `…/pull/420#issuecomment-98765`.
+    expect(step15Code).toMatch(/pull\|pull-requests\|merge_requests/)
+    expect(step15Code).not.toMatch(/grep -oE '\[0-9\]\+\$'/)
+    // The accepted input list — every form this corpus writes a PR reference in:
+    //   `420`, `#420`, `…/pull/420`, `…/pull/420/files`, `…/pull/420#issuecomment-98765`
+    // `#420` is the spelling used in prose and issue references everywhere here, and it must
+    // NOT fall through to the verbatim echo: the unreadable arms would then render the
+    // malformed `PR ##420 unreadable`, and a non-GitHub host that rejects `#N` would
+    // fail-safe 🔴 blaming an unreachable host for a parsing problem.
+    // A bare number still passes through, anchored at BOTH ends, with an OPTIONAL leading `#`
+    // that is stripped.
+    expect(step15Code).toMatch(/grep -oE '\^#\?\[0-9\]\+\$'/)
+    expect(step15Code, 'the leading `#` must be stripped, not echoed').toMatch(/tr -d '#'/)
+    // and the Arguments table says which forms are recognized
+    const args = section(SKILL, '## Arguments')
+    expect(args).toMatch(/pull\/<n>|`pull\/`/)
+    expect(args, 'the `#N` spelling must be documented as accepted').toMatch(
+      /`#420`|`#<n>`|leading `#`/i,
+    )
+    const reasonStrings = [...step15Code.matchAll(/REASON="([^"]*)"/g)].map(m => m[1] as string)
+    const prReasons = reasonStrings.filter(r => /\bPR\b/.test(r) && /\$/.test(r))
+    expect(prReasons.length).toBeGreaterThan(0)
+    for (const r of prReasons) {
+      expect(r, `PR reasons must render a normalized #number, got: ${r}`).toMatch(/#\$PR_NUM/)
+    }
+    expect(reasonStrings.join(' '), 'no raw `$pr` interpolation in a report string').not.toMatch(
+      /(?<![A-Za-z_])\$pr(?![A-Za-z_])/,
+    )
+  })
+
+  it('the PR read consumes the NORMALIZED identifier, not the raw `$pr`', () => {
+    // `PR_NUM` is normalized structurally *because* tail parsing is wrong for
+    // `…/pull/420/files` and `…/pull/420#issuecomment-98765`, and the Arguments table
+    // promises both forms are accepted — but the read that must survive them passed the RAW
+    // value, so a documented-as-accepted input fail-safes 🔴 with "unreadable — nonexistent
+    // identifier, or the code host is not reachable": a parsing problem misreported as an
+    // unreachable host, which the step's own Fail-safe bullet forbids. Normalization already
+    // falls back to `$pr` verbatim when nothing is recognized, so `$PR_NUM` is never empty
+    // when `$pr` was supplied.
+    expect(step15Code).toMatch(/pr_view_json "\$PR_NUM"/)
+    expect(step15Code, 'the read must not consume the un-normalized identifier').not.toMatch(
+      /pr_view_json "\$(pr|PR_ARG)"/,
+    )
+  })
+
+  it('point 1 carries the code-host routing qualification, like every other host read in the step', () => {
+    // GitHub-only field names (`headRefName`/`headRefOid`) with no substitution pointer
+    // leave a non-GitHub host nothing to route against: the read fails and a perfectly
+    // reachable PR renders `Tree: unknown` + a 🔴 fail-safe.
+    const point1 = step15.slice(0, step15.search(/\*\*Check — is tiering on\?\*\*/))
+    expect(point1).toMatch(/routing table/i)
+    expect(point1).toMatch(/code host/i)
+    expect(point1).toMatch(/headRefName/)
+  })
+
+  it('AC5 — the tree is resolved TIER-INDEPENDENTLY, before the `Pre-merge tiering` flag is read', () => {
+    // `disabled` is the default, and it skips straight to Step 2 — so a tree resolution
+    // living under the tiering-enabled arm would never run in the default configuration,
+    // and /review's `Tree: ⚠️` advisory rule could never fire.
+    const treeAt = step15.indexOf('TREE_MATCH')
+    const flagStepAt = step15.search(/\*\*Check — is tiering on\?\*\*/)
+    expect(treeAt).toBeGreaterThan(-1)
+    expect(flagStepAt).toBeGreaterThan(-1)
+    expect(
+      treeAt,
+      'TREE_MATCH must be resolved before the point that reads the tiering flag',
+    ).toBeLessThan(flagStepAt)
+    expect(step15).toMatch(/tier-independent/i)
+    // …on BOTH resolution paths. The promotion of `none` for the CHECKED-OUT BRANCH's own
+    // PR must be pre-flag too: left in the tiering-enabled point, the ⚠️ arm is unreachable
+    // in the DEFAULT `disabled` configuration — where the row would be the only thing
+    // saying which code the full suite ran on.
+    const preFlag = step15Code.slice(
+      0,
+      step15Code.indexOf('source .pair/knowledge/assets/tier-resolve.sh'),
+    )
+    expect(preFlag, 'the branch (no-`$pr`) PR read must sit before the flag').toContain(
+      'gh pr view --json',
+    )
+    expect(preFlag).toContain('gh pr view "$1"')
+  })
+
+  it('AC5 — the PR is read in ONE round trip on either path, and an unreadable PR renders `unknown`', () => {
+    // Two calls cost two round trips AND, on the unreadable path, return empty and drive a
+    // "NOT PR #N's head" row that asserts a mismatch the snippet could not know. One read
+    // point serves both paths (`$pr` and the checked-out branch's own PR).
+    expect((step15Code.match(/pr_view_json "\$PR_NUM"/g) ?? []).length).toBe(1)
+    expect((step15Code.match(/gh pr view/g) ?? []).length).toBe(2) // the two arms of pr_view_json
+    expect(step15Surface).toMatch(/--json labels,headRefName,headRefOid/)
+    expect(step15Surface).toMatch(/TREE_MATCH=unknown/)
+  })
+
+  it('the round trip is SKIPPED when it cannot pay — no code-host remote ⇒ no read', () => {
+    // Point 1's read is unconditional and runs BEFORE the tiering flag, so on the `disabled`
+    // DEFAULT (this repo's configuration, and the documented adopter default) every
+    // invocation pays a code-host round trip whose labels are then discarded — and
+    // /implement composes this skill once per task, so an offline, rate-limited or
+    // remote-less session pays a network failure timeout on every task gate. The cheap
+    // short-circuit costs one conditional and the `unknown` arm already handles the outcome
+    // (it changes no gate), which is the skill's Graceful Degradation posture elsewhere.
+    expect(step15Code, 'the read must be guarded by a remote check').toMatch(/git remote/)
+    const lines = step15Code.split('\n')
+    const guardAt = lines.findIndex(l => /git remote/.test(l))
+    const readAt = lines.findIndex(l => /pr_view_json "\$PR_NUM"/.test(l))
+    expect(guardAt).toBeGreaterThan(-1)
+    expect(readAt).toBeGreaterThan(-1)
+    expect(guardAt, 'the guard must sit before the read it skips').toBeLessThan(readAt)
+    // …and the skipped path resolves the honest relation, not a mismatch it never
+    // established — and not `unknown` either, which claims a read that was attempted and
+    // failed (see the dedicated state below).
+    expect(
+      lines.slice(guardAt, readAt).join('\n'),
+      'the skipped path must resolve its own TREE_MATCH value',
+    ).toMatch(/TREE_MATCH=no-remote/)
+  })
+
+  it('the skipped read is its OWN state: no remote ⇒ pre-publish, so `$story` still resolves the tier', () => {
+    // Regression guard on the short-circuit above. It skipped the read but left
+    // `NO_PR_ON_BRANCH=0`, and point 3 nests the story-card arm under that flag — so in a
+    // repository with no code-host remote a supplied `$story` was silently ignored and
+    // resolution fell to the final `else`, reporting `current-branch PR unreadable — the
+    // code host is not reachable` for a read that was never attempted, against a host that
+    // is not CONFIGURED rather than unreachable (the Fail-safe bullet forbids exactly that
+    // misattribution). Two consequences: a freshly bootstrapped project with no remote yet
+    // lost the `$story` pre-publish fallback AC3 requires (widen-only, but the fallback
+    // exists precisely for the pre-publish case, and a repo with no code host has by
+    // definition no PR), and the `$pr` arm rendered `PR #N unreadable` for a read that
+    // never happened. No remote ⇒ provably no PR ⇒ the pre-publish shape.
+    const lines = step15Code.split('\n')
+    const guardAt = lines.findIndex(l => /\[ -z "\$\(git remote\)" \]/.test(l))
+    expect(guardAt, 'the no-remote guard must be present').toBeGreaterThan(-1)
+    const guardArm = lines.slice(guardAt, guardAt + 6).join('\n')
+    expect(guardArm, 'no remote ⇒ no PR: the pre-publish flag must be raised here').toMatch(
+      /NO_PR_ON_BRANCH=1/,
+    )
+    expect(guardArm, 'the skipped read is not the failed read').not.toMatch(/TREE_MATCH=unknown/)
+    expect(guardArm, 'the state must be distinguishable downstream').toMatch(/NO_CODE_HOST=1/)
+    // …and downstream it renders as itself: its own reason on the `$pr` arm (which point 3
+    // still tests FIRST, so a named PR keeps its own arm) and its own `Tier source:` value
+    // on the sourceless arm.
+    expect(step15Code, 'the flag must be consumed, not just set').toMatch(/NO_CODE_HOST" = "1"/)
+    expect(step15Code).toMatch(/elif \[ -n "\$PR_ARG" \]/)
+    const noHostReasons = reasons.filter(r => /no code-host remote/i.test(r))
+    expect(
+      noHostReasons.length,
+      `the missing-configuration state needs its own reason(s): ${reasons.join(' | ')}`,
+    ).toBeGreaterThanOrEqual(2)
+    const sources = [...step15.matchAll(/TIER_SOURCE="([^"]+)"/g)].map(m => m[1] as string)
+    expect(sources.some(s => /no code-host remote/i.test(s))).toBe(true)
+  })
+
+  it('the names Steps 2–6 consume are assigned on EVERY arm, the tag-free modes included', () => {
+    // `TIER` and `ACTIVE_SUITES` decide which suites actually run and are read OUTSIDE this
+    // step (Step 4: "run only the test suites in ACTIVE_SUITES"; Step 1.5's own Verify).
+    // Two arms skip the tier read entirely — tiering `disabled` (the default) and the
+    // matrix-not-found fallback — and describe the WIDEST set in prose; leaving the
+    // variables unassigned there lets a previous run's `ACTIVE_SUITES="install lint type
+    // build"` survive in the shell, so an agent following Step 4 literally runs a NARROWER
+    // set than the arm demands: the same silent narrow the LABELS fix removed.
+    const initBlock = step15Inline.slice(0, step15Inline.indexOf('has_risk_tag()'))
+    expect(initBlock, 'TIER must be initialized in the hoisted block').toMatch(/^\s*TIER=/m)
+    expect(initBlock, 'ACTIVE_SUITES must be initialized to the widest set').toMatch(
+      /^\s*ACTIVE_SUITES=all\b/m,
+    )
+    // …and explicitly (re-)assigned on both tag-free arms, where the prose promises the full set
+    const disabledArm = step15.slice(
+      step15.indexOf('**`disabled` (the default)'),
+      step15.indexOf('**`enabled`**'),
+    )
+    expect(disabledArm).toMatch(/ACTIVE_SUITES=all\b/)
+    expect(disabledArm).toMatch(/TIER=/)
+    const fallbackArm = step15.slice(step15.indexOf('matrix/KB not found'))
+    expect(fallbackArm).toMatch(/ACTIVE_SUITES=all\b/)
+    expect(fallbackArm).toMatch(/TIER=/)
+    // and the consumer must know the sentinel means "every adopted gate", not a suite named `all`
+    const step4 = section(SKILL, '### Step 4: Test Gate (tier-scoped)')
+    expect(step4).toMatch(/ACTIVE_SUITES/)
+    expect(step4, 'Step 4 must define the `all` sentinel it can now read').toMatch(
+      /`all`[^\n]*(every|full)|sentinel/i,
+    )
+  })
+
+  it('AC5 — every resolved TREE_MATCH value has a rendering arm in the Output Format', () => {
+    // No improvised rows: the values the snippet can assign and the arms the report
+    // enumerates are the same set, so a pre-publish run never claims to match a PR that
+    // does not exist and an unreadable PR never renders as a mismatch.
+    const assigned = new Set([...step15Code.matchAll(/TREE_MATCH=([\w-]+)/g)].map(m => m[1]))
+    expect(assigned).toEqual(
+      new Set(['match', 'ahead', 'mismatch', 'unknown', 'none', 'no-remote']),
+    )
+    const out = section(SKILL, '## Output Format')
+    const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
+    expect(treeRow).toMatch(/matches PR #N's head/)
+    expect(treeRow).toMatch(/ahead of PR #N's head/)
+    expect(treeRow).toMatch(/⚠️ NOT PR #N's head/)
+    expect(treeRow).toMatch(/unknown — PR #N unreadable/)
+    expect(treeRow).toMatch(/no PR on this branch/)
+    expect(treeRow, 'the SKIPPED read needs its own arm, distinct from the failed one').toMatch(
+      /no code-host remote/,
+    )
+    // …and the LOCAL side of every arm that renders it pins a COMMIT. `git rev-parse
+    // --abbrev-ref HEAD` is a BRANCH NAME on an attached checkout — the common
+    // review-from-`main` and stale-branch shapes, i.e. precisely the `mismatch` cases — so a
+    // row reading "the suites ran against main" names the code that was NOT run and leaves
+    // the reader unable to tell which code WAS. It is a commit question on both sides.
+    expect(out, '`<tree>` must be defined as a commit-pinned value').toMatch(
+      /`<tree>`[^\n]*@<sha7>/,
+    )
+    for (const arm of [
+      'matches PR',
+      'ahead of PR',
+      '⚠️ NOT PR',
+      'no PR on this branch',
+      'no code-host remote',
+    ]) {
+      const armText = (treeRow.match(/\[(.*)\]$/) as RegExpMatchArray)[1]
+        .split(' | ')
+        .find(a => a.includes(arm)) as string
+      expect(armText, `the "${arm}" arm must render the commit-pinned <tree>`).toContain('<tree>')
+    }
+    expect(step15Code, 'the local sha is resolved once, as a variable').toMatch(/LOCAL_TREE=/)
+  })
+
+  it('AC5 — the tier SOURCE is resolved by the snippet too, with one arm per resolved value', () => {
+    // Same contract as `Tree:`, for the same reason: an improvised row has no arm for
+    // "`$pr` supplied but unreadable" or "current-branch PR unreadable", and neither
+    // `PR #N (named by $pr)` (claims a tier came from a PR that could not be read) nor
+    // `fail-safe — no source resolved` (a source WAS named) is true there.
+    const assigned = [...step15Code.matchAll(/TIER_SOURCE="([^"]+)"/g)].map(m => m[1] as string)
+    expect(assigned.length).toBeGreaterThanOrEqual(6)
+    expect(new Set(assigned).size, `duplicate TIER_SOURCE values: ${assigned.join(' | ')}`).toBe(
+      assigned.length,
+    )
+    const out = section(SKILL, '## Output Format')
+    const sourceRow = (out.match(/^├── Tier source:.*$/m) as RegExpMatchArray)[0].replace(/`/g, '')
+    for (const value of assigned) {
+      const rendered = value
+        .replace(/\$PR_NUM/g, 'N')
+        .replace(/\$story/g, 'ID')
+        .replace(/\\\$/g, '$')
+      expect(sourceRow, `Tier source: has no arm for ${value}`).toContain(rendered)
+    }
+    // and the modes that read no tag at all keep their arms
+    expect(sourceRow).toMatch(/n\/a \(tiering disabled/)
+    expect(sourceRow).toMatch(/fail-safe — no source resolved/)
+  })
+
+  it('AC5 — no `Tree:` arm can render an empty `PR_NUM` (`PR # unreadable`)', () => {
+    // `unknown` is reachable on the no-`$pr` path — `PR_NUM` is initialized to "" and only
+    // the `$pr` normalization block writes it, so a failed current-branch read whose stderr
+    // is not "no pull requests found" (unauthenticated, offline, rate-limited, remote not on
+    // the code host) renders `Tree: unknown — PR # unreadable`. Point 1 now makes that read
+    // on EVERY run including the default `Pre-merge tiering: disabled`, so the malformed row
+    // is the common case there. `TIER_SOURCE` already handles the same state with a
+    // numberless arm (`current-branch PR unreadable`); the Tree row must too.
+    const out = section(SKILL, '## Output Format')
+    const treeRow = (out.match(/^├── Tree:.*$/m) as RegExpMatchArray)[0]
+    const arms = (treeRow.match(/\[(.*)\]$/) as RegExpMatchArray)[1].split(' | ')
+    const unknownArms = arms.filter(a => /^unknown/.test(a))
+    expect(unknownArms.length, `the \`unknown\` value needs both spellings: ${treeRow}`).toBe(2)
+    expect(
+      unknownArms.some(a => /PR #N/.test(a)),
+      'the numbered spelling (a `$pr` was normalized) must stay',
+    ).toBe(true)
+    expect(
+      unknownArms.some(a => !/#/.test(a)),
+      'the numberless spelling (no `$pr`, `PR_NUM` never assigned) is missing',
+    ).toBe(true)
+    // and the rendering paragraph must state the two-state rule, not just the Output Format
+    expect(step15).toMatch(/`PR_NUM`[^.\n]{0,80}empty|empty[^.\n]{0,40}`PR_NUM`/)
+  })
+
+  it('AC5 — every arm of the `Tier source:` row is ASSIGNED, never improvised prose', () => {
+    // The step's contract is that both rows are "resolved variables, not improvised prose",
+    // and `TIER_SOURCE` is initialized to the fail-safe attribution precisely so no arm can
+    // render stale. The tag-free modes (`tiering disabled` — the DEFAULT this repo runs —
+    // and the matrix-not-found fallback) must therefore ASSIGN their value, not merely ask
+    // for it in prose: otherwise an agent rendering the variable it was told to resolve
+    // prints `fail-safe — no source resolved` on a run that never attempted a tier read.
+    const render = (v: string) =>
+      v
+        .replace(/\$PR_NUM/g, 'N')
+        .replace(/\$story/g, 'ID')
+        .replace(/\\\$/g, '$')
+    // read the WHOLE step (prose arms included), not just its fenced code
+    const assigned = new Set(
+      [...step15.matchAll(/TIER_SOURCE="([^"]+)"/g)].map(m => render(m[1] as string)),
+    )
+    expect(assigned).toContain('n/a (tiering disabled — no tag read)')
+    expect(assigned).toContain('n/a (matrix fallback — no tag read)')
+    const out = section(SKILL, '## Output Format')
+    const sourceRow = (out.match(/^├── Tier source:.*$/m) as RegExpMatchArray)[0].replace(/`/g, '')
+    const arms = new Set((sourceRow.match(/\[(.*)\]$/) as RegExpMatchArray)[1].split(' | '))
+    // exact correspondence in BOTH directions: no unassigned arm, no unrendered assignment
+    expect(arms, `Tier source: arms ≠ assigned TIER_SOURCE values`).toEqual(assigned)
+  })
+
+  it('AC5 — report rows are column-aligned: every value bracket sits at the same offset', () => {
+    const out = section(SKILL, '## Output Format')
+    const offsets = out
+      .split('\n')
+      .filter(l => /^[├└]── /.test(l))
+      .map(l => l.indexOf('['))
+    expect(offsets.length).toBeGreaterThan(5)
+    expect(new Set(offsets).size, `misaligned report rows: ${offsets.join(',')}`).toBe(1)
+  })
+
+  it('AC6 — the argument is optional and additive: the composition CONTRACT is what is unchanged', () => {
+    expect(SKILL).toMatch(/optional[^\n]*additive|additive[^\n]*optional/i)
+    // "callers that omit it are unchanged" full stop overclaims. In the DEFAULT
+    // `Pre-merge tiering: disabled` mode point 1's read is unconditional and
+    // tier-independent, so the omitting callers (/implement's per-task gate,
+    // /publish-pr's pre-flight) now pay one code-host round trip where pre-#382 that mode
+    // made no host read at all, and their report gains a `Tree:` row. What is unchanged is
+    // the composition CONTRACT (PASS/FAIL shape, precedence), not the run.
+    const args = section(SKILL, '## Arguments')
+    const prRow = args.split('\n').find(l => /^\|\s*`\$pr`/.test(l)) as string
+    expect(prRow, 'the `$pr` row must be found').toBeTruthy()
+    expect(prRow, 'the claim must name what is unchanged: the composition contract').toMatch(
+      /contract/i,
+    )
+    expect(prRow, 'and disclose the one added read + where it is skipped').toMatch(
+      /round trip|host read|added read/i,
+    )
+    expect(prRow).toMatch(/`Tree:`/)
+    expect(prRow).toMatch(/skipped|no[- ]remote|no code-host/i)
+  })
+
+  it('AC6 — the disclosed COST is the one the code pays: per run, no cross-invocation reuse', () => {
+    // Round-11 finding. The asset comment and the record stated the residual timeout on an
+    // unreachable-but-CONFIGURED host as "Pay it ONCE per session, not per task", and the PR
+    // asked the merge gate to accept AC6's residual on the strength of that bound. Nothing
+    // implements it: `resolve_pr_tree` re-initializes every name and re-invokes `pr_view_json`
+    // on EVERY call (the smoke scenario pins one round trip PER CALL, not one per session),
+    // each gate invocation is a fresh shell, and /implement composes this skill once per task
+    // — so an offline session on a repo that HAS a remote pays the host command's default
+    // timeout on every task gate, not once. A bound nothing implements misinforms the merge
+    // decision, so the records state the real cost and name only mitigations that exist.
+    const claimsSessionBound =
+      /once per session|per session, not per task|reused by later invocations|may be reused|reuse[^\n]{0,40}later invocation/i
+    expect(TREE_RESOLVER, 'the asset may not promise reuse it does not implement').not.toMatch(
+      claimsSessionBound,
+    )
+    expect(SKILL, 'nor may the step the agent executes').not.toMatch(claimsSessionBound)
+    // Positive: the honest per-run cost, stated where the read is made and where the agent
+    // reads the rule.
+    expect(TREE_RESOLVER, 'the asset states the per-run cost at the read').toMatch(
+      /per run|every run|each run|per gate run/i,
+    )
+    expect(step15, 'and the step states the residual the executing agent pays').toMatch(
+      /per run|every run|each run|per gate run/i,
+    )
+    // …and the mitigation it points at is the IMPLEMENTED one: the `pr_view_json` override
+    // (bound at call time, so no fork of the asset) makes an offline session fail fast.
+    expect(step15, 'the offline mitigation must be the override that exists').toMatch(
+      /pr_view_json/,
+    )
+    expect(step15).toMatch(/offline|unreachable|rate[- ]limited/i)
+  })
+
+  it('the stale boundary note is gone — no "PR number is never needed", no "belongs to /review"', () => {
+    expect(SKILL).not.toMatch(/PR number is never needed/i)
+    expect(SKILL).not.toMatch(/belongs to `?\/review`?/i)
+    expect(SKILL).not.toMatch(/out of scope for this skill/i)
+  })
+
+  // The (ACn) marker ban moved to conformance/story-local-markers.test.ts, which asserts it
+  // over EVERY skill file in both corpora. Kept here as a per-artifact copy it let 40 markers
+  // survive in 11 other skills — a per-artifact guard only ever sees its own artifact.
+})
+
+describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an executable asset (#382)', () => {
+  const INSTALLED_PATH = join(__dirname, '../../../../.pair/knowledge/assets/pr-tree-resolve.sh')
+  const SMOKE_PATH = join(__dirname, '../../../../scripts/smoke-tests/scenarios/pr-tree-resolve.sh')
+  const CI_TESTS_PATH = join(__dirname, '../../../../scripts/smoke-tests/lib/ci-tests.sh')
+  const WORKFLOWS_DIR = join(__dirname, '../../../../.github/workflows')
+  const ADL_PATH = join(
+    __dirname,
+    '../../../../.pair/adoption/decision-log/2026-08-13-tree-resolution-ships-as-an-executable-asset.md',
+  )
+
+  it('ships next to its siblings in BOTH knowledge trees, byte-equal', () => {
+    // The skill's link resolves to the DATASET copy from the dataset skill and to the
+    // INSTALLED copy from the .claude/skills mirror; a drift between them would have an
+    // installed agent run different code than the one this suite and the smoke test read.
+    expect(existsSync(TREE_RESOLVER_PATH)).toBe(true)
+    expect(existsSync(INSTALLED_PATH), 'the installed KB must carry the asset too').toBe(true)
+    expect(readFileSync(INSTALLED_PATH, 'utf-8')).toBe(TREE_RESOLVER)
+    expect(TREE_RESOLVER.split('\n')[0]).toBe('#!/usr/bin/env bash')
+  })
+
+  it('the skill SOURCES it instead of restating the shell (one source, and a runnable one)', () => {
+    expect(step15).toContain('source .pair/knowledge/assets/pr-tree-resolve.sh')
+    expect(step15).toMatch(/resolve_pr_tree "\$pr"/)
+    expect(step15).toMatch(/render_tree_row/)
+    // …and the link the reader follows resolves from the skill file
+    const m = step15.match(/\]\(([^)]*pr-tree-resolve\.sh)\)/)
+    expect(m, 'the skill must LINK to the asset it sources').not.toBeNull()
+    expect(existsSync(resolve(dirname(SKILL_PATH), (m as RegExpMatchArray)[1] as string))).toBe(
+      true,
+    )
+    // The extraction is only real if the step no longer carries a second copy: no PR read,
+    // no compare, no rendering arms inlined next to the sourced ones.
+    expect(step15Inline, 'the PR read must not be inlined a second time').not.toMatch(/gh pr view/)
+    expect(step15Inline, 'the commit compare belongs to the asset').not.toMatch(
+      /git rev-parse HEAD/,
+    )
+    expect(step15Inline, 'the tree arms belong to the asset').not.toMatch(/TREE_MATCH=/)
+  })
+
+  it('exposes the four entry points the step composes, and ONE overridable read', () => {
+    for (const fn of ['pr_view_json', 'normalize_pr_id', 'local_tree', 'resolve_pr_tree']) {
+      expect(TREE_RESOLVER).toContain(`${fn}()`)
+    }
+    expect(TREE_RESOLVER).toContain('render_tree_row()')
+    // The host substitution the routing table demands is a FUNCTION override, not a fork of
+    // the file: the default definition must not clobber one a caller already installed.
+    expect(TREE_RESOLVER).toMatch(/if ! command -v pr_view_json/)
+    expect(TREE_RESOLVER).toMatch(/way-of-working-pm-resolution/)
+    // …and it stays tag/state-only, like its two siblings (D18).
+    expect(TREE_RESOLVER).toMatch(/NO classification criteria|no criteria/i)
+    expect(TREE_RESOLVER).toMatch(/D18/)
+  })
+
+  it('its BEHAVIOR is executed by a smoke scenario, per the gate-tooling ADL', () => {
+    // Shipped shell is smoke-tested, never vitest-unit-tested (ADL 2026-07-13). The whole
+    // point of the extraction is that these arms can now RUN: a scenario that only grepped
+    // the file would leave the resolution exactly as unverified as the inline snippet was.
+    expect(existsSync(SMOKE_PATH), 'the smoke scenario must exist').toBe(true)
+    const smoke = readFileSync(SMOKE_PATH, 'utf-8')
+    expect(smoke, 'the scenario must SOURCE and RUN the asset').toMatch(
+      /source "\$RESOLVER"[\s\S]*resolve_pr_tree/,
+    )
+    // every value the resolver can assign is exercised, not just the happy one
+    for (const arm of ['match', 'ahead', 'mismatch', 'unknown', 'none', 'no-remote']) {
+      expect(smoke, `the \`${arm}\` arm must be executed`).toContain(`${arm} "$TREE_MATCH"`)
+    }
+    // and it is registered in the `CI_TESTS` array — extracted to lib/ci-tests.sh by #400
+    // so run-all.sh and scenarios/runner-outcomes.sh share one list instead of each
+    // hand-rolling it. That list is NOT why a gate/local run executes it: `pnpm
+    // smoke-tests` is `run-all.sh --cleanup`, which leaves `IS_CI=false` and takes the
+    // branch that globs `scenarios/*.sh` — so the scenario runs because the FILE EXISTS.
+    // What membership buys is inclusion in the CI-safe subset `run-all.sh --ci` runs,
+    // which #400 now wires into the `smoke` CI job.
+    const ciTests = readFileSync(CI_TESTS_PATH, 'utf-8')
+    expect(
+      ciTests,
+      "the scenario must be registered in lib/ci-tests.sh's `CI_TESTS` array",
+    ).toContain('"pr-tree-resolve.sh"')
+    expect(smoke, 'and it must be offline-safe — it stubs the host read').toContain(
+      'OFFLINE_SAFE=true',
+    )
+  })
+
+  it('the record claims only the enforcement that exists: registered ≠ run in CI (#400)', () => {
+    // Round 12 (Major): the round-10 record said the scenario was "registered in the CI list",
+    // i.e. that the extraction bought EXECUTED behavior where nine rounds had only grepped
+    // text. `CI_TESTS` is an array name inside run-all.sh — no workflow invokes that script and
+    // `pnpm quality-gate` (the pre-push hook's whole content) does not include `pnpm
+    // smoke-tests`. The suite IS a required custom gate in this repo's adoption, so a
+    // verify-quality run executes the scenario; nothing MECHANICAL does, so a break in the
+    // arms blocks no merge (#400 owns the wiring). The claim, not the registration, was the
+    // defect: this reads reality instead of pinning a wording, so when #400 lands the
+    // stronger claim becomes allowed by the same assertion.
+    const workflows = readdirSync(WORKFLOWS_DIR)
+      .filter(f => /\.ya?ml$/.test(f))
+      .map(f => readFileSync(join(WORKFLOWS_DIR, f), 'utf-8'))
+      .join('\n')
+    const gateEntry = readFileSync(join(__dirname, '../../../../package.json'), 'utf-8')
+    const suiteRuns =
+      /smoke-tests\/run-all\.sh|pnpm (?:run )?smoke-tests/.test(workflows) ||
+      /"quality-gate":[^\n]*smoke-tests/.test(gateEntry)
+
+    const adl = readFileSync(ADL_PATH, 'utf-8')
+    const claimsCiEnforcement = /\bCI[- ](?:list|registered|enforced)\b|runs? in CI/i.test(adl)
+    expect(
+      claimsCiEnforcement,
+      suiteRuns
+        ? 'the suite now runs automatically — the ADL may say so'
+        : 'nothing invokes run-all.sh, so the ADL must not present the scenario as CI-enforced',
+    ).toBe(suiteRuns)
+
+    if (!suiteRuns) {
+      // …and it must say where the registration actually lives, plus who owns the wiring, so a
+      // reader does not infer regression protection from the word "registered" alone.
+      // Round 13 (Major): naming *a* list was not enough — the record named the wrong one.
+      // `CI_TESTS` is read only under `--ci` (run-all.sh:252); `pnpm smoke-tests` never
+      // consults it and globs every scenario instead. A reader wiring CI per this record must
+      // not be sent to `pnpm smoke-tests`, so the ADL has to name `CI_TESTS`/`--ci` AND say
+      // the gate command does not consult it.
+      expect(adl, 'the ADL must name the list the scenario is registered in').toMatch(/`CI_TESTS`/)
+      expect(
+        adl,
+        'the ADL must state that `pnpm smoke-tests` does not consult that list (it globs scenarios/)',
+      ).toMatch(/does not consult/)
+      expect(adl, 'the ADL must name the entry point that DOES read it: `run-all.sh --ci`').toMatch(
+        /run-all\.sh --ci|`--ci`/,
+      )
+      expect(adl, 'the ADL must state that no workflow invokes it yet').toMatch(
+        /no workflow[^\n]*invoke/i,
+      )
+      expect(adl, 'the ADL must point at the story that owns the CI wiring').toMatch(/#400/)
+    }
+  })
+})
+
+describe('review Step 2.1 — forwards the PR under review to verify-quality (#382)', () => {
+  const step21 = section(REVIEW, '### Step 2.1: Quality Gates')
+
+  it('AC1 — composes verify-quality with `$scope = all` AND the PR under review', () => {
+    expect(step21).toMatch(/\$scope = all/)
+    expect(step21).toMatch(/\$pr/)
+  })
+
+  it('forwards an identifier, not the tier it resolved in Phase 1 (no second source of truth)', () => {
+    // Positive form first: `$pr` is named as WHICH PR, and the tier is read from labels.
+    expect(step21).toMatch(/which PR/i)
+    expect(step21).toMatch(/identifier/i)
+    expect(step21).toMatch(/reads[^\n]*labels|labels[^\n]*read/i)
+    // Negative, narrowed to the stale phrasing actually banned: an AFFIRMATIVE instruction
+    // to hand the tier VALUE over. A correct sentence ("Forward the identifier, never the
+    // resolved tier") must stay green, so a negated occurrence is not an offender.
+    const handsOverTier =
+      /\b(?:pass|passes|passing|forward|forwards|forwarding)\b[^.\n]{0,40}\btier\b/i
+    const negated = /\b(?:never|not|no|rather than|instead of)\b/i
+    const offenders = step21
+      .split(/(?<=\.)\s+/)
+      .filter(s => handsOverTier.test(s) && !negated.test(s))
+    expect(
+      offenders,
+      `Step 2.1 must not instruct passing the tier value: ${offenders.join(' | ')}`,
+    ).toEqual([])
+  })
+
+  it('a tree-mismatched local run is ADVISORY — CI on the PR head is authoritative for the state synthesis', () => {
+    expect(step21).toMatch(/advisory/i)
+    expect(step21).toMatch(/resolve_pr_state|5\.4/)
+    expect(step21).toMatch(/head commit|PR head/i)
+  })
+
+  it('defines the arm where CI has published NO conclusion on the head commit (absence ≠ green)', () => {
+    // The normal state for the first minutes after a push, and the PERMANENT state on a
+    // host with no checks. Redirecting `<gates>` to "CI's check on the head commit"
+    // without this arm leaves Step 5.4 with no gates value at all.
+    expect(step21).toMatch(/no conclusion|not (yet )?published|no check|pending/i)
+    expect(step21).toMatch(/to-be-reviewed/)
+    expect(step21).toMatch(/never[^.\n]*ready-to-merge|ready-to-merge[^.\n]*never/i)
+  })
+
+  it('the authoritative-gates read is NAMED and code-host-routed, not left to improvisation', () => {
+    // "Read the gates from CI's check on the head commit" with no command and no routing
+    // pointer forces a guess (`gh pr checks`? the status API? which conclusions count?),
+    // and leaves a non-GitHub host nothing to substitute — on the input that decides
+    // `ready-to-merge`. Every other host read in this corpus carries the qualification.
+    expect(step21).toMatch(/gh pr checks/)
+    expect(step21).toMatch(/routing table|way-of-working-pm-resolution/i)
+    expect(step21).toMatch(/success/)
+    // …and the SET's OWN read is named too: `gh pr checks` reports which checks ran, not
+    // which ones branch protection REQUIRES. Unnamed, an agent on a PROTECTED repo cannot
+    // resolve the narrowed set and silently drops to the unprotected fallback ("every
+    // non-`pair-*` check"), which then reports gates non-green on an advisory failing check.
+    expect(step21, 'the required-set read must be named').toMatch(/required_status_checks/)
+    expect(step21, 'and an unreadable required set IS the fallback trigger').toMatch(/404|403/)
+    expect(step21).toMatch(/to-be-reviewed/)
+    expect(step21).toMatch(/never[^.\n]*ready-to-merge|ready-to-merge[^.\n]*never/i)
+    // …and the SET it reads is MECHANICAL gate checks only. The branch protection's required
+    // set also holds `pair-review` (registered PENDING at t0 by /publish-pr and concluded
+    // only in THIS flow's Step 5.4) and `pair-explicit-approval` (failing at 🔴 until a human
+    // approves): `resolve_pr_state <gates> <review> <tier> <explicit_approval>` already
+    // carries both on SEPARATE axes, so folding them into `gates` double-counts them and —
+    // because pr-state.sh short-circuits on `gates != pass` — makes `ready-to-merge`
+    // unreachable BY CONSTRUCTION on every advisory arm, i.e. on the loop's normal state.
+    expect(step21, 'the two pair-* contexts must be excluded BY NAME').toMatch(/`pair-review`/)
+    expect(step21).toMatch(/`pair-explicit-approval`/)
+    expect(step21).toMatch(
+      /exclud\w*[^.\n]{0,160}`pair-review`|`pair-review`[^.\n]{0,160}exclud\w*/i,
+    )
+    // A repository with NO branch protection is the documented non-blocking degraded
+    // configuration (pr-states.md), and "the required set is the branch protection's"
+    // resolves to nothing there — so the fallback must be DEFINED, not improvised.
+    expect(step21, 'the no-branch-protection fallback must be defined').toMatch(
+      /no branch protection|not protected|unprotected/i,
+    )
+    expect(step21).toMatch(/Gates: pending/)
+  })
+
+  it('the `<base-branch>` placeholder in the required-set read is RESOLVABLE, not left to a guess', () => {
+    // `gh api "repos/{owner}/{repo}/branches/<base-branch>/protection/required_status_checks"`
+    // ships two placeholders of DIFFERENT kinds: `{owner}/{repo}` is the host command's own
+    // substitution, but `<base-branch>` is ours and nothing in the step says where its value
+    // comes from. An agent that guesses `main` reads the protection of a branch the PR may
+    // not target, and the 404 that follows is indistinguishable from "unprotected" — so the
+    // step silently drops to the unprotected fallback and treats an advisory non-required
+    // check as a red gate. The value has ONE resolution order already, single-sourced in
+    // way-of-working-pm-resolution.md; this step must point at it, never restate it.
+    expect(step21).toContain('<base-branch>')
+    const named = step21.slice(step21.indexOf('Name the SET'))
+    expect(named, 'the placeholder must name the key it resolves').toMatch(/`base-branch`/)
+    expect(named, 'and the ONE order that resolves it').toMatch(
+      /way-of-working-pm-resolution|`base-branch` resolution/,
+    )
+    // the pointer must resolve, and the target must actually own that order
+    const m = REVIEW.match(/\]\(([^)]*way-of-working-pm-resolution\.md)\)/)
+    expect(m).not.toBeNull()
+    const guidelinePath = resolve(
+      dirname(join(__dirname, '../../dataset/.skills/process/review/SKILL.md')),
+      (m as RegExpMatchArray)[1] as string,
+    )
+    expect(existsSync(guidelinePath)).toBe(true)
+    expect(
+      readFileSync(guidelinePath, 'utf-8'),
+      'the routing guideline must own the `base-branch` resolution order',
+    ).toMatch(/`base-branch` resolution/)
+    // …and the step must not invent a SECOND order (a hardcoded default is exactly that)
+    expect(named, 'no second default may be stated here').not.toMatch(
+      /defaults? to `?main`?|assume `?main`?/i,
+    )
+  })
+
+  it('disambiguates WHICH gate signal caps the verdict — the advisory run contributes findings only', () => {
+    // Otherwise "with any gate red the review can never reach APPROVED" reads as a block
+    // on evidence the same step just declared advisory (a red local run over other code).
+    expect(step21).toMatch(/authoritative/i)
+    expect(step21).toMatch(/findings only|only[^.\n]*findings/i)
+  })
+
+  it('the authoritative/advisory split keys on the RESOLVED `Tree:` value, never on the ⚠️ glyph', () => {
+    // ⚠️ is rendered by `mismatch` ALONE (the `ahead` arm was split out deliberately: it is
+    // the normal pre-push state and warning on it would train the reader to ignore the ⚠️).
+    // A rule keyed on the glyph therefore reads `ahead` — the state the implement→review→fix
+    // loop produces on EVERY locally committed, not-yet-pushed fix — as authoritative, and
+    // feeds a local green over code the PR does not contain to the Step 5.4 synthesis:
+    // `ready-to-merge` on gates CI never saw. `unknown` is the same hole with no glyph either.
+    expect(step21, 'the rule must name the `match` arm as the authoritative one').toMatch(/`match`/)
+    for (const arm of ['ahead', 'mismatch', 'unknown', 'none']) {
+      expect(step21, `Step 2.1 must name \`${arm}\` as advisory`).toMatch(new RegExp(`\`${arm}\``))
+    }
+    // the banned round-3 spelling: the trigger stated as the glyph
+    expect(step21, 'the advisory trigger must not be the ⚠️ glyph').not.toMatch(/`Tree: ⚠️`/)
+    // …and the cap must key on the same resolved value, not on a second phrasing
+    const cap = step21.slice(step21.indexOf('caps the verdict'))
+    expect(cap, 'the verdict cap must key on the same `match` arm').toMatch(/`match`/)
+  })
+
+  it('Step 2.1 Verify reads as a decision PROCEDURE, not one paragraph carrying seven rules', () => {
+    // The Verify item carries seven distinct executable rules (authoritative-vs-advisory
+    // keyed on the resolved `Tree:` value; the named CI read; narrowing to the required
+    // contexts; the pair-* exclusion and why; the unprotected-branch fallback; the
+    // no-conclusion ⇒ `Gates: pending` arm; which signal caps the verdict; the post-2.1
+    // raise ⇒ re-run). Delivered as one ~600-word bullet the executing agent has to extract
+    // an ordered procedure from prose, and the failure mode is a clause skipped at runtime:
+    // dropping the pair-* exclusion alone makes `ready-to-merge` unreachable by construction.
+    const verify = step21.slice(step21.indexOf('4. **Verify**'))
+    const longest = Math.max(...verify.split('\n').map(l => l.split(/\s+/).filter(Boolean).length))
+    expect(longest, 'no single line may carry the whole procedure').toBeLessThan(150)
+    // one rule per line — sub-bullets, and/or a table keyed by the resolved `Tree:` value
+    const ruleLines = verify.split('\n').filter(l => /^\s*(- \*\*|\| )/.test(l))
+    expect(
+      ruleLines.length,
+      `expected one line per rule in Step 2.1 Verify, got ${ruleLines.length}`,
+    ).toBeGreaterThanOrEqual(6)
+  })
+
+  it('the tag read is qualified by the Tag Projection declaration, not promised unconditionally', () => {
+    expect(step21).toMatch(/Tag Projection/)
+  })
+
+  it('documents the post-2.1 raise: the set that ran stays Phase 1 tier, widen-only ⇒ re-run', () => {
+    expect(step21).toMatch(/2\.4/)
+    expect(step21).toMatch(/re-run/i)
+    expect(step21).toMatch(/widen-only|never lower|D17/i)
+  })
+
+  it('the /review step numbers verify-quality cross-references still RESOLVE to headings', () => {
+    // Precedent: code-host-routing.test.ts pins publish-pr's cross-reference to the
+    // board-state step by its actual number. A renumber in review/SKILL.md must break the
+    // suite here, not leave verify-quality asserting a step that no longer exists — the
+    // silent-prose-drift class this story exists to remove.
+    const referenced = [...SKILL.matchAll(/`?\/review`?[^.\n]{0,60}?Step (\d+\.\d+)/g)].map(
+      m => m[1] as string,
+    )
+    // the Composition Interface note points at review's post-gate raise step by number too
+    const alsoReferenced = [...SKILL.matchAll(/\(its Step (\d+\.\d+)\)/g)].map(m => m[1] as string)
+    const all = [...new Set([...referenced, ...alsoReferenced])]
+    expect(all, 'verify-quality must cross-reference /review by step number').toContain('2.1')
+    for (const n of all) {
+      expect(
+        REVIEW,
+        `verify-quality references /review Step ${n}, which has no heading in review/SKILL.md`,
+      ).toMatch(new RegExp(`^### Step ${n.replace('.', '\\.')}:`, 'm'))
+    }
+  })
+})
