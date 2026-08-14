@@ -45,18 +45,27 @@ Under Claude Code they are not inert, and it is worth knowing exactly what arriv
 | Agent                     | Tools it declares                          | What that lets it do                                                        |
 | ------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
 | `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
-| `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); it never edits, commits or merges |
+| `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); by its own instructions it does not edit, commit or merge |
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
+
+**Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
+declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
+authority you install. What keeps `pair-reviewer` read-only and keeps merge out of every run is
+instruction — the engine's dispatched prompts and each agent's own definition — not the tool
+grant.
 
 So after an `install` or `update`, your project contains definitions that — when you invoke a
 batch — can create worktrees, write files, commit, push branches and open pull requests under
-your credentials. The table above is checked against each agent's frontmatter by the docs
-staleness gate, so it cannot understate what arrives.
+your credentials. The `Tools it declares` column is checked against each agent's frontmatter by
+the docs staleness gate, so it cannot understate what arrives; the column beside it is prose the
+gate does not check.
 
 They do nothing on their own. Nothing runs until you start a batch.
 
-**Merge is never among the authority granted.** No configuration enables an autonomous merge,
-on any path.
+**No prompt this engine dispatches instructs a merge, on any path, and no configuration enables
+one.** Every run stops at PR-review-approved and reports `ready-for-merge`, leaving the merge
+decision to you — asserted by a dry-run test that inspects every dispatched prompt and every
+returned status.
 
 Every shipped name carries a `pair-` prefix — file names, agent names, and the workflows'
 registry names (`meta.name`) alike — so neither an existing `.claude/agents/reviewer.md` nor
