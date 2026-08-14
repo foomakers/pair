@@ -40,6 +40,10 @@ function goodDraft() {
       severities: ['Critical', 'Major', 'Minor'],
       findingFields: ['location', 'severity', 'description', 'recommendation'],
     },
+    // Explicit ordinals, HIGHER = MORE SEVERE. Deliberately NOT parallel to the
+    // `severities` array's order in any way the consumer could exploit: order is not a
+    // contract term, this map is.
+    severityRanks: { Critical: 3, Major: 2, Minor: 1 },
     schema: {
       type: 'object',
       properties: {
@@ -158,6 +162,57 @@ test('validateContract rejects a contract missing the canonical severities key',
 test('decide: contract missing canonical vocabulary keys → invalid (fallback path, AC4)', () => {
   const draft = goodDraft()
   delete draft.vocabulary.severities
+  const raw = JSON.stringify(
+    stampContract(draft, { source: 't.md', sourceHash: hashContent(TEMPLATE_V1) }),
+  )
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: raw }), 'invalid')
+})
+
+// ── severityRanks: the rank is EXPLICIT, never the array's position ────────
+// Found in review of #432 (round 6): consumers ranked severities by their POSITION in
+// `vocabulary.severities`, an order this validator never required and the generator was
+// never asked to produce — so an ascending template (`Low … Blocker`) inverted a merge
+// floor and waved an unfixed `Blocker` through. Order is not a contract; an explicit
+// integer per severity is. Malformed ⇒ rejected here, at the source, so the consumer never
+// has to choose between guessing and running.
+test('validateContract rejects a contract with no severityRanks', () => {
+  const c = stamped()
+  delete c.severityRanks
+  const { ok, errors } = validateContract(c)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('severityRanks')))
+})
+
+test('validateContract rejects severityRanks that do not cover exactly vocabulary.severities', () => {
+  const missing = stamped()
+  delete missing.severityRanks.Minor
+  assert.equal(validateContract(missing).ok, false)
+  const extra = stamped()
+  extra.severityRanks.Nit = 0
+  const { ok, errors } = validateContract(extra)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('Nit')))
+})
+
+test('validateContract rejects non-integer and duplicated ranks (an ambiguous scale)', () => {
+  const fractional = stamped()
+  fractional.severityRanks.Major = 2.5
+  assert.equal(validateContract(fractional).ok, false)
+  const stringy = stamped()
+  stringy.severityRanks.Major = '3'
+  assert.equal(validateContract(stringy).ok, false)
+  const dup = stamped()
+  dup.severityRanks.Major = dup.severityRanks.Minor
+  const { ok, errors } = validateContract(dup)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => /duplicate|unique/i.test(e)))
+})
+
+test('decide: a cached contract from before severityRanks → invalid (regenerate, never reuse)', () => {
+  // The contract is hash-cached: without this, a pre-ordinal artifact stays `fresh` forever
+  // (the template did not change) and the consumer keeps ranking blind.
+  const draft = goodDraft()
+  delete draft.severityRanks
   const raw = JSON.stringify(
     stampContract(draft, { source: 't.md', sourceHash: hashContent(TEMPLATE_V1) }),
   )

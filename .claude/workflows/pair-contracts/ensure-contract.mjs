@@ -10,8 +10,19 @@
 //     "$meta": { source, sourceHash: "sha256:<hex>", generatedAt, generator },
 //     "vocabulary": { <name>: [strings...] },   // verdictOptions, severities (required,
 //                                                // canonical keys), plus any others (e.g. findingFields)
+//     "severityRanks": { <severity>: <integer> }, // required; HIGHER = MORE SEVERE
 //     "schema": { ...JSON Schema for the agent return value... }
 //   }
+//
+// `severityRanks` exists because the ORDER of `vocabulary.severities` is NOT a contract
+// term and must never be read as one. The array is whatever an LLM extracted from an
+// arbitrary adopter template; a template that documents its levels ascending, or an
+// alphabetical extraction, is as legitimate as pair's own descending one. Consumers that
+// inferred rank from position inverted a merge-blocking floor and carried an unfixed
+// `Blocker` to the gate as "below the floor" (#432 review, twice: first off a hardcoded
+// table, then off the array's position). The rank is therefore stated, per severity, and
+// validated here — missing, non-integer, duplicated or off-vocabulary ⇒ the contract is
+// invalid and gets regenerated, rather than silently ranked by guess.
 //
 // CLI (used by the agent — never hand-roll hash/cache/validation):
 //   node ensure-contract.mjs check <template.md> <contract.json>
@@ -63,6 +74,41 @@ export function schemaErrors(node, path = 'schema') {
   return errs
 }
 
+// The rank map's own rules, separate so the failure text can be reused verbatim by a
+// consumer that must explain WHY it refuses to apply a severity floor.
+// Returns [] when the map ranks exactly the given severities, unambiguously.
+export function severityRankErrors(severities, severityRanks, label = 'severityRanks') {
+  const names = Array.isArray(severities)
+    ? severities.map(s => String(s ?? '').trim()).filter(Boolean)
+    : []
+  if (!severityRanks || typeof severityRanks !== 'object' || Array.isArray(severityRanks))
+    return [
+      `${label} is required: an object giving every vocabulary.severities entry an explicit integer rank (higher = more severe) — the order of the severities array is not a ranking`,
+    ]
+  const errors = []
+  const keys = Object.keys(severityRanks)
+  const missing = names.filter(n => !keys.includes(n))
+  if (missing.length) errors.push(`${label} is missing a rank for: ${missing.join(', ')}`)
+  const extra = keys.filter(k => !names.includes(k))
+  if (extra.length)
+    errors.push(`${label} ranks names absent from vocabulary.severities: ${extra.join(', ')}`)
+  // Two severities on one rank cannot answer "does this block?" — reject rather than pick.
+  const byRank = new Map()
+  for (const key of keys) {
+    const value = severityRanks[key]
+    if (typeof value !== 'number' || !Number.isInteger(value))
+      errors.push(
+        `${label}.${key} must be an integer (higher = more severe), got ${JSON.stringify(value)}`,
+      )
+    else if (byRank.has(value))
+      errors.push(
+        `${label} must be unique: ${byRank.get(value)} and ${key} share rank ${value} — an ambiguous scale cannot decide a severity floor`,
+      )
+    else byRank.set(value, key)
+  }
+  return errors
+}
+
 export function validateContract(contract) {
   if (!contract || typeof contract !== 'object' || Array.isArray(contract))
     return { ok: false, errors: ['contract must be a JSON object'] }
@@ -97,6 +143,14 @@ export function validateContract(contract) {
       if (!Array.isArray(vocab[required]) || vocab[required].length === 0)
         errors.push(`vocabulary.${required} is required and must be a non-empty array`)
   }
+  // Ranks are validated against the severities as declared: a bad `vocabulary` already
+  // errored above, and passing [] here keeps the rank errors about the rank map itself.
+  errors.push(
+    ...severityRankErrors(
+      vocab && typeof vocab === 'object' && !Array.isArray(vocab) ? vocab.severities : [],
+      contract.severityRanks,
+    ),
+  )
   errors.push(...schemaErrors(contract.schema))
   return { ok: errors.length === 0, errors }
 }

@@ -390,34 +390,85 @@ const STORIES = PARSED.stories
 // and treat a severity in neither as ABOVE every floor.
 const SEVERITY_RANK = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 }
 const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
-// The contract's `severities` are ordered MOST-severe first (that is what the template's
-// finding sections are), so position gives the rank. With no contract there is no configured
-// vocabulary at all, and pair's own table is the fallback — it carries aliases (`blocker`,
-// `nit`, `info`) that no template lists, which is why it is not itself derived from
-// DEFAULT_SEVERITIES: dropping them would change behaviour for callers that use them today.
-function resolveSeverityScale(severities) {
+// The rank of a CONFIGURED severity is the EXPLICIT ordinal the contract states for it
+// (`severityRanks`, higher = more severe), never the position of its name in
+// `vocabulary.severities`. Position was the round-5 fix and it reproduced the same bug one
+// carrier along: that array is whatever an LLM extracted from an arbitrary adopter template,
+// and NOTHING said it must be most-severe-first — not the generator prompt, not `mirrors`,
+// not `validateContract`. Measured at floor `High` with the (equally legitimate) ascending
+// vocabulary `Low|Medium|High|Blocker`: a `Blocker` "auth bypass" ranked BELOW the floor and
+// converged `ready-for-merge` with zero fix rounds. And the contract is hash-cached, so one
+// bad extraction persists across every later batch. Hence: ordinals are stated and validated
+// (`ensure-contract.mjs`), and when they are missing or ambiguous this engine REFUSES to rank
+// rather than guessing an order — see `parseFloor`.
+// With no contract at all there is no configured vocabulary, and pair's own table is the
+// fallback — it carries aliases (`blocker`, `nit`, `info`) that no template lists, which is
+// why it is not itself derived from DEFAULT_SEVERITIES: dropping them would change behaviour
+// for callers that use them today.
+//
+// `severityRankErrors` duplicates ensure-contract.mjs's canonical check (the sandbox has no
+// filesystem and cannot import it) — same rules, same wording, deliberately minimal. It is
+// the second line: a contract reaching here should already have passed the canonical one.
+function severityRankErrors(names, severityRanks) {
+  if (!severityRanks || typeof severityRanks !== 'object' || Array.isArray(severityRanks))
+    return ['severityRanks is missing: the contract states no explicit rank per severity, and the order of `vocabulary.severities` is not a ranking']
+  const errors = []
+  const byNorm = {}
+  for (const key of Object.keys(severityRanks)) byNorm[normSeverity(key)] = severityRanks[key]
+  const missing = names.filter((n) => !(normSeverity(n) in byNorm))
+  if (missing.length) errors.push(`severityRanks is missing a rank for: ${missing.join(', ')}`)
+  const byRank = new Map()
+  for (const [key, value] of Object.entries(byNorm)) {
+    if (typeof value !== 'number' || !Number.isInteger(value))
+      errors.push(`severityRanks.${key} must be an integer (higher = more severe), got ${JSON.stringify(value)}`)
+    else if (byRank.has(value))
+      errors.push(`severityRanks must be unique: ${byRank.get(value)} and ${key} share rank ${value} — an ambiguous scale cannot decide a severity floor`)
+    else byRank.set(value, key)
+  }
+  return errors
+}
+function resolveSeverityScale(severities, severityRanks) {
   // Names keep their ORIGINAL spelling — the error message tells a caller what to type, and
   // `blocker, high, medium, low` is not what their template says. Ranks are keyed normalized,
   // so matching stays case- and whitespace-insensitive.
   const names = (Array.isArray(severities) ? severities : []).map((s) => String(s ?? '').trim()).filter(Boolean)
-  if (!names.length) return { ranks: SEVERITY_RANK, names: [...new Set(Object.keys(SEVERITY_RANK))], configured: false }
+  if (!names.length) return { ranks: SEVERITY_RANK, names: [...new Set(Object.keys(SEVERITY_RANK))], configured: false, rankError: null }
+  const errors = severityRankErrors(names, severityRanks)
+  // `ranks: null` = the vocabulary is known but its ORDERING is not. The run still uses the
+  // contract (schema + reviewer prompt); only ranking — i.e. a floor — is refused, loudly.
+  if (errors.length) return { ranks: null, names: [...new Set(names)], configured: true, rankError: errors.join('; ') }
+  const byNorm = {}
+  for (const key of Object.keys(severityRanks)) byNorm[normSeverity(key)] = severityRanks[key]
   const ranks = {}
-  names.forEach((n, i) => { const k = normSeverity(n); if (!(k in ranks)) ranks[k] = names.length - i })
-  return { ranks, names: [...new Set(names)], configured: true }
+  for (const n of names) ranks[normSeverity(n)] = byNorm[normSeverity(n)]
+  return { ranks, names: [...new Set(names)], configured: true, rankError: null }
 }
 // Resolved once the contract is known — see SEVERITY_SCALE, after REVIEW_VOCAB.
 // Infinity, not a mid-tier default: a severity in NEITHER the configured vocabulary nor pair's
 // own table outranks every possible floor, so it always blocks. The previous `?? 3` claimed to
-// be fail-safe and was not — any floor of rank >= 4 sat above it.
-const rankOf = (s) => SEVERITY_SCALE.ranks[normSeverity(s)] ?? Infinity
+// be fail-safe and was not — any floor of rank >= 4 sat above it. Unreachable with an unranked
+// scale (no floor can exist then), and Infinity there too for the same reason.
+const rankOf = (s) => (SEVERITY_SCALE.ranks ? SEVERITY_SCALE.ranks[normSeverity(s)] ?? Infinity : Infinity)
 function parseFloor(raw) {
   const v = String(raw ?? '').trim()
   if (!v) return null
-  const r = SEVERITY_SCALE.ranks[v.toLowerCase()]
+  // An unranked configured vocabulary cannot answer "is this below the floor?", and the one
+  // answer that is never acceptable is a guess: refuse the floor and name the real cause.
+  // Direction is safe — without a floor every actionable finding blocks.
+  if (!SEVERITY_SCALE.ranks)
+    throw new Error(
+      `implement-batch: severityFloor ${JSON.stringify(v)} cannot be applied — the review template's machine contract carries no usable severity ranking (${SEVERITY_SCALE.rankError}). ` +
+        `Rank is NEVER inferred from the order of \`vocabulary.severities\`: delete the cached \`*.contract.json\` so the generator re-runs and emits \`severityRanks\`, ` +
+        `or omit \`severityFloor\` so every actionable finding blocks.`,
+    )
+  const key = normSeverity(v)
+  // Membership, not truthiness: an explicit ordinal may legitimately be `0` (a template's
+  // lowest level), and `!r` would have rejected exactly that floor as a typo.
+  const r = key in SEVERITY_SCALE.ranks ? SEVERITY_SCALE.ranks[key] : undefined
   // A floor the reviewer cannot express is a configuration error, never a silent
   // reclassification: rejecting it is what stops `Critical` from out-ranking an adopter's whole
   // scale. A typo still throws, in either vocabulary.
-  if (!r)
+  if (r === undefined)
     throw new Error(
       `implement-batch: unknown severityFloor ${JSON.stringify(v)}. It must be one of the severities ` +
         `${SEVERITY_SCALE.configured ? `the configured review template declares` : `pair's default review vocabulary declares`}: ` +
@@ -578,7 +629,8 @@ const CONTRACT_SPECS = [
     contract: '.claude/workflows/pair-contracts/code-review.contract.json',
     skeleton: LOOSE_REVIEW_SCHEMA,
     mirrors:
-      'verdict ← the `## Verdict`-line options; findings[].severity ← the `Findings by severity` severity levels',
+      'verdict ← the `## Verdict`-line options; findings[].severity ← the `Findings by severity` severity levels. ' +
+      'The RELATIVE severity of those levels is a contract TERM, carried by the top-level `severityRanks` map (one explicit integer per severity, higher = more severe) — the consumer ranks a merge-blocking floor with it and IGNORES the order of the `severities` array entirely',
   },
 ]
 
@@ -614,7 +666,7 @@ function usableSchema(contract) {
 
 async function ensureContract(spec) {
   const res = await agent(
-    `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/pair-contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
+    `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/pair-contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template, AND the top-level \`severityRanks\` object: every name in \`vocabulary.severities\`, spelled identically, mapped to an explicit unique integer, HIGHER = MORE SEVERE (e.g. {"Critical": 4, "Major": 3, "Minor": 2, "Questions": 1}). Derive each rank from what the template SAYS the level means — a level it describes as must-fix/merge-blocking outranks one it describes as advisory or a question — and NEVER from the order the levels happen to appear in: the consumer ignores array order, and a wrong rank silently converts a merge-blocking finding into an accepted one. If the template's levels carry no discernible relative severity, return status \`failed\` rather than inventing an order. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
     { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
@@ -666,10 +718,15 @@ const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 
 // The severity scale is resolved from the SAME array `SEVERITIES` above threads into the
 // reviewer prompt, so what the engine ranks and what the reviewer answers can never be two
-// different vocabularies. It can only be known after the contract is ensured, which is why the
-// floor is validated HERE rather than at arg-parse time: the cost is that a bad floor throws
-// one contract dispatch late, still before any card is driven.
-const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities)
+// different vocabularies — and its RANKING comes from the contract's explicit `severityRanks`
+// ordinals, never from that array's order. It can only be known after the contract is ensured,
+// which is why the floor is validated HERE rather than at arg-parse time: the cost is that a
+// bad floor throws one contract dispatch late, still before any card is driven.
+const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract?.contract?.severityRanks)
+// Said out loud even when no floor is configured: the contract is hash-cached, so an
+// unranked one stays unranked until the template changes, and the next caller who does pass
+// a floor gets a hard stop. Better the operator sees it on the run that generated it.
+if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
 const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
 
 // ── Isolation convention ───────────────────────────────────────────────────

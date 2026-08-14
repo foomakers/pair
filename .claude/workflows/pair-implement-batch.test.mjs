@@ -66,6 +66,8 @@ function validContract() {
       severities: ['Blocker', 'Major', 'Minor'],
       findingFields: ['location', 'severity', 'description', 'recommendation'],
     },
+    // Ranking is an EXPLICIT contract term (higher = more severe), never the array's order.
+    severityRanks: { Blocker: 3, Major: 2, Minor: 1 },
     schema: {
       type: 'object',
       properties: {
@@ -1270,6 +1272,7 @@ function adopterContract() {
   return {
     $meta: { source: 'adopter-review-template.md', sourceHash: `sha256:${'1'.repeat(64)}`, generatedAt: 'x' },
     vocabulary: { verdictOptions: ['Approved', 'Rework'], severities, findingFields: ['location', 'severity', 'description', 'recommendation'] },
+    severityRanks: { Blocker: 4, High: 3, Medium: 2, Low: 1 },
     schema: {
       type: 'object',
       properties: {
@@ -1293,7 +1296,7 @@ function adopterContract() {
     },
   }
 }
-const HIGH = { location: 'auth.ts:12', severity: 'High', description: 'auth bypass', recommendation: 'check the token' }
+const HIGH ={ location: 'auth.ts:12', severity: 'High', description: 'auth bypass', recommendation: 'check the token' }
 const LOW = { location: 'a.md:1', severity: 'Low', description: 'wording', recommendation: 'reword' }
 
 test('a floor drawn from the CONFIGURED vocabulary is accepted and ranks against it', async () => {
@@ -1394,6 +1397,139 @@ test('with NO configured vocabulary, pair\'s own table (aliases included) is unc
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(fix.prompt.includes('x.ts:1'), '`Blocker` still ranks above `Major`')
   assert.ok(!fix.prompt.includes('y.md:2'), '`Nit` still ranks below it')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+// ── The rank is an EXPLICIT ordinal, never the array's POSITION ─────────────
+// Measured (#432 review round 6): the round-5 fix ranked a severity by its POSITION in
+// `vocabulary.severities` — an array an LLM extracts from an ARBITRARY adopter template.
+// Nothing said that array must be ordered most-severe-first: not `mirrors`, not the
+// generator prompt, not `validateContract` (which only required non-empty strings). Driving
+// the engine at floor `High` with the ASCENDING — and equally legitimate — vocabulary
+// `Low|Medium|High|Blocker` and one finding `{severity: 'Blocker', description: 'auth bypass'}`:
+//   status `ready-for-merge`, ZERO fix rounds, log `1 finding(s) below the High floor …`,
+//   the auth bypass filed in `acceptedFindings` as "Below severity floor (High)"
+// Identical in kind to the round-5 Major, one carrier along: from a hardcoded table to an
+// UNSTATED ordering contract over AI-generated, hash-CACHED data (one bad extraction is
+// frozen until the template hash changes). So the contract now carries `severityRanks` — an
+// explicit integer per severity, HIGHER = MORE SEVERE — and array order carries nothing.
+const RANKED = { Blocker: 4, High: 3, Medium: 2, Low: 1 }
+function contractWith({ severities, severityRanks }) {
+  return {
+    $meta: { source: 'adopter-review-template.md', sourceHash: `sha256:${'2'.repeat(64)}`, generatedAt: 'x' },
+    vocabulary: { verdictOptions: ['Approved', 'Rework'], severities, findingFields: ['location', 'severity', 'description', 'recommendation'] },
+    ...(severityRanks === undefined ? {} : { severityRanks }),
+    schema: {
+      type: 'object',
+      properties: {
+        verdict: { type: 'string', enum: ['Approved', 'Rework'] },
+        needsHumanDecision: { type: 'boolean' },
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              location: { type: 'string' },
+              severity: { type: 'string', enum: severities },
+              description: { type: 'string' },
+              recommendation: { type: 'string' },
+              nonActionable: { type: 'boolean' },
+            },
+          },
+        },
+      },
+      required: ['verdict'],
+    },
+  }
+}
+const BLOCKER = { location: 'auth.ts:10', severity: 'Blocker', description: 'auth bypass', recommendation: 'check the token' }
+
+// Both orders, same explicit ranks, same expected outcome: the ASCENDING one is the repro.
+for (const [order, severities] of [
+  ['ascending (the repro)', ['Low', 'Medium', 'High', 'Blocker']],
+  ['descending', ['Blocker', 'High', 'Medium', 'Low']],
+])
+  test(`the ORDER of vocabulary.severities carries nothing — ${order}, a Blocker still blocks at a High floor`, async () => {
+    let round = 0
+    const { result, calls, logs } = await runWorkflow({
+      args: { severityFloor: 'High', stories: [STORY] },
+      dispatch: (prompt, opts) => {
+        if (opts.agentType === 'pair-contract-generator')
+          return { status: 'cache-hit', contract: contractWith({ severities, severityRanks: RANKED }) }
+        if (opts.agentType === 'pair-reviewer')
+          return round++ === 0 ? { verdict: 'Rework', findings: [BLOCKER, LOW] } : { verdict: 'Approved', findings: [] }
+        if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+        if (opts.phase === 'PR') return { prNumber: 7 }
+        return { fixed: true }
+      },
+    })
+    const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+    assert.ok(fix, 'the most severe finding must drive a fix round, whatever order the array is in')
+    assert.ok(fix.prompt.includes('auth.ts:10'), 'the Blocker drove the fix round')
+    assert.ok(!fix.prompt.includes('a.md:1'), 'only the sub-floor Low was carried')
+    const b = result.batch[0]
+    assert.deepEqual(
+      b.acceptedFindings.map(f => f.location),
+      ['a.md:1'],
+      'the auth bypass must NEVER be filed as below the floor',
+    )
+    assert.ok(!logs.some(l => /Blocker/.test(l) && /below the/.test(l)))
+    assert.equal(b.status, 'ready-for-merge')
+  })
+
+test('an AMBIGUOUS severityRanks (a duplicate ordinal) refuses to rank instead of guessing', async () => {
+  // A malformed contract must fail LOUDLY at the floor, never silently default to some
+  // order — that silent default is the whole bug class this replaces.
+  await assert.rejects(
+    () =>
+      runWorkflow({
+        args: { severityFloor: 'High', stories: [STORY] },
+        dispatch: stdDispatch({
+          contractResult: {
+            status: 'cache-hit',
+            contract: contractWith({ severities: ['Low', 'Medium', 'High', 'Blocker'], severityRanks: { Low: 1, Medium: 2, High: 2, Blocker: 4 } }),
+          },
+          review: { verdict: 'Rework', findings: [BLOCKER, LOW] },
+        }),
+      }),
+    err => {
+      assert.match(err.message, /severityRanks/)
+      assert.match(err.message, /High|Medium/, 'the error names the ambiguous pair')
+      return true
+    },
+  )
+})
+
+test('a contract with NO severityRanks (a pre-ordinal cache) refuses to apply a floor', async () => {
+  // The rank is never re-derived from the array as a fallback: a contract that predates the
+  // ordinal, or a generator that skipped it, has an UNKNOWN ranking — and an unknown ranking
+  // may not be guessed from position.
+  await assert.rejects(
+    () =>
+      runWorkflow({
+        args: { severityFloor: 'High', stories: [STORY] },
+        dispatch: stdDispatch({
+          contractResult: { status: 'cache-hit', contract: contractWith({ severities: ['Low', 'Medium', 'High', 'Blocker'] }) },
+          review: { verdict: 'Rework', findings: [BLOCKER] },
+        }),
+      }),
+    err => {
+      assert.match(err.message, /severityRanks/, 'the message names the real cause, not the caller\'s spelling')
+      assert.ok(!/unknown severityFloor/.test(err.message), 'the floor itself is not the problem')
+      return true
+    },
+  )
+})
+
+test('…and with NO floor asked for, that same rank-less contract still drives the run', async () => {
+  // Refusing to RANK is not refusing to run: the contract still enum-locks the schema and
+  // still feeds the reviewer prompt its own vocabulary. Ranks are only consulted by a floor.
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: contractWith({ severities: ['Low', 'Medium', 'High', 'Blocker'] }) } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
+  assert.ok(rev.prompt.includes('Blocker'), 'the configured vocabulary still threads into the prompt')
   assert.equal(result.batch[0].status, 'ready-for-merge')
 })
 
