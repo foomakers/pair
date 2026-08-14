@@ -15,6 +15,10 @@ This folder contains the strategic subdomain definitions for the "pair" product.
 - [Adoption & Guidelines](./adoption-guidelines.md): Manages the adoption of practices, tools, and processes, and defines operational and technical guidelines for the team.
 - [Integration & Process Standardization](./integration-process-standardization.md): Connects with external tools and standardizes team processes for consistent operations.
 
+### Generic Subdomains
+
+- [Development Tooling Standards](./development-tooling-standards.md): Shared, off-the-shelf lint/format/TypeScript/markdown configuration and visual identity/brand assets, consumed uniformly across the monorepo.
+
 ## Subdomain Relationship Matrix
 
 | From                                  | To                                    | Relationship Type         | Data/Knowledge Flow                | Coordination Level |
@@ -27,6 +31,7 @@ This folder contains the strategic subdomain definitions for the "pair" product.
 | Adoption & Guidelines                 | How To Knowledge                      | Resource consumption      | Application of procedures          | Medium             |
 | Integration & Process Standardization | All subdomains                        | Shared service            | Process standards and integrations | Low/Transversal    |
 | How To Knowledge                      | All subdomains                        | Shared resource           | Operational instructions           | Low/Transversal    |
+| Development Tooling Standards         | All subdomains                        | Shared service            | Lint/format/TypeScript config, brand assets | Low/Transversal |
 
 ---
 
