@@ -837,7 +837,7 @@ describe('verify-quality — optional $pr argument: which PR the tier is read fr
 describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an executable asset (#382)', () => {
   const INSTALLED_PATH = join(__dirname, '../../../../.pair/knowledge/assets/pr-tree-resolve.sh')
   const SMOKE_PATH = join(__dirname, '../../../../scripts/smoke-tests/scenarios/pr-tree-resolve.sh')
-  const RUN_ALL_PATH = join(__dirname, '../../../../scripts/smoke-tests/run-all.sh')
+  const CI_TESTS_PATH = join(__dirname, '../../../../scripts/smoke-tests/lib/ci-tests.sh')
   const WORKFLOWS_DIR = join(__dirname, '../../../../.github/workflows')
   const ADL_PATH = join(
     __dirname,
@@ -900,16 +900,17 @@ describe('pr-tree-resolve.sh — the tree/PR-state resolution SHIPS as an execut
     for (const arm of ['match', 'ahead', 'mismatch', 'unknown', 'none', 'no-remote']) {
       expect(smoke, `the \`${arm}\` arm must be executed`).toContain(`${arm} "$TREE_MATCH"`)
     }
-    // and it is registered in run-all.sh's `--ci` scenario list (the `CI_TESTS` array).
-    // That list is NOT why a gate/local run executes it: `pnpm smoke-tests` is
-    // `run-all.sh --cleanup`, which leaves `IS_CI=false` and takes the branch that globs
-    // `scenarios/*.sh` — so the scenario runs because the FILE EXISTS. What membership buys
-    // is inclusion in the CI-safe subset `run-all.sh --ci` runs, the entry point #400 will
-    // wire; it is a precondition, NOT an automated trigger today, which the next test pins.
-    const runAll = readFileSync(RUN_ALL_PATH, 'utf-8')
+    // and it is registered in the `CI_TESTS` array — extracted to lib/ci-tests.sh by #400
+    // so run-all.sh and scenarios/runner-outcomes.sh share one list instead of each
+    // hand-rolling it. That list is NOT why a gate/local run executes it: `pnpm
+    // smoke-tests` is `run-all.sh --cleanup`, which leaves `IS_CI=false` and takes the
+    // branch that globs `scenarios/*.sh` — so the scenario runs because the FILE EXISTS.
+    // What membership buys is inclusion in the CI-safe subset `run-all.sh --ci` runs,
+    // which #400 now wires into the `smoke` CI job.
+    const ciTests = readFileSync(CI_TESTS_PATH, 'utf-8')
     expect(
-      runAll,
-      "the scenario must be registered in run-all.sh's `--ci` scenario list (`CI_TESTS`)",
+      ciTests,
+      "the scenario must be registered in lib/ci-tests.sh's `CI_TESTS` array",
     ).toContain('"pr-tree-resolve.sh"')
     expect(smoke, 'and it must be offline-safe — it stubs the host read').toContain(
       'OFFLINE_SAFE=true',
