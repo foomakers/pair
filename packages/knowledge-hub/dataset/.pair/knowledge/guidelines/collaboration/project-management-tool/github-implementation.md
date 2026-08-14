@@ -580,7 +580,7 @@ gh api graphql -f query='mutation {
 | Transition | When | Triggered by |
 |-----------|------|-------------|
 | Todo → Refined | Story refinement complete | `/refine-story` via `/write-issue $status: Ready` |
-| Refined → In Progress | Implementation starts | `/implement` via `/write-issue $status: In Progress` |
+| Refined → In Progress | Implementation starts | `/implement` — **writes the board field directly** (`/write-issue` Step 7b applied **by reference**: membership → a read that confirms it → the status mutation above) |
 | In Progress → Done | PR merged + issue closed | `/review` merge step |
 
 ### Issue Close (Post-Merge)

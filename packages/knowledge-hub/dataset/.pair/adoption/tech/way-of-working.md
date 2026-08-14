@@ -78,3 +78,20 @@ Example — split configuration (Linear for the backlog, GitHub for the code):
 ## State Mapping
 
 Optional. Skills resolve item state to 5 canonical macrostates — `Draft`, `Ready`, `In Progress`, `Review`, `Done` — through this section. **Omitted by default**: pair assumes your board already uses canonical names, so nothing needs to be configured here. Add a `Board State → Macrostate` table only if your board uses different names — mapping is n-m (many board states may map to one macrostate, never the inverse). See [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full schema, semantics, and examples (default, GitHub Projects, minimal board, custom n-m).
+
+## Assignment
+
+Optional. **Who** items and pull requests are assigned to. **Omitted by default** — but omitting it has a cost worth knowing before you do: most boards are read **filtered by assignee**, so an item nobody is assigned is **invisible in an assignee-filtered view** even while it is open, green and carrying a PR. Skills never guess a default from the authenticated user (an agent running under a bot token would assign everything to the bot), so with nothing declared here they file items and PRs unassigned and warn.
+
+| Field                | Default                | Meaning                                                                                                    |
+| -------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `default-assignee`   | *(none)*               | The identifier an item or PR is assigned to when the caller passes none.                                     |
+| `code-host-assignee` | *(`default-assignee`)* | Only when the code host knows the same person by a different identifier than the PM tool (split configuration). Read for **pull request** assignment; items keep using `default-assignee`. |
+
+Example:
+
+```text
+- `default-assignee`: `jane-doe`
+```
+
+The resolution order (`$assignee` argument → the adoption default for the side being written, `code-host-assignee` then `default-assignee` on a pull request → none + warning), the split-tool routing, and why the fallback is never the authenticated user live in [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution).

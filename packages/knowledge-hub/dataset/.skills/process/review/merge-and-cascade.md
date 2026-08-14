@@ -53,17 +53,20 @@ The merge happens on the **code host**; the item writes in Step 6.4 happen on th
 
 ### Step 6.4: Update Story & Parent Cascade
 
+This step produces the `Done` macrostate ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)), and it does so with **two distinct writes per item**: the issue is closed, **and** the board state field is written. **Closing the issue does not move the board column** — on an explicit-membership tool the item keeps whatever column it had, so a story reported Done off the back of the close alone sits in `In Progress` on the board.
+
+The state write goes **directly to the board field** — never through the item writer's write mode, which is a full-body overwrite and would replace the story's AC/DoD/task breakdown for a state-only change. It follows the order the item writer states once and this step applies unchanged — **membership, then a read that confirms it, then the state field** (`/write-issue` Step 7b): a state field cannot be written on an item the tracked view does not hold, and the add that puts it there can exit 0 having done nothing. The invariant is applied **by reference**, never re-derived, and it governs the story **and each parent this run transitions**.
+
 1. **Act**: Close the user story issue on the **PM tool** (an item write — never the code host; resolve the item id from the PR's `Refs: <issue-id>` cross-link when the tools are split). GitHub example:
    - MCP: `issue_write` with `method = update`, `state = closed`, `state_reason = completed`.
    - CLI: `gh issue close <story-number> --reason completed`.
-2. **Act**: Check parent epic — read sub-issues to determine if ALL stories are Done:
+2. **Act**: Write the story's board state to the state `## State Mapping` resolves for `Done`, under the order above, per the [implementation guide](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md) for the adopted tool. No tracked view is named, or the board has no state for `Done` ⇒ **no state field is written and it is reported as such** — never as a state that was written.
+3. **Act**: Check parent epic — read sub-issues to determine if ALL stories are Done:
    - MCP: `issue_read` with `method = get_sub_issues` on the epic.
-   - If all sub-issues closed → close the epic with `state_reason = completed`.
-   - If not all closed → leave epic open.
-3. **Act**: Check parent initiative — same cascade logic:
-   - If all epics closed → close the initiative.
-   - If not all closed → leave initiative open.
-4. **Verify**: Story closed. Epic and initiative updated if applicable.
+   - If all sub-issues closed → close the epic with `state_reason = completed` **and** write its board state to `Done`, under the same order.
+   - If not all closed → leave epic open, board state untouched.
+4. **Act**: Check parent initiative — same cascade logic, same two writes and the same order when it transitions.
+5. **Verify**: A **read** of the story — and of **each parent this run transitioned** — shows it closed and its board state `Done` (or the documented no-`Done`-state outcome above). Report **what the read observed**, never what the calls returned: nobody re-runs the merge phase, so a state this step reports without reading is terminal.
 
 ### Step 6.5: Branch Cleanup
 
@@ -90,8 +93,8 @@ STORY DONE:
 ├── PR:           [#PR-number — merged]
 ├── PR state:     [ready-to-merge — synthesis verified at Step 6.0]
 ├── Merge:        [squash | merge | rebase]
-├── Story:        Done
-├── Epic:         [#ID — Done | In Progress (X/Y stories done)]
-├── Initiative:   [#ID — Done | In Progress (X/Y epics done)]
+├── Story:        [Done — confirmed by read | closed; no Done state on this board]
+├── Epic:         [#ID — Done, confirmed by read | In Progress (X/Y stories done)]
+├── Initiative:   [#ID — Done, confirmed by read | In Progress (X/Y epics done)]
 └── Manual Tests: [PASS | FAIL — N issues created | SKIPPED — no suite]
 ```

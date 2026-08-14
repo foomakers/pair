@@ -75,6 +75,7 @@ Skills route by field, never by assumption. The `Reads` column names the field e
 | Branches and pushes, **pull request** create/update/read (body, tier, approvals)   | `code-host` | `/pair-capability-publish-pr`, `/pair-process-implement`, `/pair-capability-verify-done` (PR tier + approval count, Step 3)     |
 | PR **labels/tags** and required checks (CI gate)                                  | `code-host` | `/pair-capability-verify-quality` (tier from the PR), `/pair-capability-setup-gates`, `/pair-capability-classify` (in review context — the target is the PR) |
 | **Classification** matrix + chromatic tags — written on whichever side the target is | both, by target | `/pair-capability-classify`: refinement ⇒ the **card** (`pm-tool`); review ⇒ the **PR** (`code-host`) |
+| **Item / pull request assignee** — who the work is assigned to (see [Assignee resolution](#assignee-resolution)) | both, by target | `/pair-capability-write-issue` writes the item's (`pm-tool`); `/pair-capability-publish-pr` writes the PR's (`code-host`) |
 | Code **review** submission (approve / request-changes / comment) and PR **merge**  | `code-host` | `/pair-process-review`, `/pair-process-review` merge cascade                                                |
 | Open-PR detection                                                                | `code-host` | `/pair-next`                                                                           |
 
@@ -83,6 +84,32 @@ Invariants this table encodes:
 - **State transitions always happen on the PM tool.** PR states (draft/ready/approved/merged) live on the code host and are never mirrored onto the board — the board sees the outcome through the linked PR reference, so no state is duplicated.
 - The pair review check registers **on the code host only** — that is where it gates the merge.
 - A single-tool project resolves both columns to the same tool, so the table is a no-op there.
+
+## Assignee resolution
+
+Who an item or a pull request is **assigned to**. This is a resolution rule rather than bookkeeping because the board is read **filtered by assignee**: an unassigned item is invisible there even when it is open, green and carries a PR. A project's own `## Assignment` paragraph in way-of-working.md carries the *rationale*; this section is the **machine-readable half** — the key a skill can actually resolve, and the one order every skill resolves it in.
+
+| Field                | Default                | Meaning                                                                                                       |
+| -------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `default-assignee`   | *(none)*               | The identifier (login / user id) an item or PR is assigned to when the caller passes none. Declared under `## Assignment` in way-of-working.md. |
+| `code-host-assignee` | *(`default-assignee`)* | Declare **only** when the code host knows the same human by a different identifier than the PM tool does (a split configuration). Read by **code-host** writes (the PR assignee) in step 2b below; a PM-tool write never reads it. |
+
+1. **Check**: did the caller pass `$assignee`? Use it.
+2. **Skip**: otherwise read the adoption default from `## Assignment` in [way-of-working.md](../../../../../../.pair/adoption/tech/way-of-working.md) — **which key depends on the side the write is on** (routing table above):
+   - **PM-tool write** (the item assignee) → `default-assignee`.
+   - **Code-host write** (the pull request assignee) → **`code-host-assignee` when declared, else `default-assignee`** (step 2b). This branch is the whole reason the key exists: on a split project the two tools rarely spell the same human the same way, and handing the code host the PM tool's login gets it **rejected** — the PR is then published unassigned with a warning, the exact invisibility this rule removes.
+
+   **An empty value is absent**, not an empty-string assignee — for either key.
+3. **Act**: otherwise **none** — the item or PR is still written, **unassigned**, with a warning naming the consequence (invisible in an assignee-filtered view). **Never a HALT**: an item created and half-visible beats an item not created.
+4. **Verify**: an assignee was resolved and written *as part of* the create/update, or the warning was surfaced.
+
+One order, stated once — **the argument first, then the adoption default, then none** — and both writers apply it unchanged (`/pair-capability-write-issue` for the item, `/pair-capability-publish-pr` for the PR), each reading the default for **its own side** per step 2. A cascade defined twice is a cascade that drifts, and the drift is silent: the failure mode is an invisible item, not an error.
+
+**Never the authenticated user.** The fallback is the *declared* field, never "whoever is running the command": that is right only in the solo-maintainer case and wrong the moment an agent runs under a **bot token**, which would assign every item to the bot and pass its own check while defeating the rule's purpose.
+
+**Two sides, one cascade.** The item assignee is a PM-tool write and the pull request assignee is a code-host write (routing table above). On a single-tool project the two coincide, nothing extra is declared, and step 2b falls straight through to `default-assignee`; on a split one the same human often carries two identifiers, which is what `code-host-assignee` is for — and step 2b is the one place it is read, by `/pair-capability-publish-pr`. And on the PR side the distinction that actually bites: a PR's **author is not its assignee** — the host fills `author` from the token, an assignee-filtered view reads `assignees`.
+
+**Rejected by the tool** (not a collaborator, typo, deactivated account): report what the tool answered and fall to step 3 — write the item unassigned. Never drop it silently, and never let a bookkeeping field sink the item.
 
 ## Cross-linking convention (split configuration)
 

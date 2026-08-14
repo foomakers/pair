@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /verify-quality, /record-decision, /checkpoint, /publish-pr."
-version: 0.6.0
+version: 0.6.1
 author: Foomakers
 ---
 
@@ -60,12 +60,12 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
 
 ### Step 0.1b: Activate Story in PM Tool (NEVER SKIP)
 
-1. **Check**: Is the story already assigned to the current developer AND status is "In Progress"?
+1. **Check**: Read the story back: is it already assigned AND already in the `In Progress` macrostate?
 2. **Skip**: If BOTH conditions met, move to Step 0.2.
 3. **Act**: Update the PM tool:
-   - **Assign** the story to the current developer (if not already assigned).
-   - **Set status to "In Progress"** in the PM tool board/project.
-4. **Verify**: Story is assigned and In Progress. If PM tool is inaccessible → warn developer and continue.
+   - **Assign the story only when it has no assignee**, to whatever the [Assignee resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md#assignee-resolution) cascade returns — an explicitly passed assignee, else the adoption's `default-assignee`, else none with a warning (never a HALT: an under-visible story beats a blocked one). **Never the authenticated user**, and never a reassignment: the default is the _declared_ field, because an agent running under a bot token would otherwise assign every story to the bot and pass its own check, and a story already assigned belongs to whoever owns it.
+   - **Set the board state to the `In Progress` macrostate**, in the order the item writer states once and this step applies unchanged — **membership, then a read that confirms it, then the state field** (`/write-issue` Step 7b): a state field cannot be written on an item the tracked view does not hold, and the add that puts it there can exit 0 having done nothing. Composing `/write-issue` is not the route for a state-only change — its write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown — so the invariant is applied here **by reference**, never re-derived.
+4. **Verify**: A **read** of the item shows it assigned (or the unassigned warning was surfaced) and in `In Progress` — report **what the read observed**, never what the calls returned. If PM tool is inaccessible → warn developer and continue.
 
 ### Step 0.2: Analyze Tasks
 
