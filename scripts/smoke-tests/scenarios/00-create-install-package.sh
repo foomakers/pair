@@ -27,11 +27,34 @@ if [ -z "${VERSION:-}" ]; then
 fi
 PACKAGE_SCRIPT="$REPO_ROOT/scripts/workflows/release/package-manual.sh"
 
+# The runner already executes this script as its packaging preflight, BEFORE the
+# scenario loop, and then again as CI_TESTS[0]. Packaging twice costs real minutes
+# on a job whose duration is a governed number (AC6, #400), so the second pass
+# asserts the artifact instead of rebuilding it.
+PACKAGED_CLI_FILE="$TMP_DIR/packaged-cli"
+if [ -f "$PACKAGED_CLI_FILE" ]; then
+  EXISTING="$(cat "$PACKAGED_CLI_FILE")"
+  log_info "Packaged CLI already produced by the preflight: $EXISTING"
+  if [ ! -x "$EXISTING" ]; then
+    log_fail "packaged-cli marker points at a path that is not an executable file: $EXISTING"
+    exit 1
+  fi
+  log_succ "$TEST_NAME (artifact reused, packaged once per run)"
+  exit 0
+fi
+
 log_info "Preflight: running package script in --dry-run mode for version $VERSION"
 
-# If dry-run fails (missing tools), skip gracefully (non-fatal)
+# A dry-run failure is a MISSING TOOL on a developer machine — worth skipping —
+# and a broken build in CI, where "skip" would publish `✅ PASS` for a run in
+# which nothing was packaged and nothing was asserted. That silently-green no-op
+# is exactly the family #400 exists to remove, so in CI it is fatal.
 if ! "$PACKAGE_SCRIPT" --dry-run "$VERSION"; then
-  log_warn "package-manual.sh --dry-run failed (missing tools or env). Skipping package creation." 
+  if [ "${IS_CI:-false}" = "true" ] || [ "${CI:-}" = "true" ]; then
+    log_fail "package-manual.sh --dry-run failed in CI — the CLI could not be packaged, so nothing below ran"
+    exit 1
+  fi
+  log_warn "package-manual.sh --dry-run failed (missing tools or env). Skipping package creation."
   exit 0
 fi
 
@@ -70,6 +93,29 @@ fi
 
 assert_file "$ARTIFACT_DIR/pair-cli"
 assert_file "$ARTIFACT_DIR/bundle-cli/index.js"
+
+# The artifact must never advertise a file it does not contain. `index.d.ts` is
+# BEST EFFORT here — the artifact is executed via bin/, never imported, so types
+# are optional (ADL 2026-08-12-manual-cli-artifact-types-are-optional.md) — and
+# dts-bundle-generator currently fails against this repo's TypeScript. What is not
+# optional is that `types` and the file agree: the packaging script emitted
+# `types: bundle-cli/index.d.ts` unconditionally, BEFORE generation, so every
+# failure shipped a dangling pointer. Asserted in both directions so neither the
+# claim nor the file can drift away from the other.
+DECLARED_TYPES="$(node -e "process.stdout.write(String(require('$ARTIFACT_DIR/package.json').types || ''))")"
+if [ -f "$ARTIFACT_DIR/bundle-cli/index.d.ts" ]; then
+  if [ "$DECLARED_TYPES" = "bundle-cli/index.d.ts" ]; then
+    log_succ "artifact bundles index.d.ts and declares types"
+  else
+    log_fail "bundle-cli/index.d.ts exists but package.json declares types='$DECLARED_TYPES'"
+    exit 1
+  fi
+elif [ -n "$DECLARED_TYPES" ]; then
+  log_fail "package.json declares types='$DECLARED_TYPES' but bundle-cli/index.d.ts is not in the artifact — the artifact advertises a file it does not contain"
+  exit 1
+else
+  log_succ "no index.d.ts bundled and package.json omits types (consistent — types are optional for this artifact)"
+fi
 
 # Publish the packaged CLI path for other scenarios
 # Copy the entire extracted artifact into the run's TMP_DIR so it is stable for the entire run

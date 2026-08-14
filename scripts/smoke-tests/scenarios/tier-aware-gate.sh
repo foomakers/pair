@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OFFLINE_SAFE=true
+OFFLINE_SAFE=true
 #
 # Tier-aware pre-merge gate — verification scenario (story #258).
 #

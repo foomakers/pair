@@ -90,12 +90,10 @@ jobs:
 
       - name: Create manual release artifacts
         run: |
-          chmod +x scripts/workflows/release/package-manual.sh
           ./scripts/workflows/release/package-manual.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
       - name: Create knowledge base dataset release artifact
         run: |
-          chmod +x scripts/workflows/release/package-kb-dataset.sh
           ./scripts/workflows/release/package-kb-dataset.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
       - name: Upload release artifacts as workflow artifacts
@@ -118,7 +116,6 @@ jobs:
 
       - name: Create registry TGZ from manual release folder
         run: |
-          chmod +x scripts/workflows/release/create-registry-tgz.sh
           ./scripts/workflows/release/create-registry-tgz.sh ${{ steps.normalize_version.outputs.version_no_v }} release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip
 
       - name: Upload TGZ artifact as workflow artifact
@@ -135,14 +132,12 @@ jobs:
         env:
           PAIR_DIAG: '1'
         run: |
-          chmod +x scripts/workflows/release/smoke-test-manual-artifact.sh
           ./scripts/workflows/release/smoke-test-manual-artifact.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
       - name: Smoke-test npm TGZ artifact (verify checksum, install into sample-project, run --version, run pair install)
         env:
           PAIR_DIAG: '1'
         run: |
-          chmod +x scripts/workflows/release/smoke-test-npm-artifact.sh
           ./scripts/workflows/release/smoke-test-npm-artifact.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
       - name: Create GitHub Release and upload assets
@@ -150,7 +145,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          chmod +x scripts/workflows/release/create-github-release.sh
           ./scripts/workflows/release/create-github-release.sh ${{ steps.version.outputs.version }} ${{ github.token }}
 
   deploy-website:
@@ -185,7 +179,6 @@ jobs:
 
       - name: Deploy to Vercel (production)
         run: |
-          chmod +x scripts/workflows/release/deploy-website.sh
           ./scripts/workflows/release/deploy-website.sh --prod
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -222,5 +215,4 @@ jobs:
           set -euo pipefail
           V=${{ needs.release.outputs.version_no_v || needs.release.outputs.version }}
           TGZ=pair-cli-${V}.tgz
-          chmod +x scripts/workflows/release/publish-npm.sh
           ./scripts/workflows/release/publish-npm.sh "$TGZ"

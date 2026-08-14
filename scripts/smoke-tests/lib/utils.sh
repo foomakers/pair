@@ -19,6 +19,64 @@ log_succ() { echo -e "${GREEN}[PASS]${NC} $1"; }
 log_fail() { echo -e "${RED}[FAIL]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
+# --- Runner outcome vocabulary (story #400) ---------------------------------
+# A listed scenario has THREE possible states before it is ever executed. The
+# runner used to know two answers — passed, or FAILED — so a scenario that could
+# not run at all (`coverage-gate.sh`, committed mode 644) reported `Permission
+# denied` -> FAIL, indistinguishable from a real assertion failure. It sat dead
+# for weeks. Deciding the state up front is what keeps "cannot run" from ever
+# being reported as "ran and failed" again.
+#
+# These read the FILESYSTEM, which is the right question at run time. The
+# COMMITTED mode is a different question, guarded at the commit level by
+# packages/dev-tools/src/quality-gates/smoke-scenario-modes.ts (`git ls-files -s`).
+
+# file_mode <path> — octal mode, portably (GNU stat, then BSD stat).
+# Prints nothing for a path that does not exist, instead of a stat error.
+#
+# The chain is TERMINATED with `echo unknown` so the function always exits 0. The
+# runner calls it under `set -e` as a bare assignment (`mode="$(file_mode …)"`),
+# whose status is the substitution's: an unterminated chain on a platform with
+# neither stat flavour would abort the suite mid-report — the reporting path
+# killing the reporter, on the one code path added to make failures legible.
+file_mode() {
+  [ -e "$1" ] || return 0
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%OLp' "$1" 2>/dev/null || echo unknown
+}
+
+# repo_relative_path <path> — strip the repo root prefix, so a printed remedy is a
+# single path that `git update-index` accepts verbatim.
+#
+# The unset-REPO_ROOT branch is REAL, not decorative: with `root` empty the pattern
+# "$root"/* degenerates to /* — which matches every absolute path — and the
+# substitution strips the leading slash, printing `Users/x/repo/scripts/a.sh`. A
+# confidently wrong path, on the one code path added to make failures legible.
+# Without a known root the honest answer is the path verbatim.
+repo_relative_path() {
+  local root="${REPO_ROOT:-}"
+  if [ -n "$root" ]; then
+    case "$1" in
+      "$root"/*) echo "${1#"$root"/}"; return 0 ;;
+    esac
+  fi
+  case "$1" in
+    ./*) echo "${1#./}" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# scenario_state <path> — RUNNABLE | MISSING | NOT_EXECUTABLE
+scenario_state() {
+  local script="$1"
+  if [ ! -f "$script" ]; then
+    echo "MISSING"
+  elif [ ! -x "$script" ]; then
+    echo "NOT_EXECUTABLE"
+  else
+    echo "RUNNABLE"
+  fi
+}
+
 # Setup a clean test workspace
 setup_workspace() {
   local name=$1
@@ -180,9 +238,11 @@ assert_output_contains() {
 # "the pinned bug appears FIXED — update this assertion" instead of looking like an
 # unexplained smoke regression, so nobody has to reverse-engineer the red run.
 #
-# Reach: this suite is NOT run by any GitHub workflow today — it fires only when someone
-# runs `pnpm smoke-tests` (or a single scenario) locally. A pinned assertion is therefore a
-# manual gate, not a CI guarantee; the gap is tracked in foomakers/pair#400.
+# Reach (since #400): the CI-safe list (lib/ci-tests.sh) runs on every pull request, in the
+# `smoke` job of ci.yml. A pinned assertion inside one of those scenarios is a CI guarantee —
+# a pinned bug fixed upstream turns the PR red with the message below, instead of waiting for
+# someone to run the suite by hand. In a scenario listed in CI_EXCLUDED it remains a manual
+# gate, which is why exclusions carry a recorded reason.
 assert_pinned_bug() {
   local issue="$1"
   local description="$2"

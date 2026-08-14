@@ -207,8 +207,20 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
       rm "$RELEASE_DIR/bundle-cli/package.json"
     fi
   fi
-  # Generate TypeScript definitions from source
-  echo "Generating TypeScript definitions..."
+  # Generate TypeScript definitions from source — BEST EFFORT, and deliberately so.
+  #
+  # The manual artifact's contract is `bin/pair-cli`: it is executed, never
+  # imported, so a missing `index.d.ts` costs nothing (ADL
+  # 2026-08-12-manual-cli-artifact-types-are-optional.md). dts-bundle-generator
+  # currently fails against this repo's TypeScript (in CI: `TypeError: Cannot read
+  # properties of undefined (reading 'getCurrentDirectory')`; locally: `TS5101`
+  # on the deprecated `baseUrl`), which is why the message below states the
+  # outcome instead of shouting "failed": since #400 this runs inside the CI smoke
+  # job's log, and a tolerated warning inside a green row is the exact shape this
+  # repo is removing. The `types` field is then pruned to match reality (below) —
+  # it is written unconditionally further up, so without that prune every failure
+  # shipped a package.json pointing at a file the artifact does not contain.
+  echo "Generating TypeScript definitions (optional for this artifact)..."
   DTS_TSCONF="$PKG_DIR/tsconfig.dts.json"
   if [ "$DRY_RUN" = true ]; then
     echo "[dry-run] would create temporary tsconfig at $DTS_TSCONF and run dts-bundle-generator"
@@ -230,10 +242,25 @@ JSON
       --project tsconfig.dts.json \
       -o "$RELEASE_DIR/bundle-cli/index.d.ts" \
       "src/cli.ts" 2>&1 | grep -v -E "Composite projects aren't supported|skipLibCheck") ; then
-      echo "Warning: dts-bundle-generator failed, skipping types"
+      echo "Note: type declarations not bundled — the manual artifact is an executable CLI (bin/), not an importable library, so types are optional here. The artifact's package.json will omit \`types\`."
     fi
     # Cleanup temporary tsconfig
     rm -f "$DTS_TSCONF" || true
+    # Make the claim true: `types` is written unconditionally when the clean
+    # package.json is built (above, before this step could possibly have run), so
+    # it is pruned here whenever the file it names is absent. Asserted in both
+    # directions by scenarios/00-create-install-package.sh.
+    if [ ! -f "$RELEASE_DIR/bundle-cli/index.d.ts" ] && [ -f "$RELEASE_DIR/package.json" ]; then
+      (cd "$RELEASE_DIR" && node <<'NODE'
+const fs = require('fs');
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+if (pkg.types !== undefined) {
+  delete pkg.types;
+  fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+}
+NODE
+      ) || { echo "Failed to prune the unbundled \`types\` field from the artifact package.json"; exit 1; }
+    fi
   fi
 else
   echo "Bundle requested but $PKG_DIR/dist/cli.js not found"

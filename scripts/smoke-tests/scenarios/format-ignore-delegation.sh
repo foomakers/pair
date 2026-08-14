@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OFFLINE_SAFE=true
+OFFLINE_SAFE=true
 #
 # Formatter wrappers delegate to .gitignore — verification scenario (story #394).
 #

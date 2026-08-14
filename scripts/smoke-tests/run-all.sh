@@ -4,9 +4,22 @@ set -e
 # Default values
 BINARY_PATH=""
 KB_SOURCE=""
-SCENARIOS_DIR="$(dirname "$0")/scenarios"
 TMP_DIR=""
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+SMOKE_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SMOKE_DIR/../.." && pwd)"
+
+# Both are ABSOLUTE and both are overridable, which is what makes the runner's own
+# reporting testable: scenarios/runner-outcomes.sh drives this script against a
+# fixture directory (a passing scenario, a failing one, a 644 one, a listed-absent
+# one) and asserts the four report rows and the exit code. Without the seam the
+# only thing a test could do is grep this file's source for the words.
+SCENARIOS_DIR="${SCENARIOS_DIR:-$SMOKE_DIR/scenarios}"
+CI_TESTS_FILE="${CI_TESTS_FILE:-$SMOKE_DIR/lib/ci-tests.sh}"
+
+# Shared helpers. Only `scenario_state` / `file_mode` are used here (the runner's
+# outcome vocabulary, #400); sourcing defines functions and colours, it runs nothing.
+# shellcheck source=./lib/utils.sh
+source "$SMOKE_DIR/lib/utils.sh"
 
 # Help function
 usage() {
@@ -63,7 +76,12 @@ if [ -z "$BINARY_PATH" ]; then
     BINARY_PATH="node $DEFAULT_DIST"
   else
     echo "Built CLI not found at $DEFAULT_DIST — attempting build..."
-    if (cd "$REPO_ROOT" && pnpm --filter @pair/pair-cli build 2>&1); then
+    # `--filter=@pair/pair-cli...` (trailing dots) builds the CLI AND its workspace
+    # dependencies through turbo's dependsOn graph. `pnpm --filter @pair/pair-cli
+    # build` does not: it skips @pair/content-ops, whose `exports` point at `dist/`,
+    # and the compile dies with ~45 `TS2307: Cannot find module '@pair/content-ops'`
+    # on any tree where that package was never built.
+    if (cd "$REPO_ROOT" && pnpm turbo build --filter=@pair/pair-cli... 2>&1); then
       if [ -f "$DEFAULT_DIST" ]; then
         echo "Build succeeded. Using: $DEFAULT_DIST"
         BINARY_PATH="node $DEFAULT_DIST"
@@ -148,6 +166,10 @@ fi
 export KB_SOURCE_PATH="$KB_SOURCE" # Can be empty
 export TMP_DIR="$TMP_DIR"
 export REPO_ROOT="$REPO_ROOT"
+# Scenarios need to tell a pipeline run from a developer run: a preflight that may
+# be skipped gracefully on a laptop missing a tool must be FATAL in CI, where a
+# graceful skip is a green row for a scenario that asserted nothing.
+export IS_CI="$IS_CI"
 
 # --- Sanitize environment for child processes
 # Some environment keys originating from pnpm workspace config can end up as
@@ -194,7 +216,7 @@ fi
 # --- Final guard: TEST_BINARY must be set and must not be a directory ---
 if [ -z "${TEST_BINARY:-}" ]; then
   echo "Error: No usable CLI binary found. Either:"
-  echo "  1. Build the project: pnpm --filter @pair/pair-cli build"
+  echo "  1. Build the project: pnpm turbo build --filter=@pair/pair-cli..."
   echo "  2. Provide --binary <path>"
   exit 1
 fi
@@ -231,12 +253,48 @@ is_offline_safe() {
   [ "${val:-true}" = "true" ]
 }
 
+# Outcomes: PASS | FAIL | MISSING | NOT EXECUTABLE (story #400).
+#
+# MISSING and NOT EXECUTABLE are both "the scenario never ran", and they are kept
+# apart from FAIL — and from each other — because the remedy differs and because a
+# collapsed vocabulary is what hid `coverage-gate.sh` (committed 644, reported as a
+# generic FAIL) for weeks. The state is decided by `scenario_state` in lib/utils.sh,
+# so the runner and the tests that assert this behaviour read the same function.
+#
+# Check-only (ADL 2026-07-31): the runner reports the mode and NEVER chmods it. A
+# runner that repaired the tree would turn a broken commit into a green local run.
 run_scenario() {
   local script="$1"
   local name=$(basename "$script")
+  local state mode
   echo "---------------------------------------------------"
+
+  state="$(scenario_state "$script")"
+  if [ "$state" = "MISSING" ]; then
+    echo -e "\033[0;31m[MISSING]\033[0m $name — listed for this run but not present in $SCENARIOS_DIR"
+    FAILED_TESTS+=("$name (missing)")
+    echo "| $name | ⚠️ MISSING |" >> "$REPORT_FILE"
+    return
+  fi
+  if [ "$state" = "NOT_EXECUTABLE" ]; then
+    mode="$(file_mode "$script")"
+    # ONE path for both halves of the remedy. Printing "$script" alongside a
+    # hardcoded "scenarios/$name" made the two disagree for a nested scenario —
+    # and the mode guard deliberately supports nesting — so the pasted command
+    # failed with "did not match any files".
+    local rel
+    rel="$(repo_relative_path "$script")"
+    echo -e "\033[0;31m[NOT EXECUTABLE]\033[0m $name — mode $mode; the runner cannot execute it"
+    echo "  This is NOT an assertion failure: the scenario never ran."
+    echo "  Fix the TRACKED mode (a local chmod alone leaves the git index at $mode):"
+    echo "    chmod +x $rel && git update-index --chmod=+x $rel"
+    FAILED_TESTS+=("$name (not executable, mode $mode)")
+    echo "| $name | 🚫 NOT EXECUTABLE (mode $mode) |" >> "$REPORT_FILE"
+    return
+  fi
+
   echo "Running Scenario: $name"
-  
+
   # Run in subshell
   if "$script"; then
     echo -e "\033[0;32m[PASS]\033[0m $name"
@@ -250,40 +308,22 @@ run_scenario() {
 
 # Find and run scenarios
 if [ "$IS_CI" = "true" ]; then
-  # Explicit list of CI-safe smoke tests
-  # We exclude any future tests that might require external resources or internet if strictly air-gapped
-  CI_TESTS=(
-    "install-basic.sh"
-    "package.sh"
-    "00-create-install-package.sh"
-    "bundle-content.sh"
-    "links.sh"
-    "lifecycle-kb.sh"
-    "validate-config.sh"
-    "kb-validate.sh"
-    "source-resolution.sh"
-    "install-preconditions.sh"
-    "scaffold-kb.sh"
-    "default-resolution.sh"
-    "tier-aware-gate.sh"
-    "coverage-gate.sh"
-    "pr-state-flow.sh"
-    "format-ignore-delegation.sh"
-  )
-  
+  # The CI-safe list and the reasons for every exclusion live in ONE place,
+  # lib/ci-tests.sh, which scenarios/runner-outcomes.sh audits: every scenario is
+  # either in CI_TESTS or in CI_EXCLUDED with a reason, and every listed name is a
+  # file that exists. Keeping the array here made "CI_TESTS" a claim nobody checked.
+  # shellcheck source=./lib/ci-tests.sh
+  source "$CI_TESTS_FILE"
+
   for t in "${CI_TESTS[@]}"; do
     script="$SCENARIOS_DIR/$t"
-    if [ -f "$script" ]; then
-        if [ "$OFFLINE_ONLY" = "true" ] && ! is_offline_safe "$script"; then
-          echo "  Skipping (not offline-safe): $t"
-          continue
-        fi
-        run_scenario "$script"
-    else
-        echo -e "\033[0;31m[ERROR]\033[0m CI Test not found: $t"
-        FAILED_TESTS+=("$t (missing)")
-        echo "| $t | ⚠️ MISSING |" >> "$REPORT_FILE"
+    if [ -f "$script" ] && [ "$OFFLINE_ONLY" = "true" ] && ! is_offline_safe "$script"; then
+      echo "  Skipping (not offline-safe): $t"
+      continue
     fi
+    # A listed-but-absent or listed-but-unexecutable scenario is reported by
+    # run_scenario as MISSING / NOT EXECUTABLE — never as a plain FAIL.
+    run_scenario "$script"
   done
 else
   # Default: Run all discovered scenarios

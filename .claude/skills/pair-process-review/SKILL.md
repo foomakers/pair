@@ -215,7 +215,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
 2. **Skip**: If already run — reuse results, move to Phase 5.
 3. **Act**: Compose `/pair-capability-analyze-debt` with `$scope = all`. `/pair-capability-analyze-debt` is **output-only** — it returns a report and creates nothing.
 4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR. Do **not** auto-create a tech-debt issue.
-5. **Act**: If a debt item is worth scheduling, note it as a recommendation for **deliberate** promotion after review via `/pair-capability-write-issue` (with the `tech-debt` label) — a manual, selective act, never automatic.
+5. **Act**: If a debt item is worth scheduling, record it in the report as a recommendation and stop there — **the review never creates a work item** (ADL `2026-08-12-implementation-never-files-a-card-it-extends-the-story`). Cite an **already-existing** card by number when one covers it; otherwise the debt is fixed in this PR (extending the story that surfaced it), or left as an **actionable finding** the maintainer judges at the **merge gate**. Whether it ever becomes a new card is the maintainer's deliberate call, taken outside the review — never this skill's, and never a side effect of reading a diff.
 6. **Verify**: Debt items recorded in the report. High-severity items may inform the review verdict (TECH-DEBT: approve + track separately) but never force CHANGES-REQUESTED on debt grounds alone.
 
 ## Phase 5: Review Decision
