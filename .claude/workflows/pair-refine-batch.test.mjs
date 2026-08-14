@@ -621,12 +621,16 @@ test('a present-but-blank notes throws instead of silently dropping the scope di
 // lands, so a fix applied to one copy cannot stop there.
 // The engine set is resolved by PRESENCE, and the only file allowed to be absent is the one
 // this repo deliberately does not ship: `pair-analyze-pr-batch.js` dispatches to a personal,
-// user-level skill, so an adopter's `.claude/workflows/` holds the two shipped engines and this
-// test file — which must therefore stay runnable there. Reading the unshipped engine
-// unconditionally would make every installed copy of this file die at import on ENOENT, which
-// is the same class this PR already closed for shipped files citing decision records the
-// dataset does not ship. The presence check is reconciled by a test below, so it cannot become
-// a place where a missing engine quietly narrows the differential in THIS repo.
+// user-level skill, so it is root-only. The directory that must therefore stay runnable is
+// `packages/knowledge-hub/dataset/.workflows/` — the byte-identical shipped copy, which holds
+// this file beside ONLY the two shipped engines, and where `node --test` is run as part of the
+// mirror's own dogfooding. (No ADOPTER is involved: `apps/pair-cli/config.json` excludes every
+// `*.test.mjs` from the `workflows` registry and the install smoke test asserts their absence,
+// so an adopter receives the engines and never these suites.) Reading the unshipped engine
+// unconditionally would make the dataset copy die at import on ENOENT, which is the same class
+// this PR already closed for shipped files citing decision records the dataset does not ship.
+// The presence check is reconciled by a test below, so it cannot become a place where a missing
+// engine quietly narrows the differential in THIS repo.
 const srcOf = name => {
   try {
     return readFileSync(new URL(`./${name}`, import.meta.url), 'utf8')
@@ -683,10 +687,13 @@ function helperOf(name, engine) {
     assert.ok(m, `${engine}: could not extract ${name} — a differential that cannot find its subject proves nothing`)
     return m[0]
   }
-  // The ambient names a helper closes over in its own engine (`i`, `id`, `number`, `where`)
-  // are supplied here so the extracted text evaluates; nothing about the DECISION depends on them.
+  // The ambient names a helper closes over in its own engine (`i`, `id`, `number`, `where`,
+  // `listKey` — the implement engine's "which spelling did the caller use" label) are supplied
+  // here so the extracted text evaluates; nothing about the DECISION depends on them. A missing
+  // one would still THROW inside the helper, which `decide` cannot tell from a legitimate
+  // rejection — so an ambient name is added here whenever an engine gains one.
   return new Function(`
-    const i = 0, id = '218', number = 424
+    const i = 0, id = '218', number = 424, listKey = 'cards'
     ${(spec.with ?? []).map(grab).join('\n')}
     ${grab(spec.re)}
     return ${name}
@@ -775,9 +782,9 @@ for (const [helper, what, drive] of CASES) {
   const engines = declared.filter(e => ENGINE_SRCS[e] !== null)
   test(`engine differential — ${helper}: ${what} gets the same verdict from all ${engines.length} copies`, () => {
     if (engines.length < 2) {
-      // Reachable ONLY in an adopter's install, where the unshipped engine is absent and a
-      // helper it shares with just one sibling has nothing left to differ from. In a repo that
-      // holds all three engines this is a failure, not a skip.
+      // Reachable ONLY in the dataset copy, where the unshipped engine is absent and a helper
+      // it shares with just one sibling has nothing left to differ from. In a tree that holds
+      // all three engines this is a failure, not a skip.
       assert.equal(HAS_UNSHIPPED, false, `${helper}: fewer than two copies present in a repo that carries every engine`)
       return
     }

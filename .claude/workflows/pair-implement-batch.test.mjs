@@ -669,13 +669,15 @@ test('args as a bare list of issue refs THROWS (the silent-no-op regression) and
 
 test('args missing entirely THROWS and says nothing was run', async () => {
   const msg = await expectThrow({ args: undefined })
-  assert.match(msg, /must be \{ stories: \[\.\.\.\] \}/)
+  // The CONTRACT key, with the alias named as accepted — the caller used neither.
+  assert.match(msg, /must be \{ cards: \[\.\.\.\] \}/)
+  assert.match(msg, /stories/)
   assert.match(msg, /Nothing was run/i)
 })
 
-test('args object without a stories array THROWS (not treated as an empty batch)', async () => {
+test('args object without a cards array THROWS (not treated as an empty batch)', async () => {
   const msg = await expectThrow({ args: { batch: [{ id: '1' }] } })
-  assert.match(msg, /must be \{ stories/)
+  assert.match(msg, /must be \{ cards/)
 })
 
 test('a story missing branch (or title) THROWS, naming the story and the missing keys', async () => {
@@ -1050,8 +1052,8 @@ test('a partial run reports the ratio and names only the stories that died', asy
   })
   assert.equal(result.batch.length, 1)
   assert.deepEqual(result.died, ['2'])
-  assert.match(result.note, /1\/2 stories returned a result/)
-  assert.match(result.note, /1 failed outright and advanced nothing/)
+  assert.match(result.note, /1\/2 cards advanced to a PR/)
+  assert.match(result.note, /1 never returned a result at all/)
 })
 
 test('an explicitly empty batch still reads as a deliberate no-op, not a failure', async () => {
@@ -2859,4 +2861,140 @@ test('US-219 AC7: a present-but-blank optional CARD field throws, like every oth
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
   assert.equal(result.batch[0].status, 'ready-for-merge', 'undefined/null still mean absent')
+})
+
+// ── Round-13 review: an all-FAILED batch was reported under the success sentence ───────────
+// The `note` branched on `batch.length` alone, and `driveStory` returns an HONEST
+// `{status: 'failed-implement'}` row when its agents die — so `batch.length === STORIES.length`
+// even when nothing advanced, and the `NOTHING COMPLETED` arm was unreachable for the failure
+// shape that actually happens (it fires only when the THUNK itself returns null). Measured on
+// the pre-fix engine: two cards whose every agent returns null came back as two
+// `failed-implement` rows, `died: []`, and the note "2/2 stories returned a result. PRs are
+// ready-for-merge or escalated; check each status. Merge is the human gate …" — no PR exists
+// and nothing is mergeable. `#250` reads this return and `note` is its one human-readable
+// field, so the sentence is derived from the STATUSES, not from how many rows came back.
+test('US-219: a batch in which every card failed says so — the note is derived from the statuses', async () => {
+  const cards = [
+    { id: '1', title: 'a', branch: 'b1' },
+    { id: '2', title: 'b', branch: 'b2' },
+  ]
+  const { result } = await runWorkflow({
+    args: { cards },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      return null // every agent dies — driveStory still returns a well-formed failure row
+    },
+  })
+  assert.deepEqual(
+    result.batch.map(r => r.status),
+    ['failed-implement', 'failed-implement'],
+    'the rows are honest failures — this is the shape the count-based note missed',
+  )
+  assert.deepEqual(result.died, [], 'every card RETURNED a row, so `died` is empty')
+  assert.doesNotMatch(
+    result.note,
+    /ready-for-merge or escalated/,
+    'nothing reached a PR: the success sentence must not be printed',
+  )
+  assert.match(result.note, /NOTHING COMPLETED/, 'the note leads with the failure')
+  assert.match(result.note, /failed-implement/, 'it names the status that actually happened')
+  assert.match(result.note, /worktrees is intact/, 'it says committed work survived')
+})
+
+test('US-219: a MIXED batch counts what advanced, not what returned', async () => {
+  const cards = [
+    { id: '1', title: 'a', branch: 'b1' },
+    { id: '2', title: 'b', branch: 'b2' },
+  ]
+  const { result } = await runWorkflow({
+    args: { cards },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (prompt.includes('story #2') || prompt.includes('#2')) return opts.phase === 'Implement' ? null : undefined
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.deepEqual(result.batch.map(r => r.status).sort(), ['failed-implement', 'ready-for-merge'])
+  assert.match(result.note, /1\/2 cards? advanced/, 'the ratio counts advanced cards, not returned rows')
+  assert.match(result.note, /failed-implement/, 'the failed card is named by its status')
+})
+
+// ── Round-13 review: the retry covered the DEAD reviewer and not the CONTENTLESS one ───────
+// `agentRetry` retried on a falsy return, so a truthy-but-contentless `{}` — the shape the
+// comment at the review dispatch records as the MEASURED incident on this very PR ("the machine
+// slept mid-response … a truncated structured output") — was never retried. Measured on the
+// pre-fix engine, same card, same harness: `review = null` → 2 reviewer dispatches then
+// `failed-review`; `review = {}` → 1 dispatch then `failed-review`. The card has already paid
+// implement + open-PR + probe before it burns, so the transient that was actually observed got
+// the one treatment the retry was written to avoid.
+test('US-219: a CONTENTLESS review is retried exactly like a dead one — same transient, same second chance', async () => {
+  for (const [what, review] of [
+    ['null (the dead subagent)', null],
+    ['{} (the truncated structured output — the MEASURED incident)', {}],
+    ['{findings: []} (a partial object)', { findings: [] }],
+    ["{verdict: '   '} (a blank verdict)", { verdict: '   ' }],
+  ]) {
+    const { result, calls } = await runWorkflow({
+      args: { cards: [{ ...STORY, prNumber: 42 }] },
+      dispatch: (prompt, opts) => {
+        if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (opts.agentType === 'pair-reviewer') return review
+        if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+        if (opts.phase === 'PR') return { prNumber: 42 }
+        return { fixed: true }
+      },
+    })
+    const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
+    assert.equal(reviews.length, 2, `${what}: the review step must be retried exactly once`)
+    assert.ok(
+      reviews.some(c => /retry/.test(c.opts.label ?? '')),
+      `${what}: the retry is labelled distinctly so it is visible in the progress tree`,
+    )
+    assert.equal(result.batch[0].status, 'failed-review', `${what}: it still fails closed after the retry`)
+  }
+  // A review WITH a verdict is never retried — the guard costs a genuine clean review nothing.
+  const { calls } = await runWorkflow({
+    args: { cards: [{ ...STORY, prNumber: 42 }] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 1, 'a real review is dispatched once')
+})
+
+// ── Round-13 review: the loud errors named the ALIAS, not the key the caller used ──────────
+// `cards` is the contract key and `stories` the accepted alias, but three of the guards said
+// `stories` unconditionally while the four beside them said `cards[i]` — so on ONE input the
+// index label flipped depending on which guard fired, and the message a caller got for the most
+// common mistake steered them to the deprecated spelling. `#250` is the caller this contract is
+// frozen for, and this error text is the only guidance it ever reads on a malformed call.
+test('US-219 AC7: every card error names the key the CALLER used — `cards[0]` for `cards`, `stories[0]` for the alias', async () => {
+  const noTitle = { id: '1', branch: 'b' }
+  for (const [key, mine, theirs] of [
+    ['cards', /cards\[0\]/, /stories\[0\]/],
+    ['stories', /stories\[0\]/, /cards\[0\]/],
+  ]) {
+    const missing = await expectThrow({ args: { [key]: [noTitle] } })
+    assert.match(missing, mine, `${key}: the missing-field error names the key the caller passed`)
+    assert.doesNotMatch(missing, theirs, `${key}: it must not name the other spelling`)
+    const notObject = await expectThrow({ args: { [key]: [5] } })
+    assert.match(notObject, mine, `${key}: the not-an-object error names the key the caller passed`)
+    assert.doesNotMatch(notObject, theirs, `${key}: it must not name the other spelling`)
+    const unknownKey = await expectThrow({ args: { [key]: [{ ...noTitle, title: 'T', nope: 1 }] } })
+    assert.match(unknownKey, mine, `${key}: the unknown-key error names the key the caller passed`)
+    const badValue = await expectThrow({ args: { [key]: [{ id: '1', title: 'T', branch: 'x; gh pr merge 432' }] } })
+    assert.match(badValue, mine, `${key}: the value error names the key the caller passed`)
+    const dupe = await expectThrow({
+      args: { [key]: [{ id: '1', title: 'T', branch: 'b' }, { id: '1', title: 'T', branch: 'c' }] },
+    })
+    assert.match(dupe, mine, `${key}: the duplicate-id error names the key the caller passed`)
+  }
+  // A bare array is read as the card list, so it gets the contract key.
+  assert.match(await expectThrow({ args: [noTitle] }), /cards\[0\]/)
+  // No list at all: nothing was used, so the message names the CONTRACT key and mentions the
+  // alias as accepted — never the alias alone.
+  const noList = await expectThrow({ args: {} })
+  assert.match(noList, /\{ cards: \[\.\.\.\] \}/, 'the shape to pass is the contract key')
+  assert.match(noList, /stories/, 'the accepted alias is still named')
 })

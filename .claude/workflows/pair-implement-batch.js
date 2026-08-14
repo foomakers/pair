@@ -80,7 +80,9 @@ export const meta = {
 //   contracts: [{ name, status }],
 //   batch:     [{ id, status, prNumber?, findings?, acceptedFindings?, story, ... }],
 //   died:      [id],              // cards that never returned anything
-//   note,                         // says what actually happened, incl. total failure
+//   note,                         // derived from the STATUSES: how many cards ADVANCED to a
+//                                 // PR (ready-for-merge/escalate) and what the rest did —
+//                                 // a batch where every card failed says so, never "ready"
 // }
 //   status ∈ ready-for-merge | escalate
 //          | failed-implement | failed-pr | failed-review | failed-fix
@@ -225,24 +227,36 @@ function parseBatchArgs(raw) {
   // `{ cards: [...], stories: undefined }` skipped the mapping and threw "`args` must be
   // { stories: [...] }" — telling a caller who passed a list that no list was there, and naming
   // the ALIAS rather than the key they used. Its mirror image (`{ stories, cards: undefined }`)
-  // worked, which is the asymmetry the rule exists to remove.
+  // worked, which is the asymmetry the rule exists to remove. (The naming half of that same
+  // defect is closed by `listKey` just below — it survived this fix by one round.)
   const hasStories = a && typeof a === 'object' && Object.hasOwn(a, 'stories') && a.stories !== undefined && a.stories !== null
-  if (a && typeof a === 'object' && Array.isArray(a.cards) && !hasStories) a = { ...a, stories: a.cards }
+  const hasCards = a && typeof a === 'object' && Array.isArray(a.cards)
+  // EVERY error below names the spelling the CALLER actually used, and indexes cards with it.
+  // The guards used to disagree: three said `stories[i]` unconditionally while the four beside
+  // them said `cards[i]`, so ONE malformed input produced two different index labels depending
+  // on which guard happened to fire — and the message a caller got for the most common mistake
+  // (`{cards: [{id, branch}]}` → "stories[0] … is missing title") named a key they had not
+  // passed and steered them to the deprecated spelling. `cards` is the default because it is
+  // the contract key; the alias is named only when the alias is what arrived. `#250` is the
+  // caller this contract is frozen for, and this text is the only guidance it ever reads.
+  const listKey = hasStories && !hasCards ? 'stories' : 'cards'
+  if (hasCards && !hasStories) a = { ...a, stories: a.cards }
   if (!a || typeof a !== 'object' || !Array.isArray(a.stories))
     throw new Error(
-      `implement-batch: \`args\` must be { stories: [...] } (or a bare array of stories). Received: ` +
+      `implement-batch: \`args\` must be { ${listKey}: [...] }` +
+        `${listKey === 'cards' ? ' (`stories` is the accepted alias)' : ''} — or a bare array of cards. Received: ` +
         `${a === undefined || a === null ? String(a) : JSON.stringify(a).slice(0, 80)}. ` +
         `Nothing was run — this is an input error, not an empty batch.`,
     )
   const seenIds = new Map()
   const stories = a.stories.map((s, i) => {
     if (!s || typeof s !== 'object' || Array.isArray(s))
-      throw new Error(`implement-batch: stories[${i}] is not an object: ${JSON.stringify(s)}.`)
+      throw new Error(`implement-batch: ${listKey}[${i}] is not an object: ${JSON.stringify(s)}.`)
     // The CARD's key set is validated like every other caller-facing object. Without this,
     // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
     // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
     // PR for a story that already had one — the very thing this file forbids in as many words.
-    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'prNumber'], `cards[${i}]`)
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'prNumber'], `${listKey}[${i}]`)
     // `#234` and `234` name the same story; normalize once so no prompt, worktree
     // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
     // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
@@ -250,7 +264,7 @@ function parseBatchArgs(raw) {
     // "234"/"true", naming a worktree the caller never wrote. Same rule as the sibling engine.
     if (s.id !== undefined && s.id !== null && typeof s.id !== 'string' && typeof s.id !== 'number')
       throw new Error(
-        `implement-batch: cards[${i}] has id of type ${Array.isArray(s.id) ? 'array' : typeof s.id}, which is not a string or a number. ` +
+        `implement-batch: ${listKey}[${i}] has id of type ${Array.isArray(s.id) ? 'array' : typeof s.id}, which is not a string or a number. ` +
           `It would be COERCED (an array joins on commas, a boolean becomes "true") and could then pass every ` +
           `value check as an id the caller never wrote — and that id becomes the worktree directory. ` +
           `Pass the issue ref as a string or a number.`,
@@ -261,7 +275,7 @@ function parseBatchArgs(raw) {
     )
     if (missing.length)
       throw new Error(
-        `implement-batch: stories[${i}]${id ? ` (#${id})` : ''} is missing ${missing.join(', ')}. ` +
+        `implement-batch: ${listKey}[${i}]${id ? ` (#${id})` : ''} is missing ${missing.join(', ')}. ` +
           `All three are required — id + title feed the prompts, branch feeds \`git worktree add\`; ` +
           `an absent one would reach a shell command as \`undefined\`.`,
       )
@@ -281,7 +295,7 @@ function parseBatchArgs(raw) {
       // it defeats the type check a reader assumes is there.
       if (value !== undefined && value !== null && typeof value !== 'string')
         throw new Error(
-          `implement-batch: cards[${i}] (#${id}) has ${key} of type ${Array.isArray(value) ? 'array' : typeof value}, which is not a string. ` +
+          `implement-batch: ${listKey}[${i}] (#${id}) has ${key} of type ${Array.isArray(value) ? 'array' : typeof value}, which is not a string. ` +
             `A non-string would be COERCED into the shell commands the agents run (an object becomes "[object Object]", ` +
             `an array joins on commas) as if the caller had typed it. Pass a string, or omit the key.`,
         )
@@ -296,13 +310,13 @@ function parseBatchArgs(raw) {
       // the spellings of "unset"; an empty string is a value the caller wrote.
       if (value !== undefined && value !== null && !v)
         throw new Error(
-          `implement-batch: cards[${i}]${id ? ` (#${id})` : ''} has ${key} empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
+          `implement-batch: ${listKey}[${i}]${id ? ` (#${id})` : ''} has ${key} empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
             `An empty string is a value the caller wrote, and reading it as absent would drive the card on a setting nobody chose.`,
         )
       if (!v) return // absent (undefined/null) — falls back to a default, or was required and caught above
       if (!ok(v))
         throw new Error(
-          `implement-batch: cards[${i}] (#${id}) has ${key} ${JSON.stringify(v)}, which is not ${what}. ` +
+          `implement-batch: ${listKey}[${i}] (#${id}) has ${key} ${JSON.stringify(v)}, which is not ${what}. ` +
             `Card fields are interpolated verbatim into the shell commands the agents run, so a value carrying ` +
             `shell syntax or a path escape would EXECUTE rather than name a ${key}. Rejected, never quoted.`,
         )
@@ -335,7 +349,7 @@ function parseBatchArgs(raw) {
     // `prNumber: undefined` defect, one value along.
     if (Object.hasOwn(s, 'prNumber') && s.prNumber !== undefined && s.prNumber !== null && !isPosInt(s.prNumber))
       throw new Error(
-        `implement-batch: cards[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not a positive integer (>= 1). ` +
+        `implement-batch: ${listKey}[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not a positive integer (>= 1). ` +
           `An unusable value is NOT treated as "no PR": a non-integer would run implement + open a SECOND PR for a story ` +
           `that already has one, and \`0\` or a negative would SKIP implement and the PR entirely and report a story ` +
           `that was never built as review-approved. Pass the real PR number, or omit the key entirely to start a fresh story.`,
@@ -346,7 +360,7 @@ function parseBatchArgs(raw) {
     // surviving twin, so a duplicate that failed reads as having returned.
     if (seenIds.has(id))
       throw new Error(
-        `implement-batch: cards[${seenIds.get(id)}] and cards[${i}] both carry id #${id}. ` +
+        `implement-batch: ${listKey}[${seenIds.get(id)}] and ${listKey}[${i}] both carry id #${id}. ` +
           `One story is one worktree and one PR — two cards sharing an id would run two ` +
           `implementers in the same working tree and lose one of them. Pass each story once.`,
       )
@@ -775,12 +789,29 @@ const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
 // attempt RESUMES rather than restarts. One retry only: a step that dies twice is
 // a real failure, not a timeout, and further opus rounds only delay the rest of
 // the batch.
-async function agentRetry(prompt, opts) {
+//
+// WHAT COUNTS AS A DEAD STEP IS THE CALLER'S CALL (`isUsable`). A bare truthiness
+// test retried the NULL return and not the truthy-but-CONTENTLESS one (`{}`, a
+// truncated structured output) — and the contentless shape is the one this repo
+// actually measured on #432 (the machine slept mid-response), i.e. the retry
+// missed the exact incident it was written for while covering its rarer sibling.
+// The review step therefore passes `hasVerdict`, the SAME predicate its
+// convergence guard uses, so "did not review" means one thing at both sites: the
+// transient gets its second chance, and a step that comes back contentless twice
+// still fails closed.
+async function agentRetry(prompt, opts, isUsable = r => !!r) {
   const first = await agent(prompt, opts)
-  if (first) return first
-  log(`${opts.label}: step returned nothing (agent died or returned an invalid shape) — retrying once`)
+  if (isUsable(first)) return first
+  log(`${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`)
   return agent(prompt, { ...opts, label: `${opts.label} retry` })
 }
+
+// Positive evidence that a review HAPPENED: a verdict is a required field of the
+// review contract, so its absence — null, `{}`, `{findings: []}`, a blank string —
+// means the reviewer did not return one. Absence of findings is not evidence.
+// ONE predicate, asked by the retry and by the convergence guard, so the two
+// cannot drift into disagreeing about what a dead reviewer is.
+const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -1232,6 +1263,10 @@ async function driveStory(story) {
       // narration reliable, restoring 'xhigh' is legitimate: it costs review depth, which is
       // the whole point of this gate. Do not read this line as "xhigh causes stalls".
       withModel({ agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
+      // A review is USABLE only if it carries a verdict — the same predicate the guard below
+      // converges on. Without it the retry covered the dead reviewer (`null`) and skipped the
+      // contentless one (`{}`), which is the shape actually measured on #432.
+      hasVerdict,
     )
     // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent
     // dies, and `review?.findings ?? []` then yields zero findings — which the
@@ -1251,7 +1286,9 @@ async function driveStory(story) {
     // So the test is inverted: a VERDICT must be present. Absence of findings is not evidence
     // that a review happened; presence of a verdict is. Every real review emits one — it is a
     // required field of the contract schema — so this costs a genuine clean review nothing.
-    if (!review || !String(review.verdict ?? '').trim())
+    // `hasVerdict` is the SAME function `agentRetry` was given above: the contentless return is
+    // retried once like any other dead step, and only then does it land here.
+    if (!hasVerdict(review))
       // `acceptedFindings` travels on EVERY terminal arm, this one included. A card whose
       // reviewer dies mid-cycle otherwise reports the by-design and below-floor findings of
       // every earlier round as if none had been raised — and those are precisely the findings
@@ -1373,12 +1410,35 @@ const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
 // empty batch under a success-shaped sentence, indistinguishable from a completed
 // one. That is the same failure class #401 fixed for empty INPUT, reached instead
 // through total execution failure: a batch that drove nothing must say so.
+//
+// COUNTING ROWS IS NOT COUNTING PROGRESS. Branching on `batch.length` alone left the
+// failure arm unreachable for the shape that actually happens: `driveStory` returns an
+// HONEST `{status: 'failed-implement'}` row when its agents die, so `batch.length ===
+// STORIES.length` and a batch where EVERY card failed was reported as "2/2 stories
+// returned a result. PRs are ready-for-merge or escalated" — no PR existed and nothing
+// was mergeable. `batch.length` only drops when the THUNK itself returns null (a stall
+// before `driveStory` could return), which is the rarer half. So the sentence is derived
+// from the STATUSES: a card ADVANCED only if it reached a PR the human can act on
+// (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
 const died = STORIES.length - batch.length
+const ADVANCED = new Set(['ready-for-merge', 'escalate'])
+const advanced = batch.filter((r) => ADVANCED.has(r.status))
+const failedRows = batch.filter((r) => !ADVANCED.has(r.status))
+const tally = (rows) =>
+  [...new Set(rows.map((r) => r.status ?? 'unknown'))].sort().map((s) => `${rows.filter((r) => r.status === s).length} ${s}`).join(', ')
+// What did NOT advance, in the two ways it can fail — a row carrying a failure status, and a
+// card that never returned one at all. Both are named, because they are recovered differently.
+const shortfall = [
+  failedRows.length ? `${failedRows.length} returned a failure status (${tally(failedRows)})` : '',
+  died ? `${died} never returned a result at all (agents stalled or errored)` : '',
+]
+  .filter(Boolean)
+  .join('; ')
 const note = !STORIES.length
   ? 'Empty batch — nothing was requested, nothing was run.'
-  : !batch.length
-    ? `NOTHING COMPLETED: all ${STORIES.length} stories failed before returning a result (agents stalled or errored). No PR advanced in this run. Committed work in the per-story worktrees is intact — re-run to resume; check the machine's load first, since a stall means agents could not show progress within the supervisor's window.`
-    : `${batch.length}/${STORIES.length} stories returned a result${died ? ` — ${died} failed outright and advanced nothing` : ''}. PRs are ready-for-merge or escalated; check each status. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.`
+  : !advanced.length
+    ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced to a PR — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees is intact — re-run to resume; check the machine's load first, since a stall means agents could not show progress within the supervisor's window.`
+    : `${advanced.length}/${STORIES.length} cards advanced to a PR (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Those PRs are ready-for-merge or escalated; check each status. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.`
 return {
   // Contract provenance per template — `fallback-loose` is the logged signal
   // that a contract could not be derived and the loose skeleton was used (AC4).

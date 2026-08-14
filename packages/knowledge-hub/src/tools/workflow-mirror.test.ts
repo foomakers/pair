@@ -79,8 +79,11 @@ describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset
     //   skill an adopter does not have. Its `meta.whenToUse` states that prerequisite for the
     //   contributor who runs it here. `pair-analyze-pr-batch.test.mjs` is root-only for the
     //   same reason — a test file has nothing to drive without its engine. The two travel
-    //   together, and the shipped `pair-refine-batch.test.mjs` reads the unshipped engine only
-    //   when it is present, so an adopter's installed copy stays runnable (asserted there).
+    //   together, and the dataset's `pair-refine-batch.test.mjs` reads the unshipped engine only
+    //   when it is present, so the DATASET copy stays runnable (`node --test` in
+    //   `dataset/.workflows/`, asserted there). Not an adopter's install: the `workflows`
+    //   registry excludes every `*.test.mjs` (see the exclude list read below), so no adopter
+    //   ever receives these suites — the runnable-copy problem is the mirror's own.
     //
     // (The policy is recorded HERE, next to the guard that depends on it, rather than in a
     // dataset README: a README under `dataset/.workflows/` would itself install into every

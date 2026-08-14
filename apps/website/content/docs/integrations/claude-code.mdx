@@ -17,7 +17,7 @@ pair reaches your project through **one** mechanism: the CLI writes the knowledg
 |------|---------|--------------|
 | **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` → `/plugin install pair@pair` | Installs one skill: `/pair-assistant` |
 | **Assistant** | `/pair-assistant` | **Sets pair up when it is missing** — installs `pair-cli` (locally when your project has a `package.json`, otherwise via `npx`), creates the git repository if there is none, runs the install. **Then stays useful**: it turns a request into the right CLI command, and answers questions about your project from your own `.pair/llms.txt` |
-| **CLI** (tool-agnostic) | `pair-cli install` / `pair-cli update` | Writes `.pair/` (knowledge base + adoption files), `.claude/skills/`, and — for Claude Code — `.claude/workflows/` and `.claude/agents/` ([the batch engine](/docs/reference/batch-engine), whose agents can run `git`/`gh`) — also what you run directly if you skip the marketplace, or if you use Cursor, Windsurf or Copilot |
+| **CLI** (tool-agnostic) | `pair-cli install` / `pair-cli update` | Writes `.pair/` (knowledge base + adoption files), `.claude/skills/`, and `.claude/workflows/` + `.claude/agents/` ([the batch engine](/docs/reference/batch-engine), whose agents can run `git`/`gh`). Those last two install **unconditionally, on every project** — there is no install-time tool gate; they are simply inert files when the project is not driven by Claude Code — also what you run directly if you skip the marketplace, or if you use Cursor, Windsurf or Copilot |
 
 You are not choosing between two copies of the catalog: the marketplace never ships it. That is what makes the two safe to have installed at once — see below.
 
