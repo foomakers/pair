@@ -85,6 +85,16 @@ This is the **only** point where either capability runs a full-catalog `$scope: 
 
 See `/pair-process-bootstrap` Phase 3.5 for operational details.
 
+### Phase 2.6: Classification Delta (optional, opt-in)
+
+Runs after domain modeling, so the criticality rows are **proposed from** the subdomains and bounded contexts just mapped instead of asked from nothing.
+
+1. Offer the `## Criticality Table` and `## Overrides` sections of `tech/risk-matrix.md` — the two classification-delta sections nothing else authors (`/pair-capability-classify` self-proposes `## Tag Projection` only).
+2. Confirmed sections are written with the same propose-then-write-if-confirmed registry pattern `/pair-capability-classify` uses for its own section — registry state, so not via `/pair-capability-record-decision`.
+3. Strictly opt-in: the file is optional by design, so declining writes nothing and classification resolves from KB defaults. Never blocks bootstrap completion.
+
+See `/pair-process-bootstrap` Phase 3.6 for the question set and the write path.
+
 ### Phase 3: Finalization
 
 1. Verify consistency across all standards documents

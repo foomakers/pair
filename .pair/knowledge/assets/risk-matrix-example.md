@@ -18,7 +18,7 @@ Active: risk, cost
 | marketing-site | Low |
 | internal-admin-tool | Low |
 
-Any service/domain not listed here is treated as unclassified and resolves to High (conservative) for the service-criticality dimension — not to the file-absent Medium default.
+Rows are keyed by what a diff resolves to — the deployable that owns the touched files (workspace package, app, or top-level path scope); the names below are this fictitious project's services. Any service/domain not listed here is treated as unclassified and resolves to High (conservative) for the service-criticality dimension — not to the file-absent Medium default. A change touching **several** of these takes the **highest** of their criticalities (an unlisted one contributes that conservative High), so the dimension does not depend on which key the reader picks.
 
 ## Overrides
 

@@ -300,7 +300,7 @@ describe('the fallback tier points at a KB anchor that exists (AC3)', () => {
       ]) {
         expect(c, `${p}: missing fallback row ${row}`).toContain(row)
       }
-      // and it must NOT invent the two non-defaultable ones
+      // and it must NOT invent the non-defaultable ones
       expect(c).toMatch(/Deliberately absent from this table/)
     }
   })
