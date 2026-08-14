@@ -156,7 +156,11 @@ describe('US-219 AC3 — a workflow ships with the agents it dispatches to', () 
     const invoked = new Set<string>()
     for (const file of listFiles(workflowsDir).filter(f => f.endsWith('.js'))) {
       const src = readFileSync(join(workflowsDir, file), 'utf-8')
+      // TWO forms, because the corpus uses both and covering only one is how `/analyze-pr`
+      // got through: bolded `**/name**` and backticked `` `/name` ``. A bare `/word` stays
+      // out — it is usually a path fragment, and matching it would make this guard noise.
       for (const m of src.matchAll(/\*\*\/([a-z][a-z0-9-]+)\*\*/g)) invoked.add(m[1]!)
+      for (const m of src.matchAll(/`\/([a-z][a-z0-9-]{3,})`/g)) invoked.add(m[1]!)
     }
 
     const missing = [...invoked].filter(n => {
