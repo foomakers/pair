@@ -19,6 +19,10 @@ import {
   parseCatalogRow,
   checkCatalogContent,
   generateCatalogRows,
+  checkBatchEnginePaths,
+  checkBatchEngineAgents,
+  checkBatchEngineWorkflows,
+  batchEngineErrors,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -359,5 +363,164 @@ describe('generateCatalogRows + committed catalog parity (Check 2c integration)'
     const rows = generateCatalogRows(SKILLS_DIR)
     const errors = checkCatalogContent(rows, readFileSync(CATALOG, 'utf-8'))
     expect(errors, errors.join('\n')).toHaveLength(0)
+  })
+})
+
+// ── The batch-engine page's claims (#219, review of #432) ─────────────────────
+// Both gates were shipped without a unit test, so their failure branches had never been
+// executed — including the one for a DELETED registry, which cannot be reached from the real
+// config at all. The repo's own convention (ADL 2026-07-13) is that gate logic lives in tested
+// production modules, and every sibling check in this file has tests.
+describe('checkBatchEnginePaths', () => {
+  const doc = 'installs into `.claude/workflows/` and `.claude/agents/`'
+  const registries = {
+    workflows: { targets: [{ path: '.claude/workflows/' }] },
+    'agent-definitions': { targets: [{ path: '.claude/agents/' }] },
+  }
+
+  it('passes when the page names every install target', () => {
+    expect(checkBatchEnginePaths(registries, doc)).toEqual([])
+  })
+
+  it('fails when a registry target is RENAMED and the page still names the old one', () => {
+    const renamed = { ...registries, workflows: { targets: [{ path: '.claude/flows/' }] } }
+    expect(checkBatchEnginePaths(renamed, doc)).toEqual([
+      'batch-engine.mdx does not mention ".claude/flows/", where the "workflows" registry installs',
+    ])
+  })
+
+  it('fails when a registry is REMOVED entirely but the page still documents it', () => {
+    // Unreachable from the real config, which is exactly why it needs a test: this branch had
+    // never run, so a doc describing an install that no longer happens would have passed.
+    const rest = Object.fromEntries(
+      Object.entries(registries).filter(([name]) => name !== 'workflows'),
+    )
+    expect(checkBatchEnginePaths(rest, doc)).toEqual([
+      'asset_registries."workflows" is gone but batch-engine.mdx still documents it',
+    ])
+  })
+})
+
+describe('checkBatchEngineAgents', () => {
+  const agents = [
+    { name: 'pair-implementer', tools: 'Read, Edit, Write, Bash' },
+    { name: 'pair-reviewer', tools: 'Read, Grep, Bash' },
+  ]
+  const doc =
+    '`pair-implementer` holds `Read, Edit, Write, Bash`; `pair-reviewer` holds `Read, Grep, Bash`'
+
+  it('passes when every agent is named with its exact declared tools', () => {
+    expect(checkBatchEngineAgents(agents, doc)).toEqual([])
+  })
+
+  it('fails when an agent is not enumerated at all', () => {
+    const withThird = [...agents, { name: 'pair-contract-generator', tools: 'Read, Write, Bash' }]
+    expect(checkBatchEngineAgents(withThird, doc)).toEqual([
+      'batch-engine.mdx does not name the shipped agent "pair-contract-generator"',
+    ])
+  })
+
+  it('fails when an agent is named but its tool list is understated', () => {
+    // The measured case: the page said `pair-reviewer` holds `Bash` while its frontmatter
+    // declared five tools, so the note understated the authority an adopter installs.
+    const widened = [{ name: 'pair-reviewer', tools: 'Read, Grep, Glob, Bash, Skill' }]
+    expect(checkBatchEngineAgents(widened, doc)).toEqual([
+      'batch-engine.mdx does not state "pair-reviewer" tools as declared in its frontmatter: "Read, Grep, Glob, Bash, Skill"',
+    ])
+  })
+
+  it('reports an empty agent set rather than passing vacuously', () => {
+    // Deleting the dataset agents directory would otherwise turn the check green.
+    expect(checkBatchEngineAgents([], doc)).toEqual([
+      'no agent definitions found in the dataset — the batch-engine agent check is vacuous',
+    ])
+  })
+})
+
+// The AGENT table is derived; the WORKFLOW table beside it was not, so a third shipped
+// workflow — or a renamed one — left the page silently describing a set that no longer exists.
+// Same shape as the agent check, same reason: what installs is a fact, and a fact on this page
+// is read from the dataset rather than hand-copied.
+describe('checkBatchEngineWorkflows', () => {
+  const doc =
+    '| Workflow | What it drives |\n| --- | --- |\n| `pair-implement-batch` | … |\n| `pair-refine-batch` | … |\n\nprose about `pair-implementer` and `pair-reviewer`.'
+
+  it('passes when the page names every shipped workflow', () => {
+    expect(checkBatchEngineWorkflows(['pair-implement-batch', 'pair-refine-batch'], doc)).toEqual(
+      [],
+    )
+  })
+
+  it('fails when a shipped workflow is missing from the table', () => {
+    expect(
+      checkBatchEngineWorkflows(
+        ['pair-implement-batch', 'pair-refine-batch', 'pair-triage-batch'],
+        doc,
+      ),
+    ).toEqual(['batch-engine.mdx does not name the shipped workflow "pair-triage-batch"'])
+  })
+
+  it('fails when the page names a workflow that no longer ships', () => {
+    // The reverse direction matters as much: a page promising a workflow the adopter never
+    // receives is the same defect pointed the other way.
+    expect(checkBatchEngineWorkflows(['pair-implement-batch'], doc)).toEqual([
+      'batch-engine.mdx names "pair-refine-batch", which the workflows registry does not ship',
+    ])
+  })
+
+  // The reverse direction matched `` `pair-*-batch` `` only, so it could catch a stale name
+  // exactly when that name kept the `-batch` suffix. A workflow renamed or retired WITHOUT it
+  // — `pair-triage`, the shape a future non-batch workflow takes — stayed on the page promising
+  // an install nobody gets, which is the very failure the reverse check exists for. Reading the
+  // table's own rows answers it for any name, and keeps the agent table's `pair-*` names (which
+  // this check does not own) out of the scan.
+  it('fails when the page names a retired workflow whose name has no `-batch` suffix', () => {
+    const withTriage = `${doc}\n`.replace(
+      '| `pair-refine-batch` | … |',
+      '| `pair-refine-batch` | … |\n| `pair-triage` | … |',
+    )
+    expect(
+      checkBatchEngineWorkflows(['pair-implement-batch', 'pair-refine-batch'], withTriage),
+    ).toEqual(['batch-engine.mdx names "pair-triage", which the workflows registry does not ship'])
+  })
+
+  it('does not read the AGENT table or prose as workflow names', () => {
+    const withAgents = `${doc}\n\n| Agent | Tools |\n| --- | --- |\n| \`pair-implementer\` | … |\n| \`pair-reviewer\` | … |`
+    expect(
+      checkBatchEngineWorkflows(['pair-implement-batch', 'pair-refine-batch'], withAgents),
+    ).toEqual([])
+  })
+
+  it('reports an empty workflow set rather than passing vacuously', () => {
+    expect(checkBatchEngineWorkflows([], doc)).toEqual([
+      'no shipped workflows found in the dataset — the batch-engine workflow check is vacuous',
+    ])
+  })
+
+  it('reports a missing workflow TABLE rather than passing its reverse check vacuously', () => {
+    // Same loud-on-absence rule the sibling checks follow: with no table to read, the reverse
+    // direction proves nothing and must say so instead of returning green.
+    expect(checkBatchEngineWorkflows(['pair-implement-batch'], 'no table here')).toEqual([
+      'batch-engine.mdx does not name the shipped workflow "pair-implement-batch"',
+      'batch-engine.mdx has no workflow table — the reverse check (a name the registry does not ship) cannot run',
+    ])
+  })
+})
+
+// The page's own gate must not be disabled by deleting the page. `batchEngineErrors` returned
+// `[]` when the file was absent, so removing `batch-engine.mdx` turned every check above green
+// — and AC8 requires the note to EXIST. The same file states the loud-on-absence convention
+// twice for other checks; this one contradicted it.
+describe('batchEngineErrors on a missing page', () => {
+  it('fails loudly instead of self-disabling when the page is gone', () => {
+    const errors = batchEngineErrors({
+      BATCH_ENGINE_FILE: '/nowhere/batch-engine.mdx',
+      CLI_CONFIG: '/nowhere/config.json',
+      AGENTS_DIR: '/nowhere/.agents',
+      WORKFLOWS_DIR: '/nowhere/.workflows',
+    })
+    expect(errors).toEqual([
+      'Batch engine page not found: /nowhere/batch-engine.mdx — the batch-engine checks cannot run',
+    ])
   })
 })

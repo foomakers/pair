@@ -1,0 +1,4 @@
+# Derived machine contracts: regenerable from the KB template by the pair-contract-generator
+# agent, so they are a cache and never a source of truth — never commit one.
+*.contract.json
+*.draft.json

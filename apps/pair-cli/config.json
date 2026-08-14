@@ -43,6 +43,23 @@
         { "path": ".agents/skills/", "mode": "symlink" },
         { "path": ".windsurf/skills/", "mode": "symlink" }
       ]
+    },
+    "workflows": {
+      "source": ".workflows",
+      "behavior": "overwrite",
+      "exclude": [
+        "pair-implement-batch.test.mjs",
+        "pair-refine-batch.test.mjs",
+        "pair-contracts/ensure-contract.test.mjs"
+      ],
+      "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],
+      "description": "Batch orchestration workflows (Claude Code only; inert elsewhere)"
+    },
+    "agent-definitions": {
+      "source": ".agents",
+      "behavior": "overwrite",
+      "targets": [{ "path": ".claude/agents/", "mode": "canonical" }],
+      "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-contract-generator)"
     }
   }
 }

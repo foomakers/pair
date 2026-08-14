@@ -356,6 +356,71 @@ export function checkCatalogSync(allSkills: string[], catalog: string): string[]
   return errors
 }
 
+/**
+ * Check: the batch-engine page names the directories the registries actually install.
+ *
+ * AC8 asks for a note "derived from the dataset rather than hand-copied". The prose is
+ * hand-written, but the FACTS it states — which paths appear in an adopter's repo — are
+ * read from `config.json` here, so renaming a registry target without touching the page
+ * fails the gate instead of leaving a doc that points at a directory nobody gets.
+ */
+export function checkBatchEnginePaths(
+  registries: Record<string, { targets: { path: string }[] }>,
+  doc: string,
+): string[] {
+  const errors: string[] = []
+  for (const name of ['workflows', 'agent-definitions']) {
+    const reg = registries[name]
+    if (!reg) {
+      errors.push(`asset_registries."${name}" is gone but batch-engine.mdx still documents it`)
+      continue
+    }
+    for (const t of reg.targets) {
+      // Documented with or without the trailing slash — the path is the fact, not its spelling.
+      const bare = t.path.replace(/\/$/, '')
+      if (!doc.includes(bare)) {
+        errors.push(
+          `batch-engine.mdx does not mention "${t.path}", where the "${name}" registry installs`,
+        )
+      }
+    }
+  }
+  return errors
+}
+
+/**
+ * Check: the batch-engine page's authority note enumerates EVERY shipped agent, with the
+ * exact `tools:` list its frontmatter declares.
+ *
+ * The note is the only user-facing signal about what authority an adopter installs
+ * unconditionally, so an understated one is worse than none. Review of #432 found it claiming
+ * "three subagents" and then listing two, and describing `pair-reviewer` as holding `Bash`
+ * when it declares five tools — while `pair-contract-generator`, which holds `Write`, was
+ * absent. Reading the frontmatter here makes the claim gate-checked rather than hand-copied.
+ */
+export function checkBatchEngineAgents(
+  agents: { name: string; tools: string }[],
+  doc: string,
+): string[] {
+  const errors: string[] = []
+  if (agents.length === 0) {
+    // Without this, deleting the agents directory turns the check green.
+    return ['no agent definitions found in the dataset — the batch-engine agent check is vacuous']
+  }
+  for (const { name, tools } of agents) {
+    if (!doc.includes(name)) {
+      errors.push(`batch-engine.mdx does not name the shipped agent "${name}"`)
+      continue
+    }
+    if (!doc.includes(tools)) {
+      errors.push(
+        `batch-engine.mdx does not state "${name}" tools as declared in its frontmatter: "${tools}"`,
+      )
+    }
+  }
+  return errors
+}
+
 /** Check 3: every command dir has an anchor in commands.mdx. */
 export function checkCommandAnchors(commandDirs: string[], commandsDoc: string): string[] {
   const errors: string[] = []
@@ -526,7 +591,129 @@ function checkPaths(root: string) {
     // The plugin manifest lives at the PLUGIN root (the bootstrap corpus), not at the
     // repo root: the marketplace entry's `source` points there.
     PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
+    BATCH_ENGINE_FILE: join(DOCS_DIR, 'reference/batch-engine.mdx'),
+    CLI_CONFIG: join(root, 'apps/pair-cli/config.json'),
+    AGENTS_DIR: join(root, 'packages/knowledge-hub/dataset/.agents'),
+    WORKFLOWS_DIR: join(root, 'packages/knowledge-hub/dataset/.workflows'),
   }
+}
+
+/** `name:` and `tools:` from an agent definition's YAML frontmatter. */
+function readAgentFrontmatter(dir: string): { name: string; tools: string }[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.md'))
+    .sort()
+    .map(f => {
+      const src = readFileSync(join(dir, f), 'utf-8')
+      return {
+        name: /^name:\s*(.+)$/m.exec(src)?.[1]?.trim() ?? f.replace(/\.md$/, ''),
+        tools: /^tools:\s*(.+)$/m.exec(src)?.[1]?.trim() ?? '',
+      }
+    })
+}
+
+/** The shipped workflow NAMES: every `.js` at the root of the dataset workflows dir, minus the
+ * dry-run suites the registry excludes. Names, not paths — the page's table is keyed by name. */
+function readShippedWorkflowNames(dir: string, exclude: string[] = []): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.js') && !exclude.includes(f))
+    .map(f => f.replace(/\.js$/, ''))
+    .sort()
+}
+
+/**
+ * Check: the batch-engine page's WORKFLOW table enumerates every shipped workflow, and no more.
+ *
+ * The agent table beside it is derived; this one was hand-maintained, so a third shipped
+ * workflow (or a renamed one) left the page describing a set that no longer exists — and the
+ * page's whole job is to say what an adopter receives. Both directions are checked: a shipped
+ * workflow missing from the table understates the install, and a table naming a workflow that
+ * no longer ships promises something nobody gets.
+ */
+/**
+ * The first cell of every row of the page's WORKFLOW table, located by that table's own header.
+ * Scoped rather than document-wide: the agent table below it has the same row shape and its
+ * `pair-*` names are not workflows, so a whole-document scan would either false-positive on
+ * them or (as it did) be narrowed to a name suffix and stop catching renames.
+ */
+function workflowTableRows(doc: string): string[] {
+  const lines = doc.split('\n')
+  const start = lines.findIndex(l => /^\|\s*Workflow\s*\|/i.test(l))
+  if (start === -1) return []
+  const names: string[] = []
+  for (const line of lines.slice(start + 1)) {
+    if (!line.trim().startsWith('|')) break
+    const name = /^\|\s*`([^`]+)`/.exec(line)?.[1]
+    if (name) names.push(name.trim())
+  }
+  return names
+}
+
+export function checkBatchEngineWorkflows(shipped: string[], doc: string): string[] {
+  if (shipped.length === 0) {
+    // Without this, deleting the dataset workflows directory turns the check green.
+    return [
+      'no shipped workflows found in the dataset — the batch-engine workflow check is vacuous',
+    ]
+  }
+  const errors: string[] = []
+  for (const name of shipped)
+    if (!doc.includes(name))
+      errors.push(`batch-engine.mdx does not name the shipped workflow "${name}"`)
+  // The reverse, read off the TABLE's own rows rather than off the whole document. Matching
+  // `` `pair-*-batch` `` anywhere caught a stale name only while it kept the `-batch` suffix:
+  // a future `pair-triage` left in the table after it stopped shipping passed, which is exactly
+  // the promise-what-nobody-gets defect this direction exists to catch. Reading the rows makes
+  // it name-shape-agnostic AND keeps the agent table's own `pair-*` names — which this check
+  // does not own — out of the scan.
+  const rows = workflowTableRows(doc)
+  if (rows.length === 0)
+    errors.push(
+      'batch-engine.mdx has no workflow table — the reverse check (a name the registry does not ship) cannot run',
+    )
+  for (const name of rows)
+    if (!shipped.includes(name) && !errors.some(e => e.includes(name)))
+      errors.push(`batch-engine.mdx names "${name}", which the workflows registry does not ship`)
+  return [...new Set(errors)]
+}
+
+/**
+ * The batch-engine page states WHERE `pair install` puts the engine, WHAT ships, and WHAT
+ * authority arrives. Every one of those claims is read back from the dataset and the registries
+ * rather than trusted, so renaming a target — or adding a workflow — without touching the page
+ * fails here instead of leaving a doc pointing at something nobody gets.
+ */
+export function batchEngineErrors(paths: {
+  BATCH_ENGINE_FILE: string
+  CLI_CONFIG: string
+  AGENTS_DIR: string
+  WORKFLOWS_DIR: string
+}): string[] {
+  // LOUD on absence, like every sibling check in this file. Returning `[]` here meant deleting
+  // `batch-engine.mdx` turned its own gate green — the page whose existence AC8 requires
+  // disabling the checks that hold it honest, which is the one failure direction a staleness
+  // gate must never have.
+  if (!existsSync(paths.BATCH_ENGINE_FILE))
+    return [
+      `Batch engine page not found: ${paths.BATCH_ENGINE_FILE} — the batch-engine checks cannot run`,
+    ]
+  const cliConfig = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
+    asset_registries: Record<string, { targets: { path: string }[]; exclude?: string[] }>
+  }
+  const doc = readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8')
+  return [
+    ...checkBatchEnginePaths(cliConfig.asset_registries, doc),
+    ...checkBatchEngineAgents(readAgentFrontmatter(paths.AGENTS_DIR), doc),
+    ...checkBatchEngineWorkflows(
+      readShippedWorkflowNames(
+        paths.WORKFLOWS_DIR,
+        cliConfig.asset_registries['workflows']?.exclude ?? [],
+      ),
+      doc,
+    ),
+  ]
 }
 
 export function runAllChecks(root: string): RunResult {
@@ -559,6 +746,8 @@ export function runAllChecks(root: string): RunResult {
 
   // Check 2: catalog sync (both directions)
   const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
+  errors.push(...batchEngineErrors(paths))
+
   errors.push(...checkCatalogSync(allSkills, catalog))
 
   // Check 2c: catalog row CONTENT (Command + Description) single-sourced from the dataset

@@ -1,0 +1,112 @@
+---
+title: Batch engine
+description: The workflow that drives a batch of cards to review-approved PRs — what installs, what runs it, and what happens under other tools.
+---
+
+`pair install` writes two directories that carry the batch engine:
+
+| Installed to         | What it is                                        |
+| -------------------- | ------------------------------------------------- |
+| `.claude/workflows/` | the orchestration workflows                       |
+| `.claude/agents/`    | the agent definitions those workflows dispatch to |
+
+They install **unconditionally**, on every project, whatever tool you use.
+
+Two workflows ship:
+
+| Workflow               | What it drives                                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `pair-implement-batch` | a batch of cards, each to a review-approved PR — implement, open the PR, then an independent review ↔ fix loop until it converges         |
+| `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. By its dispatched prompts it writes to the PM tool only and touches no file in the repo — that is process, not permission: see the note below the agent table |
+
+`pair-refine-batch` deliberately carries neither of the two knobs `pair-implement-batch` has.
+It has **no parallelism cap** because each card costs one API round trip and holds no worktree,
+no branch and no CPU — the cap exists on the implement engine because a card there occupies a
+working tree. And it has **no `args.pipeline`** because it drives pair's own refinement
+lifecycle by name (`/pair-capability-classify`, `/pair-process-refine-story`, …) rather than a
+configurable one; generalizing it is a separate change, and the file says so at the top.
+
+## Workflows are Claude-Code-specific
+
+The engine is a workflow script driven by Claude Code's orchestration primitives — it spawns
+subagents by type and runs their steps in parallel. No other tool executes it today.
+
+**Under any other tool the files are inert.** They are never read, never executed, and cost
+about **150 KB** on disk — mostly the implement engine itself, which carries its rationale
+inline. The workflows' own dry-run test suites are development artifacts and are **excluded from
+the install**, so they are not part of that figure. Nothing errors.
+
+## What the agent layer can do
+
+Under Claude Code they are not inert, and it is worth knowing exactly what arrives.
+
+`.claude/agents/` declares three subagents, each with real tool access:
+
+| Agent                     | Tools it declares                          | What that lets it do                                                        |
+| ------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
+| `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
+| `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); by its own instructions it does not edit, commit or merge |
+| `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
+
+**One more agent type arrives with no definition of ours: `general-purpose`.** `pair-refine-batch`
+spawns it at both of its stages. It is a host built-in of Claude Code, not a file `pair install`
+writes, so it is not in the table above — and that is precisely why it is worth naming here: it
+carries your tool configuration's **unrestricted** set, `Bash` included, which is wider than any
+of the three definitions above. What keeps that engine to PM-tool writes is the read-only clause
+in every prompt it dispatches, not a tool grant.
+
+**Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
+declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
+authority you install. What keeps `pair-reviewer` read-only and keeps merge out of every run is
+instruction — the engine's dispatched prompts and each agent's own definition — not the tool
+grant.
+
+So after an `install` or `update`, your project contains definitions that — when you invoke a
+batch — can create worktrees, write files, commit, push branches and open pull requests under
+your credentials. The `Tools it declares` column is checked against each agent's frontmatter by
+the docs staleness gate, so it cannot understate what arrives; the column beside it is prose the
+gate does not check.
+
+They do nothing on their own. Nothing runs until you start a batch.
+
+**No prompt this engine dispatches instructs a merge, on any path, and no configuration enables
+one.** Every run stops at PR-review-approved and reports `ready-for-merge`, leaving the merge
+decision to you — asserted by a dry-run test that inspects every dispatched prompt and every
+returned status.
+
+Every shipped name carries a `pair-` prefix — file names, agent names, and the workflows'
+registry names (`meta.name`) alike — so neither an existing `.claude/agents/reviewer.md` nor
+your own `implement-batch` workflow is overwritten or shadowed by one of ours.
+
+They install anyway rather than being gated on the tool detected at install time, because that
+detection is a snapshot: a user who adopts Claude Code later would need a full re-install rather
+than an `update` to acquire files that were always harmless to have.
+
+## The degraded path
+
+Without a workflow runtime you drive the same lifecycle by hand, one card at a time. The
+per-step skills are the same ones the engine composes, and they work standalone under any tool:
+
+1. `/pair-process-implement` — implement the card, test-first, on its own branch
+2. `/pair-capability-publish-pr` — open or update the PR, run the tier-resolved gate
+3. `/pair-process-review` — review it independently, from the acceptance criteria and the diff
+4. `/pair-process-implement` again — apply the findings, then re-review
+
+What you lose is the orchestration, not the process: parallelism across cards, the isolated
+worktree per card, the audit log that survives a context reset, and the convergence rule that
+decides when a card is done.
+
+## Merge is always the human gate
+
+No configuration enables an autonomous merge. The engine stops at a review-approved PR and
+reports it; the decision to merge is yours, on every path — convergence, escalation, or failure.
+
+## Configuring it
+
+The engine ships with pair's own values as defaults, so it runs in a pair-shaped project with no
+configuration. A project whose skills, worktree root or base branch differ passes
+`args.pipeline` to override them per key; anything left unmentioned keeps its default.
+
+An unknown key, an empty override, or a `maxParallelism` below 1 is rejected loudly rather than
+ignored — a discarded setting would run the batch on values you did not choose while reporting
+success.

@@ -118,6 +118,19 @@ module.exports = [
     },
   },
   {
-    ignores: ['dist/', 'build/', 'node_modules/', '*.config.js', '*.config.ts', 'playwright/', 'test-results/'],
+    ignores: [
+      'dist/',
+      'build/',
+      'node_modules/',
+      '*.config.js',
+      '*.config.ts',
+      'playwright/',
+      'test-results/',
+      // Shipped workflow artifacts (#219). They are a BYTE-IDENTICAL mirror of
+      // `.claude/workflows/`, which sits outside every package and is therefore unlinted.
+      // Linting only the dataset copy would force an edit that breaks the mirror guard —
+      // the two copies must stay one artifact, so they share one lint policy: none.
+      'dataset/.workflows/',
+    ],
   },
 ]

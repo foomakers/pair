@@ -7,3 +7,16 @@ coverage/
 **/.cache/
 CHANGELOG.md
 TODO.md
+
+# Shipped agent definitions (#219) — a BYTE-IDENTICAL mirror of `.claude/agents/`, which lives
+# outside every package and is therefore linted by nothing (the root `mdlint:check` adds only a
+# non-recursive `'*.md'`). markdownlint runs with `--dot` over `**/*.md` inside each package, so
+# without this entry only the DATASET copy is linted: a rule violation would be rewritten there
+# by `pnpm format` and nowhere else, and the byte-equality mirror test would then fail with no
+# formatter able to fix both sides. Same reason `.prettierignore`, the eslint config and the
+# knowledge-hub vitest config all exclude `dataset/.workflows/` — shipping a directory into a
+# package brought it under tool scopes its root twin is not under, and they must agree.
+#
+# Anchored (the pattern contains a slash) to the directory markdownlint runs in, i.e. the
+# package being linted — `packages/knowledge-hub`.
+dataset/.agents/

@@ -45,6 +45,7 @@ CI_TESTS=(
   "pr-state-flow.sh"
   "pr-tree-resolve.sh"
   "format-ignore-delegation.sh"
+  "batch-engine-install.sh"
   "registry-exclude.sh"
   "no-dataset-in-artifacts.sh"
   "runner-outcomes.sh"

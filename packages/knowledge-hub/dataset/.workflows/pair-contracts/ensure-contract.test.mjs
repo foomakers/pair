@@ -1,0 +1,317 @@
+// Tests for the deterministic side of the md → contract.json pattern (#292):
+// hashing, cache decision (fresh/stale/missing/invalid), contract validation,
+// stamping, and the CLI fixture dry-run (cache-hit / cache-miss / fallback path).
+// Run (from repo root): `pnpm workflows:test` — i.e. `cd .claude/workflows && node --test`.
+// The `cd` is deliberate. A QUOTED glob is a Node 22 feature; Node 20 (the major
+// `release.yml` pins) reads it as a literal path and exits non-zero. A DIRECTORY argument
+// is the reverse: it recurses on 20 and is resolved as a module on 26. Bare `node --test`
+// with no positional argument discovers recursively from the cwd on every major from 18 up,
+// and it picks up a new test file (or a new subdirectory) with no script edit.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
+import {
+  hashContent,
+  decide,
+  validateContract,
+  schemaErrors,
+  stampContract,
+} from './ensure-contract.mjs'
+
+const CLI = fileURLToPath(new URL('./ensure-contract.mjs', import.meta.url))
+
+// ── fixtures ───────────────────────────────────────────────────────────────
+const TEMPLATE_V1 = '# Code Review Template\n\n- [ ] **Approved**\n'
+const TEMPLATE_V2 = '# Code Review Template\n\n- [ ] **Approved**\n- [ ] **Rejected**\n'
+
+// NB: the verdict/severity values below are INTENTIONALLY ARBITRARY — this suite
+// tests the mechanism (hash / decide / validate / stamp) and is deliberately
+// decoupled from the real code-review template. They are NOT the canonical vocab
+// (canonical is APPROVED / CHANGES-REQUESTED / TECH-DEBT); do not treat as an example.
+function goodDraft() {
+  return {
+    vocabulary: {
+      verdictOptions: ['Approved', 'Approved with Comments', 'Request Changes', 'Comment Only'],
+      severities: ['Critical', 'Major', 'Minor'],
+      findingFields: ['location', 'severity', 'description', 'recommendation'],
+    },
+    // Explicit ordinals, HIGHER = MORE SEVERE. Deliberately NOT parallel to the
+    // `severities` array's order in any way the consumer could exploit: order is not a
+    // contract term, this map is.
+    severityRanks: { Critical: 3, Major: 2, Minor: 1 },
+    schema: {
+      type: 'object',
+      properties: {
+        verdict: {
+          type: 'string',
+          enum: ['Approved', 'Approved with Comments', 'Request Changes', 'Comment Only'],
+        },
+        needsHumanDecision: { type: 'boolean' },
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              location: { type: 'string' },
+              severity: { type: 'string', enum: ['Critical', 'Major', 'Minor'] },
+              description: { type: 'string' },
+              recommendation: { type: 'string' },
+              nonActionable: { type: 'boolean' },
+            },
+          },
+        },
+      },
+      required: ['verdict'],
+    },
+  }
+}
+
+function stamped(templateContent = TEMPLATE_V1) {
+  return stampContract(goodDraft(), {
+    source: 'template.md',
+    sourceHash: hashContent(templateContent),
+  })
+}
+
+// ── hashContent ────────────────────────────────────────────────────────────
+test('hashContent is deterministic and prefixed', () => {
+  assert.equal(hashContent(TEMPLATE_V1), hashContent(TEMPLATE_V1))
+  assert.match(hashContent(TEMPLATE_V1), /^sha256:[0-9a-f]{64}$/)
+})
+
+test('hashContent differs when the template changes', () => {
+  assert.notEqual(hashContent(TEMPLATE_V1), hashContent(TEMPLATE_V2))
+})
+
+// ── decide (cache decision) ────────────────────────────────────────────────
+test('decide: missing contract → missing (cache-miss, generate)', () => {
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: null }), 'missing')
+})
+
+test('decide: unchanged template hash → fresh (cache-hit, AC2)', () => {
+  const raw = JSON.stringify(stamped(TEMPLATE_V1))
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: raw }), 'fresh')
+})
+
+test('decide: changed template hash → stale (regenerate, AC3)', () => {
+  const raw = JSON.stringify(stamped(TEMPLATE_V1))
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V2), contractRaw: raw }), 'stale')
+})
+
+test('decide: non-JSON contract → invalid (fallback path, AC4)', () => {
+  assert.equal(
+    decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: '{not json' }),
+    'invalid',
+  )
+})
+
+test('decide: structurally bad contract → invalid (fallback path, AC4)', () => {
+  const bad = JSON.stringify({
+    $meta: { source: 't.md', sourceHash: hashContent(TEMPLATE_V1) },
+    schema: { type: 'nope' },
+  })
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: bad }), 'invalid')
+})
+
+// ── validateContract ───────────────────────────────────────────────────────
+test('validateContract accepts a stamped well-formed contract', () => {
+  const { ok, errors } = validateContract(stamped())
+  assert.deepEqual(errors, [])
+  assert.equal(ok, true)
+})
+
+test('validateContract rejects a missing/invalid $meta', () => {
+  const c = stamped()
+  delete c.$meta
+  assert.equal(validateContract(c).ok, false)
+  const c2 = stamped()
+  c2.$meta.sourceHash = 'md5:abc'
+  assert.equal(validateContract(c2).ok, false)
+})
+
+test('validateContract rejects empty or non-string vocabulary entries', () => {
+  const c = stamped()
+  c.vocabulary.severities = []
+  assert.equal(validateContract(c).ok, false)
+  const c2 = stamped()
+  c2.vocabulary = {}
+  assert.equal(validateContract(c2).ok, false)
+})
+
+test('validateContract rejects a contract missing the canonical verdictOptions key', () => {
+  const c = stamped()
+  delete c.vocabulary.verdictOptions
+  const { ok, errors } = validateContract(c)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('vocabulary.verdictOptions')))
+})
+
+test('validateContract rejects a contract missing the canonical severities key', () => {
+  const c = stamped()
+  delete c.vocabulary.severities
+  const { ok, errors } = validateContract(c)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('vocabulary.severities')))
+})
+
+test('decide: contract missing canonical vocabulary keys → invalid (fallback path, AC4)', () => {
+  const draft = goodDraft()
+  delete draft.vocabulary.severities
+  const raw = JSON.stringify(
+    stampContract(draft, { source: 't.md', sourceHash: hashContent(TEMPLATE_V1) }),
+  )
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: raw }), 'invalid')
+})
+
+// ── severityRanks: the rank is EXPLICIT, never the array's position ────────
+// Found in review of #432 (round 6): consumers ranked severities by their POSITION in
+// `vocabulary.severities`, an order this validator never required and the generator was
+// never asked to produce — so an ascending template (`Low … Blocker`) inverted a merge
+// floor and waved an unfixed `Blocker` through. Order is not a contract; an explicit
+// integer per severity is. Malformed ⇒ rejected here, at the source, so the consumer never
+// has to choose between guessing and running.
+test('validateContract rejects a contract with no severityRanks', () => {
+  const c = stamped()
+  delete c.severityRanks
+  const { ok, errors } = validateContract(c)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('severityRanks')))
+})
+
+test('validateContract rejects severityRanks that do not cover exactly vocabulary.severities', () => {
+  const missing = stamped()
+  delete missing.severityRanks.Minor
+  assert.equal(validateContract(missing).ok, false)
+  const extra = stamped()
+  extra.severityRanks.Nit = 0
+  const { ok, errors } = validateContract(extra)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('Nit')))
+})
+
+test('validateContract rejects non-integer and duplicated ranks (an ambiguous scale)', () => {
+  const fractional = stamped()
+  fractional.severityRanks.Major = 2.5
+  assert.equal(validateContract(fractional).ok, false)
+  const stringy = stamped()
+  stringy.severityRanks.Major = '3'
+  assert.equal(validateContract(stringy).ok, false)
+  const dup = stamped()
+  dup.severityRanks.Major = dup.severityRanks.Minor
+  const { ok, errors } = validateContract(dup)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => /duplicate|unique/i.test(e)))
+})
+
+test('decide: a cached contract from before severityRanks → invalid (regenerate, never reuse)', () => {
+  // The contract is hash-cached: without this, a pre-ordinal artifact stays `fresh` forever
+  // (the template did not change) and the consumer keeps ranking blind.
+  const draft = goodDraft()
+  delete draft.severityRanks
+  const raw = JSON.stringify(
+    stampContract(draft, { source: 't.md', sourceHash: hashContent(TEMPLATE_V1) }),
+  )
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: raw }), 'invalid')
+})
+
+test('validateContract rejects non-object input', () => {
+  assert.equal(validateContract(null).ok, false)
+  assert.equal(validateContract([1]).ok, false)
+  assert.equal(validateContract('x').ok, false)
+})
+
+// ── schemaErrors (generic JSON Schema shape) ───────────────────────────────
+test('schemaErrors: valid nested schema has no errors', () => {
+  assert.deepEqual(schemaErrors(goodDraft().schema), [])
+})
+
+test('schemaErrors: invalid type keyword', () => {
+  assert.ok(schemaErrors({ type: 'strnig' }).length > 0)
+})
+
+test('schemaErrors: empty enum rejected', () => {
+  assert.ok(schemaErrors({ type: 'string', enum: [] }).length > 0)
+})
+
+test('schemaErrors: required must name declared properties', () => {
+  const s = { type: 'object', properties: { a: { type: 'string' } }, required: ['b'] }
+  assert.ok(schemaErrors(s).length > 0)
+})
+
+test('schemaErrors: recurses into array items and object properties', () => {
+  const s = { type: 'object', properties: { xs: { type: 'array', items: { type: 'bogus' } } } }
+  assert.ok(schemaErrors(s).some(e => e.includes('items')))
+})
+
+// ── stampContract ──────────────────────────────────────────────────────────
+test('stampContract embeds source, hash and generation metadata', () => {
+  const c = stampContract(goodDraft(), { source: 'x.md', sourceHash: hashContent(TEMPLATE_V1) })
+  assert.equal(c.$meta.source, 'x.md')
+  assert.equal(c.$meta.sourceHash, hashContent(TEMPLATE_V1))
+  assert.ok(c.$meta.generatedAt)
+})
+
+// ── CLI fixture dry-run (end-to-end cache lifecycle) ───────────────────────
+function cli(...argv) {
+  const r = spawnSync(process.execPath, [CLI, ...argv], { encoding: 'utf8' })
+  return { code: r.status, out: r.stdout.trim(), err: r.stderr.trim() }
+}
+
+test('CLI dry-run: missing → write → fresh (cache-hit) → template change → stale → corrupt → invalid', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'contract-292-'))
+  try {
+    const template = join(dir, 'template.md')
+    const contract = join(dir, 'out.contract.json')
+    const draft = join(dir, 'out.contract.draft.json')
+    writeFileSync(template, TEMPLATE_V1)
+
+    // cache-miss: no contract yet
+    let r = cli('check', template, contract)
+    assert.equal(r.code, 0)
+    assert.equal(JSON.parse(r.out).status, 'missing')
+
+    // generator writes a draft; write validates, stamps hash, persists
+    writeFileSync(draft, JSON.stringify(goodDraft()))
+    r = cli('write', template, contract, draft)
+    assert.equal(r.code, 0, r.err)
+    assert.equal(JSON.parse(r.out).status, 'written')
+    const written = JSON.parse(readFileSync(contract, 'utf8'))
+    assert.equal(written.$meta.sourceHash, hashContent(readFileSync(template)))
+
+    // cache-hit: unchanged template → fresh, no regeneration needed (AC2)
+    r = cli('check', template, contract)
+    assert.equal(JSON.parse(r.out).status, 'fresh')
+
+    // template changed → stale, regenerate (AC3)
+    writeFileSync(template, TEMPLATE_V2)
+    r = cli('check', template, contract)
+    assert.equal(JSON.parse(r.out).status, 'stale')
+
+    // malformed contract → invalid; the workflow falls back to the loose schema (AC4)
+    writeFileSync(contract, '{broken')
+    r = cli('check', template, contract)
+    assert.equal(JSON.parse(r.out).status, 'invalid')
+
+    // write rejects an invalid draft (never persists garbage)
+    writeFileSync(draft, JSON.stringify({ schema: { type: 'bogus' } }))
+    r = cli('write', template, contract, draft)
+    assert.notEqual(r.code, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('CLI: missing template is a hard error', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'contract-292-'))
+  try {
+    const r = cli('check', join(dir, 'nope.md'), join(dir, 'c.json'))
+    assert.notEqual(r.code, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

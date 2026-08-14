@@ -61,6 +61,19 @@ jobs:
             corepack enable || true
             corepack prepare pnpm@10.15.0 --activate || true
           fi
+
+      # Pinned to the SAME major `release.yml` pins. Without this step the job ran on the
+      # runner's default Node (>=22) while the release pipeline ran on 20, so a command that
+      # works on one major and not the other passed every required check on the PR and went
+      # red only at release — measured on #219's `workflows:test`, which used a quoted glob
+      # (a Node 22 feature) and could not have been caught here. Keep the two in lockstep:
+      # raising this line means raising release.yml and `engines.node` together.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
       - name: Install dependencies
         run: pnpm install
       - name: Load environment variables from GitHub Secrets
@@ -94,6 +107,12 @@ jobs:
         run: pnpm skills:conformance
       - name: Run duplication check
         run: pnpm dup:check
+      # The batch engine ships as a product artifact (#219). Its dry-run suite runs inside
+      # `pnpm quality-gate`, which only `release.yml` invokes — so without this step a commit
+      # breaking the engine passes every required check on its PR and surfaces at release.
+      # ~0.5s, no build needed.
+      - name: Run workflow dry-run tests
+        run: pnpm workflows:test
       - name: Install Playwright browsers
         run: |
           pnpm --filter @pair/brand exec playwright install --with-deps chromium

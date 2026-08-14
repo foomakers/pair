@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import {
   validateRegistry,
   detectOverlappingTargets,
@@ -6,6 +8,7 @@ import {
   checkTargetEmptiness,
   checkTargetsEmptiness,
 } from './validation'
+import { getReservedPaths, detectReservedPathOverlap } from './reserved-paths'
 import { RegistryConfig } from './resolver'
 import { createTestFs } from '#test-utils'
 
@@ -490,5 +493,64 @@ describe('registry validation - targets', () => {
     }
     const errors = validateRegistry('agents', config)
     expect(errors.some(e => e.includes('transform'))).toBe(true)
+  })
+})
+
+describe('US-219 — the workflow + agent registries are installable and reserved-path safe', () => {
+  const config = JSON.parse(readFileSync(join(__dirname, '../../config.json'), 'utf-8')) as {
+    asset_registries: Record<string, RegistryConfig>
+  }
+
+  it('registers both the workflows and the agent execution layer', () => {
+    // A workflow installed without the agent definitions its `agentType`s resolve to
+    // cannot run: the pair is the unit, not the workflow alone (AC3).
+    expect(config.asset_registries['workflows']).toBeDefined()
+    expect(config.asset_registries['agent-definitions']).toBeDefined()
+  })
+
+  it('neither target overlaps the reserved working area', () => {
+    // D14: `.pair/working` holds checkpoints and audit logs that survive context resets.
+    // A registry writing there would have an install wipe a run's own audit trail.
+    const registries = config.asset_registries
+    const result = validateAllRegistries(registries)
+    expect(result.valid, JSON.stringify(result.errors)).toBe(true)
+
+    const mine = Object.fromEntries(
+      ['workflows', 'agent-definitions'].map(n => [n, registries[n]!]),
+    )
+    expect(detectReservedPathOverlap(mine, getReservedPaths('.pair/working'))).toEqual([])
+  })
+
+  it('installs unconditionally, with no tool-gating at install time (ADR-017 §5)', () => {
+    // Workflows are Claude-Code-specific and inert elsewhere. Gating the install on the
+    // detected tool would make the artifact absent exactly where a later `pair update`
+    // could not add it back without re-running detection.
+    // The gate is on the registry's STRUCTURE — the keys that could carry a condition — not on
+    // its serialized text. Grepping the whole JSON swept in `description`, where "Claude Code
+    // only" and "workflows" contain three of the four words: the assertion passed for the wrong
+    // reason and would have failed on a harmless wording change while a real `when:` key added
+    // beside a reworded description slipped through.
+    const CONDITION_KEYS = [
+      'tool',
+      'tools',
+      'gate',
+      'gated',
+      'when',
+      'condition',
+      'conditions',
+      'if',
+      'requires',
+    ]
+    const gatingKeysIn = (o: object) =>
+      Object.keys(o).filter(k => CONDITION_KEYS.includes(k.toLowerCase()))
+    for (const name of ['workflows', 'agent-definitions']) {
+      const reg = config.asset_registries[name]!
+      expect(reg.targets.length).toBe(1)
+      expect(
+        gatingKeysIn(reg),
+        `${name} carries install-time gating keys: ${gatingKeysIn(reg).join(', ')}`,
+      ).toEqual([])
+      for (const t of reg.targets) expect(gatingKeysIn(t)).toEqual([])
+    }
   })
 })
