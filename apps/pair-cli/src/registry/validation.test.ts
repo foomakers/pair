@@ -525,10 +525,32 @@ describe('US-219 — the workflow + agent registries are installable and reserve
     // Workflows are Claude-Code-specific and inert elsewhere. Gating the install on the
     // detected tool would make the artifact absent exactly where a later `pair update`
     // could not add it back without re-running detection.
+    // The gate is on the registry's STRUCTURE — the keys that could carry a condition — not on
+    // its serialized text. Grepping the whole JSON swept in `description`, where "Claude Code
+    // only" and "workflows" contain three of the four words: the assertion passed for the wrong
+    // reason and would have failed on a harmless wording change while a real `when:` key added
+    // beside a reworded description slipped through.
+    const CONDITION_KEYS = [
+      'tool',
+      'tools',
+      'gate',
+      'gated',
+      'when',
+      'condition',
+      'conditions',
+      'if',
+      'requires',
+    ]
+    const gatingKeysIn = (o: object) =>
+      Object.keys(o).filter(k => CONDITION_KEYS.includes(k.toLowerCase()))
     for (const name of ['workflows', 'agent-definitions']) {
       const reg = config.asset_registries[name]!
       expect(reg.targets.length).toBe(1)
-      expect(JSON.stringify(reg)).not.toMatch(/tool|gate|when|condition/i)
+      expect(
+        gatingKeysIn(reg),
+        `${name} carries install-time gating keys: ${gatingKeysIn(reg).join(', ')}`,
+      ).toEqual([])
+      for (const t of reg.targets) expect(gatingKeysIn(t)).toEqual([])
     }
   })
 })

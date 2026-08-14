@@ -225,10 +225,25 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
   const agentsDir = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.agents')
   const workflowsDataset = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.workflows')
   const datasetRoot = join(REPO_ROOT, 'packages/knowledge-hub/dataset')
-  // [dir, file] over every shipped artifact of both kinds.
+  // [dir, file] over every artifact that actually INSTALLS, of both kinds.
+  //
+  // The registry's `exclude` list is applied here rather than ignored: the dry-run suites live
+  // in the dataset (they are the dogfood copy's tests) but no adopter ever receives them, so
+  // scanning them would fail these guards for references that reach nobody — and it would make
+  // the guards' own subject wrong. `installs` is the invariant word in all three checks below;
+  // "is in the dataset directory" is not the same thing. The exclude list itself is kept
+  // complete and free of stale entries by the two checks in the section above.
+  const workflowExcludes: string[] =
+    (
+      JSON.parse(readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8')) as {
+        asset_registries: Record<string, { exclude?: string[] }>
+      }
+    ).asset_registries['workflows']?.exclude ?? []
   const shippedArtifacts = (): [string, string][] => [
     ...listFiles(agentsDir).map(f => [agentsDir, f] as [string, string]),
-    ...listFiles(workflowsDataset).map(f => [workflowsDataset, f] as [string, string]),
+    ...listFiles(workflowsDataset)
+      .filter(f => !workflowExcludes.includes(f))
+      .map(f => [workflowsDataset, f] as [string, string]),
   ]
 
   it('every dataset-relative path a shipped artifact names exists in the dataset', () => {
@@ -274,15 +289,38 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
     ).toEqual([])
   })
 
-  it('no shipped agent cites this repo issue numbers', () => {
+  it('no shipped artifact cites this repo issue numbers where an adopter can read them', () => {
     // `#256` means nothing in an adopter's tracker — at best it resolves to an unrelated
     // issue of theirs, which is worse than a dangling reference.
+    //
+    // Scanned over BOTH shipped trees, not `.agents` alone: a workflow's `meta.description` /
+    // `meta.whenToUse` and its dispatched prompt strings are as adopter-facing as an agent
+    // definition — `whenToUse` is the ONLY contract an adopter reads for a workflow.
+    //
+    // A workflow's source COMMENTS are deliberately out of scope, and this is the one
+    // exception in this suite. They carry the measured rationale for each guard ("#401: the
+    // input is validated LOUDLY", "measured in review round 7") — engineering history that a
+    // maintainer reading the source wants and that no agent, adopter-side or otherwise, is
+    // ever shown: nothing interpolates a comment into a prompt. Stripping the numbers there
+    // would delete the provenance of every rule without making anything reachable safer. So
+    // the line is drawn at REACHABILITY, not at the file: a citation may live in a comment,
+    // never in a string an adopter or their agent reads.
+    const inComment = (line: string) => /^\s*(?:\/\/|\*|\/\*)/.test(line)
     const cited: string[] = []
-    for (const file of listFiles(agentsDir)) {
-      const src = readFileSync(join(agentsDir, file), 'utf-8')
-      // `#<number>` is the documented placeholder form and stays; a literal number does not.
-      for (const m of src.matchAll(/(?:^|\s)#(\d{2,4})\b/g)) cited.push(`${file} -> #${m[1]}`)
+    for (const [dir, file] of shippedArtifacts()) {
+      const src = readFileSync(join(dir, file), 'utf-8')
+      src.split('\n').forEach((line, i) => {
+        if (file.endsWith('.js') || file.endsWith('.mjs')) {
+          if (inComment(line)) return
+        }
+        // `#<number>` is the documented placeholder form and stays; a literal number does not.
+        for (const m of line.matchAll(/(?:^|\s)#(\d{2,4})\b/g))
+          cited.push(`${file}:${i + 1} -> #${m[1]}`)
+      })
     }
-    expect(cited, `shipped agents cite this repo's issues:\n  ${cited.join('\n  ')}`).toEqual([])
+    expect(
+      cited,
+      `shipped artifacts cite this repo's issues where an adopter reads them:\n  ${cited.join('\n  ')}`,
+    ).toEqual([])
   })
 })

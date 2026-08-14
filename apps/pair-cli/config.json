@@ -5,51 +5,27 @@
       "behavior": "mirror",
       "include": ["/agents"],
       "description": "GitHub workflows and configuration files",
-      "targets": [
-        {
-          "path": ".github",
-          "mode": "canonical"
-        }
-      ]
+      "targets": [{ "path": ".github", "mode": "canonical" }]
     },
     "knowledge": {
       "source": ".pair/knowledge",
       "behavior": "mirror",
       "description": "Knowledge base and documentation",
-      "targets": [
-        {
-          "path": ".pair/knowledge",
-          "mode": "canonical"
-        }
-      ]
+      "targets": [{ "path": ".pair/knowledge", "mode": "canonical" }]
     },
     "adoption": {
       "source": ".pair/adoption",
       "behavior": "add",
       "description": "Adoption guides and onboarding materials",
-      "targets": [
-        {
-          "path": ".pair/adoption",
-          "mode": "canonical"
-        }
-      ]
+      "targets": [{ "path": ".pair/adoption", "mode": "canonical" }]
     },
     "agents": {
       "source": "AGENTS.md",
       "behavior": "mirror",
       "description": "AI agents guidance and session context",
       "targets": [
-        {
-          "path": "AGENTS.md",
-          "mode": "canonical"
-        },
-        {
-          "path": "CLAUDE.md",
-          "mode": "copy",
-          "transform": {
-            "prefix": "claude"
-          }
-        }
+        { "path": "AGENTS.md", "mode": "canonical" },
+        { "path": "CLAUDE.md", "mode": "copy", "transform": { "prefix": "claude" } }
       ]
     },
     "skills": {
@@ -60,30 +36,12 @@
       "prefix": "pair",
       "description": "Agent skills distributed to AI tool directories",
       "targets": [
-        {
-          "path": ".claude/skills/",
-          "mode": "canonical"
-        },
-        {
-          "path": ".github/skills/",
-          "mode": "symlink"
-        },
-        {
-          "path": ".cursor/skills/",
-          "mode": "symlink"
-        },
-        {
-          "path": ".agent/skills/",
-          "mode": "symlink"
-        },
-        {
-          "path": ".agents/skills/",
-          "mode": "symlink"
-        },
-        {
-          "path": ".windsurf/skills/",
-          "mode": "symlink"
-        }
+        { "path": ".claude/skills/", "mode": "canonical" },
+        { "path": ".github/skills/", "mode": "symlink" },
+        { "path": ".cursor/skills/", "mode": "symlink" },
+        { "path": ".agent/skills/", "mode": "symlink" },
+        { "path": ".agents/skills/", "mode": "symlink" },
+        { "path": ".windsurf/skills/", "mode": "symlink" }
       ]
     },
     "workflows": {
@@ -94,23 +52,13 @@
         "pair-refine-batch.test.mjs",
         "pair-contracts/ensure-contract.test.mjs"
       ],
-      "targets": [
-        {
-          "path": ".claude/workflows/",
-          "mode": "canonical"
-        }
-      ],
+      "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],
       "description": "Batch orchestration workflows (Claude Code only; inert elsewhere)"
     },
     "agent-definitions": {
       "source": ".agents",
       "behavior": "overwrite",
-      "targets": [
-        {
-          "path": ".claude/agents/",
-          "mode": "canonical"
-        }
-      ],
+      "targets": [{ "path": ".claude/agents/", "mode": "canonical" }],
       "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-contract-generator)"
     }
   }

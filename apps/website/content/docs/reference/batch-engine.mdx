@@ -17,7 +17,7 @@ Two workflows ship:
 | Workflow               | What it drives                                                                                                                          |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `pair-implement-batch` | a batch of cards, each to a review-approved PR — implement, open the PR, then an independent review ↔ fix loop until it converges         |
-| `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. Writes to the PM tool only; it never touches a file in the repo |
+| `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. By its dispatched prompts it writes to the PM tool only and touches no file in the repo — that is process, not permission: see the note below the agent table |
 
 `pair-refine-batch` deliberately carries neither of the two knobs `pair-implement-batch` has.
 It has **no parallelism cap** because each card costs one API round trip and holds no worktree,
@@ -32,7 +32,7 @@ The engine is a workflow script driven by Claude Code's orchestration primitives
 subagents by type and runs their steps in parallel. No other tool executes it today.
 
 **Under any other tool the files are inert.** They are never read, never executed, and cost
-about **141 KB** on disk — mostly the implement engine itself, which carries its rationale
+about **150 KB** on disk — mostly the implement engine itself, which carries its rationale
 inline. The workflows' own dry-run test suites are development artifacts and are **excluded from
 the install**, so they are not part of that figure. Nothing errors.
 
@@ -47,6 +47,13 @@ Under Claude Code they are not inert, and it is worth knowing exactly what arriv
 | `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
 | `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); by its own instructions it does not edit, commit or merge |
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
+
+**One more agent type arrives with no definition of ours: `general-purpose`.** `pair-refine-batch`
+spawns it at both of its stages. It is a host built-in of Claude Code, not a file `pair install`
+writes, so it is not in the table above — and that is precisely why it is worth naming here: it
+carries your tool configuration's **unrestricted** set, `Bash` included, which is wider than any
+of the three definitions above. What keeps that engine to PM-tool writes is the read-only clause
+in every prompt it dispatches, not a tool grant.
 
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the

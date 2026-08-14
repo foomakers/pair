@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// Deterministic side of the "AI-generated machine contract from KB templates"
-// pattern: hashing,
-// cache decision, contract validation, hash stamping. The SEMANTIC step
-// (markdown template → vocabulary/enums) is done by the `contract-generator`
+// Deterministic side of the "AI-generated machine contract from KB templates" pattern:
+// hashing, cache decision, contract validation, hash stamping. The SEMANTIC step
+// (markdown template → vocabulary/enums) is done by the `pair-contract-generator`
 // agent — this module never parses markdown.
 //
 // Contract artifact shape (`*.contract.json`, git-ignored derived cache):
@@ -202,7 +201,7 @@ export function stampContract(draft, { source, sourceHash }) {
       source,
       sourceHash,
       generatedAt: new Date().toISOString(),
-      generator: 'contract-generator agent (AI) via ensure-contract.mjs',
+      generator: 'pair-contract-generator agent (AI) via ensure-contract.mjs',
     },
   }
 }

@@ -46,7 +46,14 @@ assert_file ".claude/workflows/pair-contracts/.gitignore"
 # The dry-run suites are development artifacts (~127 KB, more than the engine itself) and are
 # excluded from the registry. They must NOT land in the directory a workflow loader scans.
 assert_no_file ".claude/workflows/pair-implement-batch.test.mjs"
+assert_no_file ".claude/workflows/pair-refine-batch.test.mjs"
 assert_no_file ".claude/workflows/pair-contracts/ensure-contract.test.mjs"
+
+# The workflow the registry does NOT ship. It dispatches to a personal user-level skill that is
+# in neither the dataset nor an adopter's install, so an adopter who received it would get a
+# workflow whose agents are sent somewhere nobody has. Asserted here because the exclusion is
+# by SOURCE-TREE placement, not by an `exclude` entry — nothing else proves it stayed out.
+assert_no_file ".claude/workflows/pair-analyze-pr-batch.js"
 
 # Every agent type the workflow spawns must have arrived with it.
 for agent in pair-implementer pair-reviewer pair-contract-generator; do

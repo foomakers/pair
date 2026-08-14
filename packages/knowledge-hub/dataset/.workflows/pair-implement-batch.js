@@ -4,14 +4,14 @@ export const meta = {
   // collide with this one under an undefined winner. File name and registry name match.
   name: 'pair-implement-batch',
   description:
-    'Drive a mutex-safe batch of ready Pair stories, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
+    'Drive a mutex-safe batch of ready story cards, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
   // expression node. A `+`-concatenated string is a BinaryExpression and makes the whole
   // workflow UNLOADABLE: it silently disappears from the registry and only `scriptPath`
   // reports why. Keep every value here a single literal, however long the line gets
   // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"stories":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} — a bare list of issue refs ("#234 #236") is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per story: notes (scope directive) and prNumber (re-enter the review loop on an existing PR). Pre-filter for mutex safety — no two stories may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a full `pnpm quality-gate` on a cold worktree cache qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
+    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds). Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; an unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
     { title: 'Implement', model: 'opus' },
@@ -42,8 +42,19 @@ export const meta = {
 //                                 // configured; a value outside that set THROWS rather than rank
 //                                 // against a foreign scale.
 //   model?,                       // fable | haiku | sonnet | opus
-//   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS
+//   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS (skill names,
+//                                 // worktreeRoot, auditLogDir, baseBranch, reviewTemplate,
+//                                 // maxFixRounds)
 // }
+//
+// UNSET OPTIONAL KEYS. Every `?` key above has ONE spelling for "not set": OMIT it, or set it
+// to `undefined` or `null`. All three mean ABSENT, on every optional key, at every level —
+// card fields, run options and `pipeline` overrides alike. A caller composing cards in code
+// (`{ id, title, branch, prNumber: state.prNumber }`) must not have to branch on whether a
+// field happens to be set: an explicit `undefined` on a field nobody set used to abort the
+// WHOLE batch at parse time while the sibling field beside it accepted the same spelling.
+// Anything ELSE that is present and wrong-typed still THROWS — the rule loosens the spelling
+// of "absent", never the type check on a value that is actually there.
 //
 // MUTEX is the CALLER's precondition, not this engine's guarantee: it drives what it is
 // given, in parallel. Declaring which cards may run together is `pair-loop`'s dependency
@@ -217,7 +228,13 @@ function parseBatchArgs(raw) {
     // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
     // card title ("PR state flow (gate≠review) + …") must keep working.
     const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
-    constrain(id, 'id', v => /^[A-Za-z0-9._-]+$/.test(v) && !v.includes('..'), 'a single safe path segment (it becomes the worktree directory)')
+    // Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
+    // shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
+    // worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
+    // recoverable. Both passed the earlier charset test, which only forbade `..`. Same rule,
+    // same spelling, in the sibling engine — held by the differential in the test file.
+    const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
+    constrain(id, 'id', isSegment, 'a single safe path segment (it becomes the worktree directory)')
     constrain(s.branch, 'branch', isRef, 'a valid git ref')
     constrain(s.base, 'base', isRef, 'a valid git ref')
     constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
@@ -226,7 +243,13 @@ function parseBatchArgs(raw) {
     // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
     // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
     // present-but-unusable value is an error rather than a silently ignored one.
-    if ('prNumber' in s && !Number.isInteger(s.prNumber))
+    // An UNSET optional key has ONE spelling across the whole card: `undefined`/`null` mean
+    // ABSENT here exactly as they already do in `constrain`. A bare `'prNumber' in s` made
+    // `notes: undefined` legal and `prNumber: undefined` fatal inside the SAME object, so a
+    // caller composing cards in JS (`{ id, title, branch, prNumber: state.prNumber }`, #250)
+    // lost a 20-card batch at parse time on a field nobody set. `Object.hasOwn`, not `in`:
+    // `in` walks the prototype chain.
+    if (Object.hasOwn(s, 'prNumber') && s.prNumber !== undefined && s.prNumber !== null && !Number.isInteger(s.prNumber))
       throw new Error(
         `implement-batch: cards[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not an integer. ` +
           `A non-integer is NOT treated as "no PR": it would run implement + open a SECOND PR for a story ` +
@@ -252,6 +275,19 @@ function parseBatchArgs(raw) {
   // A batch ran with Minors still blocking and reported escalation as if the floor had
   // been honoured. Every option must be read from the parsed object, once.
   rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'pipeline', 'maxParallelism'], 'args')
+  // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
+  // fields. A whitelist bounds each of these two downstream, so the behavioural cost today is
+  // nil (`severityFloor: ['Major']` joined to "Major" and was accepted) — the cost is the
+  // invariant: "every caller value is type-checked" has to be true for a reader auditing it,
+  // and the next option added beside these inherits the pattern with no whitelist to save it.
+  // Checked HERE, at parse time, not where each is consumed: `severityFloor` is only rankable
+  // after the contract dispatch, and a wrong TYPE should not wait on an agent to be reported.
+  for (const key of ['severityFloor', 'model'])
+    if (a[key] !== undefined && a[key] !== null && typeof a[key] !== 'string')
+      throw new Error(
+        `implement-batch: \`args.${key}\` has ${key} of type ${Array.isArray(a[key]) ? 'array' : typeof a[key]}, which is not a string. ` +
+          `It would be COERCED (an array joins on commas) into a value the caller never wrote. Pass a string, or omit the key.`,
+      )
   return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
 }
 const PARSED = parseBatchArgs(args)
@@ -285,6 +321,13 @@ const PIPELINE_DEFAULTS = {
   // string — which then also rendered as the vocabulary label in the reviewer prompt. Path
   // and label are now independent: the label is derived with `templateLabel()` below.
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
+  // Rounds of autonomous fix<->re-review before escalating to a human. Pair's 3 is measured
+  // (see the rationale at MAX_FIX_ROUNDS below) and is the DEFAULT, not the rule: story
+  // assumption A1 lists the fix-round cap among the limits a caller configures, and once the
+  // engine ships this number is an adopter-visible contract — a review loop that converges in
+  // one round should not pay for three, and a caller who wants a longer leash should not have
+  // to fork the file to get it.
+  maxFixRounds: 3,
 }
 
 // The human-readable NAME of the contract template, for the prompt sentence "using the …
@@ -292,15 +335,18 @@ const PIPELINE_DEFAULTS = {
 const templateLabel = (p) => String(p).split('/').filter(Boolean).pop() || String(p)
 
 function resolvePipeline(raw) {
+  // `undefined`/`null` = absent, the same rule every optional key in this contract follows.
   if (raw === undefined || raw === null) return PIPELINE_DEFAULTS
   if (typeof raw !== 'object' || Array.isArray(raw))
     throw new Error(
       `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
         `Omit it entirely to run on pair's defaults.`,
     )
-  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate'], 'args.pipeline')
+  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds'], 'args.pipeline')
   const str = (v, key, fallback) => {
-    if (v === undefined) return fallback
+    // `null` is ABSENT here too, not a bad value — one spelling for an unset optional key
+    // across the whole contract (see the contract block's "unset optional" rule).
+    if (v === undefined || v === null) return fallback
     // `String(v)` on an object yields '[object Object]', which interpolates into a prompt as
     // a skill name no agent can follow. Reject the type rather than coerce it.
     if (typeof v !== 'string')
@@ -324,7 +370,22 @@ function resolvePipeline(raw) {
     auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir),
     baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch),
     reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate),
+    maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
   }
+}
+// The one NUMERIC pipeline key. Rejected rather than coerced, for the same reason
+// `maxParallelism` is: a cap that cannot be honoured must not silently become pair's default —
+// the discarded setting is the one deciding how much autonomous work happens before a human is
+// asked, so the failure would be a loop running three rounds while the caller believes it runs
+// one. `'2'` is the shape a hand-written JSON arg produces, so it is named explicitly.
+function posInt(v, key, fallback) {
+  if (v === undefined || v === null) return fallback
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1)
+    throw new Error(
+      `implement-batch: \`args.pipeline.${key}\` must be an integer >= 1; received ${JSON.stringify(v)}. ` +
+        `Omit the key to keep pair's default (${fallback}) — it is never inferred from a bad value.`,
+    )
+  return v
 }
 
 // ── Bounded fan-out (#219 AC6) ─────────────────────────────────────────────
@@ -335,7 +396,7 @@ function resolvePipeline(raw) {
 // Absent cap = today's behaviour, unbounded. That default is deliberate: every existing
 // caller keeps the fan-out it already has, so landing this option changes nobody's run.
 function parseMaxParallelism(raw) {
-  if (raw === undefined) return undefined
+  if (raw === undefined || raw === null) return undefined
   // Rejected rather than coerced. A cap that cannot be honoured must not silently become
   // "no cap": the discarded setting is the one holding back load, so the failure would be a
   // batch running at full width while the caller believes it is throttled (#401's shape).
@@ -428,9 +489,17 @@ const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
 // (`ensure-contract.mjs`), and when they are missing or ambiguous this engine REFUSES to rank
 // rather than guessing an order — see `parseFloor`.
 // With no contract at all there is no configured vocabulary, and pair's own table is the
-// fallback — it carries aliases (`blocker`, `nit`, `info`) that no template lists, which is
-// why it is not itself derived from DEFAULT_SEVERITIES: dropping them would change behaviour
-// for callers that use them today.
+// fallback. It carries aliases (`blocker`, `nit`, `info`) that no template lists, which is why
+// it is not itself derived from DEFAULT_SEVERITIES. Where they are actually reachable, stated
+// precisely rather than as a vague "callers use them": (a) as a caller-passed `severityFloor`,
+// because `parseFloor` validates against `Object.keys(SEVERITY_RANK)` on the unconfigured path,
+// so `severityFloor: 'blocker'` is accepted and ranks with `critical`; (b) as the severity of a
+// FINDING whose reviewer answered off-vocabulary — the prompt names DEFAULT_SEVERITIES
+// (Critical|Major|Minor|Questions), so a `Blocker` coming back is a reviewer deviating from it,
+// and the alias is what keeps that finding ranked instead of falling to `Infinity`. Neither is
+// the normal path. They are kept because removing them is a BREAKING change for a floor an
+// adopter may already pass, not because the normal path needs them — and (b) is fail-safe
+// either way, since `Infinity` blocks.
 //
 // `severityRankErrors` duplicates ensure-contract.mjs's canonical check, and the duplication
 // is FORCED, not lazy: this sandbox has no filesystem and no imports, so the only contract
@@ -532,11 +601,20 @@ function parseFloor(raw) {
   // A floor the reviewer cannot express is a configuration error, never a silent
   // reclassification: rejecting it is what stops `Critical` from out-ranking an adopter's whole
   // scale. A typo still throws, in either vocabulary.
+  // TWO different failures wear the same shape here, and the message decides which one an
+  // operator goes looking for. When a contract WAS derived, an unmatched floor is a caller
+  // typo. When it was NOT (the generator died, or returned nothing usable, so the run is on the
+  // loose fallback), the floor is measured against pair's own table instead of the adopter's —
+  // a correctly-spelled `High` then throws, and the old message told them to check their
+  // spelling. Naming the transient cause is what makes a re-run the obvious next step.
   if (r === undefined)
     throw new Error(
-      `implement-batch: unknown severityFloor ${JSON.stringify(v)}. It must be one of the severities ` +
-        `${SEVERITY_SCALE.configured ? `the configured review template declares` : `pair's default review vocabulary declares`}: ` +
-        `${SEVERITY_SCALE.names.join(', ')} — or omit it so every actionable finding blocks.`,
+      SEVERITY_SCALE.configured
+        ? `implement-batch: unknown severityFloor ${JSON.stringify(v)}. It must be one of the severities the configured review template declares: ` +
+          `${SEVERITY_SCALE.names.join(', ')} — or omit it so every actionable finding blocks.`
+        : `implement-batch: severityFloor ${JSON.stringify(v)} cannot be applied — no machine contract could be derived for the review template on this run, so the only vocabulary available is pair's own default ` +
+          `(${SEVERITY_SCALE.names.join(', ')}). If ${JSON.stringify(v)} is a severity YOUR template declares, this is a contract-generation failure and not a typo: re-run (the generator is dispatched once per batch and its result is hash-cached), ` +
+          `check \`contracts[].status\` in the previous run's result, or omit \`severityFloor\` so every actionable finding blocks.`,
     )
   return { name: v, rank: r }
 }
@@ -556,14 +634,15 @@ const BATCH_MODEL = (() => {
 })()
 // Applied to an opts object without disturbing a step's own deliberate override.
 const withModel = (opts) => (BATCH_MODEL ? { ...opts, model: BATCH_MODEL } : opts)
-// Rounds of autonomous fix<->re-review before escalating to a human. Raised from 2:
-// an escalation costs a human round-trip (read the flush, decide, re-run the batch),
+// Rounds of autonomous fix<->re-review before escalating to a human. Caller-configurable
+// (`args.pipeline.maxFixRounds`); pair's own 3 is the default and the measured one. Raised
+// from 2: an escalation costs a human round-trip (read the flush, decide, re-run the batch),
 // which is strictly more expensive than one more opus fix round — and the observed
 // escalations were dominated by long tails of minor findings that a third round
 // clears. Beyond 3 the loop is usually not converging for a reason a fourth round
 // won't fix either (a design disagreement), and `needsHumanDecision` already exits
 // early for that case.
-const MAX_FIX_ROUNDS = 3
+const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
 
 // ── Step retry ─────────────────────────────────────────────────────────────
 // `agent()` returns null when the subagent dies on a terminal error or is killed
@@ -1053,7 +1132,12 @@ async function driveStory(story) {
     // that a review happened; presence of a verdict is. Every real review emits one — it is a
     // required field of the contract schema — so this costs a genuine clean review nothing.
     if (!review || !String(review.verdict ?? '').trim())
-      return { story, prNumber: pr.prNumber, status: 'failed-review', round, reviewLog: cycleHasRemediation ? reviewLog : undefined }
+      // `acceptedFindings` travels on EVERY terminal arm, this one included. A card whose
+      // reviewer dies mid-cycle otherwise reports the by-design and below-floor findings of
+      // every earlier round as if none had been raised — and those are precisely the findings
+      // the fixer never receives, so they are recoverable from nowhere else. AC4 says an
+      // accepted finding always reaches the human; a failure is not an exception to that.
+      return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     const findings = review.findings ?? []
     const allActionable = findings.filter((f) => !f.nonActionable)
     // Below the floor: still reported, still shown to the human, just not blocking. Marked
@@ -1125,7 +1209,8 @@ async function driveStory(story) {
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
     // its path in the return so the human / next resume can find (and clean) it.
-    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', reviewLog: cycleHasRemediation ? reviewLog : undefined }
+    // Same rule as `failed-review` above: whatever was accepted before the death still travels.
+    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     if (fix.needsHumanDecision) {
       // No guard here: reaching this line means the fix round above already ran, which set
       // `cycleHasRemediation = true` AND had the fixer append this round to the working log.

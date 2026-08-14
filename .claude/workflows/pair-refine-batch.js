@@ -91,6 +91,13 @@ function parseArgs(raw) {
   // and the report looks exactly like a successful override. Fail loudly at parse time.
   const MODELS = ['fable', 'haiku', 'sonnet', 'opus']
   const checkModel = (m, where) => {
+    // Reject the TYPE before coercing it, exactly as `constrain` does for card fields. A
+    // whitelist immediately below bounds the damage today (`['sonnet']` joined to "sonnet"
+    // and was accepted), but coerce-then-whitelist is the pattern the next field added here
+    // would inherit without a whitelist to save it — and it makes "every caller value is
+    // type-checked" read true when it is not.
+    if (m !== undefined && m !== null && typeof m !== 'string')
+      throw new Error(`refine-batch: ${where} has model of type ${Array.isArray(m) ? 'array' : typeof m}, which is not a string. Pass one of ${MODELS.join(' | ')}, or omit the key.`)
     const v = String(m ?? '').trim()
     if (!v) return undefined
     if (!MODELS.includes(v))
@@ -149,8 +156,21 @@ function parseArgs(raw) {
     // restructures a prompt. Punctuation, spaces and non-ASCII stay legal: a real note
     // ("triage says #234/#390 already shipped this (gate≠review)") must keep working.
     const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
-    constrain(id, 'id', v => /^[A-Za-z0-9._-]+$/.test(v) && !v.includes('..'), 'a single safe path segment (it reaches `gh issue view <id>`)')
+    // Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
+    // shell as a FLAG rather than as the argument it sits in, and `.` / `..` name a directory
+    // instead of a card — on the sibling engine the same value becomes the worktree path, where
+    // `.` resolves to the worktree ROOT and `git worktree remove --force` on it is unrecoverable.
+    // Same rule in both engines, kept together deliberately.
+    const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
+    constrain(id, 'id', isSegment, 'a single safe path segment (it reaches `gh issue view <id>`)')
     constrain(it.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
+    // Type before coercion, same rule as `constrain` and `checkModel`: `mode: ['refine']`
+    // joined to "refine" and was silently accepted as the mode the caller never wrote.
+    if (it.mode !== undefined && it.mode !== null && typeof it.mode !== 'string')
+      throw new Error(
+        `refine-batch: items[${i}] (#${id}) has mode of type ${Array.isArray(it.mode) ? 'array' : typeof it.mode}, which is not a string. ` +
+          `Pass one of ${MODES.join(' | ')}, or omit the key for the "classify" default.`,
+      )
     const mode = String(it.mode ?? 'classify').trim()
     if (!MODES.includes(mode))
       throw new Error(`refine-batch: items[${i}] (#${id}) has unknown mode ${JSON.stringify(mode)}; expected one of ${MODES.join(' | ')}.`)
@@ -167,8 +187,13 @@ function parseArgs(raw) {
     // hand-written JSON arg looks like. Same call the sibling engine makes on `prNumber`
     // (`pair-implement-batch.js`): a present-but-unusable value is an error, never a silently
     // ignored one.
+    // An UNSET optional key has ONE spelling across the whole card. `constrain` already treats
+    // `undefined`/`null` as absent, so a bare presence test here made `notes: undefined` legal
+    // and `breakdown: undefined` fatal inside the SAME object — and a caller composing cards
+    // in JS (`{ id, mode, breakdown: state.breakdown }`, #250) lost a whole batch at parse time
+    // on a field nobody set. `Object.hasOwn`, not `in`: `in` walks the prototype chain.
     const checkFlag = key => {
-      if (key in it && typeof it[key] !== 'boolean')
+      if (Object.hasOwn(it, key) && it[key] !== undefined && it[key] !== null && typeof it[key] !== 'boolean')
         throw new Error(
           `refine-batch: items[${i}] (#${id}) has ${key} ${JSON.stringify(it[key]) ?? String(it[key])} ` +
             `(${Array.isArray(it[key]) ? 'array' : typeof it[key]}), which is not a boolean. ` +

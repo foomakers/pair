@@ -21,6 +21,8 @@ import {
   generateCatalogRows,
   checkBatchEnginePaths,
   checkBatchEngineAgents,
+  checkBatchEngineWorkflows,
+  batchEngineErrors,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -431,6 +433,61 @@ describe('checkBatchEngineAgents', () => {
     // Deleting the dataset agents directory would otherwise turn the check green.
     expect(checkBatchEngineAgents([], doc)).toEqual([
       'no agent definitions found in the dataset — the batch-engine agent check is vacuous',
+    ])
+  })
+})
+
+// The AGENT table is derived; the WORKFLOW table beside it was not, so a third shipped
+// workflow — or a renamed one — left the page silently describing a set that no longer exists.
+// Same shape as the agent check, same reason: what installs is a fact, and a fact on this page
+// is read from the dataset rather than hand-copied.
+describe('checkBatchEngineWorkflows', () => {
+  const doc = '| `pair-implement-batch` | … |\n| `pair-refine-batch` | … |'
+
+  it('passes when the page names every shipped workflow', () => {
+    expect(checkBatchEngineWorkflows(['pair-implement-batch', 'pair-refine-batch'], doc)).toEqual(
+      [],
+    )
+  })
+
+  it('fails when a shipped workflow is missing from the table', () => {
+    expect(
+      checkBatchEngineWorkflows(
+        ['pair-implement-batch', 'pair-refine-batch', 'pair-triage-batch'],
+        doc,
+      ),
+    ).toEqual(['batch-engine.mdx does not name the shipped workflow "pair-triage-batch"'])
+  })
+
+  it('fails when the page names a workflow that no longer ships', () => {
+    // The reverse direction matters as much: a page promising a workflow the adopter never
+    // receives is the same defect pointed the other way.
+    expect(checkBatchEngineWorkflows(['pair-implement-batch'], doc)).toEqual([
+      'batch-engine.mdx names "pair-refine-batch", which the workflows registry does not ship',
+    ])
+  })
+
+  it('reports an empty workflow set rather than passing vacuously', () => {
+    expect(checkBatchEngineWorkflows([], doc)).toEqual([
+      'no shipped workflows found in the dataset — the batch-engine workflow check is vacuous',
+    ])
+  })
+})
+
+// The page's own gate must not be disabled by deleting the page. `batchEngineErrors` returned
+// `[]` when the file was absent, so removing `batch-engine.mdx` turned every check above green
+// — and AC8 requires the note to EXIST. The same file states the loud-on-absence convention
+// twice for other checks; this one contradicted it.
+describe('batchEngineErrors on a missing page', () => {
+  it('fails loudly instead of self-disabling when the page is gone', () => {
+    const errors = batchEngineErrors({
+      BATCH_ENGINE_FILE: '/nowhere/batch-engine.mdx',
+      CLI_CONFIG: '/nowhere/config.json',
+      AGENTS_DIR: '/nowhere/.agents',
+      WORKFLOWS_DIR: '/nowhere/.workflows',
+    })
+    expect(errors).toEqual([
+      'Batch engine page not found: /nowhere/batch-engine.mdx — the batch-engine checks cannot run',
     ])
   })
 })

@@ -328,6 +328,91 @@ test('a present-but-non-string card value is rejected, never coerced into the pr
   assert.ok(calls.some(c => c.opts.label === 'triage:#134'), 'a numeric id still drives the batch')
 })
 
+// An UNSET optional key must have ONE spelling across the whole card. `constrain` treats
+// `undefined`/`null` as absent, but `checkFlag` tested bare key PRESENCE — so within one card
+// object `notes: undefined` was legal and `breakdown: undefined` was fatal. The realistic
+// caller is the one this contract is frozen for: #250 composes cards in JS, and
+// `{ id, mode, breakdown: state.breakdown }` with nothing decided yet killed the WHOLE batch
+// at parse time on a field nobody set. Loud, so not the #401 direction — an ergonomics defect
+// in a frozen contract, which is why it is settled before #250 codes against it.
+test('an explicitly-undefined optional key means ABSENT, not an error — one spelling for every field', async () => {
+  const { calls } = await runWorkflow({
+    args: {
+      model: undefined,
+      items: [{ id: '218', mode: 'refine', notes: undefined, breakdown: undefined, fixStatusLine: undefined, model: undefined }],
+    },
+    dispatch: okDispatch,
+  })
+  const work = calls.find(c => c.opts.label === 'refine:#218')
+  assert.ok(work, 'the card drives the batch instead of aborting it')
+  assert.doesNotMatch(work.prompt, /plan-tasks/, 'breakdown: undefined is read as absent, not as true')
+
+  // `null` too: it is what `JSON.parse` yields for an explicit JSON null, and `constrain`
+  // already accepts it as absent on every string field.
+  const { calls: c2 } = await runWorkflow({
+    args: { items: [{ id: '218', mode: 'refine', notes: null, breakdown: null }] },
+    dispatch: okDispatch,
+  })
+  assert.ok(c2.some(c => c.opts.label === 'refine:#218'), 'null is absent too')
+
+  // The guard is not weakened: a present, wrong-typed value still throws.
+  await assert.rejects(
+    () => runWorkflow({ args: { items: [{ id: '218', mode: 'refine', breakdown: 'true' }] }, dispatch: okDispatch }),
+    /has breakdown "true" \(string\), which is not a boolean/,
+  )
+})
+
+// The card-level string fields were hardened to reject-before-coerce; `mode` and `model` were
+// not, so `mode: ['refine']` was joined to "refine" and ACCEPTED. Bounded by a whitelist, so
+// the behavioural impact is nil today — what it costs is the invariant: a reader auditing
+// "is every caller value type-checked?" got a false yes, and the next field added beside
+// these two would inherit the pattern with no whitelist to save it.
+test('mode and model are rejected by TYPE, never coerced into the whitelist', async () => {
+  const cases = [
+    [{ items: [{ id: '218', mode: ['refine'] }] }, /has mode of type array, which is not a string/],
+    [{ items: [{ id: '218', mode: 7 }] }, /has mode of type number, which is not a string/],
+    [{ items: [{ id: '218', model: ['sonnet'] }] }, /model of type array, which is not a string/],
+    [{ model: ['sonnet'], items: [{ id: '218' }] }, /model of type array, which is not a string/],
+    [{ model: {}, items: [{ id: '218' }] }, /model of type object, which is not a string/],
+  ]
+  for (const [args, re] of cases) {
+    let dispatched = 0
+    await assert.rejects(
+      () => runWorkflow({ args, dispatch: (p, o) => (dispatched++, okDispatch(p, o)) }),
+      re,
+      `${JSON.stringify(args)} must throw`,
+    )
+    assert.equal(dispatched, 0, 'rejection happens at parse time')
+  }
+  // The whitelist still does its own job for a correctly-typed value.
+  await assert.rejects(
+    () => runWorkflow({ args: { items: [{ id: '218', mode: 'refin' }] }, dispatch: okDispatch }),
+    /unknown mode "refin"/,
+  )
+})
+
+// The rule the message states is "a single safe path segment", and `id` reaches
+// `gh issue view <id>` on a Bash-capable agent's command line. `.` and `-rf` both passed:
+// `-rf` is read by the shell as a FLAG, not as an argument, and `.` is not a segment naming
+// anything. The sibling engine turns the same value into a worktree directory, where `.`
+// resolves to the worktree ROOT and a `--force` remove of it is unrecoverable.
+test('an id that is not a usable path segment is rejected — a leading dash and a bare dot included', async () => {
+  for (const id of ['.', '-rf', '..', '-', '.hidden']) {
+    let dispatched = 0
+    await assert.rejects(
+      () => runWorkflow({ args: { items: [{ id, mode: 'triage' }] }, dispatch: (p, o) => (dispatched++, okDispatch(p, o)) }),
+      /is not a single safe path segment/,
+      `id ${JSON.stringify(id)} must throw`,
+    )
+    assert.equal(dispatched, 0, 'rejection happens at parse time')
+  }
+  // Real ids keep working, including the non-numeric shapes an adopter tracker uses.
+  for (const id of ['218', 'PROJ-42', 'a.b_c-1']) {
+    const { calls } = await runWorkflow({ args: { items: [{ id, mode: 'triage' }] }, dispatch: okDispatch })
+    assert.ok(calls.some(c => c.opts.label === `triage:#${id}`), `id ${id} still drives the batch`)
+  }
+})
+
 // ── meta integrity ─────────────────────────────────────────────────────────
 // The loader parses `meta` statically and rejects any expression node: a `+`-concatenated
 // string makes the whole workflow silently unloadable — it disappears from the registry.
@@ -494,7 +579,8 @@ function helpersOf(src, label) {
     ${grab(/^function rejectUnknownKeys[\s\S]*?^}$/m, 'rejectUnknownKeys')}
     ${grab(/^ {4}const constrain = [\s\S]*?^ {4}}$/m, 'constrain')}
     ${grab(/^ {4}const isProse = .*$/m, 'isProse')}
-    return { rejectUnknownKeys, constrain, isProse }
+    ${grab(/^ {4}const isSegment = .*$/m, 'isSegment')}
+    return { rejectUnknownKeys, constrain, isProse, isSegment }
   `)()
 }
 
@@ -527,6 +613,15 @@ for (const [what, drive] of [
   ['a non-string array', h => h.constrain(['a', 'b'], 'notes', h.isProse, 'plain text')],
   ['a non-string number', h => h.constrain(7, 'notes', h.isProse, 'plain text')],
   ['a non-string boolean', h => h.constrain(true, 'notes', h.isProse, 'plain text')],
+  // `isSegment` is the fourth hand-duplicated helper, and the one whose drift is worst: on the
+  // implement engine its value becomes the worktree directory a `--force` remove is aimed at.
+  ['an id that is a bare dot', h => h.constrain('.', 'id', h.isSegment, 'a segment')],
+  ['an id with a leading dash', h => h.constrain('-rf', 'id', h.isSegment, 'a segment')],
+  ['an id that traverses', h => h.constrain('../../scratch', 'id', h.isSegment, 'a segment')],
+  ['an id that is a hidden file', h => h.constrain('.hidden', 'id', h.isSegment, 'a segment')],
+  ['a numeric issue id', h => h.constrain('219', 'id', h.isSegment, 'a segment')],
+  ['a tracker-style id', h => h.constrain('PROJ-42', 'id', h.isSegment, 'a segment')],
+  ['an id with a slash', h => h.constrain('a/b', 'id', h.isSegment, 'a segment')],
 ])
   test(`engine differential — ${what} gets the same verdict from both copies`, () => {
     const a = decide(() => drive(REFINE_HELPERS))

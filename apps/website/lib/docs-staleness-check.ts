@@ -594,6 +594,7 @@ function checkPaths(root: string) {
     BATCH_ENGINE_FILE: join(DOCS_DIR, 'reference/batch-engine.mdx'),
     CLI_CONFIG: join(root, 'apps/pair-cli/config.json'),
     AGENTS_DIR: join(root, 'packages/knowledge-hub/dataset/.agents'),
+    WORKFLOWS_DIR: join(root, 'packages/knowledge-hub/dataset/.workflows'),
   }
 }
 
@@ -612,24 +613,77 @@ function readAgentFrontmatter(dir: string): { name: string; tools: string }[] {
     })
 }
 
+/** The shipped workflow NAMES: every `.js` at the root of the dataset workflows dir, minus the
+ * dry-run suites the registry excludes. Names, not paths — the page's table is keyed by name. */
+function readShippedWorkflowNames(dir: string, exclude: string[] = []): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.js') && !exclude.includes(f))
+    .map(f => f.replace(/\.js$/, ''))
+    .sort()
+}
+
 /**
- * The batch-engine page states WHERE `pair install` puts the engine. That claim is read back
- * from the registries rather than trusted, so renaming a target without touching the page
- * fails here instead of leaving a doc pointing at a directory nobody gets.
+ * Check: the batch-engine page's WORKFLOW table enumerates every shipped workflow, and no more.
+ *
+ * The agent table beside it is derived; this one was hand-maintained, so a third shipped
+ * workflow (or a renamed one) left the page describing a set that no longer exists — and the
+ * page's whole job is to say what an adopter receives. Both directions are checked: a shipped
+ * workflow missing from the table understates the install, and a table naming a workflow that
+ * no longer ships promises something nobody gets.
  */
-function batchEngineErrors(paths: {
+export function checkBatchEngineWorkflows(shipped: string[], doc: string): string[] {
+  if (shipped.length === 0) {
+    // Without this, deleting the dataset workflows directory turns the check green.
+    return [
+      'no shipped workflows found in the dataset — the batch-engine workflow check is vacuous',
+    ]
+  }
+  const errors: string[] = []
+  for (const name of shipped)
+    if (!doc.includes(name))
+      errors.push(`batch-engine.mdx does not name the shipped workflow "${name}"`)
+  // The reverse: a name in a backticked table cell that the registry does not ship.
+  for (const m of doc.matchAll(/`(pair-[a-z0-9-]+-batch)`/g))
+    if (!shipped.includes(m[1]!) && !errors.some(e => e.includes(m[1]!)))
+      errors.push(`batch-engine.mdx names "${m[1]}", which the workflows registry does not ship`)
+  return [...new Set(errors)]
+}
+
+/**
+ * The batch-engine page states WHERE `pair install` puts the engine, WHAT ships, and WHAT
+ * authority arrives. Every one of those claims is read back from the dataset and the registries
+ * rather than trusted, so renaming a target — or adding a workflow — without touching the page
+ * fails here instead of leaving a doc pointing at something nobody gets.
+ */
+export function batchEngineErrors(paths: {
   BATCH_ENGINE_FILE: string
   CLI_CONFIG: string
   AGENTS_DIR: string
+  WORKFLOWS_DIR: string
 }): string[] {
-  if (!existsSync(paths.BATCH_ENGINE_FILE)) return []
+  // LOUD on absence, like every sibling check in this file. Returning `[]` here meant deleting
+  // `batch-engine.mdx` turned its own gate green — the page whose existence AC8 requires
+  // disabling the checks that hold it honest, which is the one failure direction a staleness
+  // gate must never have.
+  if (!existsSync(paths.BATCH_ENGINE_FILE))
+    return [
+      `Batch engine page not found: ${paths.BATCH_ENGINE_FILE} — the batch-engine checks cannot run`,
+    ]
   const cliConfig = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
-    asset_registries: Record<string, { targets: { path: string }[] }>
+    asset_registries: Record<string, { targets: { path: string }[]; exclude?: string[] }>
   }
   const doc = readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8')
   return [
     ...checkBatchEnginePaths(cliConfig.asset_registries, doc),
     ...checkBatchEngineAgents(readAgentFrontmatter(paths.AGENTS_DIR), doc),
+    ...checkBatchEngineWorkflows(
+      readShippedWorkflowNames(
+        paths.WORKFLOWS_DIR,
+        cliConfig.asset_registries['workflows']?.exclude ?? [],
+      ),
+      doc,
+    ),
   ]
 }
 

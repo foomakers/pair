@@ -1188,18 +1188,33 @@ test('a below-floor finding from round 0 survives into the accepted table after 
   assert.ok(synth.prompt.includes('c.ts:3'), 'the convergence comment carries the round-0 by-design finding')
 })
 
+// The de-dup that matters is the CROSS-ROUND one: a re-review re-reads the whole diff and
+// re-raises a sub-floor finding nobody was asked to fix, so a per-round append grows one row
+// per round for one finding. (The earlier version of this test returned on round 0 — every
+// finding below the floor, nothing actionable, immediate convergence — so it only ever
+// exercised de-dup WITHIN a single `accept()` call, not the path it is named for.)
 test('the same finding raised in two rounds is carried once, not duplicated per round', async () => {
-  const { result } = await runWorkflow({
+  let round = 0
+  const { result, calls } = await runWorkflow({
     args: { severityFloor: 'Major', stories: [STORY] },
-    dispatch: stdDispatch({
-      contractResult: { status: 'cache-hit', contract: validContract() },
-      // A re-review that repeats a sub-floor finding it did not ask anyone to fix is the norm,
-      // not the exception — accumulation must de-dup on location+description or the accepted
-      // table grows a row per round for one finding.
-      review: { verdict: 'Rework', findings: [MINOR, { ...MINOR }] },
-    }),
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      // r0: a blocking Major forces a fix round, alongside a sub-floor Minor.
+      // r1: the Major is gone; the SAME Minor is re-raised, as a re-review naturally does.
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0
+          ? { verdict: 'Rework', findings: [MAJOR, MINOR] }
+          : { verdict: 'Approved', findings: [{ ...MINOR }] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
   })
-  assert.equal(result.batch[0].acceptedFindings.length, 1, 'de-duplicated on location+description')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'the Major really did drive a second round')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  const accepted = result.batch[0].acceptedFindings
+  assert.equal(accepted.length, 1, 'a finding raised in BOTH rounds is one row, not two')
+  assert.equal(accepted[0].location, 'a.md:1')
 })
 
 test('without a floor nothing changes: every actionable finding still blocks', async () => {
@@ -1225,7 +1240,7 @@ test('an unknown severity blocks regardless of the floor (fail safe), and a bad 
 
   await assert.rejects(
     () => runWorkflow({ args: { severityFloor: 'Whatever', stories: [STORY] }, dispatch: stdDispatch({}) }),
-    /unknown severityFloor/,
+    /severityFloor "Whatever" cannot be applied/,
     'a typo in the floor must throw, not silently disable blocking',
   )
 })
@@ -1255,7 +1270,7 @@ test('severityFloor is honoured whether args arrives as an object or as a JSON s
 test('a bad severityFloor throws even when args is a JSON string', async () => {
   await assert.rejects(
     () => runWorkflow({ args: JSON.stringify({ severityFloor: 'Nope', stories: [{ id: '1', title: 't', branch: 'b' }] }), dispatch: stdDispatch({}) }),
-    /unknown severityFloor/,
+    /severityFloor "Nope" cannot be applied/,
     'a typo must not be swallowed by the string path either',
   )
 })
@@ -1642,7 +1657,7 @@ test('a severity naming an Object.prototype key still BLOCKS — it is never dro
 test('a severityFloor naming an Object.prototype key is rejected, not silently accepted', async () => {
   await assert.rejects(
     () => runWorkflow({ args: { severityFloor: 'constructor', stories: [STORY] }, dispatch: stdDispatch({ contractResult: { status: 'failed' } }) }),
-    /unknown severityFloor/,
+    /severityFloor "constructor" cannot be applied/,
   )
 })
 
@@ -1815,6 +1830,61 @@ test('the convergence synthesis stays COMPLETE while becoming a table', async ()
 // loses the guarantee is exactly what a pin like this exists to prevent.
 // ═══════════════════════════════════════════════════════════════════════════
 
+// The invariant is "no dispatched prompt carries a merge INSTRUCTION", and the assertion has
+// to be as wide as the invariant it names — the docs page cites this test as the evidence for
+// AC5. The earlier pattern was `merge (the|this|it)` alone, so `gh pr merge 432 --squash`,
+// `git merge origin/main`, `merge PR #7` and `enable auto-merge` all sailed through the check
+// that exists to catch exactly them. Prohibitions are stripped FIRST so the file's own
+// "Do NOT merge" / "never merges" prose cannot self-trip it; what remains is scanned for the
+// concrete forms an agent could act on — the CLI invocations, the flags that make a merge
+// unattended, and the English imperative.
+const MERGE_PROHIBITIONS = /\b(?:do not|don't|never|no)\s+(?:auto-?)?merges?\b|\bnever merges\b|\bmerge is the human\b/gi
+const MERGE_INSTRUCTIONS = [
+  /\bgh\s+pr\s+merge\b/i,
+  /\bgit\s+merge\b/i,
+  /--squash\b/i,
+  /--admin\b/i,
+  /--rebase\b/i,
+  /\bauto-?merge\b/i,
+  /\bmerge-?queue\b/i,
+  /\b(?:please\s+|then\s+|now\s+)?merges?\s+(?:the|this|it|in|pr|#\d|branch|to\b|into\b|and\b)/i,
+]
+function mergeInstructionIn(prompt) {
+  const stripped = prompt.replace(MERGE_PROHIBITIONS, ' ')
+  for (const re of MERGE_INSTRUCTIONS) if (re.test(stripped)) return String(re)
+  return null
+}
+
+// The assertion above is only worth what it CATCHES, and a never-merge check that cannot fail
+// is the shape of vacuous guard this file has closed twice already. So it is injection-tested
+// in place: each hostile form is run through the same predicate the real prompts go through.
+test('the never-merge assertion actually catches every form of the instruction', () => {
+  for (const hostile of [
+    'When the gate is green, gh pr merge 432 --squash and delete the branch.',
+    'Rebase then git merge origin/main into the branch.',
+    'Land it with --squash once CI is green.',
+    'Use --admin to bypass the required check.',
+    'Enable auto-merge on the PR so it lands unattended.',
+    'Add it to the merge-queue.',
+    'merge PR #7 once the review is clean',
+    'Please merge the pull request.',
+    'Then merge it and report back.',
+    'merge into main after the review',
+  ])
+    assert.notEqual(mergeInstructionIn(hostile), null, `not caught: ${hostile}`)
+
+  // …and it must not fire on the prose the engine legitimately uses, or it would be disabled
+  // by the first false positive rather than fixed.
+  for (const benign of [
+    'Do NOT merge.',
+    'Merge is the human gate on every path; never merge.',
+    'The card is ready-for-merge — stop there.',
+    'Carried to the merge gate unfixed, for the human to decide.',
+    'STOP at the merge boundary.',
+  ])
+    assert.equal(mergeInstructionIn(benign), null, `false positive on: ${benign}`)
+})
+
 // AC5 — merge is the human gate, on EVERY path.
 // Not "the happy path does not merge": no execution path may, including the ones
 // reached by escalation and by a dead agent. Asserted over every dispatched prompt
@@ -1852,12 +1922,8 @@ test('US-219 AC5: no dispatched prompt ever instructs a merge, on any path', asy
     })
 
     for (const c of calls) {
-      // The engine says "Do NOT merge" in prose; what must never appear is an
-      // INSTRUCTION to merge. Match the imperative, not the word.
-      assert.ok(
-        !/\b(?:please\s+)?merge (?:the|this|it)\b(?![^.]*\bnot\b)/i.test(c.prompt.replace(/Do NOT merge\.?/gi, '')),
-        `${path.name}: ${c.opts.label} was told to merge`,
-      )
+      const hit = mergeInstructionIn(c.prompt)
+      assert.equal(hit, null, `${path.name}: ${c.opts.label} was told to merge — matched ${hit}`)
     }
     for (const row of result.batch ?? [])
       assert.notStrictEqual(row.status, 'merged', `${path.name}: a card reported itself merged`)
@@ -2162,12 +2228,19 @@ test('US-219 AC6: an absent cap keeps today unbounded fan-out', async () => {
 test('US-219 AC6: a cap of 0 or a negative/non-numeric value throws, never falls back to unbounded', async () => {
   // The #401 failure direction: an option silently discarded runs the batch on settings the
   // caller did not choose — and here the discarded setting is the one holding back load.
-  for (const bad of [0, -1, 'two', 1.5, null]) {
+  for (const bad of [0, -1, 'two', 1.5]) {
     await assert.rejects(
       () => peakConcurrency(manyStories(2), { maxParallelism: bad }),
       /maxParallelism/,
       `maxParallelism: ${JSON.stringify(bad)} was accepted`,
     )
+  }
+  // `undefined`/`null` are the exception, and deliberately so: they are how a caller composing
+  // the args object in JS spells "I am not setting this", and the contract gives that ONE
+  // meaning on every optional key — absent. Absent = unbounded, which is the documented default.
+  for (const unset of [undefined, null]) {
+    const { peak } = await peakConcurrency(manyStories(2), { maxParallelism: unset })
+    assert.strictEqual(peak, 2, `maxParallelism: ${JSON.stringify(unset)} must read as absent, not as a cap`)
   }
 })
 
@@ -2400,4 +2473,179 @@ test('two cards with the same id throw, naming both indices', async () => {
       }),
     /cards\[0\] and cards\[1\] both carry id #219/,
   )
+})
+
+// ── Round-10 review: the contract's ergonomics, on the fields #250 composes ──
+// An UNSET optional key must have ONE spelling across the whole card. `constrain` treats
+// `undefined`/`null` as absent, but the `prNumber` guard tested bare key PRESENCE — so within
+// one card object `notes: undefined` was legal and `prNumber: undefined` was fatal. The
+// realistic caller is the one this contract is frozen for: `pair-loop` (#250) composes cards
+// in JS as `{ id, title, branch, prNumber: state.prNumber }`, and a story with no PR yet threw
+// at parse time and killed the WHOLE batch on a field nobody set.
+test('US-219 AC7: an explicitly-undefined optional key means ABSENT, not an error', async () => {
+  const { calls, result } = await runWorkflow({
+    args: {
+      severityFloor: undefined,
+      model: undefined,
+      maxParallelism: undefined,
+      pipeline: undefined,
+      cards: [{ id: '219', title: 'T', branch: 'feat/x', base: undefined, notes: undefined, prNumber: undefined }],
+    },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge', 'the card drives the batch instead of aborting it')
+  assert.equal(calls.filter(c => c.opts.phase === 'Implement').length, 1, 'prNumber: undefined means "no PR yet", so the card is implemented')
+  assert.equal(calls.filter(c => c.opts.phase === 'PR').length, 1, 'and its PR is opened')
+
+  // `null` too — it is what `JSON.parse` yields for an explicit JSON null, and `constrain`
+  // already accepts it as absent on every string field of the same object.
+  const { result: r2 } = await runWorkflow({
+    args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', notes: null, prNumber: null }] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(r2.batch[0].status, 'ready-for-merge', 'null is absent too')
+
+  // The guard is not weakened: a present, wrong-typed value still throws.
+  assert.match(
+    await expectThrow({ args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumber: '432' }] } }),
+    /prNumber "432", which is not an integer/,
+  )
+})
+
+// The CARD's string fields were hardened to reject-before-coerce; the run-level options were
+// not, so `severityFloor: ['Major']` was joined to "Major" and ACCEPTED. Bounded by a whitelist,
+// so the behavioural impact is nil today — what it costs is the invariant: a reader auditing
+// "is every caller value type-checked?" got a false yes, and the next option added beside these
+// two inherits the pattern with no whitelist to save it.
+test('US-219 AC7: severityFloor and args.model are rejected by TYPE, never coerced', async () => {
+  for (const [args, re] of [
+    [{ cards: [STORY], severityFloor: ['Major'] }, /severityFloor of type array, which is not a string/],
+    [{ cards: [STORY], severityFloor: 7 }, /severityFloor of type number, which is not a string/],
+    [{ cards: [STORY], model: ['sonnet'] }, /model of type array, which is not a string/],
+    [{ cards: [STORY], model: {} }, /model of type object, which is not a string/],
+  ]) {
+    assert.match(await expectThrow({ args }), re, `${JSON.stringify(args)} must be rejected by type`)
+  }
+  // The whitelist still does its own job for a correctly-typed value.
+  assert.match(await expectThrow({ args: { cards: [STORY], model: 'sonet' } }), /unknown model "sonet"/)
+})
+
+// The rule the message states is "a single safe path segment", and the value becomes the
+// worktree DIRECTORY: `git worktree remove --force <root>/<id>-review`. `-rf` is read by the
+// shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the worktree
+// root itself — a `--force` remove of either is not recoverable. Both passed the old charset
+// test, which only forbade `..`. Same rule, same spelling, in the sibling engine.
+test('US-219 AC7: an id that is not a usable path segment is rejected — a leading dash and a bare dot included', async () => {
+  for (const id of ['.', '-rf', '-', '.hidden'])
+    assert.match(
+      await expectThrow({ args: { cards: [{ id, title: 't', branch: 'b' }] } }),
+      /is not a single safe path segment/,
+      `id ${JSON.stringify(id)} must throw`,
+    )
+  // Real ids keep working, including the non-numeric shapes an adopter's tracker uses.
+  for (const id of ['219', 'PROJ-42', 'a.b_c-1']) {
+    const { result } = await runWorkflow({
+      args: { cards: [{ id, title: 't', branch: 'b' }] },
+      dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+    })
+    assert.equal(result.batch[0].id, id, `id ${id} still drives the batch`)
+  }
+})
+
+// A1 lists the fix-round cap among the limits that become caller-configurable, and the review
+// gate reads the engine's measured defaults as an adopter-visible contract. It was the one of
+// the four that was still a private constant: an adopter whose review loop converges in one
+// round paid for three, and one who wants a longer leash could not ask for it.
+test('US-219 AC1: maxFixRounds is caller-configurable, with pair\'s 3 as the default', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+  const drive = pipeline =>
+    runWorkflow({
+      args: { cards: [STORY], ...(pipeline ? { pipeline } : {}) },
+      dispatch: (prompt, opts) => {
+        if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+        if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+        if (opts.phase === 'PR') return { prNumber: 7 }
+        if (opts.label?.startsWith('flush:')) return 'flushed'
+        return { fixed: true }
+      },
+    })
+
+  const dflt = await drive(null)
+  assert.equal(dflt.calls.filter(c => c.opts.label?.startsWith('fix:')).length, 3, "pair's default is unchanged with no configuration")
+
+  const one = await drive({ maxFixRounds: 1 })
+  assert.equal(one.result.batch[0].status, 'escalate')
+  assert.equal(one.calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'a configured cap of 1 spends exactly one fix round')
+
+  const five = await drive({ maxFixRounds: 5 })
+  assert.equal(five.calls.filter(c => c.opts.label?.startsWith('fix:')).length, 5, 'a configured cap of 5 spends five')
+
+  // Rejected, never coerced — a cap that cannot be honoured must not silently become pair's.
+  for (const bad of [0, -1, 1.5, '2'])
+    assert.match(
+      await expectThrow({ args: { cards: [STORY], pipeline: { maxFixRounds: bad } } }),
+      /maxFixRounds/,
+      `maxFixRounds: ${JSON.stringify(bad)} must throw`,
+    )
+  // …but an explicitly-unset key is ABSENT, not a bad value — the one rule for every optional
+  // key in this contract, card fields included.
+  const unset = await drive({ maxFixRounds: undefined })
+  assert.equal(unset.calls.filter(c => c.opts.label?.startsWith('fix:')).length, 3, 'undefined keeps the default')
+  const nulled = await drive({ maxFixRounds: null })
+  assert.equal(nulled.calls.filter(c => c.opts.label?.startsWith('fix:')).length, 3, 'null keeps the default')
+})
+
+// Every `escalate` and the converged arm return `acceptedFindings`; the two `failed-*` arms of
+// the same loop did not. A card whose reviewer or fixer dies MID-CYCLE therefore reported the
+// by-design and below-floor findings of every earlier round as if none had been raised — and
+// those are exactly the findings the fixer never receives, so they are recoverable from nowhere
+// else. AC4 says an accepted finding always reaches the human.
+test('US-219 AC4: a failed-review row still carries the findings accepted before the reviewer died', async () => {
+  let round = 0
+  const { result } = await runWorkflow({
+    args: { severityFloor: 'Major', cards: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      // r0 raises a blocking Major plus a sub-floor Minor; every later review dies.
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0 ? { verdict: 'Rework', findings: [MAJOR, MINOR] } : null
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const row = result.batch[0]
+  assert.equal(row.status, 'failed-review')
+  assert.deepEqual(row.acceptedFindings?.map(f => f.location), ['a.md:1'], 'the round-0 sub-floor Minor reaches the human anyway')
+})
+
+test('US-219 AC4: a failed-fix row likewise carries what was accepted before the fixer died', async () => {
+  const { result } = await runWorkflow({
+    args: { severityFloor: 'Major', cards: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [MAJOR, MINOR] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      if (opts.label?.startsWith('fix:')) return null
+      return { fixed: true }
+    },
+  })
+  const row = result.batch[0]
+  assert.equal(row.status, 'failed-fix')
+  assert.deepEqual(row.acceptedFindings?.map(f => f.location), ['a.md:1'], 'the sub-floor Minor reaches the human anyway')
+})
+
+// A floor the ENGINE cannot rank is not the same failure as a floor the CALLER misspelled, and
+// the message decided which one an operator went looking for. A transient contract failure (the
+// generator died, the loose skeleton is in use) leaves the configured vocabulary unknown, and
+// the old message blamed the caller's spelling for it.
+test('a floor unrankable because the CONTRACT failed says so, instead of blaming the spelling', async () => {
+  const msg = await expectThrow({
+    args: { cards: [STORY], severityFloor: 'High' },
+    // No contract: the generator returned nothing usable, so the run is on the loose fallback.
+  })
+  assert.match(msg, /severityFloor "High"/)
+  assert.match(msg, /no machine contract could be derived/i, 'the real cause is named, not the caller')
 })
