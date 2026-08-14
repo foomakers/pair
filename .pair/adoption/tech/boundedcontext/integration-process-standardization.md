@@ -44,10 +44,10 @@ This context manages all integration logic and process standardization for the p
 | Smoke test | End-to-end CLI release process validation (`pnpm smoke-tests`) |
 | KB dataset | The packaged collection of knowledge files distributed as a release artifact |
 | Content distribution | The pipeline that flattens, prefixes, and symlinks skills to AI tool directories |
-| KB cache | Local versioned storage at `~/.pair/kb/{version}/` for downloaded KB artifacts |
+| KB cache | Local storage for downloaded KB artifacts, one slot per source identity: `~/.pair/kb/{version}/` for the official KB, `~/.pair/kb/external/{kind}-{hash}/` for every other source that needs materializing (only the remote-URL form keeps a `{label}`: `~/.pair/kb/external/url-{label}-{hash}/`; a `--source` directory is read in place and owns no slot) (see the [2026-08-11 ADL](../../decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md)) |
 
 ## Quality Attributes
 
 - **Performance:** Quality gate execution under 30 seconds for cached builds; KB download with resume support; sub-second local cache hits
-- **Scalability:** Pipeline supports multiple AI tool targets via symlink distribution; version-isolated KB cache prevents cross-version conflicts
+- **Scalability:** Pipeline supports multiple AI tool targets via symlink distribution; source-keyed KB cache prevents cross-version AND cross-source conflicts
 - **Reliability:** Pre-commit hooks enforce gate compliance (no bypass without explicit override); SHA256 checksum validation on all downloaded KB artifacts

@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { Command } from 'commander'
-import { InMemoryFileSystemService, NodeHttpClientService } from '@pair/content-ops'
+import {
+  buildTestResponse,
+  InMemoryFileSystemService,
+  MockHttpClientService,
+  NodeHttpClientService,
+  toIncomingMessage,
+  getLogLevel,
+  setLogLevel,
+} from '@pair/content-ops'
+import { MIN_LOG_LEVEL } from './diagnostics'
 
 describe('CLI command registration', () => {
   it('install command is registered', () => {
@@ -310,5 +319,446 @@ describe('CLI INIT_CWD wiring', () => {
 
     // "." resolves via fs.cwd() = packageDir
     expect(fs.existsSync(`${packageDir}/.pair/knowledge/README.md`)).toBe(true)
+  })
+})
+
+/**
+ * US-395 review round 12 — the wiring, from argv to disk. `--url` is declared on the
+ * PROGRAM, so it only reaches a command through the global/command option merge in
+ * `registerCommandFromMetadata`; that merge is what makes the flag a named source rather
+ * than a value only the bootstrap pre-flight ever reads.
+ */
+describe('US-395: the program-level --url reaches the command', () => {
+  const root = '/url-wiring'
+  const originalInitCwd = process.env['INIT_CWD']
+
+  beforeEach(() => {
+    // INIT_CWD wins over the positional target (see the wiring describe above), and the
+    // suite inherits one from pnpm — the update would then look for targets in the real
+    // repo instead of the in-memory project.
+    delete process.env['INIT_CWD']
+  })
+
+  afterEach(() => {
+    if (originalInitCwd !== undefined) process.env['INIT_CWD'] = originalInitCwd
+    vi.restoreAllMocks()
+  })
+
+  it('pair update --url <mirror> updates from the mirror, not from the local dataset', async () => {
+    const { runCli } = await import('./cli.js')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${root}/package.json`]: JSON.stringify({ name: 'monorepo' }),
+        [`${root}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${root}/packages/knowledge-hub/dataset/.pair/knowledge/README.md`]:
+          '# Content from the local dataset',
+        [`${root}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+              description: 'KB',
+            },
+          },
+        }),
+        [`${root}/.pair/knowledge/README.md`]: '# old',
+      },
+      root,
+      root,
+    )
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/.pair/knowledge/README.md`, '# Content from the mirror')
+    })
+
+    const url = 'https://mirror.internal/kb.zip'
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    await runCli(['node', 'pair', 'update', '--url', url, '.'], { fs, httpClient })
+
+    // Exactly one fetch of the mirror (plus its checksum) — by the COMMAND. The comment here
+    // used to say the pre-flight "does not run at all", which stopped being true when round 17
+    // revived it; what carries this assertion is that `--url` names a source, so the pre-flight
+    // skips (and, before that skip existed, this fixture's bundled monorepo dataset
+    // short-circuited it — which is why the released-shape twin of this test lives below and is
+    // the one that can actually detect a double download).
+    expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
+    expect(await fs.readFile(`${root}/.pair/knowledge/README.md`)).toBe('# Content from the mirror')
+  })
+})
+
+describe('US-395 round 14: the global --log-level actually takes effect', () => {
+  afterEach(() => {
+    setLogLevel(MIN_LOG_LEVEL)
+    vi.restoreAllMocks()
+  })
+
+  /**
+   * The `--log-level`/`--verbose` handling used to sit BELOW the pre-flight guards in the
+   * `preAction` hook, and the first of those guards (`thisCommand === prog`) is always true
+   * — Commander invokes a program-level hook as `(hookedCommand, actionCommand)`, so
+   * `thisCommand` IS the program for every subcommand. The result: `pair <cmd> --log-level
+   * debug` silently did nothing, and the only level ever applied was the module-level
+   * default. It is a program-level flag, so it must apply to EVERY command.
+   */
+  it('pair --log-level debug applies the level before the command runs', async () => {
+    const { runCli } = await import('./cli.js')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    // validate-config throws (no config file) but preAction has already run by then.
+    await runCli(['node', 'pair', '--log-level', 'debug', 'validate-config'], {
+      fs,
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    expect(getLogLevel()).toBe('DEBUG')
+  })
+
+  it('the legacy --verbose alias maps to debug for a KB-producing command too', async () => {
+    const { runCli } = await import('./cli.js')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    await runCli(['node', 'pair', '--verbose', 'package', '--source-dir', '/nope'], {
+      fs,
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    expect(getLogLevel()).toBe('DEBUG')
+  })
+})
+
+describe('US-395 round 18: `pair --help` describes what --no-kb actually does', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  /**
+   * Round 15 pinned this line as a NO-OP, which was true then: `--no-kb`'s only consumers sat
+   * behind a pre-flight that never ran. Round 17 revived the pre-flight, so the flag takes
+   * effect again — and the pinned assertion then locked the wrong text in, telling users in
+   * the place they read first that a working flag does nothing. It must describe the real
+   * effect, and name the combination that is now rejected (`--url` + `--no-kb`).
+   */
+  it('the --no-kb help line describes the skip, not a no-op', async () => {
+    const { runCli } = await import('./cli.js')
+    let help = ''
+    vi.spyOn(process.stdout, 'write').mockImplementation(chunk => {
+      help += String(chunk)
+      return true
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runCli(['node', 'pair', '--help'], {
+      fs: new InMemoryFileSystemService({}, '/tmp', '/tmp'),
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    const noKbLine = help.split('\n').find(line => line.includes('--no-kb')) ?? ''
+    expect(noKbLine).not.toBe('')
+    expect(noKbLine).not.toMatch(/no-op/i)
+    expect(noKbLine).toMatch(/skip the knowledge base download/i)
+    // The `--url` conflict sits on the wrapped continuation line, so assert on the block.
+    expect(help).toMatch(/cannot\s+be combined with --url/)
+  })
+})
+
+// ── The pre-flight hook must actually fire (US-395) ────────────────────────
+// It did not, for the whole life of the feature: `cli.ts` guarded on
+// `thisCommand === prog`, and Commander invokes a program-level hook as
+// `callback(hookedCommand, actionCommand)` — the hooked command IS the program for every
+// subcommand, so the guard always returned. `--no-kb` downloaded anyway, the
+// `--url`+`--no-kb` conflict was never rejected, and the accessibility probe never ran.
+//
+// The whole 1125-test suite stayed green with the guard broken, which is why this pins the
+// ARGUMENT CONVENTION itself rather than any of our own code: if Commander ever changed it,
+// the fix would silently invert.
+describe('Commander preAction argument convention (the assumption the KB pre-flight rests on)', () => {
+  it('passes the HOOKED command first and the ACTION command second', async () => {
+    const prog = new Command()
+    prog.exitOverride().name('pair')
+    let seen: { firstIsProg: boolean; secondIsProg: boolean; actionName: string } | undefined
+
+    prog.hook('preAction', (thisCommand, actionCommand) => {
+      seen = {
+        firstIsProg: thisCommand === prog,
+        secondIsProg: actionCommand === prog,
+        actionName: actionCommand.name(),
+      }
+    })
+    prog.command('install').action(() => {})
+
+    await prog.parseAsync(['node', 'pair', 'install'])
+
+    expect(seen, 'the hook must have fired at all').toBeDefined()
+    // This is the trap: guarding on the FIRST argument skips every subcommand.
+    expect(seen!.firstIsProg, 'first argument is the hooked command — always the program').toBe(
+      true,
+    )
+    expect(
+      seen!.secondIsProg,
+      'second argument is the command that matched — never the program',
+    ).toBe(false)
+    expect(seen!.actionName).toBe('install')
+  })
+})
+
+// ── The pre-flight must not fetch what the command never uses (US-395 round 19) ──
+// Reviving the dead pre-flight (round 17) exposed a defect it had been hiding: the hook reads
+// `thisCommand.opts()`, which for a program-level `preAction` is the PROGRAM's option set. Every
+// flag that names the command's own source — `--source`, `--offline`, `--list-targets` — is
+// declared on the `install` SUBCOMMAND and is therefore invisible to it, so the pre-flight
+// resolves the official KB anyway.
+//
+// The fixture below is the RELEASED shape, and that is the whole point: it seeds no
+// `packages/knowledge-hub`, so `bundledDatasetPath` finds nothing and the pre-flight falls
+// through to the network. Every existing fixture seeds a monorepo dataset and the smoke suite
+// runs `dist` from inside the monorepo, so the bundled branch short-circuits in both — which is
+// why a suite of 1144 tests never saw this.
+describe('US-395 rounds 19+21: the KB pre-flight never fetches a KB the command will not use', () => {
+  const root = '/released'
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  /** A released install: a CLI with no dataset shipped beside it. */
+  const releasedFs = (extra: Record<string, string> = {}) =>
+    new InMemoryFileSystemService(
+      {
+        [`${root}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+              description: 'KB',
+            },
+          },
+        }),
+        ...extra,
+      },
+      root,
+      root,
+    )
+
+  const silence = () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  }
+
+  /**
+   * A client that ANSWERS (404) rather than hanging. A mock with an empty queue makes the
+   * download stall and the test fail on a timeout — which proves only that something blocked,
+   * not what was requested. Answering keeps the failure on the URL assertion, where the
+   * evidence is.
+   */
+  const answeringClient = () => {
+    const c = new MockHttpClientService()
+    const notFound = () => toIncomingMessage(buildTestResponse(404))
+    c.setRequestResponses([notFound(), notFound(), notFound(), notFound()])
+    c.setGetResponses([notFound(), notFound(), notFound(), notFound()])
+    return c
+  }
+
+  it('install --source <dir> --offline issues no request at all', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs({
+      [`${root}/local-kb/manifest.json`]: JSON.stringify({ name: 'local-kb' }),
+      [`${root}/local-kb/.pair/knowledge/README.md`]: '# local',
+    })
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--source', `${root}/local-kb`, '--offline', '.'], {
+      fs,
+      httpClient,
+    }).catch(() => {})
+
+    // `--offline` is documented as THE air-gapped path. A single request here means the flag
+    // fails for exactly the user it exists for.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --offline with no --source fails without downloading first', async () => {
+    // The pre-flight runs BEFORE the action handler, so `validateCommandOptions` has not yet
+    // rejected this combination. Without its own guard the run downloads an entire KB and only
+    // then reports that the invocation was invalid all along.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--offline', '.'], { fs, httpClient }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --source <dir> issues no request, with no --offline to help it', async () => {
+    // Kept separate from the --offline case on purpose: that test passes two flags, so it
+    // cannot tell which guard is carrying it. This one isolates the named-source rule.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs({
+      [`${root}/local-kb/manifest.json`]: JSON.stringify({ name: 'local-kb' }),
+      [`${root}/local-kb/.pair/knowledge/README.md`]: '# local',
+    })
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--source', `${root}/local-kb`, '.'], {
+      fs,
+      httpClient,
+    }).catch(() => {})
+
+    // The command reads this source directly; warming the official slot downloads an entire KB
+    // the run never opens.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --list-targets issues no request at all', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--list-targets'], { fs, httpClient }).catch(() => {})
+
+    // Listing targets reads local config only — it has no use for a KB.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('install --no-kb issues no request at all, on a cold cache', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--no-kb', '.'], { fs, httpClient }).catch(() => {})
+
+    // The help text, commands.mdx and the ADL all promise this now. The pre-flight honours the
+    // flag, but the command path resolves its dataset independently — so the promise held only
+    // as far as the first of the two readers.
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  /**
+   * The `--url` hole in the round-19 suite: it covered `--source`, `--offline`,
+   * `--list-targets` and `--no-kb`, and `--url` is the ONE named-source form declared on the
+   * PROGRAM rather than on the subcommand. `actionCommand.opts()` therefore never carries it
+   * (verified with commander@11: for both `pair install --url X` and `pair --url X install`,
+   * `url` lands on the program's opts and `cmd.opts()` is `{}`), so the skip predicate could
+   * not observe it and the pre-flight warmed a slot the command then re-fetched — 2 full
+   * archive downloads per remote `install|update --url`.
+   *
+   * The pre-existing single-fetch assertion (`update --url`, above) did NOT catch this: its
+   * fixture seeds a bundled monorepo dataset, which short-circuits the pre-flight before it
+   * reaches the network. Only a released shape can tell the two apart.
+   */
+  const remoteUrlFixture = () => {
+    const fs = releasedFs()
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/.pair/knowledge/README.md`, '# Content from the mirror')
+    })
+    const httpClient = new MockHttpClientService()
+    const ok = () => toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const body = () =>
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'))
+    // Deliberately enough responses for TWO full downloads: starving the mock would make the
+    // second download fail instead of being counted, and the assertion below must fail on the
+    // URL list, where the evidence is.
+    httpClient.setRequestResponses([ok(), ok(), ok(), ok()])
+    httpClient.setGetResponses([
+      body(),
+      body(),
+      body(),
+      body(),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+    return { fs, httpClient }
+  }
+
+  it('install --url <remote zip> downloads the archive exactly once', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const url = 'https://mirror.internal/kb.zip'
+    const { fs, httpClient } = remoteUrlFixture()
+
+    await runCli(['node', 'pair', 'install', '--url', url, '.'], { fs, httpClient }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
+  })
+
+  it('update --url <remote zip> downloads the archive exactly once, in a released shape too', async () => {
+    const { runCli } = await import('./cli.js')
+    silence()
+    const url = 'https://mirror.internal/kb.zip'
+    const { fs, httpClient } = remoteUrlFixture()
+
+    await runCli(['node', 'pair', 'update', '--url', url, '.'], { fs, httpClient }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([url, `${url}.sha256`])
+  })
+
+  it('install --url <local zip> issues no request at all', async () => {
+    // Keeps at the CLI layer the coverage the removed `bootstrapEnvironment` `url` parameter had
+    // ("skips accessibility check for local customUrl"): a local `--url` must reach no network,
+    // and now that is because the hook skips the pre-flight, not because a branch inside it
+    // returns early.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs({ [`${root}/acme-kb.zip`]: 'PK-fake-zip' })
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(`${targetPath}/manifest.json`, JSON.stringify({ name: 'acme-kb' }))
+      await fs.writeFile(`${targetPath}/.pair/knowledge/README.md`, '# from the archive')
+    })
+    const httpClient = answeringClient()
+
+    await runCli(['node', 'pair', 'install', '--url', `${root}/acme-kb.zip`, '.'], {
+      fs,
+      httpClient,
+    }).catch(() => {})
+
+    expect(httpClient.getUrls()).toEqual([])
+  })
+
+  it('--url together with --no-kb is rejected before anything is fetched', async () => {
+    // The rejection is documented in `--help`, the CLI reference and the ADL. It used to fire
+    // only as a SIDE EFFECT of the pre-flight running to step 1; once `--url` makes the
+    // pre-flight skip (named source), the validation has to sit above the skip or the
+    // documented error silently disappears.
+    const { runCli } = await import('./cli.js')
+    silence()
+    const fs = releasedFs()
+    const httpClient = answeringClient()
+
+    await expect(
+      runCli(
+        ['node', 'pair', 'install', '--url', 'https://mirror.internal/kb.zip', '--no-kb', '.'],
+        {
+          fs,
+          httpClient,
+        },
+      ),
+    ).rejects.toThrow(/Cannot use --url and --no-kb together/)
+    expect(httpClient.getUrls()).toEqual([])
   })
 })

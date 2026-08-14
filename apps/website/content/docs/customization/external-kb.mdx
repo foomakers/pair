@@ -137,13 +137,25 @@ pair-cli install --source https://github.com/acme/acme-kb.git
 pair-cli install --source ../acme-kb --offline
 ```
 
-<Callout type="warn">
-  **Installing straight from a release ZIP is not equivalent yet.** `pair install --source path-or-url-of-the-zip` extracts the
-  external KB into the version-keyed cache slot (`~/.pair/kb/` followed by the CLI
-  version) that is shared with the official KB, mixing the two and rewriting that
-  slot's `manifest.json` for every project on the machine. Publish the ZIP as your
-  release artifact, but point consumers at the repository (git URL) or a local clone
-  until [foomakers/pair#395](https://github.com/foomakers/pair/issues/395) is fixed.
+```bash
+# from a published release ZIP
+pair-cli install --source ./dist/acme-kb-1.0.0.zip --offline
+```
+
+<Callout>
+  **No external source ever writes the official KB's slot.** An external KB that has to
+  be materialized first — a ZIP, a remote ZIP, a git clone — is cached under
+  `~/.pair/kb/external/<kind>-<hash>/` (the remote-ZIP form also keeps a label:
+  `url-<label>-<hash>/`), never in the official KB's version slot
+  (`~/.pair/kb/<cli-version>/`). A **local directory** is not cached at all: it is
+  installed from in place, so editing it changes what the next install produces. Either
+  way, installing an external KB in one project cannot change what any other project on
+  the machine resolves. If the official slot **for the
+  CLI version you are running** is found holding a different KB, it is discarded and
+  re-fetched instead of served. Slots left polluted by an older CLI (the bug fixed in
+  [foomakers/pair#395](https://github.com/foomakers/pair/issues/395)) sit under that older
+  version's directory, which the new CLI never reads again — they are abandoned, not
+  cleaned: delete `~/.pair/kb/<old-cli-version>/` yourself to reclaim the disk.
 </Callout>
 
 Registries the external KB does not ship (for example `adoption`, `github`) are currently

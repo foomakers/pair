@@ -16,7 +16,9 @@ import {
   logger,
 } from '@pair/content-ops'
 import { bootstrapEnvironment } from './config'
-import { runDiagnostics, MIN_LOG_LEVEL } from './diagnostics'
+import { namedSource } from './config/cli'
+import { validateCliOptions } from '#kb-manager'
+import { runDiagnostics, isDiagEnabled, MIN_LOG_LEVEL } from './diagnostics'
 
 // Helper type-guard to keep positional args typed as string[]
 function onlyStrings(arr: unknown[]): string[] {
@@ -79,10 +81,17 @@ export async function runCli(
     .name(chalk.blue(pkg.name))
     .description(pkg.description)
     .version(pkg.version)
-    .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
+    .option(
+      '--url <url|path>',
+      'KB source used when a command names no --source (overrides default GitHub release)',
+    )
     .option('-l, --log-level <level>', 'Set minimum log level (debug|info|warn|error)')
     .option('-v, --verbose', 'Enable verbose logging (deprecated; use --log-level debug)')
-    .option('--no-kb', 'Skip knowledge base download')
+    // Live again since the pre-flight was revived (see `runKbPreflight`): `kb === false`
+    // skips the pre-flight KB resolution for `install`/`update`. It cannot be combined with
+    // `--url` — naming a source and refusing to fetch it is a contradiction, and
+    // `validateCliOptions` rejects it.
+    .option('--no-kb', 'Skip the knowledge base download (cannot be combined with --url)')
     // Prevent Commander from calling process.exit() automatically
     .exitOverride()
     .configureHelp({ sortSubcommands: true })
@@ -233,6 +242,154 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
   })
 }
 
+/**
+ * Apply the program-level `--log-level` (or its legacy `--verbose` alias).
+ *
+ * It runs BEFORE any pre-flight guard, deliberately: it is a program-level flag, so it must
+ * take effect for every command — including the ones the pre-flight allow-list skips. It used to live
+ * BELOW those guards, so `pair <cmd> --log-level debug` silently did nothing and the only
+ * level ever applied was the module-level default (US-395 review round 14). A command-level
+ * `--log-level` (`package`, `update-link`) is applied later in that handler and still wins.
+ */
+function applyGlobalLogLevel(prog: Command): void {
+  const globalOptions = prog.opts<{ logLevel?: string; verbose?: boolean }>()
+  if (globalOptions.verbose && !globalOptions.logLevel) {
+    // map legacy verbose flag to debug level
+    globalOptions.logLevel = 'debug'
+  }
+  if (globalOptions.logLevel) {
+    setLogLevel(globalOptions.logLevel)
+  }
+}
+
+/**
+ * The KB pre-flight: resolve (and if needed download) a knowledge base before a
+ * KB-consuming command runs.
+ *
+ * It was dead code until now. Commander invokes a program-level hook as
+ * `callback(hookedCommand, actionCommand)`, so `thisCommand` IS `prog` for EVERY
+ * subcommand, and the old first guard — `if (thisCommand === prog) return` — always
+ * returned. The consequences were user-visible: `--no-kb` still downloaded a KB (the flag
+ * an air-gapped user reaches for), `validateCliOptions` never rejected `--url` together
+ * with `--no-kb`, and the dataset accessibility probe never ran.
+ *
+ * Fixed in US-395 by testing the ACTION command instead, with the exemption list inverted
+ * to an allow-list (see `bootstrap-policy`) so waking the hook up does not make every
+ * read-only command reach for the network. `install` and `update` resolve a KB; nothing
+ * else does.
+ */
+/**
+ * Why the pre-flight must not run for this invocation, or `undefined` to proceed.
+ *
+ * Its own function because the answer depends on the ACTION command's options while the hook
+ * reads the PROGRAM's: keeping the three cases named and together is what stops a fourth flag
+ * from being added to `install` and silently inheriting a KB download it has no use for.
+ *
+ * It must be fed the MERGED option set — the same value the parsers see through
+ * `namedSource` — not the action command's alone. `--url` is declared on the PROGRAM, so
+ * `actionCommand.opts()` never carries it (commander@11: for both `pair install --url X` and
+ * `pair --url X install`, `url` lands on the program's opts and the subcommand's are `{}`), and
+ * with the command's set alone this predicate could not see a named remote source: the
+ * pre-flight warmed `external/url-…` and the command re-fetched the same archive into the same
+ * slot — 2 full downloads per remote `install|update --url` in a released layout. Same
+ * predicate as the resolver and the parsers is not enough; it has to be the same INPUT too.
+ */
+function preflightSkipReason(cmd: {
+  source?: string
+  url?: string
+  offline?: boolean
+  listTargets?: boolean
+}): string | undefined {
+  // Reads local config and nothing else; a KB is of no use to it.
+  if (cmd.listTargets === true) return 'list-targets'
+  // The air-gapped path (`install --offline --source /local/kb`). A fetch here does not degrade
+  // the run, it FAILS it — and `validateCommandOptions` has not run yet, so an `--offline` with
+  // no source would otherwise download an entire KB before reporting the invocation invalid.
+  if (cmd.offline === true) return 'offline'
+  // A command that names its own source resolves it itself; warming the official slot downloads
+  // a KB the run never opens. Same predicate the resolver and the parsers use, so the three
+  // layers cannot disagree on what "named" means.
+  const named = namedSource({
+    ...(cmd.source !== undefined && { source: cmd.source }),
+    ...(cmd.url !== undefined && { url: cmd.url }),
+  })
+  return named !== undefined ? 'named-source' : undefined
+}
+
+/**
+ * The one option set the pre-flight decides on: the ACTION command's flags with the program's
+ * merged over them, `--source`/`--url` precedence applied exactly as `namedSource` applies it.
+ *
+ * Both sets are needed and neither alone is enough. `thisCommand` is the PROGRAM for a
+ * program-level `preAction` hook, so it carries only the program's flags (`--url`, `--no-kb`);
+ * every flag that names the command's own source — `--source`, `--offline`, `--list-targets` —
+ * is declared on the SUBCOMMAND and is invisible there. Reading only the program's set made the
+ * revived pre-flight fetch the official KB for `install --source … --offline` (round 19);
+ * reading only the command's made it fetch a remote `--url` the command then fetched again
+ * (round 21). Merging here is what leaves ONE value for every reader below.
+ */
+function preflightOptions(
+  prog: Command,
+  actionCommand: Command,
+): { source?: string; url?: string; offline?: boolean; listTargets?: boolean; kb: boolean } {
+  const progOptions = prog.opts<{ url?: string; kb: boolean }>()
+  const cmdOptions = actionCommand.opts<{
+    source?: string
+    url?: string
+    offline?: boolean
+    listTargets?: boolean
+  }>()
+  const url = cmdOptions.url ?? progOptions.url
+  return { ...cmdOptions, ...(url !== undefined && { url }), kb: progOptions.kb }
+}
+
+async function runKbPreflight(args: {
+  prog: Command
+  thisCommand: Command
+  actionCommand: Command
+  ctx: { fsService: FileSystemService; httpClient: HttpClientService; version: string }
+}): Promise<void> {
+  const { prog, thisCommand, actionCommand, ctx } = args
+
+  // Commander invokes a program-level `preAction` hook as `callback(hookedCommand,
+  // actionCommand)` — the FIRST argument is the command the hook was attached to, i.e. the
+  // program itself, for every subcommand. So the old guard here, `if (thisCommand === prog)
+  // return`, was always true and this entire pre-flight was dead code: `--no-kb` still
+  // downloaded a KB, `--log-level` was inert everywhere except two command-level flags, and
+  // `bootstrapEnvironment` never ran at all.
+  //
+  // The right test is on the ACTION command: skip only when no subcommand matched.
+  if (actionCommand === prog) return
+
+  // Only KB-consuming commands resolve a KB (allow-list — see bootstrap-policy).
+  if (!requiresKbBootstrap(actionCommand.name())) return
+
+  const options = preflightOptions(thisCommand, actionCommand)
+
+  // ABOVE the skip, deliberately, and the ONLY place this rule is enforced now. `--url` +
+  // `--no-kb` is incoherent whatever the pre-flight decides next, and its rejection used to fire
+  // only as a SIDE EFFECT of the pre-flight running on into `bootstrapEnvironment` — so making
+  // `--url` a skip reason (as it must be: a named source is fetched by the command) would
+  // silently delete an error `--help`, the CLI reference, the contracts spec and the ADL all
+  // document.
+  validateCliOptions({ ...(options.url && { url: options.url }), kb: options.kb })
+
+  const skip = preflightSkipReason(options)
+  if (skip !== undefined) {
+    if (isDiagEnabled()) console.error(`[pair:diag] Skipping KB pre-flight (${skip})`)
+    return
+  }
+
+  // No source to pass on: reaching here means none was named, so the only KB to warm is the
+  // official one (see `bootstrapEnvironment`).
+  await bootstrapEnvironment({
+    fsService: ctx.fsService,
+    httpClient: ctx.httpClient,
+    version: ctx.version,
+    kb: options.kb,
+  })
+}
+
 function attachPreActionHook(
   prog: Command,
   ctx: { fsService: FileSystemService; httpClient: HttpClientService; version: string },
@@ -245,30 +402,9 @@ function attachPreActionHook(
       console.log(`  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`)
     }
 
-    // Skip bootstrap for root command (no subcommand matched)
-    if (thisCommand === prog) return
+    applyGlobalLogLevel(prog)
 
-    // Skip bootstrap for KB-producing commands (package, scaffold-kb) — they don't need a KB
-    if (!requiresKbBootstrap(actionCommand.name())) return
-
-    // Apply global log level or legacy --verbose alias if provided
-    const globalOptions = prog.opts<{ logLevel?: string; verbose?: boolean }>()
-    if (globalOptions.verbose && !globalOptions.logLevel) {
-      // map legacy verbose flag to debug level
-      globalOptions.logLevel = 'debug'
-    }
-    if (globalOptions.logLevel) {
-      setLogLevel(globalOptions.logLevel)
-    }
-
-    const options = thisCommand.opts<{ url?: string; kb: boolean }>()
-    await bootstrapEnvironment({
-      fsService: ctx.fsService,
-      httpClient: ctx.httpClient,
-      version: ctx.version,
-      url: options.url,
-      kb: options.kb,
-    })
+    await runKbPreflight({ prog, thisCommand, actionCommand, ctx })
   })
 }
 

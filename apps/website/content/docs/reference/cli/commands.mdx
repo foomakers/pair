@@ -3,6 +3,8 @@ title: CLI Commands
 description: Complete reference for all pair-cli commands with syntax, options, and examples.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout'
+
 Complete reference for all `pair-cli` commands with syntax, options, and examples.
 
 **Quick Navigation:**
@@ -13,6 +15,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [package](#package) — Package KB content into ZIP
 - [scaffold-kb](#scaffold-kb) — Scaffold an external KB repository
 - [kb-info](#kb-info) — Display package metadata, or check installed vs current KB version
+- [kb-cache](#kb-cache) — Inspect and reclaim the shared KB cache
 - [kb-verify](#kb-verify) — Verify KB package integrity
 - [kb validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
@@ -48,13 +51,13 @@ pair install [registry:target ...]
 
 ### Options
 
-| Option                 | Description                                            |
-| ---------------------- | ------------------------------------------------------ |
-| `--list-targets`       | List all available asset registries with descriptions  |
-| `--config <file>`      | Use custom configuration file (default: `config.json`) |
+| Option                      | Description                                                       |
+| --------------------------- | ----------------------------------------------------------------- |
+| `--list-targets`            | List all available asset registries with descriptions             |
+| `--config <file>`           | Use custom configuration file (default: `config.json`)            |
 | `--source <url\|path\|git>` | KB source: URL, local path, or git repo (overrides auto-download) |
-| `--offline`            | Skip KB download, use local source only                |
-| `--skip-verify`        | Skip package integrity verification (for ZIP sources)  |
+| `--offline`                 | Skip KB download, use local source only                           |
+| `--skip-verify`             | Skip package integrity verification (for ZIP sources)             |
 
 **KB Source Options:**
 
@@ -116,11 +119,11 @@ pair update [registry:target ...]
 
 ### Options
 
-| Option                 | Description                                            |
-| ---------------------- | ------------------------------------------------------ |
-| `--config <file>`          | Use custom configuration file (default: `config.json`) |
+| Option                      | Description                                                       |
+| --------------------------- | ----------------------------------------------------------------- |
+| `--config <file>`           | Use custom configuration file (default: `config.json`)            |
 | `--source <url\|path\|git>` | KB source: URL, local path, or git repo (overrides auto-download) |
-| `--offline`                | Skip KB download, use local source only                |
+| `--offline`                 | Skip KB download, use local source only                           |
 
 ### Examples
 
@@ -155,11 +158,11 @@ pair update-link [target]
 
 ### Options
 
-| Option                | Description                                                                    |
-| --------------------- | ------------------------------------------------------------------------------ |
-| `--url <url\|path>`   | KB source URL or local filesystem path                                         |
-| `--dry-run`           | Preview changes without writing to files                                       |
-| `--log-level <level>` | Set logging level (trace, debug, info, warn, error)                            |
+| Option                | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `--url <url\|path>`   | KB source URL or local filesystem path              |
+| `--dry-run`           | Preview changes without writing to files            |
+| `--log-level <level>` | Set logging level (trace, debug, info, warn, error) |
 
 ### Examples
 
@@ -194,29 +197,29 @@ pair package [options]
 
 ### Options
 
-| Option                        | Short | Description                                                         |
-| ----------------------------- | ----- | ------------------------------------------------------------------- |
-| `--layout <mode>`             |       | Layout mode: `source` or `target` (default: `target`)              |
-| `--output <path>`             | `-o`  | Output ZIP file path (default: `kb-package.zip`)                    |
-| `--source-dir <path>`         | `-s`  | Source directory to package (default: current directory)             |
-| `--config <path>`             | `-c`  | Path to config.json file                                            |
-| `--name <name>`               |       | Package name for manifest                                           |
-| `--version <version>`         |       | Package version for manifest                                        |
-| `--description <description>` |       | Package description for manifest                                    |
-| `--author <author>`           |       | Package author for manifest                                         |
-| `--skip-registries <list>`    |       | Comma-separated registry names to exclude                           |
-| `--root <path>`               |       | Custom root path for link relativization (default: `.pair/`)        |
-| `--log-level <level>`         | `-l`  | Set logging level (trace, debug, info, warn, error)                 |
-| `--interactive`               | `-i`  | Enter interactive mode with guided prompts                          |
-| `--tags <tags>`               |       | Comma-separated tags (e.g., `"ai,devops,testing"`)                  |
-| `--license <license>`         |       | Package license (default: `MIT`)                                    |
-| `--org`                       |       | Enable organizational packaging mode                                |
-| `--org-name <name>`           |       | Organization name (required when `--org`)                           |
-| `--team <team>`               |       | Team name within the organization                                   |
-| `--department <department>`   |       | Department within the organization                                  |
-| `--approver <approver>`       |       | Package approver (free-text)                                        |
-| `--compliance <tags>`         |       | Comma-separated compliance tags (e.g., `"SOC2,ISO27001"`)          |
-| `--distribution <policy>`     |       | Distribution policy: `open`, `private`, or `restricted`             |
+| Option                        | Short | Description                                                  |
+| ----------------------------- | ----- | ------------------------------------------------------------ |
+| `--layout <mode>`             |       | Layout mode: `source` or `target` (default: `target`)        |
+| `--output <path>`             | `-o`  | Output ZIP file path (default: `kb-package.zip`)             |
+| `--source-dir <path>`         | `-s`  | Source directory to package (default: current directory)     |
+| `--config <path>`             | `-c`  | Path to config.json file                                     |
+| `--name <name>`               |       | Package name for manifest                                    |
+| `--version <version>`         |       | Package version for manifest                                 |
+| `--description <description>` |       | Package description for manifest                             |
+| `--author <author>`           |       | Package author for manifest                                  |
+| `--skip-registries <list>`    |       | Comma-separated registry names to exclude                    |
+| `--root <path>`               |       | Custom root path for link relativization (default: `.pair/`) |
+| `--log-level <level>`         | `-l`  | Set logging level (trace, debug, info, warn, error)          |
+| `--interactive`               | `-i`  | Enter interactive mode with guided prompts                   |
+| `--tags <tags>`               |       | Comma-separated tags (e.g., `"ai,devops,testing"`)           |
+| `--license <license>`         |       | Package license (default: `MIT`)                             |
+| `--org`                       |       | Enable organizational packaging mode                         |
+| `--org-name <name>`           |       | Organization name (required when `--org`)                    |
+| `--team <team>`               |       | Team name within the organization                            |
+| `--department <department>`   |       | Department within the organization                           |
+| `--approver <approver>`       |       | Package approver (free-text)                                 |
+| `--compliance <tags>`         |       | Comma-separated compliance tags (e.g., `"SOC2,ISO27001"`)    |
+| `--distribution <policy>`     |       | Distribution policy: `open`, `private`, or `restricted`      |
 
 ### Examples
 
@@ -242,7 +245,7 @@ pair package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,I
 
 ### Interactive Mode
 
-Quick mode is the default: omitting `--interactive` resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`) and applies them in one shot — so `pair package` in a repo whose `package.json` name is `foo` produces a `foo` package, not `kb-package`. Passing `--interactive` (the guided selector, requires a TTY) enters a guided flow that pre-fills prompts from the *same* resolved defaults and lets you confirm or override each. This guided/quick duality follows the [Guided / Quick Setup Convention](/docs/contributing/writing-skills#setup-skills-guided-vs-quick).
+Quick mode is the default: omitting `--interactive` resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`) and applies them in one shot — so `pair package` in a repo whose `package.json` name is `foo` produces a `foo` package, not `kb-package`. Passing `--interactive` (the guided selector, requires a TTY) enters a guided flow that pre-fills prompts from the _same_ resolved defaults and lets you confirm or override each. This guided/quick duality follows the [Guided / Quick Setup Convention](/docs/contributing/writing-skills#setup-skills-guided-vs-quick).
 
 ### Org Template
 
@@ -263,11 +266,11 @@ pair kb-info [package-path] [options]
 
 ### Options
 
-| Option                 | Description                                                    |
-| ----------------------- | --------------------------------------------------------------- |
-| `--json`                | Output package metadata or version-check result as JSON format  |
-| `--source <path\|url>`  | KB source to resolve the current version from (version-check mode only) |
-| `--log-level <level>`   | Set minimum log level (debug, info, warn, error)                |
+| Option                 | Description                                                             |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `--json`               | Output package metadata or version-check result as JSON format          |
+| `--source <path\|url>` | KB source to resolve the current version from (version-check mode only) |
+| `--log-level <level>`  | Set minimum log level (debug, info, warn, error)                        |
 
 ### Version Check Mode
 
@@ -307,6 +310,70 @@ pair kb-info --source /path/to/kb
 
 ---
 
+## kb-cache
+
+Inspect and reclaim the shared KB cache — the machine-wide directory where `install` and
+`update` keep downloaded knowledge bases so repeated runs do not re-fetch them.
+
+### Usage
+
+```bash
+pair kb-cache [list|prune] [options]
+```
+
+### Arguments
+
+| Argument | Description                                                          |
+| -------- | -------------------------------------------------------------------- |
+| `list`   | Show every cache slot with its kind, size and label (default action) |
+| `prune`  | Remove the slots that are safe to remove                             |
+
+### Options
+
+| Option                | Description                                                   |
+| --------------------- | ------------------------------------------------------------- |
+| `--dry-run`           | `prune` only: report what would be removed and delete nothing |
+| `--json`              | Output the inventory or the prune result as JSON              |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error)              |
+
+### What prune removes — and what it never removes
+
+`prune` removes only slots that a later `install`/`update` can recreate:
+
+- **backup** — a `.bak` slot left behind by an interrupted install
+- **stage** — an abandoned `.tmp-*` staging directory
+- **legacy-git** — a pre-`external/` git clone at the cache root
+- **official** — KB slots for CLI versions other than the one running
+
+It never removes:
+
+- **external KBs** (`external/`) — fetched from a URL the CLI does not retain, so deleting one
+  is not undoable by re-running an install
+- **every official slot when the running version cannot be resolved** — rather than compare
+  against an empty version and delete the KB currently in use
+
+A cache root that exists but cannot be read is reported as an error, not as an empty cache, and
+a prune that fails to remove part of what it identified exits non-zero instead of reporting a
+clean sweep.
+
+This command reads the cache only — it never downloads a KB.
+
+### Examples
+
+```bash
+# Show what the cache holds
+pair kb-cache
+
+# See what prune would reclaim, without deleting
+pair kb-cache prune --dry-run
+
+# Reclaim the stale slots
+pair kb-cache prune
+
+# Machine-readable inventory
+pair kb-cache list --json
+```
+
 ## kb-verify
 
 Verify KB package integrity before installation or distribution. Validates checksum (SHA-256), structure, and manifest.
@@ -319,10 +386,10 @@ pair kb-verify <package-path> [options]
 
 ### Options
 
-| Option                | Description                                       |
-| --------------------- | ------------------------------------------------- |
-| `--json`              | Output verification report as JSON format         |
-| `--log-level <level>` | Set minimum log level (debug, info, warn, error)  |
+| Option                | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `--json`              | Output verification report as JSON format        |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error) |
 
 ### Verification Checks
 
@@ -361,14 +428,14 @@ This command takes **no positional argument** — the KB directory is passed as
 
 ### Options
 
-| Option                     | Description                                                 |
-| -------------------------- | ----------------------------------------------------------- |
-| `--path <path>`            | KB directory to validate (default: current directory)       |
-| `--layout <mode>`          | Layout mode: `source` or `target` (default: `target`)      |
-| `--strict`                 | Enable external link checking via HTTP HEAD (slow)          |
-| `--ignore-config`          | Skip config-based registry structure validation             |
-| `--skip-registries <list>` | Comma-separated registry names to exclude from validation   |
-| `--log-level <level>`      | Set logging level (trace, debug, info, warn, error)         |
+| Option                     | Description                                               |
+| -------------------------- | --------------------------------------------------------- |
+| `--path <path>`            | KB directory to validate (default: current directory)     |
+| `--layout <mode>`          | Layout mode: `source` or `target` (default: `target`)     |
+| `--strict`                 | Enable external link checking via HTTP HEAD (slow)        |
+| `--ignore-config`          | Skip config-based registry structure validation           |
+| `--skip-registries <list>` | Comma-separated registry names to exclude from validation |
+| `--log-level <level>`      | Set logging level (trace, debug, info, warn, error)       |
 
 ### Examples
 
@@ -409,11 +476,11 @@ pair scaffold-kb [path] [options]
 
 ### Options
 
-| Option          | Short | Description                                                    |
-| --------------- | ----- | -------------------------------------------------------------- |
-| `--name <name>` |       | KB name (default: derived from the target directory name)       |
+| Option          | Short | Description                                                        |
+| --------------- | ----- | ------------------------------------------------------------------ |
+| `--name <name>` |       | KB name (default: derived from the target directory name)          |
 | `--host <host>` |       | Release automation host: `github` or `generic` (default: `github`) |
-| `--force`       | `-f`  | Regenerate scaffold-owned files without confirmation            |
+| `--force`       | `-f`  | Regenerate scaffold-owned files without confirmation               |
 
 `--name` is embedded in generated YAML, bash, and Markdown: newlines, control characters
 and `${{` (which GitHub Actions would evaluate as a live expression in the generated
@@ -435,13 +502,13 @@ overwrite decision.
 
 ### What Gets Created
 
-| Path                            | Ownership                                          |
-| ------------------------------- | -------------------------------------------------- |
+| Path                            | Ownership                                           |
+| ------------------------------- | --------------------------------------------------- |
 | `.pair/knowledge/`, `.skills/`  | your content (seed files are never overwritten)     |
 | `pair.config.json`              | scaffold-owned — knowledge + skills registries      |
 | `README.md`, `.gitignore`       | scaffold-owned                                      |
-| `scripts/release.sh`            | scaffold-owned — wraps `pair package` (mode `0755`)  |
-| `.github/workflows/release.yml` | scaffold-owned — `--host github` only                |
+| `scripts/release.sh`            | scaffold-owned — wraps `pair package` (mode `0755`) |
+| `.github/workflows/release.yml` | scaffold-owned — `--host github` only               |
 
 No `.pair/adoption/` is created: a KB is knowledge, not a configured project.
 
@@ -515,19 +582,33 @@ pair validate-config --config ./my-config.json
 
 Options available for all commands:
 
-| Option                | Description                                            |
-| --------------------- | ------------------------------------------------------ |
-| `--help`              | Display help for command                               |
-| `--version`           | Display CLI version                                    |
-| `--log-level <level>` | Set global logging level (trace, debug, info, warn, error) |
+| Option                | Description                                                                                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--help`              | Display help for command                                                                                                                                                |
+| `--version`           | Display CLI version                                                                                                                                                     |
+| `--log-level <level>` | Set global logging level (trace, debug, info, warn, error)                                                                                                              |
+| `--url <url\|path>`   | KB source for whichever command runs, used when that command names no `--source` (which outranks it); resolves exactly like `--source` — same identity, same cache slot |
+| `--no-kb`             | Skip the knowledge base download — cannot be combined with `--url` (see below)                                                                                          |
+
+<Callout type="warn">
+  **`--no-kb` takes effect again, and now conflicts with `--url`.** The flag skips the KB
+  pre-flight that `install` and `update` run before their work, so nothing is fetched and the
+  command proceeds with whatever KB is already on disk. It was a **no-op** in every release up to
+  and including 0.4.3: its only consumer was that pre-flight, and a guard in the `preAction` hook
+  returned before it on every invocation. Two consequences of reviving it, both user-visible:
+  `pair install --no-kb` no longer downloads a KB, and `--url <source>` together with `--no-kb` is
+  now **rejected** (`Cannot use --url and --no-kb together`) where it was previously accepted and
+  silently ignored — naming a source and refusing to fetch it is a contradiction. Only `install`
+  and `update` run the pre-flight at all; every other command reads what is already on disk.
+</Callout>
 
 ---
 
 ## Exit Codes
 
-| Code | Meaning                                         |
-| ---- | ----------------------------------------------- |
-| `0`  | Success                                         |
+| Code | Meaning                                          |
+| ---- | ------------------------------------------------ |
+| `0`  | Success                                          |
 | `1`  | Validation error or command failure              |
 | `2`  | Download/packaging error                         |
 | `3`  | File system error (disk full, permission denied) |

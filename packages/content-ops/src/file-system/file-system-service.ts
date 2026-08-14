@@ -8,6 +8,12 @@ export interface FileSystemService {
   accessSync: (path: string) => void
   readdir: (path: string) => Promise<Dirent[]>
   readFile: (file: string) => Promise<string>
+  /**
+   * Byte-mode read. `readFile` decodes as utf-8, which is LOSSY on binary content —
+   * an identity derived from it (e.g. the content hash keying a local ZIP's cache
+   * slot, US-395/#429) would not be the identity of the bytes on disk.
+   */
+  readFileBytes: (file: string) => Promise<Buffer>
   readFileSync: (file: string) => string
   existsSync: (file: string) => boolean
   writeFile: (file: string, content: string) => Promise<void>
@@ -41,6 +47,7 @@ export const fileSystemService: FileSystemService = {
   accessSync: path => accessSync(path, constants.R_OK),
   readdir: path => fs.readdir(path, { withFileTypes: true }),
   readFile: file => fs.readFile(file, 'utf-8'),
+  readFileBytes: file => fs.readFile(file),
   existsSync: file => existsSync(file),
   readFileSync: file => readFileSync(file, 'utf-8'),
   writeFile: (file, content) => fs.writeFile(file, content, 'utf-8'),

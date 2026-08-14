@@ -177,3 +177,57 @@ describe('parseInstallCommand', () => {
     })
   })
 })
+
+/**
+ * US-395 review round 12: the program-level `--url` was disconnected from resolution.
+ * `pair install --url <mirror>` produced `resolution: 'default'`, so the mirror archive
+ * bootstrap had fetched into its own identity slot was never read and the OFFICIAL KB was
+ * downloaded and installed instead — silently a different KB than the user named, and a
+ * hard failure behind a firewall where the mirror was the whole point.
+ */
+describe('US-395: the program-level --url names the source when --source does not', () => {
+  it('resolves a remote --url as a remote source (the identity bootstrap fetched)', () => {
+    const config = parseInstallCommand({ url: 'https://mirror.internal/kb.zip' })
+
+    expect(config).toEqual({
+      command: 'install',
+      kb: true,
+      resolution: 'remote',
+      url: 'https://mirror.internal/kb.zip',
+      offline: false,
+    })
+  })
+
+  it('resolves a local path passed as --url as a local source', () => {
+    const config = parseInstallCommand({ url: '/local/kb' })
+
+    expect(config.resolution).toBe('local')
+    expect((config as InstallCommandConfigLocal).path).toBe('/local/kb')
+  })
+
+  it('resolves a git --url as a git source', () => {
+    const config = parseInstallCommand({ url: 'https://github.com/org/repo.git' })
+
+    expect(config.resolution).toBe('git')
+    expect((config as InstallCommandConfigGit).url).toBe('https://github.com/org/repo.git')
+  })
+
+  it('lets an explicit --source outrank --url', () => {
+    const config = parseInstallCommand({
+      source: 'https://example.com/kb.zip',
+      url: 'https://mirror.internal/other.zip',
+    })
+
+    expect((config as InstallCommandConfigRemote).url).toBe('https://example.com/kb.zip')
+  })
+
+  it('keeps default resolution when neither --source nor --url is given', () => {
+    expect(parseInstallCommand({}).resolution).toBe('default')
+  })
+
+  it('still rejects an unsupported protocol passed as --url', () => {
+    expect(() => parseInstallCommand({ url: 'ftp://example.com/kb.zip' })).toThrow(
+      'Unsupported source protocol',
+    )
+  })
+})

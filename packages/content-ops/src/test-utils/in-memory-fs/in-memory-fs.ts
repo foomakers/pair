@@ -32,6 +32,10 @@ export class InMemoryFileSystemService implements FileSystemService {
     return read.readFileSync(this.state, path)
   }
 
+  async readFileBytes(path: string): Promise<Buffer> {
+    return read.readFileBytes(this.state, path)
+  }
+
   existsSync(path: string): boolean {
     return read.existsSync(this.state, path)
   }

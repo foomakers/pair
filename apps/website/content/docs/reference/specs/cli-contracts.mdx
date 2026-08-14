@@ -33,10 +33,21 @@ export interface CommandOptions {
 }
 
 export interface CliOptions {
-  url?: string // --source <url|path>
+  url?: string // --url <url|path>
   kb: boolean // --no-kb flag (true=download, false=offline)
 }
 ```
+
+`kb` is read by the KB pre-flight (`bootstrapEnvironment`), which runs before `install` and
+`update`: `false` skips the pre-flight fetch, and `false` together with a `url` is rejected by
+`validateCliOptions`. Both were dead through 0.4.3 — the pre-flight was unreachable, so
+`pair install --no-kb` installed a KB anyway and the conflict never fired. See the
+[`--no-kb` note in the CLI reference](/docs/reference/cli/commands).
+
+The conflict is checked in the CLI hook (`runKbPreflight`), **above** the pre-flight's own
+skip, and `bootstrapEnvironment` takes no `url`: a named source — `--source`, `--git`, `--url`,
+local or remote — skips the pre-flight entirely, because the command fetches that source itself
+into its own cache slot. A pre-flight that also warmed it downloaded the same archive twice.
 
 ### Install Command
 
@@ -174,41 +185,41 @@ export interface VerificationReport {
 
 | Category              | Exit Code | Description                                           |
 | --------------------- | --------- | ----------------------------------------------------- |
-| **Option Validation** | 1         | Invalid option combination or missing required option  |
-| **File System**       | 1         | Path not found, permission denied, not writable        |
-| **Network**           | 2         | Download failure, connection timeout, DNS error        |
-| **Checksum**          | 2         | SHA256 validation failure                              |
-| **Configuration**     | 1         | Invalid config.json structure or values                |
-| **KB Structure**      | 1         | Invalid KB directory structure                         |
+| **Option Validation** | 1         | Invalid option combination or missing required option |
+| **File System**       | 1         | Path not found, permission denied, not writable       |
+| **Network**           | 2         | Download failure, connection timeout, DNS error       |
+| **Checksum**          | 2         | SHA256 validation failure                             |
+| **Configuration**     | 1         | Invalid config.json structure or values               |
+| **KB Structure**      | 1         | Invalid KB directory structure                        |
 
 ### Option Validation Errors
 
-| Code | Error | Trigger | Resolution |
-| ---- | ----- | ------- | ---------- |
-| V001 | Conflicting options | `--list-targets` with target args | Use separately |
-| V002 | Offline requires source | `--offline` without `--source` | Provide `--source` |
-| V003 | Offline cannot use URL | `--offline` with HTTP URL | Use local path |
-| V004 | Invalid config file | `--config` points to missing file | Fix path |
-| V005 | Malformed JSON | Invalid JSON in config | Fix syntax |
+| Code | Error                   | Trigger                           | Resolution         |
+| ---- | ----------------------- | --------------------------------- | ------------------ |
+| V001 | Conflicting options     | `--list-targets` with target args | Use separately     |
+| V002 | Offline requires source | `--offline` without `--source`    | Provide `--source` |
+| V003 | Offline cannot use URL  | `--offline` with HTTP URL         | Use local path     |
+| V004 | Invalid config file     | `--config` points to missing file | Fix path           |
+| V005 | Malformed JSON          | Invalid JSON in config            | Fix syntax         |
 
 ### File System Errors
 
-| Code | Error | Trigger | Resolution |
-| ---- | ----- | ------- | ---------- |
-| FS001 | Path not found | Target path missing | Create dir or fix path |
-| FS002 | Permission denied | Insufficient permissions | Fix permissions |
-| FS003 | Not writable | Read-only target | Fix write permissions |
-| FS004 | Disk full | Insufficient space | Free space |
+| Code  | Error             | Trigger                  | Resolution             |
+| ----- | ----------------- | ------------------------ | ---------------------- |
+| FS001 | Path not found    | Target path missing      | Create dir or fix path |
+| FS002 | Permission denied | Insufficient permissions | Fix permissions        |
+| FS003 | Not writable      | Read-only target         | Fix write permissions  |
+| FS004 | Disk full         | Insufficient space       | Free space             |
 
 ### Package Verification Errors
 
-| Code | Error | Trigger | Resolution |
-| ---- | ----- | ------- | ---------- |
-| VER001 | Package not found | File missing | Check path |
-| VER002 | Invalid format | Not valid ZIP | Use valid package |
-| VER003 | Checksum mismatch | Content tampered | Re-download |
-| VER004 | Missing manifest | No manifest.json | Use valid package |
-| VER005 | Missing registry | Structure mismatch | Rebuild package |
+| Code   | Error             | Trigger            | Resolution        |
+| ------ | ----------------- | ------------------ | ----------------- |
+| VER001 | Package not found | File missing       | Check path        |
+| VER002 | Invalid format    | Not valid ZIP      | Use valid package |
+| VER003 | Checksum mismatch | Content tampered   | Re-download       |
+| VER004 | Missing manifest  | No manifest.json   | Use valid package |
+| VER005 | Missing registry  | Structure mismatch | Rebuild package   |
 
 ## Validation Logic
 
@@ -234,12 +245,12 @@ function validateInstallUpdateOptions(options: InstallOptions | UpdateOptions): 
 
 ## Exit Code Contract
 
-| Code | Meaning                | Examples                                                 |
-| ---- | ---------------------- | -------------------------------------------------------- |
-| `0`  | Success                | Command completed successfully                           |
-| `1`  | Validation Error       | Invalid options, config errors, KB structure errors      |
-| `2`  | Download/Network Error | Network timeout, checksum mismatch, packaging error      |
-| `3`  | File System Error      | Disk full, permission denied during operation            |
+| Code | Meaning                | Examples                                            |
+| ---- | ---------------------- | --------------------------------------------------- |
+| `0`  | Success                | Command completed successfully                      |
+| `1`  | Validation Error       | Invalid options, config errors, KB structure errors |
+| `2`  | Download/Network Error | Network timeout, checksum mismatch, packaging error |
+| `3`  | File System Error      | Disk full, permission denied during operation       |
 
 ## Test Matrices
 

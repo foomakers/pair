@@ -1,11 +1,14 @@
-import { join, dirname, resolve } from 'path'
-import { rmSync } from 'fs'
+import { join, dirname } from 'path'
 import { FileSystemService, HttpClientService, validateKBStructure } from '@pair/content-ops'
 import { findPackageJsonPath } from './discovery'
-import { isKBCached, ensureKBAvailable } from '#kb-manager'
-import { installKBFromLocalZip } from '#kb-manager/kb-installer'
-import { cloneGitRepo, gitCacheKey } from '#kb-manager/git-clone'
-import cacheManager from '#kb-manager/cache-manager'
+import {
+  cachedOfficialKBPath,
+  isKBCached,
+  ensureKBAvailable,
+  installKBFromGit,
+  installKBFromLocalZip,
+  localKBSource,
+} from '#kb-manager'
 import { isDiagEnabled } from '#diagnostics'
 
 /**
@@ -65,11 +68,15 @@ async function downloadKBIfNeeded(options: {
     ensureKBAvailableFn = ensureKBAvailable,
   } = options
 
-  if (DIAG) console.error(`[diag] Checking KB cache for version ${version}`)
-  const cached = await isKBCachedFn(version, fsService)
-
-  if (!cached && DIAG) {
-    console.error(`[diag] KB not cached, downloading...`)
+  // Probed ONLY under PAIR_DIAG: the answer feeds a `[diag]` line and nothing else —
+  // `ensureKBAvailable` inspects the slot itself and is called either way. Unconditionally
+  // it costs two existsSync + readFile + JSON.parse on the hot path of every command that
+  // reaches the fallback resolver, in exchange for no behaviour.
+  if (DIAG) {
+    console.error(`[diag] Checking KB cache for version ${version}`)
+    if (!(await isKBCachedFn(version, fsService))) {
+      console.error(`[diag] KB not cached, downloading...`)
+    }
   }
 
   const kbPath = await ensureKBAvailableFn(version, {
@@ -101,8 +108,16 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
   } = options
   const DIAG = isDiagEnabled()
 
-  const localPath = await tryMonorepoDatasetPath(fsService, DIAG)
-  if (localPath) return localPath
+  // The monorepo shortcut is the fallback for the DEFAULT source only. An explicit
+  // `--url` names a source, and a named source always reaches identity resolution (AC4):
+  // resolving it to the local monorepo dataset would ignore what the user typed with no
+  // warning — the same class of surprise as the slot contamination this story fixes, and
+  // the reason the `--url` path used to be exercisable only in a released binary
+  // (`--source` and `--git` are honoured in a checkout; this one was the odd one out).
+  if (!customUrl) {
+    const localPath = await tryMonorepoDatasetPath(fsService, DIAG)
+    if (localPath) return localPath
+  }
 
   return downloadKBIfNeeded({
     version,
@@ -124,18 +139,17 @@ export type DatasetResolvableConfig =
 
 /** Options accepted by resolveDatasetRoot. */
 export interface DatasetResolveOptions {
+  /**
+   * `false` when the caller passed `--no-kb`. The pre-flight already honours the flag, but it is
+   * only ONE of the two readers: the command path resolves its dataset independently through
+   * `resolveDatasetRoot`, so without this the flag skipped the warm fetch and the command
+   * downloaded anyway — the flag's help text, the CLI reference and the ADL all promise a skip.
+   */
+  kb?: boolean | undefined
   cliVersion?: string | undefined
   httpClient?: HttpClientService | undefined
   progressWriter?: { write(s: string): void } | undefined
   isTTY?: boolean | undefined
-}
-
-async function resolveGitDataset(fs: FileSystemService, url: string): Promise<string> {
-  const cachePath = cacheManager.getCachedKBPath(gitCacheKey(url))
-  await cacheManager.ensureCacheDirectory(cachePath, fs)
-  cloneGitRepo(url, cachePath)
-  rmSync(join(cachePath, '.git'), { recursive: true, force: true })
-  return cachePath
 }
 
 async function resolveLocalDataset(
@@ -144,8 +158,13 @@ async function resolveLocalDataset(
   version: string,
   skipVerify = false,
 ): Promise<string> {
-  const resolved = resolve(fs.currentWorkingDirectory(), path)
-  if (path.endsWith('.zip')) {
+  // ZIP-vs-directory is classified in ONE place (`localKBSource`), so this dispatch and
+  // the cache slot the installer writes can never disagree — `KB.ZIP` included (US-395).
+  // A ZIP is extracted into its own cache slot; a DIRECTORY is used IN PLACE — no copy,
+  // no slot, so edits to it are picked up by the next install.
+  const source = localKBSource(path, fs)
+  const resolved = source.path
+  if (source.kind === 'zip') {
     return installKBFromLocalZip(version, resolved, fs, skipVerify)
   }
   if (!fs.existsSync(resolved)) {
@@ -162,7 +181,23 @@ async function resolveDefaultDataset(
   fs: FileSystemService,
   version: string,
   httpClient?: HttpClientService,
+  kb?: boolean,
 ): Promise<string> {
+  // `--no-kb` means "use what is already here", not "download quietly". Resolve from the
+  // bundled dataset or an already-populated cache slot, and if neither exists say so with the
+  // two ways out — rather than fetching the KB the user just refused.
+  if (kb === false) {
+    const bundled = await tryMonorepoDatasetPath(fs, isDiagEnabled())
+    if (bundled) return bundled
+    const cached = await cachedOfficialKBPath(version, fs)
+    if (cached) return cached
+    throw new Error(
+      `--no-kb was passed, so no KB was downloaded, and none is available locally ` +
+        `(no dataset bundled with the CLI, and no cached KB for version ${version}). ` +
+        `Either drop --no-kb to fetch it, or name a local KB with --source <path>.`,
+    )
+  }
+
   if (httpClient) {
     return getKnowledgeHubDatasetPathWithFallback({
       fsService: fs,
@@ -188,25 +223,29 @@ export async function resolveDatasetRoot(
   options?: DatasetResolveOptions,
 ): Promise<string> {
   const version = options?.cliVersion || '0.0.0'
+  const httpClient = options?.httpClient
+  const kb = options?.kb
 
   switch (config.resolution) {
     case 'default':
-      return resolveDefaultDataset(fs, version, options?.httpClient)
+      return resolveDefaultDataset(fs, version, httpClient, kb)
 
     case 'remote': {
-      if (!options?.httpClient) {
+      if (!httpClient) {
         throw new Error('Remote resolution requires httpClient')
       }
       return getKnowledgeHubDatasetPathWithFallback({
         fsService: fs,
-        httpClient: options.httpClient,
+        httpClient,
         version,
         customUrl: config.url,
       })
     }
 
     case 'git':
-      return resolveGitDataset(fs, config.url)
+      // Pure dispatch: the git slot's lifecycle lives in kb-manager, with every other
+      // source form's (US-395 review round 2).
+      return installKBFromGit(config.url, fs)
 
     case 'local':
       return resolveLocalDataset(fs, config.path, version, config.skipVerify)

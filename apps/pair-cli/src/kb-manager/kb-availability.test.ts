@@ -9,6 +9,9 @@ import {
   type FileSystemService,
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
+import { downloadStagingName, getSourceCachePath, OFFICIAL_KB_NAME } from './cache-slot-key'
+import { zipKBSource } from './zip-source'
+import { buildGithubReleaseUrl } from './url-utils'
 
 // Helper to create valid ZIP data for InMemoryFileSystemService
 function createValidZipData(files: Record<string, string>): string {
@@ -111,7 +114,14 @@ describe('KB Manager - Version handling', () => {
     vi.clearAllMocks()
 
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
+    // A real extraction leaves a manifest behind; without one the slot reads as a
+    // half-written download and the second call re-fetches (US-395 AC5).
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(
+        join(targetPath, 'manifest.json'),
+        JSON.stringify({ name: OFFICIAL_KB_NAME, version: '1.2.3' }),
+      )
+    })
 
     const versionWithV = 'v1.2.3'
 
@@ -206,7 +216,11 @@ describe('KB Manager - ZIP cleanup', () => {
 
     const testVersion = '0.2.0'
     const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
-    const expectedZipPath = join(tmpdir(), `kb-${testVersion}.zip`)
+    // The staging file is keyed by the SOURCE url, not by the CLI version alone (round 5)
+    const expectedZipPath = join(
+      tmpdir(),
+      downloadStagingName(testVersion, buildGithubReleaseUrl(testVersion)),
+    )
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
@@ -230,7 +244,15 @@ describe('KB Manager - ZIP cleanup', () => {
       /Corrupted ZIP/,
     )
 
-    expect(extractZipSpy).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
+    // Extraction targets the ATOMIC STAGE beside the slot, never the slot itself (#428):
+    // a failed extraction leaves neither stage nor slot behind.
+    expect(extractZipSpy).toHaveBeenCalledWith(
+      expectedZipPath,
+      expect.stringContaining(`${expectedCachePath}.tmp-`),
+    )
+    const stagePath = extractZipSpy.mock.calls[0]![1]
+    expect(fs.existsSync(stagePath)).toBe(false)
+    expect(fs.existsSync(expectedCachePath)).toBe(false)
   })
 })
 
@@ -439,8 +461,13 @@ describe('KB manager integration - custom URL', () => {
   })
 })
 
-describe('KB manager integration - local directory paths via customUrl', () => {
-  it('should handle local directory paths via customUrl', async () => {
+/**
+ * A local DIRECTORY owns no cache slot: `resolveDatasetRoot` reads it in place. Routing
+ * one here would have to invent a slot to copy it into — the two layers would then
+ * disagree about where that KB lives, which is the class of defect US-395 exists to fix.
+ */
+describe('KB manager integration - a local directory is not a fetchable source', () => {
+  it('refuses a local directory instead of copying it into a cache slot', async () => {
     const datasetPath = '/local/kb/dataset'
 
     const seed: Record<string, string> = {}
@@ -449,20 +476,41 @@ describe('KB manager integration - local directory paths via customUrl', () => {
 
     const fs = new InMemoryFileSystemService(seed, '/', '/')
 
-    const httpClient = new MockHttpClientService()
-    const result = await ensureKBAvailable('local-test', {
-      httpClient,
-      fs: fs,
-      customUrl: datasetPath,
-    })
+    await expect(
+      ensureKBAvailable('local-test', {
+        httpClient: new MockHttpClientService(),
+        fs,
+        customUrl: datasetPath,
+      }),
+    ).rejects.toThrow(/used in place, not cached/)
 
-    expect(result).toBeDefined()
+    // The message a user can act on names the FLAG, not the internal functions: this error
+    // reaches the terminal through KnowledgeHubSetupError.
+    await expect(
+      ensureKBAvailable('local-test', {
+        httpClient: new MockHttpClientService(),
+        fs,
+        customUrl: datasetPath,
+      }),
+    ).rejects.toThrow(/--source/)
+    await expect(
+      ensureKBAvailable('local-test', {
+        httpClient: new MockHttpClientService(),
+        fs,
+        customUrl: datasetPath,
+      }),
+    ).rejects.not.toThrow(/resolveDatasetRoot|ensureKBAvailable/)
+
+    // nothing was written under the cache root for it
+    expect(fs.existsSync(join(homedir(), '.pair', 'kb', 'external'))).toBe(false)
   })
 })
 
 describe('KB Manager - Cache bypass when customUrl provided', () => {
   const testVersion = '0.2.0'
   const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
+  // US-395: every non-official source installs into its own identity-keyed slot
+  const remoteSlot = (url: string) => getSourceCachePath({ kind: 'remote', url })
 
   it('should download from remote customUrl even when cache exists (AC-1)', async () => {
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -500,7 +548,10 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
 
     // Should have downloaded (httpClient was called), not just returned cache
     expect(httpClient.getUrls()[0]).toBe(customUrl)
-    expect(result).toBe(expectedCachePath)
+    // US-395: a custom source gets its OWN slot; the official slot stays as it was
+    expect(result).toBe(remoteSlot(customUrl))
+    expect(result).not.toBe(expectedCachePath)
+    expect(await fs.readFile(expectedCachePath + '/.pair/knowledge/test.md')).toBe('old content')
 
     consoleLogSpy.mockRestore()
   })
@@ -524,13 +575,16 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     expect(httpClient.getUrls()).toHaveLength(0)
   })
 
-  it('should re-install from local path when cache exists (AC-4)', async () => {
-    const localPath = '/local/kb/dataset'
+  it('should re-install from a local ZIP without serving the official cache (AC-4)', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const localZip = '/local/kb/acme-kb.zip'
     const fs = new InMemoryFileSystemService(
       {
         [expectedCachePath + '/manifest.json']: '{"version": "0.2.0"}',
-        [localPath + '/AGENTS.md']: 'local agents',
-        [localPath + '/.pair/knowledge/index.md']: '# Local KB',
+        [localZip]: createValidZipData({
+          'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+          '.pair/knowledge/index.md': '# Local KB',
+        }),
       },
       '/',
       '/',
@@ -541,26 +595,33 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     const result = await ensureKBAvailable(testVersion, {
       httpClient,
       fs,
-      customUrl: localPath,
+      customUrl: localZip,
+      skipVerify: true,
     })
 
-    // Should have installed from local path, not returned stale cache
-    expect(result).toBeDefined()
-    // No HTTP calls for local path
+    // Installed from the local ZIP's own slot, not the official cache it must not touch
+    expect(result).toBe(getSourceCachePath(await zipKBSource(localZip, fs)))
+    expect(result).not.toBe(expectedCachePath)
+    expect(await fs.readFile(expectedCachePath + '/manifest.json')).toBe('{"version": "0.2.0"}')
+    // No HTTP calls for a local path
     expect(httpClient.getUrls()).toHaveLength(0)
+
+    consoleLogSpy.mockRestore()
   })
 
-  it('should restore cache when remote customUrl download fails (AC-5)', async () => {
+  it('should restore the source slot when remote customUrl download fails (AC-5)', async () => {
+    const failingUrl = 'https://failing.example.com/kb.zip'
+    const sourceSlot = remoteSlot(failingUrl)
     const fs = new InMemoryFileSystemService(
       {
         [expectedCachePath + '/manifest.json']: '{"version": "0.2.0"}',
-        [expectedCachePath + '/.pair/knowledge/test.md']: 'cached content',
+        [sourceSlot + '/manifest.json']: '{"name": "acme-kb", "version": "1.0.0"}',
+        [sourceSlot + '/.pair/knowledge/test.md']: 'cached content',
       },
       '/',
       '/',
     )
 
-    const failingUrl = 'https://failing.example.com/kb.zip'
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '0' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(404))
@@ -573,9 +634,69 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
       ensureKBAvailable(testVersion, { httpClient, fs, customUrl: failingUrl }),
     ).rejects.toThrow()
 
-    // Cache is restored from backup after failed download (atomic replacement)
-    expect(fs.existsSync(expectedCachePath)).toBe(true)
-    expect(fs.existsSync(expectedCachePath + '.bak')).toBe(false)
+    // The source's own slot is restored from backup after a failed download
+    expect(await fs.readFile(sourceSlot + '/.pair/knowledge/test.md')).toBe('cached content')
+    expect(fs.existsSync(sourceSlot + '.bak')).toBe(false)
+    // and the official KB's slot was never in play
+    expect(fs.existsSync(expectedCachePath + '/manifest.json')).toBe(true)
+  })
+
+  /**
+   * Round 5, the RESTORE half of the "a cleanup must not undo the work it follows" rule:
+   * the restore runs inside the `catch`, so a fs error thrown there REPLACES the only
+   * actionable diagnosis the user had (the HTTP failure that started this) with an
+   * unrelated message. The original error is always the one rethrown.
+   */
+  it('reports the download failure, not a failure of the restore that follows it', async () => {
+    const failingUrl = 'https://failing.example.com/kb.zip'
+    const sourceSlot = remoteSlot(failingUrl)
+    const fs = new InMemoryFileSystemService(
+      {
+        [sourceSlot + '/manifest.json']: '{"name":"acme-kb"}',
+        [sourceSlot + '/.pair/knowledge/test.md']: 'cached content',
+      },
+      '/',
+      '/',
+    )
+
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const realRename = fs.rename.bind(fs)
+    vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      // the restore's rename (`.bak` back into place) fails; setting aside still works
+      if (from.endsWith('.bak')) {
+        throw Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+      }
+      return realRename(from, to)
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '0' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(404)),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    let err: Error | undefined
+    try {
+      await ensureKBAvailable(testVersion, { httpClient, fs, customUrl: failingUrl })
+    } catch (e) {
+      err = e as Error
+    }
+
+    expect(err?.message).not.toMatch(/EPERM/)
+    expect(err?.message).toMatch(/404|download/i)
+
+    // Round 6 — and the invariant the ADL bolds still holds in THIS run: the cache the user
+    // had is not gone, and it is not left nameless either. A swallowed failure that leaves
+    // the only good copy at `<slot>.bak` with nothing but a debug line (off by default) is
+    // indistinguishable, from the user's side, from having lost it.
+    expect(await fs.readFile(sourceSlot + '.bak/manifest.json')).toBe('{"name":"acme-kb"}')
+    const warned = consoleWarnSpy.mock.calls.map(c => String(c[0])).join('\n')
+    expect(warned).toContain(sourceSlot + '.bak')
+    expect(warned).toContain(sourceSlot)
+    consoleWarnSpy.mockRestore()
   })
 
   it('should download from different customUrl even when cache exists (AC-2)', async () => {
@@ -609,7 +730,215 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     const result = await ensureKBAvailable(testVersion, { httpClient, fs, customUrl: differentUrl })
 
     expect(httpClient.getUrls()[0]).toBe(differentUrl)
-    expect(result).toBe(expectedCachePath)
+    expect(result).toBe(remoteSlot(differentUrl))
+    expect(result).not.toBe(remoteSlot('https://custom.example.com/new-kb.zip'))
+
+    consoleLogSpy.mockRestore()
+  })
+})
+
+/**
+ * US-395 AC5 — a cache slot polluted by an earlier `--source` install is detected and
+ * re-fetched, never served. Without this, a user who ran one bad install keeps getting
+ * foreign content in every project, with nothing connecting cause and effect.
+ */
+describe('KB Manager - contaminated official slot self-heals (US-395 AC5)', () => {
+  const testVersion = '0.2.0'
+  const officialSlot = join(homedir(), '.pair', 'kb', testVersion)
+
+  it('discards a slot whose manifest names another KB and re-downloads the official one', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        // Left behind by a previous `install --source acme-kb.zip`
+        [officialSlot + '/manifest.json']: JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        [officialSlot + '/.pair/knowledge/foreign.md']: 'foreign content',
+      },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(
+        join(targetPath, 'manifest.json'),
+        JSON.stringify({ name: OFFICIAL_KB_NAME, version: testVersion }),
+      )
+      await fs.writeFile(join(targetPath, '.pair', 'knowledge', 'official.md'), 'official content')
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
+
+    expect(result).toBe(officialSlot)
+    // it did NOT trust the polluted slot
+    expect(httpClient.getUrls().length).toBeGreaterThan(0)
+    // the foreign content is gone, not merged with the official KB
+    expect(fs.existsSync(officialSlot + '/.pair/knowledge/foreign.md')).toBe(false)
+    expect(await fs.readFile(officialSlot + '/.pair/knowledge/official.md')).toBe(
+      'official content',
+    )
+    expect(JSON.parse(await fs.readFile(officialSlot + '/manifest.json')).name).toBe(
+      OFFICIAL_KB_NAME,
+    )
+
+    consoleLogSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
+  })
+
+  it('keeps the contaminated cache when the re-fetch fails, instead of leaving no cache', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [officialSlot + '/manifest.json']: JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        [officialSlot + '/.pair/knowledge/foreign.md']: 'foreign content',
+      },
+      '/',
+      '/',
+    )
+
+    // The user is offline / the release is unreachable: the re-download fails.
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '0' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(404)),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    await expect(ensureKBAvailable(testVersion, { httpClient, fs })).rejects.toThrow()
+
+    // wrong-but-working content is still there — a failed re-fetch is not destructive
+    expect(await fs.readFile(officialSlot + '/.pair/knowledge/foreign.md')).toBe('foreign content')
+    expect(fs.existsSync(officialSlot + '.bak')).toBe(false)
+
+    consoleWarnSpy.mockRestore()
+  })
+
+  /**
+   * The backup is discarded AFTER the install has succeeded, so a failure to delete the
+   * `.bak` must not reach the `catch` that RESTORES it: restoring here would delete the KB
+   * just downloaded correctly and put the contaminated slot back — undoing the AC5 self-heal
+   * and reporting an unrelated fs error. (EPERM/EBUSY from an antivirus handle on a
+   * just-renamed tree is the concrete Windows trigger.)
+   */
+  it('keeps a successful re-download when discarding the old slot fails', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [officialSlot + '/manifest.json']: JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        [officialSlot + '/.pair/knowledge/foreign.md']: 'foreign content',
+      },
+      '/',
+      '/',
+    )
+
+    let installed = false
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(
+        join(targetPath, 'manifest.json'),
+        JSON.stringify({ name: OFFICIAL_KB_NAME, version: testVersion }),
+      )
+      await fs.writeFile(join(targetPath, '.pair', 'knowledge', 'official.md'), 'official content')
+      installed = true
+    })
+
+    const realRm = fs.rm.bind(fs)
+    vi.spyOn(fs, 'rm').mockImplementation(async (path, options) => {
+      // only the post-install cleanup of the set-aside slot fails
+      if (installed && path.endsWith('.bak')) {
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      }
+      return realRm(path, options)
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
+
+    expect(result).toBe(officialSlot)
+    expect(await fs.readFile(officialSlot + '/.pair/knowledge/official.md')).toBe(
+      'official content',
+    )
+    expect(fs.existsSync(officialSlot + '/.pair/knowledge/foreign.md')).toBe(false)
+
+    consoleLogSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
+  })
+
+  it('serves the cache without downloading when the slot holds the official KB', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [officialSlot + '/manifest.json']: JSON.stringify({
+          name: OFFICIAL_KB_NAME,
+          version: testVersion,
+        }),
+      },
+      '/',
+      '/',
+    )
+    const httpClient = new MockHttpClientService()
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
+
+    expect(result).toBe(officialSlot)
+    expect(httpClient.getUrls()).toHaveLength(0)
+  })
+})
+
+/**
+ * US-395 — the source's identity is derived ONCE and every dispatch follows it. When the
+ * slot was keyed case-insensitively (`KB.ZIP` → a zip slot) but the installer was picked
+ * with `endsWith('.zip')`, an uppercase archive was routed to the DIRECTORY installer:
+ * it purged a second, unrelated slot and failed with "Failed to install KB from local
+ * directory", leaving an orphan slot behind.
+ */
+describe('KB Manager - one identity per source, whatever the extension case (US-395)', () => {
+  it('installs an uppercase .ZIP as a ZIP, into the slot its identity owns', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const zipPath = '/downloads/KB.ZIP'
+    const fs = new InMemoryFileSystemService(
+      {
+        [zipPath]: createValidZipData({
+          'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+          '.pair/knowledge/acme.md': '# acme',
+        }),
+      },
+      '/work',
+      '/work',
+    )
+
+    const result = await ensureKBAvailable('0.2.0', {
+      httpClient: new MockHttpClientService(),
+      fs,
+      customUrl: zipPath,
+      skipVerify: true,
+    })
+
+    expect(result).toBe(getSourceCachePath(await zipKBSource(zipPath, fs)))
+    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'acme.md'))).toBe(true)
+    // exactly one slot exists for this archive — no orphan from a second classification
+    expect(await fs.readdir(join(homedir(), '.pair', 'kb', 'external'))).toHaveLength(1)
 
     consoleLogSpy.mockRestore()
   })

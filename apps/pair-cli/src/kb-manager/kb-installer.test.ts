@@ -1,13 +1,26 @@
 import { describe, it, expect, vi } from 'vitest'
+import { createHash } from 'crypto'
 import { join } from 'path'
-import { homedir } from 'os'
+import { homedir, tmpdir } from 'os'
 import {
   InMemoryFileSystemService,
   MockHttpClientService,
   buildTestResponse,
   toIncomingMessage,
 } from '@pair/content-ops'
-import { installKB, installKBFromLocalZip, installKBFromLocalDirectory } from './kb-installer'
+import { installKB, installKBFromGit, installKBFromLocalZip } from './kb-installer'
+import { getSourceCachePath } from './cache-slot-key'
+import * as gitClone from './git-clone'
+
+// A local source owns a slot keyed by its own identity, not by the CLI version (US-395).
+// The identity of a ZIP is its CONTENT (#429): the helper hashes the serialized in-memory
+// archive exactly the way `zipKBSource` hashes the bytes on disk (latin1 = byte-identical).
+const zipSlot = (zipFileContent: string) =>
+  getSourceCachePath({
+    kind: 'zip',
+    path: '/any.zip',
+    contentHash: createHash('sha256').update(Buffer.from(zipFileContent, 'latin1')).digest('hex'),
+  })
 
 describe('KB Installer', () => {
   it('downloads and installs when checksum absent', async () => {
@@ -46,6 +59,60 @@ describe('KB Installer', () => {
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ KB v0.2.0 installed'))
 
     consoleLogSpy.mockRestore()
+  })
+
+  /**
+   * US-395 review round 5: `installKB` serves the OFFICIAL release AND `--url <remote zip>`,
+   * so a staging file named after the CLI version alone is shared by two different sources
+   * at the same version — the exact keying this story abolishes, one layer lower.
+   *
+   * It is not merely a concurrency window: `resume-manager.shouldResume()` decides to resume
+   * from the existence and SIZE of `<staging>.partial` alone, with no binding to the URL
+   * that produced those bytes, and then issues `Range: bytes=<n>-` against the NEW url. An
+   * interrupted official download followed by `pair install --url https://acme…/kb.zip` at
+   * the same CLI version would append the acme body onto the official KB's bytes and
+   * finalize the hybrid as one archive.
+   */
+  it('stages a download under a name keyed by the source URL, not by the CLI version alone', async () => {
+    const version = '0.2.0'
+    const staged: string[] = []
+
+    const stageOne = async (downloadUrl: string): Promise<void> => {
+      const fs = new InMemoryFileSystemService({}, '/', '/')
+      vi.spyOn(fs, 'extractZip').mockImplementation(async (zipPath, targetPath) => {
+        staged.push(zipPath)
+        await fs.writeFile(join(targetPath, 'manifest.json'), JSON.stringify({ version }))
+      })
+      const httpClient = new MockHttpClientService()
+      httpClient.setRequestResponses([
+        toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+      ])
+      httpClient.setGetResponses([
+        toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+        toIncomingMessage(buildTestResponse(404)),
+      ])
+      await installKB(
+        version,
+        getSourceCachePath({ kind: 'remote', url: downloadUrl }),
+        downloadUrl,
+        {
+          httpClient,
+          fs,
+        },
+      )
+    }
+
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await stageOne(
+      `https://github.com/foomakers/pair/releases/download/v${version}/knowledge-base-${version}.zip`,
+    )
+    await stageOne('https://acme.example/acme-kb.zip')
+    consoleLogSpy.mockRestore()
+
+    expect(staged).toHaveLength(2)
+    // Two sources, two staging files — neither is the version-keyed path they used to share
+    expect(staged[0]).not.toBe(staged[1])
+    expect(staged).not.toContain(join(tmpdir(), `kb-${version}.zip`))
   })
 
   it('preserves extraction errors and cleans up zip', async () => {
@@ -105,6 +172,170 @@ describe('KB Installer', () => {
 
     expect(result).toBe(cachePath)
   })
+
+  /**
+   * US-395 review round 3: `installKB` serves the official download AND `--url <remote zip>`.
+   * The local-ZIP path unwraps an archive whose content sits under a single root directory
+   * (`normalizeExtractedKB`); this one did not, so an external KB packaged that way gave a
+   * dataset root one level too high — inside the source-identity model this story defines.
+   */
+  it('unwraps a downloaded ZIP nested under a single root directory', async () => {
+    const version = '0.4.3'
+    const downloadUrl = 'https://acme.example.com/acme-kb.zip'
+    const cachePath = getSourceCachePath({ kind: 'remote', url: downloadUrl })
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const httpClient = new MockHttpClientService()
+
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(join(targetPath, 'acme-kb-1.0.0', 'manifest.json'), '{"name":"acme-kb"}')
+      await fs.writeFile(join(targetPath, 'acme-kb-1.0.0', '.pair', 'knowledge', 'a.md'), '# a')
+    })
+
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    const result = await installKB(version, cachePath, downloadUrl, { httpClient, fs })
+
+    expect(result).toBe(cachePath)
+    expect(fs.existsSync(join(cachePath, '.pair', 'knowledge', 'a.md'))).toBe(true)
+    expect(fs.existsSync(join(cachePath, 'acme-kb-1.0.0'))).toBe(false)
+  })
+})
+
+/**
+ * US-395 review round 3 — the ADL's invariant "a slot is never deleted before its
+ * replacement is in hand" must hold for the git path too: it purged the slot and only then
+ * cloned, and `cloneGitRepo` rm -rf's the destination on failure, so an offline/auth error
+ * left the user with an empty slot where a working clone had been.
+ */
+describe('KB Installer - installKBFromGit', () => {
+  it('keeps the previous clone when the new clone fails', async () => {
+    const url = 'https://github.com/acme/kb.git#v1.0.0'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(slot, 'manifest.json')]: '{"name":"acme-kb"}',
+        [join(slot, '.pair', 'knowledge', 'index.md')]: '# working clone',
+      },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
+      throw new Error('Git clone failed: network unreachable')
+    })
+
+    await expect(installKBFromGit(url, fs)).rejects.toThrow(/Git clone failed/)
+
+    expect(await fs.readFile(join(slot, '.pair', 'knowledge', 'index.md'))).toBe('# working clone')
+    expect(fs.existsSync(`${slot}.bak`)).toBe(false)
+  })
+
+  it('replaces the slot wholesale on a successful clone, leaving no backup behind', async () => {
+    const url = 'https://github.com/acme/kb.git'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      { [join(slot, '.pair', 'knowledge', 'stale.md')]: '# from a previous clone' },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {})
+
+    const result = await installKBFromGit(url, fs)
+
+    expect(result).toBe(slot)
+    expect(fs.existsSync(join(slot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
+    expect(fs.existsSync(`${slot}.bak`)).toBe(false)
+  })
+
+  /**
+   * Same invariant as `ensureKBAvailable`: discarding the set-aside clone happens after the
+   * new clone is on disk, so its failure must not reach the `catch` that RESTORES the old
+   * one — that would delete the fresh clone and reinstate the stale one over an unrelated
+   * fs error (EPERM/EBUSY on a just-renamed tree).
+   */
+  it('keeps a successful clone when discarding the set-aside one fails', async () => {
+    const url = 'https://github.com/acme/kb.git#v2.0.0'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(slot, 'manifest.json')]: '{"name":"acme-kb"}',
+        [join(slot, '.pair', 'knowledge', 'stale.md')]: '# from a previous clone',
+      },
+      '/',
+      '/',
+    )
+
+    let cloned = false
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation((_url, dest) => {
+      // The clone lands in the atomic STAGE it is handed (#428), not in the slot; the swap
+      // renames it into place. `cloneGitRepo` is synchronous; the in-memory write lands
+      // before the promise settles.
+      void fs.writeFile(join(dest, '.pair', 'knowledge', 'fresh.md'), '# fresh clone')
+      cloned = true
+    })
+
+    const realRm = fs.rm.bind(fs)
+    vi.spyOn(fs, 'rm').mockImplementation(async (path, options) => {
+      if (cloned && path.endsWith('.bak')) {
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      }
+      return realRm(path, options)
+    })
+
+    const result = await installKBFromGit(url, fs)
+
+    expect(result).toBe(slot)
+    expect(await fs.readFile(join(slot, '.pair', 'knowledge', 'fresh.md'))).toBe('# fresh clone')
+    expect(fs.existsSync(join(slot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
+  })
+
+  /**
+   * Round 5, the RESTORE half of the same invariant: the restore runs inside the `catch`,
+   * so if it throws, its fs error REPLACES the actionable one the user needs ("Git clone
+   * failed: network unreachable"). A cleanup must not undo the work it follows — and it
+   * must not hide why that work failed either.
+   */
+  it('reports the clone failure, not a failure of the restore that follows it', async () => {
+    const url = 'https://github.com/acme/kb.git#v3.0.0'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(slot, 'manifest.json')]: '{"name":"acme-kb"}',
+        [join(slot, '.pair', 'knowledge', 'index.md')]: '# working clone',
+      },
+      '/',
+      '/',
+    )
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
+      throw new Error('Git clone failed: network unreachable')
+    })
+    const realRm = fs.rm.bind(fs)
+    vi.spyOn(fs, 'rm').mockImplementation(async (path, options) => {
+      // the recursive delete of the half-written slot, inside the restore, fails
+      if (path === slot) {
+        throw Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' })
+      }
+      return realRm(path, options)
+    })
+
+    let err: Error | undefined
+    try {
+      await installKBFromGit(url, fs)
+    } catch (e) {
+      err = e as Error
+    }
+
+    expect(err?.message).toMatch(/Git clone failed/)
+    expect(err?.message).not.toMatch(/EBUSY/)
+  })
 })
 
 describe('KB Installer - installKBFromLocalZip', () => {
@@ -112,13 +343,13 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = '/absolute/path/kb.zip'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
 
     // Create valid ZIP content in InMemoryFS format (JSON serialized)
     const zipContent = {
       '.pair/knowledge/test.md': 'extracted content',
       'manifest.json': JSON.stringify({ version: '0.2.0' }),
     }
+    const expectedCachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService(
       {
@@ -140,14 +371,15 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = './downloads/kb.zip'
-    const resolvedZipPath = join(process.cwd(), 'downloads', 'kb.zip')
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    // relative paths resolve against the INJECTED cwd ('/'), not process.cwd()
+    const resolvedZipPath = '/downloads/kb.zip'
 
     // Create valid ZIP content
     const zipContent = {
       'AGENTS.md': 'extracted content',
       'manifest.json': JSON.stringify({ version: '0.2.0' }),
     }
+    const expectedCachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService(
       {
@@ -203,13 +435,13 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange - Simulates ZIP created by `pair package` which has .zip-temp/ root
     const version = '0.2.0'
     const zipPath = '/path/kb.zip'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
 
     // Create valid ZIP with .zip-temp root directory structure
     const zipContent = {
       '.zip-temp/.pair/knowledge/test.md': 'test content',
       '.zip-temp/manifest.json': JSON.stringify({ version: '0.2.0' }),
     }
+    const cachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService(
       {
@@ -251,13 +483,14 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = '/path/manifest-plus.zip'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
+    const zipData = JSON.stringify({ 'manifest.json': '{}', 'AGENTS.md': 'agents' })
+    const cachePath = zipSlot(zipData)
 
     // Pre-populate extraction output so extractZip (test path) results in both files
     const fs = new InMemoryFileSystemService(
       {
         // ZIP exists (content not used by extract when fs param is provided),
-        [zipPath]: JSON.stringify({ 'manifest.json': '{}', 'AGENTS.md': 'agents' }),
+        [zipPath]: zipData,
         // Simulate extraction output already present
         [`${cachePath}/manifest.json`]: '{}',
         [`${cachePath}/AGENTS.md`]: 'agents',
@@ -289,124 +522,6 @@ describe('KB Installer - installKBFromLocalZip', () => {
 
     // Act & Assert
     await expect(installKBFromLocalZip(version, zipPath, fs, true)).rejects.toThrow(
-      'Invalid KB structure',
-    )
-  })
-})
-
-describe('KB Installer - installKBFromLocalDirectory', () => {
-  it('should reject when directory contains only manifest.json', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/path/manifest-only-dir'
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, 'manifest.json')]: '{}',
-      },
-      '/',
-      '/',
-    )
-
-    // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
-      'Invalid KB structure',
-    )
-  })
-
-  it('should accept when directory contains manifest.json and another file', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/path/manifest-plus-dir'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, 'manifest.json')]: '{}',
-        [join(dirPath, 'AGENTS.md')]: 'agents content',
-      },
-      '/',
-      '/',
-    )
-
-    // Act
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    // Assert
-    expect(result).toBe(expectedCachePath)
-    expect(fs.existsSync(`${expectedCachePath}/manifest.json`)).toBe(true)
-    expect(fs.existsSync(`${expectedCachePath}/AGENTS.md`)).toBe(true)
-  })
-
-  it('should install KB from absolute path local directory and return cachePath', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/absolute/path/kb'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
-        [join(dirPath, 'AGENTS.md')]: 'agents content',
-      },
-      '/',
-      '/',
-    )
-
-    // Act
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    // Assert — datasetRoot must be cachePath, not cachePath/.pair
-    expect(result).toBe(expectedCachePath)
-  })
-
-  it('should install KB from relative path local directory and return cachePath', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = './relative/kb'
-    // fs.currentWorkingDirectory() returns '/' so resolve('/', './relative/kb') = '/relative/kb'
-    const resolvedDirPath = '/relative/kb'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(resolvedDirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
-        [join(resolvedDirPath, 'AGENTS.md')]: 'agents content',
-      },
-      '/',
-      '/',
-    )
-
-    // Act
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    // Assert — datasetRoot must be cachePath, not cachePath/.pair
-    expect(result).toBe(expectedCachePath)
-  })
-
-  it('should throw error if directory does not exist', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/nonexistent/kb'
-    const fs = new InMemoryFileSystemService({}, '/', '/')
-
-    // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
-      'Directory not found: /nonexistent/kb',
-    )
-  })
-
-  it('should validate KB structure after copy', async () => {
-    // Arrange
-    const version = '0.2.0'
-    const dirPath = '/path/kb'
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, 'some-file.txt')]: 'content',
-        // No .pair/ or AGENTS.md
-      },
-      '/',
-      '/',
-    )
-
-    // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
       'Invalid KB structure',
     )
   })
@@ -511,7 +626,6 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
   it('installKBFromLocalZip returns cachePath when ZIP has root-level registries beside .pair/', async () => {
     const version = '0.4.1'
     const zipPath = '/path/kb-full.zip'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
 
     // Full dataset structure matching real knowledge-base-0.4.1.zip
     const zipContent = {
@@ -522,6 +636,7 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
       '.skills/capability/next/SKILL.md': '# /next',
       'manifest.json': JSON.stringify({ version }),
     }
+    const cachePath = zipSlot(JSON.stringify(zipContent))
 
     const fs = new InMemoryFileSystemService({ [zipPath]: JSON.stringify(zipContent) }, '/', '/')
 
@@ -533,31 +648,6 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
     // All 5 registries must be accessible from datasetRoot
     expect(fs.existsSync(join(result, '.pair', 'knowledge'))).toBe(true)
     expect(fs.existsSync(join(result, '.pair', 'adoption'))).toBe(true)
-    expect(fs.existsSync(join(result, '.github'))).toBe(true)
-    expect(fs.existsSync(join(result, 'AGENTS.md'))).toBe(true)
-    expect(fs.existsSync(join(result, '.skills'))).toBe(true)
-  })
-
-  it('installKBFromLocalDirectory returns cachePath when dir has root-level registries beside .pair/', async () => {
-    const version = '0.4.1'
-    const dirPath = '/source/kb'
-    const cachePath = join(homedir(), '.pair', 'kb', version)
-
-    const fs = new InMemoryFileSystemService(
-      {
-        [join(dirPath, '.pair/knowledge/test.md')]: '# Test',
-        [join(dirPath, '.github/ci.yml')]: 'ci',
-        [join(dirPath, 'AGENTS.md')]: '# AGENTS',
-        [join(dirPath, '.skills/next/SKILL.md')]: '# /next',
-      },
-      '/',
-      '/',
-    )
-
-    const result = await installKBFromLocalDirectory(version, dirPath, fs)
-
-    expect(result).toBe(cachePath)
-    expect(fs.existsSync(join(result, '.pair', 'knowledge'))).toBe(true)
     expect(fs.existsSync(join(result, '.github'))).toBe(true)
     expect(fs.existsSync(join(result, 'AGENTS.md'))).toBe(true)
     expect(fs.existsSync(join(result, '.skills'))).toBe(true)
@@ -596,5 +686,227 @@ describe('BUG #02: datasetRoot must NOT append .pair — all registries must be 
     expect(fs.existsSync(join(result, '.github'))).toBe(true)
     expect(fs.existsSync(join(result, 'AGENTS.md'))).toBe(true)
     expect(fs.existsSync(join(result, '.skills'))).toBe(true)
+  })
+})
+
+/**
+ * US-395: `install --source <zip>` used to extract an external KB into the OFFICIAL KB's
+ * version-keyed slot (~/.pair/kb/<cliVersion>/), rewriting its manifest.json and
+ * contaminating the shared cache of every other project on the machine.
+ */
+describe('US-395: an external source never lands in the official KB cache slot', () => {
+  const OFFICIAL_MANIFEST = JSON.stringify({ name: 'knowledge-base', version: '0.4.3' })
+
+  function populatedOfficialCache(version: string, extra: Record<string, string>) {
+    const officialSlot = join(homedir(), '.pair', 'kb', version)
+    return new InMemoryFileSystemService(
+      {
+        [`${officialSlot}/manifest.json`]: OFFICIAL_MANIFEST,
+        [`${officialSlot}/.pair/knowledge/guidelines/testing.md`]: '# official testing guideline',
+        [`${officialSlot}/getting-started.md`]: '# official getting started',
+        ...extra,
+      },
+      '/',
+      '/',
+    )
+  }
+
+  it('leaves the official slot and its manifest untouched when installing an external ZIP (AC1)', async () => {
+    const version = '0.4.3'
+    const officialSlot = join(homedir(), '.pair', 'kb', version)
+    const zipPath = '/downloads/acme-kb-1.0.0.zip'
+    const fs = populatedOfficialCache(version, {
+      [zipPath]: JSON.stringify({
+        'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        '.pair/knowledge/acme.md': '# acme',
+      }),
+    })
+
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
+
+    expect(result).not.toBe(officialSlot)
+    expect(await fs.readFile(`${officialSlot}/manifest.json`)).toBe(OFFICIAL_MANIFEST)
+    expect(fs.existsSync(`${officialSlot}/.pair/knowledge/guidelines/testing.md`)).toBe(true)
+  })
+
+  it('installs only what the external ZIP ships — no official-KB files mixed in (AC2)', async () => {
+    const version = '0.4.3'
+    const officialSlot = join(homedir(), '.pair', 'kb', version)
+    const zipPath = '/downloads/acme-kb-1.0.0.zip'
+    const fs = populatedOfficialCache(version, {
+      [zipPath]: JSON.stringify({
+        'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+        '.pair/knowledge/acme.md': '# acme',
+      }),
+    })
+
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
+
+    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'acme.md'))).toBe(true)
+    expect(fs.existsSync(join(result, 'getting-started.md'))).toBe(false)
+    expect(fs.existsSync(join(result, '.pair', 'knowledge', 'guidelines', 'testing.md'))).toBe(
+      false,
+    )
+    expect(result.startsWith(officialSlot)).toBe(false)
+  })
+
+  it('re-installing the same source replaces the slot instead of merging stale files', async () => {
+    const version = '0.4.3'
+    const zipPath = '/downloads/acme-kb.zip'
+    const fs = new InMemoryFileSystemService(
+      {
+        [zipPath]: JSON.stringify({
+          'manifest.json': JSON.stringify({ name: 'acme-kb', version: '2.0.0' }),
+          '.pair/knowledge/new.md': '# new',
+        }),
+      },
+      '/',
+      '/',
+    )
+
+    const firstSlot = await installKBFromLocalZip(version, zipPath, fs, true)
+    await fs.writeFile(join(firstSlot, '.pair', 'knowledge', 'stale.md'), '# from a previous KB')
+
+    const secondSlot = await installKBFromLocalZip(version, zipPath, fs, true)
+
+    expect(secondSlot).toBe(firstSlot)
+    expect(fs.existsSync(join(secondSlot, '.pair', 'knowledge', 'stale.md'))).toBe(false)
+    expect(fs.existsSync(join(secondSlot, '.pair', 'knowledge', 'new.md'))).toBe(true)
+  })
+
+  it('gives two different external ZIPs two different slots (AC4)', async () => {
+    const version = '0.4.3'
+    const zipA = '/team-a/dist/kb-1.0.0.zip'
+    const zipB = '/team-b/dist/kb-1.0.0.zip'
+    const payload = (name: string) =>
+      JSON.stringify({
+        'manifest.json': JSON.stringify({ name, version: '1.0.0' }),
+        '.pair/knowledge/index.md': `# ${name}`,
+      })
+    const fs = new InMemoryFileSystemService(
+      { [zipA]: payload('kb-a'), [zipB]: payload('kb-b') },
+      '/',
+      '/',
+    )
+
+    const slotA = await installKBFromLocalZip(version, zipA, fs, true)
+    const slotB = await installKBFromLocalZip(version, zipB, fs, true)
+
+    expect(slotA).not.toBe(slotB)
+    expect(await fs.readFile(join(slotA, '.pair', 'knowledge', 'index.md'))).toBe('# kb-a')
+    expect(await fs.readFile(join(slotB, '.pair', 'knowledge', 'index.md'))).toBe('# kb-b')
+  })
+})
+
+/**
+ * US-395 (absorbed #428) — every install form populates its slot through
+ * `writeSlotAtomically`: the payload lands in a `<slot>.tmp-<pid>-<n>` stage and is
+ * renamed onto the slot only when complete. A concurrent process therefore never
+ * observes a half-written slot, for any source form.
+ */
+describe('US-395/#428: extraction never writes into the live slot', () => {
+  const stagePrefixOf = (slot: string) => `${slot}.tmp-${process.pid}-`
+
+  it('installKBFromLocalZip extracts into a tmp stage and renames it onto the slot', async () => {
+    const zipContent = JSON.stringify({
+      'manifest.json': JSON.stringify({ name: 'acme-kb', version: '1.0.0' }),
+      '.pair/knowledge/index.md': '# acme',
+    })
+    const slot = zipSlot(zipContent)
+    const fs = new InMemoryFileSystemService({ '/kb/acme.zip': zipContent }, '/', '/')
+
+    let extractedTo = ''
+    const realExtract = fs.extractZip.bind(fs)
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (zipPath, targetPath) => {
+      extractedTo = targetPath
+      // While the stage is being written the slot must not exist at all
+      expect(fs.existsSync(slot)).toBe(false)
+      return realExtract(zipPath, targetPath)
+    })
+
+    const result = await installKBFromLocalZip('0.4.3', '/kb/acme.zip', fs, true)
+
+    expect(result).toBe(slot)
+    expect(extractedTo.startsWith(stagePrefixOf(slot))).toBe(true)
+    expect(fs.existsSync(extractedTo)).toBe(false)
+    expect(await fs.readFile(join(slot, '.pair', 'knowledge', 'index.md'))).toBe('# acme')
+  })
+
+  it('a failing local-ZIP install leaves neither a slot nor a stage behind', async () => {
+    // Only a manifest at the root: normalizeExtractedKB rejects it AFTER extraction,
+    // so a non-atomic install would have already written the broken tree into the slot.
+    const zipContent = JSON.stringify({ 'manifest.json': '{"name":"broken"}' })
+    const slot = zipSlot(zipContent)
+    const fs = new InMemoryFileSystemService({ '/kb/broken.zip': zipContent }, '/', '/')
+
+    let extractedTo = ''
+    const realExtract = fs.extractZip.bind(fs)
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (zipPath, targetPath) => {
+      extractedTo = targetPath
+      return realExtract(zipPath, targetPath)
+    })
+
+    await expect(installKBFromLocalZip('0.4.3', '/kb/broken.zip', fs, true)).rejects.toThrow(
+      /Invalid KB structure/,
+    )
+
+    expect(fs.existsSync(slot)).toBe(false)
+    expect(extractedTo.startsWith(stagePrefixOf(slot))).toBe(true)
+    expect(fs.existsSync(extractedTo)).toBe(false)
+  })
+
+  it('installKB (download) extracts into a tmp stage, never into the slot', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const version = '0.4.3'
+    const downloadUrl = 'https://acme.example/acme-kb.zip'
+    const slot = getSourceCachePath({ kind: 'remote', url: downloadUrl })
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    let extractedTo = ''
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      extractedTo = targetPath
+      expect(fs.existsSync(slot)).toBe(false)
+      await fs.writeFile(join(targetPath, 'manifest.json'), '{"name":"acme-kb"}')
+    })
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' })),
+    ])
+    httpClient.setGetResponses([
+      toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data')),
+      toIncomingMessage(buildTestResponse(404)),
+    ])
+
+    const result = await installKB(version, slot, downloadUrl, { httpClient, fs })
+    consoleLogSpy.mockRestore()
+
+    expect(result).toBe(slot)
+    expect(extractedTo.startsWith(stagePrefixOf(slot))).toBe(true)
+    expect(fs.existsSync(extractedTo)).toBe(false)
+    expect(await fs.readFile(join(slot, 'manifest.json'))).toBe('{"name":"acme-kb"}')
+  })
+
+  it('installKBFromGit clones into a tmp stage, never into the slot', async () => {
+    const url = 'https://github.com/acme/kb.git#v9.0.0'
+    const slot = getSourceCachePath({ kind: 'git', url })
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    let clonedTo = ''
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation((_url, dest) => {
+      clonedTo = dest
+      expect(fs.existsSync(slot)).toBe(false)
+      void fs.writeFile(join(dest, 'manifest.json'), '{"name":"acme-kb"}')
+      void fs.writeFile(join(dest, '.git', 'HEAD'), 'ref: refs/heads/main')
+    })
+
+    const result = await installKBFromGit(url, fs)
+
+    expect(result).toBe(slot)
+    expect(clonedTo.startsWith(stagePrefixOf(slot))).toBe(true)
+    expect(fs.existsSync(clonedTo)).toBe(false)
+    expect(await fs.readFile(join(slot, 'manifest.json'))).toBe('{"name":"acme-kb"}')
+    // the clone's history is not part of the dataset and must not survive the swap
+    expect(fs.existsSync(join(slot, '.git'))).toBe(false)
   })
 })

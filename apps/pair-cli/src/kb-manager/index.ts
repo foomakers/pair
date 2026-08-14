@@ -1,6 +1,20 @@
-// Public API exports - only what's used externally
+// Public API of the kb-manager module.
+// Public re-exports live HERE: production modules outside kb-manager import from
+// `#kb-manager`, never from `#kb-manager/<internal module>` (DR-4). Tests still reach
+// internal modules directly — deliberately, to spy on them.
+//
+// Nothing is re-exported "for completeness": every symbol below has a caller outside
+// kb-manager. Slot primitives (getSourceCachePath, purgeSlot, ensureCacheDirectory,
+// getCachedKBPath) are NOT public — slot mechanics stay inside the module that owns
+// slots, behind the install* entry points.
 export { ensureKBAvailable } from './kb-availability'
-export { getCachedKBPath, isKBCached } from './cache-manager'
+export { isKBCached, isStageOwnerAlive } from './cache-manager'
+// `getCacheRoot` is the ONE public slot primitive: `kb-cache list/prune` inspects the cache
+// as a whole, which is the one job that cannot go through an install entry point. It reads a
+// root, it derives no slot — `getSourceCachePath` and friends stay private.
+export { getCacheRoot, localKBSource } from './cache-slot-key'
+export { cachedOfficialKBPath } from './kb-availability'
+export { installKBFromLocalZip, installKBFromGit } from './kb-installer'
 export { validateUrl } from '@pair/content-ops'
 export { validateCliOptions } from './cli-options'
 export type { KBManagerDeps } from './kb-availability'

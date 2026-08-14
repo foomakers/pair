@@ -33,4 +33,19 @@ describe('renderReadme', () => {
   it('documents the ZIP location for hosts without automated release publishing', () => {
     expect(generic).toContain('dist/acme-kb-<version>.zip')
   })
+
+  // The scaffolded README is committed into every external-KB repo and read by that KB's
+  // consumers: a limitation that no longer exists steers them off the release artifact.
+  it('offers the release ZIP as an install source, with no stale #395 limitation', () => {
+    for (const readme of [github, generic]) {
+      expect(readme).toContain('pair-cli install --source ./dist/acme-kb-1.0.0.zip')
+      expect(readme).not.toContain('not yet equivalent')
+      expect(readme).not.toContain('issues/395')
+    }
+  })
+
+  it('keeps the limitations that are still real (#396, #397)', () => {
+    expect(github).toContain('issues/396')
+    expect(github).toContain('issues/397')
+  })
 })

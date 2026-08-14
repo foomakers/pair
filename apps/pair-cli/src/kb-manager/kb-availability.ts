@@ -1,12 +1,14 @@
 import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
-import { detectSourceType, SourceType } from '@pair/content-ops'
+import { detectSourceType, logger as log, SourceType, validateKBStructure } from '@pair/content-ops'
 
 import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
+import { getSourceCachePath, localKBSource, officialSource, type KBSource } from './cache-slot-key'
 import urlUtils from './url-utils'
+import { zipKBSource } from './zip-source'
 import {
   installKB,
-  installKBFromLocalDirectory,
+  installKBFromGit,
   installKBFromLocalZip,
   type InstallerDeps,
 } from './kb-installer'
@@ -21,9 +23,33 @@ export interface KBManagerDeps {
   skipVerify?: boolean
 }
 
-// Internal: use cacheManager directly. Public re-exports live in the kb-manager index.
-const getCachedKBPath = cacheManager.getCachedKBPath
-const isKBCached = cacheManager.isKBCached
+/**
+ * Identity of the KB this call installs — the official KB when no `customUrl` is given,
+ * otherwise the custom source itself. The slot follows the identity, so an external
+ * source can never occupy the official KB's slot (US-395).
+ *
+ * A local ZIP is accepted — its identity is its CONTENT hash (`zipKBSource`, #429), which
+ * is why this function is async: deriving the identity reads the archive's bytes. A local
+ * DIRECTORY is not accepted, and that is a real boundary rather than a missing case: a
+ * directory source is read in place by `resolveDatasetRoot`, never fetched into a slot,
+ * so there is nothing here to make "available". Rejecting it keeps the two layers from
+ * disagreeing silently.
+ */
+async function resolveSource(version: string, deps: KBManagerDeps): Promise<KBSource> {
+  const sourceUrl = deps.customUrl
+  if (!sourceUrl) return officialSource(version)
+  if (detectSourceType(sourceUrl, deps.fs) === SourceType.REMOTE_URL) {
+    return { kind: 'remote', url: sourceUrl }
+  }
+  const local = localKBSource(sourceUrl, deps.fs)
+  if (local.kind === 'directory') {
+    throw new Error(
+      `A local KB directory is used in place, not cached: ${local.path}. ` +
+        'Pass it as `--source <dir>` rather than `--url`.',
+    )
+  }
+  return zipKBSource(local.path, deps.fs)
+}
 
 function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
   const result: InstallerDeps = {
@@ -37,49 +63,96 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
 
 export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
   const fs = deps.fs
-  const cachePath = getCachedKBPath(version)
+  const source = await resolveSource(version, deps)
+  const cachePath = getSourceCachePath(source)
 
   if (!deps.customUrl) {
-    const cached = await isKBCached(version, fs)
-    if (cached) {
-      return cachePath
+    const state = await cacheManager.inspectSlot(source, fs)
+    if (state.status === 'ready') return cachePath
+    if (state.status === 'contaminated') {
+      // AC5: a slot polluted by an earlier `--source` install is never served — it is
+      // replaced and re-fetched, so users self-heal without knowing the cache exists.
+      log.warn(
+        `Cached KB at ${cachePath} belongs to "${state.found}", not "${state.expected}" — discarding it and re-downloading.`,
+      )
     }
   }
 
-  const hadCache = deps.customUrl ? await cacheManager.backupCachedKB(version, fs) : false
+  // The slot is set ASIDE, never deleted, before it is rewritten — for a contaminated
+  // official slot as much as for a custom source. A failing re-fetch (offline, 5xx, proxy)
+  // must leave the user with the cache they had, not with no cache at all.
+  const hadCache = await cacheManager.backupCachedKB(source, fs)
 
+  let result: string
   try {
-    const result = await installFromSource(version, cachePath, deps)
-    if (hadCache) await cacheManager.removeBackupKB(version, fs)
-    return result
+    result = await installFromSource(version, source, cachePath, deps)
   } catch (err) {
-    if (hadCache) await cacheManager.restoreCachedKB(version, fs)
+    // The restore is a cleanup, and a cleanup must not replace the diagnosis it follows:
+    // an EBUSY/EPERM here would surface instead of "Network error downloading KB… check
+    // connectivity" or the 404 carrying the manual-download URL, and the user would lose
+    // the only actionable message they had. The ORIGINAL error is always the one rethrown.
+    if (hadCache) await cacheManager.restoreCachedKB(source, fs)
     throw err
   }
+
+  // OUTSIDE the try on purpose: the catch RESTORES the backup, so a cleanup failure inside
+  // it would delete the KB just installed correctly and reinstate the previous slot — the
+  // contaminated one, in the AC5 self-heal above. (`removeBackupKB` is best-effort too;
+  // this is the structural half of the same invariant.)
+  if (hadCache) await cacheManager.removeBackupKB(source, fs)
+  return result
 }
 
 async function installFromSource(
   version: string,
+  source: KBSource,
   cachePath: string,
   deps: KBManagerDeps,
 ): Promise<string> {
-  const sourceUrl = deps.customUrl || urlUtils.buildGithubReleaseUrl(version)
   const installerDeps = buildInstallerDeps(deps)
   const fs = deps.fs
 
-  // Check if source is a local path instead of a remote URL
-  const sourceType = detectSourceType(sourceUrl, fs)
-  if (sourceType !== SourceType.REMOTE_URL) {
-    if (sourceUrl.endsWith('.zip')) {
-      return installKBFromLocalZip(version, sourceUrl, fs, deps.skipVerify)
-    }
-    return installKBFromLocalDirectory(version, sourceUrl, fs)
-  }
+  const download = (downloadUrl: string): Promise<string> =>
+    installKB(version, cachePath, downloadUrl, {
+      fs,
+      ...installerDeps,
+      ...(deps.retryOptions ? { retryOptions: deps.retryOptions } : {}),
+    })
 
-  // Remote URL - use standard download
-  return installKB(version, cachePath, sourceUrl, {
-    fs,
-    ...installerDeps,
-    ...(deps.retryOptions ? { retryOptions: deps.retryOptions } : {}),
-  })
+  // Dispatch on the ALREADY-RESOLVED identity, never on a second look at the raw string:
+  // the slot a source owns and the installer it is routed to must agree (US-395). The
+  // switch is EXHAUSTIVE and the `never` default is the point of it — the earlier
+  // "zip, else download" shape sent any future `KBSource` kind to the OFFICIAL KB's
+  // release zip, written into that source's slot: a cross-source write with no signal.
+  switch (source.kind) {
+    case 'zip':
+      return installKBFromLocalZip(version, source.path, fs, deps.skipVerify)
+    case 'remote':
+      return download(source.url)
+    case 'official':
+      return download(urlUtils.buildGithubReleaseUrl(version))
+    case 'git':
+      return installKBFromGit(source.url, fs)
+    default: {
+      const unreachable: never = source
+      throw new Error(`Unhandled KB source kind: ${JSON.stringify(unreachable)}`)
+    }
+  }
+}
+
+/**
+ * The path of an ALREADY-POPULATED official cache slot for `version`, or `undefined`.
+ *
+ * Exists for the `--no-kb` path: that flag means "use what is already here", so the resolver
+ * needs to ask whether a usable KB is on disk WITHOUT the fetch every other entry point in this
+ * module performs. It lives here rather than the resolver reaching for `getCachedKBPath`
+ * directly because slot mechanics stay inside the module that owns them (see index.ts).
+ */
+export async function cachedOfficialKBPath(
+  version: string,
+  fs: FileSystemService,
+): Promise<string | undefined> {
+  const path = getSourceCachePath(officialSource(version))
+  if (!fs.existsSync(path)) return undefined
+  return (await validateKBStructure(path, fs)) ? path : undefined
 }

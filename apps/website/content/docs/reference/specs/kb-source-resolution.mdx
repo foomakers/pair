@@ -12,15 +12,31 @@ Technical specification for the Knowledge Base (KB) source resolution algorithm 
 KB source is resolved in the following order (highest to lowest priority):
 
 1. **CLI flag `--source <url|path>`** — Explicit user-provided source
-2. **Monorepo default** — `packages/knowledge-hub/dataset` (when running from monorepo)
-3. **GitHub release auto-download** — Latest release from configured repository
+2. **Program-level flag `--url <url|path>`** — Used as the source when the command names no
+   `--source`; `--source` outranks it
+3. **Monorepo default** — `packages/knowledge-hub/dataset` (when running from monorepo)
+4. **GitHub release auto-download** — Latest release from configured repository
+
+The monorepo default is the fallback for the **default** source only: a source you name
+explicitly always wins, `--url <remote zip>` included. In a development checkout that URL
+is downloaded and cached under its own slot rather than silently replaced by the local
+dataset — which is also what makes the `--url` path exercisable outside a released binary.
+
+`--url` and `--source` name a source in exactly the same way: `pair install --url X` and
+`pair install --source X` resolve the same identity, download into the same cache slot and
+install the same bytes. The only difference is scope — `--url` is declared on the program,
+so it applies to whichever subcommand runs (`install`, `update`, `kb-info`), while
+`--source` belongs to one command and therefore wins where both are given. That equivalence
+is a rule, not a coincidence: a slot is keyed by source identity, so a flag that names a
+source without reaching resolution would fetch into a slot nothing reads and serve the
+official KB instead — silently a different KB than the one the user typed.
 
 ### Decision Tree
 
 ```text
                   KB Source Resolution
                          |
-                 --source provided?
+            --source (or --url) provided?
                 /                  \
               YES                   NO
                |                     |
@@ -72,10 +88,10 @@ function isUrl(source: string): boolean {
 ```typescript
 function isLocalPath(source: string): boolean {
   return (
-    source.startsWith('/') ||          // Absolute Unix path
-    source.startsWith('./') ||         // Relative path
-    source.startsWith('../') ||        // Relative parent path
-    /^[A-Za-z]:[/\\]/.test(source)    // Windows absolute path
+    source.startsWith('/') || // Absolute Unix path
+    source.startsWith('./') || // Relative path
+    source.startsWith('../') || // Relative parent path
+    /^[A-Za-z]:[/\\]/.test(source) // Windows absolute path
   )
 }
 ```
@@ -110,11 +126,12 @@ When the source is a Git URL:
 
 1. **Parse ref** — split `url#ref` into repo URL and optional branch/tag
 2. **Inject token** — if `PAIR_GIT_TOKEN` is set and URL is HTTPS, rewrite URL with token
-3. **Shallow clone** — `git clone --depth 1 [--branch ref] <url> <tempDir>`
-4. **Install from clone** — copy dataset from temp dir to `~/.pair/kb/{version}/`
-5. **Cleanup** — remove temp clone directory
+3. **Shallow clone** — `git clone --depth 1 [--branch ref] <url> <slot>` into the git
+   source's own cache slot (`~/.pair/kb/external/git-{hash}/`), replaced on each install
+4. **Cleanup** — remove the clone's `.git` directory, leaving the dataset
 
 Auth strategy:
+
 - **Default**: git inherits system auth (SSH keys, credential manager, `gh auth`)
 - **Override**: `PAIR_GIT_TOKEN` env var injects token into HTTPS URLs
 
@@ -127,10 +144,7 @@ interface KbSource {
   requiresDownload: boolean
 }
 
-async function resolveKbSource(options: {
-  source?: string
-  offline?: boolean
-}): Promise<KbSource> {
+async function resolveKbSource(options: { source?: string; offline?: boolean }): Promise<KbSource> {
   // Precedence 1: Explicit --source flag
   if (options.source) {
     if (isUrl(options.source)) {
@@ -172,16 +186,16 @@ async function resolveKbSource(options: {
 
 ## Error Catalog
 
-| Code | Error | Exit | Cause | Resolution |
-| ---- | ----- | ---- | ----- | ---------- |
-| E001 | Offline without source | 1 | `--offline` without `--source` | Provide `--source` |
-| E002 | Offline with remote URL | 1 | `--offline` with HTTP URL | Use local path |
-| E003 | Source path not found | 1 | `--source` points to missing path | Verify path |
-| E004 | Invalid source format | 1 | Source is neither URL nor path | Use valid format |
-| E005 | Download network error | 2 | Network failure | Check connectivity |
-| E006 | Checksum validation failed | 2 | SHA256 mismatch | Retry download |
-| E007 | Auto-download in offline | 1 | No source + offline mode | Provide local source |
-| E008 | Git clone failed | 2 | Clone error (auth, network, missing git) | Check git config, set `PAIR_GIT_TOKEN`, or use SSH |
+| Code | Error                      | Exit | Cause                                    | Resolution                                         |
+| ---- | -------------------------- | ---- | ---------------------------------------- | -------------------------------------------------- |
+| E001 | Offline without source     | 1    | `--offline` without `--source`           | Provide `--source`                                 |
+| E002 | Offline with remote URL    | 1    | `--offline` with HTTP URL                | Use local path                                     |
+| E003 | Source path not found      | 1    | `--source` points to missing path        | Verify path                                        |
+| E004 | Invalid source format      | 1    | Source is neither URL nor path           | Use valid format                                   |
+| E005 | Download network error     | 2    | Network failure                          | Check connectivity                                 |
+| E006 | Checksum validation failed | 2    | SHA256 mismatch                          | Retry download                                     |
+| E007 | Auto-download in offline   | 1    | No source + offline mode                 | Provide local source                               |
+| E008 | Git clone failed           | 2    | Clone error (auth, network, missing git) | Check git config, set `PAIR_GIT_TOKEN`, or use SSH |
 
 ## Download Process
 
@@ -189,26 +203,113 @@ When `requiresDownload: true` for URL sources:
 
 1. **HEAD request** — Fetch URL metadata
 2. **Fetch checksum** — Download `.sha256` checksum file
-3. **Download KB** — GET request with progress tracking
+3. **Download KB** — GET request with progress tracking, staged in a temporary file named
+   after the **source URL** (`kb-{version}-{hash}.zip` under the system temp directory).
+   An interrupted download leaves a `.partial` file that the next run of the **same** URL
+   resumes; two different sources never share a staging file, so one source's bytes can
+   never be resumed into another source's archive.
 4. **Validate SHA256** — Verify integrity (if checksum available)
-5. **Extract to cache** — Store at `~/.pair/kb/{version}/`
+5. **Extract to cache** — Store in the source's own slot (see Cache Strategy below)
+6. **Unwrap a single root directory** — an archive whose content sits under one top-level
+   folder (`acme-kb-1.0.0/.pair/…`) is lifted to the slot root, so the dataset root is the
+   slot itself whichever way the archive was packaged. Same normalization as a local ZIP.
 
 ### Cache Strategy
 
-**Cache Location:** `~/.pair/kb/{version}/`
+**Cache location — one slot per source, not per CLI version:**
 
-Downloaded KBs are cached to avoid redundant downloads. Cache key is derived from the download URL or version string.
+| Source                      | Slot                                     |
+| --------------------------- | ---------------------------------------- |
+| Official KB (auto-download) | `~/.pair/kb/{version}/`                  |
+| `--source <zip>`            | `~/.pair/kb/external/zip-{hash}/`        |
+| `--source <dir>`            | **none** — read in place                 |
+| `--source <git-url>`        | `~/.pair/kb/external/git-{hash}/`        |
+| `--url <remote-zip>`        | `~/.pair/kb/external/url-{name}-{hash}/` |
+
+The slot is derived from the **identity of the source** (its resolved path or URL) — the ZIP
+and git forms carry no name, only the content/url hash; the remote-URL form is the only one
+that keeps a human-readable label. Two different sources never share a slot and the same
+source always reuses its own. Only the
+official KB writes the version-keyed slot — an external KB can never overwrite it or its
+`manifest.json` ([foomakers/pair#395](https://github.com/foomakers/pair/issues/395)). The
+root of every slot above is `~/.pair/kb` unless `PAIR_KB_CACHE_DIR` overrides it (which
+must be an absolute path — slots are deleted recursively, so a relative value pointing at
+the current directory is rejected rather than honoured).
+
+**A directory source is never copied into the cache.** `--source <dir>` validates the
+directory and installs from it **in place**, so it occupies no slot and there is nothing
+to invalidate: edit the directory and the next install picks the edit up. Only the archive
+forms (`zip`, remote `zip`, git clone) need a slot, because they have to be materialized
+somewhere before they can be read.
+
+A slot whose `manifest.json` names a different KB than the one expected is treated as
+**contaminated**: it is discarded and re-fetched rather than served. The contaminated slot
+is set aside first, not deleted, so a failing re-fetch (offline, 5xx) leaves the previous
+content in place instead of no cache at all. A slot of the **official** KB with no
+`manifest.json` at all is treated as an aborted download and re-fetched too. External slots
+declare no expected manifest name — there is nothing to compare against, so they are not
+inspected: every `--source`/`--url` install re-installs into its own slot regardless of
+what the slot already holds.
+
+**A fetched slot is never deleted before its replacement is in hand.** Every source whose
+content comes over the network — the official download, `--url`, a git clone — sets its
+slot aside before it writes, and puts it back when the fetch throws. A local ZIP is the one
+exception, and deliberately: its source is a file you still have, so re-running the command
+is the recovery, and replacing the slot wholesale is what keeps a previous KB's files from
+lingering next to the new one.
+
+Putting the slot back is itself a **cleanup, and a cleanup never undoes or hides the work
+it follows**: the set-aside copy is moved back first and the half-written one discarded
+afterwards (so a failing delete cannot cost you both), and a failure of that housekeeping
+is logged rather than raised — the error you see is the one that actually stopped the
+install ("Network error downloading KB…", a 404 with the manual-download URL), never an
+unrelated filesystem message from the recovery. Should the recovery itself fail (a held
+handle on the directory, on Windows), it is retried the other way round first; if that fails
+too you get a **warning naming the copy it kept** and the path to move it back to, so your
+previous KB is never left recoverable-but-unnamed at `<slot>.bak`.
+
+**Scope of the self-heal:** the official slot is keyed by CLI version, so detection only
+applies to the slot of the CLI version you are running. A slot polluted by an **older**
+CLI (before [foomakers/pair#395](https://github.com/foomakers/pair/issues/395)) lives under
+that older version's directory and is never read again — abandoned, not discarded.
+
+**Disk:** one slot per distinct source. Slots are plain directories with no hidden state —
+`rm -rf ~/.pair/kb/external` is always safe, and the next install re-populates what it
+needs. There is no automatic eviction (no LRU, no TTL): growth is proportional to the number
+of KBs you install, not to how often you install them. Use `pair kb-cache list` to see what
+is there and `pair kb-cache prune` (add `--dry-run` first) to reclaim what is dead. Four
+leftovers `rm -rf ~/.pair/kb/external` does **not** cover, all safe to delete by hand:
+
+| Leftover                           | Left by                                                                           | `prune`                         |
+| ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------- |
+| `~/.pair/kb/<old-version>/`        | an older CLI, possibly polluted by a pre-fix `--source`                           | reclaimed                       |
+| `~/.pair/kb/git-<hash>/`           | a git `--source` clone from before the `external/` namespace                      | reclaimed                       |
+| `~/.pair/kb/<version>.bak`         | an install that was interrupted mid-write                                         | reclaimed once its slot is back |
+| `~/.pair/kb/<version>.discarded-*` | an install whose recovery could not delete the half-written slot — a full KB tree | by hand                         |
+
+An external slot's own `.discarded-*` sits under `external/` and is already covered by the
+`rm -rf` above; only the official slot's spelling needs stating.
+
+**What `prune` never deletes.** The KB cache is shared by every project on the machine, so
+prune is deliberately timid: your running CLI version's official slot (the KB the next
+command reads), **every** `external/` slot (one per source you chose — the CLI does not
+retain the URL or the archive, so deleting one is not undone by re-running an install),
+anything it cannot classify, and anything an install currently in flight owns. That last one
+covers two shapes: a `<slot>.tmp-<pid>-<n>` stage whose process is still alive, and a
+`<slot>.bak` whose slot has not come back yet — that backup is the only copy of that KB.
+`list` marks both as kept, so a leftover-shaped entry that survives a prune is not a bug.
+With no CLI version resolvable, prune spares every official slot rather than guess.
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable              | Description                         | Default               |
-| --------------------- | ----------------------------------- | --------------------- |
-| `PAIR_KB_CACHE_DIR`   | Override KB cache directory          | `~/.pair/kb`          |
-| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL  | GitHub latest release  |
-| `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos | Not set      |
-| `PAIR_DIAG`           | Enable diagnostic logging            | `0` (disabled)        |
+| Variable              | Description                                                                                                                        | Default               |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `PAIR_KB_CACHE_DIR`   | Override the KB cache root. Must be ABSOLUTE and free of `..` segments — rejected otherwise, because slots are deleted recursively | `~/.pair/kb`          |
+| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL                                                                                                | GitHub latest release |
+| `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos                                                                         | Not set               |
+| `PAIR_DIAG`           | Enable diagnostic logging                                                                                                          | `0` (disabled)        |
 
 ---
 

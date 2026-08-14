@@ -34,5 +34,6 @@ export const installMetadata = {
     '--source accepts: http(s) URLs, absolute paths, relative paths',
     'Relative paths resolved from current working directory',
     '--offline requires explicit local --source path',
+    'The program-level --url is the source when --source is absent; --source outranks it',
   ],
 } as const

@@ -109,3 +109,36 @@ describe('FileSystemService.symlink (in-memory)', () => {
     )
   })
 })
+
+/**
+ * US-395 (absorbed #429) — a byte-mode read. `readFile`/`readFileSync` decode as utf-8,
+ * and hashing a lossily decoded binary is not an identity to defend in a security-adjacent
+ * path: local ZIP slots are keyed on the archive's CONTENT hash, so the bytes hashed must
+ * be the bytes on disk.
+ */
+describe('fileSystemService.readFileBytes — byte-mode read (US-395/#429)', () => {
+  it('returns the exact bytes on disk, not a utf-8 decoding', async () => {
+    const { mkdtemp, rm: rmDir } = await import('fs/promises')
+    const { tmpdir } = await import('os')
+    const { join: joinPath } = await import('path')
+    const { fileSystemService } = await import('./file-system-service')
+
+    const dir = await mkdtemp(joinPath(tmpdir(), 'pair-bytes-'))
+    const file = joinPath(dir, 'blob.bin')
+    // 0xFF/0x80/0x00 are exactly the bytes a utf-8 round-trip mangles (ZIP headers have them)
+    const bytes = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x80, 0xff, 0xfe, 0x81])
+    try {
+      await fileSystemService.writeFileBinary(file, bytes)
+
+      const read = await fileSystemService.readFileBytes(file)
+
+      expect(Buffer.isBuffer(read)).toBe(true)
+      expect(read.equals(bytes)).toBe(true)
+      // the text-mode read of the same file is lossy — that is WHY this API exists
+      const text = await fileSystemService.readFile(file)
+      expect(Buffer.from(text, 'utf-8').equals(bytes)).toBe(false)
+    } finally {
+      await rmDir(dir, { recursive: true, force: true })
+    }
+  })
+})
