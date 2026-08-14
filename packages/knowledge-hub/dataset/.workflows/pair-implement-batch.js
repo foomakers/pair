@@ -30,7 +30,10 @@ export const meta = {
 //     id, title, branch,          // required — id+title feed prompts, branch feeds worktree add
 //     base?,                      // the branch this card STACKS on (default: pipeline.baseBranch)
 //     notes?,                     // scope directive threaded into implement + PR
-//     prNumber?,                  // resume an existing PR straight into the review<->fix loop
+//     prNumber?,                  // resume an existing PR straight into the review<->fix loop.
+//                                 // A POSITIVE integer (>= 1): `0`/negative do not name a PR,
+//                                 // and `0` would skip implement AND the probe and report an
+//                                 // unbuilt story as review-approved.
 //   }],                           // every card VALUE is validated, not just its key set: id is one
 //                                 // path segment, branch/base are git refs, title/notes are plain
 //                                 // text. They reach shell command text an agent runs, so a value
@@ -55,7 +58,8 @@ export const meta = {
 // }
 //
 // PRESENT-BUT-EMPTY IS AN ERROR, at every level: `''` (or whitespace) on any string option —
-// `severityFloor`, `model`, any `pipeline` key — THROWS rather than being read as absent. The
+// `severityFloor`, `model`, any `pipeline` key, any optional CARD field (`base`, `notes`) —
+// THROWS rather than being read as absent. The
 // three spellings of "unset" are the ones above; an empty string is a value the caller wrote,
 // and treating it as absent runs the batch on a setting nobody chose.
 //
@@ -180,6 +184,15 @@ const isRelPath = v => {
 // rendered verbatim into the implement prompt as the process the agent must follow, so the
 // space is the giveaway — no legitimate skill reference carries one.
 const isSkillRef = v => /^\/?[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(v) && !v.includes('..')
+// A STRICTLY POSITIVE integer. `0` and negatives are not smaller values of these fields, they
+// are non-values: there is no PR #0, no cap of 0 agents, no 0 fix rounds. `Number.isInteger`
+// alone accepted both, and on `cards[i].prNumber` that was the worst input this engine takes —
+// `0` flipped the card into RESUME mode (implement + open-PR skipped) while `if (pr?.prNumber)`
+// read it as falsy (continuation probe skipped), so the batch reported `ready-for-merge` for a
+// card that was never implemented and has no PR. ONE definition for the rule, every numeric
+// caller value: `posInt`, `parseMaxParallelism` and the card guard all ask this predicate, so a
+// numeric field added later cannot be added with a looser test than the three beside it.
+const isPosInt = v => typeof v === 'number' && Number.isInteger(v) && v >= 1
 
 function parseBatchArgs(raw) {
   let a = raw
@@ -273,7 +286,20 @@ function parseBatchArgs(raw) {
             `an array joins on commas) as if the caller had typed it. Pass a string, or omit the key.`,
         )
       const v = String(value ?? '').trim()
-      if (!v) return // absent/blank is handled above (required) or falls back to a default (optional)
+      // PRESENT-BUT-EMPTY IS AN ERROR, at every level — the rule the contract block states and
+      // the one this early return used to break. `''` was read as ABSENT here while
+      // `args.severityFloor: ''` and `args.pipeline.<key>: ''` both threw for the stated reason.
+      // `base` is what it cost: a card composing `base: cfg.base ?? ''` was branched off
+      // `pipeline.baseBranch` and the whole `This story is STACKED on …` clause vanished from the
+      // implement prompt — a PR built on `origin/main` without its dependency's commits, and a
+      // review diffed against the wrong range, with nothing reported. `undefined`/`null` remain
+      // the spellings of "unset"; an empty string is a value the caller wrote.
+      if (value !== undefined && value !== null && !v)
+        throw new Error(
+          `implement-batch: cards[${i}]${id ? ` (#${id})` : ''} has ${key} empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
+            `An empty string is a value the caller wrote, and reading it as absent would drive the card on a setting nobody chose.`,
+        )
+      if (!v) return // absent (undefined/null) — falls back to a default, or was required and caught above
       if (!ok(v))
         throw new Error(
           `implement-batch: cards[${i}] (#${id}) has ${key} ${JSON.stringify(v)}, which is not ${what}. ` +
@@ -299,11 +325,20 @@ function parseBatchArgs(raw) {
     // caller composing cards in JS (`{ id, title, branch, prNumber: state.prNumber }`, #250)
     // lost a 20-card batch at parse time on a field nobody set. `Object.hasOwn`, not `in`:
     // `in` walks the prototype chain.
-    if (Object.hasOwn(s, 'prNumber') && s.prNumber !== undefined && s.prNumber !== null && !Number.isInteger(s.prNumber))
+    // POSITIVE, not merely integral (`isPosInt`, the same predicate `posInt`/`maxParallelism`
+    // ask). `Number.isInteger(0)` is true, so `prNumber: 0` passed and then decided the
+    // lifecycle wrongly TWICE: `resuming` became true (implement + open-PR skipped) while
+    // `if (pr?.prNumber)` read the same `0` as falsy (continuation probe skipped), and the batch
+    // returned `ready-for-merge` for a card that was never implemented and has no PR. `0` is
+    // what a caller composing cards in code produces from `Number(row.pr ?? '')`, an
+    // uninitialized counter or a tracker field defaulting to 0 — the same shape as the
+    // `prNumber: undefined` defect, one value along.
+    if (Object.hasOwn(s, 'prNumber') && s.prNumber !== undefined && s.prNumber !== null && !isPosInt(s.prNumber))
       throw new Error(
-        `implement-batch: cards[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not an integer. ` +
-          `A non-integer is NOT treated as "no PR": it would run implement + open a SECOND PR for a story ` +
-          `that already has one. Pass an integer, or omit the key entirely to start a fresh story.`,
+        `implement-batch: cards[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not a positive integer (>= 1). ` +
+          `An unusable value is NOT treated as "no PR": a non-integer would run implement + open a SECOND PR for a story ` +
+          `that already has one, and \`0\` or a negative would SKIP implement and the PR entirely and report a story ` +
+          `that was never built as review-approved. Pass the real PR number, or omit the key entirely to start a fresh story.`,
       )
     // Two cards with the same id resolve to the SAME worktree path, so under an unbounded cap
     // two implementers would interleave `git worktree add`/checkout/commit in one working tree
@@ -465,7 +500,7 @@ function resolvePipeline(raw) {
 // one. `'2'` is the shape a hand-written JSON arg produces, so it is named explicitly.
 function posInt(v, key, fallback) {
   if (v === undefined || v === null) return fallback
-  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1)
+  if (!isPosInt(v))
     throw new Error(
       `implement-batch: \`args.pipeline.${key}\` must be an integer >= 1; received ${JSON.stringify(v)}. ` +
         `Omit the key to keep pair's default (${fallback}) — it is never inferred from a bad value.`,
@@ -485,7 +520,7 @@ function parseMaxParallelism(raw) {
   // Rejected rather than coerced. A cap that cannot be honoured must not silently become
   // "no cap": the discarded setting is the one holding back load, so the failure would be a
   // batch running at full width while the caller believes it is throttled (#401's shape).
-  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1)
+  if (!isPosInt(raw))
     throw new Error(
       `implement-batch: \`args.maxParallelism\` must be an integer >= 1; received ${JSON.stringify(raw)}. ` +
         `Omit it entirely for unbounded fan-out — it is never inferred from a bad value.`,

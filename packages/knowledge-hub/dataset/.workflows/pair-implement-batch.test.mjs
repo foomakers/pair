@@ -2466,7 +2466,7 @@ test('a JSON-stringified prNumber throws rather than being read as "no PR yet"',
         args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumber: '432' }] },
         dispatch: stdDispatch({}),
       }),
-    /prNumber "432", which is not an integer/,
+    /prNumber "432", which is not a positive integer/,
   )
 })
 
@@ -2533,7 +2533,7 @@ test('US-219 AC7: an explicitly-undefined optional key means ABSENT, not an erro
   // The guard is not weakened: a present, wrong-typed value still throws.
   assert.match(
     await expectThrow({ args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumber: '432' }] } }),
-    /prNumber "432", which is not an integer/,
+    /prNumber "432", which is not a positive integer/,
   )
 })
 
@@ -2791,4 +2791,72 @@ test('US-219 AC7: `{ cards, stories: undefined }` is accepted, like its mirror i
   }
   // Both PRESENT as lists still throws — that rule is untouched.
   assert.match(await expectThrow({ args: { cards: [STORY], stories: [STORY] } }), /both `cards` and `stories`/)
+})
+
+// ── Round-12 review: `prNumber` was checked as an INTEGER, never as a PR NUMBER ────────────
+// `Number.isInteger(0)` is true, so `prNumber: 0` passed the guard and then decided the whole
+// lifecycle wrongly, twice over: `resuming` became true so implement + open-PR were SKIPPED,
+// and the continuation probe is gated on `if (pr?.prNumber)` — falsy for `0` — so it never ran
+// either. The batch dispatched a reviewer at "PR #0", told it to post a first review there, and
+// returned `status: 'ready-for-merge'` for a card that was never implemented and has no PR.
+// Realistic rather than theoretical: #250 composes cards IN CODE, where `0` is what
+// `Number(row.pr ?? '')`, an uninitialized counter or a tracker field defaulting to 0 produces
+// — the round-10 `prNumber: undefined` defect, one value along. The rule already existed in
+// this file (`posInt`, for `maxFixRounds`) and in the sibling added by the same PR
+// (`pair-analyze-pr-batch.js`, which rejects `n <= 0`); it just was not applied here.
+test('US-219 AC7: prNumber 0 and negatives THROW — a PR number is a POSITIVE integer', async () => {
+  for (const prNumber of [0, -1, -5]) {
+    const calls = []
+    let msg = ''
+    try {
+      await runWorkflow({
+        args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumber }] },
+        dispatch: (prompt, opts) => {
+          calls.push({ prompt, opts })
+          return stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } })(prompt, opts)
+        },
+      })
+      assert.fail(`prNumber: ${prNumber} was accepted — the card resumes a PR that cannot exist`)
+    } catch (e) {
+      msg = e.message
+    }
+    assert.match(msg, /prNumber/, `prNumber: ${prNumber} — the error names the offending key`)
+    assert.match(msg, /positive integer|>= ?1/i, `prNumber: ${prNumber} — the message states the rule`)
+    assert.equal(calls.length, 0, `prNumber: ${prNumber} must throw BEFORE any agent is dispatched`)
+  }
+  // 1 is the boundary on the legal side and must keep resuming — the guard costs the real path
+  // nothing.
+  const { calls, result } = await runWorkflow({
+    args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumber: 1 }] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(result.batch[0].prNumber, 1)
+  assert.equal(calls.filter(c => c.opts.phase === 'Implement').length, 0, 'PR #1 is a resume, not a fresh card')
+})
+
+// The contract block states "PRESENT-BUT-EMPTY IS AN ERROR, at every level" and "on every
+// optional key, at every level — card fields, run options and `pipeline` overrides alike".
+// At the CARD level it was not: `constrain` returned early on a blank value, so `base: ''` was
+// read as absent. `base` is the one that costs something — the card is then branched off
+// `pipeline.baseBranch` and the whole `This story is STACKED on …` clause disappears from the
+// implement prompt, so a caller composing `base: cfg.base ?? ''` gets a PR built on `origin/main`
+// WITHOUT its dependency's commits and a review diffed against the wrong range, silently.
+test('US-219 AC7: a present-but-blank optional CARD field throws, like every other level already did', async () => {
+  for (const [card, re] of [
+    [{ id: '219', title: 'T', branch: 'feat/x', base: '' }, /base.*empty/s],
+    [{ id: '219', title: 'T', branch: 'feat/x', base: '   ' }, /base.*empty/s],
+    [{ id: '219', title: 'T', branch: 'feat/x', notes: '' }, /notes.*empty/s],
+  ]) {
+    const msg = await expectThrow({ args: { cards: [card] } })
+    assert.match(msg, re, `${JSON.stringify(card)} must throw rather than be read as absent`)
+    assert.match(msg, /omit the key/i, 'the message says how to actually mean "unset"')
+  }
+  // The three spellings of "unset" are untouched — this narrows the meaning of ABSENT to
+  // exactly them, it does not make an optional key required.
+  const { result } = await runWorkflow({
+    args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', base: undefined, notes: null }] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge', 'undefined/null still mean absent')
 })

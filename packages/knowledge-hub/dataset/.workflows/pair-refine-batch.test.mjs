@@ -555,43 +555,143 @@ test('every refine prompt carries the pacing contract and states the no-new-card
   )
 })
 
-// ── Differential: the three helpers the two shipped engines hand-duplicate ──
-// `rejectUnknownKeys`, `constrain` and `isProse` exist verbatim in BOTH engines because a
-// sandbox script has no imports and cannot share a module. Their agreement was held by a
-// comment ("keep the two copies together, change them together") and by nothing executable —
-// the same shape round 7 closed for `severityRankErrors` with a differential once the
-// duplicate proved able to drift LOOSER than the original. A byte comparison cannot be used:
-// the error prefixes differ by design (`refine-batch:` vs `implement-batch:`), which is
-// exactly why the differential is behavioural — same input, same accept/reject DECISION.
-const IMPL_SRC = readFileSync(new URL('./pair-implement-batch.js', import.meta.url), 'utf8')
-
-// Extract each helper's SOURCE TEXT from an engine and evaluate the three together in
-// isolation. Extraction that silently missed would make the differential vacuously green,
-// so a miss is an assertion failure, not a skip.
-// The predicate patterns are INDENTATION-AGNOSTIC on purpose: the implement engine hoisted
-// `isRef`/`isProse`/`isSegment` to module scope so `resolvePipeline` can call the very same
-// functions (its values land on the same command lines), while the refine engine — which has
-// no `pipeline` — keeps them inside the per-card closure. Pinning the indentation would have
-// turned that legitimate move into an extraction miss, i.e. into a red differential for a
-// change that made the two engines MORE aligned, not less.
-function helpersOf(src, label) {
-  const grab = (re, what) => {
-    const m = src.match(re)
-    assert.ok(m, `${label}: could not extract ${what} — a differential that cannot find its subject proves nothing`)
-    return m[0]
+// ── Round-12 review: the empty-string rule reached only ONE of the two engines ──────────────
+// The sibling engine THROWS on `model: ''` / `severityFloor: ''` for a stated reason ("an empty
+// string is a value the caller wrote, and reading it as absent would run the batch on a setting
+// nobody chose"); `checkModel` here did `String(m ?? '').trim()` and returned `undefined`, so a
+// blank model was read as ABSENT and the batch ran on the inherited tier. The realistic caller
+// is the same config-driven one (`model: cfg.model ?? ''`), and this file's own comment three
+// lines above says a silently-ignored model override "looks exactly like a successful override.
+// Fail loudly at parse time." Both levels, because both are the same key.
+test('a present-but-blank model throws at BOTH levels, exactly as the sibling engine already did', async () => {
+  for (const args of [
+    { model: '', items: [{ id: '218', mode: 'triage' }] },
+    { model: '   ', items: [{ id: '218', mode: 'triage' }] },
+    { items: [{ id: '218', mode: 'triage', model: '' }] },
+  ]) {
+    let dispatched = 0
+    let msg = ''
+    try {
+      await runWorkflow({ args, dispatch: (p, o) => (dispatched++, okDispatch(p, o)) })
+      assert.fail(`${JSON.stringify(args)} was accepted — the batch runs on a tier nobody chose`)
+    } catch (e) {
+      msg = e.message
+    }
+    assert.match(msg, /model.*empty/s, `${JSON.stringify(args)}: the error names the key`)
+    assert.match(msg, /omit the key/i, 'the message says how to actually mean "unset"')
+    assert.equal(dispatched, 0, 'rejection happens at parse time, before any agent')
   }
-  return new Function(`
-    const i = 0, id = '218'
-    ${grab(/^function rejectUnknownKeys[\s\S]*?^}$/m, 'rejectUnknownKeys')}
-    ${grab(/^ {4}const constrain = [\s\S]*?^ {4}}$/m, 'constrain')}
-    ${grab(/^ *const isProse = .*$/m, 'isProse')}
-    ${grab(/^ *const isSegment = .*$/m, 'isSegment')}
-    return { rejectUnknownKeys, constrain, isProse, isSegment }
-  `)()
+  // The three spellings of "unset" are untouched, and a real override still routes.
+  const { calls } = await runWorkflow({
+    args: { model: undefined, items: [{ id: '218', mode: 'triage', model: null }] },
+    dispatch: okDispatch,
+  })
+  assert.ok(!('model' in calls.find(c => c.opts.label === 'triage:#218').opts), 'undefined/null still mean absent')
+})
+
+// Same rule, same round, on the string fields: `notes: ''` silently dropped the scope directive
+// from the work prompt. Held in agreement with the sibling by the differential below, whose
+// `a blank value` case went RED the moment the implement engine was fixed alone.
+test('a present-but-blank notes throws instead of silently dropping the scope directive', async () => {
+  for (const notes of ['', '   ']) {
+    let dispatched = 0
+    await assert.rejects(
+      () => runWorkflow({ args: { items: [{ id: '218', mode: 'refine', notes }] }, dispatch: (p, o) => (dispatched++, okDispatch(p, o)) }),
+      /notes.*empty/s,
+      `notes: ${JSON.stringify(notes)} must throw rather than be read as absent`,
+    )
+    assert.equal(dispatched, 0, 'rejection happens at parse time')
+  }
+})
+
+// ── Differential: the helpers the THREE engines hand-duplicate ─────────────
+// `rejectUnknownKeys`, `constrain`, `isProse`, `isSegment`, `isRef` and `checkModel` exist
+// verbatim in more than one engine because a sandbox script has no imports and cannot share a
+// module. Their agreement was held by a comment ("keep the copies together, change them
+// together") and by nothing executable — the same shape round 7 closed for `severityRankErrors`
+// with a differential once the duplicate proved able to drift LOOSER than the original. A byte
+// comparison cannot be used: the error prefixes differ by design (`refine-batch:` vs
+// `implement-batch:` vs `analyze-pr-batch:`), which is exactly why the differential is
+// behavioural — same input, same accept/reject DECISION.
+//
+// Round 12 widened it from two engines to three. `pair-analyze-pr-batch.js` had never been
+// through the hardening rounds the other two went through and had NONE of these helpers, which
+// is precisely the state this differential exists to make impossible to reach again — and it is
+// the containment the review named for the residual coupling: widen it as each shared predicate
+// lands, so a fix applied to one copy cannot stop there.
+// The engine set is resolved by PRESENCE, and the only file allowed to be absent is the one
+// this repo deliberately does not ship: `pair-analyze-pr-batch.js` dispatches to a personal,
+// user-level skill, so an adopter's `.claude/workflows/` holds the two shipped engines and this
+// test file — which must therefore stay runnable there. Reading the unshipped engine
+// unconditionally would make every installed copy of this file die at import on ENOENT, which
+// is the same class this PR already closed for shipped files citing decision records the
+// dataset does not ship. The presence check is reconciled by a test below, so it cannot become
+// a place where a missing engine quietly narrows the differential in THIS repo.
+const srcOf = name => {
+  try {
+    return readFileSync(new URL(`./${name}`, import.meta.url), 'utf8')
+  } catch {
+    return null
+  }
+}
+const UNSHIPPED = 'pair-analyze-pr-batch.js'
+const ENGINE_SRCS = {
+  'pair-implement-batch.js': srcOf('pair-implement-batch.js'),
+  'pair-refine-batch.js': SRC,
+  [UNSHIPPED]: srcOf(UNSHIPPED),
+}
+const HAS_UNSHIPPED = ENGINE_SRCS[UNSHIPPED] !== null
+
+// Which engine declares which helper is stated EXPLICITLY rather than discovered: "extract it
+// if it happens to be there" would turn deleting a helper from an engine into a silently
+// narrower differential instead of a failure. `isProse` is absent from analyze-pr-batch because
+// that engine takes no free-text field; `isRef` is absent from refine-batch because that one
+// takes no branch. Every other pairing is required.
+const ALL = Object.keys(ENGINE_SRCS)
+const HELPERS = {
+  // The predicate patterns are INDENTATION-AGNOSTIC on purpose: the implement engine hoisted
+  // `isRef`/`isProse`/`isSegment` to module scope so `resolvePipeline` can call the very same
+  // functions (its values land on the same command lines), while the refine engine — which has
+  // no `pipeline` — keeps them inside the per-card closure. Pinning the indentation would have
+  // turned that legitimate move into an extraction miss, i.e. into a red differential for a
+  // change that made the engines MORE aligned, not less.
+  rejectUnknownKeys: { re: /^function rejectUnknownKeys[\s\S]*?^}$/m, engines: ALL },
+  constrain: { re: /^ {4}const constrain = [\s\S]*?^ {4}}$/m, engines: ALL },
+  isSegment: { re: /^ *const isSegment = .*$/m, engines: ALL },
+  isProse: { re: /^ *const isProse = .*$/m, engines: ['pair-implement-batch.js', 'pair-refine-batch.js'] },
+  isRef: { re: /^ *const isRef = .*$/m, engines: ['pair-implement-batch.js', 'pair-analyze-pr-batch.js'] },
+  // `checkModel` carries its own `MODELS` whitelist, so the whitelist is extracted WITH it — a
+  // differential that supplied its own list would pass while the two engines disagreed on which
+  // tiers exist. The implement engine states the same rule in a different shape (a parse-time
+  // type/empty check plus a whitelist at `BATCH_MODEL`), so it is out of THIS pairing and is
+  // covered by its own tests; the two that share the function shape must not drift.
+  checkModel: {
+    re: /^ {2}const checkModel = [\s\S]*?^ {2}}$/m,
+    with: [/^ *const MODELS = .*$/m],
+    engines: ['pair-refine-batch.js', 'pair-analyze-pr-batch.js'],
+  },
 }
 
-const REFINE_HELPERS = helpersOf(SRC, 'pair-refine-batch.js')
-const IMPL_HELPERS = helpersOf(IMPL_SRC, 'pair-implement-batch.js')
+// Extract each helper's SOURCE TEXT from an engine and evaluate it in isolation. Extraction that
+// silently missed would make the differential vacuously green, so a miss is an assertion
+// failure, not a skip.
+function helperOf(name, engine) {
+  const spec = HELPERS[name]
+  const src = ENGINE_SRCS[engine]
+  const grab = re => {
+    const m = src.match(re)
+    assert.ok(m, `${engine}: could not extract ${name} — a differential that cannot find its subject proves nothing`)
+    return m[0]
+  }
+  // The ambient names a helper closes over in its own engine (`i`, `id`, `number`, `where`)
+  // are supplied here so the extracted text evaluates; nothing about the DECISION depends on them.
+  return new Function(`
+    const i = 0, id = '218', number = 424
+    ${(spec.with ?? []).map(grab).join('\n')}
+    ${grab(spec.re)}
+    return ${name}
+  `)()
+}
 
 // `throws` / `ok` only — never the message, which legitimately differs between the copies.
 const decide = fn => {
@@ -603,34 +703,96 @@ const decide = fn => {
   }
 }
 
-for (const [what, drive] of [
-  ['an unknown key', h => h.rejectUnknownKeys({ id: '1', nope: 1 }, ['id'], 'x')],
-  ['a known key set', h => h.rejectUnknownKeys({ id: '1' }, ['id'], 'x')],
-  ['a null object', h => h.rejectUnknownKeys(null, ['id'], 'x')],
-  ['a prototype key', h => h.rejectUnknownKeys({ __proto__: 1 }, ['id'], 'x')],
-  ['prose with a backtick', h => h.constrain('run `sh`', 'notes', h.isProse, 'plain text')],
-  ['prose with $(', h => h.constrain('and $(whoami)', 'notes', h.isProse, 'plain text')],
-  ['prose with a newline', h => h.constrain('a\nb', 'notes', h.isProse, 'plain text')],
-  ['prose with a control character', h => h.constrain('a\x07b', 'notes', h.isProse, 'plain text')],
-  ['real prose with punctuation and non-ASCII', h => h.constrain('#234/#390 (gate≠review) — verify', 'notes', h.isProse, 'plain text')],
-  ['a blank value', h => h.constrain('   ', 'notes', h.isProse, 'plain text')],
-  ['an absent value', h => h.constrain(undefined, 'notes', h.isProse, 'plain text')],
-  ['a non-string object', h => h.constrain({ a: 1 }, 'notes', h.isProse, 'plain text')],
-  ['a non-string array', h => h.constrain(['a', 'b'], 'notes', h.isProse, 'plain text')],
-  ['a non-string number', h => h.constrain(7, 'notes', h.isProse, 'plain text')],
-  ['a non-string boolean', h => h.constrain(true, 'notes', h.isProse, 'plain text')],
-  // `isSegment` is the fourth hand-duplicated helper, and the one whose drift is worst: on the
-  // implement engine its value becomes the worktree directory a `--force` remove is aimed at.
-  ['an id that is a bare dot', h => h.constrain('.', 'id', h.isSegment, 'a segment')],
-  ['an id with a leading dash', h => h.constrain('-rf', 'id', h.isSegment, 'a segment')],
-  ['an id that traverses', h => h.constrain('../../scratch', 'id', h.isSegment, 'a segment')],
-  ['an id that is a hidden file', h => h.constrain('.hidden', 'id', h.isSegment, 'a segment')],
-  ['a numeric issue id', h => h.constrain('219', 'id', h.isSegment, 'a segment')],
-  ['a tracker-style id', h => h.constrain('PROJ-42', 'id', h.isSegment, 'a segment')],
-  ['an id with a slash', h => h.constrain('a/b', 'id', h.isSegment, 'a segment')],
-])
-  test(`engine differential — ${what} gets the same verdict from both copies`, () => {
-    const a = decide(() => drive(REFINE_HELPERS))
-    const b = decide(() => drive(IMPL_HELPERS))
-    assert.equal(a, b, `refine-batch ${a} it while implement-batch ${b} it — the duplicate has drifted`)
+// Fixtures are grouped by the helper they drive, so a helper that only SOME engines declare is
+// still driven across every engine that does — and adding an engine to a helper's list
+// immediately drives every fixture at it.
+const CASES = [
+  ['rejectUnknownKeys', 'an unknown key', h => h({ id: '1', nope: 1 }, ['id'], 'x')],
+  ['rejectUnknownKeys', 'a known key set', h => h({ id: '1' }, ['id'], 'x')],
+  ['rejectUnknownKeys', 'a null object', h => h(null, ['id'], 'x')],
+  ['rejectUnknownKeys', 'a prototype key', h => h({ __proto__: 1 }, ['id'], 'x')],
+  ['isProse', 'prose with a backtick', (h, e) => e.constrain('run `sh`', 'notes', h, 'plain text')],
+  ['isProse', 'prose with $(', (h, e) => e.constrain('and $(whoami)', 'notes', h, 'plain text')],
+  ['isProse', 'prose with a newline', (h, e) => e.constrain('a\nb', 'notes', h, 'plain text')],
+  ['isProse', 'prose with a control character', (h, e) => e.constrain('a\x07b', 'notes', h, 'plain text')],
+  ['isProse', 'real prose with punctuation and non-ASCII', (h, e) => e.constrain('#234/#390 (gate≠review) — verify', 'notes', h, 'plain text')],
+  // `constrain`'s own contract: what counts as ABSENT, what counts as a bad TYPE, and — round 12
+  // — what counts as PRESENT-BUT-EMPTY. The blank case is the one that caught the drift: fixing
+  // the implement engine alone turned it red immediately.
+  ['constrain', 'a blank value', h => h('   ', 'notes', () => true, 'plain text')],
+  ['constrain', 'an empty string', h => h('', 'notes', () => true, 'plain text')],
+  ['constrain', 'an absent value', h => h(undefined, 'notes', () => true, 'plain text')],
+  ['constrain', 'an explicitly null value', h => h(null, 'notes', () => true, 'plain text')],
+  ['constrain', 'a non-string object', h => h({ a: 1 }, 'notes', () => true, 'plain text')],
+  ['constrain', 'a non-string array', h => h(['a', 'b'], 'notes', () => true, 'plain text')],
+  ['constrain', 'a non-string number', h => h(7, 'notes', () => true, 'plain text')],
+  ['constrain', 'a non-string boolean', h => h(true, 'notes', () => true, 'plain text')],
+  ['constrain', 'a value its predicate rejects', h => h('bad', 'notes', () => false, 'plain text')],
+  // `isSegment` is the helper whose drift is worst: on the implement engine its value becomes
+  // the worktree directory a `--force` remove is aimed at.
+  ['isSegment', 'an id that is a bare dot', (h, e) => e.constrain('.', 'id', h, 'a segment')],
+  ['isSegment', 'an id with a leading dash', (h, e) => e.constrain('-rf', 'id', h, 'a segment')],
+  ['isSegment', 'an id that traverses', (h, e) => e.constrain('../../scratch', 'id', h, 'a segment')],
+  ['isSegment', 'an id that is a hidden file', (h, e) => e.constrain('.hidden', 'id', h, 'a segment')],
+  ['isSegment', 'a numeric issue id', (h, e) => e.constrain('219', 'id', h, 'a segment')],
+  ['isSegment', 'a tracker-style id', (h, e) => e.constrain('PROJ-42', 'id', h, 'a segment')],
+  ['isSegment', 'an id with a slash', (h, e) => e.constrain('a/b', 'id', h, 'a segment')],
+  // `isRef` lands on `git worktree add … <base>` in one engine and `git fetch origin <branch>`
+  // in the other — the same command-line authority, so the same rule.
+  ['isRef', 'a ref chaining a merge command', (h, e) => e.constrain('main; gh pr merge 432 --admin', 'branch', h, 'a git ref')],
+  ['isRef', 'a ref with a leading dash', (h, e) => e.constrain('-rf', 'branch', h, 'a git ref')],
+  ['isRef', 'a ref that traverses', (h, e) => e.constrain('../../etc/passwd', 'branch', h, 'a git ref')],
+  ['isRef', 'a ref with a backtick', (h, e) => e.constrain('x `whoami`', 'branch', h, 'a git ref')],
+  ['isRef', 'a ref with a space', (h, e) => e.constrain('feat/x --force', 'branch', h, 'a git ref')],
+  ['isRef', 'a plain branch', (h, e) => e.constrain('main', 'branch', h, 'a git ref')],
+  ['isRef', 'a branch with an issue ref in it', (h, e) => e.constrain('feat/#292-x', 'branch', h, 'a git ref')],
+  ['isRef', 'a remote-qualified ref', (h, e) => e.constrain('origin/main', 'branch', h, 'a git ref')],
+  ['checkModel', 'a known model', h => h('opus', 'x')],
+  ['checkModel', 'an unknown model', h => h('gpt-5', 'x')],
+  ['checkModel', 'an absent model', h => h(undefined, 'x')],
+  ['checkModel', 'an explicitly null model', h => h(null, 'x')],
+  ['checkModel', 'an EMPTY model', h => h('', 'x')],
+  ['checkModel', 'a blank model', h => h('   ', 'x')],
+  ['checkModel', 'a non-string model', h => h(['opus'], 'x')],
+]
+
+// The two SHIPPED engines are unconditional: if either is missing, every case below fails at
+// extraction rather than quietly proving nothing.
+test('the differential covers every engine present in this directory', () => {
+  for (const name of ALL)
+    assert.equal(
+      ENGINE_SRCS[name] !== null,
+      name !== UNSHIPPED || HAS_UNSHIPPED,
+      `${name} is declared in the differential but not readable — the differential would silently narrow`,
+    )
+  // In THIS repo the unshipped engine is present, and its own test file proves it: the two
+  // travel together, so "absent" can only mean an adopter's install, never local drift.
+  assert.equal(HAS_UNSHIPPED, srcOf('pair-analyze-pr-batch.test.mjs') !== null, `${UNSHIPPED} and its test file must be present together`)
+})
+
+for (const [helper, what, drive] of CASES) {
+  const declared = HELPERS[helper].engines
+  const engines = declared.filter(e => ENGINE_SRCS[e] !== null)
+  test(`engine differential — ${helper}: ${what} gets the same verdict from all ${engines.length} copies`, () => {
+    if (engines.length < 2) {
+      // Reachable ONLY in an adopter's install, where the unshipped engine is absent and a
+      // helper it shares with just one sibling has nothing left to differ from. In a repo that
+      // holds all three engines this is a failure, not a skip.
+      assert.equal(HAS_UNSHIPPED, false, `${helper}: fewer than two copies present in a repo that carries every engine`)
+      return
+    }
+    const verdicts = engines.map(engine => {
+      // Some fixtures drive the predicate THROUGH `constrain` (that is where a predicate is
+      // actually consumed), so the engine's own `constrain` comes along.
+      const helpers = { constrain: HELPERS.constrain.engines.includes(engine) ? helperOf('constrain', engine) : null }
+      return [engine, decide(() => drive(helperOf(helper, engine), helpers))]
+    })
+    const [, first] = verdicts[0]
+    for (const [engine, v] of verdicts)
+      assert.equal(
+        v,
+        first,
+        `${engine} ${v} it while ${verdicts[0][0]} ${first} it — the duplicate has drifted (${helper}: ${what})`,
+      )
   })
+}

@@ -70,14 +70,17 @@ describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset
 
   it('the root copy carries every dataset file — the dataset is the shipped subset', () => {
     // Direction matters. Every shipped file must exist at the root, or this repo is not
-    // running what it ships. The reverse is NOT required, and the one current root-only file
-    // is a deliberate exclusion rather than drift:
+    // running what it ships. The reverse is NOT required, and the current root-only files
+    // are a deliberate exclusion rather than drift:
     //
     //   `.claude/workflows/pair-analyze-pr-batch.js` dispatches its agents to `/analyze-pr`,
     //   a PERSONAL, user-level skill that exists in neither this repo's `.claude/skills/` nor
     //   the shipped dataset. Shipping it would install a workflow whose agents are sent to a
     //   skill an adopter does not have. Its `meta.whenToUse` states that prerequisite for the
-    //   contributor who runs it here.
+    //   contributor who runs it here. `pair-analyze-pr-batch.test.mjs` is root-only for the
+    //   same reason — a test file has nothing to drive without its engine. The two travel
+    //   together, and the shipped `pair-refine-batch.test.mjs` reads the unshipped engine only
+    //   when it is present, so an adopter's installed copy stays runnable (asserted there).
     //
     // (The policy is recorded HERE, next to the guard that depends on it, rather than in a
     // dataset README: a README under `dataset/.workflows/` would itself install into every

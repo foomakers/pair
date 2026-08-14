@@ -98,6 +98,16 @@ function parseArgs(raw) {
     // type-checked" read true when it is not.
     if (m !== undefined && m !== null && typeof m !== 'string')
       throw new Error(`refine-batch: ${where} has model of type ${Array.isArray(m) ? 'array' : typeof m}, which is not a string. Pass one of ${MODELS.join(' | ')}, or omit the key.`)
+    // PRESENT-BUT-EMPTY IS AN ERROR, the same rule `constrain` applies to the string fields and
+    // the sibling engine applies to `args.model`/`args.severityFloor`. `String(m ?? '').trim()`
+    // read `''` as ABSENT, so `model: cfg.model ?? ''` (or a JSON template rendering an unset
+    // key as `""`) ran the whole batch on the inherited tier while the caller believed they had
+    // chosen one — the silently-ignored override this very comment block exists to forbid.
+    if (typeof m === 'string' && !m.trim())
+      throw new Error(
+        `refine-batch: ${where} has model empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
+          `An empty string is a value the caller wrote, and reading it as absent would run the batch on a tier nobody chose.`,
+      )
     const v = String(m ?? '').trim()
     if (!v) return undefined
     if (!MODELS.includes(v))
@@ -143,7 +153,18 @@ function parseArgs(raw) {
             `as if the caller had typed it. Pass a string, or omit the key.`,
         )
       const v = String(value ?? '').trim()
-      if (!v) return // absent/blank is handled above (required) or simply omitted from the prompt
+      // PRESENT-BUT-EMPTY IS AN ERROR — the rule the sibling engine's contract block states "at
+      // every level", and the one this early return used to break in BOTH copies. `notes: ''`
+      // (what `notes: cfg.notes ?? ''`, or a JSON template rendering an unset key, produces)
+      // silently dropped the scope directive from the work prompt: a discarded setting that
+      // looks exactly like a run nobody configured, which is the #401 shape. `undefined`/`null`
+      // remain the spellings of "unset"; an empty string is a value the caller wrote.
+      if (value !== undefined && value !== null && !v)
+        throw new Error(
+          `refine-batch: items[${i}] (#${id}) has ${key} empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
+            `An empty string is a value the caller wrote, and reading it as absent would drive the card on a setting nobody chose.`,
+        )
+      if (!v) return // absent (undefined/null) — the key is simply omitted from the prompt
       if (!ok(v))
         throw new Error(
           `refine-batch: items[${i}] (#${id}) has ${key} ${JSON.stringify(v)}, which is not ${what}. ` +
