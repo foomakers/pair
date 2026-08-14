@@ -758,7 +758,17 @@ async function driveStory(story) {
     // on a FIRST round it is also missing the first-review comment that would make the
     // absence visible. Distinguish "reviewed, found nothing" from "did not review":
     // only the former may converge.
-    if (!review)
+    //
+    // MEASURED (#432): checking only for `null` was not enough. Every reviewer agent died —
+    // the machine slept mid-response — the PR carried zero comments and zero reviews, and the
+    // batch still returned `ready-for-merge`. A truthy-but-contentless return (`{}`, a
+    // truncated structured output) yields `findings ?? []` = no findings, which reads as
+    // "nothing actionable remains".
+    //
+    // So the test is inverted: a VERDICT must be present. Absence of findings is not evidence
+    // that a review happened; presence of a verdict is. Every real review emits one — it is a
+    // required field of the contract schema — so this costs a genuine clean review nothing.
+    if (!review || !String(review.verdict ?? '').trim())
       return { story, prNumber: pr.prNumber, status: 'failed-review', round, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     const findings = review.findings ?? []
     const allActionable = findings.filter((f) => !f.nonActionable)

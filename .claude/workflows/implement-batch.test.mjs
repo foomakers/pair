@@ -1696,3 +1696,49 @@ test('US-219 AC7: an explicitly empty card list stays a legal no-op', async () =
   assert.strictEqual(calls.length, 0, 'an empty batch spawned agents')
   assert.match(result.note, /Empty batch/)
 })
+
+// ── Convergence requires POSITIVE evidence of a review ─────────────────────
+// Measured, on this story's own PR (#432): every reviewer agent died — the machine slept
+// mid-response — the PR carried zero comments and zero reviews, and the batch still
+// returned `ready-for-merge`. The existing `if (!review)` guard only catches a NULL
+// return; a truthy-but-contentless one (`{}`, a truncated structured output, a partial
+// object) yields `findings ?? []` = no findings, which the convergence test reads as
+// "nothing actionable remains".
+//
+// So the rule is inverted: converging requires a VERDICT to be present. Absence of
+// findings is not evidence of a review — the presence of a verdict is.
+test('a contentless review return cannot converge — absence of findings is not evidence', async () => {
+  for (const emptyish of [{}, { findings: [] }, { verdict: '' }, { verdict: null, findings: [] }]) {
+    const { result } = await runWorkflow({
+      args: { cards: [{ ...STORY, prNumber: 42 }] },
+      dispatch: (prompt, opts) => {
+        if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (opts.agentType === 'reviewer') return emptyish
+        if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+        if (opts.phase === 'PR') return { prNumber: 42 }
+        return { fixed: true }
+      },
+    })
+    const row = result.batch[0]
+    assert.strictEqual(
+      row?.status,
+      'failed-review',
+      `a review returning ${JSON.stringify(emptyish)} was treated as a clean review`,
+    )
+  }
+})
+
+test('a review WITH a verdict and no findings still converges', async () => {
+  // The guard above must not make a genuinely clean review unreachable.
+  const { result } = await runWorkflow({
+    args: { cards: [{ ...STORY, prNumber: 42 }] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'PR') return { prNumber: 42 }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      return { fixed: true }
+    },
+  })
+  assert.strictEqual(result.batch[0]?.status, 'ready-for-merge')
+})
