@@ -336,8 +336,8 @@ const STORIES = PARSED.stories
 //
 // `severityFloor` names the lowest severity that BLOCKS. Findings below it are NOT
 // discarded and NOT silently accepted: they are carried to the merge gate in
-// `acceptedFindings` with `disposition: 'Below severity floor'`, so the human sees every
-// one and decides. Absent → every actionable finding blocks (the previous behaviour), so
+// `acceptedFindings` with `disposition: 'Below severity floor'`, accumulated across every
+// round of the cycle, so the human sees every one and decides. Absent → every actionable finding blocks (the previous behaviour), so
 // nothing changes for a caller that does not ask for a floor.
 const SEVERITY_RANK = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 }
 const rankOf = (s) => SEVERITY_RANK[String(s ?? '').trim().toLowerCase()] ?? 3 // unknown severity blocks: fail safe
@@ -498,8 +498,7 @@ const PROBE_SCHEMA = {
 // The pattern is per-template and reusable: add a spec below to contract another
 // template — e.g. { name: 'pr', template: '.../pr-template.md', contract:
 // '.claude/workflows/pair-contracts/pr.contract.json', skeleton: PR_SCHEMA, mirrors: ... }
-// once the PR return value grows beyond a handle. See
-// ADR-016 (adr-016-ai-generated-template-contracts.md).
+// once the PR return value grows beyond a handle.
 const CONTRACT_SPECS = [
   {
     name: 'code-review',
@@ -681,10 +680,11 @@ async function driveStory(story) {
   // 3. REVIEW <-> FIX loop — reviewer is independent & BLIND to the handoff.
   //    Converges when every ACTIONABLE finding is resolved. Findings the reviewer
   //    marks nonActionable (by-design / won't-fix, justified) don't block: they're
-  //    carried to the merge gate as `acceptedFindings` for the human to see.
+  //    carried to the merge gate as `acceptedFindings` for the human to see —
+  //    ACCUMULATED over every round, not just the last one (a round-1 reviewer never
+  //    re-raises what round 0 already had accepted).
   //    nonActionable is NOT a scope filter — "not this story's original scope" alone
-  //    never qualifies; only "fixing it would be genuinely wrong" does. See ADL
-  //    decision-log/2026-07-11-agent-execution-layer.md (amended 2026-07-18).
+  //    never qualifies; only "fixing it would be genuinely wrong" does.
   //
   //    PR-COMMENT POLICY (noise reduction — the WHOLE cycle of a PR is ONE logical cycle,
   //    #367 in-loop + #373 across-runs): regardless of how many runs / escalations /
@@ -785,7 +785,26 @@ async function driveStory(story) {
   // before honouring it, so the escalation is deferred by a round rather than dropped.
   let humanDecisionPending = false
   let prevFindings = []
-  let accepted = []
+  // ACCUMULATES across rounds — never reassigned. A finding accepted in round 0 (by-design, or
+  // below the floor) is not re-raised by the round-1 reviewer, because round 1 only sees the
+  // fixed code and has no memory of what the human was already told would be carried. So a
+  // per-round reassignment loses it: the card converges `ready-for-merge` with an EMPTY accepted
+  // table, the convergence prompt renders that empty table, and the merge gate is told nothing was
+  // carried. Sub-floor findings are not recoverable elsewhere either — `prevFindings = actionable`
+  // excludes them, so they never reach the fixer's working log. AC4 requires them carried, so the
+  // accumulator is the carrier of record.
+  const accepted = []
+  // De-dup key: a re-review repeating a sub-floor finding nobody was asked to fix is the norm, and
+  // one finding must occupy one row of the accepted table, not one row per round it survived.
+  const acceptedKeys = new Set()
+  const accept = (findings) => {
+    for (const f of findings) {
+      const key = `${f.location ?? ''} ${f.description ?? ''}`
+      if (acceptedKeys.has(key)) continue
+      acceptedKeys.add(key)
+      accepted.push(f)
+    }
+  }
   // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
   // any remediation state to synthesize — not merely whether a fix happened this run. On a
   // continuation (log present) it is seeded true so an immediate round-0 convergence still
@@ -841,10 +860,10 @@ async function driveStory(story) {
     // "the reviewer judged it by-design", which are different statements.
     const belowFloor = SEVERITY_FLOOR ? allActionable.filter((f) => rankOf(f.severity) < SEVERITY_FLOOR.rank) : []
     const actionable = SEVERITY_FLOOR ? allActionable.filter((f) => rankOf(f.severity) >= SEVERITY_FLOOR.rank) : allActionable
-    accepted = [
+    accept([
       ...findings.filter((f) => f.nonActionable),
       ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
-    ]
+    ])
     if (belowFloor.length)
       log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
     // Converge once nothing actionable remains (by-design findings don't block).

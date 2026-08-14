@@ -1112,7 +1112,9 @@ test('with a Major floor, Minor-only findings converge and are carried to the ga
     args: { severityFloor: 'Major', stories: [STORY] },
     dispatch: stdDispatch({
       contractResult: { status: 'cache-hit', contract: validContract() },
-      review: { verdict: 'Rework', findings: [MINOR, MINOR] },
+      // Two DISTINCT Minors: accumulation de-dups on location+description, so repeating one
+      // object twice would assert the de-dup rather than the carry.
+      review: { verdict: 'Rework', findings: [MINOR, { ...MINOR, location: 'a.md:9' }] },
     }),
   })
   const b = result.batch[0]
@@ -1144,6 +1146,54 @@ test('a finding AT or ABOVE the floor still blocks and still drives a fix round'
   assert.ok(fix.prompt.includes('b.ts:2'), 'the fixer got the Major')
   assert.ok(!fix.prompt.includes('a.md:1'), 'the sub-floor Minor was not sent to the fixer')
   assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+// ── acceptedFindings accumulate ACROSS rounds ───────────────────────────────
+// Measured (#432 review): `accepted` was REASSIGNED from each round's findings, so any
+// nonActionable / below-floor finding raised before the LAST round vanished. The failure is
+// silent and points the wrong way: the card returns `ready-for-merge` with `acceptedFindings: []`,
+// the convergence prompt renders the accepted table from that empty array, and the human merge
+// gate is told nothing was carried. `prevFindings = actionable` excludes sub-floor findings, so
+// they are not recoverable from the fixer's working log either. AC4 requires the opposite.
+test('a below-floor finding from round 0 survives into the accepted table after a later clean round', async () => {
+  let round = 0
+  const { result, calls } = await runWorkflow({
+    args: { severityFloor: 'Major', stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      // r0: one blocking Major + one sub-floor Minor. r1: the Major is fixed, nothing left.
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0
+          ? { verdict: 'Rework', findings: [MAJOR, MINOR, { location: 'c.ts:3', severity: 'Major', description: 'by design', nonActionable: true }] }
+          : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const b = result.batch[0]
+  assert.equal(b.status, 'ready-for-merge')
+  const locations = b.acceptedFindings.map(f => f.location).sort()
+  assert.deepEqual(locations, ['a.md:1', 'c.ts:3'], 'round 0 accepted findings are still carried after a clean round 1')
+  // The convergence comment renders the accepted table from the same array — if it drops the
+  // findings, the human merge gate never sees them.
+  const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
+  assert.ok(synth.prompt.includes('a.md:1'), 'the convergence comment carries the round-0 Minor')
+  assert.ok(synth.prompt.includes('c.ts:3'), 'the convergence comment carries the round-0 by-design finding')
+})
+
+test('the same finding raised in two rounds is carried once, not duplicated per round', async () => {
+  const { result } = await runWorkflow({
+    args: { severityFloor: 'Major', stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: validContract() },
+      // A re-review that repeats a sub-floor finding it did not ask anyone to fix is the norm,
+      // not the exception — accumulation must de-dup on location+description or the accepted
+      // table grows a row per round for one finding.
+      review: { verdict: 'Rework', findings: [MINOR, { ...MINOR }] },
+    }),
+  })
+  assert.equal(result.batch[0].acceptedFindings.length, 1, 'de-duplicated on location+description')
 })
 
 test('without a floor nothing changes: every actionable finding still blocks', async () => {
