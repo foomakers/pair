@@ -388,7 +388,13 @@ const STORIES = PARSED.stories
 // severity hit the same fallback rank), and the adopter's own `High` was rejected as an unknown
 // floor. So: rank against the resolved vocabulary, validate the floor against that SAME set,
 // and treat a severity in neither as ABOVE every floor.
-const SEVERITY_RANK = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 }
+// Prototype-free, like every rank map below it: a severity is arbitrary text from a review
+// template, so `ranks['constructor']` on a plain object returns an INHERITED function — not a
+// number, not undefined, so `?? Infinity` never fires and every `<`/`>=` comparison against it
+// is false. Measured (#432 review round 7): a `{severity: 'constructor'}` finding fell out of
+// BOTH the below-floor and the actionable set and was recorded nowhere. `Object.create(null)`
+// removes the inherited keys; `Object.hasOwn` at every read is the belt to that braces.
+const SEVERITY_RANK = Object.assign(Object.create(null), { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 })
 const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
 // The rank of a CONFIGURED severity is the EXPLICIT ordinal the contract states for it
 // (`severityRanks`, higher = more severe), never the position of its name in
@@ -406,19 +412,46 @@ const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
 // why it is not itself derived from DEFAULT_SEVERITIES: dropping them would change behaviour
 // for callers that use them today.
 //
-// `severityRankErrors` duplicates ensure-contract.mjs's canonical check (the sandbox has no
-// filesystem and cannot import it) — same rules, same wording, deliberately minimal. It is
-// the second line: a contract reaching here should already have passed the canonical one.
+// `severityRankErrors` duplicates ensure-contract.mjs's canonical check, and the duplication
+// is FORCED, not lazy: this sandbox has no filesystem and no imports, so the only contract
+// bytes that ever reach it are an agent's RETURN VALUE. The copy `ensure-contract.mjs write`
+// validated on disk is unreadable from here, and dispatching a second agent to read it back
+// would yield another unvalidated agent return value — the same trust boundary, one dispatch
+// more expensive. So this function is NOT a redundant second line: it is THE validation on
+// the path that decides the severity floor, and it may never be weaker than the canonical one.
+//
+// It WAS weaker, in exactly one way, and that cost a third occurrence of the same bug class
+// (#432 review round 7): it matched keys case-INSENSITIVELY and never rejected keys absent
+// from the vocabulary, so `{Low:0, Medium:1, Blocker:2, High:3, high:5}` collapsed the two
+// case-variants LAST-WINS — `High` became 5, `Blocker` 2 — and a `Blocker` "auth bypass"
+// converged `ready-for-merge` with zero fix rounds at a `High` floor, while the canonical
+// validator rejected the very same map. Keys are therefore matched EXACTLY, as canonical
+// does, plus one rule canonical does not need: two VOCABULARY names that normalize to the
+// same string (`High` and `high` both listed) would collapse this consumer's normalized
+// lookup map, so that vocabulary is refused too. Strictly stronger than canonical, never
+// looser — asserted by the canonical/consumer differential in the test file, which CAN
+// import the real module.
 function severityRankErrors(names, severityRanks) {
   if (!severityRanks || typeof severityRanks !== 'object' || Array.isArray(severityRanks))
     return ['severityRanks is missing: the contract states no explicit rank per severity, and the order of `vocabulary.severities` is not a ranking']
   const errors = []
-  const byNorm = {}
-  for (const key of Object.keys(severityRanks)) byNorm[normSeverity(key)] = severityRanks[key]
-  const missing = names.filter((n) => !(normSeverity(n) in byNorm))
+  const keys = Object.keys(severityRanks)
+  const missing = names.filter((n) => !keys.includes(n))
   if (missing.length) errors.push(`severityRanks is missing a rank for: ${missing.join(', ')}`)
+  const extra = keys.filter((k) => !names.includes(k))
+  if (extra.length) errors.push(`severityRanks ranks names absent from vocabulary.severities: ${extra.join(', ')} — a key that is not spelled exactly as the vocabulary spells it (a case variant included) is ambiguous, never a synonym`)
+  // Consumer-specific: ranks are looked up by NORMALIZED severity, so two names that
+  // normalize alike cannot both be ranked — the second would silently overwrite the first.
+  const seen = new Map()
+  for (const n of names) {
+    const norm = normSeverity(n)
+    if (seen.has(norm) && seen.get(norm) !== n)
+      errors.push(`vocabulary.severities is ambiguous: ${seen.get(norm)} and ${n} differ only in case/whitespace, so their ranks cannot be told apart`)
+    else seen.set(norm, n)
+  }
   const byRank = new Map()
-  for (const [key, value] of Object.entries(byNorm)) {
+  for (const key of keys) {
+    const value = severityRanks[key]
     if (typeof value !== 'number' || !Number.isInteger(value))
       errors.push(`severityRanks.${key} must be an integer (higher = more severe), got ${JSON.stringify(value)}`)
     else if (byRank.has(value))
@@ -437,10 +470,10 @@ function resolveSeverityScale(severities, severityRanks) {
   // `ranks: null` = the vocabulary is known but its ORDERING is not. The run still uses the
   // contract (schema + reviewer prompt); only ranking — i.e. a floor — is refused, loudly.
   if (errors.length) return { ranks: null, names: [...new Set(names)], configured: true, rankError: errors.join('; ') }
-  const byNorm = {}
-  for (const key of Object.keys(severityRanks)) byNorm[normSeverity(key)] = severityRanks[key]
-  const ranks = {}
-  for (const n of names) ranks[normSeverity(n)] = byNorm[normSeverity(n)]
+  // Prototype-free and built from the EXACT keys the check above accepted — after it, every
+  // name is a key of `severityRanks` spelled identically, and no two names normalize alike.
+  const ranks = Object.create(null)
+  for (const n of names) ranks[normSeverity(n)] = severityRanks[n]
   return { ranks, names: [...new Set(names)], configured: true, rankError: null }
 }
 // Resolved once the contract is known — see SEVERITY_SCALE, after REVIEW_VOCAB.
@@ -448,7 +481,16 @@ function resolveSeverityScale(severities, severityRanks) {
 // own table outranks every possible floor, so it always blocks. The previous `?? 3` claimed to
 // be fail-safe and was not — any floor of rank >= 4 sat above it. Unreachable with an unranked
 // scale (no floor can exist then), and Infinity there too for the same reason.
-const rankOf = (s) => (SEVERITY_SCALE.ranks ? SEVERITY_SCALE.ranks[normSeverity(s)] ?? Infinity : Infinity)
+// `Object.hasOwn`, not `??`: an inherited `Object.prototype` key (`constructor`, `toString`)
+// is neither null nor undefined, so `??` would hand a FUNCTION to a `<` comparison and the
+// finding would fall out of every partition. Own-key membership answers it once, for both
+// the prototype-free maps and any future one that is not.
+const rankOf = (s) => {
+  const map = SEVERITY_SCALE.ranks
+  if (!map) return Infinity
+  const key = normSeverity(s)
+  return Object.hasOwn(map, key) ? map[key] : Infinity
+}
 function parseFloor(raw) {
   const v = String(raw ?? '').trim()
   if (!v) return null
@@ -464,7 +506,9 @@ function parseFloor(raw) {
   const key = normSeverity(v)
   // Membership, not truthiness: an explicit ordinal may legitimately be `0` (a template's
   // lowest level), and `!r` would have rejected exactly that floor as a typo.
-  const r = key in SEVERITY_SCALE.ranks ? SEVERITY_SCALE.ranks[key] : undefined
+  // OWN-key membership: `in` walks the prototype chain, so `severityFloor: 'constructor'`
+  // passed this test and then ranked against an inherited function.
+  const r = Object.hasOwn(SEVERITY_SCALE.ranks, key) ? SEVERITY_SCALE.ranks[key] : undefined
   // A floor the reviewer cannot express is a configuration error, never a silent
   // reclassification: rejecting it is what stops `Critical` from out-ranking an adopter's whole
   // scale. A typo still throws, in either vocabulary.
@@ -995,8 +1039,17 @@ async function driveStory(story) {
     // Below the floor: still reported, still shown to the human, just not blocking. Marked
     // with a disposition so the merge gate can tell "we chose not to block on this" from
     // "the reviewer judged it by-design", which are different statements.
-    const belowFloor = SEVERITY_FLOOR ? allActionable.filter((f) => rankOf(f.severity) < SEVERITY_FLOOR.rank) : []
-    const actionable = SEVERITY_FLOOR ? allActionable.filter((f) => rankOf(f.severity) >= SEVERITY_FLOOR.rank) : allActionable
+    // ONE predicate, two buckets — not two independent filters. `< floor` and `>= floor` are
+    // both false for a rank that is not a number (NaN, or an inherited prototype value before
+    // `Object.hasOwn` above), so the two-filter form was NOT total: such a finding landed in
+    // neither set and was recorded nowhere — not blocking, not even in `acceptedFindings`,
+    // which AC4 says never happens (#432 review round 7). Partitioning on the single
+    // below-floor test makes the complement the actionable set by construction: anything the
+    // test cannot answer YES for blocks, which is also the safe direction.
+    const belowFloor = []
+    const actionable = []
+    for (const f of allActionable)
+      (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
     accept([
       ...findings.filter((f) => f.nonActionable),
       ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),

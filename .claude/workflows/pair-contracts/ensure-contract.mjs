@@ -30,9 +30,15 @@
 //   node ensure-contract.mjs write <template.md> <contract.json> <draft.json>
 //     → validates the draft, stamps $meta with the template hash, persists.
 //
-// NOTE: the workflow sandbox (implement-batch.js) cannot import this module
-// (no filesystem access); it keeps a deliberately minimal duplicate guard
-// (`usableSchema`) for its own consumer-side needs. Keep both small.
+// NOTE: the workflow sandbox (implement-batch.js) cannot import this module (no filesystem,
+// no imports), and it never sees the contract this module PERSISTED — only the one its
+// generator agent RETURNED. So its duplicates of these checks (`usableSchema` and its own
+// `severityRankErrors`) are not a redundant second line: they are the only validation on the
+// path that decides a merge-blocking severity floor, and a duplicate that is LOOSER than the
+// rule here is a silent bypass (#432 review round 7, the third of that class). The duplicate
+// must stay at least as strict as this module; `pair-implement-batch.test.mjs` imports
+// `severityRankErrors` from here and asserts exactly that, map by map. Keep both small, and
+// change them together.
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -91,7 +97,22 @@ export function severityRankErrors(severities, severityRanks, label = 'severityR
   if (missing.length) errors.push(`${label} is missing a rank for: ${missing.join(', ')}`)
   const extra = keys.filter(k => !names.includes(k))
   if (extra.length)
-    errors.push(`${label} ranks names absent from vocabulary.severities: ${extra.join(', ')}`)
+    errors.push(
+      `${label} ranks names absent from vocabulary.severities: ${extra.join(', ')} — a key that is not spelled exactly as the vocabulary spells it (a case variant included) is ambiguous, never a synonym`,
+    )
+  // Two severity NAMES that differ only in case/whitespace: consumers key their rank lookup
+  // by the normalized severity a reviewer answered with (the sandbox consumer in
+  // implement-batch.js does), so such a pair collapses to one entry and the second silently
+  // wins. Rejected here, at the source, rather than left for each consumer to survive.
+  const seenNorm = new Map()
+  for (const n of names) {
+    const norm = n.toLowerCase()
+    if (seenNorm.has(norm) && seenNorm.get(norm) !== n)
+      errors.push(
+        `vocabulary.severities is ambiguous: ${seenNorm.get(norm)} and ${n} differ only in case/whitespace, so their ranks cannot be told apart`,
+      )
+    else seenNorm.set(norm, n)
+  }
   // Two severities on one rank cannot answer "does this block?" — reject rather than pick.
   const byRank = new Map()
   for (const key of keys) {

@@ -12,6 +12,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+// The CANONICAL rank-map rule, imported from the module that owns it. The engine cannot
+// import it (no filesystem in the sandbox) and keeps a duplicate; this test is what keeps
+// the duplicate from drifting looser than the original — see the differential below.
+import { severityRankErrors as canonicalSeverityRankErrors } from './pair-contracts/ensure-contract.mjs'
 
 // The workflow file is a sandbox script (top-level await + return, ambient
 // `args`/`agent`/`parallel`), not importable ESM. Evaluate it as an async
@@ -1531,6 +1535,115 @@ test('…and with NO floor asked for, that same rank-less contract still drives 
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(rev.prompt.includes('Blocker'), 'the configured vocabulary still threads into the prompt')
   assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+// ── The CONSUMER's guard is the trust boundary, and may never be weaker ─────
+// Measured (#432 review round 7): the engine consumes the contract the AGENT RETURNED, and
+// it always will — the sandbox has NO filesystem and NO imports, so the only contract bytes
+// that ever reach it are an agent's return value; the copy `ensure-contract.mjs write`
+// validated on disk is unreadable from here, and dispatching a second agent to read it back
+// would produce another unvalidated agent return value, not a stronger one. So the in-file
+// `severityRankErrors` is not a redundant duplicate — it IS the validation on the deciding
+// path, and being LOOSER than the canonical rule is a silent bypass.
+// It was looser in exactly one way: it matched rank keys case-INSENSITIVELY and never checked
+// for keys absent from the vocabulary. Driving the engine at floor `High` with vocabulary
+// `Low|Medium|High|Blocker` and `severityRanks: {Low:0, Medium:1, Blocker:2, High:3, high:5}`
+// (a duplicate `High`/`high` differing only in case): the two keys collapsed under
+// normalization, LAST WON, `High` resolved to 5 and `Blocker` to 2, and a `Blocker` "auth
+// bypass" converged `ready-for-merge` with ZERO fix rounds, filed "Below severity floor
+// (High)". The canonical validator rejects the same map outright (`severityRanks ranks names
+// absent from vocabulary.severities: high`). Third occurrence of the same bug class, this
+// time through dual validation with one path weaker than the other.
+const CASE_COLLIDING_RANKS = { Low: 0, Medium: 1, Blocker: 2, High: 3, high: 5 }
+test('a CASE-COLLIDING severityRanks key refuses to rank instead of resolving it last-wins', async () => {
+  await assert.rejects(
+    () =>
+      runWorkflow({
+        args: { severityFloor: 'High', stories: [STORY] },
+        dispatch: stdDispatch({
+          contractResult: {
+            status: 'cache-hit',
+            contract: contractWith({ severities: ['Low', 'Medium', 'High', 'Blocker'], severityRanks: CASE_COLLIDING_RANKS }),
+          },
+          review: { verdict: 'Rework', findings: [BLOCKER] },
+        }),
+      }),
+    err => {
+      assert.match(err.message, /severityRanks/, 'the message names the real cause')
+      assert.match(err.message, /high/, 'the message names the offending key')
+      assert.ok(!/unknown severityFloor/.test(err.message), 'the floor itself is not the problem')
+      return true
+    },
+  )
+})
+
+// The differential the duplication needs: for every rank map the CANONICAL validator rejects,
+// the engine must refuse to rank too. Without it, the next edit to either copy re-opens this
+// class a fourth time. Canonical is imported from the real module — the test runner has the
+// filesystem the sandbox does not.
+const SEVS = ['Low', 'Medium', 'High', 'Blocker']
+for (const [what, severityRanks] of [
+  ['a case-colliding duplicate key', CASE_COLLIDING_RANKS],
+  ['an off-vocabulary key', { Low: 0, Medium: 1, High: 2, Blocker: 3, Bloqueur: 4 }],
+  ['a missing rank', { Low: 0, Medium: 1, High: 2 }],
+  ['a duplicate ordinal', { Low: 0, Medium: 1, High: 2, Blocker: 2 }],
+  ['a non-integer ordinal', { Low: 0, Medium: 1, High: 2.5, Blocker: 3 }],
+  ['a non-numeric ordinal', { Low: 0, Medium: 1, High: 'high', Blocker: 3 }],
+  ['a prototype-key rank', { Low: 0, Medium: 1, High: 2, Blocker: 3, constructor: 4 }],
+])
+  test(`canonical/consumer differential — ${what} is rejected by BOTH`, async () => {
+    assert.ok(
+      canonicalSeverityRankErrors(SEVS, severityRanks).length > 0,
+      'precondition: the canonical validator rejects this map',
+    )
+    await assert.rejects(
+      () =>
+        runWorkflow({
+          args: { severityFloor: 'High', stories: [STORY] },
+          dispatch: stdDispatch({
+            contractResult: { status: 'cache-hit', contract: contractWith({ severities: SEVS, severityRanks }) },
+            review: { verdict: 'Rework', findings: [BLOCKER] },
+          }),
+        }),
+      err => {
+        assert.match(err.message, /severityRanks/, 'the consumer refuses to rank, as loudly as the canonical one rejects')
+        return true
+      },
+    )
+  })
+
+// ── The floor partition is TOTAL: a finding is never in NEITHER set ─────────
+// Measured (#432 review round 7, Minor): the rank maps were plain objects and the partition
+// was two independent filters (`< floor`, `>= floor`). A severity naming an inherited
+// `Object.prototype` key made `rankOf` return that inherited value (a function, so `?? Infinity`
+// never fired); both comparisons were false and the finding fell out of BOTH sets — not
+// blocking, and not even carried into `acceptedFindings`, which AC4 says never happens.
+// Reachable on the loose-fallback path, where severities are free-form (no contract enum).
+const PROTO = { location: 'a.ts:1', severity: 'constructor', description: 'prototype-key severity', recommendation: 'r' }
+test('a severity naming an Object.prototype key still BLOCKS — it is never dropped from both sets', async () => {
+  let round = 0
+  const { result, calls } = await runWorkflow({
+    args: { severityFloor: 'Major', stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'failed' } // loose fallback
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0 ? { verdict: 'Rework', findings: [PROTO] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix, 'an unrankable severity outranks every floor — it must drive a fix round')
+  assert.ok(fix.prompt.includes('a.ts:1'), 'the finding reaches the fixer')
+  assert.deepEqual(result.batch[0].acceptedFindings, [], 'and it was NOT filed as below the floor')
+})
+
+test('a severityFloor naming an Object.prototype key is rejected, not silently accepted', async () => {
+  await assert.rejects(
+    () => runWorkflow({ args: { severityFloor: 'constructor', stories: [STORY] }, dispatch: stdDispatch({ contractResult: { status: 'failed' } }) }),
+    /unknown severityFloor/,
+  )
 })
 
 // ── needsHumanDecision buys one fix round before escalating ─────────────────
