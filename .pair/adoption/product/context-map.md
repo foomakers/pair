@@ -15,8 +15,9 @@ This is Pair's own map — the framework dogfooding the mechanism it ships. Its 
 | [Adoption & Guidelines](subdomain/adoption-guidelines.md) | Supporting | No | |
 | [How-To Knowledge](subdomain/how-to-knowledge.md) | Supporting | No | |
 | [Integration & Process Standardization](subdomain/integration-process-standardization.md) | Supporting | No | |
+| [Development Tooling Standards](subdomain/development-tooling-standards.md) | Generic | No | Low |
 
-- **Classification** and **Volatility** mirror the subdomain catalog (`subdomain/<slug>.md`) — one column each here, never invented in the map. Volatility is intentionally empty: the catalog files carry no rating yet.
+- **Classification** and **Volatility** mirror the subdomain catalog (`subdomain/<slug>.md`) — one column each here, never invented in the map. Volatility is empty for entries whose catalog file carries no rating yet; Development Tooling Standards is the first to carry one (Low, per its Generic classification default).
 - **Own Context** is "Yes" for Collaborative Workflow: its glossary and entities (the way-of-working mechanics) outgrew the shared file and split to the co-located [`collaborative-workflow.context.md`](subdomain/collaborative-workflow.context.md) (see the [Subdomain Context Template](../../knowledge/guidelines/collaboration/templates/subdomain-context-template.md)).
 
 ## Glossary
