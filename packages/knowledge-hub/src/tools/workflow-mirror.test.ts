@@ -215,14 +215,26 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
   //   3. `pair-implementer.md` cited an ADL and an issue number the dataset does not ship
   //
   // The mirror guard cannot see any of them: both copies are equally wrong. This one reads
-  // the references OUT of the shipped agents and resolves each against what actually ships.
+  // the references OUT of the shipped artifacts and resolves each against what actually ships.
+  //
+  // Instances 4 and 5 were found by the NEXT reviewer, in the half this guard did not scan:
+  // `pair-refine-batch.js` cited an ADL by filename inside a runtime PROMPT, and
+  // `pair-contracts/{ensure-contract.mjs,.gitignore}` cited an ADR the dataset has no
+  // directory for. Scanning `.agents` only was the reason review round 5, not CI, caught them.
+  // Both shipped trees are scanned now — a workflow is as adopter-facing as an agent.
   const agentsDir = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.agents')
+  const workflowsDataset = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.workflows')
   const datasetRoot = join(REPO_ROOT, 'packages/knowledge-hub/dataset')
+  // [dir, file] over every shipped artifact of both kinds.
+  const shippedArtifacts = (): [string, string][] => [
+    ...listFiles(agentsDir).map(f => [agentsDir, f] as [string, string]),
+    ...listFiles(workflowsDataset).map(f => [workflowsDataset, f] as [string, string]),
+  ]
 
-  it('every dataset-relative path an agent names exists in the dataset', () => {
+  it('every dataset-relative path a shipped artifact names exists in the dataset', () => {
     const missing: string[] = []
-    for (const file of listFiles(agentsDir)) {
-      const src = readFileSync(join(agentsDir, file), 'utf-8')
+    for (const [dir, file] of shippedArtifacts()) {
+      const src = readFileSync(join(dir, file), 'utf-8')
       // Backticked paths rooted at a dataset directory — the shape these files use to point
       // a reader at a document.
       for (const m of src.matchAll(/`((?:\.pair|\.claude|\.github)\/[^`\s]+\.[a-z]{2,4})`/g)) {
@@ -238,7 +250,25 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
     }
     expect(
       missing,
-      `shipped agents point at paths nobody receives:\n  ${missing.join('\n  ')}`,
+      `shipped artifacts point at paths nobody receives:\n  ${missing.join('\n  ')}`,
+    ).toEqual([])
+  })
+
+  it('no shipped artifact cites a decision record by filename', () => {
+    // The dataset ships no decision-log entries and no `tech/adr/` content — `.keep` and one
+    // unrelated example are the whole of it. So citing `2026-08-12-….md` or `adr-016-….md`
+    // from a shipped file is broken BY CONSTRUCTION, no matter which record it names: the
+    // adopter has none of them. The remedy is always the same — state the RULE inline, so it
+    // stands on its own for a reader who has never seen this repo's decision log.
+    const cited: string[] = []
+    for (const [dir, file] of shippedArtifacts()) {
+      const src = readFileSync(join(dir, file), 'utf-8')
+      for (const m of src.matchAll(/\b(\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md|adr-\d{3}-[a-z0-9-]+\.md)/g))
+        cited.push(`${file} -> ${m[1]}`)
+    }
+    expect(
+      cited,
+      `shipped artifacts cite decision records the dataset does not ship:\n  ${cited.join('\n  ')}`,
     ).toEqual([])
   })
 

@@ -312,7 +312,12 @@ test('breakdown on a non-refine mode throws instead of being silently ignored', 
   }
 })
 
-test('every refine prompt carries the pacing contract and the no-new-cards ADL reference', async () => {
+// The no-new-cards rule must be STATED, not cited. The dataset ships no
+// `.pair/adoption/decision-log/` content, so a shipped prompt naming an ADL by filename points
+// an adopter's agent at a file it will never have — the "shipped artifact points at something
+// unshipped" family. Asserting the rule instead of the citation is what keeps the fix from
+// being reverted by someone re-adding the reference to satisfy this test.
+test('every refine prompt carries the pacing contract and states the no-new-cards rule inline', async () => {
   const { calls } = await runWorkflow({
     args: { items: [{ id: '219', mode: 'refine', breakdown: true }] },
     dispatch: okDispatch,
@@ -320,5 +325,10 @@ test('every refine prompt carries the pacing contract and the no-new-cards ADL r
   const p = calls.find(c => c.opts.label === 'refine:#219').prompt
   assert.match(p, /180 seconds without emitting a TEXT MESSAGE/, 'the real supervisor limit is named')
   assert.match(p, /Silence is fatal, slowness is not/, 'the rule is unambiguous')
-  assert.match(p, /2026-08-12-implementation-never-files-a-card/, 'the binding decision is cited by name')
+  assert.match(p, /do NOT file any new issue — this is binding/, 'the rule is stated, and stated as binding')
+  assert.doesNotMatch(
+    p,
+    /\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md|adr-\d{3}-[a-z0-9-]+\.md/,
+    'no decision record is cited by filename — the dataset ships none of them',
+  )
 })

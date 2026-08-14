@@ -204,7 +204,7 @@ NON-INTERACTIVE (mandatory): you are running unattended in a batch — there is 
 ${item.breakdown ? `\n\nTHEN, once the card is Ready, run /pair-process-plan-tasks on it: an implementation task checklist, the dependency graph between tasks, and an AC-coverage table showing which task satisfies which acceptance criterion — added to the SAME issue body. Do NOT create separate task issues. Every acceptance criterion must be covered by at least one task; if one cannot be, that is a signal the criterion is not implementable as written — go back and fix the criterion rather than leaving a hole in the table.\n` : ''}
 PACING (mandatory): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE — tool calls do not count. Narrate as you go: a short line after each file you read and after each section you write. Silence is fatal, slowness is not.
 
-Do NOT expand the scope beyond what the card states, and do NOT file any new issue — this is binding, see ADL \`2026-08-12-implementation-never-files-a-card-it-extends-the-story.md\`. Remember: \`gh project item-add\` exits 0 WITHOUT creating the item — re-read every write. Return what you changed.`,
+Do NOT expand the scope beyond what the card states, and do NOT file any new issue — this is binding: refinement records what a card must do, it never spawns a second card to hold the overflow. Where scope exceeds the card, say so in your return and let the maintainer decide. Remember: \`gh project item-add\` exits 0 WITHOUT creating the item — re-read every write. Return what you changed.`,
 
   // Read-only: decide what the card IS before spending refinement on it.
   triage: (item) =>

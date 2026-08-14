@@ -1,3 +1,4 @@
-# Derived machine contracts (regenerable cache; ADR-016 (adr-016-ai-generated-template-contracts.md))
+# Derived machine contracts: regenerable from the KB template by the contract-generator
+# agent, so they are a cache and never a source of truth — never commit one.
 *.contract.json
 *.draft.json
