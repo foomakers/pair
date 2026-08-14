@@ -1254,6 +1254,149 @@ test('a bad severityFloor throws even when args is a JSON string', async () => {
   )
 })
 
+// ── The floor speaks the CONFIGURED vocabulary, not pair's own ──────────────
+// Measured (#432 review round 5): `severityFloor` was ranked against a HARDCODED table
+// (critical/blocker/major/minor/…) while the reviewer prompt is fed `severities` from the
+// CONFIGURED template's contract. Driving the engine with an adopter vocabulary
+// `Blocker|High|Medium|Low` and findings `[High "auth bypass", Low]`:
+//   floor `Critical`  -> ready-for-merge, ZERO fix rounds, the High filed "Below severity floor"
+//   floor `Major`     -> High and Low BOTH rank 3 (the unknown fallback), floor is a no-op
+//   floor `High`      -> throws `unknown severityFloor "High"` — the engine rejects the very
+//                        vocabulary the same run told the reviewer to answer in
+// The ranking must resolve against the contract vocabulary when there is one, the floor must
+// be validated against that same set, and a severity in NEITHER must outrank every floor.
+function adopterContract() {
+  const severities = ['Blocker', 'High', 'Medium', 'Low']
+  return {
+    $meta: { source: 'adopter-review-template.md', sourceHash: `sha256:${'1'.repeat(64)}`, generatedAt: 'x' },
+    vocabulary: { verdictOptions: ['Approved', 'Rework'], severities, findingFields: ['location', 'severity', 'description', 'recommendation'] },
+    schema: {
+      type: 'object',
+      properties: {
+        verdict: { type: 'string', enum: ['Approved', 'Rework'] },
+        needsHumanDecision: { type: 'boolean' },
+        findings: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              location: { type: 'string' },
+              severity: { type: 'string', enum: severities },
+              description: { type: 'string' },
+              recommendation: { type: 'string' },
+              nonActionable: { type: 'boolean' },
+            },
+          },
+        },
+      },
+      required: ['verdict'],
+    },
+  }
+}
+const HIGH = { location: 'auth.ts:12', severity: 'High', description: 'auth bypass', recommendation: 'check the token' }
+const LOW = { location: 'a.md:1', severity: 'Low', description: 'wording', recommendation: 'reword' }
+
+test('a floor drawn from the CONFIGURED vocabulary is accepted and ranks against it', async () => {
+  let round = 0
+  const { result, calls } = await runWorkflow({
+    args: { severityFloor: 'High', stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: adopterContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0 ? { verdict: 'Rework', findings: [HIGH, LOW] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix, 'a floor the reviewer itself speaks must not throw — and the High must block')
+  assert.ok(fix.prompt.includes('auth.ts:12'), 'the High finding drove the fix round')
+  assert.ok(!fix.prompt.includes('a.md:1'), 'the sub-floor Low was not sent to the fixer')
+  const b = result.batch[0]
+  assert.equal(b.status, 'ready-for-merge')
+  assert.deepEqual(b.acceptedFindings.map(f => f.location), ['a.md:1'], 'the Low is carried to the gate')
+  assert.match(b.acceptedFindings[0].disposition, /Below severity floor \(High\)/)
+})
+
+test('a floor OUTSIDE the configured vocabulary throws instead of silently mis-ranking', async () => {
+  // The reported failure: `Critical` is not in `Blocker|High|Medium|Low`, so it used to rank 4
+  // against pair's own table while every adopter severity fell to the 3 fallback — converging
+  // `ready-for-merge` with an unfixed "auth bypass". A floor the reviewer cannot express must
+  // be a loud error, not a silent reclassification.
+  await assert.rejects(
+    () =>
+      runWorkflow({
+        args: { severityFloor: 'Critical', stories: [STORY] },
+        dispatch: stdDispatch({
+          contractResult: { status: 'cache-hit', contract: adopterContract() },
+          review: { verdict: 'Rework', findings: [HIGH, LOW] },
+        }),
+      }),
+    err => {
+      assert.match(err.message, /unknown severityFloor/)
+      assert.match(err.message, /Blocker, High, Medium, Low/, 'the error names the CONFIGURED vocabulary, not pair\'s')
+      return true
+    },
+  )
+})
+
+test('an unmapped severity outranks EVERY floor, including one at the top of the scale', async () => {
+  // `rankOf` used to fall back to 3 and call itself "fail safe". It was not: at a floor of
+  // rank >= 4 (`Critical`) a rank-3 default sits BELOW the floor, so an unrecognised severity
+  // was silently carried instead of blocked — the exact direction a fail-safe must never fail.
+  const { result, calls } = await runWorkflow({
+    args: { severityFloor: 'Critical', stories: [STORY] },
+    dispatch: stdDispatch({
+      // No contract: pair's own vocabulary is in force, and `High` belongs to neither it nor
+      // any configured set.
+      review: { verdict: 'Rework', findings: [{ location: 'auth.ts:12', severity: 'High', description: 'auth bypass' }] },
+    }),
+  })
+  const b = result.batch[0]
+  assert.equal(b.status, 'escalate', 'an unmapped severity blocks at ANY floor')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('fix:')), 'and it is sent to a fixer, not waved through')
+  assert.deepEqual(b.acceptedFindings, [], 'nothing was filed as below the floor')
+})
+
+test('an explicit top-of-scale floor still carries lower findings — deliberately, with a disposition', async () => {
+  // The other half of the contract: `Blocker` IS in the adopter vocabulary, so a `Blocker`
+  // floor carrying a `High` is the caller's stated choice, not a mis-rank — and the human
+  // sees it at the gate with a disposition saying so.
+  const { result } = await runWorkflow({
+    args: { severityFloor: 'Blocker', stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: adopterContract() },
+      review: { verdict: 'Rework', findings: [HIGH, LOW] },
+    }),
+  })
+  const b = result.batch[0]
+  assert.equal(b.status, 'ready-for-merge')
+  assert.deepEqual(b.acceptedFindings.map(f => f.location).sort(), ['a.md:1', 'auth.ts:12'])
+  assert.ok(b.acceptedFindings.every(f => /Below severity floor \(Blocker\)/.test(f.disposition)))
+})
+
+test('with NO configured vocabulary, pair\'s own table (aliases included) is unchanged', async () => {
+  let round = 0
+  const { result, calls } = await runWorkflow({
+    args: { severityFloor: 'Major', stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return undefined // fallback-loose: no contract
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0
+          ? { verdict: 'Rework', findings: [{ location: 'x.ts:1', severity: 'Blocker', description: 'boom' }, { location: 'y.md:2', severity: 'Nit', description: 'space' }] }
+          : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix.prompt.includes('x.ts:1'), '`Blocker` still ranks above `Major`')
+  assert.ok(!fix.prompt.includes('y.md:2'), '`Nit` still ranks below it')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
 // ── needsHumanDecision buys one fix round before escalating ─────────────────
 // Measured: a reviewer raising the flag skipped the fixer ENTIRELY, so four consecutive
 // rounds on one story and two on another produced review after review and zero commits —

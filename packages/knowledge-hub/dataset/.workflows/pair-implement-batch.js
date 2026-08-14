@@ -36,7 +36,11 @@ export const meta = {
 //                                 // text. They reach shell command text an agent runs, so a value
 //                                 // carrying shell syntax or `..` is REJECTED, never quoted.
 //   maxParallelism?,              // integer >= 1; absent = unbounded fan-out
-//   severityFloor?,               // findings below it are carried, not fixed
+//   severityFloor?,               // findings below it are carried, not fixed. It is spelled in
+//                                 // the REVIEW TEMPLATE's severity vocabulary (pipeline.reviewTemplate
+//                                 // -> contract `vocabulary.severities`), pair's own when none is
+//                                 // configured; a value outside that set THROWS rather than rank
+//                                 // against a foreign scale.
 //   model?,                       // fable | haiku | sonnet | opus
 //   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS
 // }
@@ -373,20 +377,54 @@ const STORIES = PARSED.stories
 // `acceptedFindings` with `disposition: 'Below severity floor'`, accumulated across every
 // round of the cycle, so the human sees every one and decides. Absent → every actionable finding blocks (the previous behaviour), so
 // nothing changes for a caller that does not ask for a floor.
+//
+// The floor speaks the REVIEW's OWN vocabulary, not a table private to this file.
+// AC1 makes `pipeline.reviewTemplate` configurable and the contract generator derives
+// `vocabulary.severities` from THAT template — the same array the reviewer prompt is told to
+// answer in (`SEVERITIES`, below). Ranking against a hardcoded table instead made the engine
+// speak one language and the reviewer another, and the mismatch failed OPEN: with an adopter
+// vocabulary `Blocker|High|Medium|Low`, a `Critical` floor converged `ready-for-merge` with an
+// unfixed "auth bypass" filed as below the floor, a `Major` floor was a no-op (every adopter
+// severity hit the same fallback rank), and the adopter's own `High` was rejected as an unknown
+// floor. So: rank against the resolved vocabulary, validate the floor against that SAME set,
+// and treat a severity in neither as ABOVE every floor.
 const SEVERITY_RANK = { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 }
-const rankOf = (s) => SEVERITY_RANK[String(s ?? '').trim().toLowerCase()] ?? 3 // unknown severity blocks: fail safe
+const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
+// The contract's `severities` are ordered MOST-severe first (that is what the template's
+// finding sections are), so position gives the rank. With no contract there is no configured
+// vocabulary at all, and pair's own table is the fallback — it carries aliases (`blocker`,
+// `nit`, `info`) that no template lists, which is why it is not itself derived from
+// DEFAULT_SEVERITIES: dropping them would change behaviour for callers that use them today.
+function resolveSeverityScale(severities) {
+  // Names keep their ORIGINAL spelling — the error message tells a caller what to type, and
+  // `blocker, high, medium, low` is not what their template says. Ranks are keyed normalized,
+  // so matching stays case- and whitespace-insensitive.
+  const names = (Array.isArray(severities) ? severities : []).map((s) => String(s ?? '').trim()).filter(Boolean)
+  if (!names.length) return { ranks: SEVERITY_RANK, names: [...new Set(Object.keys(SEVERITY_RANK))], configured: false }
+  const ranks = {}
+  names.forEach((n, i) => { const k = normSeverity(n); if (!(k in ranks)) ranks[k] = names.length - i })
+  return { ranks, names: [...new Set(names)], configured: true }
+}
+// Resolved once the contract is known — see SEVERITY_SCALE, after REVIEW_VOCAB.
+// Infinity, not a mid-tier default: a severity in NEITHER the configured vocabulary nor pair's
+// own table outranks every possible floor, so it always blocks. The previous `?? 3` claimed to
+// be fail-safe and was not — any floor of rank >= 4 sat above it.
+const rankOf = (s) => SEVERITY_SCALE.ranks[normSeverity(s)] ?? Infinity
 function parseFloor(raw) {
   const v = String(raw ?? '').trim()
   if (!v) return null
-  const r = SEVERITY_RANK[v.toLowerCase()]
+  const r = SEVERITY_SCALE.ranks[v.toLowerCase()]
+  // A floor the reviewer cannot express is a configuration error, never a silent
+  // reclassification: rejecting it is what stops `Critical` from out-ranking an adopter's whole
+  // scale. A typo still throws, in either vocabulary.
   if (!r)
     throw new Error(
-      `implement-batch: unknown severityFloor ${JSON.stringify(v)}. Use one of: ` +
-        `${[...new Set(Object.keys(SEVERITY_RANK))].join(', ')} — or omit it so every actionable finding blocks.`,
+      `implement-batch: unknown severityFloor ${JSON.stringify(v)}. It must be one of the severities ` +
+        `${SEVERITY_SCALE.configured ? `the configured review template declares` : `pair's default review vocabulary declares`}: ` +
+        `${SEVERITY_SCALE.names.join(', ')} — or omit it so every actionable finding blocks.`,
     )
   return { name: v, rank: r }
 }
-const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
 
 // `args.model` overrides the model for every AUTHORING and REVIEW agent in the run —
 // implement, PR, fix, review. Absent, each agent keeps the tier its frontmatter declares
@@ -625,6 +663,14 @@ const TEXT_SHAPE =
 
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
+
+// The severity scale is resolved from the SAME array `SEVERITIES` above threads into the
+// reviewer prompt, so what the engine ranks and what the reviewer answers can never be two
+// different vocabularies. It can only be known after the contract is ensured, which is why the
+// floor is validated HERE rather than at arg-parse time: the cost is that a bad floor throws
+// one contract dispatch late, still before any card is driven.
+const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities)
+const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
 
 // ── Isolation convention ───────────────────────────────────────────────────
 // The AUTHORING chain (implement -> PR -> fix) runs inside a dedicated, PERSISTENT
