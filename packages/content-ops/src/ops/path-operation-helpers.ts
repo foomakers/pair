@@ -1,9 +1,11 @@
+import type { Dirent } from 'fs'
 import { join, relative, basename, dirname } from 'path/posix'
 import { logger, createMirrorConstraintError, createError } from '../observability'
 import { validatePaths } from '../file-system/file-validations'
 import { SyncOptions } from './SyncOptions'
 import { FileSystemService } from '../file-system'
-import { Behavior, validateMirrorConstraints } from './behavior'
+import { Behavior, normalizeKey, resolveBehavior, validateMirrorConstraints } from './behavior'
+import { isExcluded } from '../file-system/file-operations'
 import { processPathSubstitution } from './link-batch-processor'
 
 /**
@@ -105,23 +107,184 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
 }
 
 /**
- * Handles mirror behavior cleanup for directories
+ * Handles mirror behavior cleanup for directories.
+ *
+ * RECURSIVE by necessity (#426, absorbed into #393). The comparison used to stop at the
+ * top level: an entry present on BOTH sides was kept and never looked inside, so a file
+ * removed from the source survived every mirror run forever. A directory present on both
+ * sides is therefore DESCENDED INTO rather than kept wholesale; only an entry absent from
+ * the source is removed, exactly as before. That asymmetry is the whole point: `rm -r` on
+ * a shared directory would delete content the source still has.
+ *
+ * SCOPE — this function DELETES from a real adopter's working tree during `pair update`.
+ * Two callers: the content-ops library path (`copyPathOps` / `movePathOps` →
+ * `performDirectoryCopy`, on the resolved folder behavior) and, since #393, the CLI's
+ * registry install — `copyDirectory` in `apps/pair-cli/src/registry/operations.ts`, gated
+ * on `mirrorsAnyPath(options)` and handed the SAME ownership context the copy then uses.
+ * That covers both shipped directory mirrors: `.pair/knowledge/**` (`knowledge`) and
+ * `.github/agents/**` (`github`, whose `include: ["/agents"]` expresses the mirror in
+ * `folderBehavior`, leaving `.github/workflows` and friends at `skip` — not owned, never
+ * touched). So `pair update` now removes an installed file the dataset no longer ships,
+ * including one the adopter authored under a mirror target. That decision, its three
+ * non-negotiable properties and the deferred `--dry-run`/`--no-clean` affordance are
+ * recorded in
+ * `.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`.
+ *
+ * SUPERSEDED (kept as the reason this needs saying at all): before that wire, the CLI
+ * install did NOT reach this function — `copyDirHelper` is a pure source→target copy — so a
+ * top-level AND a nested orphan planted under `.pair/knowledge/**` both survived every
+ * `pair update`, measured on this branch. The two how-to guides deleted from the dataset in
+ * #246 and still installed ~5 months later were removed BY HAND in #393, and four unit tests
+ * calling this helper directly had made the defect look fixed. Test the gate through
+ * `doCopyAndUpdateLinks` with options built by `buildCopyOptions`, never through a
+ * hand-built options literal.
+ *
+ * OWNERSHIP — required now that the walk is recursive. The copy step decides, at EVERY
+ * depth, what it installs: an `exclude`d entry is dropped as if it were never in the
+ * source, and an entry resolving to `add` or `skip` is left alone (for `add`, target-only
+ * files are the entire point of the semantics). A delete pass that descends the shared
+ * tree without the same knowledge deletes MORE than the copy would install — adopter
+ * content, under a subtree the registry does not own. `ownership` carries that context;
+ * omitting it keeps the pre-#393 semantics (everything under the mirror root is owned),
+ * which is what the plain `mirror` registries shipped today mean.
+ *
+ * Reachability, so the next reader does not over-trust either half: `exclude` under a
+ * mirror root is fully reachable from config and is pinned end-to-end in
+ * `copy-directory.test.ts`. `add`/`skip` under a mirror root is NOT reachable through a
+ * validated registry today — `validateMirrorConstraints` rejects a non-mirror descendant
+ * of a `mirror` key — so that half is defense-in-depth for direct callers of this
+ * exported function and for any future relaxation of that constraint. It is pinned at the
+ * unit level rather than through the copy path for exactly that reason.
  */
+export type MirrorCleanupOwnership = {
+  /** Source-relative entries the registry never installs. Needs `excludeRoot`. */
+  exclude?: string[]
+  /** The registry source root `exclude` entries resolve against. */
+  excludeRoot?: string
+  /** Per-path behavior overrides, same map the copy step resolves against. */
+  folderBehavior?: Record<string, Behavior>
+  /** Behavior when no override matches. Defaults to `overwrite` (owned). */
+  defaultBehavior?: Behavior
+  /** Root the `folderBehavior` keys are relative to. Without it, behavior is not resolved. */
+  datasetRoot?: string
+}
+
+/**
+ * Whether the registry owns this source path — i.e. whether the copy step would install
+ * it. Mirrors `copyDirEntry`'s two short-circuits (exclusion first, then behavior), so
+ * cleanup can never delete what the copy would have left in place. `add` counts as
+ * not-owned unconditionally here: the caller only ever asks about a path that EXISTS in
+ * the target, which is exactly the case where the copy returns early.
+ */
+function registryOwns(srcEntryPath: string, ownership: MirrorCleanupOwnership): boolean {
+  const { exclude, excludeRoot, folderBehavior, defaultBehavior, datasetRoot } = ownership
+
+  if (excludeRoot && isExcluded(relative(excludeRoot, srcEntryPath), exclude)) return false
+  if (!datasetRoot) return true
+
+  const rel = normalizeKey(relative(datasetRoot, srcEntryPath))
+  const behavior = resolveBehavior(rel, folderBehavior, defaultBehavior ?? 'overwrite')
+  return behavior !== 'add' && behavior !== 'skip'
+}
+
+/**
+ * Reads the source side of a cleanup pass, distinguishing "the source is not there" from
+ * "the source could not be read".
+ *
+ * FAILED READ ≠ EMPTY SOURCE. This walk is recursive and it DELETES from a real working
+ * tree, so swallowing the read (`catch(() => [])`) makes every owned entry of the target
+ * look absent from the source and removes it — announced, worst of all, as
+ * `⚠️ Mirror: removed … (not in the source)`, which blames a dataset retirement for what
+ * was an IO fault. One EACCES/EPERM/EIO/EMFILE on a subdirectory during `pair update`
+ * would take out the whole installed subtree, and the only recovery is the adopter's VCS
+ * (there is no `--dry-run`, no `--no-clean`, no install manifest).
+ *
+ * ENOENT is the one failure that says something about the MIRROR rather than about the
+ * filesystem: the source directory is gone, so its target must go too — the delete
+ * semantics this function has always had, kept deliberately. Everything else, including a
+ * rejection carrying no errno at all, means only "we do not know what the source holds",
+ * and the safe answer to not knowing is to delete nothing here. The caller proceeds with
+ * the copy either way: abstaining leaves stale files behind, which the next successful
+ * run cleans; guessing destroys files no run can bring back.
+ */
+async function readSourceForCleanup(
+  fileService: FileSystemService,
+  srcPath: string,
+): Promise<{ entries: Dirent[] } | { unreadable: string }> {
+  try {
+    return { entries: await fileService.readdir(srcPath) }
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code)
+        : undefined
+    // A source that is genuinely gone still means the target is gone.
+    if (code === 'ENOENT') return { entries: [] }
+    return { unreadable: code ?? 'unknown' }
+  }
+}
+
+/**
+ * Removes a target entry the source no longer has, and says so at WARN.
+ *
+ * WARN, not info: this is the one place `pair update` DELETES from the target tree.
+ * `.pair/knowledge/` is a mirror — `customization/templates.mdx` states that edits there
+ * are lost on the next update and that customization belongs in `.pair/adoption/` — but a
+ * deletion the operator cannot see in the output is indistinguishable from data loss,
+ * whatever the docs say. Reaching this line therefore requires KNOWING the source does
+ * not have the entry; see `readSourceForCleanup` for why a failed read is not that.
+ */
+async function removeMirrorOrphan(fileService: FileSystemService, toRemove: string) {
+  if (!fileService.rm) return
+  await fileService.rm(toRemove, { recursive: true, force: true })
+  logger.warn(`Mirror: removed ${toRemove} (not in the source; customize via .pair/adoption/)`)
+}
+
 export async function handleMirrorCleanup(
   fileService: FileSystemService,
   srcPath: string,
   destPath: string,
+  ownership: MirrorCleanupOwnership = {},
 ) {
+  const source = await readSourceForCleanup(fileService, srcPath)
+  if ('unreadable' in source) {
+    // WARN and skip THIS directory only — a sibling scope whose source reads fine is
+    // still cleaned, and the copy still runs. Names the path and the errno so the
+    // operator can tell an IO fault from a retirement.
+    logger.warn(
+      `Mirror: skipped cleanup of ${destPath} — could not read source ${srcPath} (${source.unreadable})`,
+    )
+    return
+  }
+
   const destEntries = await fileService.readdir(destPath).catch(() => [])
-  const srcNames = new Set((await fileService.readdir(srcPath).catch(() => [])).map(e => e.name))
+  const srcByName = new Map(source.entries.map(e => [e.name, e]))
 
   for (const de of destEntries) {
-    if (!srcNames.has(de.name)) {
-      const toRemove = join(destPath, de.name)
-      if (fileService.rm) {
-        await fileService.rm(toRemove, { recursive: true, force: true })
-        logger.info(`Mirror: removed ${toRemove}`)
-      }
+    // Not ours: neither removed nor descended into. The target side is the adopter's here.
+    if (!registryOwns(join(srcPath, de.name), ownership)) {
+      logger.info(`Mirror: left ${join(destPath, de.name)} untouched (not owned by the registry)`)
+      continue
+    }
+
+    const src = srcByName.get(de.name)
+
+    // Absent from the source: remove it, whatever it is.
+    if (!src) {
+      await removeMirrorOrphan(fileService, join(destPath, de.name))
+      continue
+    }
+
+    // Present on both sides. If both are directories, the stale entries may be INSIDE —
+    // recurse. Anything else (a file the source also has, or a type mismatch we do not
+    // adjudicate here) is left to the copy step that follows.
+    if (de.isDirectory?.() && src.isDirectory?.()) {
+      await handleMirrorCleanup(
+        fileService,
+        join(srcPath, de.name),
+        join(destPath, de.name),
+        ownership,
+      )
     }
   }
 }

@@ -35,6 +35,167 @@ describe('registry operations', () => {
     expect(await fs.exists('/dataset/dst/file2.md')).toBe(true)
   })
 
+  // ── Mirror cleanup runs on THIS path, not only in the library (#426) ────────
+  // The recursion landed in content-ops but `pair update` never called it: the registry
+  // copy falls through to `copyDirHelper`, a pure source->dest copy that deletes nothing.
+  // Four unit tests passed by calling `handleMirrorCleanup` directly, which is how the
+  // defect came to be believed fixed. These go through `doCopyAndUpdateLinks` — the
+  // function the CLI actually invokes.
+  it('doCopyAndUpdateLinks removes a target file the source no longer ships', async () => {
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/keep.md': '# Keep',
+        '/dataset/dst/keep.md': '# Keep',
+        '/dataset/dst/ORPHAN.md': '# Removed from the dataset months ago',
+        '/dataset/dst/how-to/99-stale.md': '# Nested orphan under a shared directory',
+        '/dataset/src/how-to/01-live.md': '# Still shipped',
+        '/dataset/dst/how-to/01-live.md': '# Still shipped',
+      },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'mirror' },
+    })
+
+    expect(await fs.exists('/dataset/dst/ORPHAN.md')).toBe(false)
+    expect(await fs.exists('/dataset/dst/how-to/99-stale.md')).toBe(false)
+    expect(await fs.exists('/dataset/dst/how-to/01-live.md')).toBe(true)
+    expect(await fs.exists('/dataset/dst/keep.md')).toBe(true)
+  })
+
+  it('doCopyAndUpdateLinks leaves an EXCLUDED subtree alone', async () => {
+    // `exclude` means "as if it were never in the source" — so cleanup must not read the
+    // absence of a source entry as permission to delete the target one.
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/keep.md': '# Keep',
+        '/dataset/dst/keep.md': '# Keep',
+        '/dataset/dst/private/theirs.md': '# The registry does not own this',
+      },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'mirror', exclude: ['private'] },
+    })
+
+    expect(await fs.exists('/dataset/dst/private/theirs.md')).toBe(true)
+  })
+
+  // The three cases above hand-build `{ defaultBehavior: 'mirror' }`, which is NOT what the
+  // CLI feeds in: `update/handler.ts` calls `buildCopyOptions(registryConfig)`, and that
+  // rewrites `defaultBehavior` to `'skip'` for a mirror registry declaring `include` —
+  // i.e. the shipped `github` registry. So the options must come from `buildCopyOptions`
+  // over the REAL config, or the gate is tested through a shape production never produces.
+  it('doCopyAndUpdateLinks cleans a mirror registry whose mirror lives in folderBehavior', async () => {
+    // Verbatim `github` registry from apps/pair-cli/config.json.
+    const githubRegistry: RegistryConfig = {
+      source: '.github',
+      behavior: 'mirror',
+      include: ['/agents'],
+      description: 'GitHub workflows and configuration files',
+      flatten: false,
+      targets: [{ path: '.github', mode: 'canonical' }],
+    }
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/.github/agents/live.agent.md': '# Still shipped',
+        '/project/.github/agents/live.agent.md': '# Still shipped',
+        '/project/.github/agents/RETIRED.agent.md': '# Dropped from the dataset',
+        // Owned by the adopter: `include: ["/agents"]` leaves everything else at `skip`.
+        '/project/.github/workflows/my-ci.yml': 'name: my-ci',
+        '/project/.github/ISSUE_TEMPLATE/bug.md': '# Bug',
+      },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: '/dataset/.github',
+      target: '/project/.github',
+      datasetRoot: '/dataset',
+      options: buildCopyOptions(githubRegistry),
+    })
+
+    expect(await fs.exists('/project/.github/agents/RETIRED.agent.md')).toBe(false)
+    expect(await fs.exists('/project/.github/agents/live.agent.md')).toBe(true)
+    // Not owned by the registry — cleanup must not descend here at all.
+    expect(await fs.exists('/project/.github/workflows/my-ci.yml')).toBe(true)
+    expect(await fs.exists('/project/.github/ISSUE_TEMPLATE/bug.md')).toBe(true)
+  })
+
+  // The wire above is the destructive one, so the failure mode that matters is tested HERE
+  // and not only on the helper: during `pair update`, a source subdirectory that cannot be
+  // READ (EACCES/EPERM/EIO/EMFILE, or one that becomes unreadable mid-run) must never be
+  // read as "the dataset retired everything under it" — that would delete the installed
+  // subtree out of the adopter's working tree, whose only recovery is their VCS.
+  it('doCopyAndUpdateLinks keeps the installed subtree when the source cannot be read', async () => {
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/keep.md': '# Keep',
+        '/dataset/src/how-to/01-live.md': '# Still shipped',
+        '/dataset/dst/keep.md': '# Keep',
+        '/dataset/dst/how-to/01-live.md': '# Still shipped',
+        '/dataset/dst/how-to/99-stale.md': '# Looks orphaned only because the read failed',
+        '/dataset/dst/ORPHAN.md': '# Genuinely retired, under a readable directory',
+      },
+      cwd,
+    )
+
+    // Unreadable at cleanup time, readable afterwards — cleanup runs before the copy, so
+    // this models the subdirectory that goes unreadable mid-run without breaking the copy.
+    const originalReaddir = fs.readdir.bind(fs)
+    let failed = false
+    fs.readdir = async (path: string) => {
+      if (path === '/dataset/src/how-to' && !failed) {
+        failed = true
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+      }
+      return originalReaddir(path)
+    }
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'mirror' },
+    })
+
+    expect(failed).toBe(true)
+    expect(await fs.exists('/dataset/dst/how-to/99-stale.md')).toBe(true)
+    expect(await fs.exists('/dataset/dst/how-to/01-live.md')).toBe(true)
+    // The rest of the tree is still cleaned, and the copy still ran.
+    expect(await fs.exists('/dataset/dst/ORPHAN.md')).toBe(false)
+    expect(await fs.exists('/dataset/dst/keep.md')).toBe(true)
+  })
+
+  it('doCopyAndUpdateLinks deletes nothing when the registry behavior is not mirror', async () => {
+    const fs = createTestFs(
+      {},
+      { '/dataset/src/keep.md': '# Keep', '/dataset/dst/theirs.md': '# Target-only' },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: 'dst',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), defaultBehavior: 'add' },
+    })
+
+    expect(await fs.exists('/dataset/dst/theirs.md')).toBe(true)
+  })
+
   it('returns skillNameMap when flatten+prefix produces skill renames', async () => {
     const fs = new InMemoryFileSystemService(
       {

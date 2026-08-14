@@ -231,7 +231,13 @@ async function handleDirectoryMove(params: HandleDirectoryMoveParams) {
   const sourceFolderBehavior = resolveBehavior(relSourceKey, folderBehavior, defaultBehavior)
 
   if (sourceFolderBehavior === 'mirror') {
-    await handleMirrorCleanup(fileService, srcPath, destPath)
+    // Same ownership context as the per-entry resolution below — see handleMirrorCleanup's
+    // OWNERSHIP note. `exclude` is threaded even though move does not filter on it.
+    await handleMirrorCleanup(fileService, srcPath, destPath, {
+      ...params,
+      excludeRoot: srcPath,
+      ...(options?.exclude?.length && { exclude: options.exclude }),
+    })
   }
 
   await moveAndUpdateDirectory({

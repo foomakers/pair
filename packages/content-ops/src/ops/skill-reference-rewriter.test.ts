@@ -60,6 +60,29 @@ describe('rewriteSkillReferences', () => {
     expect(rewriteSkillReferences(input, map)).toBe('run /pair-next')
   })
 
+  it('replaces a reference written in CALL form — an argument list is a boundary too', () => {
+    // The KB documents a skill contract as `/record-decision(content, target, ...)`.
+    // With '(' missing from the after-boundary class this token was left
+    // un-prefixed, so the installed corpora named a command no reader's
+    // assistant exposes — the exact rule #393 makes explicit ("the installed KB
+    // never names commands the reader does not have").
+    const input = 'composes `/record-decision(content, target, decision-metadata)` to write it'
+    expect(rewriteSkillReferences(input, map)).toBe(
+      'composes `/pair-capability-record-decision(content, target, decision-metadata)` to write it',
+    )
+  })
+
+  it('leaves an UNKNOWN name in call form alone (only mapped names are rewritten)', () => {
+    expect(rewriteSkillReferences('/unmapped-skill(args) stays', map)).toBe(
+      '/unmapped-skill(args) stays',
+    )
+  })
+
+  it('is idempotent on an already-prefixed call-form reference', () => {
+    const installed = '`/pair-capability-record-decision(content, target)`'
+    expect(rewriteSkillReferences(installed, map)).toBe(installed)
+  })
+
   it('does NOT replace name without leading slash', () => {
     const input = 'name: pair-next'
     expect(rewriteSkillReferences(input, map)).toBe(input)

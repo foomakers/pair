@@ -13,12 +13,14 @@ Start with the default pair Knowledge Base in your central repository, then cust
 
 ### Organization-Specific Guidelines
 
-Add or modify files in `.pair/knowledge/guidelines/` to reflect your organization's standards:
+In **this central KB repository — and only here** — `.pair/knowledge/` is source you author. Add or modify files in `.pair/knowledge/guidelines/` to reflect your organization's standards:
 
 - **Code design** — naming conventions, design patterns, review criteria
 - **Testing strategy** — coverage targets, testing frameworks, test categories
 - **Security** — authentication patterns, data handling, compliance requirements
 - **Architecture** — approved patterns, integration standards, API conventions
+
+In a **consuming project**, the same path is installed output: the `knowledge` registry is a mirror, so `pair-cli update` overwrites it and edits there are lost. Teams customize through `.pair/adoption/` instead — see [Customize for Your Team](/docs/customization/team) and [Customize Templates](/docs/customization/templates). The distinction matters for every rollout: your org's standards belong in this repo's KB and reach teams through the package, never through hand-edits on their side.
 
 ### Standard Adoption Templates
 

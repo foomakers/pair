@@ -487,7 +487,7 @@ Pessimistic Scenario (20% probability):
 - Significant blockers
 - Execution delays
 - Forecast: Base estimate × 1.5
-```text
+```
 
 ## Implementation Guidelines
 

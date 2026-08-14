@@ -173,7 +173,8 @@ async function performDirectoryCopy(params: {
   validateSubfolderOperation({ srcPath, destPath, normSource, normTarget, operation: 'copy' })
 
   if (sourceFolderBehavior === 'mirror') {
-    await handleMirrorCleanup(fileService, srcPath, destPath)
+    // Same ownership context as the copy below — see handleMirrorCleanup's OWNERSHIP note.
+    await handleMirrorCleanup(fileService, srcPath, destPath, { ...params, excludeRoot: srcPath })
   }
 
   await copyDirectoryContents({

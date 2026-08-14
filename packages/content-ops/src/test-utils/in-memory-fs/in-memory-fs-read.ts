@@ -28,7 +28,11 @@ export async function stat(state: InMemoryFsState, path: string): Promise<Stats>
 export async function readdir(state: InMemoryFsState, path: string): Promise<Dirent[]> {
   const resolvedPath = state.resolvePath(path)
   if (!state.dirs.has(resolvedPath)) {
-    throw new Error(`no such file or directory '${path}'`)
+    // Carries the errno node's `fs.readdir` carries. Callers on the DESTRUCTIVE mirror
+    // path branch on it — "absent" (ENOENT: the target goes too) vs. "unreadable"
+    // (EACCES/EIO/…: touch nothing) — so a double that reports absence without a code
+    // would let that split be asserted against a fiction.
+    throw Object.assign(new Error(`no such file or directory '${path}'`), { code: 'ENOENT' })
   }
 
   const entries: Dirent[] = []

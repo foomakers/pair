@@ -23,9 +23,13 @@ vi.mock('../file-system/file-validations', () => ({
   validatePaths: vi.fn(),
 }))
 
-vi.mock('./behavior', () => ({
-  validateMirrorConstraints: vi.fn(),
-}))
+// Only the constraint validator is stubbed. `resolveBehavior`/`normalizeKey` are pure and
+// are what the cleanup uses to decide ownership — stubbing them would make the ownership
+// tests below assert against a fiction instead of against the resolution the copy step runs.
+vi.mock('./behavior', async () => {
+  const actual = await vi.importActual<typeof import('./behavior')>('./behavior')
+  return { ...actual, validateMirrorConstraints: vi.fn() }
+})
 
 vi.mock('./link-batch-processor', () => ({
   processPathSubstitution: vi.fn(),
@@ -318,32 +322,320 @@ describe('handleMirrorCleanup', () => {
     // No files should be removed since destination is empty
     await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
   })
-})
 
-describe('handleMirrorCleanup - error handling', () => {
-  it('should handle source directory read errors gracefully', async () => {
+  // ── Recursive cleanup (#426, absorbed into #393) ──────────────────────────
+  // The comparison used to stop at the TOP level: a directory present on both sides was
+  // kept and never looked inside, so a file removed from the dataset survived every
+  // `pair update` forever. Measured cost: two how-to guides deleted from the dataset in
+  // #246 were still installed ~5 months later and were advertised by `.pair/llms.txt`,
+  // so agents were pointed at guides the KB no longer ships.
+  it('removes a stale file NESTED under a directory that exists on both sides', async () => {
     fileService = new InMemoryFileSystemService(
       {
-        '/dataset/dest/extra.md': 'to remove',
+        '/dataset/src/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/04-orphan.md': 'stale',
       },
       '/',
       '/',
     )
 
-    // Mock readdir to throw for source
-    const originalReaddir = fileService.readdir.bind(fileService)
-    fileService.readdir = vi.fn().mockImplementation(async (path: string) => {
-      if (path === '/dataset/src') {
-        throw new Error('Source not found')
-      }
-      return originalReaddir(path)
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/how-to/04-orphan.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/how-to/01-keep.md')).resolves.toBe(true)
+  })
+
+  it('does not blow away a directory present on BOTH sides', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/01-keep.md': 'keep',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    // The shared directory must survive as a directory, with its shared content intact.
+    await expect(fileService.exists('/dataset/dest/how-to')).resolves.toBe(true)
+    await expect(fileService.exists('/dataset/dest/how-to/01-keep.md')).resolves.toBe(true)
+  })
+
+  it('removes a stale file nested TWO levels deep', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/a/b/keep.md': 'keep',
+        '/dataset/dest/a/b/keep.md': 'keep',
+        '/dataset/dest/a/b/orphan.md': 'stale',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/a/b/orphan.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/a/b/keep.md')).resolves.toBe(true)
+  })
+
+  it('still removes a top-level entry absent from the source (unchanged behaviour)', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/gone/nested.md': 'stale',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/gone/nested.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/keep.md')).resolves.toBe(true)
+
+    // Every deletion is ANNOUNCED, at WARN. This is a declared property of the deletion
+    // decision (`2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`), not an
+    // implementation detail: the v0.4→v0.5 migration page tells the adopter to reconcile each
+    // `⚠️ Mirror: removed …` line against a pre-update snapshot, so both the text and the
+    // level are an adopter-facing contract. `logger.warn` is what renders the `⚠️` prefix
+    // (pinned in observability.test.ts), so asserting the level here pins the prefix too.
+    // Filesystem state alone cannot see a downgrade to `info`, a dropped
+    // `customize via .pair/adoption/` hint, or the line moving behind a verbosity flag — an
+    // irreversible delete would then happen silently in an adopter's working tree.
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: removed /dataset/dest/gone (not in the source; customize via .pair/adoption/)',
+    )
+    expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining('Mirror: removed'))
+  })
+
+  // ── Ownership: "a target-only path the registry does not own is left untouched" ──
+  // Recursion made the delete path reach the whole shared tree, so it must know what the
+  // copy step knows: `exclude` (the subtree is treated as if it were never in the source)
+  // and per-entry `folderBehavior` (`add`/`skip` — where target-only files are the point).
+  // Deleting more than the copy would install is the failure mode these pin.
+  it('leaves a target-only entry under an EXCLUDED source subtree untouched', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/vendor/theirs.md': 'not ours',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      exclude: ['vendor'],
+      excludeRoot: '/dataset/src',
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
     })
 
-    // Should not throw and should still remove extra.md
+    await expect(fileService.exists('/dataset/dest/vendor/theirs.md')).resolves.toBe(true)
+    // "Left untouched" is reported, at info — this is the line that distinguishes a BOUNDED
+    // cleanup from one that never ran (a survivors-only check cannot tell them apart, which
+    // is how the `.github/agents` gap hid through several rounds). It is the execution
+    // evidence the PR cites, so it is asserted rather than assumed.
+    expect(logger.info).toHaveBeenCalledWith(
+      'Mirror: left /dataset/dest/vendor untouched (not owned by the registry)',
+    )
+  })
+
+  it('does not descend into an excluded subtree present on both sides', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/vendor/a.md': 'a',
+        '/dataset/dest/vendor/a.md': 'a',
+        '/dataset/dest/vendor/theirs.md': 'not ours',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      exclude: ['vendor'],
+      excludeRoot: '/dataset/src',
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+    })
+
+    await expect(fileService.exists('/dataset/dest/vendor/theirs.md')).resolves.toBe(true)
+  })
+
+  it('leaves a target-only entry whose resolved behavior is `add` untouched', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/local/notes.md': 'authored by the adopter',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { 'src/local': 'add' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/local/notes.md')).resolves.toBe(true)
+  })
+
+  it('leaves a target-only entry whose resolved behavior is `skip` untouched', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/local/notes.md': 'authored by the adopter',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { 'src/local': 'skip' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/local/notes.md')).resolves.toBe(true)
+  })
+
+  it('leaves a NESTED target-only file untouched when its resolved behavior is `add`', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/shared/keep.md': 'keep',
+        '/dataset/dest/shared/keep.md': 'keep',
+        '/dataset/dest/shared/adopter.md': 'authored by the adopter',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { 'src/shared/adopter.md': 'add' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/shared/adopter.md')).resolves.toBe(true)
+    await expect(fileService.exists('/dataset/dest/shared/keep.md')).resolves.toBe(true)
+  })
+
+  it('still removes an orphan the registry DOES own when an ownership context is given', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/01-keep.md': 'keep',
+        '/dataset/dest/how-to/04-orphan.md': 'stale',
+      },
+      '/',
+      '/',
+    )
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', {
+      exclude: ['vendor'],
+      excludeRoot: '/dataset/src',
+      datasetRoot: '/dataset',
+      defaultBehavior: 'overwrite',
+      folderBehavior: { src: 'mirror' },
+    })
+
+    await expect(fileService.exists('/dataset/dest/how-to/04-orphan.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/how-to/01-keep.md')).resolves.toBe(true)
+  })
+})
+
+describe('handleMirrorCleanup - error handling', () => {
+  // ── A FAILED source read is not an EMPTY source ─────────────────────────────
+  // The walk is recursive and the target side is a real adopter's working tree, so
+  // `readdir(src).catch(() => [])` is the worst possible default: every owned entry of
+  // the target reads as "absent from the source" and is removed recursively, announced
+  // as `⚠️ Mirror: removed … (not in the source)` — an IO fault reported as a dataset
+  // retirement. Only ENOENT actually says something about the mirror ("the source is
+  // gone, so the target goes too"); EACCES/EPERM/EIO/EMFILE — or an error carrying no
+  // errno at all — say only that we do not know, and cleanup must abstain.
+  const errnoError = (code: string) => Object.assign(new Error(`${code}: readdir failed`), { code })
+
+  /** Make `readdir` reject for exactly one path, otherwise behave normally. */
+  const failReaddirFor = (path: string, error: Error) => {
+    const originalReaddir = fileService.readdir.bind(fileService)
+    fileService.readdir = vi.fn().mockImplementation(async (p: string) => {
+      if (p === path) throw error
+      return originalReaddir(p)
+    })
+  }
+
+  it('still removes a target entry when the source is genuinely absent (ENOENT)', async () => {
+    fileService = new InMemoryFileSystemService({ '/dataset/dest/extra.md': 'to remove' }, '/', '/')
+    vi.spyOn(fileService, 'rm')
+    failReaddirFor('/dataset/src', errnoError('ENOENT'))
+
     await expect(
       handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest'),
     ).resolves.not.toThrow()
+
     await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
+  })
+
+  it('leaves the target intact and warns when the source cannot be READ (EACCES)', async () => {
+    fileService = new InMemoryFileSystemService({ '/dataset/dest/extra.md': 'keep' }, '/', '/')
+    vi.spyOn(fileService, 'rm')
+    failReaddirFor('/dataset/src', errnoError('EACCES'))
+
+    await expect(
+      handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest'),
+    ).resolves.not.toThrow()
+
+    await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(true)
+    expect(fileService.rm).not.toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: skipped cleanup of /dataset/dest — could not read source /dataset/src (EACCES)',
+    )
+  })
+
+  it('treats a read failure carrying NO errno as unreadable, not as an empty source', async () => {
+    fileService = new InMemoryFileSystemService({ '/dataset/dest/extra.md': 'keep' }, '/', '/')
+    failReaddirFor('/dataset/src', new Error('Source not found'))
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(true)
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: skipped cleanup of /dataset/dest — could not read source /dataset/src (unknown)',
+    )
+  })
+
+  it('skips only the unreadable directory and keeps cleaning the rest of the tree', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/keep.md': 'keep',
+        '/dataset/src/how-to/01-live.md': 'live',
+        '/dataset/dest/keep.md': 'keep',
+        '/dataset/dest/how-to/01-live.md': 'live',
+        '/dataset/dest/how-to/99-stale.md': 'orphan under the unreadable directory',
+        '/dataset/dest/ORPHAN.md': 'orphan under a readable directory',
+      },
+      '/',
+      '/',
+    )
+    failReaddirFor('/dataset/src/how-to', errnoError('EIO'))
+
+    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
+
+    // Unreadable subtree: untouched, including the entry that LOOKS like an orphan.
+    await expect(fileService.exists('/dataset/dest/how-to/99-stale.md')).resolves.toBe(true)
+    await expect(fileService.exists('/dataset/dest/how-to/01-live.md')).resolves.toBe(true)
+    // Readable sibling scope: cleaned exactly as before.
+    await expect(fileService.exists('/dataset/dest/ORPHAN.md')).resolves.toBe(false)
+    await expect(fileService.exists('/dataset/dest/keep.md')).resolves.toBe(true)
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Mirror: skipped cleanup of /dataset/dest/how-to — could not read source /dataset/src/how-to (EIO)',
+    )
   })
 
   it('should handle destination directory read errors gracefully', async () => {

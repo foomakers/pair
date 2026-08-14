@@ -7,8 +7,6 @@
 - [How to Create a Product Requirements Document (PRD) - AI-Assisted Guide](.pair/knowledge/how-to/01-how-to-create-PRD.md)
 - [How to Complete Bootstrap Checklist - AI-Assisted Guide](.pair/knowledge/how-to/02-how-to-complete-bootstrap-checklist.md)
 - [How to Create and Prioritize Initiatives - AI-Assisted Guide](.pair/knowledge/how-to/03-how-to-create-and-prioritize-initiatives.md)
-- [How to Define Subdomains - AI-Assisted Guide](.pair/knowledge/how-to/04-how-to-define-subdomains.md)
-- [How to Define Bounded Contexts - AI-Assisted Guide](.pair/knowledge/how-to/05-how-to-define-bounded-contexts.md)
 - [How to Breakdown Epics - AI-Assisted Guide](.pair/knowledge/how-to/06-how-to-breakdown-epics.md)
 - [How to Breakdown User Stories - AI-Assisted Guide](.pair/knowledge/how-to/07-how-to-breakdown-user-stories.md)
 - [How to Refine a User Story - AI-Assisted Guide](.pair/knowledge/how-to/08-how-to-refine-a-user-story.md)
