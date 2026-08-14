@@ -203,3 +203,50 @@ describe('US-219 — development artifacts do not install', () => {
     expect(exclude.filter(e => !shipped.has(e))).toEqual([])
   })
 })
+
+describe('US-219 — a shipped artifact never points at something unshipped', () => {
+  // Three instances of one defect, each found by an outside reader after I had checked:
+  //   1. `analyze-pr-batch` invoked `/analyze-pr`, a personal skill (caught by the guard above)
+  //   2. `pair-contract-generator.md` ran `workflows/contracts/…` after the rename
+  //   3. `pair-implementer.md` cited an ADL and an issue number the dataset does not ship
+  //
+  // The mirror guard cannot see any of them: both copies are equally wrong. This one reads
+  // the references OUT of the shipped agents and resolves each against what actually ships.
+  const agentsDir = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.agents')
+  const datasetRoot = join(REPO_ROOT, 'packages/knowledge-hub/dataset')
+
+  it('every dataset-relative path an agent names exists in the dataset', () => {
+    const missing: string[] = []
+    for (const file of listFiles(agentsDir)) {
+      const src = readFileSync(join(agentsDir, file), 'utf-8')
+      // Backticked paths rooted at a dataset directory — the shape these files use to point
+      // a reader at a document.
+      for (const m of src.matchAll(/`((?:\.pair|\.claude|\.github)\/[^`\s]+\.[a-z]{2,4})`/g)) {
+        const rel = m[1]!
+        // `<story-id>` and friends are PATTERNS the agent fills in at runtime, not references
+        // to a file that should exist. Only concrete paths are resolvable.
+        if (rel.includes('<')) continue
+        // `.claude/**` is INSTALLED output, not dataset content: it exists in an adopter's
+        // repo after install, so it is resolved against this repo's root instead.
+        const base = rel.startsWith('.claude/') ? REPO_ROOT : datasetRoot
+        if (!existsSync(join(base, rel))) missing.push(`${file} -> ${rel}`)
+      }
+    }
+    expect(
+      missing,
+      `shipped agents point at paths nobody receives:\n  ${missing.join('\n  ')}`,
+    ).toEqual([])
+  })
+
+  it('no shipped agent cites this repo issue numbers', () => {
+    // `#256` means nothing in an adopter's tracker — at best it resolves to an unrelated
+    // issue of theirs, which is worse than a dangling reference.
+    const cited: string[] = []
+    for (const file of listFiles(agentsDir)) {
+      const src = readFileSync(join(agentsDir, file), 'utf-8')
+      // `#<number>` is the documented placeholder form and stays; a literal number does not.
+      for (const m of src.matchAll(/(?:^|\s)#(\d{2,4})\b/g)) cited.push(`${file} -> #${m[1]}`)
+    }
+    expect(cited, `shipped agents cite this repo's issues:\n  ${cited.join('\n  ')}`).toEqual([])
+  })
+})
