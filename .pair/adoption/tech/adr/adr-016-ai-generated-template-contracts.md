@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted (amended 2026-08-13 — the execution layer this ADR scopes itself to now ships in the dataset; see Adoption Impact)
 
 ## Date
 
-2026-07-12
+2026-07-12 (amended 2026-08-13)
 
 ## Context
 
@@ -57,7 +57,7 @@ Option 3. Additional calls within it:
 
 - Generation correctness is AI-judged (mitigated: `ensure-contract.mjs write` validates structure and stamps the hash; the workflow's `usableSchema` guard re-checks the control-flow-critical shape before use; enum values must appear verbatim in the template per the generator's rules).
 - A minimal, documented duplication between the canonical validator and the sandboxed consumer guard (the sandbox cannot import modules).
-- Applies to the Claude-Code-specific execution layer only — not the portable skills (per ADL 2026-07-11-agent-execution-layer).
+- Applies to the Claude-Code-specific execution layer only — not the portable skills (per ADL 2026-07-11-agent-execution-layer, amended 2026-08-13: that layer now ships — see Adoption Impact).
 
 ## Adoption Impact
 

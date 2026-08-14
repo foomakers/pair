@@ -2,11 +2,11 @@
 
 ## Date
 
-2026-07-11
+2026-07-11 (amended 2026-07-18, 2026-08-13)
 
 ## Status
 
-Active
+Active (amended 2026-08-13 — the execution layer now SHIPS in the dataset; the "not part of the shipped dataset/KB" clause below no longer holds. See `2026-08-13-the-agent-execution-layer-ships.md`)
 
 ## Category
 
@@ -44,10 +44,16 @@ Invariants baked into the layer:
 ## Consequences
 
 - Validated by smoke test on 2026-07-11 (story #248 → PR): implement → checkpoint handoff → PR → blind review → HALT; `nonActionable` and worktree-isolation behaviours confirmed.
-- To be folded into the framework proper via #255 (`pair-capability-publish-pr`), #256 (`pair-process-implement` composes checkpoint + publish-pr via subagent), #219 (supervisor loop) — each with its own ADR/ADL as it lands.
+- To be folded into the framework proper via #255 (`pair-capability-publish-pr`), #256 (`pair-process-implement` composes checkpoint + publish-pr via subagent), #219 (supervisor loop) — each with its own ADR/ADL as it lands. **#219 landed 2026-08-13** and is what makes the layer shipped rather than dogfood-only; see the amendment on Adoption Impact.
 - `.pair/working/` is git-ignored (checkpoints are task-scoped runtime state, D14 / working-artifacts-task-scoped).
 - Amended 2026-07-18: the wave-1 follow-up cleanup surfaced that the operator was pausing after every review round to ask whether to continue — the two added invariants above (escalation retry, `nonActionable` isn't an automatic pass) close that gap, per explicit correction from the repo owner.
 
 ## Adoption Impact
 
-- No downstream project configuration change. This layer lives under `.claude/` in this repo as an opt-in dogfood execution layer; it is not part of the shipped dataset/KB. Downstream projects continue to use the skills directly; the execution layer is offered separately once #255/#256/#219 formalize it.
+- ~~No downstream project configuration change. This layer lives under `.claude/` in this repo as an opt-in dogfood execution layer; it is not part of the shipped dataset/KB. Downstream projects continue to use the skills directly; the execution layer is offered separately once #255/#256/#219 formalize it.~~
+  **Amended 2026-08-13 by #219** (`decision-log/2026-08-13-the-agent-execution-layer-ships.md`): #219 is the story this clause named,
+  and it reopened the question the way the clause anticipated. The execution layer — the workflows AND the agent definitions they
+  dispatch to — now ships in the dataset and installs into every adopter's `.claude/workflows/` and `.claude/agents/`,
+  unconditionally and with no tool-gating. `pair install` therefore DOES write two directories in a downstream project. The
+  decision itself stands: what changed is its distribution, not its design, which is why this record is amended rather than
+  superseded.

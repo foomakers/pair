@@ -99,6 +99,10 @@ Three properties come with it:
 
 ## Related
 
-- Amends: `.pair/adoption/decision-log/2026-07-11-agent-execution-layer.md` (Consequences, final bullet)
+- Amends: `.pair/adoption/decision-log/2026-07-11-agent-execution-layer.md` (Adoption Impact, sole bullet) — marked
+  above the fold in its `## Status` and `## Date`, per `2026-07-30-amended-adr-surfaces-the-amendment-in-status.md`:
+  a reader who stops at Status must not walk away with the superseded clause.
+- Amends: `.pair/adoption/tech/adr/adr-016-ai-generated-template-contracts.md` (Status, Date, Consequences,
+  Adoption Impact) — it scopes itself to "the execution layer, which is not shipped", so the same clause moved.
 - ADR-017 — automation loop (`pair-loop` over atom), §3 context isolation, §5 install policy, §6 parallelism cap
 - #219 (this story) · #250 (`pair-loop`, the first external consumer)
