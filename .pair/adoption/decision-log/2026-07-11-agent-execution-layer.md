@@ -23,7 +23,7 @@ The question: are these part of Pair the framework, or a Claude-Code-specific ad
 **Introduce an optional agent execution layer, Claude-Code-specific and additive — NOT core.**
 
 - **Roles** (`.claude/agents/`): `implementer` (implement + PR + fix; write-access; disciplined handoff via checkpoint; never merges) and `reviewer` (read-only; independent; **blind to the handoff** — reviews only story AC + PR diff + code; runs `/pair-process-review`).
-- **Orchestrator** (`.claude/workflows/implement-batch.js`): drives a mutex-safe batch of stories to PR-ready via the review↔fix loop; **never merges**.
+- **Orchestrator** (`.claude/workflows/pair-implement-batch.js`): drives a mutex-safe batch of stories to PR-ready via the review↔fix loop; **never merges**.
 - **Portability boundary:** the process *logic* stays in the **skills** (`SKILL.md`, portable cross-assistant, shipped in the dataset). Subagents + Workflow are an **execution layer** on top — opt-in, not required. One-story-at-a-time manual use of the skills remains fully valid.
 
 Invariants baked into the layer:

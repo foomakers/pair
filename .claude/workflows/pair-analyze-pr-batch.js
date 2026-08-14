@@ -1,11 +1,13 @@
 export const meta = {
-  name: 'analyze-pr-batch',
+  // Prefixed like every other pair artifact: the registry keys a workflow by `meta.name`, so an
+  // unprefixed name would shadow — or be shadowed by — a workflow of the same name elsewhere.
+  name: 'pair-analyze-pr-batch',
   description:
     'Produce an evidence-based analysis of each open PR and persist it under .pair/working/pr-analyses/, stamped with the head SHA it describes.',
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
   // expression node. Keep every value a single literal, however long the line gets.
   whenToUse:
-    'REQUIRED args shape: {"prs":[{"number":424,"branch":"feature/US-400-smoke-in-ci","story":"400"}]}. Run this on STABLE heads — after the implement/review batch has finished, not while it is still pushing fix commits, or every analysis describes a head that no longer exists. Read-only: it runs git diff / gh / shasum and writes ONLY under .pair/working/pr-analyses/. Safe to run against a repo whose worktrees are idle.',
+    'PREREQUISITE: this workflow dispatches every agent to the **/analyze-pr** skill, which is a PERSONAL, user-level skill — it is installed in neither this repo\'s `.claude/skills/` nor the shipped pair dataset. Without it the agents have nothing to follow: they fabricate the six sections or die, while the run still reports the paths it wrote. Install /analyze-pr at user level before running this. That prerequisite is also why this workflow is deliberately NOT shipped to adopters (see the exclusion note in `packages/knowledge-hub/src/tools/workflow-mirror.test.ts`). REQUIRED args shape: {"prs":[{"number":424,"branch":"feature/US-400-smoke-in-ci","story":"400"}]}. Run this on STABLE heads — after the implement/review batch has finished, not while it is still pushing fix commits, or every analysis describes a head that no longer exists. Read-only: it runs git diff / gh / shasum and writes ONLY under .pair/working/pr-analyses/. Safe to run against a repo whose worktrees are idle.',
   phases: [{ title: 'Analyze' }, { title: 'Freshness' }],
 }
 

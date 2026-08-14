@@ -35,7 +35,10 @@
     "format": "pnpm prettier:fix && pnpm mdlint:fix",
     "format:check": "pnpm prettier:check; _p=$?; pnpm mdlint:check; _m=$?; exit $((_p > 1 || _m > 1 ? 2 : (_p || _m)))",
     "gate:composition": "pnpm --filter @pair/dev-tools pre-push-gate:check",
-    "workflows:test": "node --test \".claude/workflows/*.test.mjs\" \".claude/workflows/pair-contracts/*.test.mjs\""
+    "workflows:test": "cd .claude/workflows && node --test"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   },
   "devDependencies": {
     "@changesets/cli": "catalog:",

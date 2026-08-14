@@ -19,6 +19,8 @@ import {
   parseCatalogRow,
   checkCatalogContent,
   generateCatalogRows,
+  checkBatchEnginePaths,
+  checkBatchEngineAgents,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -359,5 +361,76 @@ describe('generateCatalogRows + committed catalog parity (Check 2c integration)'
     const rows = generateCatalogRows(SKILLS_DIR)
     const errors = checkCatalogContent(rows, readFileSync(CATALOG, 'utf-8'))
     expect(errors, errors.join('\n')).toHaveLength(0)
+  })
+})
+
+// ── The batch-engine page's claims (#219, review of #432) ─────────────────────
+// Both gates were shipped without a unit test, so their failure branches had never been
+// executed — including the one for a DELETED registry, which cannot be reached from the real
+// config at all. The repo's own convention (ADL 2026-07-13) is that gate logic lives in tested
+// production modules, and every sibling check in this file has tests.
+describe('checkBatchEnginePaths', () => {
+  const doc = 'installs into `.claude/workflows/` and `.claude/agents/`'
+  const registries = {
+    workflows: { targets: [{ path: '.claude/workflows/' }] },
+    'agent-definitions': { targets: [{ path: '.claude/agents/' }] },
+  }
+
+  it('passes when the page names every install target', () => {
+    expect(checkBatchEnginePaths(registries, doc)).toEqual([])
+  })
+
+  it('fails when a registry target is RENAMED and the page still names the old one', () => {
+    const renamed = { ...registries, workflows: { targets: [{ path: '.claude/flows/' }] } }
+    expect(checkBatchEnginePaths(renamed, doc)).toEqual([
+      'batch-engine.mdx does not mention ".claude/flows/", where the "workflows" registry installs',
+    ])
+  })
+
+  it('fails when a registry is REMOVED entirely but the page still documents it', () => {
+    // Unreachable from the real config, which is exactly why it needs a test: this branch had
+    // never run, so a doc describing an install that no longer happens would have passed.
+    const rest = Object.fromEntries(
+      Object.entries(registries).filter(([name]) => name !== 'workflows'),
+    )
+    expect(checkBatchEnginePaths(rest, doc)).toEqual([
+      'asset_registries."workflows" is gone but batch-engine.mdx still documents it',
+    ])
+  })
+})
+
+describe('checkBatchEngineAgents', () => {
+  const agents = [
+    { name: 'pair-implementer', tools: 'Read, Edit, Write, Bash' },
+    { name: 'pair-reviewer', tools: 'Read, Grep, Bash' },
+  ]
+  const doc =
+    '`pair-implementer` holds `Read, Edit, Write, Bash`; `pair-reviewer` holds `Read, Grep, Bash`'
+
+  it('passes when every agent is named with its exact declared tools', () => {
+    expect(checkBatchEngineAgents(agents, doc)).toEqual([])
+  })
+
+  it('fails when an agent is not enumerated at all', () => {
+    const withThird = [...agents, { name: 'pair-contract-generator', tools: 'Read, Write, Bash' }]
+    expect(checkBatchEngineAgents(withThird, doc)).toEqual([
+      'batch-engine.mdx does not name the shipped agent "pair-contract-generator"',
+    ])
+  })
+
+  it('fails when an agent is named but its tool list is understated', () => {
+    // The measured case: the page said `pair-reviewer` holds `Bash` while its frontmatter
+    // declared five tools, so the note understated the authority an adopter installs.
+    const widened = [{ name: 'pair-reviewer', tools: 'Read, Grep, Glob, Bash, Skill' }]
+    expect(checkBatchEngineAgents(widened, doc)).toEqual([
+      'batch-engine.mdx does not state "pair-reviewer" tools as declared in its frontmatter: "Read, Grep, Glob, Bash, Skill"',
+    ])
+  })
+
+  it('reports an empty agent set rather than passing vacuously', () => {
+    // Deleting the dataset agents directory would otherwise turn the check green.
+    expect(checkBatchEngineAgents([], doc)).toEqual([
+      'no agent definitions found in the dataset — the batch-engine agent check is vacuous',
+    ])
   })
 })

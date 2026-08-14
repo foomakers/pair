@@ -89,6 +89,11 @@
     "workflows": {
       "source": ".workflows",
       "behavior": "overwrite",
+      "exclude": [
+        "pair-implement-batch.test.mjs",
+        "pair-refine-batch.test.mjs",
+        "pair-contracts/ensure-contract.test.mjs"
+      ],
       "targets": [
         {
           "path": ".claude/workflows/",

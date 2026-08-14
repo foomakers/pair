@@ -3,7 +3,12 @@
 // phase-0 ensure-contract behavior — derived schema on a valid contract (AC1),
 // loose fallback on a malformed/failed one (AC4), value-agnostic control flow
 // (AC6) — plus the optional per-story `notes` scope directive threading.
-// Run (from repo root): node --test '.claude/workflows/**/*.test.mjs'
+// Run (from repo root): `pnpm workflows:test` — i.e. `cd .claude/workflows && node --test`.
+// The `cd` is deliberate. A QUOTED glob is a Node 22 feature; Node 20 (the major
+// `release.yml` pins) reads it as a literal path and exits non-zero. A DIRECTORY argument
+// is the reverse: it recurses on 20 and is resolved as a module on 26. Bare `node --test`
+// with no positional argument discovers recursively from the cwd on every major from 18 up,
+// and it picks up a new test file (or a new subdirectory) with no script edit.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -922,7 +927,21 @@ test('the review step is the review PROCESS skill, and the reviewer is never ask
   })
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(rev.prompt.includes('/pair-process-review'), 'the review follows the process skill')
-  assert.ok(rev.prompt.includes('Do NOT read .pair/working/'), 'the reviewer stays blind to the authoring handoff')
+  assert.ok(rev.prompt.includes('Do NOT read `.pair/working/`'), 'the reviewer stays blind to the authoring handoff')
+})
+
+// Review of #432: the blindness clause named `.pair/working/` as a LITERAL while the audit
+// log's location is configurable. A caller setting `auditLogDir: '.ops/reviews'` left the file
+// holding every prior round's findings unnamed — so "the review is independent and blind" was
+// unguarded exactly where the caller had moved the evidence.
+test('US-219 AC1: the blindness clause names the CONFIGURED audit log dir, not just pair default', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY], pipeline: { auditLogDir: '.ops/reviews' } },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
+  const clause = rev.slice(rev.indexOf('Do NOT read'), rev.indexOf('Do NOT read') + 200)
+  assert.ok(clause.includes('`.ops/reviews`'), `the configured audit log is not in the blindness clause: ${clause}`)
 })
 
 // ── Debts are resolved in place, never spun out into new cards ──────────────
@@ -1461,7 +1480,7 @@ const PAIR_DEFAULTS = {
   worktreeRoot: '../pair-worktrees',
   auditLog: '.pair/working/reviews',
   baseBranch: 'origin/main',
-  reviewTemplate: 'code-review-template.md',
+  reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
 }
 
 test('US-219 AC1: with no configuration, every pair default is still in the prompts', async () => {
@@ -1486,7 +1505,9 @@ test('US-219 AC1: a caller-supplied pipeline replaces every pair literal', async
     worktreeRoot: '../acme-trees',
     auditLogDir: '.acme/audit',
     baseBranch: 'origin/trunk',
-    reviewTemplate: 'acme-review-format.md',
+    // A FULL path, not a basename: an adopter whose KB is not at `.pair/knowledge/` could
+    // otherwise only reach their template through a `../../../..` traversal string.
+    reviewTemplate: 'kb/templates/acme-review-format.md',
   }
   const { calls } = await runWorkflow({
     args: { stories: [STORY], pipeline },
@@ -1494,8 +1515,19 @@ test('US-219 AC1: a caller-supplied pipeline replaces every pair literal', async
   })
   const all = calls.map(c => c.prompt).join('\n')
 
-  for (const v of [...Object.values(pipeline.skills), '../acme-trees', '.acme/audit', 'origin/trunk', 'acme-review-format.md'])
+  for (const v of [...Object.values(pipeline.skills), '../acme-trees', '.acme/audit', 'origin/trunk', 'kb/templates/acme-review-format.md'])
     assert.ok(all.includes(v), `configured value ${v} never reached a prompt`)
+
+  // Path and vocabulary LABEL are independent (review of #432): the contract generator gets the
+  // full path, the reviewer's prose gets the basename — interpolating the path into the prose
+  // produced "using the kb/templates/acme-review-format.md vocabulary".
+  const gen = calls.find(c => c.opts.agentType === 'pair-contract-generator').prompt
+  assert.ok(gen.includes('kb/templates/acme-review-format.md'), 'the generator must receive the full template path')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
+  assert.ok(
+    rev.includes('using the acme-review-format.md vocabulary'),
+    'the reviewer prompt must name the template by basename, not by path',
+  )
 
   // And the pair values must be GONE — a config that is merely appended, leaving the
   // hardcoded value in place, would send the agent two contradictory instructions.
@@ -1770,5 +1802,63 @@ test('a non-string pipeline override throws instead of stringifying to [object O
   await assert.rejects(
     () => runWorkflow({ args: { cards: [STORY], pipeline: { skills: { implement: { name: '/x' } } } }, dispatch: stdDispatch({}) }),
     /skills\.implement.*string/i,
+  )
+})
+
+// ── Second review of #432: the CARD was the one object still unvalidated ───────
+// `args`, `args.pipeline` and `args.pipeline.skills` all rejected an unknown key; the per-card
+// object did not. The failure is the worst one this engine has: a dropped `prNumber` makes
+// `resuming` false, so the run implements and calls publishPr, opening a SECOND PR for a story
+// that already has one — which this file forbids in as many words.
+test('a misspelled card key throws instead of silently opening a second PR', async () => {
+  await assert.rejects(
+    () =>
+      runWorkflow({
+        args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumbr: 432 }] },
+        dispatch: stdDispatch({}),
+      }),
+    /cards\[0\]\.prNumbr/,
+  )
+})
+
+test('a JSON-stringified prNumber throws rather than being read as "no PR yet"', async () => {
+  // `Number.isInteger('432')` is false, so the card fell through to implement + publishPr.
+  await assert.rejects(
+    () =>
+      runWorkflow({
+        args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumber: '432' }] },
+        dispatch: stdDispatch({}),
+      }),
+    /prNumber "432", which is not an integer/,
+  )
+})
+
+test('an integer prNumber still resumes straight into the review loop', async () => {
+  // The guard above must not cost the resume path: this is the shape a real resume passes.
+  const { calls, result } = await runWorkflow({
+    args: { cards: [{ id: '219', title: 'T', branch: 'feat/x', prNumber: 432 }] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(calls.filter(c => c.opts.phase === 'Implement').length, 0, 'a resumed card must not re-implement')
+  assert.equal(calls.filter(c => c.opts.phase === 'PR').length, 0, 'a resumed card must not open a second PR')
+})
+
+test('two cards with the same id throw, naming both indices', async () => {
+  // They resolve to the SAME worktree path, so under an unbounded cap two implementers
+  // interleave `git worktree add`/checkout/commit in one working tree and one card's
+  // committed work is lost. `died` also mis-reported: it matched on the surviving twin.
+  await assert.rejects(
+    () =>
+      runWorkflow({
+        args: {
+          cards: [
+            { id: '219', title: 'A', branch: 'feat/a' },
+            { id: '#219', title: 'B', branch: 'feat/b' },
+          ],
+        },
+        dispatch: stdDispatch({}),
+      }),
+    /cards\[0\] and cards\[1\] both carry id #219/,
   )
 })

@@ -33,22 +33,27 @@ const PAIRS = [
 ] as const
 
 /**
- * Every shipped file, RECURSIVELY — `contracts/ensure-contract.mjs` is a real dependency
+ * Every shipped file, RECURSIVELY — `pair-contracts/ensure-contract.mjs` is a real dependency
  * the agents invoke, so a flat listing would let the engine ship without the helper it
  * calls and still pass this guard.
  *
+ * Dot FILES are included; dot DIRECTORIES are not. The distinction is load-bearing (review of
+ * #432): `pair-contracts/.gitignore` is the file whose entire job is to keep the derived
+ * `*.contract.json` / `*.draft.json` out of an adopter's git, and a blanket dot-filter put
+ * exactly that file outside the guard. Dot directories stay filtered because they are tool
+ * state (`.git`, `.turbo`), never shipped content.
+ *
  * Derived contract caches (`*.contract.json`, `*.draft.json`) are excluded: they are
- * regenerable output, ignored by `contracts/.gitignore`, and a machine that has simply
+ * regenerable output, ignored by `pair-contracts/.gitignore`, and a machine that has simply
  * run a batch must not read as drifted.
  */
 const listFiles = (dir: string, prefix = ''): string[] =>
   existsSync(dir)
     ? readdirSync(dir)
-        .filter(f => !f.startsWith('.'))
         .flatMap(f => {
           const full = join(dir, f)
           const rel = prefix ? `${prefix}/${f}` : f
-          if (statSync(full).isDirectory()) return listFiles(full, rel)
+          if (statSync(full).isDirectory()) return f.startsWith('.') ? [] : listFiles(full, rel)
           return /\.(contract|draft)\.json$/.test(f) ? [] : [rel]
         })
         .sort()
@@ -65,9 +70,18 @@ describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset
 
   it('the root copy carries every dataset file — the dataset is the shipped subset', () => {
     // Direction matters. Every shipped file must exist at the root, or this repo is not
-    // running what it ships. The reverse is NOT required: `pair-analyze-pr-batch.js` runs
-    // here and is deliberately unshipped (it invokes a personal skill — see the dataset
-    // README), so a root-only file is a deliberate exclusion, not drift.
+    // running what it ships. The reverse is NOT required, and the one current root-only file
+    // is a deliberate exclusion rather than drift:
+    //
+    //   `.claude/workflows/pair-analyze-pr-batch.js` dispatches its agents to `/analyze-pr`,
+    //   a PERSONAL, user-level skill that exists in neither this repo's `.claude/skills/` nor
+    //   the shipped dataset. Shipping it would install a workflow whose agents are sent to a
+    //   skill an adopter does not have. Its `meta.whenToUse` states that prerequisite for the
+    //   contributor who runs it here.
+    //
+    // (The policy is recorded HERE, next to the guard that depends on it, rather than in a
+    // dataset README: a README under `dataset/.workflows/` would itself install into every
+    // adopter's `.claude/workflows/`.)
     const shipped = listFiles(datasetDir)
     const live = new Set(listFiles(installedDir))
     expect(shipped.filter(f => !live.has(f))).toEqual([])
@@ -153,5 +167,39 @@ describe('US-219 AC3 — a workflow ships with the agents it dispatches to', () 
       missing,
       `shipped workflows invoke skills the dataset does not ship: ${missing.join(', ')}`,
     ).toEqual([])
+  })
+})
+
+describe('US-219 — development artifacts do not install', () => {
+  /**
+   * The `workflows` registry ships a directory, and that directory also holds the dry-run
+   * suites that prove the engine works. They are development artifacts: an adopter cannot run
+   * them (no `workflows:test` script in their repo), and they would sit in the very directory
+   * a workflow loader scans — ~127 KB of it, more than the engine itself.
+   *
+   * `exclude` is matched by PATH SEGMENTS, not by glob, so each file is named explicitly. This
+   * guard is what keeps that list complete: adding a test file without excluding it fails here
+   * instead of silently enlarging every adopter's install.
+   */
+  it('every dataset workflow test file is excluded from the install', () => {
+    const config = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
+    ) as { asset_registries: Record<string, { exclude?: string[] }> }
+    const exclude = config.asset_registries['workflows']?.exclude ?? []
+
+    const tests = listFiles(join(REPO_ROOT, 'packages/knowledge-hub/dataset/.workflows')).filter(
+      f => f.endsWith('.test.mjs'),
+    )
+    expect(tests.length, 'no dry-run suites found — the scan broke').toBeGreaterThan(0)
+    expect(tests.filter(t => !exclude.includes(t))).toEqual([])
+  })
+
+  it('excludes nothing that is not there — a stale entry silently protects nothing', () => {
+    const config = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
+    ) as { asset_registries: Record<string, { exclude?: string[] }> }
+    const exclude = config.asset_registries['workflows']?.exclude ?? []
+    const shipped = new Set(listFiles(join(REPO_ROOT, 'packages/knowledge-hub/dataset/.workflows')))
+    expect(exclude.filter(e => !shipped.has(e))).toEqual([])
   })
 })

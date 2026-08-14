@@ -35,7 +35,18 @@ assert_dir ".claude/agents"
 # The engine itself, plus the helper the agents invoke. `contracts/ensure-contract.mjs` is a
 # real dependency: shipping the workflow without it produces a batch that dies in phase 0.
 assert_file ".claude/workflows/pair-implement-batch.js"
+assert_file ".claude/workflows/pair-refine-batch.js"
 assert_file ".claude/workflows/pair-contracts/ensure-contract.mjs"
+
+# The DOTFILE. `pair-contracts/.gitignore` is what keeps the derived `*.contract.json` /
+# `*.draft.json` out of an adopter's git; if the installer does not carry dotfiles, their first
+# batch leaves untracked, un-ignored generated contracts behind and nothing above notices.
+assert_file ".claude/workflows/pair-contracts/.gitignore"
+
+# The dry-run suites are development artifacts (~127 KB, more than the engine itself) and are
+# excluded from the registry. They must NOT land in the directory a workflow loader scans.
+assert_no_file ".claude/workflows/pair-implement-batch.test.mjs"
+assert_no_file ".claude/workflows/pair-contracts/ensure-contract.test.mjs"
 
 # Every agent type the workflow spawns must have arrived with it.
 for agent in pair-implementer pair-reviewer pair-contract-generator; do

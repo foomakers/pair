@@ -80,6 +80,22 @@ Three properties come with it:
 - **Keep the layer private and have adopters copy it.** Rejected: it is the status quo this
   story exists to end, and a copied artifact has no mirror guard — the drift this repo has
   measured repeatedly in its own mirrors would move to every adopter.
+- **Ship it enabled, but behind an explicit install-time opt-in** (a prompt, or an
+  `--with-agents` flag). This is the story's one Open Question — the layer carries `Write` +
+  `Bash` for `pair-implementer` and `pair-contract-generator`, so "does it arrive by default?"
+  is a security posture question, not a packaging one. Rejected, for three reasons. (1) The
+  files are **declarations, not execution**: nothing in `.claude/agents/` runs until a human
+  starts a batch, and a batch is already an explicit act; the authority is granted at
+  invocation, by the same person, not at install. (2) An install-time flag is a **snapshot**,
+  exactly like the tool-gating rejected above — a user who answers "no" and later wants the
+  engine needs a re-install rather than an `update`, and the answer is recorded nowhere they
+  will find it. (3) A per-registry opt-in has **no precedent** in the CLI: every other registry
+  installs unconditionally, and introducing a first exception here would make the install
+  surface conditional on state the config cannot see. The mitigation the story anticipated is
+  the one taken: the docs page (AC8) discloses each agent and its exact `tools:` list, gate-
+  checked against the frontmatter so the disclosure cannot go stale. **Merge-gate sign-off is
+  where the posture is confirmed** — this story is `risk:red`, which already requires explicit
+  human approval; that approval is the record that the default-on posture was accepted.
 
 ## Related
 

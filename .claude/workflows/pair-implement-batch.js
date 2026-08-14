@@ -1,5 +1,8 @@
 export const meta = {
-  name: 'implement-batch',
+  // The registry keys a workflow by `meta.name`, not by its filename, so the `pair-` prefix
+  // has to be HERE too: an adopter with their own `implement-batch` workflow would otherwise
+  // collide with this one under an undefined winner. File name and registry name match.
+  name: 'pair-implement-batch',
   description:
     'Drive a mutex-safe batch of ready Pair stories, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
@@ -140,9 +143,15 @@ function parseBatchArgs(raw) {
         `${a === undefined || a === null ? String(a) : JSON.stringify(a).slice(0, 80)}. ` +
         `Nothing was run — this is an input error, not an empty batch.`,
     )
+  const seenIds = new Map()
   const stories = a.stories.map((s, i) => {
     if (!s || typeof s !== 'object' || Array.isArray(s))
       throw new Error(`implement-batch: stories[${i}] is not an object: ${JSON.stringify(s)}.`)
+    // The CARD's key set is validated like every other caller-facing object. Without this,
+    // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
+    // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
+    // PR for a story that already had one — the very thing this file forbids in as many words.
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'prNumber'], `cards[${i}]`)
     // `#234` and `234` name the same story; normalize once so no prompt, worktree
     // path or marker ever carries a stray `#`.
     const id = String(s.id ?? '').trim().replace(/^#/, '')
@@ -155,6 +164,27 @@ function parseBatchArgs(raw) {
           `All three are required — id + title feed the prompts, branch feeds \`git worktree add\`; ` +
           `an absent one would reach a shell command as \`undefined\`.`,
       )
+    // `prNumber` decides the ENTIRE lifecycle: an integer re-enters the review loop on the
+    // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
+    // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
+    // present-but-unusable value is an error rather than a silently ignored one.
+    if ('prNumber' in s && !Number.isInteger(s.prNumber))
+      throw new Error(
+        `implement-batch: cards[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not an integer. ` +
+          `A non-integer is NOT treated as "no PR": it would run implement + open a SECOND PR for a story ` +
+          `that already has one. Pass an integer, or omit the key entirely to start a fresh story.`,
+      )
+    // Two cards with the same id resolve to the SAME worktree path, so under an unbounded cap
+    // two implementers would interleave `git worktree add`/checkout/commit in one working tree
+    // and one card's committed work would be lost. `died` also mis-reports: it matches on the
+    // surviving twin, so a duplicate that failed reads as having returned.
+    if (seenIds.has(id))
+      throw new Error(
+        `implement-batch: cards[${seenIds.get(id)}] and cards[${i}] both carry id #${id}. ` +
+          `One story is one worktree and one PR — two cards sharing an id would run two ` +
+          `implementers in the same working tree and lose one of them. Pass each story once.`,
+      )
+    seenIds.set(id, i)
     return { ...s, id }
   })
   // Return the NORMALIZED container, not just the list. Reading a second option off the
@@ -191,8 +221,17 @@ const PIPELINE_DEFAULTS = {
   worktreeRoot: '../pair-worktrees',
   auditLogDir: '.pair/working/reviews',
   baseBranch: 'origin/main',
-  reviewTemplate: 'code-review-template.md',
+  // A FULL path, not a basename. AC1 names "the code-review-template.md contract path" as
+  // configuration, and an adopter whose KB root is not `.pair/knowledge/` (the CLI supports
+  // layout modes) could otherwise only reach their template with a `../../../..` traversal
+  // string — which then also rendered as the vocabulary label in the reviewer prompt. Path
+  // and label are now independent: the label is derived with `templateLabel()` below.
+  reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
 }
+
+// The human-readable NAME of the contract template, for the prompt sentence "using the …
+// vocabulary". Derived from the path so a configured path never leaks into prose.
+const templateLabel = (p) => String(p).split('/').filter(Boolean).pop() || String(p)
 
 function resolvePipeline(raw) {
   if (raw === undefined || raw === null) return PIPELINE_DEFAULTS
@@ -274,6 +313,14 @@ async function boundedParallel(thunks, cap) {
 
 const PIPELINE = resolvePipeline(PARSED.pipeline)
 const SK = PIPELINE.skills
+// The reviewer prompt names the template TWICE as prose ("using the … vocabulary", "… structure").
+// Interpolating the configured PATH there produced a sentence like "using the
+// ../../../kb/templates/code-review-template.md vocabulary"; the label keeps the two independent.
+const REVIEW_TEMPLATE_LABEL = templateLabel(PIPELINE.reviewTemplate)
+// The blindness clause has to name the CONFIGURED working locations, not pair's literals: a
+// caller that sets `auditLogDir` to `.ops/reviews` would otherwise leave the file holding every
+// prior round's findings unnamed, and "the review is independent and blind" would go unguarded.
+const BLIND_PATHS = [...new Set(['.pair/working/', PIPELINE.auditLogDir])].map((p) => `\`${p}\``).join(' or ')
 
 
 const STORIES = PARSED.stories
@@ -456,7 +503,7 @@ const PROBE_SCHEMA = {
 const CONTRACT_SPECS = [
   {
     name: 'code-review',
-    template: `.pair/knowledge/guidelines/collaboration/templates/${PIPELINE.reviewTemplate}`,
+    template: PIPELINE.reviewTemplate,
     contract: '.claude/workflows/pair-contracts/code-review.contract.json',
     skeleton: LOOSE_REVIEW_SCHEMA,
     mirrors:
@@ -753,7 +800,7 @@ async function driveStory(story) {
     // round-0 a SILENT re-review, so a PR never accrues a second first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
     const review = await agentRetry(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${baseOf(story)}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the ${PIPELINE.reviewTemplate} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${PIPELINE.reviewTemplate} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
+      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${baseOf(story)}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
             ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`
             : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`} Return findings and a verdict.`,
       // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a

@@ -1,7 +1,12 @@
 // Tests for the deterministic side of the md → contract.json pattern (#292):
 // hashing, cache decision (fresh/stale/missing/invalid), contract validation,
 // stamping, and the CLI fixture dry-run (cache-hit / cache-miss / fallback path).
-// Run (from repo root): node --test '.claude/workflows/**/*.test.mjs'
+// Run (from repo root): `pnpm workflows:test` — i.e. `cd .claude/workflows && node --test`.
+// The `cd` is deliberate. A QUOTED glob is a Node 22 feature; Node 20 (the major
+// `release.yml` pins) reads it as a literal path and exits non-zero. A DIRECTORY argument
+// is the reverse: it recurses on 20 and is resolved as a module on 26. Bare `node --test`
+// with no positional argument discovers recursively from the cwd on every major from 18 up,
+// and it picks up a new test file (or a new subdirectory) with no script edit.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'

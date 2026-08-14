@@ -5,12 +5,26 @@ description: The workflow that drives a batch of cards to review-approved PRs �
 
 `pair install` writes two directories that carry the batch engine:
 
-| Installed to          | What it is                                                                    |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `.claude/workflows/`  | the orchestration workflows, including `implement-batch`                       |
-| `.claude/agents/`     | the agent definitions those workflows dispatch to                              |
+| Installed to         | What it is                                        |
+| -------------------- | ------------------------------------------------- |
+| `.claude/workflows/` | the orchestration workflows                       |
+| `.claude/agents/`    | the agent definitions those workflows dispatch to |
 
 They install **unconditionally**, on every project, whatever tool you use.
+
+Two workflows ship:
+
+| Workflow               | What it drives                                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `pair-implement-batch` | a batch of cards, each to a review-approved PR — implement, open the PR, then an independent review ↔ fix loop until it converges         |
+| `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. Writes to the PM tool only; it never touches a file in the repo |
+
+`pair-refine-batch` deliberately carries neither of the two knobs `pair-implement-batch` has.
+It has **no parallelism cap** because each card costs one API round trip and holds no worktree,
+no branch and no CPU — the cap exists on the implement engine because a card there occupies a
+working tree. And it has **no `args.pipeline`** because it drives pair's own refinement
+lifecycle by name (`/pair-capability-classify`, `/pair-process-refine-story`, …) rather than a
+configurable one; generalizing it is a separate change, and the file says so at the top.
 
 ## Workflows are Claude-Code-specific
 
@@ -18,25 +32,35 @@ The engine is a workflow script driven by Claude Code's orchestration primitives
 subagents by type and runs their steps in parallel. No other tool executes it today.
 
 **Under any other tool the files are inert.** They are never read, never executed, and cost
-nothing but a few kilobytes on disk. Nothing errors.
+about **115 KB** on disk — mostly the implement engine itself, which carries its rationale
+inline. The workflows' own dry-run test suites are development artifacts and are **excluded from
+the install**, so they are not part of that figure. Nothing errors.
 
 ## What the agent layer can do
 
 Under Claude Code they are not inert, and it is worth knowing exactly what arrives.
 
-`.claude/agents/` declares three subagents with real tool access: `pair-implementer` holds
-`Read, Edit, Write, Bash, Grep, Glob, Skill`, and `pair-reviewer` holds `Bash`. So after an
-`install` or `update`, your project contains definitions that — when you invoke a batch — can
-create worktrees, write files, commit, push branches and open pull requests under your
-credentials.
+`.claude/agents/` declares three subagents, each with real tool access:
+
+| Agent                     | Tools it declares                          | What that lets it do                                                        |
+| ------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
+| `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
+| `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); it never edits, commits or merges |
+| `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
+
+So after an `install` or `update`, your project contains definitions that — when you invoke a
+batch — can create worktrees, write files, commit, push branches and open pull requests under
+your credentials. The table above is checked against each agent's frontmatter by the docs
+staleness gate, so it cannot understate what arrives.
 
 They do nothing on their own. Nothing runs until you start a batch.
 
 **Merge is never among the authority granted.** No configuration enables an autonomous merge,
 on any path.
 
-Every shipped name carries a `pair-` prefix — files and agent names both — so an existing
-`.claude/agents/reviewer.md` of your own is never overwritten by one of ours.
+Every shipped name carries a `pair-` prefix — file names, agent names, and the workflows'
+registry names (`meta.name`) alike — so neither an existing `.claude/agents/reviewer.md` nor
+your own `implement-batch` workflow is overwritten or shadowed by one of ours.
 
 They install anyway rather than being gated on the tool detected at install time, because that
 detection is a snapshot: a user who adopts Claude Code later would need a full re-install rather

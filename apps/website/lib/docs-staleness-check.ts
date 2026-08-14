@@ -388,6 +388,39 @@ export function checkBatchEnginePaths(
   return errors
 }
 
+/**
+ * Check: the batch-engine page's authority note enumerates EVERY shipped agent, with the
+ * exact `tools:` list its frontmatter declares.
+ *
+ * The note is the only user-facing signal about what authority an adopter installs
+ * unconditionally, so an understated one is worse than none. Review of #432 found it claiming
+ * "three subagents" and then listing two, and describing `pair-reviewer` as holding `Bash`
+ * when it declares five tools — while `pair-contract-generator`, which holds `Write`, was
+ * absent. Reading the frontmatter here makes the claim gate-checked rather than hand-copied.
+ */
+export function checkBatchEngineAgents(
+  agents: { name: string; tools: string }[],
+  doc: string,
+): string[] {
+  const errors: string[] = []
+  if (agents.length === 0) {
+    // Without this, deleting the agents directory turns the check green.
+    return ['no agent definitions found in the dataset — the batch-engine agent check is vacuous']
+  }
+  for (const { name, tools } of agents) {
+    if (!doc.includes(name)) {
+      errors.push(`batch-engine.mdx does not name the shipped agent "${name}"`)
+      continue
+    }
+    if (!doc.includes(tools)) {
+      errors.push(
+        `batch-engine.mdx does not state "${name}" tools as declared in its frontmatter: "${tools}"`,
+      )
+    }
+  }
+  return errors
+}
+
 /** Check 3: every command dir has an anchor in commands.mdx. */
 export function checkCommandAnchors(commandDirs: string[], commandsDoc: string): string[] {
   const errors: string[] = []
@@ -560,7 +593,23 @@ function checkPaths(root: string) {
     PLUGIN_MANIFEST: join(root, 'packages/knowledge-hub/dataset/plugin/.claude-plugin/plugin.json'),
     BATCH_ENGINE_FILE: join(DOCS_DIR, 'reference/batch-engine.mdx'),
     CLI_CONFIG: join(root, 'apps/pair-cli/config.json'),
+    AGENTS_DIR: join(root, 'packages/knowledge-hub/dataset/.agents'),
   }
+}
+
+/** `name:` and `tools:` from an agent definition's YAML frontmatter. */
+function readAgentFrontmatter(dir: string): { name: string; tools: string }[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.md'))
+    .sort()
+    .map(f => {
+      const src = readFileSync(join(dir, f), 'utf-8')
+      return {
+        name: /^name:\s*(.+)$/m.exec(src)?.[1]?.trim() ?? f.replace(/\.md$/, ''),
+        tools: /^tools:\s*(.+)$/m.exec(src)?.[1]?.trim() ?? '',
+      }
+    })
 }
 
 /**
@@ -568,15 +617,20 @@ function checkPaths(root: string) {
  * from the registries rather than trusted, so renaming a target without touching the page
  * fails here instead of leaving a doc pointing at a directory nobody gets.
  */
-function batchEngineErrors(paths: { BATCH_ENGINE_FILE: string; CLI_CONFIG: string }): string[] {
+function batchEngineErrors(paths: {
+  BATCH_ENGINE_FILE: string
+  CLI_CONFIG: string
+  AGENTS_DIR: string
+}): string[] {
   if (!existsSync(paths.BATCH_ENGINE_FILE)) return []
   const cliConfig = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
     asset_registries: Record<string, { targets: { path: string }[] }>
   }
-  return checkBatchEnginePaths(
-    cliConfig.asset_registries,
-    readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8'),
-  )
+  const doc = readFileSync(paths.BATCH_ENGINE_FILE, 'utf-8')
+  return [
+    ...checkBatchEnginePaths(cliConfig.asset_registries, doc),
+    ...checkBatchEngineAgents(readAgentFrontmatter(paths.AGENTS_DIR), doc),
+  ]
 }
 
 export function runAllChecks(root: string): RunResult {

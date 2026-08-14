@@ -10,7 +10,7 @@ Accepted
 
 ## Context
 
-- The agent execution layer's orchestrator (`.claude/workflows/implement-batch.js`, ADL 2026-07-11-agent-execution-layer) consumes machine return-value schemas (review verdicts, severities, finding fields) that must mirror the KB markdown templates (`code-review-template.md`, `pr-template.md`, ...). Hand-rolled schemas drifted from the templates (verdict vocabulary 2-vs-4, severity sets); the interim fix loosened the schemas to free strings.
+- The agent execution layer's orchestrator (`.claude/workflows/pair-implement-batch.js`, ADL 2026-07-11-agent-execution-layer) consumes machine return-value schemas (review verdicts, severities, finding fields) that must mirror the KB markdown templates (`code-review-template.md`, `pr-template.md`, ...). Hand-rolled schemas drifted from the templates (verdict vocabulary 2-vs-4, severity sets); the interim fix loosened the schemas to free strings.
 - The team authors only human-friendly markdown — no JSON authoring should be required to keep the machine contract in sync.
 - Constraint: the Workflow sandbox has **no filesystem access** — the orchestrator script cannot read or hash a template at runtime; any file work must happen inside a spawned agent.
 - Emerged from the 2026-07-11 orchestrator dogfood (story #292, epic #206).
@@ -31,7 +31,7 @@ Accepted
 
 ### Option 3: AI-generated `contract.json`, cache-by-hash, loose fallback (chosen)
 
-- **Description**: A `contract-generator` agent (has FS + AI) reads the template and derives a `*.contract.json` (vocabulary + enum-locked JSON Schema). The deterministic half (sha256 hashing, cache decision fresh/stale/missing/invalid, validation, `$meta` stamping) lives in `.claude/workflows/contracts/ensure-contract.mjs`. The orchestrator's phase 0 ("ensure-contract") spawns the agent per template spec; unchanged template hash → the cached contract is reused with no regeneration; malformed/failed contract → the workflow falls back to the loose skeleton schema and reports it — the run never breaks.
+- **Description**: A `contract-generator` agent (has FS + AI) reads the template and derives a `*.contract.json` (vocabulary + enum-locked JSON Schema). The deterministic half (sha256 hashing, cache decision fresh/stale/missing/invalid, validation, `$meta` stamping) lives in `.claude/workflows/pair-contracts/ensure-contract.mjs`. The orchestrator's phase 0 ("ensure-contract") spawns the agent per template spec; unchanged template hash → the cached contract is reused with no regeneration; malformed/failed contract → the workflow falls back to the loose skeleton schema and reports it — the run never breaks.
 - **Pros**: Markdown stays the single source of truth; the AI adapts to reformatting and restructuring (that is why it replaces a parser); deterministic across runs via the hash cache; per-template and reusable (`code-review` → `code-review.contract.json`, `pr` → `pr.contract.json`, ...).
 - **Cons**: One AI generation per template change (or per fresh clone); two validators exist (canonical in `ensure-contract.mjs`, a minimal consumer-side guard duplicated in the sandboxed workflow, which cannot import modules).
 
@@ -39,7 +39,7 @@ Accepted
 
 Option 3. Additional calls within it:
 
-- **Contract artifacts are git-ignored** (`.claude/workflows/contracts/.gitignore`), not committed: they are a regenerable derived cache. Committing them would require mutating the main working tree during orchestrator runs (violating the execution layer's isolation invariant) and would force template PRs to remember to regenerate. The cost — one AI generation per clone or template change — is negligible.
+- **Contract artifacts are git-ignored** (`.claude/workflows/pair-contracts/.gitignore`), not committed: they are a regenerable derived cache. Committing them would require mutating the main working tree during orchestrator runs (violating the execution layer's isolation invariant) and would force template PRs to remember to regenerate. The cost — one AI generation per clone or template change — is negligible.
 - **Control flow stays value-agnostic**: the orchestrator converges on `actionable.length === 0` + `nonActionable`, never on specific verdict/severity strings. Enum-locking lives only in the generated schema (safe, because it regenerates with the template); the fallback skeleton stays loose.
 - **Orchestration-only fields** (`needsHumanDecision`, `nonActionable`) have no template counterpart and are preserved byte-identical from the skeleton — the generator only tightens template-mirroring fields.
 - **Reviewer prompt vocabulary** (severities, verdict options) is threaded from the generated contract, with the current KB wording as fallback.
@@ -50,7 +50,7 @@ Option 3. Additional calls within it:
 
 - Editing a KB template can no longer drift the workflow: the hash mismatch forces regeneration, and the vocabulary the agents see always comes from the template.
 - The team keeps authoring only markdown; no JSON maintenance, no parser maintenance.
-- Pattern reusable for any template a workflow consumes; adding one = one entry in `CONTRACT_SPECS` (documented in `implement-batch.js` for `pr-template.md`).
+- Pattern reusable for any template a workflow consumes; adding one = one entry in `CONTRACT_SPECS` (documented in `pair-implement-batch.js` for `pr-template.md`).
 - The run degrades gracefully (loose fallback + reported `fallback-loose` status) instead of failing.
 
 ### Trade-offs and Limitations
@@ -62,8 +62,12 @@ Option 3. Additional calls within it:
 ## Adoption Impact
 
 - No adoption file changes: the execution layer is opt-in, lives under `.claude/`, and is not part of the shipped dataset/KB.
-- New components: `.claude/agents/contract-generator.md`, `.claude/workflows/contracts/ensure-contract.mjs` (+ tests), phase 0 in `.claude/workflows/implement-batch.js`.
+  **Amended by #219** (`decision-log/2026-08-13-the-agent-execution-layer-ships.md`): the layer — the workflows AND the agent
+  definitions they dispatch to, this generator included — now ships in the dataset and installs into every adopter's `.claude/`.
+  The paths in this record were renamed by that story: `contracts/` → `pair-contracts/`, `implement-batch.js` →
+  `pair-implement-batch.js`, `contract-generator.md` → `pair-contract-generator.md`; the citations above are updated in place.
+- New components: `.claude/agents/pair-contract-generator.md`, `.claude/workflows/pair-contracts/ensure-contract.mjs` (+ tests), phase 0 in `.claude/workflows/pair-implement-batch.js`.
 
 ## Related Changes
 
-This branch also bundles an unrelated-but-small orchestrator feature: a per-story `notes` field (`STORIES[].notes` in `implement-batch.js`), a free-text scope directive threaded verbatim into the implement and PR prompts, overriding the issue body where they conflict (e.g. "resolve all findings in ONE PR, do not split"). It ships alongside the contract work rather than as a separate story because it was needed to drive this same story's own batch run; noted here so a reviewer reading only this ADR knows it is deliberate, not scope creep.
+This branch also bundles an unrelated-but-small orchestrator feature: a per-story `notes` field (`STORIES[].notes` in `pair-implement-batch.js`), a free-text scope directive threaded verbatim into the implement and PR prompts, overriding the issue body where they conflict (e.g. "resolve all findings in ONE PR, do not split"). It ships alongside the contract work rather than as a separate story because it was needed to drive this same story's own batch run; noted here so a reviewer reading only this ADR knows it is deliberate, not scope creep.

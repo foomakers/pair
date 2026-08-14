@@ -1,5 +1,9 @@
 export const meta = {
-  name: 'refine-batch',
+  // The registry keys a workflow by `meta.name`, not by its filename, so the `pair-` prefix
+  // belongs here too: an adopter who has a `refine-batch` of their own would otherwise collide
+  // with this one, under an undefined winner. NOTE: no apostrophes in a comment inside `meta`
+  // — the pure-literal guard scans this block character by character and reads one as a string.
+  name: 'pair-refine-batch',
   description:
     'Drive a batch of backlog cards to Ready in parallel: classify-only (matrix + risk tag), full refinement, or read-only triage. Writes to the PM tool only — never to the repo.',
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
@@ -22,6 +26,28 @@ export const meta = {
 //     it is Ready, a duplicate, or blocked, WITHOUT writing anything.
 // Splitting them means the mechanical majority runs at low effort and full width
 // instead of being paced by the few cards that need real thought.
+//
+// ── Why this workflow carries NEITHER of implement-batch's two knobs (#219) ─
+// This file ships to adopters alongside `pair-implement-batch.js`, so the difference is
+// deliberate and stated here rather than left for a reader to infer:
+//
+//   NO parallelism cap (AC6). The cap exists on the implement engine because a card there
+//   OCCUPIES a working tree: N cards = N worktrees, N checkouts, N `pnpm install`s, N agents
+//   doing real CPU work, and the machine is the constraint. A card here costs one PM-tool API
+//   round trip and touches no repo file at all — the fan-out is bounded by the tracker's rate
+//   limit, not by local resources, and throttling it would only make a batch slower. If that
+//   ever changes (a tracker that rate-limits hard), add the cap here the same way: inside the
+//   file, because the sandbox `pipeline`/`parallel` primitives are unbounded by construction.
+//
+//   NO `args.pipeline` (AC1). The implement engine was generalized because its prompts named
+//   pair skills for steps that EVERY project performs under some name (implement, open a PR,
+//   review). This workflow's prompts name `/pair-capability-classify`,
+//   `/pair-process-refine-story` and `/pair-process-plan-tasks` — and those are not generic
+//   steps with a local equivalent, they ARE pair's refinement method: the classification
+//   matrix, the Given-When-Then Draft->Ready path, the AC-coverage table. Swapping the skill
+//   name would leave the prompts describing artifacts the substitute does not produce, so a
+//   `pipeline` key here would be configuration that cannot actually be honoured. Generalizing
+//   this workflow means generalizing the method, which is a separate decision, not a knob.
 
 function parseArgs(raw) {
   let a = raw
