@@ -35,7 +35,7 @@ This context captures, manages, and disseminates operational instructions, best 
 | Term | Definition |
 | ---- | ---------- |
 | Guideline | A reusable standard or best practice documented in the knowledge base |
-| How-to | An orchestration document that composes skills into a phase-driven workflow |
+| How-to | An operational instruction describing *how* the assistant executes a given task, so the workflow is transparent and repeatable |
 | Adoption file | A project-specific record of a decision (architecture, tech-stack, way-of-working) |
 
 ## Quality Attributes
