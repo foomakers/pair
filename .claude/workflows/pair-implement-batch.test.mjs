@@ -1487,6 +1487,76 @@ test('US-219 AC5: every step that can push carries an explicit no-merge instruct
   }
 })
 
+// AC5 + AC7 — the never-merge invariant asserted over HOSTILE input, not only benign.
+// The two tests above iterate prompts built from `{ id:'292', title:'T', branch:'feat/#292-x' }`,
+// input that could never break the invariant. The card fields are interpolated VERBATIM into
+// command text a Bash-capable agent then runs, so a caller-supplied value carries the
+// authority of the command line it lands on: `branch` reaches `git worktree add … -B <branch>
+// <base>`, and `id` reaches `git worktree remove --force <root>/<id>-review`. Presence checks
+// do not constrain either. These drive the two concrete escapes and assert the engine fails
+// LOUDLY (AC7) BEFORE any agent is dispatched — no prompt, no worktree, no merge.
+test('US-219 AC5: a branch carrying a shell-chained `gh pr merge` THROWS before any dispatch', async () => {
+  const hostile = { id: '1', title: 't', branch: 'x origin/main; gh pr merge 432 --squash' }
+  const calls = []
+  let msg = ''
+  try {
+    await runWorkflow({
+      args: { stories: [hostile] },
+      dispatch: (prompt, opts) => {
+        calls.push({ prompt, opts })
+        return stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } })(prompt, opts)
+      },
+    })
+    assert.fail('a branch value carrying a merge command was accepted')
+  } catch (e) {
+    msg = e.message
+  }
+  assert.match(msg, /branch/i, 'the error names the offending field')
+  assert.match(msg, /#1|cards\[0\]|stories\[0\]/, 'the error names the offending card')
+  assert.equal(calls.length, 0, 'no agent may be dispatched with a hostile branch')
+})
+
+test('US-219 AC5: `base` is validated like `branch` — it lands on the same command line', async () => {
+  const msg = await expectThrow({
+    args: { stories: [{ id: '1', title: 't', branch: 'b', base: 'origin/main; gh pr merge 432 --squash' }] },
+  })
+  assert.match(msg, /base/i)
+})
+
+test('US-219 AC7: an id that escapes the worktree root THROWS (`--force` remove is not recoverable)', async () => {
+  const msg = await expectThrow({ args: { stories: [{ id: '../../scratch', title: 't', branch: 'b' }] } })
+  assert.match(msg, /id/i, 'the error names the offending field')
+  assert.match(msg, /worktree|path segment/i, 'the error says why: the id is a path segment')
+})
+
+test('US-219 AC7: title and notes reject command substitution rather than carrying it into a prompt', async () => {
+  const t = await expectThrow({ args: { stories: [{ id: '1', title: 'x `gh pr merge 432`', branch: 'b' }] } })
+  assert.match(t, /title/i)
+  const n = await expectThrow({
+    args: { stories: [{ id: '1', title: 't', branch: 'b', notes: 'scope $(gh pr merge 432)' }] },
+  })
+  assert.match(n, /notes/i)
+})
+
+test('US-219 AC7: real-world card values keep working — validation rejects injection, not punctuation', async () => {
+  const { result } = await runWorkflow({
+    args: {
+      stories: [
+        {
+          id: '#234',
+          title: 'PR state flow (gate≠review) + pair review as a required check',
+          branch: 'feature/US-234-pr-state-flow',
+          base: 'feature/US-219-batch-engine',
+          notes: 'Scope: only the engine; do NOT touch the CLI. Keep #401 semantics.',
+        },
+      ],
+    },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch.length, 1)
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
 // AC4 — one fresh subagent per card per step (ADR-017 §3). Context isolation is an
 // architectural invariant, so the pin is on the SHAPE of the dispatch: N distinct
 // agent() calls, never one context handed a second story to iterate over.

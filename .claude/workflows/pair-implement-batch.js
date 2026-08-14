@@ -31,7 +31,10 @@ export const meta = {
 //     base?,                      // the branch this card STACKS on (default: pipeline.baseBranch)
 //     notes?,                     // scope directive threaded into implement + PR
 //     prNumber?,                  // resume an existing PR straight into the review<->fix loop
-//   }],
+//   }],                           // every card VALUE is validated, not just its key set: id is one
+//                                 // path segment, branch/base are git refs, title/notes are plain
+//                                 // text. They reach shell command text an agent runs, so a value
+//                                 // carrying shell syntax or `..` is REJECTED, never quoted.
 //   maxParallelism?,              // integer >= 1; absent = unbounded fan-out
 //   severityFloor?,               // findings below it are carried, not fixed
 //   model?,                       // fable | haiku | sonnet | opus
@@ -164,6 +167,37 @@ function parseBatchArgs(raw) {
           `All three are required — id + title feed the prompts, branch feeds \`git worktree add\`; ` +
           `an absent one would reach a shell command as \`undefined\`.`,
       )
+    // Presence is not validity. Every field below is interpolated VERBATIM into command text a
+    // Bash-capable agent then runs — `git worktree add <root>/<id> -B <branch> <base>` and
+    // `git worktree remove --force <root>/<id>-review` — so a card value carries the authority
+    // of the command line it lands on. Two escapes reachable through the DOCUMENTED contract:
+    // `branch: 'x origin/main; gh pr merge 432 --squash'` renders a merge instruction into the
+    // implement prompt, defeating AC5's hardest guarantee; `id: '../../scratch'` aims a
+    // `--force` remove outside the worktree root, which is not recoverable. Rejected rather
+    // than quoted: an escaped value still RUNS, and the caller who typed something that was
+    // never a branch never learns it — the #401 direction, on the one input that can merge.
+    const constrain = (value, key, ok, what) => {
+      const v = String(value ?? '').trim()
+      if (!v) return // absent/blank is handled above (required) or falls back to a default (optional)
+      if (!ok(v))
+        throw new Error(
+          `implement-batch: cards[${i}] (#${id}) has ${key} ${JSON.stringify(v)}, which is not ${what}. ` +
+            `Card fields are interpolated verbatim into the shell commands the agents run, so a value carrying ` +
+            `shell syntax or a path escape would EXECUTE rather than name a ${key}. Rejected, never quoted.`,
+        )
+    }
+    // Git ref charset. Never a leading `-` (the shell reads it as a flag) and never `..`
+    // (a traversal in a path position, and illegal in a ref anyway).
+    const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..')
+    // Free prose, minus the two forms that become a COMMAND when an agent puts the value on a
+    // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
+    // card title ("PR state flow (gate≠review) + …") must keep working.
+    const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
+    constrain(id, 'id', v => /^[A-Za-z0-9._-]+$/.test(v) && !v.includes('..'), 'a single safe path segment (it becomes the worktree directory)')
+    constrain(s.branch, 'branch', isRef, 'a valid git ref')
+    constrain(s.base, 'base', isRef, 'a valid git ref')
+    constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
+    constrain(s.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
     // `prNumber` decides the ENTIRE lifecycle: an integer re-enters the review loop on the
     // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
     // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
