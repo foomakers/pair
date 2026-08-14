@@ -63,10 +63,14 @@ describe.each(PAIRS)('$what: dataset and root copy are one artifact', ({ dataset
     expect(listFiles(datasetDir).length).toBeGreaterThan(0)
   })
 
-  it('the root copy carries exactly the dataset files, no more and no fewer', () => {
-    // A file present only at the root is a change that ships to nobody; one present only
-    // in the dataset is a change this repo is not actually running.
-    expect(listFiles(installedDir)).toEqual(listFiles(datasetDir))
+  it('the root copy carries every dataset file — the dataset is the shipped subset', () => {
+    // Direction matters. Every shipped file must exist at the root, or this repo is not
+    // running what it ships. The reverse is NOT required: `pair-analyze-pr-batch.js` runs
+    // here and is deliberately unshipped (it invokes a personal skill — see the dataset
+    // README), so a root-only file is a deliberate exclusion, not drift.
+    const shipped = listFiles(datasetDir)
+    const live = new Set(listFiles(installedDir))
+    expect(shipped.filter(f => !live.has(f))).toEqual([])
   })
 
   it('every file is byte-identical', () => {
@@ -106,6 +110,48 @@ describe('US-219 AC3 — a workflow ships with the agents it dispatches to', () 
     expect(
       missing,
       `workflows spawn agent types the dataset does not ship: ${missing.join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('every /skill a shipped workflow prompt invokes has a shipped definition', () => {
+    // Found in review of #432: `pair-analyze-pr-batch.js` told every agent to "invoke the
+    // /analyze-pr skill", which exists in neither the dataset nor this repo — it was a
+    // personal, user-level skill. An adopter would install a workflow whose agents are sent
+    // to a skill that does not exist; they would fabricate the output or die, while the run
+    // reported the paths it wrote.
+    //
+    // The AC3 guard above scans `agentType:` only, and this file spawns `general-purpose`,
+    // which that guard exempts — so the same half-installed failure reappeared one level up.
+    const skillsRoot = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
+    const shipped = new Set<string>()
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (e.name.startsWith('.')) continue
+        if (e.isDirectory()) {
+          shipped.add(e.name)
+          walk(join(dir, e.name))
+        }
+      }
+    }
+    walk(skillsRoot)
+    expect(shipped.size, 'no shipped skills found — the scan broke').toBeGreaterThan(0)
+
+    // A skill INVOCATION, as these prompts actually write one: bolded, `**/name**`. Matching a
+    // bare `/word` would sweep up path fragments (`/pair-cli`, `/pair-worktrees`) and make the
+    // guard noise instead of signal.
+    const invoked = new Set<string>()
+    for (const file of listFiles(workflowsDir).filter(f => f.endsWith('.js'))) {
+      const src = readFileSync(join(workflowsDir, file), 'utf-8')
+      for (const m of src.matchAll(/\*\*\/([a-z][a-z0-9-]+)\*\*/g)) invoked.add(m[1]!)
+    }
+
+    const missing = [...invoked].filter(n => {
+      const bare = n.replace(/^pair-(process|capability|next)-/, '')
+      return !shipped.has(bare) && !shipped.has(n)
+    })
+    expect(
+      missing,
+      `shipped workflows invoke skills the dataset does not ship: ${missing.join(', ')}`,
     ).toEqual([])
   })
 })

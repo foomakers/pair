@@ -94,6 +94,12 @@ jobs:
         run: pnpm skills:conformance
       - name: Run duplication check
         run: pnpm dup:check
+      # The batch engine ships as a product artifact (#219). Its dry-run suite runs inside
+      # `pnpm quality-gate`, which only `release.yml` invokes — so without this step a commit
+      # breaking the engine passes every required check on its PR and surfaces at release.
+      # ~0.5s, no build needed.
+      - name: Run workflow dry-run tests
+        run: pnpm workflows:test
       - name: Install Playwright browsers
         run: |
           pnpm --filter @pair/brand exec playwright install --with-deps chromium

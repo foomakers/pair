@@ -93,6 +93,20 @@ export const meta = {
 // stories all failed. An orchestrator asked to drive stories and driving none
 // must fail, not report success. An EXPLICIT empty list stays a legal no-op:
 // a caller that computed "nothing to do" is not making a mistake.
+
+// Every caller-facing object validates its key SET, not just the keys it recognises. A
+// misspelled key that is merely ignored runs the batch on values nobody chose and reports
+// success — the #401 direction — and the shipped docs promise the opposite in as many words.
+function rejectUnknownKeys(obj, allowed, where) {
+  for (const k of Object.keys(obj ?? {}))
+    if (!allowed.includes(k))
+      throw new Error(
+        `implement-batch: unknown \`${where}.${k}\`; expected one of ${allowed.join(', ')}. ` +
+          `An unrecognised key would be dropped in silence and the run would use the default ` +
+          `while the caller believed otherwise.`,
+      )
+}
+
 function parseBatchArgs(raw) {
   let a = raw
   if (typeof a === 'string') {
@@ -149,6 +163,7 @@ function parseBatchArgs(raw) {
   // undefined and the floor was silently ignored while the caller believed it was set.
   // A batch ran with Minors still blocking and reported escalation as if the floor had
   // been honoured. Every option must be read from the parsed object, once.
+  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'pipeline', 'maxParallelism'], 'args')
   return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
 }
 const PARSED = parseBatchArgs(args)
@@ -186,8 +201,15 @@ function resolvePipeline(raw) {
       `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
         `Omit it entirely to run on pair's defaults.`,
     )
+  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate'], 'args.pipeline')
   const str = (v, key, fallback) => {
     if (v === undefined) return fallback
+    // `String(v)` on an object yields '[object Object]', which interpolates into a prompt as
+    // a skill name no agent can follow. Reject the type rather than coerce it.
+    if (typeof v !== 'string')
+      throw new Error(
+        `implement-batch: \`args.pipeline.${key}\` must be a string; received ${typeof v}.`,
+      )
     const t = String(v).trim()
     // An empty override is the dangerous case: it would interpolate as an empty string and
     // produce `cd /` or a bare `git worktree add`. Reject it rather than fall back silently,
@@ -195,15 +217,10 @@ function resolvePipeline(raw) {
     if (!t) throw new Error(`implement-batch: \`args.pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`)
     return t
   }
+  rejectUnknownKeys(raw.skills, Object.keys(PIPELINE_DEFAULTS.skills), 'args.pipeline.skills')
   const skills = { ...PIPELINE_DEFAULTS.skills }
-  for (const [k, v] of Object.entries(raw.skills ?? {})) {
-    if (!(k in PIPELINE_DEFAULTS.skills))
-      throw new Error(
-        `implement-batch: unknown \`args.pipeline.skills.${k}\`; expected one of ${Object.keys(PIPELINE_DEFAULTS.skills).join(', ')}. ` +
-          `An unrecognised key would be dropped in silence and the run would use the default while the caller believed otherwise.`,
-      )
+  for (const [k, v] of Object.entries(raw.skills ?? {}))
     skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k])
-  }
   return {
     skills,
     worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot),
@@ -426,21 +443,21 @@ const PROBE_SCHEMA = {
 // The KB markdown template is the single source of truth; the machine contract
 // is DERIVED from it by an AI generator agent (this sandbox has no filesystem
 // access, so all file work — hashing, cache check, generation, validation —
-// happens in the agent via `.claude/workflows/contracts/ensure-contract.mjs`).
+// happens in the agent via `.claude/workflows/pair-contracts/ensure-contract.mjs`).
 // Cache-by-hash: the contract stores the template's sha256; unchanged hash →
 // reuse (no regeneration), changed hash → regenerate. Malformed/failed contract
 // → the loose skeleton above is used as-is (the run never breaks) and the
 // fallback is reported in the run result (`contracts[].status: 'fallback-loose'`).
 // The pattern is per-template and reusable: add a spec below to contract another
 // template — e.g. { name: 'pr', template: '.../pr-template.md', contract:
-// '.claude/workflows/contracts/pr.contract.json', skeleton: PR_SCHEMA, mirrors: ... }
+// '.claude/workflows/pair-contracts/pr.contract.json', skeleton: PR_SCHEMA, mirrors: ... }
 // once the PR return value grows beyond a handle. See
 // ADR-016 (adr-016-ai-generated-template-contracts.md).
 const CONTRACT_SPECS = [
   {
     name: 'code-review',
     template: `.pair/knowledge/guidelines/collaboration/templates/${PIPELINE.reviewTemplate}`,
-    contract: '.claude/workflows/contracts/code-review.contract.json',
+    contract: '.claude/workflows/pair-contracts/code-review.contract.json',
     skeleton: LOOSE_REVIEW_SCHEMA,
     mirrors:
       'verdict ← the `## Verdict`-line options; findings[].severity ← the `Findings by severity` severity levels',
@@ -479,8 +496,8 @@ function usableSchema(contract) {
 
 async function ensureContract(spec) {
   const res = await agent(
-    `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
-    { agentType: 'contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
+    `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/pair-contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
+    { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
   return {
@@ -602,14 +619,14 @@ async function driveStory(story) {
     // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
     const impl = await agentRetry(
       `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following ${SK.implement}, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with ${SK.verifyQuality} (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with ${SK.recordDecision} rather than leaving it in a commit message. On completion write the story checkpoint via ${SK.checkpoint} $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
-      withModel({ agentType: 'implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
+      withModel({ agentType: 'pair-implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
     )
     if (!impl) return { story, status: 'failed-implement' }
 
     // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
     pr = await agentRetry(
       `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (${SK.checkpoint} $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **${SK.publishPr}**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
-      { agentType: 'implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
+      { agentType: 'pair-implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
     )
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
   }
@@ -702,7 +719,7 @@ async function driveStory(story) {
   if (pr?.prNumber) {
     const probe = await agent(
       `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY carry the first-review comment? Match it DETERMINISTICALLY, not by judgment: fetch the PR comments via \`gh\` and report whether ANY comment's raw body contains the EXACT marker substring \`${firstReviewMarker}\` (the first review always emits this hidden marker verbatim; a minimized/outdated comment still counts — its raw body still contains the marker). Do NOT infer from a comment's structure or tone — it is a plain substring match. Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
-      { agentType: 'implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
+      { agentType: 'pair-implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
     )
     // #373 finding 4: a failed / malformed / schema-invalid probe return yields BOTH signals
     // false (via `?.x === true`), so round-0 falls through to a POSTED first review. This
@@ -748,7 +765,7 @@ async function driveStory(story) {
       // shortens the silent stretches between utterances — so if a future change makes the
       // narration reliable, restoring 'xhigh' is legitimate: it costs review depth, which is
       // the whole point of this gate. Do not read this line as "xhigh causes stalls".
-      withModel({ agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
+      withModel({ agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
     )
     // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent
     // dies, and `review?.findings ?? []` then yields zero findings — which the
@@ -815,7 +832,7 @@ async function driveStory(story) {
           : `No prior review working log exists (a re-review on a resumed PR whose log was never written or was pruned) — escalate from the inline findings directly. ${flushMinimize(pr.prNumber)} `
         await agent(
           `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} ${logClause}post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing${cycleHasRemediation ? ' the rounds so far (per finding: what was attempted + current state) and' : ''} the still-open actionable findings: ${JSON.stringify(actionable)}.${cycleHasRemediation ? ' Do NOT delete the log — it is the continuation anchor for this cycle.' : ''} Do NOT merge.`,
-          { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
+          { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
       }
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
@@ -828,7 +845,7 @@ async function driveStory(story) {
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
     const fix = await agentRetry(
       `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. Follow ${SK.implement} for the change itself (test-first where a finding describes a defect), verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
-      withModel({ agentType: 'implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
+      withModel({ agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
     // its path in the return so the human / next resume can find (and clean) it.
@@ -841,7 +858,7 @@ async function driveStory(story) {
       // guard IS load-bearing because that path can be reached on a silent round-0 re-review).
       await agent(
         `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
-        { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
+        { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
       )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
     }
@@ -854,7 +871,7 @@ async function driveStory(story) {
   if (cycleHasRemediation)
     await agent(
       `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: render EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) as ONE MARKDOWN TABLE — columns \`round | severity | location | resolution | commit\` — one row per finding, one line per row. Then a second short table for the accepted/non-actionable findings and their dispositions (${JSON.stringify(accepted)}), and the final verdict (review clean) as a single line. ${TEXT_SHAPE} This comment is the merge-gate reader's entire view of the cycle, so it must stay COMPLETE — no finding dropped, no silent truncation; if one does not fit a row, give it a single line beneath the table. THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments, any manual out-of-band rework/re-review comments, AND any earlier final-remediation/synthesis comment left by a prior convergence of this same cycle (a converged-but-unmerged PR that was re-run, found new findings and re-converged — do NOT minimize the first review comment) — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
-      { agentType: 'implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
+      { agentType: 'pair-implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
     )
 
   // STOP at the merge boundary — human decides the merge.

@@ -18,7 +18,25 @@ The engine is a workflow script driven by Claude Code's orchestration primitives
 subagents by type and runs their steps in parallel. No other tool executes it today.
 
 **Under any other tool the files are inert.** They are never read, never executed, and cost
-nothing but a few kilobytes on disk. Nothing errors, and no configuration turns them off.
+nothing but a few kilobytes on disk. Nothing errors.
+
+## What the agent layer can do
+
+Under Claude Code they are not inert, and it is worth knowing exactly what arrives.
+
+`.claude/agents/` declares three subagents with real tool access: `pair-implementer` holds
+`Read, Edit, Write, Bash, Grep, Glob, Skill`, and `pair-reviewer` holds `Bash`. So after an
+`install` or `update`, your project contains definitions that — when you invoke a batch — can
+create worktrees, write files, commit, push branches and open pull requests under your
+credentials.
+
+They do nothing on their own. Nothing runs until you start a batch.
+
+**Merge is never among the authority granted.** No configuration enables an autonomous merge,
+on any path.
+
+Every shipped name carries a `pair-` prefix — files and agent names both — so an existing
+`.claude/agents/reviewer.md` of your own is never overwritten by one of ours.
 
 They install anyway rather than being gated on the tool detected at install time, because that
 detection is a snapshot: a user who adopts Claude Code later would need a full re-install rather

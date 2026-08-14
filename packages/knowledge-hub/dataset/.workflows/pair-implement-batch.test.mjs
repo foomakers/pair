@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 // The workflow file is a sandbox script (top-level await + return, ambient
 // `args`/`agent`/`parallel`), not importable ESM. Evaluate it as an async
 // function body — same shape the Workflow harness gives it.
-const SRC = readFileSync(new URL('./implement-batch.js', import.meta.url), 'utf8').replace(
+const SRC = readFileSync(new URL('./pair-implement-batch.js', import.meta.url), 'utf8').replace(
   /^export /gm,
   '',
 )
@@ -43,8 +43,8 @@ async function runWorkflow({ args, dispatch }) {
 // Happy-path stub: dispatch on agentType/phase; contract behavior injectable.
 function stdDispatch({ contractResult, review = { verdict: 'Approved', findings: [] } } = {}) {
   return (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return contractResult
-    if (opts.agentType === 'reviewer') return review
+    if (opts.agentType === 'pair-contract-generator') return contractResult
+    if (opts.agentType === 'pair-reviewer') return review
     if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
     return { fixed: true } // fix step
@@ -93,7 +93,7 @@ test('valid contract: reviewer schema derives from contract.json (AC1) and cache
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract } }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.deepEqual(rev.opts.schema, contract.schema)
   assert.ok(rev.prompt.includes('Blocker'), 'severity vocabulary threaded from the contract')
   assert.ok(rev.prompt.includes('Rework'), 'verdict vocabulary threaded from the contract')
@@ -109,7 +109,7 @@ test('reviewer prompt pins the nonActionable-is-not-a-scope-filter correction', 
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(
     rev.prompt.includes('originally stated scope'),
     'reviewer prompt keeps the scope-filter correction',
@@ -133,10 +133,10 @@ test('per-step effort + PR model override are wired into agent opts', async () =
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
-  const contract = calls.find(c => c.opts.agentType === 'contract-generator')
+  const contract = calls.find(c => c.opts.agentType === 'pair-contract-generator')
   const impl = calls.find(c => c.opts.phase === 'Implement')
   const pr = calls.find(c => c.opts.phase === 'PR')
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(contract.opts.effort, 'low')
   assert.equal(impl.opts.effort, 'high')
   // Was 'xhigh' until the reviewer's reasoning gaps started outrunning the supervisor's
@@ -153,7 +153,7 @@ test('malformed contract: loose fallback schema, run never breaks (AC4)', async 
       contractResult: { status: 'regenerated', contract: { schema: { type: 'object' } } },
     }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(rev.opts.schema.properties.verdict.type, 'string')
   assert.equal(
     rev.opts.schema.properties.verdict.enum,
@@ -170,7 +170,7 @@ test('generator failure (no return): loose fallback, run never breaks (AC4)', as
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: undefined }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(rev.opts.schema.properties.verdict.enum, undefined)
   assert.deepEqual(result.contracts, [{ name: 'code-review', status: 'fallback-loose' }])
 })
@@ -200,7 +200,7 @@ test('contract with usable schema but missing canonical vocabulary keys: prompt 
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract } }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   // Schema is still enum-locked from the (structurally usable) contract...
   assert.deepEqual(rev.opts.schema, contract.schema)
   // ...but the prompt vocabulary text falls back to the documented defaults,
@@ -245,8 +245,8 @@ test('empty batch: no agent calls at all (contracts skipped too)', async () => {
 test('review noise policy: first review posts, re-review is silent, fix logs to working, convergence synthesizes ONE remediation', async () => {
   let revCall = 0
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') {
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') {
       revCall++
       // round 0: one actionable finding; round 1 (re-review): clean → converge
       return revCall === 1
@@ -260,7 +260,7 @@ test('review noise policy: first review posts, re-review is silent, fix logs to 
   }
   const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
 
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 2, 'first review + one re-review')
   assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'), 'first review is posted on the PR')
   assert.ok(reviews[1].prompt.includes('do NOT post any PR comment'), 're-review posts no comment')
@@ -285,7 +285,7 @@ test('clean first review: no remediation comment, no synthesis step (first-revie
   })
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis when first review is already clean')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('fix:')), 'no fix round when nothing actionable')
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 1, 'exactly one (first) review')
   assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'))
 })
@@ -293,8 +293,8 @@ test('clean first review: no remediation comment, no synthesis step (first-revie
 test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the PR with the open findings, no synthesis', async () => {
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] } // never converges
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] } // never converges
     if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
     if (opts.label?.startsWith('flush:')) return 'flushed'
@@ -325,9 +325,9 @@ const RESUME_STORY = { id: '292', title: 'T', branch: 'feat/#292-x', prNumber: 7
 
 test('#373 continuation (resume + existing log): probe runs, round-0 review is SILENT, immediate convergence still synthesizes + deletes (AC1 + immediate-convergence edge)', async () => {
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true } // prior run left a log + first review
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] } // round-0 already clean
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] } // round-0 already clean
     if (opts.label?.startsWith('synth:')) return 'posted'
     return { fixed: true }
   }
@@ -340,7 +340,7 @@ test('#373 continuation (resume + existing log): probe runs, round-0 review is S
   assert.ok(probe, 'a continuation existence-probe runs on resume')
   assert.ok(probe.prompt.includes('.pair/working/reviews/292.md'), 'probe checks the per-story working log')
 
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 1, 'round-0 only (immediate convergence)')
   assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 on a continuation is a SILENT re-review')
   assert.ok(!reviews[0].prompt.includes('This is the FIRST review: POST'), 'no second first-review is posted')
@@ -353,9 +353,9 @@ test('#373 continuation (resume + existing log): probe runs, round-0 review is S
 test('#373 continuation convergence: the ONE synthesis maps ALL runs, minimizes prior flush/manual comments, then deletes the log (AC2 + AC3)', async () => {
   let revCall = 0
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
-    if (opts.agentType === 'reviewer') {
+    if (opts.agentType === 'pair-reviewer') {
       revCall++
       return revCall === 1
         ? { verdict: 'Rework', findings: [{ location: 'a.ts:1', severity: 'Minor', description: 'd', recommendation: 'r' }] }
@@ -380,15 +380,15 @@ test('#373 continuation convergence: the ONE synthesis maps ALL runs, minimizes 
 
 test('#373 resume with NO prior log: round-0 is a FRESH first review (posted), not silenced (prNumber-resume-no-log edge)', async () => {
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: false } // review never ran → no log, no prior first review
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return { fixed: true }
   }
   const { calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
   const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
   assert.ok(probe, 'probe still runs on resume')
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'), 'no log → round-0 posts a fresh first review')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'clean fresh review on resume → no synthesis (cycleHasRemediation stayed false)')
 })
@@ -413,7 +413,7 @@ test('fresh story: the probe runs (guard independent of caller bookkeeping) and 
   )
   // Fresh path outcome unchanged: both signals come back false (no log, no marker),
   // so round-0 is a POSTED first review, not a silent one.
-  const review = calls.find(c => c.opts.agentType === 'reviewer')
+  const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(review, 'a review round ran')
   assert.match(
     review.prompt,
@@ -429,24 +429,24 @@ test('the probe cannot silence a fresh first review even if it returns garbage',
   const { calls } = await runWorkflow({
     args: { stories: [STORY] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator')
+      if (opts.agentType === 'pair-contract-generator')
         return { status: 'cache-hit', contract: validContract() }
       if (opts.label?.startsWith('probe:')) return { nonsense: true }
-      if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
       return { fixed: true }
     },
   })
-  const review = calls.find(c => c.opts.agentType === 'reviewer')
+  const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.match(review.prompt, /post/i, 'a garbage probe return must not silence the first review')
 })
 
 test('#373 escalate documents the manual out-of-band convention (funnel into the same log; next run synthesizes) — AC4', async () => {
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
     if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
     if (opts.label?.startsWith('flush:')) return 'flushed'
@@ -465,13 +465,13 @@ test('#373 resume with NO log but a first review ALREADY on the PR: round-0 is S
   // suppress a second first-review. cycleHasRemediation stays false (no log to continue), so a
   // clean round-0 adds nothing and never tries to synthesize a gone log.
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: true }
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return { fixed: true }
   }
   const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 1, 'round-0 only')
   assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 is a SILENT re-review when a first review already exists on the PR')
   assert.ok(!reviews[0].prompt.includes('This is the FIRST review: POST'), 'no duplicate first-review is posted')
@@ -488,15 +488,15 @@ test('#373 finding 1: resume, NO log + first review already on PR, round-0 ESCAL
   // there is no log to anchor to, it escalates from the inline findings directly.
   const finding = { location: 'x.ts:1', severity: 'Blocker', description: 'design disagreement', recommendation: 'r' }
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: true }
-    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding], needsHumanDecision: true }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding], needsHumanDecision: true }
     if (opts.label?.startsWith('flush:')) return 'flushed'
     return { fixed: true }
   }
   const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
   assert.equal(result.batch[0].status, 'escalate')
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   // TWO reviews, not one: `needsHumanDecision` no longer escalates immediately. It now buys
   // ONE fix round first — measured cost of the old behaviour was six consecutive rounds
   // across two stories that produced reviews and zero commits, because the flag skipped the
@@ -524,9 +524,9 @@ test('#373 finding 4: probe queries BOTH signals and runs at sonnet/low — reli
   // at sonnet (not the cheapest haiku) while staying at low effort. This pins the model choice
   // so a later refactor can't silently drop it back to a tier that mis-runs the tool steps.
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: false }
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return { fixed: true }
   }
   const { calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
@@ -543,15 +543,15 @@ test('#373 finding 1: the first review emits a hidden marker and the probe match
   // over-silencing risk). Instead the first review emits a fixed hidden marker and the probe
   // does a plain EXACT substring match on that same marker.
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: false }
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return { fixed: true }
   }
   const { calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
   const marker = `<!-- pair:first-review #${RESUME_STORY.id} PR#${RESUME_STORY.prNumber} -->`
 
-  const first = calls.find(c => c.opts.agentType === 'reviewer')
+  const first = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(first.prompt.includes(marker), 'the first review emits the exact hidden marker verbatim')
   assert.ok(/HTML comment/i.test(first.prompt) && /invisible/i.test(first.prompt), 'marker is documented as an invisible HTML comment (no visible noise)')
 
@@ -570,8 +570,8 @@ test('#373 finding 3: both escalate-flush prompts carry the shared convention bl
   const maxRoundsFlush = (await runWorkflow({
     args: { stories: [STORY_A] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
       if (opts.label?.startsWith('flush:')) return 'flushed'
@@ -585,9 +585,9 @@ test('#373 finding 3: both escalate-flush prompts carry the shared convention bl
   const designFlush = (await runWorkflow({
     args: { stories: [STORY_B] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
       if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
-      if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
       if (opts.label?.startsWith('flush:')) return 'flushed'
       return { needsHumanDecision: true } // fixer escalates a design disagreement
     },
@@ -612,9 +612,9 @@ test('#373 finding 3: both escalate-flush prompts carry the shared convention bl
 test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging re-review keeps the log, flushes (cycleHasRemediation seeded true), supersedes prior flush, no synth (AC5 on the resume path)', async () => {
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
-    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] } // never converges
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] } // never converges
     if (opts.label?.startsWith('flush:')) return 'flushed'
     return { fixed: true }
   }
@@ -768,8 +768,8 @@ test('a DEAD reviewer is NOT a clean review: the story fails loudly instead of c
   // yielded zero findings, the convergence test read that as "nothing actionable remains"
   // and the batch reported ready-for-merge — a PR that was never reviewed, labelled approved.
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') return null // dies on both the call and its retry
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') return null // dies on both the call and its retry
     if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
     return { fixed: true }
@@ -779,17 +779,17 @@ test('a DEAD reviewer is NOT a clean review: the story fails loudly instead of c
   assert.equal(result.batch[0].status, 'failed-review', 'a dead reviewer never yields ready-for-merge')
   assert.equal(result.batch[0].prNumber, 7, 'the PR handle is still surfaced so the human can pick it up')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no convergence synthesis on a failed review')
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 2, 'the review step is retried exactly once before giving up')
 })
 
 test('a dead authoring step is retried once and the story continues (a 180s supervisor kill no longer costs the card)', async () => {
   let implCalls = 0
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.phase === 'Implement') return ++implCalls === 1 ? null : { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return { fixed: true }
   }
   const { result, calls, logs } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
@@ -841,8 +841,8 @@ test('no `base` keeps the existing behaviour byte-for-byte (origin/main, no stac
 test('MAX_FIX_ROUNDS allows three autonomous fix rounds before escalating', async () => {
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
     if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
     if (opts.label?.startsWith('flush:')) return 'flushed'
@@ -853,7 +853,7 @@ test('MAX_FIX_ROUNDS allows three autonomous fix rounds before escalating', asyn
   assert.equal(result.batch[0].status, 'escalate')
   const fixes = calls.filter(c => c.opts.label?.startsWith('fix:'))
   assert.equal(fixes.length, 3, 'three fix rounds run before the human is involved')
-  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 4, 'first review + one re-review per fix round')
 })
 
@@ -886,8 +886,8 @@ test('the implement and fix steps name the skills that own gating and decisions'
   const finding = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
   let round = 0
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
     if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
     return { fixed: true }
@@ -920,7 +920,7 @@ test('the review step is the review PROCESS skill, and the reviewer is never ask
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(rev.prompt.includes('/pair-process-review'), 'the review follows the process skill')
   assert.ok(rev.prompt.includes('Do NOT read .pair/working/'), 'the reviewer stays blind to the authoring handoff')
 })
@@ -936,7 +936,7 @@ test('the reviewer is forbidden from filing issues and told to resolve debts in 
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer').prompt
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
   assert.ok(/DO NOT FILE NEW ISSUES/.test(rev), 'the ban is stated, in the imperative')
   assert.ok(
     !/file one via \/pair-capability-write-issue/.test(rev),
@@ -958,8 +958,8 @@ test('the fix step is likewise barred from deferring a finding into a new issue'
   const { calls } = await runWorkflow({
     args: { stories: [STORY] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
       return { fixed: true }
@@ -990,7 +990,7 @@ test('total failure is reported as failure, and names the stories that died', as
   const { result } = await runWorkflow({
     args: { stories },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
       // A stalled agent is killed by the supervisor: the thunk throws, and `parallel`
       // resolves it to null. This is the shape the real run produced.
       throw new Error('agent stalled on all 6 attempts (no progress for 180000ms each)')
@@ -1015,9 +1015,9 @@ test('a partial run reports the ratio and names only the stories that died', asy
   const { result } = await runWorkflow({
     args: { stories },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
       if (prompt.includes('story #2')) throw new Error('agent stalled') // one story dies throughout
-      if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
       return { fixed: true }
@@ -1049,7 +1049,7 @@ test('the reviewer runs at high effort, not xhigh, and is told to work in short 
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(rev.opts.effort, 'high', 'xhigh reasoning gaps outrun the supervisor window')
   assert.match(rev.prompt, /PACING \(mandatory/, 'the pacing contract is stated')
   // The measurement that matters: the window is on TEXT, not on tool calls. A prompt that
@@ -1069,8 +1069,8 @@ test('the fix step keeps high effort — it was never the step that stalled', as
   const { calls } = await runWorkflow({
     args: { stories: [STORY] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
       return { fixed: true }
@@ -1112,8 +1112,8 @@ test('a finding AT or ABOVE the floor still blocks and still drives a fix round'
   const { result, calls } = await runWorkflow({
     args: { severityFloor: 'Major', stories: [STORY] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'reviewer')
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
         return round++ === 0 ? { verdict: 'Rework', findings: [MAJOR, MINOR] } : { verdict: 'Approved', findings: [MINOR] }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
@@ -1196,8 +1196,8 @@ test('needsHumanDecision spends one fix round first, then escalates if it still 
   const { result, calls, logs } = await runWorkflow({
     args: { stories: [STORY] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'reviewer') { round++; return { verdict: 'Rework', findings: [f], needsHumanDecision: true } }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') { round++; return { verdict: 'Rework', findings: [f], needsHumanDecision: true } }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
       if (opts.label?.startsWith('flush:')) return 'flushed'
@@ -1216,8 +1216,8 @@ test('a flag raised only AFTER a fix round still escalates on that round', async
   const { result, calls } = await runWorkflow({
     args: { stories: [STORY] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'reviewer')
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
         return { verdict: 'Rework', findings: [f], needsHumanDecision: round++ > 0 }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
@@ -1234,8 +1234,8 @@ test('args.model routes implement, review and fix; absent, each agent keeps its 
   const f = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
   let n = 0
   const dispatch = (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') return n++ === 0 ? { verdict: 'Rework', findings: [f] } : { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') return n++ === 0 ? { verdict: 'Rework', findings: [f] } : { verdict: 'Approved', findings: [] }
     if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
     if (opts.phase === 'PR') return { prNumber: 7 }
     return { fixed: true }
@@ -1272,8 +1272,8 @@ test('an unknown model throws instead of silently running the wrong tier', async
 const shapeDispatch = () => {
   let rev = 0
   return (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-    if (opts.agentType === 'reviewer') {
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') {
       rev++
       return rev === 1
         ? { verdict: 'Rework', findings: [{ location: 'a.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }] }
@@ -1289,7 +1289,7 @@ const shapeDispatch = () => {
 test('the text-shape rule reaches the prompts whose output gets re-read', async () => {
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
   const pr = calls.find(c => c.opts.phase === 'PR')
-  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
   for (const [name, c] of [['PR', pr], ['review', rev], ['synthesis', synth]]) {
     assert.ok(c, `no ${name} call`)
@@ -1299,7 +1299,7 @@ test('the text-shape rule reaches the prompts whose output gets re-read', async 
 
 test('the shape rule protects evidence: it forbids narration, never the failure case', async () => {
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
-  const review = calls.find(c => c.opts.agentType === 'reviewer').prompt
+  const review = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
   // A rule that merely said "be brief" would trade a review round for a few words. The
   // asymmetry — cut narration, keep the failure case and the proof — IS the rule.
   assert.ok(review.includes('KEEP AT FULL LENGTH'), 'the keep-clause is gone')
@@ -1382,8 +1382,8 @@ test('US-219 AC5: no dispatched prompt ever instructs a merge, on any path', asy
     const { calls, result } = await runWorkflow({
       args: { stories: [STORY] },
       dispatch: (prompt, opts) => {
-        if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-        if (opts.agentType === 'reviewer') return path.reviews[Math.min(i++, path.reviews.length - 1)]
+        if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (opts.agentType === 'pair-reviewer') return path.reviews[Math.min(i++, path.reviews.length - 1)]
         if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
         if (opts.phase === 'PR') return { prNumber: 7 }
         return { fixed: true }
@@ -1553,7 +1553,7 @@ async function peakConcurrency(stories, args = {}) {
   let inFlight = 0
   let peak = 0
   const dispatch = async (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.phase === 'Implement') {
       inFlight++
       peak = Math.max(peak, inFlight)
@@ -1562,7 +1562,7 @@ async function peakConcurrency(stories, args = {}) {
       return { gatesPassed: true, branch: 'b' }
     }
     if (opts.phase === 'PR') return { prNumber: 7 }
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return { fixed: true }
   }
   const { result } = await runWorkflow({ args: { stories, ...args }, dispatch })
@@ -1613,7 +1613,7 @@ test('US-219 AC6: under a cap, results keep INPUT order and a dead card does not
   // cards still in flight. Both are `parallel`'s contract; the bounded version must match it.
   const order = []
   const dispatch = async (prompt, opts) => {
-    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
     if (opts.phase === 'Implement') {
       const id = (prompt.match(/#(\d{3})/) ?? [])[1]
       // Later stories finish FIRST, so a naive push-on-completion would reverse the list.
@@ -1623,7 +1623,7 @@ test('US-219 AC6: under a cap, results keep INPUT order and a dead card does not
       return { gatesPassed: true, branch: 'b' }
     }
     if (opts.phase === 'PR') return { prNumber: 7 }
-    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
     return { fixed: true }
   }
 
@@ -1712,8 +1712,8 @@ test('a contentless review return cannot converge — absence of findings is not
     const { result } = await runWorkflow({
       args: { cards: [{ ...STORY, prNumber: 42 }] },
       dispatch: (prompt, opts) => {
-        if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-        if (opts.agentType === 'reviewer') return emptyish
+        if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+        if (opts.agentType === 'pair-reviewer') return emptyish
         if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
         if (opts.phase === 'PR') return { prNumber: 42 }
         return { fixed: true }
@@ -1733,12 +1733,42 @@ test('a review WITH a verdict and no findings still converges', async () => {
   const { result } = await runWorkflow({
     args: { cards: [{ ...STORY, prNumber: 42 }] },
     dispatch: (prompt, opts) => {
-      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
       if (opts.phase === 'PR') return { prNumber: 42 }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       return { fixed: true }
     },
   })
   assert.strictEqual(result.batch[0]?.status, 'ready-for-merge')
+})
+
+// ── Review of #432: validation was one level deep ──────────────────────────
+// Three findings, one shape: a key the caller misspells is dropped in silence and the batch
+// runs on values nobody chose while reporting success. The shipped docs already PROMISE the
+// opposite ("an unknown key ... is rejected loudly rather than ignored"), so this was a
+// documented behaviour the code did not have.
+test('an unknown TOP-LEVEL pipeline key throws, like an unknown skill key already did', async () => {
+  await assert.rejects(
+    () => runWorkflow({ args: { cards: [STORY], pipeline: { worktreeroot: '/srv/wt' } }, dispatch: stdDispatch({}) }),
+    /worktreeroot/,
+    'a mis-cased key ran the whole batch under the default root',
+  )
+})
+
+test('an unknown TOP-LEVEL args key throws', async () => {
+  // `maxParallelsim` (typo) previously ran unbounded and returned success.
+  await assert.rejects(
+    () => runWorkflow({ args: { cards: [STORY], maxParallelsim: 2 }, dispatch: stdDispatch({}) }),
+    /maxParallelsim/,
+  )
+})
+
+test('a non-string pipeline override throws instead of stringifying to [object Object]', async () => {
+  // Verified in review: it produced "…following [object Object], the reference skills…",
+  // telling every agent in the run to follow a skill that cannot exist.
+  await assert.rejects(
+    () => runWorkflow({ args: { cards: [STORY], pipeline: { skills: { implement: { name: '/x' } } } }, dispatch: stdDispatch({}) }),
+    /skills\.implement.*string/i,
+  )
 })

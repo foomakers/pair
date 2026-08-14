@@ -34,11 +34,11 @@ assert_dir ".claude/agents"
 
 # The engine itself, plus the helper the agents invoke. `contracts/ensure-contract.mjs` is a
 # real dependency: shipping the workflow without it produces a batch that dies in phase 0.
-assert_file ".claude/workflows/implement-batch.js"
-assert_file ".claude/workflows/contracts/ensure-contract.mjs"
+assert_file ".claude/workflows/pair-implement-batch.js"
+assert_file ".claude/workflows/pair-contracts/ensure-contract.mjs"
 
 # Every agent type the workflow spawns must have arrived with it.
-for agent in implementer reviewer contract-generator; do
+for agent in pair-implementer pair-reviewer pair-contract-generator; do
   assert_file ".claude/agents/${agent}.md"
 done
 
@@ -46,11 +46,11 @@ log_info "Test 2: the installed engine is the one that ships, not a stale copy"
 # Byte-equality against the dataset is guarded in the unit suite; here the cheaper claim is
 # that the installed file is the current contract — it names `cards`, the key #250 codes
 # against. An older engine on disk would still pass the existence checks above.
-assert_contains ".claude/workflows/implement-batch.js" "cards"
+assert_contains ".claude/workflows/pair-implement-batch.js" "cards"
 
 log_info "Test 3: update keeps them (an overwrite registry must not drop the pair)"
 run_pair update .
-assert_file ".claude/workflows/implement-batch.js"
-assert_file ".claude/agents/reviewer.md"
+assert_file ".claude/workflows/pair-implement-batch.js"
+assert_file ".claude/agents/pair-reviewer.md"
 
 echo "=== $TEST_NAME Completed ==="

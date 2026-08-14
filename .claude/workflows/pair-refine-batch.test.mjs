@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 // The workflow file is a sandbox script (top-level await + return, ambient globals),
 // not importable ESM. Evaluate it as an async function body — the same shape the
 // Workflow harness gives it.
-const SRC = readFileSync(new URL('./refine-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
+const SRC = readFileSync(new URL('./pair-refine-batch.js', import.meta.url), 'utf8').replace(/^export /gm, '')
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
 
 async function runWorkflow({ args, dispatch }) {
