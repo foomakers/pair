@@ -263,7 +263,9 @@ describe('US-219 — a shipped artifact never points at something unshipped', ()
     const cited: string[] = []
     for (const [dir, file] of shippedArtifacts()) {
       const src = readFileSync(join(dir, file), 'utf-8')
-      for (const m of src.matchAll(/\b(\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md|adr-\d{3}-[a-z0-9-]+\.md)/g))
+      for (const m of src.matchAll(
+        /\b(\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md|adr-\d{3}-[a-z0-9-]+\.md)/g,
+      ))
         cited.push(`${file} -> ${m[1]}`)
     }
     expect(

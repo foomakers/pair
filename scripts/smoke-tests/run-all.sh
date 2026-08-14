@@ -315,7 +315,6 @@ if [ "$IS_CI" = "true" ]; then
   # shellcheck source=./lib/ci-tests.sh
   source "$CI_TESTS_FILE"
 
-
   for t in "${CI_TESTS[@]}"; do
     script="$SCENARIOS_DIR/$t"
     if [ -f "$script" ] && [ "$OFFLINE_ONLY" = "true" ] && ! is_offline_safe "$script"; then
