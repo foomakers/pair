@@ -442,7 +442,8 @@ describe('checkBatchEngineAgents', () => {
 // Same shape as the agent check, same reason: what installs is a fact, and a fact on this page
 // is read from the dataset rather than hand-copied.
 describe('checkBatchEngineWorkflows', () => {
-  const doc = '| `pair-implement-batch` | … |\n| `pair-refine-batch` | … |'
+  const doc =
+    '| Workflow | What it drives |\n| --- | --- |\n| `pair-implement-batch` | … |\n| `pair-refine-batch` | … |\n\nprose about `pair-implementer` and `pair-reviewer`.'
 
   it('passes when the page names every shipped workflow', () => {
     expect(checkBatchEngineWorkflows(['pair-implement-batch', 'pair-refine-batch'], doc)).toEqual(
@@ -467,9 +468,41 @@ describe('checkBatchEngineWorkflows', () => {
     ])
   })
 
+  // The reverse direction matched `` `pair-*-batch` `` only, so it could catch a stale name
+  // exactly when that name kept the `-batch` suffix. A workflow renamed or retired WITHOUT it
+  // — `pair-triage`, the shape a future non-batch workflow takes — stayed on the page promising
+  // an install nobody gets, which is the very failure the reverse check exists for. Reading the
+  // table's own rows answers it for any name, and keeps the agent table's `pair-*` names (which
+  // this check does not own) out of the scan.
+  it('fails when the page names a retired workflow whose name has no `-batch` suffix', () => {
+    const withTriage = `${doc}\n`.replace(
+      '| `pair-refine-batch` | … |',
+      '| `pair-refine-batch` | … |\n| `pair-triage` | … |',
+    )
+    expect(
+      checkBatchEngineWorkflows(['pair-implement-batch', 'pair-refine-batch'], withTriage),
+    ).toEqual(['batch-engine.mdx names "pair-triage", which the workflows registry does not ship'])
+  })
+
+  it('does not read the AGENT table or prose as workflow names', () => {
+    const withAgents = `${doc}\n\n| Agent | Tools |\n| --- | --- |\n| \`pair-implementer\` | … |\n| \`pair-reviewer\` | … |`
+    expect(
+      checkBatchEngineWorkflows(['pair-implement-batch', 'pair-refine-batch'], withAgents),
+    ).toEqual([])
+  })
+
   it('reports an empty workflow set rather than passing vacuously', () => {
     expect(checkBatchEngineWorkflows([], doc)).toEqual([
       'no shipped workflows found in the dataset — the batch-engine workflow check is vacuous',
+    ])
+  })
+
+  it('reports a missing workflow TABLE rather than passing its reverse check vacuously', () => {
+    // Same loud-on-absence rule the sibling checks follow: with no table to read, the reverse
+    // direction proves nothing and must say so instead of returning green.
+    expect(checkBatchEngineWorkflows(['pair-implement-batch'], 'no table here')).toEqual([
+      'batch-engine.mdx does not name the shipped workflow "pair-implement-batch"',
+      'batch-engine.mdx has no workflow table — the reverse check (a name the registry does not ship) cannot run',
     ])
   })
 })

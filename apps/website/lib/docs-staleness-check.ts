@@ -632,6 +632,25 @@ function readShippedWorkflowNames(dir: string, exclude: string[] = []): string[]
  * workflow missing from the table understates the install, and a table naming a workflow that
  * no longer ships promises something nobody gets.
  */
+/**
+ * The first cell of every row of the page's WORKFLOW table, located by that table's own header.
+ * Scoped rather than document-wide: the agent table below it has the same row shape and its
+ * `pair-*` names are not workflows, so a whole-document scan would either false-positive on
+ * them or (as it did) be narrowed to a name suffix and stop catching renames.
+ */
+function workflowTableRows(doc: string): string[] {
+  const lines = doc.split('\n')
+  const start = lines.findIndex(l => /^\|\s*Workflow\s*\|/i.test(l))
+  if (start === -1) return []
+  const names: string[] = []
+  for (const line of lines.slice(start + 1)) {
+    if (!line.trim().startsWith('|')) break
+    const name = /^\|\s*`([^`]+)`/.exec(line)?.[1]
+    if (name) names.push(name.trim())
+  }
+  return names
+}
+
 export function checkBatchEngineWorkflows(shipped: string[], doc: string): string[] {
   if (shipped.length === 0) {
     // Without this, deleting the dataset workflows directory turns the check green.
@@ -643,10 +662,20 @@ export function checkBatchEngineWorkflows(shipped: string[], doc: string): strin
   for (const name of shipped)
     if (!doc.includes(name))
       errors.push(`batch-engine.mdx does not name the shipped workflow "${name}"`)
-  // The reverse: a name in a backticked table cell that the registry does not ship.
-  for (const m of doc.matchAll(/`(pair-[a-z0-9-]+-batch)`/g))
-    if (!shipped.includes(m[1]!) && !errors.some(e => e.includes(m[1]!)))
-      errors.push(`batch-engine.mdx names "${m[1]}", which the workflows registry does not ship`)
+  // The reverse, read off the TABLE's own rows rather than off the whole document. Matching
+  // `` `pair-*-batch` `` anywhere caught a stale name only while it kept the `-batch` suffix:
+  // a future `pair-triage` left in the table after it stopped shipping passed, which is exactly
+  // the promise-what-nobody-gets defect this direction exists to catch. Reading the rows makes
+  // it name-shape-agnostic AND keeps the agent table's own `pair-*` names — which this check
+  // does not own — out of the scan.
+  const rows = workflowTableRows(doc)
+  if (rows.length === 0)
+    errors.push(
+      'batch-engine.mdx has no workflow table — the reverse check (a name the registry does not ship) cannot run',
+    )
+  for (const name of rows)
+    if (!shipped.includes(name) && !errors.some(e => e.includes(name)))
+      errors.push(`batch-engine.mdx names "${name}", which the workflows registry does not ship`)
   return [...new Set(errors)]
 }
 
