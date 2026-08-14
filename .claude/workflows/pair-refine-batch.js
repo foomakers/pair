@@ -9,7 +9,7 @@ export const meta = {
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
   // expression node. Keep every value a single literal, however long the line gets.
   whenToUse:
-    'REQUIRED args shape: {"items":[{"id":"218","mode":"classify"}]} where mode is one of classify | refine | triage. Optional per item: notes (a directive threaded into the prompt) and fixStatusLine (true when the issue body declares a status contradicting its content). This batch is I/O-bound (GitHub API + KB reads) and touches NO repo file, so it is safe to run CONCURRENTLY with an implement-batch: the two contend for neither files nor CPU. Items are independent by construction — each writes a different issue — so there is no mutex to pre-filter, unlike implement-batch.',
+    'REQUIRED args shape: {"items":[{"id":"218","mode":"classify"}]} where mode is one of classify | refine | triage. Optional per item: notes (a directive threaded into the prompt), breakdown (refine only: carry the card past Ready into a task list) and fixStatusLine (the issue body declares a status contradicting its content). Both flags must be REAL booleans, true or false — a JSON string "true" or a number is rejected, never coerced, because a wrong-typed flag would silently drop the directive it controls. This batch is I/O-bound (GitHub API + KB reads) and touches NO repo file, so it is safe to run CONCURRENTLY with an implement-batch: the two contend for neither files nor CPU. Items are independent by construction — each writes a different issue — so there is no mutex to pre-filter, unlike implement-batch.',
   phases: [{ title: 'Work' }, { title: 'Verify' }],
 }
 
@@ -103,6 +103,17 @@ function parseArgs(raw) {
     if (!it || typeof it !== 'object' || Array.isArray(it))
       throw new Error(`refine-batch: items[${i}] is not an object: ${JSON.stringify(it)}.`)
     rejectUnknownKeys(it, ['id', 'mode', 'notes', 'breakdown', 'fixStatusLine', 'model'], `items[${i}]`)
+    // A number is lossless and unambiguous for an issue ref (`{"id":218}` is what a caller
+    // composing JSON from an issue number writes), so it is coerced deliberately. Anything
+    // else is not: `id: ['218']` and `id: true` both used to survive `String()` and then PASS
+    // the safe-path-segment test as "218"/"true", so a caller who passed the wrong shape got a
+    // plausible-looking run against an id they never named. See `constrain` below.
+    if (it.id !== undefined && it.id !== null && typeof it.id !== 'string' && typeof it.id !== 'number')
+      throw new Error(
+        `refine-batch: items[${i}] has id of type ${Array.isArray(it.id) ? 'array' : typeof it.id}, which is not a string or a number. ` +
+          `It would be COERCED (an array joins on commas, a boolean becomes "true") and could then pass every ` +
+          `value check as an id the caller never wrote. Pass the issue ref as a string or a number.`,
+      )
     const id = String(it.id ?? '').trim().replace(/^#/, '')
     if (!id) throw new Error(`refine-batch: items[${i}] is missing id.`)
     // Presence is not validity. `id` and `notes` are interpolated VERBATIM into the prompt of a
@@ -114,6 +125,16 @@ function parseArgs(raw) {
     // the READONLY clause it sits next to. Rejected rather than quoted: an escaped value still
     // RUNS, and the caller who typed something that was never an issue ref never learns it.
     const constrain = (value, key, ok, what) => {
+      // Reject a present-but-non-string value BEFORE coercing it. `String(value ?? '')` first
+      // meant `notes: {a:1}` reached the prompt as `[object Object]` and `notes: ['a','b']` as
+      // `a,b` — the coerce-instead-of-reject direction this file rejects everywhere else, and
+      // it defeats the type check a reader assumes is there.
+      if (value !== undefined && value !== null && typeof value !== 'string')
+        throw new Error(
+          `refine-batch: items[${i}] (#${id}) has ${key} of type ${Array.isArray(value) ? 'array' : typeof value}, which is not a string. ` +
+            `A non-string would be COERCED into the prompt (an object becomes "[object Object]", an array joins on commas) ` +
+            `as if the caller had typed it. Pass a string, or omit the key.`,
+        )
       const v = String(value ?? '').trim()
       if (!v) return // absent/blank is handled above (required) or simply omitted from the prompt
       if (!ok(v))
@@ -133,6 +154,31 @@ function parseArgs(raw) {
     const mode = String(it.mode ?? 'classify').trim()
     if (!MODES.includes(mode))
       throw new Error(`refine-batch: items[${i}] (#${id}) has unknown mode ${JSON.stringify(mode)}; expected one of ${MODES.join(' | ')}.`)
+    // A boolean field is validated as a boolean and coerced NOWHERE. The two flags used to
+    // disagree with each other, in opposite directions and with nothing reported either way:
+    // `breakdown` was read `=== true` (a wrong-typed YES silently ignored) while
+    // `fixStatusLine` was a bare truthiness test (a wrong-typed NO — the string "false", which
+    // is truthy — silently APPLIED). The ignored direction is the dangerous one and it is the
+    // #401 shape: `breakdown: "true"` dropped the plan-tasks directive from the work prompt AND
+    // the AC-coverage assertion from the verify prompt — the stage that exists to catch a
+    // dropped directive is keyed off the same field — so the card came back `verified` and
+    // landed in `ready` with no breakdown at all. Realistic, not theoretical: the runtime hands
+    // this script a JSON STRING (see `parseArgs` above) and `"breakdown":"true"` is what a
+    // hand-written JSON arg looks like. Same call the sibling engine makes on `prNumber`
+    // (`pair-implement-batch.js`): a present-but-unusable value is an error, never a silently
+    // ignored one.
+    const checkFlag = key => {
+      if (key in it && typeof it[key] !== 'boolean')
+        throw new Error(
+          `refine-batch: items[${i}] (#${id}) has ${key} ${JSON.stringify(it[key]) ?? String(it[key])} ` +
+            `(${Array.isArray(it[key]) ? 'array' : typeof it[key]}), which is not a boolean. ` +
+            `A non-boolean is NOT read as "flag absent": the directive it controls would be dropped from the work ` +
+            `prompt AND from the verify assertion built to catch that drop, and the card would still be reported ` +
+            `Ready. Pass true or false, or omit the key.`,
+        )
+    }
+    checkFlag('breakdown')
+    checkFlag('fixStatusLine')
     // `breakdown: true` carries the card past Ready into an implementation task list.
     // Only meaningful for `refine`: a classify-only card already has its body, and a
     // triage writes nothing at all.
@@ -231,7 +277,7 @@ async function verify(item, wrote) {
   const expected =
     item.mode === 'triage'
       ? ' (for triage: nothing was to be written, so `verified` is true as long as the issue is readable and UNCHANGED).'
-      : `: a \`## Classification\` section with the matrix in the body, a \`risk:*\` label, and a board column of EXACTLY \`Refined\` — any other column, \`Todo\` included, means NOT verified however plausible the writer's report.${item.fixStatusLine ? ` ALSO required for this card: the body's own \`**Status**:\` line must now read \`Refined\`. Ignore the \`### Status Workflow\` legend — it lists every state by design and is NOT the card's status.` : ''}${item.breakdown ? ` ALSO required: an implementation task checklist in the body AND an AC-coverage table mapping tasks to acceptance criteria. Check the table is COMPLETE — every acceptance criterion covered by at least one task; report an uncovered criterion in \`missing\`, since a breakdown with a hole is what silently ships an unimplemented AC.` : ''} List anything you expected but could NOT find in \`missing\`.`
+      : `: a \`## Classification\` section with the matrix in the body, a \`risk:*\` label, and a board column of EXACTLY \`Refined\` — any other column, \`Todo\` included, means NOT verified however plausible the writer's report.${item.fixStatusLine === true ? ` ALSO required for this card: the body's own \`**Status**:\` line must now read \`Refined\`. Ignore the \`### Status Workflow\` legend — it lists every state by design and is NOT the card's status.` : ''}${item.breakdown ? ` ALSO required: an implementation task checklist in the body AND an AC-coverage table mapping tasks to acceptance criteria. Check the table is COMPLETE — every acceptance criterion covered by at least one task; report an uncovered criterion in \`missing\`, since a breakdown with a hole is what silently ships an unimplemented AC.` : ''} List anything you expected but could NOT find in \`missing\`.`
   return agent(
     `Re-read issue #${item.id} from the tracker and report its CURRENT state as stored. ${READONLY} Fetch the issue (body + labels) and its project-board item. Report: \`riskTag\` (the \`risk:*\` label actually present, '' if none), \`boardStatus\` (the board column actually set, '' if the issue is not on the board), and \`verified\` — true ONLY if the issue now genuinely carries what this mode was supposed to produce${expected} The writing agent reported: ${JSON.stringify(wrote ?? null)} — treat that as a CLAIM to check, not as fact. Do NOT fix anything you find missing; just report it.`,
     { agentType: 'general-purpose', phase: 'Verify', label: `verify:#${item.id}`, model: 'sonnet', effort: 'low', schema: VERIFY_SCHEMA },
@@ -242,7 +288,7 @@ const PROMPTS = {
   // The body is already complete; only the matrix + tag are missing. Uniform, mechanical,
   // low effort — this is the group that makes the batch worth running wide.
   classify: (item) =>
-    `Classify backlog card #${item.id}. ${READONLY} Its body ALREADY has Given-When-Then acceptance criteria, a Definition of Done and story points — do NOT rewrite, re-scope or re-estimate any of that. The ONLY thing missing is the classification. Run /pair-capability-classify against the existing content to build the classification matrix, then apply it with /pair-capability-write-issue: add the \`## Classification\` section to the body, apply the resulting \`risk:*\` label, and set the board status to Refined. Follow the project's quality model (KB default + any \`tech/risk-matrix.md\` adoption delta) — do not invent criteria.${item.fixStatusLine ? ` ALSO: this card's body declares a status line that CONTRADICTS its own content (it says Todo while carrying AC, DoD and points). Correct the body's status line to match the content, and say so in \`changed\`.` : ''}${item.notes ? ` CONTEXT: ${item.notes}` : ''} Remember the tracker invariant: \`gh project item-add\` exits 0 WITHOUT creating the item — re-read every write before reporting it. Return what you changed.`,
+    `Classify backlog card #${item.id}. ${READONLY} Its body ALREADY has Given-When-Then acceptance criteria, a Definition of Done and story points — do NOT rewrite, re-scope or re-estimate any of that. The ONLY thing missing is the classification. Run /pair-capability-classify against the existing content to build the classification matrix, then apply it with /pair-capability-write-issue: add the \`## Classification\` section to the body, apply the resulting \`risk:*\` label, and set the board status to Refined. Follow the project's quality model (KB default + any \`tech/risk-matrix.md\` adoption delta) — do not invent criteria.${item.fixStatusLine === true ? ` ALSO: this card's body declares a status line that CONTRADICTS its own content (it says Todo while carrying AC, DoD and points). Correct the body's status line to match the content, and say so in \`changed\`.` : ''}${item.notes ? ` CONTEXT: ${item.notes}` : ''} Remember the tracker invariant: \`gh project item-add\` exits 0 WITHOUT creating the item — re-read every write before reporting it. Return what you changed.`,
 
   // Full Draft->Ready path. Covers BOTH shapes: a genuinely empty card, and a card whose
   // existing content has gone wrong (AC that presume a feature nobody shipped, a plan for

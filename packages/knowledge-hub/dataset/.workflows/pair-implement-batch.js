@@ -160,7 +160,17 @@ function parseBatchArgs(raw) {
     // PR for a story that already had one — the very thing this file forbids in as many words.
     rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'prNumber'], `cards[${i}]`)
     // `#234` and `234` name the same story; normalize once so no prompt, worktree
-    // path or marker ever carries a stray `#`.
+    // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
+    // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
+    // `id: true` both survived `String()` and then PASSED the safe-path-segment test as
+    // "234"/"true", naming a worktree the caller never wrote. Same rule as the sibling engine.
+    if (s.id !== undefined && s.id !== null && typeof s.id !== 'string' && typeof s.id !== 'number')
+      throw new Error(
+        `implement-batch: cards[${i}] has id of type ${Array.isArray(s.id) ? 'array' : typeof s.id}, which is not a string or a number. ` +
+          `It would be COERCED (an array joins on commas, a boolean becomes "true") and could then pass every ` +
+          `value check as an id the caller never wrote — and that id becomes the worktree directory. ` +
+          `Pass the issue ref as a string or a number.`,
+      )
     const id = String(s.id ?? '').trim().replace(/^#/, '')
     const missing = ['id', 'title', 'branch'].filter(
       k => !String((k === 'id' ? id : s[k]) ?? '').trim(),
@@ -181,6 +191,16 @@ function parseBatchArgs(raw) {
     // than quoted: an escaped value still RUNS, and the caller who typed something that was
     // never a branch never learns it — the #401 direction, on the one input that can merge.
     const constrain = (value, key, ok, what) => {
+      // Reject a present-but-non-string value BEFORE coercing it. `String(value ?? '')` first
+      // meant `notes: {a:1}` reached the prompt as `[object Object]` and `branch: ['a','b']` as
+      // `a,b` — the coerce-instead-of-reject direction this file rejects everywhere else, and
+      // it defeats the type check a reader assumes is there.
+      if (value !== undefined && value !== null && typeof value !== 'string')
+        throw new Error(
+          `implement-batch: cards[${i}] (#${id}) has ${key} of type ${Array.isArray(value) ? 'array' : typeof value}, which is not a string. ` +
+            `A non-string would be COERCED into the shell commands the agents run (an object becomes "[object Object]", ` +
+            `an array joins on commas) as if the caller had typed it. Pass a string, or omit the key.`,
+        )
       const v = String(value ?? '').trim()
       if (!v) return // absent/blank is handled above (required) or falls back to a default (optional)
       if (!ok(v))

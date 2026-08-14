@@ -1930,6 +1930,33 @@ test('US-219 AC7: title and notes reject command substitution rather than carryi
   assert.match(n, /notes/i)
 })
 
+// `constrain` coerced BEFORE it validated (`String(value ?? '').trim()`), so a present-but-
+// non-string value was stringified rather than rejected: `notes: {a:1}` reached the prompt as
+// `[object Object]`, `id: true` passed the safe-path-segment test as the literal "true" and
+// would have become the worktree directory. Harmless in content, but it is the
+// coerce-instead-of-reject direction this file rejects everywhere else, and it defeats the type
+// check a reader assumes is there. Same fix on the sibling engine, which shares the helper.
+test('US-219 AC7: a present-but-non-string card value is rejected, never coerced', async () => {
+  for (const [story, re] of [
+    [{ id: '1', title: 't', branch: 'b', notes: { a: 1 } }, /has notes of type object, which is not a string/],
+    [{ id: '1', title: 't', branch: ['a', 'b'] }, /has branch of type array, which is not a string/],
+    [{ id: '1', title: 7, branch: 'b' }, /has title of type number, which is not a string/],
+    [{ id: ['1'], title: 't', branch: 'b' }, /has id of type array, which is not a string or a number/],
+    [{ id: true, title: 't', branch: 'b' }, /has id of type boolean, which is not a string or a number/],
+  ]) {
+    const msg = await expectThrow({ args: { stories: [story] } })
+    assert.match(msg, re, `story ${JSON.stringify(story)} must be rejected by type, not coerced`)
+  }
+
+  // A NUMERIC id stays legal — lossless, unambiguous, and what a caller composing JSON from an
+  // issue number naturally writes.
+  const { result } = await runWorkflow({
+    args: { stories: [{ id: 234, title: 't', branch: 'b' }] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch[0].id, '234', 'a numeric id drives the batch, normalized to a string')
+})
+
 test('US-219 AC7: real-world card values keep working — validation rejects injection, not punctuation', async () => {
   const { result } = await runWorkflow({
     args: {
