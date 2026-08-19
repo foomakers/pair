@@ -2,6 +2,7 @@ import type { FileSystemService } from '@pair/content-ops'
 import type { HttpClientService } from '@pair/content-ops'
 import { logger } from '@pair/content-ops'
 import { join, dirname, isAbsolute, relative } from 'path'
+import type { OptionalLinkMatcher } from './glob-match'
 import { compileOptionalLinkPatterns, matchesAnyPattern } from './glob-match'
 
 /**
@@ -43,21 +44,23 @@ export async function validateLinks(
   const { baseDir, files, fs, httpClient, strict, optionalLinkPatterns } = options
 
   // Compiled ONCE per run, not per file: a malformed pattern must be reported
-  // once, and the regexes are reused across every link of every file.
-  const { matchers, invalid } = strict
-    ? { matchers: [], invalid: [] }
-    : compileOptionalLinkPatterns(optionalLinkPatterns ?? [])
+  // once, and the matchers are reused across every link of every file.
+  // Compiled EVEN IN STRICT MODE: strict discards the matchers (it tolerates
+  // nothing), but a typo in the config must still be reported — CI is exactly
+  // where `--strict` runs and where a silent typo would go unnoticed.
+  const { matchers, invalid } = compileOptionalLinkPatterns(optionalLinkPatterns ?? [])
   for (const pattern of invalid) {
     logger.warn(`Invalid optional link pattern '${pattern}', ignoring`)
   }
+  const optionalMatchers = strict ? [] : matchers
 
   const results: LinkValidationResult[] = []
 
   for (const file of files) {
     const result =
       strict && httpClient
-        ? await validateFileLinks({ file, baseDir, fs, httpClient, optionalMatchers: matchers })
-        : await validateFileLinks({ file, baseDir, fs, optionalMatchers: matchers })
+        ? await validateFileLinks({ file, baseDir, fs, httpClient, optionalMatchers })
+        : await validateFileLinks({ file, baseDir, fs, optionalMatchers })
     results.push(result)
   }
 
@@ -72,7 +75,7 @@ async function validateFileLinks(params: {
   baseDir: string
   fs: FileSystemService
   httpClient?: HttpClientService
-  optionalMatchers: RegExp[]
+  optionalMatchers: OptionalLinkMatcher[]
 }): Promise<LinkValidationResult> {
   const { file, baseDir, fs, httpClient, optionalMatchers } = params
 
@@ -203,7 +206,7 @@ function isOptionalLink(
   link: string,
   targetPath: string | undefined,
   baseDir: string,
-  optionalMatchers: RegExp[],
+  optionalMatchers: OptionalLinkMatcher[],
 ): boolean {
   if (optionalMatchers.length === 0) return false
 

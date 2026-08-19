@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import type { FileSystemService } from '@pair/content-ops'
 import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
-import { MockHttpClientService } from '@pair/content-ops'
+import { MockHttpClientService, logger } from '@pair/content-ops'
 import { validateLinks } from './link-checker'
 import type { IncomingMessage } from 'http'
 
@@ -371,6 +371,52 @@ describe('validateLinks', () => {
 
       expect(results[0]?.valid).toBe(false)
       expect(results[0]?.errors).toHaveLength(1)
+    })
+
+    // Edge case: "Invalid glob syntax — CLI warns about malformed patterns and skips
+    // them (does not crash the run)". Table-driven: the contract is that NOTHING a
+    // config file can contain aborts validation, not that two known shapes are handled.
+    describe.each([
+      ['unterminated character class', 'apps/[ab'],
+      ['range out of order', 'docs/[z-a].md'],
+      ['blank pattern', '   '],
+    ])('malformed pattern (%s)', (_label, malformed) => {
+      afterEach(() => {
+        vi.restoreAllMocks()
+      })
+
+      it('completes the run, skips the pattern, and keeps the valid ones working', async () => {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+        fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/x.ts)')
+
+        const results = await validateLinks({
+          baseDir: '/kb',
+          files: ['/kb/.pair/knowledge/guide.md'],
+          fs,
+          optionalLinkPatterns: [malformed, 'apps/**'],
+        })
+
+        expect(results).toHaveLength(1)
+        expect(results[0]?.valid).toBe(true)
+        expect(results[0]?.warnings).toHaveLength(1)
+        expect(warn).toHaveBeenCalledWith(`Invalid optional link pattern '${malformed}', ignoring`)
+      })
+
+      it('is still reported in --strict mode, where CI runs', async () => {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+        fs.writeFile('/kb/README.md', '[Link](./missing.md)')
+
+        const results = await validateLinks({
+          baseDir: '/kb',
+          files: ['/kb/README.md'],
+          fs,
+          strict: true,
+          optionalLinkPatterns: [malformed],
+        })
+
+        expect(results[0]?.valid).toBe(false)
+        expect(warn).toHaveBeenCalledWith(`Invalid optional link pattern '${malformed}', ignoring`)
+      })
     })
 
     it('AC-5: a pattern-matched target that EXISTS is simply valid — no warning', async () => {

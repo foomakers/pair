@@ -1,5 +1,6 @@
 import { FileSystemService, Behavior, type TargetConfig } from '@pair/content-ops'
 import { getCanonicalTarget } from './layout'
+import type { LinkValidationConfig } from '../commands/kb-validate/optional-link-config'
 
 /**
  * Unified configuration for an individual asset registry.
@@ -44,6 +45,14 @@ export interface Config {
    * project-relative — see `reserved-paths.ts` / `validateWorkingPath`.
    */
   working_path?: string
+  /**
+   * Tuning for `pair kb-validate`'s markdown link checking (US-188):
+   * `optional_link_patterns` downgrades a MISSING target matching a glob to a
+   * warning, so a KB can be validated in isolation. Read from the config of the
+   * KB being validated (`<--path>/config.json`), merged with
+   * `--optional-link-patterns`.
+   */
+  link_validation?: LinkValidationConfig
   [key: string]: unknown
 }
 

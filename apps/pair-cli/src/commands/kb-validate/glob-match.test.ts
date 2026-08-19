@@ -16,11 +16,22 @@ describe('compileOptionalLinkPatterns', () => {
     expect(invalid).toEqual(['', '   '])
   })
 
-  it('reports an unterminated character class as invalid and keeps the rest', () => {
-    const { matchers, invalid } = compileOptionalLinkPatterns(['apps/[ab.md', 'packages/**'])
+  // The contract is "a pattern this matcher cannot compile is REPORTED and skipped,
+  // never thrown" (US-188 edge case). Table-driven so the contract is what is
+  // pinned, not the handful of malformed shapes known today.
+  it.each([
+    ['unterminated character class', 'apps/[ab.md'],
+    ['unterminated class with negation', 'apps/[!ab.md'],
+    ['range out of order', 'docs/[z-a].md'],
+    ['numeric range out of order', 'docs/[9-0].md'],
+    ['range out of order mid-segment', 'a[b-a]c'],
+    ['negated range out of order', 'x[!z-a]y'],
+    ['empty character class', 'docs/[].md'],
+  ])('reports a %s as invalid instead of throwing', (_label, pattern) => {
+    const { matchers, invalid } = compileOptionalLinkPatterns([pattern, 'packages/**'])
 
     expect(matchers).toHaveLength(1)
-    expect(invalid).toEqual(['apps/[ab.md'])
+    expect(invalid).toEqual([pattern])
   })
 
   it('returns nothing for an empty pattern list', () => {
@@ -79,7 +90,43 @@ describe('matchesAnyPattern', () => {
   })
 
   it('matches a bare directory pattern against the directory itself', () => {
-    expect(match(['apps'], ['apps/**'])).toBe(false)
+    // `**` matches ZERO or more segments, so `apps/**` covers `apps` too.
+    expect(match(['apps'], ['apps/**'])).toBe(true)
     expect(match(['apps'], ['apps'])).toBe(true)
+  })
+
+  it('lets `**` match zero segments, like mainstream globs', () => {
+    expect(match(['a/b'], ['a/**/b'])).toBe(true)
+    expect(match(['a/x/b'], ['a/**/b'])).toBe(true)
+    expect(match(['a/x/y/b'], ['a/**/b'])).toBe(true)
+    expect(match(['apps/x.ts'], ['**/apps/**'])).toBe(true)
+    expect(match(['vendor/apps/x.ts'], ['**/apps/**'])).toBe(true)
+  })
+
+  it('collapses repeated globstars', () => {
+    expect(match(['a/b/c'], ['**/**/c'])).toBe(true)
+    expect(match(['c'], ['**/**/c'])).toBe(true)
+  })
+
+  it('treats a `**` that is not a whole segment as a single `*`', () => {
+    expect(match(['docs/aXb.md'], ['docs/a**b.md'])).toBe(true)
+    expect(match(['docs/a/b.md'], ['docs/a**b.md'])).toBe(false)
+  })
+
+  it('supports ranges inside a character class', () => {
+    expect(match(['docs/c.md'], ['docs/[a-z].md'])).toBe(true)
+    expect(match(['docs/C.md'], ['docs/[a-z].md'])).toBe(false)
+    expect(match(['docs/-.md'], ['docs/[a-].md'])).toBe(true)
+  })
+
+  it('matches a pathological pattern in bounded time instead of hanging', () => {
+    // A regex-compiled matcher backtracks catastrophically here (minutes for a
+    // 65-char candidate); the two-pointer matcher is O(n*m).
+    const pattern = '**a**a**a**a**a**a**a**a**b'
+    const candidate = 'a'.repeat(64) + 'c'
+
+    const started = Date.now()
+    expect(match([candidate], [pattern])).toBe(false)
+    expect(Date.now() - started).toBeLessThan(1000)
   })
 })
