@@ -286,6 +286,214 @@ describe('validateLinks', () => {
     })
   })
 
+  /**
+   * US-188 — optional link patterns. A KB validated in isolation links into a
+   * codebase that may not be checked out next to it; a pattern-matched MISSING
+   * target is a warning, everything else keeps failing.
+   */
+  describe('optional link patterns (US-188)', () => {
+    it('AC-1: downgrades a pattern-matched missing target to a labelled warning', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['../../apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toHaveLength(0)
+      expect(results[0]?.warnings).toHaveLength(1)
+      expect(results[0]?.warnings[0]).toContain('optional link (pattern-matched)')
+      expect(results[0]?.warnings[0]).toContain('../../apps/website/page.tsx')
+    })
+
+    it('AC-1: matches on the path resolved relative to the KB root, not only the written link', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        // '/kb/.pair/knowledge/../../apps/**' → 'apps/**' relative to baseDir
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.warnings).toHaveLength(1)
+    })
+
+    it('AC-3: a missing target matching NO pattern stays an error', async () => {
+      fs.writeFile('/kb/README.md', '[Link](./missing.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+        optionalLinkPatterns: ['../../apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+      expect(results[0]?.errors[0]).toContain('Broken internal link')
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('AC-4: --strict overrides the optional treatment (error, not warning)', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        httpClient,
+        strict: true,
+        optionalLinkPatterns: ['../../apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+      expect(results[0]?.errors[0]).toContain('Broken internal link')
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('AC-4: --strict overrides even without an httpClient', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        strict: true,
+        optionalLinkPatterns: ['../../apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+    })
+
+    it('AC-5: a pattern-matched target that EXISTS is simply valid — no warning', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
+      fs.writeFile('/kb/apps/website/page.tsx', 'export default null')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toHaveLength(0)
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('AC-6: no patterns at all keeps every missing link an error', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+    })
+
+    it('AC-6: an empty pattern list is identical to no patterns', async () => {
+      fs.writeFile('/kb/README.md', '[Link](./missing.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+        optionalLinkPatterns: [],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+    })
+
+    it('matches only the intended pattern when several are configured', async () => {
+      fs.writeFile(
+        '/kb/.pair/knowledge/guide.md',
+        '[Code](../../apps/x.ts)\n[Gone](./missing.md)',
+      )
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**', 'packages/**'],
+      })
+
+      expect(results[0]?.errors).toHaveLength(1)
+      expect(results[0]?.errors[0]).toContain('./missing.md')
+      expect(results[0]?.warnings).toHaveLength(1)
+      expect(results[0]?.warnings[0]).toContain('../../apps/x.ts')
+    })
+
+    it('emits ONE warning when several patterns match the same link', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/x.ts)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**', 'apps/x.ts', '../../apps/**'],
+      })
+
+      expect(results[0]?.warnings).toHaveLength(1)
+    })
+
+    it('skips malformed patterns without crashing the run', async () => {
+      fs.writeFile('/kb/README.md', '[Link](./missing.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+        optionalLinkPatterns: ['[unterminated', ''],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+    })
+
+    it('never applies to anchor-only or external links', async () => {
+      fs.writeFile(
+        '/kb/.pair/knowledge/guide.md',
+        '[Anchor](#section)\n[External](https://apps.example.com/x)',
+      )
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('applies to absolute internal links too (resolved from the KB root)', async () => {
+      fs.writeFile('/kb/docs/guide.md', '[Code](/apps/website/page.tsx)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/docs/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.warnings).toHaveLength(1)
+    })
+  })
+
   describe('edge cases', () => {
     it('should handle files with no links', async () => {
       fs.writeFile('/kb/README.md', 'No links here')

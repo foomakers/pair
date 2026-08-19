@@ -1,6 +1,8 @@
 import type { FileSystemService } from '@pair/content-ops'
 import type { HttpClientService } from '@pair/content-ops'
-import { join, dirname, isAbsolute } from 'path'
+import { logger } from '@pair/content-ops'
+import { join, dirname, isAbsolute, relative } from 'path'
+import { compileOptionalLinkPatterns, matchesAnyPattern } from './glob-match'
 
 /**
  * Link validation result
@@ -21,6 +23,13 @@ export interface LinkValidationOptions {
   fs: FileSystemService
   httpClient?: HttpClientService
   strict?: boolean
+  /**
+   * Globs (US-188) marking a MISSING internal link target as optional: matched
+   * misses become warnings instead of errors, so a KB validated on its own does
+   * not fail on links into a codebase that is not checked out beside it.
+   * `--strict` overrides this — strict tolerates nothing, by definition.
+   */
+  optionalLinkPatterns?: string[]
 }
 
 /**
@@ -31,15 +40,24 @@ export interface LinkValidationOptions {
 export async function validateLinks(
   options: LinkValidationOptions,
 ): Promise<LinkValidationResult[]> {
-  const { baseDir, files, fs, httpClient, strict } = options
+  const { baseDir, files, fs, httpClient, strict, optionalLinkPatterns } = options
+
+  // Compiled ONCE per run, not per file: a malformed pattern must be reported
+  // once, and the regexes are reused across every link of every file.
+  const { matchers, invalid } = strict
+    ? { matchers: [], invalid: [] }
+    : compileOptionalLinkPatterns(optionalLinkPatterns ?? [])
+  for (const pattern of invalid) {
+    logger.warn(`Invalid optional link pattern '${pattern}', ignoring`)
+  }
 
   const results: LinkValidationResult[] = []
 
   for (const file of files) {
     const result =
       strict && httpClient
-        ? await validateFileLinks({ file, baseDir, fs, httpClient })
-        : await validateFileLinks({ file, baseDir, fs })
+        ? await validateFileLinks({ file, baseDir, fs, httpClient, optionalMatchers: matchers })
+        : await validateFileLinks({ file, baseDir, fs, optionalMatchers: matchers })
     results.push(result)
   }
 
@@ -54,8 +72,9 @@ async function validateFileLinks(params: {
   baseDir: string
   fs: FileSystemService
   httpClient?: HttpClientService
+  optionalMatchers: RegExp[]
 }): Promise<LinkValidationResult> {
-  const { file, baseDir, fs, httpClient } = params
+  const { file, baseDir, fs, httpClient, optionalMatchers } = params
 
   const errors: string[] = []
   const warnings: string[] = []
@@ -80,7 +99,11 @@ async function validateFileLinks(params: {
       // Internal link - always validate
       const internalResult = await validateInternalLink(link, file, baseDir, fs)
       if (!internalResult.valid) {
-        errors.push(`Broken internal link: ${link}`)
+        if (isOptionalLink(link, internalResult.targetPath, baseDir, optionalMatchers)) {
+          warnings.push(`optional link (pattern-matched), target missing: ${link}`)
+        } else {
+          errors.push(`Broken internal link: ${link}`)
+        }
       }
     }
   }
@@ -137,7 +160,7 @@ async function validateInternalLink(
   sourceFile: string,
   baseDir: string,
   fs: FileSystemService,
-): Promise<{ valid: boolean }> {
+): Promise<{ valid: boolean; targetPath?: string }> {
   // Handle anchor-only links (#section)
   if (link.startsWith('#')) {
     // Anchor within same file - assume valid
@@ -163,7 +186,34 @@ async function validateInternalLink(
 
   // Check if target exists
   const exists = await fs.exists(targetPath)
-  return { valid: exists }
+  return { valid: exists, targetPath }
+}
+
+/**
+ * Whether a MISSING internal link target is declared optional (US-188).
+ *
+ * A pattern is matched against two forms of the same link — the path as written
+ * in the markdown (`../../apps/x.ts`, stable whatever the file's depth) and the
+ * resolved target relative to the KB root (`apps/x.ts`, stable whatever the link
+ * text) — because both are how a maintainer legitimately expresses the rule.
+ * String matching only: nothing here reads the filesystem, so an optional
+ * pattern can never widen what kb-validate touches outside the KB root.
+ */
+function isOptionalLink(
+  link: string,
+  targetPath: string | undefined,
+  baseDir: string,
+  optionalMatchers: RegExp[],
+): boolean {
+  if (optionalMatchers.length === 0) return false
+
+  const [writtenPath] = link.split('#')
+  const candidates = [
+    ...(writtenPath ? [writtenPath] : []),
+    ...(targetPath ? [relative(baseDir, targetPath)] : []),
+  ]
+
+  return matchesAnyPattern(candidates, optionalMatchers)
 }
 
 /**
