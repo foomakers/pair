@@ -2,7 +2,13 @@ import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname, join } from 'path'
 import chalk from 'chalk'
-import { loadConfigWithOverrides, resolveDatasetRoot, ensureDir } from '#config'
+import {
+  loadConfigWithOverrides,
+  resolveDatasetRoot,
+  ensureDir,
+  type LoadConfigOptions,
+  type SourceDeclarationOutcome,
+} from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import {
   extractRegistries,
@@ -28,6 +34,7 @@ import {
   exitCodeFor,
   tallyRegistries,
   SKIP_NOT_SHIPPED,
+  SKIP_UNKNOWN_REGISTRY,
   type CliPresenter,
   type RegistryResult,
 } from '#ui'
@@ -71,19 +78,9 @@ export async function handleInstallCommand(
       await listTargets(fs, options)
       return 0
     }
-    const { datasetRoot, registries, baseTarget } = await setupInstallContext(
+    return await runInstall({
       fs,
-      config as InstallableConfig,
-      options,
-    )
-    await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
-    validateDatasetContent(fs, datasetRoot, registries)
-    await validateInstallContext(fs, registries, baseTarget)
-    return await executeInstall({
-      fs,
-      datasetRoot,
-      registries,
-      baseTarget,
+      config: config as InstallableConfig,
       options,
       pushLog,
       presenter,
@@ -92,6 +89,37 @@ export async function handleInstallCommand(
     pushLog('error', `Installation failed: ${String(err)}`)
     throw err
   }
+}
+
+async function runInstall(ctx: {
+  fs: FileSystemService
+  config: InstallableConfig
+  options: InstallHandlerOptions | undefined
+  pushLog: (level: LogEntry['level'], message: string) => void
+  presenter: CliPresenter
+}): Promise<number> {
+  const { fs, config, options, pushLog, presenter } = ctx
+  const { datasetRoot, registries, baseTarget, sourceDeclaration } = await setupInstallContext(
+    fs,
+    config,
+    options,
+  )
+  // A source that ships a broken config never aborts the install: it is reported and the
+  // consumer's own resolution stands (US-396).
+  if (sourceDeclaration?.warning) pushLog('warn', sourceDeclaration.warning)
+  await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
+  validateDatasetContent(fs, datasetRoot, registries)
+  await validateInstallContext(fs, registries, baseTarget)
+  return executeInstall({
+    fs,
+    datasetRoot,
+    registries,
+    baseTarget,
+    options,
+    pushLog,
+    presenter,
+    ...(sourceDeclaration && { sourceDeclaration }),
+  })
 }
 
 async function listTargets(
@@ -119,6 +147,26 @@ async function listTargets(
 
 type InstallableConfig = Exclude<InstallCommandConfig, { resolution: 'list-targets' }>
 
+/**
+ * A named source (`--source`, `--url`, `--git`) declares its own registries; the default
+ * source does not — reading a declaration there would change the official path's
+ * behaviour for no gain (US-396).
+ */
+function namesItsOwnSource(config: InstallableConfig): boolean {
+  return config.resolution !== 'default'
+}
+
+function resolveConfigOptions(
+  config: InstallableConfig,
+  datasetRoot: string,
+  options?: InstallHandlerOptions,
+): LoadConfigOptions {
+  return {
+    ...(options?.config && { customConfigPath: options.config }),
+    ...(namesItsOwnSource(config) && { sourceRoot: datasetRoot }),
+  }
+}
+
 async function setupInstallContext(
   fs: FileSystemService,
   config: InstallableConfig,
@@ -127,6 +175,7 @@ async function setupInstallContext(
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
+  sourceDeclaration?: SourceDeclarationOutcome | undefined
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -135,9 +184,10 @@ async function setupInstallContext(
     // fetch, and the command would otherwise download the KB the user just refused.
     kb: (config as { kb?: boolean }).kb,
   })
-  const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
-  if (options?.config) configOptions.customConfigPath = options.config
-  const configContent = loadConfigWithOverrides(fs, configOptions)
+  const configContent = loadConfigWithOverrides(
+    fs,
+    resolveConfigOptions(config, datasetRoot, options),
+  )
 
   const registries = extractRegistries(configContent.config)
   const workingPathOverride = resolveWorkingPathOverride(configContent.config)
@@ -147,7 +197,30 @@ async function setupInstallContext(
   }
 
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
-  return { datasetRoot, registries, baseTarget }
+  return {
+    datasetRoot,
+    registries,
+    baseTarget,
+    ...(configContent.sourceDeclaration && {
+      sourceDeclaration: configContent.sourceDeclaration,
+    }),
+  }
+}
+
+/**
+ * Registries the source declared that this CLI has no definition for: named as skipped
+ * with their own reason, never silently dropped (US-396 edge case: newer KB, older CLI).
+ */
+function declaredButUnknownResults(
+  declaration: SourceDeclarationOutcome | undefined,
+  baseTarget: string,
+  presenter: CliPresenter,
+): RegistryResult[] {
+  if (!declaration) return []
+  return declaration.unknownRegistries.map(name => {
+    presenter.registrySkipped(name, SKIP_UNKNOWN_REGISTRY)
+    return { name, target: baseTarget, status: 'skipped' as const, reason: SKIP_UNKNOWN_REGISTRY }
+  })
 }
 
 function validateDatasetContent(
@@ -300,6 +373,7 @@ type InstallContext = {
   options: InstallHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
+  sourceDeclaration?: SourceDeclarationOutcome | undefined
 }
 
 async function installAllRegistries(ctx: InstallContext): Promise<{
@@ -358,6 +432,10 @@ async function executeInstall(context: InstallContext): Promise<number> {
   await writeProjectLlmsTxt(fs, baseTarget, pushLog)
   await recordInstalledVersion({ fs, datasetRoot, baseTarget })
 
-  presenter.summary(results, 'install', Date.now() - startTime)
-  return exitCodeFor(tallyRegistries(results))
+  const allResults = [
+    ...results,
+    ...declaredButUnknownResults(context.sourceDeclaration, baseTarget, presenter),
+  ]
+  presenter.summary(allResults, 'install', Date.now() - startTime)
+  return exitCodeFor(tallyRegistries(allResults))
 }

@@ -1466,3 +1466,149 @@ describe('US-396: absent registries are skipped, real failures are not', () => {
     expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
   })
 })
+
+/**
+ * US-396 half B — `install --source` honours the source KB's own declaration.
+ *
+ * The KB declares its registries (notably `skills.prefix`) in its own pair.config.json.
+ * Install used to resolve the CONSUMING project's config only, so the declared
+ * namespacing silently did not apply and the maintainer had to tell every consumer to
+ * copy the file in.
+ */
+describe('US-396: the source KB declares, the consuming project overrides', () => {
+  const cwd = '/consumer'
+  const kb = '/acme-kb'
+
+  const consumerBaseConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      skills: {
+        source: '.skills',
+        behavior: 'overwrite',
+        flatten: true,
+        flattenDepth: 2,
+        prefix: 'pair',
+        targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        description: 'Skills',
+      },
+    },
+  }
+
+  const sourceInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'local',
+    path: kb,
+    offline: true,
+    kb: true,
+  }
+
+  function consumerFs(extra: Record<string, string> = {}) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${kb}/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'acme-kb' } },
+        }),
+        [`${kb}/.pair/knowledge/guide.md`]: '# Acme guide',
+        [`${kb}/.skills/example-skill/SKILL.md`]: '---\nname: example-skill\n---\n',
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  test('installs the skills under the prefix the source declares, with no config copied (AC3)', async () => {
+    const fs = consumerFs()
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test("the consuming project's deliberate override beats the source declaration (AC4)", async () => {
+    const fs = consumerFs({
+      [`${cwd}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'house-rules' } },
+      }),
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.claude/skills/house-rules-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test('a malformed source config never aborts the install and is never half-applied', async () => {
+    const fs = consumerFs({ [`${kb}/pair.config.json`]: '{ broken' })
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+  })
+
+  test('a registry the source declares but this CLI does not know is skipped, not dropped', async () => {
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: {
+          skills: { prefix: 'acme-kb' },
+          telemetry: {
+            source: '.telemetry',
+            behavior: 'mirror',
+            targets: [{ path: '.telemetry', mode: 'canonical' }],
+          },
+        },
+      }),
+      [`${kb}/.telemetry/traces.md`]: '# traces',
+    })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.telemetry/traces.md`)).toBe(false)
+    const printed = lines.join('\n')
+    expect(printed).toContain('declared by source, unknown to this CLI')
+    expect(printed).toContain('telemetry')
+  })
+
+  test('the default source path reads no declaration — behaviour is unchanged', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        // A stray declaration at the dataset root must not be read on the default path
+        [`${cwd}/packages/knowledge-hub/dataset/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'acme-kb' } },
+        }),
+        [`${cwd}/packages/knowledge-hub/dataset/.skills/example-skill/SKILL.md`]:
+          '---\nname: example-skill\n---\n',
+      },
+      cwd,
+      cwd,
+    )
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+  })
+})

@@ -7,26 +7,94 @@ import {
   resolveWorkingPathOverride,
 } from '#registry'
 
+/** What reading a named source KB's own declaration produced (US-396). */
+export interface SourceDeclarationOutcome {
+  /** The source's registry declaration was merged in (below the consumer's overrides). */
+  applied: boolean
+  /** Registries the source declares that this CLI has no definition for — never installed. */
+  unknownRegistries: string[]
+  /** The source shipped a config that could not be used; the consumer resolution stands. */
+  warning?: string
+}
+
+export interface LoadConfigOptions {
+  customConfigPath?: string
+  projectRoot?: string
+  skipBaseConfig?: boolean
+  /**
+   * Root of an explicitly named source KB (`--source`). Its own `pair.config.json` is
+   * honoured, so a maintainer's declared namespacing applies without the consuming
+   * project copying anything (US-396 AC3). Absent for the default source.
+   */
+  sourceRoot?: string
+}
+
+export interface LoadedConfig {
+  config: Config
+  source: string
+  /** Present only when a `sourceRoot` was named. */
+  sourceDeclaration?: SourceDeclarationOutcome
+}
+
 /**
- * Loads the CLI configuration with optional overrides from project-local
- * pair.config.json or a custom configuration path.
+ * Loads the CLI configuration with optional overrides.
+ *
+ * Precedence, weakest first: base CLI config < **source KB declaration** < consuming
+ * project `pair.config.json` < explicit `--config`. The source declares, the consumer
+ * overrides — stated once here, and documented in the external-KB guide.
  */
 export function loadConfigWithOverrides(
   fsService: FileSystemService,
-  options: { customConfigPath?: string; projectRoot?: string; skipBaseConfig?: boolean } = {},
-): { config: Config; source: string } {
-  const {
-    customConfigPath,
-    projectRoot = fsService.rootModuleDirectory(),
-    skipBaseConfig,
-  } = options
-
-  // If skipBaseConfig is true, start with empty config instead of base config
-  let { config, source } = skipBaseConfig
+  options: LoadConfigOptions = {},
+): LoadedConfig {
+  const { sourceRoot, skipBaseConfig } = options
+  const base = skipBaseConfig
     ? { config: { asset_registries: {} } as Config, source: 'empty' }
     : loadBaseConfig(fsService)
 
-  const pairApplied = applyPairConfigIfExists(fsService, config, projectRoot)
+  const declaration = sourceRoot
+    ? readSourceDeclaration(fsService, sourceRoot, Object.keys(base.config.asset_registries ?? {}))
+    : null
+
+  const layered = layerOverrides(
+    fsService,
+    applyDeclaration(base, declaration, sourceRoot),
+    options,
+  )
+  if (!declaration) return layered
+  return { ...layered, sourceDeclaration: summarizeDeclaration(declaration, layered.config) }
+}
+
+/** The source KB's own declaration sits directly above the base config, below the consumer. */
+function applyDeclaration(
+  base: { config: Config; source: string },
+  declaration: { config: Config | null } | null,
+  sourceRoot: string | undefined,
+): { config: Config; source: string } {
+  if (!declaration?.config) return base
+  return {
+    config: mergeConfigs(base.config, declaration.config),
+    source: `source KB declaration: ${sourceRoot}`,
+  }
+}
+
+/** Consumer layers, weakest first: project `pair.config.json`, then an explicit `--config`. */
+function layerOverrides(
+  fsService: FileSystemService,
+  start: { config: Config; source: string },
+  options: LoadConfigOptions,
+): { config: Config; source: string } {
+  const { customConfigPath, projectRoot = fsService.rootModuleDirectory() } = options
+  let { config, source } = start
+
+  const pairApplied = applyPairConfigIfExists(fsService, config, projectRoot, {
+    // The base config is not a project override of itself: when the project root IS the
+    // module dir (the released layout), re-merging `config.json` here would silently undo
+    // the source KB's declaration applied just above.
+    ...(options.skipBaseConfig
+      ? {}
+      : { alreadyLoaded: baseConfigPath(fsService.rootModuleDirectory()) }),
+  })
   if (pairApplied) {
     config = pairApplied.config
     source = 'pair.config.json'
@@ -38,6 +106,61 @@ export function loadConfigWithOverrides(
   }
 
   return { config, source }
+}
+
+function summarizeDeclaration(
+  declaration: { config: Config | null; declaredNames: string[]; warning?: string },
+  resolved: Config,
+): SourceDeclarationOutcome {
+  return {
+    applied: declaration.config !== null,
+    // A name the consumer went on to declare itself is deliberate, not unknown.
+    unknownRegistries: declaration.declaredNames.filter(
+      name => !(name in (resolved.asset_registries ?? {})),
+    ),
+    ...(declaration.warning && { warning: declaration.warning }),
+  }
+}
+
+/**
+ * Reads a source KB's own `pair.config.json`.
+ *
+ * A malformed source config never aborts the install and is never half-applied: the
+ * consumer's resolution stands and the caller reports the warning. Registries the source
+ * declares that this CLI has no definition for are held back (reported as skipped by the
+ * install summary) rather than installed on the strength of the source's word alone.
+ */
+function readSourceDeclaration(
+  fsService: FileSystemService,
+  sourceRoot: string,
+  knownRegistries: string[],
+): { config: Config | null; declaredNames: string[]; warning?: string } {
+  const declarationPath = join(sourceRoot, 'pair.config.json')
+  if (!fsService.existsSync(declarationPath)) {
+    return { config: null, declaredNames: [] }
+  }
+
+  let declared: Config
+  try {
+    declared = JSON.parse(fsService.readFileSync(declarationPath)) as Config
+  } catch (err) {
+    return {
+      config: null,
+      declaredNames: [],
+      warning: `Ignoring the source KB's pair.config.json (${declarationPath}): ${String(err)}`,
+    }
+  }
+
+  const declaredNames = Object.keys(declared?.asset_registries ?? {})
+  const applicable: Config = {
+    ...declared,
+    asset_registries: Object.fromEntries(
+      Object.entries(declared?.asset_registries ?? {}).filter(([name]) =>
+        knownRegistries.includes(name),
+      ),
+    ),
+  }
+  return { config: applicable, declaredNames }
 }
 
 function baseConfigPath(currentDir: string) {
@@ -65,14 +188,16 @@ function applyPairConfigIfExists(
   fsService: FileSystemService,
   baseConfig: Config,
   projectRoot: string,
+  options: { alreadyLoaded?: string } = {},
 ): { config: Config } | null {
   const pairConfigPath = join(projectRoot, 'pair.config.json')
   const configJsonPath = join(projectRoot, 'config.json')
 
-  // Try pair.config.json first, then fall back to config.json
+  // Try pair.config.json first, then fall back to config.json — unless that config.json is
+  // the base config this resolution already started from.
   const configPath = fsService.existsSync(pairConfigPath)
     ? pairConfigPath
-    : fsService.existsSync(configJsonPath)
+    : fsService.existsSync(configJsonPath) && configJsonPath !== options.alreadyLoaded
       ? configJsonPath
       : null
 
