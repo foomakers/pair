@@ -26,6 +26,7 @@ While the [Knowledge Base](/docs/concepts/knowledge-base) provides general guide
       infrastructure.md         # Hosting, CI/CD, deployment
       way-of-working.md         # Process, methodology, quality gates
       ux-ui.md                  # Design system, component library
+    automation.md               # Unattended-automation policy (optional)
     adr/                        # Architectural Decision Records
 ```
 
@@ -87,6 +88,18 @@ For a worked example, see Pair's own map — the framework dogfoods this artifac
 The unit is the **subdomain**, not a separate "domain" taxonomy. When a subdomain's inline context grows too large, the session proposes moving it to a co-located `subdomain/<slug>.context.md` file — lazy, and only after you approve. The map keeps the index entry and the domain-wide rules; everything subdomain-specific (glossary, entities) moves to the sibling file.
 
 If the file doesn't exist, AI assistants skip the domain check entirely — this is the expected state for most projects, not an error.
+
+### automation.md
+
+Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**. Today it holds a single section — `## Eligibility` — naming which cards an automated run may pick up at all:
+
+```text
+## Eligibility
+
+risk:green
+```
+
+The value is **a single literal label** (recommended `risk:green`), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
 
 ## How They Get Created
 

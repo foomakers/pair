@@ -60,7 +60,8 @@ const docsSources: Array<[string, string]> = [
 // optional" (quality-gates-configuration.mdx §30), and a guard that trips on
 // English would be disabled the first time it cried wolf. What must not exist is
 // an example FILTER carrying an operator, since `--filter` cannot express one.
-const LABEL_BOOLEAN_OPERATOR = /(?:[a-z][a-z-]*:[a-z]+\s+(?:AND|OR|NOT)\s|\s(?:AND|OR|NOT)\s+[a-z][a-z-]*:[a-z]+)/
+const LABEL_BOOLEAN_OPERATOR =
+  /(?:[a-z][a-z-]*:[a-z]+\s+(?:AND|OR|NOT)\s|\s(?:AND|OR|NOT)\s+[a-z][a-z-]*:[a-z]+)/
 
 describe.each(policySources)('automation-policy.md — %s (AC1: the declaration)', (_, content) => {
   it('names the adoption file and the section that holds the declaration', () => {
@@ -177,11 +178,14 @@ describe('quality-model.md §5 — reconciled with the single-label filter (AC6)
     expect(content).toMatch(/No dedicated eligibility tag/)
   })
 
-  it.each(qualityModelSources)('%s states the single-label rule and links the schema', (_, content) => {
-    expect(content.toLowerCase()).toMatch(/single literal label/)
-    expect(content).toContain('automation-policy.md')
-    expect(content).toContain('tech/automation.md')
-  })
+  it.each(qualityModelSources)(
+    '%s states the single-label rule and links the schema',
+    (_, content) => {
+      expect(content.toLowerCase()).toMatch(/single literal label/)
+      expect(content).toContain('automation-policy.md')
+      expect(content).toContain('tech/automation.md')
+    },
+  )
 })
 
 describe('docs site — the same rule from every surface (AC6)', () => {
