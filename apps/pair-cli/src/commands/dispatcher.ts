@@ -1,12 +1,15 @@
 import type { CommandConfig } from './index'
 import { commandRegistry } from './index'
 import type { FileSystemService, HttpClientService } from '@pair/content-ops'
+import type { GitCloner } from '#kb-manager'
 
 interface DispatchContext {
   httpClient?: HttpClientService
   cliVersion?: string
   baseTarget?: string
   config?: string
+  /** Injected git clone for `kb-info`'s version check; unset in production (real clone). */
+  gitCloner?: GitCloner
 }
 
 async function dispatchWithExitCode(handler: () => Promise<number>): Promise<void> {
@@ -79,5 +82,6 @@ function resolveOptions(ctx: DispatchContext) {
     ...(ctx.cliVersion && { cliVersion: ctx.cliVersion }),
     ...(ctx.baseTarget && { baseTarget: ctx.baseTarget }),
     ...(ctx.config && { config: ctx.config }),
+    ...(ctx.gitCloner && { gitCloner: ctx.gitCloner }),
   }
 }

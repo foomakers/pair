@@ -15,6 +15,12 @@ export { isKBCached, isStageOwnerAlive } from './cache-manager'
 export { getCacheRoot, localKBSource } from './cache-slot-key'
 export { cachedOfficialKBPath } from './kb-availability'
 export { installKBFromLocalZip, installKBFromGit } from './kb-installer'
+// `cloneGitRepo` is public because materializing a git source is not always an INSTALL:
+// `kb-info`'s version check clones read-only into a throwaway directory and owns no slot,
+// so it cannot go through `installKBFromGit`. `redactGitCredentials` travels with it —
+// whoever surfaces a git error must be able to strip the credential from it.
+export { cloneGitRepo, redactGitCredentials } from './git-clone'
+export type { GitCloner } from './git-clone'
 export { validateUrl } from '@pair/content-ops'
 export { validateCliOptions } from './cli-options'
 export type { KBManagerDeps } from './kb-availability'

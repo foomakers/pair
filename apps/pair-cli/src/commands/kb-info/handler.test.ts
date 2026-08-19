@@ -371,6 +371,97 @@ describe('handleKbInfoCommand - version-check mode', () => {
     expect(parsed.current.version).toBe('1.2.0')
     expect(parsed.current.sourceKind).toBe('remote')
   })
+  it('reports drift for a git --source whose clone carries a newer manifest (AC1)', async () => {
+    const fsService = new InMemoryFileSystemService(
+      { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleKbInfoCommand(
+      {
+        command: 'kb-info',
+        mode: 'version-check',
+        json: true,
+        source: 'https://github.com/org/kb.git#v1.2.0',
+      },
+      fsService,
+      {
+        baseTarget: cwd,
+        gitCloner: (_source, destDir) => {
+          void fsService.writeFile(`${destDir}/manifest.json`, JSON.stringify({ version: '1.2.0' }))
+        },
+      },
+    )
+
+    expect(exitCode).toBe(0)
+    const parsed = JSON.parse(capturedOutput())
+    expect(parsed.status).toBe('drift')
+    expect(parsed.current.sourceKind).toBe('git')
+    expect(parsed.current.version).toBe('1.2.0')
+    expect(parsed.current.available).toBe(true)
+    expect(parsed.migrationUrl).toContain('v1.1.0-to-v1.2.0')
+  })
+
+  it('reports current-unavailable with exit code 0 when a git clone fails (AC3)', async () => {
+    const fsService = new InMemoryFileSystemService(
+      { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleKbInfoCommand(
+      {
+        command: 'kb-info',
+        mode: 'version-check',
+        json: false,
+        source: 'https://github.com/org/kb.git',
+      },
+      fsService,
+      {
+        baseTarget: cwd,
+        gitCloner: () => {
+          throw new Error('git executable not found. Install git to use git repository sources.')
+        },
+      },
+    )
+
+    expect(exitCode).toBe(0)
+    const output = capturedOutput()
+    expect(output).toContain('Current version unavailable')
+    expect(output).toContain('git executable not found')
+    expect(output).toContain('1.1.0')
+  })
+
+  it('never prints a git credential in human or JSON output (AC4)', async () => {
+    const failing = () => {
+      throw new Error("fatal: could not read from 'https://ghp_supersecret@github.com/org/kb.git'")
+    }
+
+    for (const json of [false, true]) {
+      logSpy.mockClear()
+      const fsService = new InMemoryFileSystemService(
+        { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
+        cwd,
+        cwd,
+      )
+
+      const exitCode = await handleKbInfoCommand(
+        {
+          command: 'kb-info',
+          mode: 'version-check',
+          json,
+          source: 'https://github.com/org/kb.git',
+        },
+        fsService,
+        { baseTarget: cwd, gitCloner: failing },
+      )
+
+      expect(exitCode).toBe(0)
+      expect(capturedOutput()).not.toContain('ghp_supersecret')
+      expect(capturedOutput()).toContain('***@github.com')
+    }
+  })
 })
 
 /**

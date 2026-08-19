@@ -1,6 +1,10 @@
 import { join, dirname } from 'path'
+import { tmpdir } from 'os'
+import { randomUUID } from 'crypto'
 import type { FileSystemService, HttpClientService } from '@pair/content-ops'
 import { isGitUrl, isRemoteUrl } from '@pair/content-ops'
+import type { GitCloner } from '#kb-manager'
+import { cloneGitRepo, redactGitCredentials } from '#kb-manager'
 import { resolveDatasetRoot } from '#config/kb-resolver'
 import { readManifestFromZip } from './manifest-reader'
 
@@ -182,12 +186,61 @@ async function resolveLocalVersion(
 }
 
 /**
+ * Resolve the version a git source currently publishes.
+ *
+ * The clone lands in a THROWAWAY directory under the OS temp root, never in the KB cache
+ * slot the same source owns (`~/.pair/kb/external/git-<hash>`): the version check is a read
+ * (D20), while the install path clones into that slot unconditionally and deletes it on
+ * failure. Reusing it here would make a read able to destroy an installed KB — and a cached
+ * clone can be arbitrarily stale, which would make the reported "current" version a lie.
+ *
+ * The directory is deliberately NOT pre-created: `git clone` creates its destination, and
+ * cloning into an existing directory is exactly the failure mode the install path suffers.
+ */
+async function resolveGitVersion(
+  fs: FileSystemService,
+  source: string,
+  cloner: GitCloner,
+): Promise<Omit<CurrentVersionResult, 'sourceKind' | 'stable'>> {
+  const tempDir = join(tmpdir(), `pair-kb-version-${randomUUID()}`)
+  try {
+    await cloner(source, tempDir)
+    const version = readVersionFromDirectory(fs, tempDir)
+    if (version === null) {
+      return {
+        version: null,
+        available: false,
+        error: `No KB version found at git source ${redactGitCredentials(source)} (no manifest.json or sibling package.json)`,
+      }
+    }
+    return { version, available: true }
+  } catch (err) {
+    // Offline, auth failure, missing `git`, unknown #ref — all degrade, none throw. git
+    // echoes the token-injected URL in its stderr, so the reason is redacted (AC4).
+    return { version: null, available: false, error: redactGitCredentials(errorMessage(err)) }
+  } finally {
+    // Best-effort: a temp directory that outlives the check is litter, never a failure,
+    // and it can never be mistaken for the install cache (different root).
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    } catch {
+      // ignore — cleanup must not turn a successful read into an error
+    }
+  }
+}
+
+/**
  * Resolve the "current" KB version for a given source (registry/remote/local/git).
  * Never throws: unexpected errors degrade to `{ available: false, error }`.
  */
 export async function resolveCurrentVersion(
   fs: FileSystemService,
-  options: { source?: string; httpClient?: HttpClientService; cliVersion?: string } = {},
+  options: {
+    source?: string
+    httpClient?: HttpClientService
+    cliVersion?: string
+    gitCloner?: GitCloner
+  } = {},
 ): Promise<CurrentVersionResult> {
   const sourceKind = detectSourceKind(options.source)
 
@@ -202,7 +255,12 @@ export async function resolveCurrentVersion(
 async function resolvePartialCurrentVersion(
   sourceKind: KbSourceKind,
   fs: FileSystemService,
-  options: { source?: string; httpClient?: HttpClientService; cliVersion?: string },
+  options: {
+    source?: string
+    httpClient?: HttpClientService
+    cliVersion?: string
+    gitCloner?: GitCloner
+  },
 ): Promise<Omit<CurrentVersionResult, 'sourceKind' | 'stable'>> {
   switch (sourceKind) {
     case 'registry':
@@ -215,11 +273,7 @@ async function resolvePartialCurrentVersion(
     case 'remote':
       return resolveRemoteVersion(options.source as string, options.httpClient)
     case 'git':
-      return {
-        version: null,
-        available: false,
-        error: 'Git source version check is not supported yet',
-      }
+      return resolveGitVersion(fs, options.source as string, options.gitCloner ?? cloneGitRepo)
   }
 }
 

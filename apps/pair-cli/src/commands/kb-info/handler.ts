@@ -1,4 +1,5 @@
 import type { FileSystemService, HttpClientService } from '@pair/content-ops'
+import type { GitCloner } from '#kb-manager'
 import type { KbInfoCommandConfig } from './parser'
 import type { ManifestMetadata } from '../package/metadata'
 import { formatHumanReadable, formatJSON } from './display-formatter'
@@ -12,6 +13,12 @@ export interface KbInfoHandlerOptions {
   httpClient?: HttpClientService
   baseTarget?: string
   cliVersion?: string
+  /**
+   * How a git `--source` is materialized for the version check. Injected so the git path
+   * is exercised without a real `git` binary or a network; production leaves it unset and
+   * the resolver falls back to the real clone.
+   */
+  gitCloner?: GitCloner
 }
 
 async function handlePackageMode(
@@ -47,6 +54,7 @@ async function handleVersionCheckMode(
     ...(config.source && { source: config.source }),
     ...(options.httpClient && { httpClient: options.httpClient }),
     ...(options.cliVersion && { cliVersion: options.cliVersion }),
+    ...(options.gitCloner && { gitCloner: options.gitCloner }),
   })
 
   const result = compareVersions(installed, current)
