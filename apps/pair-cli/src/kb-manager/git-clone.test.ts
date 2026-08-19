@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { parseGitRef, injectToken, gitCacheKey } from './git-clone'
+import { parseGitRef, injectToken, gitCacheKey, redactGitCredentials } from './git-clone'
 
 describe('parseGitRef', () => {
   it('returns URL without ref when no # present', () => {
@@ -81,6 +81,41 @@ describe('injectToken', () => {
     process.env['PAIR_GIT_TOKEN'] = 'mytoken'
     expect(injectToken('http://gitlab.com/org/repo.git')).toBe(
       'http://mytoken@gitlab.com/org/repo.git',
+    )
+  })
+})
+
+describe('redactGitCredentials', () => {
+  afterEach(() => {
+    delete process.env['PAIR_GIT_TOKEN']
+  })
+
+  it('strips the userinfo segment injected into an HTTPS URL', () => {
+    expect(
+      redactGitCredentials('Git clone failed: repository https://ghp_abc123@github.com/org/kb.git'),
+    ).toBe('Git clone failed: repository https://***@github.com/org/kb.git')
+  })
+
+  it('strips a user:password userinfo segment', () => {
+    expect(
+      redactGitCredentials('fatal: http://alice:s3cret@gitlab.internal/kb.git not found'),
+    ).toBe('fatal: http://***@gitlab.internal/kb.git not found')
+  })
+
+  it('redacts the literal PAIR_GIT_TOKEN value wherever it appears', () => {
+    process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
+    expect(redactGitCredentials('remote: token ghp_abc123 rejected')).toBe(
+      'remote: token *** rejected',
+    )
+  })
+
+  it('leaves a credential-free message untouched', () => {
+    expect(redactGitCredentials('git executable not found.')).toBe('git executable not found.')
+  })
+
+  it('leaves an SSH-style URL untouched (no scheme, no injected token)', () => {
+    expect(redactGitCredentials('fatal: git@github.com:org/kb.git not found')).toBe(
+      'fatal: git@github.com:org/kb.git not found',
     )
   })
 })
