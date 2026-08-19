@@ -99,6 +99,7 @@
 - [Shared Config Packages](.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md)
 - [Technical Debt Management](.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md)
 - [Code Design](.pair/knowledge/guidelines/code-design/README.md)
+- [Automation Policy — `tech/automation.md`](.pair/knowledge/guidelines/collaboration/automation/automation-policy.md)
 - [Azure DevOps Automation](.pair/knowledge/guidelines/collaboration/automation/azure-devops-automation.md)
 - [Filesystem Automation](.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md)
 - [GitHub Automation](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)
