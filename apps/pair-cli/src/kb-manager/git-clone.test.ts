@@ -1,5 +1,16 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { parseGitRef, injectToken, gitCacheKey, redactGitCredentials } from './git-clone'
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
+import { execFileSync } from 'child_process'
+import {
+  parseGitRef,
+  injectToken,
+  gitCacheKey,
+  redactGitCredentials,
+  cloneGitRepo,
+} from './git-clone'
+
+vi.mock('child_process', () => ({ execFileSync: vi.fn() }))
+
+const execFileSyncMock = vi.mocked(execFileSync)
 
 describe('parseGitRef', () => {
   it('returns URL without ref when no # present', () => {
@@ -117,5 +128,123 @@ describe('redactGitCredentials', () => {
     expect(redactGitCredentials('fatal: git@github.com:org/kb.git not found')).toBe(
       'fatal: git@github.com:org/kb.git not found',
     )
+  })
+
+  it('keeps the `git` user of an ssh:// URL — it is not a credential', () => {
+    expect(redactGitCredentials('fatal: ssh://git@github.com/org/kb.git not found')).toBe(
+      'fatal: ssh://git@github.com/org/kb.git not found',
+    )
+  })
+
+  it('still strips a non-`git` userinfo from an ssh:// URL', () => {
+    expect(redactGitCredentials('fatal: ssh://deploy:s3cret@host/org/kb.git')).toBe(
+      'fatal: ssh://***@host/org/kb.git',
+    )
+  })
+})
+
+describe('cloneGitRepo', () => {
+  /** Reproduces what execFileSync throws on a non-zero git exit: no `code`, stderr in message. */
+  function gitFailure(stderr: string): Error {
+    const err = new Error(`Command failed: git clone --depth 1 <url> <dest>\n${stderr}`)
+    return Object.assign(err, { status: 128 })
+  }
+
+  beforeEach(() => {
+    execFileSyncMock.mockReset()
+    delete process.env['PAIR_GIT_TOKEN']
+  })
+
+  it('clones the requested ref', () => {
+    cloneGitRepo('https://github.com/org/kb.git#v1.0.0', '/tmp/pair-git-clone-test/dest')
+
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'git',
+      [
+        'clone',
+        '--depth',
+        '1',
+        '--branch',
+        'v1.0.0',
+        'https://github.com/org/kb.git',
+        '/tmp/pair-git-clone-test/dest',
+      ],
+      expect.anything(),
+    )
+  })
+
+  it('never lets git prompt for credentials, and bounds the clone', () => {
+    cloneGitRepo('https://github.com/org/kb.git', '/tmp/pair-git-clone-test/dest')
+
+    const options = execFileSyncMock.mock.calls[0]?.[2] as {
+      timeout?: number
+      env?: NodeJS.ProcessEnv
+    }
+    expect(options.env?.['GIT_TERMINAL_PROMPT']).toBe('0')
+    expect(typeof options.timeout).toBe('number')
+    expect(options.timeout).toBeGreaterThan(0)
+  })
+
+  it('maps a failed SPAWN (ENOENT) to the missing-binary message', () => {
+    execFileSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('spawnSync git ENOENT'), { code: 'ENOENT', errno: -2 })
+    })
+
+    expect(() =>
+      cloneGitRepo('https://github.com/org/kb.git', '/tmp/pair-git-clone-test/dest'),
+    ).toThrow('git executable not found')
+  })
+
+  it('reports the real reason for a non-existent ref, NOT a missing-binary claim', () => {
+    // Real git stderr — note it contains "not found", which must not be keyed on.
+    execFileSyncMock.mockImplementation(() => {
+      throw gitFailure('fatal: Remote branch nonexistent-branch-xyz not found in upstream origin')
+    })
+
+    expect(() =>
+      cloneGitRepo(
+        'https://github.com/org/kb.git#nonexistent-branch-xyz',
+        '/tmp/pair-git-clone-test/dest',
+      ),
+    ).toThrow(/not found in upstream origin/)
+    expect(() =>
+      cloneGitRepo(
+        'https://github.com/org/kb.git#nonexistent-branch-xyz',
+        '/tmp/pair-git-clone-test/dest',
+      ),
+    ).not.toThrow(/git executable not found/)
+  })
+
+  it('reports the real reason for a private or absent repo, NOT a missing-binary claim', () => {
+    // Real git stderr for a repo the caller cannot see.
+    execFileSyncMock.mockImplementation(() => {
+      throw gitFailure('remote: Repository not found.\nfatal: repository not found')
+    })
+
+    let message = ''
+    try {
+      cloneGitRepo('https://github.com/acme/private-kb.git', '/tmp/pair-git-clone-test/dest')
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+    expect(message).toContain('Repository not found')
+    expect(message).toContain('PAIR_GIT_TOKEN')
+    expect(message).not.toContain('git executable not found')
+  })
+
+  it('redacts the injected token echoed back in git stderr', () => {
+    process.env['PAIR_GIT_TOKEN'] = 'ghp_supersecret'
+    execFileSyncMock.mockImplementation(() => {
+      throw gitFailure("fatal: could not read from 'https://ghp_supersecret@github.com/org/kb.git'")
+    })
+
+    let message = ''
+    try {
+      cloneGitRepo('https://github.com/org/kb.git', '/tmp/pair-git-clone-test/dest')
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+    expect(message).not.toContain('ghp_supersecret')
+    expect(message).toContain('https://***@github.com/org/kb.git')
   })
 })

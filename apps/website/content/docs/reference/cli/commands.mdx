@@ -266,11 +266,11 @@ pair kb-info [package-path] [options]
 
 ### Options
 
-| Option                 | Description                                                             |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `--json`               | Output package metadata or version-check result as JSON format          |
-| `--source <path\|url>` | KB source to resolve the current version from — local path, `.zip`, remote URL or git URL (version-check mode only) |
-| `--log-level <level>`  | Set minimum log level (debug, info, warn, error)                        |
+| Option                | Description                                                          |
+| --------------------- | -------------------------------------------------------------------- |
+| `--json`              | Output package metadata or version-check result as JSON format       |
+| `--source <path\|url>` | KB source the current version is read from (version-check mode only) |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error)                     |
 
 ### Version Check Mode
 
@@ -294,12 +294,12 @@ when the version about to be applied differs from what's currently recorded.
 `--source` accepts every kind `install`/`update` accept, and each resolves the current version
 the same way it would be installed:
 
-| Source kind  | How the current version is resolved                                                   |
-| ------------ | -------------------------------------------------------------------------------------- |
-| _(none)_     | The KB the CLI resolves by default (bundled dataset, or the cached official release)   |
-| Local path   | `manifest.json` in the directory, or the `manifest.json` inside a `.zip`               |
-| Remote URL   | The URL is probed for reachability and the version read from it                        |
-| Git URL      | The repository is shallow-cloned read-only and its root `manifest.json` is read         |
+| Source kind | How the current version is resolved                                                                                           |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| _(none)_    | The KB the CLI resolves by default (bundled dataset, or the cached official release)                                          |
+| Local path  | `manifest.json` in the directory, or the `manifest.json` inside a `.zip`                                                      |
+| Remote URL  | The URL is probed for reachability and the version read from it                                                               |
+| Git URL     | The repository is shallow-cloned read-only and its root `manifest.json` — or, failing that, its root `package.json` — is read |
 
 A git source (`*.git`, `git@…`, `ssh://git@…`, optionally pinned with `#ref`) is cloned into a
 throwaway temporary directory that is deleted straight after the read — the shared KB cache
@@ -309,7 +309,7 @@ Credentials never reach the output — any token in a git error message is redac
 printed or serialized to JSON.
 
 If the clone cannot run at all — offline, `git` not installed, wrong credentials, a `#ref` that
-does not exist, or a repository with no readable `manifest.json` — the check reports **Current
+does not exist, or a repository carrying no readable version — the check reports **Current
 version unavailable** with the reason and still exits **0**, like every other source kind.
 
 ### Examples

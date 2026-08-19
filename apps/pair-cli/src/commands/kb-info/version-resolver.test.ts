@@ -14,7 +14,7 @@ import {
   readVersionFromDirectory,
   isStableVersion,
 } from './version-resolver'
-import { getSourceCachePath } from '#kb-manager/cache-slot-key'
+import { getCacheRoot } from '#kb-manager'
 
 const cwd = '/project'
 
@@ -204,15 +204,19 @@ describe('resolveCurrentVersion - remote source', () => {
 describe('resolveCurrentVersion - git source', () => {
   const gitSource = 'https://github.com/org/kb.git#v2.0.0'
 
-  /** Records where the clone was asked to land, and seeds it with the given files. */
+  interface CloneCall {
+    source: string
+    destDir: string
+  }
+
+  /** Records what the clone was asked to do, and seeds the destination with the given files. */
   function cloneStub(files: Record<string, string>) {
-    const calls: string[] = []
+    const calls: CloneCall[] = []
     const cloner = (fsService: InMemoryFileSystemService) => (source: string, destDir: string) => {
-      calls.push(destDir)
+      calls.push({ source, destDir })
       for (const [name, content] of Object.entries(files)) {
         void fsService.writeFile(`${destDir}/${name}`, content)
       }
-      expect(source).toBe(gitSource)
     }
     return { calls, cloner }
   }
@@ -225,19 +229,57 @@ describe('resolveCurrentVersion - git source', () => {
 
   it('resolves the version from the cloned manifest.json (AC1)', async () => {
     const fsService = new InMemoryFileSystemService({}, cwd, cwd)
-    const { cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+    const { calls, cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
 
     const result = await resolveCurrentVersion(fsService, {
       source: gitSource,
       gitCloner: cloner(fsService),
     })
 
+    // Asserted AFTER the call: an expect() inside the injected cloner would be swallowed by
+    // resolveGitVersion's catch and resurface as a confusing `available: false`.
+    expect(calls.map(call => call.source)).toEqual([gitSource])
     expect(result).toMatchObject({
       sourceKind: 'git',
       version: '2.0.0',
       available: true,
       stable: true,
     })
+  })
+
+  it('falls back to the cloned repository OWN package.json when it has no manifest.json', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { cloner } = cloneStub({ 'package.json': JSON.stringify({ version: '3.0.0' }) })
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: cloner(fsService),
+    })
+
+    expect(result).toMatchObject({ version: '3.0.0', available: true })
+  })
+
+  it('never reports a package.json planted OUTSIDE the clone (temp-root regression)', async () => {
+    // The clone lands under the OS temp root, which on Linux is the shared /tmp: a
+    // package.json sitting beside it — or in the clone's own parent — belongs to nobody
+    // and must never be read as the KB's current version.
+    const fsService = new InMemoryFileSystemService(
+      { [join(tmpdir(), 'package.json')]: JSON.stringify({ version: '99.99.99-PLANTED' }) },
+      cwd,
+      cwd,
+    )
+    const cloner = (_source: string, destDir: string) => {
+      void fsService.writeFile(`${destDir}/README.md`, '# kb, no version anywhere')
+      void fsService.writeFile(
+        join(destDir, '..', 'package.json'),
+        JSON.stringify({ version: '88.88.88-PLANTED' }),
+      )
+    }
+
+    const result = await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: cloner })
+
+    expect(result).toMatchObject({ sourceKind: 'git', version: null, available: false })
+    expect(result.error).not.toContain('PLANTED')
   })
 
   it('reports a pre-release git version as non-stable (AC1)', async () => {
@@ -259,17 +301,37 @@ describe('resolveCurrentVersion - git source', () => {
     await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: cloner(fsService) })
 
     expect(calls).toHaveLength(1)
-    const tempDir = calls[0] as string
+    const tempDir = calls[0]?.destDir as string
     expect(tempDir.startsWith(tmpdir())).toBe(true)
     expect(fsService.existsSync(`${tempDir}/manifest.json`)).toBe(false)
   })
 
+  it('gives the clone a private (0700) root of its own under the temp directory', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { calls, cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+    const modes: Array<number | undefined> = []
+    const recordingCloner = (source: string, destDir: string) => {
+      // Read the mode WHILE the clone runs: after the check the root is gone.
+      modes.push(fsService.getMode(join(destDir, '..')))
+      cloner(fsService)(source, destDir)
+    }
+
+    await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: recordingCloner })
+
+    const tempDir = calls[0]?.destDir as string
+    // The clone is a CHILD of the private root, never the temp root itself.
+    expect(join(tempDir, '..')).not.toBe(tmpdir())
+    expect(modes).toEqual([0o700])
+  })
+
   it('never touches the KB cache slot owned by the git source (AC2)', async () => {
-    const slot = getSourceCachePath({ kind: 'git', url: gitSource })
-    const slotManifest = `${slot}/manifest.json`
+    // The exact slot key is kb-manager's business; what AC2 requires is that a read
+    // neither reads from nor writes to anything under the cache root.
+    const cacheRoot = getCacheRoot()
+    const slotManifest = join(cacheRoot, 'external', 'git-slot-of-this-source', 'manifest.json')
     const cachedContent = JSON.stringify({ version: '0.0.1-stale' })
     const fsService = new InMemoryFileSystemService({ [slotManifest]: cachedContent }, cwd, cwd)
-    const { cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+    const { calls, cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
 
     const result = await resolveCurrentVersion(fsService, {
       source: gitSource,
@@ -278,24 +340,11 @@ describe('resolveCurrentVersion - git source', () => {
 
     // The reported version comes from the fresh clone, not from the (stale) slot...
     expect(result.version).toBe('2.0.0')
+    // ...the clone landed outside the cache entirely...
+    expect((calls[0]?.destDir as string).startsWith(cacheRoot)).toBe(false)
     // ...and the slot is byte-identical, neither rewritten nor deleted.
     expect(fsService.existsSync(slotManifest)).toBe(true)
     expect(fsService.readFileSync(slotManifest)).toBe(cachedContent)
-  })
-
-  it('falls back to a sibling package.json when the clone has no manifest.json', async () => {
-    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
-    const cloner = (_source: string, destDir: string) => {
-      void fsService.writeFile(
-        join(destDir, '..', 'package.json'),
-        JSON.stringify({ version: '3.0.0' }),
-      )
-      void fsService.writeFile(`${destDir}/README.md`, '# kb')
-    }
-
-    const result = await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: cloner })
-
-    expect(result).toMatchObject({ version: '3.0.0', available: true })
   })
 
   it('marks unavailable when the clone carries no readable version (AC3)', async () => {
@@ -321,6 +370,21 @@ describe('resolveCurrentVersion - git source', () => {
 
     expect(result).toMatchObject({ sourceKind: 'git', version: null, available: false })
     expect(result.error).toContain('Git clone failed')
+  })
+
+  it('surfaces the real reason for a missing ref instead of a missing-git claim (AC3)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: failingCloner(
+        'Git clone failed: fatal: Remote branch v9.9.9 not found in upstream origin',
+      ),
+    })
+
+    expect(result.available).toBe(false)
+    expect(result.error).toContain('not found in upstream origin')
+    expect(result.error).not.toContain('git executable not found')
   })
 
   it('surfaces the missing-git-binary reason instead of throwing (AC3)', async () => {

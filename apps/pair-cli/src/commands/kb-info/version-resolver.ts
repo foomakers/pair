@@ -37,41 +37,66 @@ export function isStableVersion(version: string | null): boolean {
   return version !== null && /^\d+\.\d+\.\d+$/.test(version)
 }
 
+/** `version` of the JSON file at `filePath`, or null when absent/unreadable/untyped. */
+function readVersionField(fs: FileSystemService, filePath: string): string | null {
+  if (!fs.existsSync(filePath)) return null
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath)) as { version?: unknown }
+    return typeof parsed.version === 'string' ? parsed.version : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Read a version string from a directory: prefers a manifest.json at the
  * directory root (packaged KB layout), falls back to a sibling package.json
- * (monorepo `packages/knowledge-hub/dataset` layout). Returns null when
- * neither is present or neither carries a usable version field.
+ * (monorepo `packages/knowledge-hub/dataset` layout, where `..` IS the KB package
+ * root). Returns null when neither is present or neither carries a usable version
+ * field.
+ *
+ * Only for a directory whose PARENT is known to be the owning package — never for a
+ * clone in a temp directory: see `readVersionFromRepoRoot`.
  */
 export function readVersionFromDirectory(fs: FileSystemService, dirPath: string): string | null {
-  const manifestPath = join(dirPath, 'manifest.json')
-  if (fs.existsSync(manifestPath)) {
-    try {
-      const manifest = JSON.parse(fs.readFileSync(manifestPath)) as { version?: unknown }
-      if (typeof manifest.version === 'string') return manifest.version
-    } catch {
-      // fall through to package.json fallback
-    }
-  }
-
-  const siblingPkgPath = join(dirPath, '..', 'package.json')
-  if (fs.existsSync(siblingPkgPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(siblingPkgPath)) as { version?: unknown }
-      if (typeof pkg.version === 'string') return pkg.version
-    } catch {
-      // fall through to null
-    }
-  }
-
-  return null
+  return (
+    readVersionField(fs, join(dirPath, 'manifest.json')) ??
+    readVersionField(fs, join(dirPath, '..', 'package.json'))
+  )
 }
 
-function detectSourceKind(source?: string): KbSourceKind {
-  if (!source) return 'registry'
-  if (isGitUrl(source)) return 'git'
-  if (isRemoteUrl(source)) return 'remote'
-  return 'local'
+/**
+ * Read a version string from a directory that IS the repository root: manifest.json first,
+ * then the repository's OWN package.json.
+ *
+ * Deliberately never looks at the PARENT directory. For a git clone the parent is a
+ * throwaway temp root, so the sibling fallback would report `<temp-root>/package.json` —
+ * a file the cloned repository does not own, and on Linux one any local process can drop
+ * into the shared /tmp.
+ */
+function readVersionFromRepoRoot(fs: FileSystemService, dirPath: string): string | null {
+  return (
+    readVersionField(fs, join(dirPath, 'manifest.json')) ??
+    readVersionField(fs, join(dirPath, 'package.json'))
+  )
+}
+
+/**
+ * What has to be resolved, with the value each kind needs already narrowed. A discriminated
+ * union rather than an options bag with optional fields: the compiler proves `source` is
+ * present on every kind that reads it, so no branch re-asserts it.
+ */
+type VersionRequest =
+  | { kind: 'registry' }
+  | { kind: 'local'; source: string }
+  | { kind: 'remote'; source: string }
+  | { kind: 'git'; source: string }
+
+function detectRequest(source?: string): VersionRequest {
+  if (!source) return { kind: 'registry' }
+  if (isGitUrl(source)) return { kind: 'git', source }
+  if (isRemoteUrl(source)) return { kind: 'remote', source }
+  return { kind: 'local', source }
 }
 
 /**
@@ -194,23 +219,35 @@ async function resolveLocalVersion(
  * failure. Reusing it here would make a read able to destroy an installed KB — and a cached
  * clone can be arbitrarily stale, which would make the reported "current" version a lie.
  *
- * The directory is deliberately NOT pre-created: `git clone` creates its destination, and
- * cloning into an existing directory is exactly the failure mode the install path suffers.
+ * The clone gets a PRIVATE root of its own (`<temp>/pair-kb-version-<uuid>/repo`), created
+ * 0700 before anything lands in it, for two reasons:
+ *   - the clone's PARENT must never be the shared OS temp root, or a `/tmp/package.json`
+ *     dropped by any local process would be read as the KB's version (the read here is
+ *     root-only anyway — `readVersionFromRepoRoot` — so this is defence in depth);
+ *   - `git clone` creates its destination 0755 & ~umask, i.e. a world-readable copy of a
+ *     possibly-private KB sitting in shared /tmp for the duration of the check.
+ * The root is created empty and the clone lands in a child that does not exist yet, which
+ * `git clone` requires (it accepts a missing or empty destination, never a populated one).
  */
 async function resolveGitVersion(
   fs: FileSystemService,
   source: string,
   cloner: GitCloner,
 ): Promise<Omit<CurrentVersionResult, 'sourceKind' | 'stable'>> {
-  const tempDir = join(tmpdir(), `pair-kb-version-${randomUUID()}`)
+  const tempRoot = join(tmpdir(), `pair-kb-version-${randomUUID()}`)
+  const tempDir = join(tempRoot, 'repo')
   try {
+    await fs.mkdir(tempRoot, { recursive: true })
+    // Private BEFORE the clone starts: until chmod returns the directory is empty, so the
+    // window exposes nothing. (`mkdir` here takes no mode, hence create-then-restrict.)
+    await fs.chmod(tempRoot, 0o700)
     await cloner(source, tempDir)
-    const version = readVersionFromDirectory(fs, tempDir)
+    const version = readVersionFromRepoRoot(fs, tempDir)
     if (version === null) {
       return {
         version: null,
         available: false,
-        error: `No KB version found at git source ${redactGitCredentials(source)} (no manifest.json or sibling package.json)`,
+        error: `No KB version found at git source ${redactGitCredentials(source)} (no manifest.json or package.json at the repository root)`,
       }
     }
     return { version, available: true }
@@ -222,7 +259,7 @@ async function resolveGitVersion(
     // Best-effort: a temp directory that outlives the check is litter, never a failure,
     // and it can never be mistaken for the install cache (different root).
     try {
-      await fs.rm(tempDir, { recursive: true, force: true })
+      await fs.rm(tempRoot, { recursive: true, force: true })
     } catch {
       // ignore — cleanup must not turn a successful read into an error
     }
@@ -235,45 +272,51 @@ async function resolveGitVersion(
  */
 export async function resolveCurrentVersion(
   fs: FileSystemService,
-  options: {
-    source?: string
-    httpClient?: HttpClientService
-    cliVersion?: string
-    gitCloner?: GitCloner
-  } = {},
+  options: CurrentVersionOptions = {},
 ): Promise<CurrentVersionResult> {
-  const sourceKind = detectSourceKind(options.source)
+  const request = detectRequest(options.source)
+  const sourceKind = request.kind
 
   try {
-    const partial = await resolvePartialCurrentVersion(sourceKind, fs, options)
+    const partial = await resolvePartialCurrentVersion(request, fs, options)
     return { sourceKind, stable: isStableVersion(partial.version), ...partial }
   } catch (err) {
-    return { sourceKind, version: null, available: false, stable: false, error: errorMessage(err) }
+    // Unreachable for a git source today (resolveGitVersion catches everything), which is
+    // exactly why it redacts too: a future refactor must not be able to leak a token here.
+    return {
+      sourceKind,
+      version: null,
+      available: false,
+      stable: false,
+      error: redactGitCredentials(errorMessage(err)),
+    }
   }
 }
 
+interface CurrentVersionOptions {
+  source?: string
+  httpClient?: HttpClientService
+  cliVersion?: string
+  gitCloner?: GitCloner
+}
+
 async function resolvePartialCurrentVersion(
-  sourceKind: KbSourceKind,
+  request: VersionRequest,
   fs: FileSystemService,
-  options: {
-    source?: string
-    httpClient?: HttpClientService
-    cliVersion?: string
-    gitCloner?: GitCloner
-  },
+  options: CurrentVersionOptions,
 ): Promise<Omit<CurrentVersionResult, 'sourceKind' | 'stable'>> {
-  switch (sourceKind) {
+  switch (request.kind) {
     case 'registry':
       return resolveRegistryVersion(fs, {
         ...(options.httpClient && { httpClient: options.httpClient }),
         ...(options.cliVersion && { cliVersion: options.cliVersion }),
       })
     case 'local':
-      return resolveLocalVersion(fs, options.source as string)
+      return resolveLocalVersion(fs, request.source)
     case 'remote':
-      return resolveRemoteVersion(options.source as string, options.httpClient)
+      return resolveRemoteVersion(request.source, options.httpClient)
     case 'git':
-      return resolveGitVersion(fs, options.source as string, options.gitCloner ?? cloneGitRepo)
+      return resolveGitVersion(fs, request.source, options.gitCloner ?? cloneGitRepo)
   }
 }
 

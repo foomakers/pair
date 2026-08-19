@@ -23,6 +23,13 @@ export function parseGitRef(source: string): GitRef {
 /**
  * Inject PAIR_GIT_TOKEN into HTTPS URLs for private repo auth.
  * SSH URLs are not modified (they use SSH keys).
+ *
+ * KNOWN LIMITATION (stated, not silently carried): the token ends up in the `git clone`
+ * argv, so it is readable by any local user through /proc/<pid>/cmdline on Linux for the
+ * duration of the clone. Moving it out of argv (GIT_ASKPASS / credential helper /
+ * `-c http.extraHeader`) changes how install and update authenticate against every private
+ * source, so it is tracked as its own card (#448) rather than smuggled into a version-check
+ * story.
  */
 export function injectToken(repoUrl: string): string {
   const token = process.env['PAIR_GIT_TOKEN']
@@ -40,7 +47,14 @@ export function injectToken(repoUrl: string): string {
  * only place that knows how a credential enters a URL is the only place that removes it.
  */
 export function redactGitCredentials(message: string): string {
-  const withoutUserinfo = message.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s@]+@/gi, `$1${REDACTED}@`)
+  // `git@` is NOT a credential: `injectToken` only rewrites http(s) URLs, so an SSH URL can
+  // never carry an injected token — `ssh://git@host/org/kb.git` is the one shape guaranteed
+  // credential-free, and redacting it would only hide the repo from a debug message.
+  const withoutUserinfo = message.replace(
+    /([a-z][a-z0-9+.-]*:\/\/)([^/\s@]+)@/gi,
+    (whole: string, scheme: string, userinfo: string) =>
+      userinfo === 'git' ? whole : `${scheme}${REDACTED}@`,
+  )
   const token = process.env['PAIR_GIT_TOKEN']
   if (!token) return withoutUserinfo
   return withoutUserinfo.split(token).join(REDACTED)
@@ -60,8 +74,21 @@ export function gitCacheKey(source: string): string {
 export type GitCloner = (source: string, destDir: string) => void | Promise<void>
 
 /**
+ * Upper bound on a single clone. `kb-info`'s read-only version check reaches this function,
+ * and a read-only info command must never block a terminal forever on a slow or huge repo.
+ */
+const CLONE_TIMEOUT_MS = 5 * 60_000
+
+/**
  * Shallow-clone a git repository into destDir.
- * destDir must already exist.
+ *
+ * destDir must NOT already exist, or must be EMPTY: `git clone` creates its destination and
+ * refuses only a NON-empty one (that is the install path's second-run failure — a populated
+ * cache slot — not a freshly created empty directory).
+ *
+ * Never interactive: `GIT_TERMINAL_PROMPT=0` turns a missing credential into an error instead
+ * of a `Username for 'https://…':` prompt git would open on /dev/tty, so a private repo
+ * without credentials degrades to a reported reason instead of hanging.
  */
 export function cloneGitRepo(source: string, destDir: string): void {
   const { repoUrl, ref } = parseGitRef(source)
@@ -72,7 +99,11 @@ export function cloneGitRepo(source: string, destDir: string): void {
   args.push(authedUrl, destDir)
 
   try {
-    execFileSync('git', args, { stdio: 'pipe' })
+    execFileSync('git', args, {
+      stdio: 'pipe',
+      timeout: CLONE_TIMEOUT_MS,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    })
   } catch (err) {
     // Clean up partial clone on failure
     try {
@@ -80,12 +111,16 @@ export function cloneGitRepo(source: string, destDir: string): void {
     } catch {
       // best-effort
     }
+    // ONLY a failed spawn means the binary is missing. Keying on git's stderr instead would
+    // rewrite `fatal: Remote branch <ref> not found in upstream origin` (bad #ref) and
+    // `remote: Repository not found.` (private repo, no credentials) into "install git" —
+    // and this message is now the user-visible reason of a read-only version check.
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error('git executable not found. Install git to use git repository sources.')
+    }
     // git echoes the AUTHENTICATED url back in its stderr, so redact before the message
     // exists as an Error — every caller (version check, install, update) inherits it.
     const msg = redactGitCredentials(err instanceof Error ? err.message : String(err))
-    if (msg.includes('not found') || msg.includes('ENOENT')) {
-      throw new Error('git executable not found. Install git to use git repository sources.')
-    }
     throw new Error(
       `Git clone failed: ${msg}\n\nFor private repos, set PAIR_GIT_TOKEN or configure SSH keys.`,
     )
