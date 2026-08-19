@@ -8,8 +8,7 @@ import { Callout } from 'fumadocs-ui/components/callout'
 `pair-cli scaffold-kb` creates an **external Knowledge Base repository**: a repo whose
 only job is to hold knowledge and skills, package them, and publish them. A project
 installs it through the normal `pair install --source <git-url-or-path>` path — no custom
-tooling, no special-casing in the CLI (see the ZIP caveat under
-[Install it in a project](#install-it-in-a-project)).
+tooling, no special-casing in the CLI.
 
 Use it when you want your own KB (private, self-hosted, or a fork) instead of
 hand-assembling the structure described in [Publish a Knowledge Base](/docs/customization/organization).
@@ -77,13 +76,13 @@ scaffold's, not something you added):
 }
 ```
 
-The `prefix` is meant to namespace this KB's skills once installed
-(`acme-kb-example-skill`), so two KBs never collide. Today it only takes effect if the
-consuming project adopts this config: `pair install --source` resolves the **consuming**
-project's `pair.config.json`, never the source KB's, so with a default project the
-skills install as `pair-example-skill`. Copy this file into the consuming project to get
-the declared prefix. Tracked in
-[foomakers/pair#397](https://github.com/foomakers/pair/issues/397).
+The `prefix` namespaces this KB's skills once installed (`acme-kb-example-skill`), so two
+KBs never collide. `pair install --source <kb>` reads this file from the KB itself:
+nothing has to be copied into the consuming project.
+
+A consuming project that declares the same registry in its own `pair.config.json` still
+wins — **the source declares, the consumer overrides**. The full resolution order is in
+the [configuration reference](/docs/reference/configuration#resolution-order).
 
 ## Add content
 
@@ -158,18 +157,19 @@ pair-cli install --source ./dist/acme-kb-1.0.0.zip --offline
   cleaned: delete `~/.pair/kb/<old-cli-version>/` yourself to reclaim the disk.
 </Callout>
 
-Registries the external KB does not ship (for example `adoption`, `github`) are currently
-counted as **failed** in the install summary, so a successful install of an external KB
-ends with a line like:
+Registries the external KB does not ship (for example `adoption`, `github`) are **skipped**,
+not failed — there is simply nothing to copy. The summary names them and the reason:
 
 ```text
-! Installation finished with errors (2 ok, 3 failed, 79ms)
+✓ Installation complete (2 ok, 3 skipped — not shipped by this source, 79ms)
+    3 skipped — not shipped by this source: adoption, github, agents
 ```
 
-The command still exits `0` and everything the KB ships is installed — the registries it
-does not ship simply have no source to copy from. Making them report as skipped is
-tracked in [foomakers/pair#396](https://github.com/foomakers/pair/issues/396). See
-[Install from URL or Path](/docs/customization/install-from-url) for every source form.
+The exit code follows the failures only, so it never contradicts that line: `0` here, and
+non-zero if a registry the KB **does** ship fails to install, or if the run installs
+nothing at all. A skipped registry never hides a real failure — the two are counted
+separately. See [Install from URL or Path](/docs/customization/install-from-url) for every
+source form.
 
 A project consumes **one** distribution channel for a given skill set: an external KB
 like this one, or the marketplace — not both.

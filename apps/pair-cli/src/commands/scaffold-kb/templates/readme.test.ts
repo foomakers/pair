@@ -44,8 +44,21 @@ describe('renderReadme', () => {
     }
   })
 
-  it('keeps the limitations that are still real (#396, #397)', () => {
-    expect(github).toContain('issues/396')
-    expect(github).toContain('issues/397')
+  // US-396 landed: install honours this KB's own declaration and reports absent
+  // registries as skipped. A README that still tells consumers to copy the config in, or
+  // to expect a red summary, costs more than the defect it used to describe.
+  it('carries no stale #396 / #397 limitation', () => {
+    for (const readme of [github, generic]) {
+      expect(readme).not.toContain('issues/396')
+      expect(readme).not.toContain('issues/397')
+      expect(readme).not.toContain('Current limitations')
+      expect(readme).not.toContain('Installation finished with errors')
+    }
+  })
+
+  it('states the precedence a consumer needs: this KB declares, the project overrides', () => {
+    expect(github).toContain('acme-kb')
+    expect(github).toMatch(/prefix/i)
+    expect(github).toMatch(/overrid/i)
   })
 })

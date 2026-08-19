@@ -16,6 +16,36 @@ packages/knowledge-hub/dataset/config.json    # In monorepo (source)
 
 Override with `--config <path>` on any command.
 
+## Resolution Order
+
+More than one configuration can be in play at once — the CLI's own defaults, the KB you
+are installing, and your project. They are merged per registry, weakest first:
+
+| Layer | Source | Wins over |
+| ----- | ------ | --------- |
+| 1. CLI defaults | `config.json` shipped with pair-cli | — |
+| 2. Source KB declaration | `pair.config.json` at the root of the KB named by `install --source` | CLI defaults |
+| 3. Project configuration | `pair.config.json` (or `config.json`) in the project being installed into | the source KB |
+| 4. Explicit `--config <path>` | the file you name | everything |
+
+**The source declares, the consumer overrides.** An external KB that declares
+`skills.prefix: "acme-kb"` installs its skills under that prefix with nothing to copy
+into your project — and if your project declares a `skills.prefix` of its own, yours
+wins. Only the fields a layer actually states are overridden; the rest fall through.
+
+Two guards apply to layer 2, and only to it, because the source is the one layer you do
+not control:
+
+- A **malformed** source `pair.config.json` is ignored with a warning — never partially
+  applied — and installation continues on your project's resolution.
+- A registry the source declares that this CLI has **no definition for** (a newer KB read
+  by an older CLI) is not installed: it is reported as skipped, with the reason
+  `declared by source, unknown to this CLI`. Declare it in your project's own
+  configuration to adopt it deliberately.
+
+Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`); the default
+KB path resolves exactly as before.
+
 ## Structure
 
 ```json
