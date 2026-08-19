@@ -16,6 +16,12 @@
  * A pattern is anchored: it must match the WHOLE candidate path, so `apps/**`
  * does not match `vendor/apps/x.md`.
  *
+ * NOT minimatch-equivalent, and every divergence measured is MORE permissive: a
+ * trailing `/**` also matches the directory itself (`apps/**` matches `apps`), and
+ * `**` traverses `..` segments (`**` matches `../../apps/x.ts` — which is the point
+ * here, the tolerated links leave the KB). Both are pinned in `glob-match.test.ts`
+ * and stated in the CLI reference; see the ADL's Consequences.
+ *
  * Matching is NOT regex-based, on purpose: patterns come from a config file and
  * a CLI flag, and a compiled-to-RegExp matcher both throws on some inputs
  * (`[z-a]` — range out of order) and backtracks catastrophically on others
@@ -196,79 +202,75 @@ function compileCharacterClass(body: string): Token | null {
 }
 
 /**
- * Matches compiled segments against candidate segments, with `**` consuming zero or
- * more segments.
+ * The wildcard match, written ONCE for both levels (segments against a path, tokens
+ * against one segment): greedy consume, remember the last wildcard position, and on a
+ * mismatch let that wildcard swallow one more element and retry from just after it.
  *
- * Two-pointer with a single backtrack anchor (the classic wildcard algorithm): the
- * last globstar is the only place to retry, so the cost is O(segments²) worst case
- * and no input can make it hang.
+ * Two-pointer with a single backtrack anchor (the classic wildcard algorithm): the last
+ * wildcard is the only place to retry, so the cost is O(pattern·input) worst case and no
+ * input can make it hang. Generic on purpose — the algorithm's correctness is subtle and
+ * one copy per level would let a fix land in one and not the other.
  */
-function matchSegments(pattern: Segment[], candidate: string[]): boolean {
+function matchWildcard<P, I>(
+  pattern: readonly P[],
+  input: readonly I[],
+  isWildcard: (element: P) => boolean,
+  matchOne: (element: P, item: I) => boolean,
+): boolean {
   let patternIndex = 0
-  let candidateIndex = 0
-  let starPattern = -1
-  let starCandidate = -1
+  let inputIndex = 0
+  let wildcardPattern = -1
+  let wildcardInput = -1
 
-  while (candidateIndex < candidate.length) {
-    const segment = pattern[patternIndex]
+  while (inputIndex < input.length) {
+    const element = pattern[patternIndex]
 
-    if (segment?.kind === 'globstar') {
-      starPattern = patternIndex
-      starCandidate = candidateIndex
+    if (element !== undefined && isWildcard(element)) {
+      wildcardPattern = patternIndex
+      wildcardInput = inputIndex
       patternIndex += 1
       continue
     }
 
-    if (segment !== undefined && matchTokens(segment.tokens, candidate[candidateIndex] as string)) {
+    if (element !== undefined && matchOne(element, input[inputIndex] as I)) {
       patternIndex += 1
-      candidateIndex += 1
+      inputIndex += 1
       continue
     }
 
-    if (starPattern === -1) return false
+    if (wildcardPattern === -1) return false
 
-    // Let the globstar swallow one more segment and retry from just after it.
-    starCandidate += 1
-    patternIndex = starPattern + 1
-    candidateIndex = starCandidate
+    // Let the wildcard swallow one more element and retry from just after it.
+    wildcardInput += 1
+    patternIndex = wildcardPattern + 1
+    inputIndex = wildcardInput
   }
 
-  while (pattern[patternIndex]?.kind === 'globstar') patternIndex += 1
+  // Trailing wildcards can still match nothing.
+  while (patternIndex < pattern.length && isWildcard(pattern[patternIndex] as P)) patternIndex += 1
   return patternIndex === pattern.length
 }
 
-/** Same algorithm, one level down: tokens against the characters of one segment. */
+/** Matches compiled segments against candidate segments, `**` consuming zero or more. */
+function matchSegments(pattern: Segment[], candidate: string[]): boolean {
+  return matchWildcard(
+    pattern,
+    candidate,
+    segment => segment.kind === 'globstar',
+    (segment, value) => segment.kind === 'tokens' && matchTokens(segment.tokens, value),
+  )
+}
+
+/** Same match, one level down: tokens against the characters of one segment. */
 function matchTokens(tokens: Token[], value: string): boolean {
-  let tokenIndex = 0
-  let valueIndex = 0
-  let starToken = -1
-  let starValue = -1
-
-  while (valueIndex < value.length) {
-    const token = tokens[tokenIndex]
-
-    if (token?.kind === 'star') {
-      starToken = tokenIndex
-      starValue = valueIndex
-      tokenIndex += 1
-      continue
-    }
-
-    if (token !== undefined && matchToken(token, value[valueIndex] as string)) {
-      tokenIndex += 1
-      valueIndex += 1
-      continue
-    }
-
-    if (starToken === -1) return false
-
-    starValue += 1
-    tokenIndex = starToken + 1
-    valueIndex = starValue
-  }
-
-  while (tokens[tokenIndex]?.kind === 'star') tokenIndex += 1
-  return tokenIndex === tokens.length
+  return matchWildcard(
+    tokens,
+    // `split('')`, not `[...value]`: the pattern is tokenized by UTF-16 code unit too,
+    // so both sides must be split the same way.
+    value.split(''),
+    token => token.kind === 'star',
+    (token, char) => matchToken(token, char),
+  )
 }
 
 function matchToken(token: Token, char: string): boolean {

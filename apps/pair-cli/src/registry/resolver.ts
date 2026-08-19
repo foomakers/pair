@@ -1,6 +1,5 @@
 import { FileSystemService, Behavior, type TargetConfig } from '@pair/content-ops'
 import { getCanonicalTarget } from './layout'
-import type { LinkValidationConfig } from '../commands/kb-validate/optional-link-config'
 
 /**
  * Unified configuration for an individual asset registry.
@@ -31,6 +30,15 @@ export interface RegistryConfig {
   flattenDepth?: number
   prefix?: string
   targets: TargetConfig[]
+}
+
+/**
+ * The `link_validation` section of `pair.config.json` / `config.json`, consumed by
+ * `kb-validate` (US-188). Declared here, beside `Config`: `#registry` is imported BY
+ * the commands, never the reverse.
+ */
+export interface LinkValidationConfig {
+  optional_link_patterns?: string[]
 }
 
 /**

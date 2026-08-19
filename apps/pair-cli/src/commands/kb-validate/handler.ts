@@ -92,10 +92,11 @@ export async function handleKbValidateCommand(
 
   const loadedConfig = loadKbConfig(config, fs, kbPath)
   const registries = loadRegistries(config, loadedConfig)
-  const optionalLinkPatterns = resolveOptionalLinkPatterns(
-    loadedConfig,
-    config.optionalLinkPatterns,
-  )
+  const { patterns: optionalLinkPatterns, warnings: optionalLinkWarnings } =
+    resolveOptionalLinkPatterns(loadedConfig, config.optionalLinkPatterns)
+  for (const warning of optionalLinkWarnings) {
+    logger.warn(warning)
+  }
 
   const structure = !config.ignoreConfig
     ? await validateStructure({ registries, layout, baseDir: kbPath, fs })

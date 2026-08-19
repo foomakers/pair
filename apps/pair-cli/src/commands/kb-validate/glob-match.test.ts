@@ -103,6 +103,19 @@ describe('matchesAnyPattern', () => {
     expect(match(['vendor/apps/x.ts'], ['**/apps/**'])).toBe(true)
   })
 
+  // Documented divergences from minimatch (ADL: every one MORE permissive). Pinned so a
+  // rewrite has to decide about them rather than change them by accident.
+  it('lets `**` traverse `..` segments, unlike minimatch', () => {
+    expect(match(['../../apps/x.ts'], ['**'])).toBe(true)
+    expect(match(['../../apps/x.ts'], ['**/apps/**'])).toBe(true)
+    expect(match(['../../apps/x.ts'], ['**/x.ts'])).toBe(true)
+  })
+
+  it('lets a trailing `/**` match the directory itself, unlike minimatch', () => {
+    expect(match(['b'], ['**/b/**'])).toBe(true)
+    expect(match(['a/b'], ['**/b/**'])).toBe(true)
+  })
+
   it('collapses repeated globstars', () => {
     expect(match(['a/b/c'], ['**/**/c'])).toBe(true)
     expect(match(['c'], ['**/**/c'])).toBe(true)

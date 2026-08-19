@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { handleKbValidateCommand } from './handler'
+import { logger } from '@pair/content-ops'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 
 const minimalConfig = JSON.stringify({ asset_registries: {} })
@@ -304,5 +305,38 @@ describe('handleKbValidateCommand - optional link patterns (US-188)', () => {
         seedKb(),
       ),
     ).resolves.toBeUndefined()
+  })
+
+  // A section of the wrong shape must not read as "no patterns declared": without a
+  // diagnostic the run reports every out-of-tree link as broken and the config typo
+  // is invisible.
+  it.each([
+    {
+      case: 'a string instead of an array (the comma-separated-flag typo)',
+      extras: { link_validation: { optional_link_patterns: 'apps/**' } },
+      expected: /optional_link_patterns' must be an array of strings, got a string/,
+    },
+    {
+      case: 'a camelCase key',
+      extras: { link_validation: { optionalLinkPatterns: ['apps/**'] } },
+      expected: /declares no 'optional_link_patterns' \(found: optionalLinkPatterns\)/,
+    },
+    {
+      case: 'a section that is not an object',
+      extras: { link_validation: 'apps/**' },
+      expected: /'link_validation' must be an object, got a string/,
+    },
+    {
+      case: 'non-string entries in the array',
+      extras: { link_validation: { optional_link_patterns: ['apps/**', 42] } },
+      expected: /has 1 entry that is not a non-empty string/,
+    },
+  ])('warns when the config declares $case', async ({ extras, expected }) => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+
+    await handleKbValidateCommand({ command: 'kb-validate' }, seedKb(extras)).catch(() => undefined)
+
+    expect(warn.mock.calls.flat().join('\n')).toMatch(expected)
+    warn.mockRestore()
   })
 })
