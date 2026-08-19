@@ -35,7 +35,14 @@ import { join } from 'path'
 
 const ROOT = join(__dirname, '../../../..')
 const CP10 = join(ROOT, 'qa/release-validation/CP10-web-cloud-environment.md')
+const CP5 = join(ROOT, 'qa/release-validation/CP5-website-docs-completeness.md')
 const SUITE_README = join(ROOT, 'qa/release-validation/README.md')
+const DOCS_PAGE = join(ROOT, 'apps/website/content/docs/integrations/web-cloud-environments.mdx')
+const DOCS_META = join(ROOT, 'apps/website/content/docs/integrations/meta.json')
+const E2E = join(ROOT, 'apps/website/e2e/docs.e2e.test.ts')
+
+const DOCS_SLUG = 'web-cloud-environments'
+const DOCS_URL = `/docs/integrations/${DOCS_SLUG}`
 
 const read = (p: string): string => readFileSync(p, 'utf-8')
 
@@ -146,5 +153,88 @@ describe('CP10 is registered in the suite index', () => {
     // has to name the exception, or the next executor trusts a prerequisite that no longer holds.
     expect(prerequisites).toMatch(/CP10/)
     expect(prerequisites.toLowerCase()).toMatch(/authenticat/)
+  })
+})
+
+describe('the docs page tells the reader what holds on web/cloud and what does not', () => {
+  it('exists on the docs site', () => {
+    expect(existsSync(DOCS_PAGE)).toBe(true)
+  })
+
+  it('carries the frontmatter the site needs', () => {
+    const c = read(DOCS_PAGE)
+    expect(c).toMatch(/^---\n(?:.*\n)*?title:\s*\S/m)
+    expect(c).toMatch(/^description:\s*\S/m)
+  })
+
+  it('states what works — skills, and branch/commit/PR', () => {
+    const c = read(DOCS_PAGE).toLowerCase()
+    expect(c).toMatch(/skills/)
+    expect(c).toMatch(/\bbranch\b/)
+    expect(c).toMatch(/\bcommit\b/)
+    expect(c).toMatch(/pull request/)
+  })
+
+  it('states what does not work, without promising a live preview', () => {
+    const c = read(DOCS_PAGE)
+    expect(c).toMatch(/R9\.4/)
+    expect(c.toLowerCase()).toMatch(/live preview/)
+    // The failure mode this guards is a docs page that sells the workaround as the
+    // feature. Any sentence claiming a live preview is available fails here.
+    expect(c).not.toMatch(/live preview (?:is|are|will be) (?:available|supported|exposed)/i)
+    expect(c).not.toMatch(/(?:can|you can) (?:get|share|expose) a (?:public )?live preview/i)
+  })
+
+  it('documents the mitigation as something to verify, not as a promise', () => {
+    const c = read(DOCS_PAGE).toLowerCase()
+    expect(c).toMatch(/playwright/)
+    expect(c).toMatch(/headless/)
+    expect(c).toMatch(/screenshot/)
+  })
+
+  it('points at CP10, so the claim is re-verified rather than trusted forever', () => {
+    expect(read(DOCS_PAGE)).toMatch(/CP10/)
+  })
+
+  it.each(CREDENTIAL_SHAPES)('embeds no %s', (_label, shape) => {
+    expect(read(DOCS_PAGE)).not.toMatch(shape)
+  })
+
+  it('is registered in the Integrations sidebar', () => {
+    const meta = JSON.parse(read(DOCS_META)) as { pages: string[] }
+    expect(meta.pages).toContain(DOCS_SLUG)
+  })
+})
+
+describe('the new page is swept by the existing coverage, not left unwatched', () => {
+  it('is listed in CP5 (docs completeness)', () => {
+    expect(read(CP5)).toContain(DOCS_URL)
+  })
+
+  it('keeps CP5 self-consistent — every stated count matches what is listed', () => {
+    const c = read(CP5)
+    const mt501 = c.slice(c.indexOf('## MT-CP501'), c.indexOf('## MT-CP502'))
+
+    // Per-section: `**Integrations** (7 pages):` must match the bullets under it.
+    const sections = [...mt501.matchAll(/\*\*(.+?)\*\* \((\d+) pages?\):\n((?:- `.+`\n)+)/g)]
+    expect(sections.length).toBeGreaterThan(0)
+    let listed = 0
+    for (const [, name, declared, bullets] of sections) {
+      const urls = bullets.trim().split('\n').length
+      expect(urls, `${name} declares ${declared} pages but lists ${urls}`).toBe(Number(declared))
+      listed += urls
+    }
+
+    // And the totals quoted in the expected result + notes must equal the sum.
+    for (const quoted of [...mt501.matchAll(/All (\d+) URLs return HTTP 200/g)])
+      expect(Number(quoted[1])).toBe(listed)
+    for (const quoted of [...mt501.matchAll(/Total: (\d+) pages/g)])
+      expect(Number(quoted[1])).toBe(listed)
+  })
+
+  it('is covered by the website e2e page sweeps', () => {
+    const c = read(E2E)
+    // Both lists: the integrations smoke sweep and the prev/next integrity sweep.
+    expect(c.split(DOCS_URL).length - 1).toBeGreaterThanOrEqual(2)
   })
 })

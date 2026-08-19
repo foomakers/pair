@@ -49,13 +49,14 @@
 - `$BASE_URL/docs/customization/templates`
 - `$BASE_URL/docs/customization/organization`
 
-**Integrations** (6 pages):
+**Integrations** (7 pages):
 - `$BASE_URL/docs/integrations`
 - `$BASE_URL/docs/integrations/claude-code`
 - `$BASE_URL/docs/integrations/cursor`
 - `$BASE_URL/docs/integrations/github-copilot`
 - `$BASE_URL/docs/integrations/windsurf`
 - `$BASE_URL/docs/integrations/codex`
+- `$BASE_URL/docs/integrations/web-cloud-environments`
 
 **PM Tools** (4 pages):
 - `$BASE_URL/docs/pm-tools`
@@ -99,13 +100,13 @@
 
 ### Expected Result
 
-- All 61 URLs return HTTP 200
+- All 62 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 61 pages
+- Total: 62 pages
 
 ---
 
@@ -149,3 +150,4 @@
 ## Changelog
 
 - #278 (bootstrap quick mode): MT-CP501 page count 60 → 61, Getting Started 6 → 7 — added `/docs/getting-started/bootstrap-quick-mode`.
+- #225 (web/cloud environments): MT-CP501 page count 61 → 62, Integrations 6 → 7 — added `/docs/integrations/web-cloud-environments`.

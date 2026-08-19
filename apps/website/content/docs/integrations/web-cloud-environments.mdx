@@ -1,0 +1,110 @@
+---
+title: Web and Cloud Environments
+description: Running pair from Claude Code Web and similar cloud coding environments — what works, what does not, and the workaround for the one thing that does not.
+---
+
+pair is a knowledge base plus a skill catalog in your repository. Nothing about it is tied to a
+laptop, so a cloud coding environment that clones the repo — [Claude Code
+Web](https://docs.anthropic.com/en/docs/claude-code) is the one this page describes — reads the
+same `.pair/` files and runs the same skills your local session does.
+
+One thing is genuinely different, and it is a deliberate exclusion rather than a gap: **there is no
+live preview of a dev server**. This page states both halves honestly, so you can decide what to
+run where.
+
+## What works
+
+| Capability                | Status | Notes                                                                                             |
+| ------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| Skill discovery           | Works  | Skills are read from `.claude/skills/` in the repository — the same directory `pair-cli install` writes |
+| Skill execution           | Works  | Including skills that **write files** (adoption files, decision records, checkpoints)              |
+| Reading the knowledge base | Works  | `.pair/knowledge/` and `.pair/adoption/` are ordinary repository files                              |
+| Git: branch and commit    | Works  | The environment carries its own git identity                                                       |
+| Pull requests             | Works  | Via `gh`, authenticated by the environment — a full story can go from `Ready` to an open pull request without a local terminal |
+| Running tests and builds  | Works  | The usual `pnpm` scripts run in the session                                                        |
+| Dev server, inside the session | Works | The server binds and is reachable **from within** the session                                    |
+| Dev server, live preview from outside | **Not available** | Excluded by design — see below                                              |
+
+## What does not work: a live dev-server preview
+
+A dev server started in the session is **not exposed on the public internet**, so you cannot open
+it from your own browser and click through the running app.
+
+This is a decision, not a defect. Requirement **R9.4** excludes public dev-server exposure: a
+port that anyone can reach turns every ad-hoc `pnpm dev` into an unauthenticated deployment of
+unreviewed code. The environment declining to do that is the environment behaving correctly.
+
+<Callout type="warn">
+  Do not plan work that depends on a human eyeballing a running UI from a cloud session. Visual
+  review of a running app is a local-session job, or a job for a deployed preview environment your
+  own pipeline builds — not something the coding environment will hand you.
+</Callout>
+
+## The workaround: drive the app headlessly
+
+The dev server is reachable **inside** the session, so a headless browser inside the session can
+reach it too. Playwright is already in pair's stack, so a screenshot of a real rendered page is a
+one-liner:
+
+```bash
+# terminal 1 — inside the cloud session
+pnpm --filter @pair/website dev
+
+# terminal 2 — inside the same session
+pnpm --filter @pair/website exec playwright screenshot http://localhost:3000/docs preview.png
+```
+
+You get a PNG in the workspace instead of an interactive preview: enough to confirm a layout
+renders, a component mounted, or a regression is visible — not enough to click around.
+
+<Callout type="info">
+  **Check this in your own environment before you rely on it.** Whether a headless browser is
+  installable and runnable depends on the sandbox you are in, and a workaround that only works on a
+  dev machine is not a workaround for a cloud session. Run the two commands above once; if the
+  screenshot is not produced, the honest state for that environment is "no visual verification at
+  all", and you should plan around it rather than around this page.
+</Callout>
+
+For the full end-to-end browser suite (rather than a single screenshot), the same reasoning
+applies: it runs against `localhost` inside the session, so it works wherever the browsers install.
+
+## Prerequisites
+
+The environment supplies its own credentials — you do not paste any into the repository, and pair
+never asks you to. What is worth checking, once, at the start of a session:
+
+| Check                                  | Confirms                                     |
+| -------------------------------------- | -------------------------------------------- |
+| `git config user.email`                | The session can author commits               |
+| `gh auth status`                        | The session can open pull requests           |
+| `gh repo view --json viewerPermission`  | You have write access to this repository     |
+| The session's MCP server list          | Which integrations are available             |
+
+<Callout type="warn">
+  **Never commit a token.** These are checks that authentication is *present*; none of them
+  involves writing a credential into a file. If a skill appears to need one, that is a bug worth
+  reporting, not a reason to paste a secret into the repo.
+</Callout>
+
+If `gh` is not authenticated, everything up to the commit still works and the pull-request step
+does not — stop there and finish it from an environment that is authenticated, rather than
+improvising. If MCP servers are unavailable, skills that reach a project-management tool or the
+code host through MCP degrade accordingly; the rest are unaffected.
+
+## Verifying it yourself
+
+None of the above is a permanent guarantee: cloud environments change under you. pair keeps the
+claim honest with a critical path in the release-validation suite,
+`qa/release-validation/CP10-web-cloud-environment.md`, executed from **inside** a web session — a
+local run cannot observe a web environment. It walks the same ground this page describes: skills
+visible and executable, a story carried end-to-end to a pull request, the dev-server limit recorded
+as the expected result it is, and the headless workaround verified rather than assumed.
+
+Re-run it at each release. If what it observes and what this page says diverge, the observation
+wins.
+
+## Related
+
+- [Claude Code](/docs/integrations/claude-code) — installing and configuring pair for Claude Code
+- [Agent Integration](/docs/concepts/agent-integration) — how the bridge pattern reaches every tool
+- [Skills](/docs/concepts/skills) — what skills are and how they are discovered
