@@ -43,7 +43,7 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 ## Manual Testing
 
 - Manual test suites live in `qa/` at the repository root.
-- `qa/release-validation/` contains critical path test cases (CP1–CP8) for release validation.
+- `qa/release-validation/` contains critical path test cases (CP1–CP10) for release validation. **CP10 is the one path a local session cannot execute** — it exercises pair from inside a cloud/web coding environment, so the environment is the subject under test.
 - Test cases follow the template in `.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md`.
 - When a bug fix or feature changes behavior covered by an existing CP, the corresponding test case MUST be updated.
 
