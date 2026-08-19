@@ -1,12 +1,8 @@
 import chalk from 'chalk'
 import type { LogEntry } from '#diagnostics'
+import { buildOperationSummary, type OperationSummary, type RegistryResult } from './summary'
 
-export interface RegistryResult {
-  name: string
-  target: string
-  ok: boolean
-  error?: string | undefined
-}
+export type { RegistryResult, RegistryStatus, RegistryTally, OperationSummary } from './summary'
 
 type PushLog = (level: LogEntry['level'], message: string) => void
 
@@ -22,6 +18,7 @@ export interface CliPresenter {
   startOperation(operation: 'install' | 'update', registryCount: number): void
   registryStart(reg: RegistryProgress): void
   registryDone(name: string): void
+  registrySkipped(name: string, reason: string): void
   registryError(name: string, error: string): void
   phase(message: string): void
   summary(results: RegistryResult[], operation: 'install' | 'update', elapsedMs: number): void
@@ -29,45 +26,26 @@ export interface CliPresenter {
 
 const SEPARATOR = '──────────────────────────────────────'
 
-function formatElapsed(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
-
 function opLabel(operation: 'install' | 'update'): string {
   return operation === 'install' ? 'Installing' : 'Updating'
-}
-
-function summaryLabel(operation: 'install' | 'update'): string {
-  return operation === 'install' ? 'Installation' : 'Update'
 }
 
 function plural(count: number): string {
   return count === 1 ? 'registry' : 'registries'
 }
 
-function printSummaryBlock(
-  results: RegistryResult[],
-  operation: 'install' | 'update',
-  elapsedMs: number,
-): string {
-  const ok = results.filter(r => r.ok).length
-  const failed = results.length - ok
-  const elapsed = formatElapsed(elapsedMs)
-  const label = summaryLabel(operation)
+/** ✓ for a clean run, ! for anything the reader has to act on (failure or no-op). */
+function marker(tone: OperationSummary['tone']): string {
+  return tone === 'success' ? chalk.green('✓') : chalk.yellow('!')
+}
 
+function printSummaryBlock(summary: OperationSummary): void {
   console.log(`\n  ${chalk.dim(SEPARATOR)}`)
-  if (failed === 0) {
-    console.log(
-      `  ${chalk.green('✓')} ${label} complete (${results.length} ${plural(results.length)}, ${elapsed})`,
-    )
-  } else {
-    console.log(
-      `  ${chalk.yellow('!')} ${label} finished with errors (${ok} ok, ${failed} failed, ${elapsed})`,
-    )
+  console.log(`  ${marker(summary.tone)} ${summary.headline}`)
+  for (const detail of summary.details) {
+    console.log(`    ${chalk.dim(detail)}`)
   }
   console.log()
-  return `${label} complete: ${ok} ok, ${failed} failed (${elapsed})`
 }
 
 export function createCliPresenter(pushLog: PushLog): CliPresenter {
@@ -92,6 +70,11 @@ export function createCliPresenter(pushLog: PushLog): CliPresenter {
       pushLog('info', `Successfully processed registry '${name}'`)
     },
 
+    registrySkipped(name, reason) {
+      console.log(`        ${chalk.dim(`- skipped — ${reason}`)}`)
+      pushLog('info', `Registry '${name}' skipped: ${reason}`)
+    },
+
     registryError(name, error) {
       console.log(`        ${chalk.red('✗')} ${error}`)
       pushLog('error', `Failed to process registry '${name}': ${error}`)
@@ -103,7 +86,9 @@ export function createCliPresenter(pushLog: PushLog): CliPresenter {
     },
 
     summary(results, operation, elapsedMs) {
-      pushLog('info', printSummaryBlock(results, operation, elapsedMs))
+      const built = buildOperationSummary(results, operation, elapsedMs)
+      printSummaryBlock(built)
+      pushLog('info', built.log)
     },
   }
 }
@@ -120,6 +105,9 @@ export function createSilentPresenter(pushLog: PushLog): CliPresenter {
     registryDone(name) {
       pushLog('info', `Successfully processed registry '${name}'`)
     },
+    registrySkipped(name, reason) {
+      pushLog('info', `Registry '${name}' skipped: ${reason}`)
+    },
     registryError(name, error) {
       pushLog('error', `Failed to process registry '${name}': ${error}`)
     },
@@ -127,10 +115,7 @@ export function createSilentPresenter(pushLog: PushLog): CliPresenter {
       pushLog('info', message)
     },
     summary(results, operation, elapsedMs) {
-      const ok = results.filter(r => r.ok).length
-      const failed = results.length - ok
-      const label = operation === 'install' ? 'Installation' : 'Update'
-      pushLog('info', `${label} complete: ${ok} ok, ${failed} failed (${formatElapsed(elapsedMs)})`)
+      pushLog('info', buildOperationSummary(results, operation, elapsedMs).log)
     },
   }
 }

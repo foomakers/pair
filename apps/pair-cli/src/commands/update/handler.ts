@@ -268,7 +268,7 @@ async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<{
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
     skillLinkPathMap: copyResult['skillLinkPathMap'] as SkillLinkPathMap | undefined,
-    result: { name: registryName, target: effectiveTarget, ok: true },
+    result: { name: registryName, target: effectiveTarget, status: 'ok' },
   }
 }
 

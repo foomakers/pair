@@ -23,7 +23,14 @@ import {
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { type SkillNameMap, type SkillLinkPathMap } from '@pair/content-ops'
-import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
+import {
+  createCliPresenter,
+  exitCodeFor,
+  tallyRegistries,
+  SKIP_NOT_SHIPPED,
+  type CliPresenter,
+  type RegistryResult,
+} from '#ui'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
@@ -42,12 +49,16 @@ interface InstallHandlerOptions {
 /**
  * Handles the install command execution.
  * Processes InstallCommandConfig to install KB content from various sources.
+ *
+ * Returns the process exit code, so what the summary says and what automation reads can
+ * never disagree (US-396 AC5): non-zero only when a registry the source actually ships
+ * failed, or when the run installed nothing at all.
  */
 export async function handleInstallCommand(
   config: InstallCommandConfig,
   fs: FileSystemService,
   options?: InstallHandlerOptions,
-): Promise<void> {
+): Promise<number> {
   const logLevel =
     (config as unknown as { logLevel?: LogEntry['level'] }).logLevel ??
     options?.minLogLevel ??
@@ -57,7 +68,8 @@ export async function handleInstallCommand(
 
   try {
     if (config.resolution === 'list-targets') {
-      return listTargets(fs, options)
+      await listTargets(fs, options)
+      return 0
     }
     const { datasetRoot, registries, baseTarget } = await setupInstallContext(
       fs,
@@ -67,7 +79,7 @@ export async function handleInstallCommand(
     await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
     validateDatasetContent(fs, datasetRoot, registries)
     await validateInstallContext(fs, registries, baseTarget)
-    await executeInstall({
+    return await executeInstall({
       fs,
       datasetRoot,
       registries,
@@ -237,9 +249,19 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     options: buildCopyOptions(registryConfig),
   })
 
+  // Absent is not failed: the source simply does not contain this registry, and there is
+  // nothing to copy. Only a registry that IS shipped and breaks is a failure (US-396 AC1/AC2).
   if (copyResult['skipped']) {
-    pushLog('warn', `Registry '${registryName}' skipped: source not found at ${datasetPath}`)
-    return { result: { name: registryName, target: effectiveTarget, ok: false } }
+    pushLog('debug', `Registry '${registryName}' has no source at ${datasetPath}`)
+    presenter.registrySkipped(registryName, SKIP_NOT_SHIPPED)
+    return {
+      result: {
+        name: registryName,
+        target: effectiveTarget,
+        status: 'skipped',
+        reason: SKIP_NOT_SHIPPED,
+      },
+    }
   }
 
   await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
@@ -247,7 +269,26 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
     skillLinkPathMap: copyResult['skillLinkPathMap'] as SkillLinkPathMap | undefined,
-    result: { name: registryName, target: effectiveTarget, ok: true },
+    result: { name: registryName, target: effectiveTarget, status: 'ok' },
+  }
+}
+
+/**
+ * One broken registry must not abort the ones after it: it is reported as failed, the run
+ * continues, and the exit code carries the failure out (US-396 AC2).
+ */
+async function installRegistryOrReportFailure(ctx: RegistryInstallCtx): Promise<{
+  skillNameMap?: SkillNameMap | undefined
+  skillLinkPathMap?: SkillLinkPathMap | undefined
+  result: RegistryResult
+}> {
+  try {
+    return await installRegistry(ctx)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    ctx.presenter.registryError(ctx.registryName, message)
+    const target = resolveTarget(ctx.registryName, ctx.registryConfig, ctx.fs, ctx.baseTarget)
+    return { result: { name: ctx.registryName, target, status: 'failed', error: message } }
   }
 }
 
@@ -272,7 +313,7 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
   const total = Object.keys(registries).length
 
   const results = await forEachRegistry(registries, async (registryName, registryConfig, index) => {
-    const out = await installRegistry({
+    const out = await installRegistryOrReportFailure({
       fs,
       registryName,
       registryConfig,
@@ -294,7 +335,7 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
   return { results, skillNameMap: accumulated, skillLinkPathMap: accumulatedLinkMap }
 }
 
-async function executeInstall(context: InstallContext): Promise<void> {
+async function executeInstall(context: InstallContext): Promise<number> {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog, presenter } = context
   const total = Object.keys(registries).length
   const startTime = Date.now()
@@ -318,4 +359,5 @@ async function executeInstall(context: InstallContext): Promise<void> {
   await recordInstalledVersion({ fs, datasetRoot, baseTarget })
 
   presenter.summary(results, 'install', Date.now() - startTime)
+  return exitCodeFor(tallyRegistries(results))
 }

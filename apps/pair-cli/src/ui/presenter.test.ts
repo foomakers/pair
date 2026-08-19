@@ -76,31 +76,59 @@ describe('createCliPresenter', () => {
   it('summary prints success when all ok', () => {
     const presenter = createCliPresenter(pushLog)
     const results: RegistryResult[] = [
-      { name: 'a', target: '/a', ok: true },
-      { name: 'b', target: '/b', ok: true },
+      { name: 'a', target: '/a', status: 'ok' },
+      { name: 'b', target: '/b', status: 'ok' },
     ]
     presenter.summary(results, 'install', 1234)
 
     expect(consoleSpy).toHaveBeenCalledTimes(3)
-    expect(pushLog).toHaveBeenCalledWith('info', 'Installation complete: 2 ok, 0 failed (1.2s)')
+    expect(pushLog).toHaveBeenCalledWith(
+      'info',
+      'Installation complete: 2 ok, 0 skipped, 0 failed (1.2s)',
+    )
   })
 
   it('summary prints warning when some failed', () => {
     const presenter = createCliPresenter(pushLog)
     const results: RegistryResult[] = [
-      { name: 'a', target: '/a', ok: true },
-      { name: 'b', target: '/b', ok: false, error: 'bad' },
+      { name: 'a', target: '/a', status: 'ok' },
+      { name: 'b', target: '/b', status: 'failed', error: 'bad' },
     ]
     presenter.summary(results, 'update', 500)
 
-    expect(pushLog).toHaveBeenCalledWith('info', 'Update complete: 1 ok, 1 failed (500ms)')
+    expect(pushLog).toHaveBeenCalledWith(
+      'info',
+      'Update complete: 1 ok, 0 skipped, 1 failed (500ms)',
+    )
+  })
+
+  it('summary prints a green line plus one detail per skip reason', () => {
+    const printed: string[] = []
+    consoleSpy.mockImplementation(m => {
+      printed.push(String(m))
+    })
+    const presenter = createCliPresenter(pushLog)
+    const results: RegistryResult[] = [
+      { name: 'knowledge', target: '/k', status: 'ok' },
+      { name: 'adoption', target: '/a', status: 'skipped', reason: 'not shipped by this source' },
+      { name: 'github', target: '/g', status: 'skipped', reason: 'not shipped by this source' },
+    ]
+    presenter.summary(results, 'install', 79)
+
+    const output = printed.join('\n')
+    expect(output).toContain('Installation complete (1 ok, 2 skipped — not shipped by this source')
+    expect(output).toContain('2 skipped — not shipped by this source: adoption, github')
+    expect(output).not.toContain('failed')
   })
 
   it('summary formats sub-second elapsed as ms', () => {
     const presenter = createCliPresenter(pushLog)
-    presenter.summary([{ name: 'a', target: '/a', ok: true }], 'install', 42)
+    presenter.summary([{ name: 'a', target: '/a', status: 'ok' }], 'install', 42)
 
-    expect(pushLog).toHaveBeenCalledWith('info', 'Installation complete: 1 ok, 0 failed (42ms)')
+    expect(pushLog).toHaveBeenCalledWith(
+      'info',
+      'Installation complete: 1 ok, 0 skipped, 0 failed (42ms)',
+    )
   })
 })
 
@@ -118,8 +146,9 @@ describe('createSilentPresenter', () => {
     presenter.startOperation('install', 2)
     presenter.registryStart({ name: 'x', index: 0, total: 2, source: '/src', target: '/dst' })
     presenter.registryDone('x')
+    presenter.registrySkipped('z', 'not shipped by this source')
     presenter.phase('backup')
-    presenter.summary([{ name: 'x', target: '/dst', ok: true }], 'install', 100)
+    presenter.summary([{ name: 'x', target: '/dst', status: 'ok' }], 'install', 100)
 
     expect(consoleSpy).not.toHaveBeenCalled()
     consoleSpy.mockRestore()
@@ -131,17 +160,18 @@ describe('createSilentPresenter', () => {
     presenter.startOperation('install', 2)
     presenter.registryStart({ name: 'x', index: 0, total: 2, source: '/src', target: '/dst' })
     presenter.registryDone('x')
+    presenter.registrySkipped('z', 'not shipped by this source')
     presenter.registryError('y', 'fail')
     presenter.phase('backup')
     presenter.summary(
       [
-        { name: 'x', target: '/dst', ok: true },
-        { name: 'y', target: '/dst2', ok: false },
+        { name: 'x', target: '/dst', status: 'ok' },
+        { name: 'y', target: '/dst2', status: 'failed' },
       ],
       'install',
       100,
     )
 
-    expect(pushLog).toHaveBeenCalledTimes(6)
+    expect(pushLog).toHaveBeenCalledTimes(7)
   })
 })

@@ -21,12 +21,14 @@ export async function installCommand(
   try {
     const config = parseInstallArgs(args)
     const handlerOptions = buildInstallHandlerOptions(options)
-    await handleInstallCommand(
+    const exitCode = await handleInstallCommand(
       config,
       fs,
       handlerOptions as Parameters<typeof handleInstallCommand>[2],
     )
-    return { success: true, message: 'Installation completed successfully' }
+    return exitCode === 0
+      ? { success: true, message: 'Installation completed successfully' }
+      : { success: false, message: `Installation finished with errors (exit ${exitCode})` }
   } catch (err) {
     return { success: false, message: `Installation failed: ${String(err)}` }
   }

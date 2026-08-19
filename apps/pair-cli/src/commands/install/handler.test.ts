@@ -1039,6 +1039,9 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
     expect(agentsContent).toContain('/ext-catalog-next')
   })
 
+  // US-396: a collision is REPORTED, not thrown past the summary. The run no longer
+  // succeeds silently and no longer aborts the registries after it — the registry is
+  // marked failed with the collision message and the exit code carries it out (AC2).
   test('name collision after flattening fails install with an explicit error', async () => {
     const fs = new InMemoryFileSystemService(
       {
@@ -1075,7 +1078,15 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
       offline: false,
     }
 
-    await expect(handleInstallCommand(installConfig, fs)).rejects.toThrow(/collision/i)
+    const printed: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      printed.push(String(m))
+    })
+    const exitCode = await handleInstallCommand(installConfig, fs)
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(1)
+    expect(printed.join('\n')).toMatch(/collision/i)
   })
 })
 
@@ -1338,5 +1349,120 @@ describe('US-395: `pair install --url <mirror>` installs what the mirror served'
     )
 
     consoleLogSpy.mockRestore()
+  })
+})
+
+/**
+ * US-396 half A — a registry the source does not ship is NOT a failure.
+ *
+ * The install summary used to count every absent registry as failed while the command
+ * exited 0, so a legitimate external KB (knowledge + skills, never adoption) ended on a
+ * red line that contradicted the status code.
+ */
+describe('US-396: absent registries are skipped, real failures are not', () => {
+  const cwd = '/project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+  const twoRegistries = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      github: {
+        source: '.github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GH',
+      },
+    },
+  }
+
+  const defaultInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'default',
+    kb: true,
+    offline: false,
+  }
+
+  function projectFs(extra: Record<string, string>) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  /** In-memory double: everything real except one operation on one path. */
+  function breakingOn(
+    fs: InMemoryFileSystemService,
+    method: keyof InMemoryFileSystemService,
+    pathFragment: string,
+  ): InMemoryFileSystemService {
+    return new Proxy(fs, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown
+        if (typeof value !== 'function') return value
+        const bound = (value as (...args: unknown[]) => unknown).bind(target)
+        if (prop !== method) return bound
+        return (...args: unknown[]) => {
+          if (String(args[0]).includes(pathFragment)) throw new Error('disk on fire')
+          return bound(...args)
+        }
+      },
+    }) as InMemoryFileSystemService
+  }
+
+  test('an absent registry does not fail the run — exit code stays 0', async () => {
+    const fs = projectFs({ [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test' })
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.github`)).toBe(false)
+  })
+
+  test('the summary names the skipped registry and its reason, and reads as success', async () => {
+    const fs = projectFs({ [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test' })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(defaultInstall, fs)
+    consoleSpy.mockRestore()
+
+    const printed = lines.join('\n')
+    expect(printed).toContain('Installation complete (1 ok, 1 skipped')
+    expect(printed).toContain('not shipped by this source')
+    expect(printed).toContain('github')
+    expect(printed).not.toContain('finished with errors')
+  })
+
+  test('a registry present in the source that fails is still reported as failed (exit 1)', async () => {
+    const fs = breakingOn(
+      projectFs({
+        [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test',
+        [`${datasetSrc}/.github/workflow.yml`]: 'on: push',
+      }),
+      'readdir',
+      `${datasetSrc}/.github`,
+    )
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(1)
+    // The healthy registry still installed — one broken registry does not abort the rest
+    expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
   })
 })

@@ -33,7 +33,9 @@ export async function dispatchCommand(
   const opts = resolveOptions(ctx)
   switch (config.command) {
     case 'install':
-      return commandRegistry.install.handle(config, fs, opts)
+      // The install summary distinguishes ok / skipped / failed; the exit code follows the
+      // failures, so text and status can never disagree (US-396 AC5).
+      return dispatchWithExitCode(() => commandRegistry.install.handle(config, fs, opts))
     case 'update':
       return commandRegistry.update.handle(config, fs, opts)
     case 'update-link':
