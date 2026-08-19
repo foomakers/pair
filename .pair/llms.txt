@@ -331,6 +331,7 @@
 - [AI Development Documentation Standards](.pair/knowledge/guidelines/technical-standards/ai-development/documentation-standards.md)
 - [Model Context Protocol (MCP) Integration](.pair/knowledge/guidelines/technical-standards/ai-development/mcp-integration.md)
 - [AI Development Standards](.pair/knowledge/guidelines/technical-standards/ai-development/README.md)
+- [Adoption-Informed Generation (decision log + ADR + context map)](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md)
 - [Graceful Degradation — Standard Bullets](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md)
 - [Guided / Quick Setup Convention](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md)
 - [Idempotency Convention](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md)
