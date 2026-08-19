@@ -121,7 +121,7 @@ Active: risk
 
 A project decides which other model parameters, if any, to expose by adding them to the `Active` list — e.g. `Active: risk, cost` if it also wants the cost class (§3.3) projected as a tag; the choice, and the resulting tag's color scheme, follows whichever parameter was added. Write `Active: none` to explicitly opt out of all tag emission (`classify` reads this as a durable "don't ask again," not as "not yet configured"). A project may also rename `risk` itself here (e.g. `risk` → `priority`) — the color values and their meaning stay the same, only the label changes.
 
-**No dedicated eligibility tag**: automation eligibility is an **adoption-declared filter over classification tags** (e.g. `risk:green`, optionally combined with project tags), not a special tag of its own. `pair-next` consumes it generically, like any other tag filter, re-evaluated on every run (tags can change between runs, e.g. review raising the tier).
+**No dedicated eligibility tag**: automation eligibility is an **adoption-declared filter over classification tags** (e.g. `risk:green`), not a special tag of its own. The declaration is a **single literal label** in the optional `tech/automation.md` — schema in [automation-policy.md](../collaboration/automation/automation-policy.md) — matched by exactly the plain string-equality label query `pair-next --filter` performs, with no AND/OR/NOT grammar; a tag *combination* is not expressible and must not be promised here. `pair-next` consumes the label generically, like any other tag filter, re-evaluated on every run and every step, never cached (tags can change between runs, e.g. review raising the tier).
 
 ## 6. `tech/risk-matrix.md` — Adoption Delta
 
