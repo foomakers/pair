@@ -32,6 +32,7 @@ export async function createPackageZip(
     await fsService.mkdir(tempDir, { recursive: true })
     // Copy content first
     await copyRegistrySources(tempDir, options, fsService)
+    await copySourceDeclaration(tempDir, options.projectRoot, fsService)
     // Compute checksum over content files
     const contentChecksum = await computeContentChecksum(tempDir, fsService)
     // Write manifest with checksum
@@ -90,6 +91,24 @@ async function collectAllFiles(dir: string, fsService: FileSystemService): Promi
   }
 
   return files
+}
+
+/**
+ * A KB's own `pair.config.json` travels WITH the package: `install --source` honours the
+ * source's declaration (US-396), and a release ZIP that dropped it would apply the
+ * declared prefix from a directory or git source but not from the released artifact.
+ */
+async function copySourceDeclaration(
+  tempDir: string,
+  projectRoot: string,
+  fsService: FileSystemService,
+): Promise<void> {
+  const declarationPath = path.join(projectRoot, 'pair.config.json')
+  if (!fsService.existsSync(declarationPath)) return
+  await fsService.writeFile(
+    path.join(tempDir, 'pair.config.json'),
+    await fsService.readFile(declarationPath),
+  )
 }
 
 async function writeManifest(

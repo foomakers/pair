@@ -44,7 +44,9 @@ not control:
   configuration to adopt it deliberately.
 
 Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`); the default
-KB path resolves exactly as before.
+KB path resolves exactly as before. `pair package` ships the KB's `pair.config.json` in
+the release ZIP, so a KB installed from its published artifact declares exactly what the
+same KB installed from a directory or a git clone declares.
 
 ## Structure
 
