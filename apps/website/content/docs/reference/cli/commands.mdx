@@ -17,7 +17,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [kb-info](#kb-info) — Display package metadata, or check installed vs current KB version
 - [kb-cache](#kb-cache) — Inspect and reclaim the shared KB cache
 - [kb-verify](#kb-verify) — Verify KB package integrity
-- [kb validate](#kb-validate) — Validate KB structure
+- [kb-validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
 
 ## Rules that apply to every command
@@ -412,14 +412,14 @@ pair kb-verify kb-package.zip --log-level debug
 
 ---
 
-## kb validate
+## kb-validate
 
 Validate KB structure, links, and metadata using layout-aware validation.
 
 ### Usage
 
 ```bash
-pair kb validate [options]
+pair kb-validate [options]
 ```
 
 This command takes **no positional argument** — the KB directory is passed as
@@ -428,36 +428,36 @@ This command takes **no positional argument** — the KB directory is passed as
 
 ### Options
 
-| Option                     | Description                                               |
-| -------------------------- | --------------------------------------------------------- |
-| `--path <path>`            | KB directory to validate (default: current directory)     |
-| `--layout <mode>`          | Layout mode: `source` or `target` (default: `target`)     |
-| `--strict`                 | Enable external link checking via HTTP HEAD (slow)        |
-| `--ignore-config`          | Skip config-based registry structure validation           |
-| `--skip-registries <list>` | Comma-separated registry names to exclude from validation |
+| Option                            | Description                                                                   |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `--path <path>`                   | KB directory to validate (default: current directory)                         |
+| `--layout <mode>`                 | Layout mode: `source` or `target` (default: `target`)                         |
+| `--strict`                        | Enable external link checking via HTTP HEAD (slow)                            |
+| `--ignore-config`                 | Skip config-based registry structure validation                               |
+| `--skip-registries <list>`        | Comma-separated registry names to exclude from validation                     |
 | `--optional-link-patterns <list>` | Comma-separated globs whose **missing** link targets are warnings, not errors |
-| `--log-level <level>`      | Set logging level (trace, debug, info, warn, error)       |
+| `--log-level <level>`             | Set logging level (trace, debug, info, warn, error)                           |
 
 ### Examples
 
 ```bash
 # Validate current directory
-pair kb validate
+pair kb-validate
 
 # Validate another directory
-pair kb validate --path ./my-kb
+pair kb-validate --path ./my-kb
 
 # Validate source layout
-pair kb validate --layout source
+pair kb-validate --layout source
 
 # Validate with external link checking
-pair kb validate --strict
+pair kb-validate --strict
 
 # Validate excluding specific registries
-pair kb validate --skip-registries adoption,github
+pair kb-validate --skip-registries adoption,github
 
 # Tolerate links into a codebase that is not checked out beside the KB
-pair kb validate --optional-link-patterns "../../apps/**,../../packages/**"
+pair kb-validate --optional-link-patterns "../../apps/**,../../packages/**"
 ```
 
 ### Optional link patterns
@@ -483,11 +483,19 @@ Rules:
 - Each pattern is matched against both the link **as written** (`../../apps/x.ts`) and
   the target **resolved relative to the KB root** (`apps/x.ts`) — a match in either form
   makes the link optional, and overlapping patterns still produce a single warning.
-- Glob syntax: `**` (any characters, separators included), `*` (any characters except `/`),
-  `?` (one character), `[abc]` / `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does
-  not match `vendor/apps/x.ts`. A malformed pattern is reported and skipped, never fatal.
+- Glob syntax: `**` (a whole segment: **zero or more** path segments, so `a/**/b` matches
+  `a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also
+  what a `**` that is not a whole segment means), `?` (one character), `[abc]` / `[a-z]` /
+  `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`. A malformed
+  pattern (unterminated class, out-of-order range like `[z-a]`) is reported and skipped,
+  never fatal — including under `--strict`, where the matchers are discarded but the typo is
+  still warned about.
 - `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
 - `--ignore-config` skips the config-declared patterns; CLI-declared ones still apply.
+- Config patterns are read from the config of the **KB being validated**
+  (`<--path>/config.json`), not from the invoking project — the same config `--path` already
+  resolves registries from. Validating `--path ./my-kb` therefore ignores a `link_validation`
+  section left in the repo-root config.
 
 ---
 

@@ -10,7 +10,7 @@ Active
 
 ## Category
 
-Technology Selection
+Library Choice
 
 ## Context
 
@@ -32,13 +32,19 @@ already done by the registry layer; the patterns only classify a path string).
 ## Decision
 
 Optional-link glob matching is implemented **inside the CLI**, in
-`apps/pair-cli/src/commands/kb-validate/glob-match.ts` (~90 LOC, white-box unit-tested in
-`glob-match.test.ts`), and **no glob library is added to the tech stack**.
+`apps/pair-cli/src/commands/kb-validate/glob-match.ts` (~160 LOC plus comments, white-box
+unit-tested in `glob-match.test.ts`), and **no glob library is added to the tech stack**.
 
-The module compiles each pattern to an anchored `RegExp` (`**` → `.*`, `*` → `[^/]*`,
-`?` → `[^/]`, `[...]` preserved, everything else escaped) and reports patterns it cannot
-compile — blank, or an unterminated character class — to the caller instead of throwing, so a
-config typo degrades to a warning rather than aborting the run.
+The module compiles each pattern to segments of tokens and matches them with a two-pointer
+wildcard algorithm — **not** a `RegExp`. Compiling to a regex was the first implementation and
+was rejected on review evidence: `[z-a]` (range out of order) makes `new RegExp` THROW, and
+adjacent `.*` groups backtrack catastrophically (`**a**a**a**b` against a 65-character path did
+not finish in two minutes). Both failure modes are structural, not input-validation gaps, and
+both abort a run the feature exists to keep alive. The two-pointer matcher cannot throw and is
+O(n·m); patterns it cannot compile — blank, unterminated character class, out-of-order range —
+are reported to the caller instead, so a config typo degrades to a warning rather than aborting
+the run (and is warned about under `--strict` too, where the matchers are discarded but the
+diagnostic still matters, CI being where `--strict` runs).
 
 Two consequences of "internal, therefore ours to define" are decided here as well:
 
@@ -55,7 +61,7 @@ Two consequences of "internal, therefore ours to define" are decided here as wel
 - **Add `picomatch` (or `minimatch`) as a runtime dependency**: rejected for now. It buys
   brace expansion and extglob that this feature does not use, on a published CLI whose
   dependency list is deliberately short; the pnpm catalog would gain an entry, and every
-  consumer a transitive install, to replace ~90 lines with fully specified behavior. The
+  consumer a transitive install, to replace ~160 lines with fully specified behavior. The
   matcher's API (`compileOptionalLinkPatterns` / `matchesAnyPattern`) is the seam: if a second
   or third consumer needs real glob semantics, swapping the implementation behind it is a
   contained change, and this decision is revisited then.
@@ -74,6 +80,11 @@ Two consequences of "internal, therefore ours to define" are decided here as wel
   docs state the anchoring and the two matched forms so behavior is not inferred from source.
 - Unsupported constructs (`{a,b}`, extglob) are matched **literally** rather than rejected. A user
   who writes them gets no match rather than an error; the documented syntax list is the contract.
+- `**` matches **zero or more** segments when it is a whole segment (`a/**/b` matches `a/b`,
+  `**/apps/**` matches `apps/x.ts`, `apps/**` matches `apps` itself), and means `*` when it is not
+  (`a**b` cannot cross `/`) — the mainstream semantics, so a maintainer's minimatch habits hold.
+- Matching cost is bounded by construction (two-pointer, single backtrack anchor at each level),
+  so no pattern an operator can write can hang `kb-validate` in CI.
 - A future need for full glob semantics elsewhere in the CLI is the trigger to revisit — the
   decision is "not yet", not "never".
 
