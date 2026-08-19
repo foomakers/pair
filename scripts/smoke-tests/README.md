@@ -93,6 +93,8 @@ Verifies the `pair kb-validate` command:
 - **Skip Registries**: Validates with `--skip-registries` to exclude specific registries.
 - **Ignore Config**: Validates with `--ignore-config` to skip structure checks.
 - **Failure Detection**: Verifies validation fails on a workspace with missing registry paths.
+- **Optional Link Patterns**: a missing out-of-tree link is an error by default, a warning via
+  `--optional-link-patterns` or the `link_validation` config, and an error again under `--strict`.
 
 ### 7. Configuration Validation (`scenarios/validate-config.sh`)
 

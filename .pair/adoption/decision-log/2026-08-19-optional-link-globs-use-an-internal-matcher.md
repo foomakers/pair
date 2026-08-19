@@ -76,13 +76,28 @@ Two consequences of "internal, therefore ours to define" are decided here as wel
 
 - No change to `tech-stack.md`: this story adds no dependency.
 - `glob-match.ts` is production code with its own unit tests; the supported syntax is documented
-  in the module header and in the CLI reference (`kb validate` → Optional link patterns), and the
+  in the module header and in the CLI reference (`kb-validate` → Optional link patterns), and the
   docs state the anchoring and the two matched forms so behavior is not inferred from source.
 - Unsupported constructs (`{a,b}`, extglob) are matched **literally** rather than rejected. A user
   who writes them gets no match rather than an error; the documented syntax list is the contract.
 - `**` matches **zero or more** segments when it is a whole segment (`a/**/b` matches `a/b`,
   `**/apps/**` matches `apps/x.ts`, `apps/**` matches `apps` itself), and means `*` when it is not
-  (`a**b` cannot cross `/`) — the mainstream semantics, so a maintainer's minimatch habits hold.
+  (`a**b` cannot cross `/`).
+- **This is NOT minimatch parity** — do not transfer minimatch habits wholesale. Measured against
+  `minimatch@10.1.2` over a 20 × 20 pattern/candidate grid, every divergence found was MORE
+  permissive than minimatch, in three families:
+  1. a trailing `/**` also matches the **directory itself** (`apps/**` ∋ `apps`, `**/b/**` ∋ `b`,
+     `a/b`, `a/x/b`, `a/x/y/b`) — deliberate, pinned by `glob-match.test.ts`, and the reason
+     `apps/**` reads as "anything under apps, apps included";
+  2. `**` **traverses `..` segments** (`**`, `**/apps/**`, `**/x.ts` all match `../../apps/x.ts`),
+     which minimatch's globstar refuses — and `..` is exactly the shape these patterns are written
+     for, since the links this feature tolerates point out of the KB;
+  3. a trailing empty segment matches a wildcard (`apps/*` ∋ `apps/`) — irrelevant here, link
+     targets are files.
+  All three point the same, riskier way for a feature whose job is downgrading errors to warnings:
+  a maintainer assuming minimatch writes a BROADER rule than intended and can silence a genuinely
+  broken link, with no diagnostic (a too-broad pattern is not "malformed"). Families 1 and 2 are
+  stated in the CLI reference's syntax list, which is the contract.
 - Matching cost is bounded by construction (two-pointer, single backtrack anchor at each level),
   so no pattern an operator can write can hang `kb-validate` in CI.
 - A future need for full glob semantics elsewhere in the CLI is the trigger to revisit — the

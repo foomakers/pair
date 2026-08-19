@@ -485,11 +485,21 @@ Rules:
   makes the link optional, and overlapping patterns still produce a single warning.
 - Glob syntax: `**` (a whole segment: **zero or more** path segments, so `a/**/b` matches
   `a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also
-  what a `**` that is not a whole segment means), `?` (one character), `[abc]` / `[a-z]` /
-  `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`. A malformed
-  pattern (unterminated class, out-of-order range like `[z-a]`) is reported and skipped,
-  never fatal — including under `--strict`, where the matchers are discarded but the typo is
-  still warned about.
+  what a `**` that is not a whole segment means), `?` (one character, never `/`), `[abc]` /
+  `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`. A
+  malformed pattern (unterminated class, out-of-order range like `[z-a]`) is reported and
+  skipped, never fatal — including under `--strict`, where the matchers are discarded but the
+  typo is still warned about.
+- Two places this matcher is **more permissive than `minimatch`**, so do not assume parity:
+  a trailing `/**` also matches the **directory itself** (`apps/**` matches `apps`, `**/b/**`
+  matches `a/b`), and `**` **traverses `..` segments** (`**` matches `../../apps/x.ts`). Both
+  make a pattern broader than a minimatch habit suggests — and a too-broad pattern is not
+  malformed, so nothing warns about it. Prefer the narrowest pattern that covers the links you
+  mean to tolerate.
+- A `link_validation` section of the wrong **shape** — not an object, `optional_link_patterns`
+  not an array (`"apps/**"` instead of `["apps/**"]`), a camelCase key, or non-string entries —
+  is reported as a warning and ignored, never fatal. Without that warning the run would look
+  like "all these links are broken" rather than "the config key is misspelled".
 - `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
 - `--ignore-config` skips the config-declared patterns; CLI-declared ones still apply.
 - Config patterns are read from the config of the **KB being validated**
