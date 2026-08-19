@@ -117,6 +117,61 @@ describe('parseKbValidateCommand', () => {
     })
   })
 
+  describe('optional-link-patterns flag (US-188)', () => {
+    it('should parse comma-separated glob patterns', () => {
+      const config = parseKbValidateCommand({
+        optionalLinkPatterns: '../../apps/**,../../packages/**',
+      })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        optionalLinkPatterns: ['../../apps/**', '../../packages/**'],
+      })
+    })
+
+    it('should handle a single pattern', () => {
+      const config = parseKbValidateCommand({ optionalLinkPatterns: 'apps/**' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        optionalLinkPatterns: ['apps/**'],
+      })
+    })
+
+    it('should trim whitespace around patterns', () => {
+      const config = parseKbValidateCommand({ optionalLinkPatterns: ' apps/** , packages/** ' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        optionalLinkPatterns: ['apps/**', 'packages/**'],
+      })
+    })
+
+    it('should drop empty segments', () => {
+      const config = parseKbValidateCommand({ optionalLinkPatterns: 'apps/**,,  ,' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        optionalLinkPatterns: ['apps/**'],
+      })
+    })
+
+    it('should yield an empty list for an empty string (AC-6: no optional patterns)', () => {
+      const config = parseKbValidateCommand({ optionalLinkPatterns: '' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        optionalLinkPatterns: [],
+      })
+    })
+
+    it('should omit the field when the flag is absent', () => {
+      const config = parseKbValidateCommand({})
+
+      expect(config.optionalLinkPatterns).toBeUndefined()
+    })
+  })
+
   describe('combined flags', () => {
     it('should parse multiple flags together', () => {
       const config = parseKbValidateCommand({
@@ -125,6 +180,7 @@ describe('parseKbValidateCommand', () => {
         strict: true,
         ignoreConfig: false,
         skipRegistries: 'adoption,skills',
+        optionalLinkPatterns: '../../apps/**',
       })
 
       expect(config).toEqual({
@@ -134,6 +190,7 @@ describe('parseKbValidateCommand', () => {
         strict: true,
         ignoreConfig: false,
         skipRegistries: ['adoption', 'skills'],
+        optionalLinkPatterns: ['../../apps/**'],
       })
     })
   })

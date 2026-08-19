@@ -10,6 +10,7 @@ export const kbValidateMetadata = {
     'pair kb-validate --layout source',
     'pair kb-validate --strict',
     'pair kb-validate --skip-registries adoption,agents',
+    'pair kb-validate --optional-link-patterns "../../apps/**,../../packages/**"',
   ],
   options: [
     {
@@ -32,11 +33,17 @@ export const kbValidateMetadata = {
       flags: '--skip-registries <names>',
       description: 'Comma-separated registry names to exclude from validation',
     },
+    {
+      flags: '--optional-link-patterns <patterns>',
+      description:
+        'Comma-separated globs whose missing link targets are warnings, not errors (merged with link_validation.optional_link_patterns)',
+    },
   ],
   notes: [
     'Validates .pair directory structure',
     'Returns exit code 0 if valid, 1 if errors found, 2 if validation fails',
     'Target layout validation skips symlink targets',
     'Use --strict for external link validation (requires network)',
+    'Optional link patterns downgrade MISSING targets to warnings; --strict overrides them back to errors',
   ],
 } as const
