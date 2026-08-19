@@ -435,6 +435,7 @@ This command takes **no positional argument** — the KB directory is passed as
 | `--strict`                 | Enable external link checking via HTTP HEAD (slow)        |
 | `--ignore-config`          | Skip config-based registry structure validation           |
 | `--skip-registries <list>` | Comma-separated registry names to exclude from validation |
+| `--optional-link-patterns <list>` | Comma-separated globs whose **missing** link targets are warnings, not errors |
 | `--log-level <level>`      | Set logging level (trace, debug, info, warn, error)       |
 
 ### Examples
@@ -454,7 +455,39 @@ pair kb validate --strict
 
 # Validate excluding specific registries
 pair kb validate --skip-registries adoption,github
+
+# Tolerate links into a codebase that is not checked out beside the KB
+pair kb validate --optional-link-patterns "../../apps/**,../../packages/**"
 ```
+
+### Optional link patterns
+
+A KB validated on its own still contains relative links into the codebase it
+normally sits next to. Declaring those targets **optional** keeps every other link
+checked, instead of switching whole registries off:
+
+```json
+{
+  "link_validation": {
+    "optional_link_patterns": ["../../apps/**", "../../packages/**"]
+  }
+}
+```
+
+Rules:
+
+- A pattern only affects a **missing** target. A target that exists is simply valid.
+- A missing target matching a pattern is a **warning** (`optional link (pattern-matched)`)
+  and does not fail the run; a missing target matching nothing stays an **error**.
+- Config patterns and `--optional-link-patterns` are **merged** (union), never replaced.
+- Each pattern is matched against both the link **as written** (`../../apps/x.ts`) and
+  the target **resolved relative to the KB root** (`apps/x.ts`) — a match in either form
+  makes the link optional, and overlapping patterns still produce a single warning.
+- Glob syntax: `**` (any characters, separators included), `*` (any characters except `/`),
+  `?` (one character), `[abc]` / `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does
+  not match `vendor/apps/x.ts`. A malformed pattern is reported and skipped, never fatal.
+- `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
+- `--ignore-config` skips the config-declared patterns; CLI-declared ones still apply.
 
 ---
 

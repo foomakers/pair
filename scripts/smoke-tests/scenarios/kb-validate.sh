@@ -67,4 +67,65 @@ EOF
 run_pair kb-validate
 assert_failure || exit 1
 
+# Test 6: Optional link patterns (US-188) — a KB validated on its own still links
+# into the codebase that normally sits beside it. Same fixture three ways:
+# no patterns → error, config/CLI patterns → warning, --strict → error again.
+log_info "Test 6: Optional link patterns downgrade missing out-of-tree targets"
+OPT_DIR=$(setup_workspace "kb-validate-optional-links")
+cd "$OPT_DIR"
+mkdir -p .pair/knowledge
+cat > .pair/knowledge/index.md <<'EOF'
+# Knowledge
+
+See [the app code](../../apps/website/page.tsx).
+EOF
+cat > config.json <<EOF
+{
+  "asset_registries": {
+    "knowledge": {
+      "source": ".pair/knowledge",
+      "behavior": "mirror",
+      "description": "KB content",
+      "targets": [
+        {"path": ".pair/knowledge", "mode": "canonical"}
+      ]
+    }
+  }
+}
+EOF
+
+# 6a: baseline — the out-of-tree link is a hard error (backward compatible)
+run_pair kb-validate
+assert_failure || exit 1
+
+# 6b: CLI flag downgrades it to a labelled warning
+run_pair kb-validate --optional-link-patterns "../../apps/**"
+assert_success || exit 1
+assert_output_contains "optional link (pattern-matched)" || exit 1
+
+# 6c: same pattern declared in config.json instead of on the command line
+cat > config.json <<EOF
+{
+  "link_validation": {
+    "optional_link_patterns": ["apps/**"]
+  },
+  "asset_registries": {
+    "knowledge": {
+      "source": ".pair/knowledge",
+      "behavior": "mirror",
+      "description": "KB content",
+      "targets": [
+        {"path": ".pair/knowledge", "mode": "canonical"}
+      ]
+    }
+  }
+}
+EOF
+run_pair kb-validate
+assert_success || exit 1
+
+# 6d: --strict overrides the configured pattern
+run_pair kb-validate --strict
+assert_failure || exit 1
+
 echo "=== $TEST_NAME Completed ==="

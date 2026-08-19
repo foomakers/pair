@@ -4,7 +4,7 @@
  * Deliberately NOT a new runtime dependency: `pair-cli` is published to npm and
  * this is the only place the CLI needs glob matching, on short path strings with
  * a fixed syntax (`**`, `*`, `?`, `[...]`). See ADL
- * `2026-08-19-kb-validate-optional-link-globs-use-an-internal-matcher.md`.
+ * `2026-08-19-optional-link-globs-use-an-internal-matcher.md`.
  *
  * Syntax:
  * - `**` — any characters, separators included

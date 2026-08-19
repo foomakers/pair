@@ -170,6 +170,25 @@ Override the default path with a top-level `working_path` field, a sibling of `a
 
 When set, the override path — not `.pair/working` — is the reserved path that no registry `target` may overlap, checked by `pair validate-config`.
 
+## Link Validation
+
+A top-level `link_validation` field, a sibling of `asset_registries`, tunes how
+`pair kb validate` treats relative markdown links whose target is **missing**:
+
+```json
+{
+  "link_validation": {
+    "optional_link_patterns": ["../../apps/**", "../../packages/**"]
+  }
+}
+```
+
+`optional_link_patterns` marks matched-but-missing targets as warnings instead of
+errors, so a KB can be validated in isolation without disabling whole registries.
+Patterns merge (union) with `--optional-link-patterns`, and `--strict` overrides
+them back to errors. Full semantics and glob syntax:
+[kb validate — Optional link patterns](/docs/reference/cli/commands#optional-link-patterns).
+
 ## Validation
 
 Validate your config with:

@@ -417,10 +417,7 @@ describe('validateLinks', () => {
     })
 
     it('matches only the intended pattern when several are configured', async () => {
-      fs.writeFile(
-        '/kb/.pair/knowledge/guide.md',
-        '[Code](../../apps/x.ts)\n[Gone](./missing.md)',
-      )
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/x.ts)\n[Gone](./missing.md)')
 
       const results = await validateLinks({
         baseDir: '/kb',
