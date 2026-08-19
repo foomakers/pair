@@ -1,7 +1,7 @@
 ---
 name: pair-process-brainstorm
 description: "Runs discovery in three fixed phases — grill interview, domain integration, backlog tree triage — on a free theme or an existing `$root` issue, landing an integrated Draft epic/story tree while leaving the PRD untouched. Invoke to open a new feature area or to deepen an existing epic/story ('brainstorm the notifications area', 'explore what is missing under #205'); level (broad/punctual) and orientation (functional/technical) are deduced from the root's type and tags, or asked as the first interview question when no root is given (or its type label is unrecognized). Composes /pair-capability-grill, /pair-capability-map-subdomains, /pair-capability-map-contexts, /pair-process-plan-epics, /pair-process-plan-stories."
-version: 0.1.0
+version: 0.2.0
 author: Foomakers
 ---
 
@@ -95,11 +95,13 @@ Places the blob in the domain and reconciles it with what the project has alread
 
 ### Phase 3: Tree Triage — Draft Items
 
+**Adoption Context Read** — before item 5 assembles anything, read the recorded decisions and the domain map per [adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md): **read-only**, never a write. **This skill's subject**: the placed blob, scoped to what phase 2 placed and reusing the map it **already loaded**. No adoption history ⇒ a noted skip, no citations.
+
 1. **Check**: Was a tree already proposed for this discovery — a confirmed proposal list in this session (evaluated **here**, it needs no backlog read), or items under the resolved parent whose idempotency keys already match the tree's candidates (that half needs the tree of item 5 and the parent of item 6, so it is evaluated **once item 6 has resolved the parent**, before the writer is composed in item 7)?
 2. **Skip**: If so, re-present that outcome instead of re-triaging; a re-run is a no-op because the composed writer re-checks each key and proposes `ALREADY EXISTS #ID` (skip) for it.
 3. **Check**: Is a PM tool configured and reachable ([way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md))?
 4. **Act**: No PM tool → **HALT** here with the setup pointer (`/pair-capability-setup-pm`); phases 1–2 keep their output (blob handoff + updated domain files), so re-running after setup starts at this phase. **Before halting, write phase 1's handoff if it is not already on disk** — the completed blob, its resolved parametrization (no parent on this path — see Phase 1 item 6), and phase 2's placement. Phase 1 item 6 is the writer; every HALT past phase 1 shares this obligation ([resume.md](./resume.md)).
-5. **Act**: Assemble the **candidate tree** from the placed blob — each candidate a **vertical slice** carrying user value, **one level deep**, sitting one level under the parent Step 0 announced (epics under an initiative parent, stories under an epic one), each with its one-line rationale and the domain placement it came from. **The item type follows the resolved parent, not the answered level** — the level sizes the interview, never what the tree contains ([Level sizes, parent types](./parametrization.md#level-sizes-parent-types)). The tree never carries two levels: an initiative-root discovery produces epics **only**, no story slices beneath them (see item 7).
+5. **Act**: Assemble the **candidate tree** from the placed blob — each candidate a **vertical slice** carrying user value, **one level deep**, sitting one level under the parent Step 0 announced (epics under an initiative parent, stories under an epic one), each with its one-line rationale, the domain placement it came from, and what the adoption read applies (reshaped or dropped with the record named, a **citation**, or a `Revisits <id>: <why>` label). **The item type follows the resolved parent, not the answered level** — the level sizes the interview, never what the tree contains ([Level sizes, parent types](./parametrization.md#level-sizes-parent-types)). The tree never carries two levels: an initiative-root discovery produces epics **only**, no story slices beneath them (see item 7).
 6. **Act**: Resolve the parent — **compound insertion** (R3.1) — from the [Orientation Matrix](./parametrization.md)'s writer column, which keys on the **root's type**, not on the level:
    The row gives parent, writer and tree level for every signal — **container roots** (`initiative`, `epic`) parent the tree on themselves; **leaf roots** (`story`, and the untyped fallback) parent it on the root's parent epic and enter the writer's registry as an **EXTEND target**, never as a candidate; **no `$root`** parents it on the initiative (broad) or epic (punctual) the placement points to, confirmed with the developer. Read the row rather than re-deriving it here.
 
@@ -110,7 +112,7 @@ Places the blob in the domain and reconciles it with what the project has alread
 
    **One writer per run, one level written**: an initiative-root (or free-theme broad) discovery stops at the confirmed epics — it does **not** cascade into `/pair-process-plan-stories`, because the tree of item 5 carries no story slices to hand over and inventing them here is exactly how phase 3 would flood the backlog. Slicing a new epic is the next, separately confirmed step: `/pair-process-plan-stories` with `$epic: [the new epic]`, or `/pair-process-brainstorm` with `$root: [the new epic]` for another interview-driven pass.
 
-   `$candidates` stops the tree from being discarded: given it, both writers triage the **supplied** candidates instead of re-deriving their own (their Step 3 Check). `$domain-placed` carries phase 2's placement **in-band**, so the writer's domain step is a confirm-only pass and the developer approves **one** subdomain-catalog delta per run — scope and omission rule in [parametrization.md](./parametrization.md). Each writer still runs its own registry query and presents the **dry-run** list — `ALREADY EXISTS #ID` | `EXTEND #ID` | `CREATE`, one per candidate with its rationale — for confirmation **before any write**. Brainstorm writes no issue itself.
+   `$candidates` stops the tree from being discarded: given it, both writers triage the **supplied** candidates instead of re-deriving their own (their Step 3 Check). `$domain-placed` carries phase 2's placement **in-band**, so the writer's domain step is a confirm-only pass and the developer approves **one** subdomain-catalog delta per run — scope and omission rule in [parametrization.md](./parametrization.md). Each writer still runs its own registry query and presents the **dry-run** list — `ALREADY EXISTS #ID` | `EXTEND #ID` | `CREATE`, one per candidate with its rationale, its citation and any `Revisits <id>` flag — for confirmation **before any write**. Brainstorm writes no issue itself.
 8. **Act**: Items land as **Draft**: discovery produces planning units, and `/pair-process-refine-story` is what takes a story from Draft to Ready. Report a discovery that changes the product vision as a recommendation to run `/pair-process-specify-prd` — the PRD is never modified here.
 9. **Verify**: Every candidate carries exactly one confirmed proposal; created/extended items are Draft, linked under the resolved parent (and to `$root` when given); `.pair/adoption/product/PRD.md` is unchanged. **Then retire this discovery's handoff** — remove it, or mark it `consumed` — so a finished discovery never lingers to skip a later interview on the same root (the rule `/pair-capability-checkpoint` already applies to finished stories). This is the handoff's terminal state: without it a `complete` blob would be consumed forever by Phase 1 item 1.
 
@@ -124,7 +126,7 @@ BRAINSTORM COMPLETE:
 ├── Phase 1:     [blob: N findings, M open items, K assumptions]
 ├── Phase 2:     [placement: subdomains/contexts touched | skipped — no map, no artifacts] · [conflicts: N flagged, N resolved]
 ├── Writer:      [/plan-epics | /plan-stories] — one writer, one level — under [#parent ID: Title] ([root | root's parent epic | root's parent initiative | placement])
-├── Phase 3:     [Created: X · Extended: Y · Skipped: Z — all Draft]
+├── Phase 3:     [Created: X · Extended: Y · Skipped: Z — all Draft] · [N cited · M revisits]
 ├── PRD:         untouched
 └── Next:        [/refine-story on the first Draft story | /plan-stories on the first Draft epic (initiative-root discovery stops at epics)]
 ```
@@ -145,7 +147,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) for the standard scenarios (optional skill not installed → skip that step and note it; PM tool unreachable → ask the developer directly). **No missing composition fails a discovery** — grill, `/map-*`, `/pair-capability-record-decision`, the plan-\* writers and even a missing `context-map.md` each degrade to a noted skip or an inline substitute; the only hard stops are the HALT Conditions above.
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) for the standard scenarios (optional skill not installed → skip that step and note it; PM tool unreachable → ask the developer directly). **No missing composition fails a discovery** — grill, `/map-*`, `/pair-capability-record-decision`, the plan-\* writers, a missing `context-map.md` and absent/unreadable adoption history (adoption-informed triage) each degrade to a noted skip or an inline substitute; the only hard stops are the HALT Conditions above.
 
 > **The per-composition fallback for each one is in [degradation.md](./degradation.md)** — read it when a composition brainstorm expects is missing, not on a normal run.
 
