@@ -269,7 +269,7 @@ pair kb-info [package-path] [options]
 | Option                 | Description                                                             |
 | ---------------------- | ----------------------------------------------------------------------- |
 | `--json`               | Output package metadata or version-check result as JSON format          |
-| `--source <path\|url>` | KB source to resolve the current version from (version-check mode only) |
+| `--source <path\|url>` | KB source to resolve the current version from — local path, `.zip`, remote URL or git URL (version-check mode only) |
 | `--log-level <level>`  | Set minimum log level (debug, info, warn, error)                        |
 
 ### Version Check Mode
@@ -289,6 +289,29 @@ the project (written by `install`/`update` on success) against the current one:
 `install` and `update` also print a non-blocking heads-up with the same migration-page pointer
 when the version about to be applied differs from what's currently recorded.
 
+#### Sources
+
+`--source` accepts every kind `install`/`update` accept, and each resolves the current version
+the same way it would be installed:
+
+| Source kind  | How the current version is resolved                                                   |
+| ------------ | -------------------------------------------------------------------------------------- |
+| _(none)_     | The KB the CLI resolves by default (bundled dataset, or the cached official release)   |
+| Local path   | `manifest.json` in the directory, or the `manifest.json` inside a `.zip`               |
+| Remote URL   | The URL is probed for reachability and the version read from it                        |
+| Git URL      | The repository is shallow-cloned read-only and its root `manifest.json` is read         |
+
+A git source (`*.git`, `git@…`, `ssh://git@…`, optionally pinned with `#ref`) is cloned into a
+throwaway temporary directory that is deleted straight after the read — the shared KB cache
+(`~/.pair/kb`) is never written to, so a version check can never disturb an installed KB. Private
+repositories authenticate exactly as they do for `install`: `PAIR_GIT_TOKEN` or your SSH keys.
+Credentials never reach the output — any token in a git error message is redacted before it is
+printed or serialized to JSON.
+
+If the clone cannot run at all — offline, `git` not installed, wrong credentials, a `#ref` that
+does not exist, or a repository with no readable `manifest.json` — the check reports **Current
+version unavailable** with the reason and still exits **0**, like every other source kind.
+
 ### Examples
 
 ```bash
@@ -306,6 +329,9 @@ pair kb-info --json
 
 # Version check against a custom source
 pair kb-info --source /path/to/kb
+
+# Version check against a git-hosted KB, pinned to a tag
+pair kb-info --source https://github.com/acme/kb.git#v2.0.0
 ```
 
 ---
