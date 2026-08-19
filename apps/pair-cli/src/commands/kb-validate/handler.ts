@@ -3,6 +3,7 @@ import type { FileSystemService } from '@pair/content-ops'
 import { logger } from '@pair/content-ops'
 import { loadConfigWithOverrides } from '#config'
 import {
+  type Config,
   extractRegistries,
   filterRegistries,
   validateSkipList,
@@ -14,16 +15,29 @@ import { validateStructure } from './structure-validator'
 import { validateLinks } from './link-checker'
 import { validateMetadata } from './metadata-validator'
 import { createValidationReport, formatReport, ValidationExitCode } from './report-formatter'
+import { resolveOptionalLinkPatterns } from './optional-link-config'
 
-function loadRegistries(
+/**
+ * Loads the project config once per run. `--ignore-config` means "consult no
+ * config at all", so it yields null and every config-derived input (registries,
+ * optional link patterns) falls back to what the CLI passed.
+ */
+function loadKbConfig(
   config: KbValidateCommandConfig,
   fs: FileSystemService,
   kbPath: string,
-): Record<string, RegistryConfig> {
-  if (config.ignoreConfig) return {}
+): Config | null {
+  if (config.ignoreConfig) return null
+  return loadConfigWithOverrides(fs, { projectRoot: kbPath }).config
+}
 
-  const result = loadConfigWithOverrides(fs, { projectRoot: kbPath })
-  let registries = extractRegistries(result.config)
+function loadRegistries(
+  config: KbValidateCommandConfig,
+  loadedConfig: Config | null,
+): Record<string, RegistryConfig> {
+  if (loadedConfig === null) return {}
+
+  let registries = extractRegistries(loadedConfig)
 
   if (config.skipRegistries) {
     const invalid = validateSkipList(registries, config.skipRegistries)
@@ -76,7 +90,12 @@ export async function handleKbValidateCommand(
     throw new Error(`Invalid KB: missing .pair directory at ${pairDir}`)
   }
 
-  const registries = loadRegistries(config, fs, kbPath)
+  const loadedConfig = loadKbConfig(config, fs, kbPath)
+  const registries = loadRegistries(config, loadedConfig)
+  const optionalLinkPatterns = resolveOptionalLinkPatterns(
+    loadedConfig,
+    config.optionalLinkPatterns,
+  )
 
   const structure = !config.ignoreConfig
     ? await validateStructure({ registries, layout, baseDir: kbPath, fs })
@@ -90,6 +109,7 @@ export async function handleKbValidateCommand(
     files: mdFiles,
     fs,
     ...(config.strict !== undefined && { strict: config.strict }),
+    ...(optionalLinkPatterns.length > 0 && { optionalLinkPatterns }),
   })
 
   const metadata = await validateMetadata({

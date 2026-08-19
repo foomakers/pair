@@ -217,3 +217,92 @@ describe('handleKbValidateCommand - realistic multi-registry layouts', () => {
     ).resolves.toBeUndefined()
   })
 })
+
+/**
+ * US-188 — optional link patterns end to end through the handler: config file,
+ * CLI flag, their union, and the --strict override.
+ */
+describe('handleKbValidateCommand - optional link patterns (US-188)', () => {
+  const cwd = '/kb-optional-links'
+
+  function seedKb(configExtras: Record<string, unknown> = {}): InMemoryFileSystemService {
+    const config = {
+      asset_registries: {
+        knowledge: {
+          source: '.pair/knowledge',
+          behavior: 'mirror',
+          description: 'KB content',
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        },
+      },
+      ...configExtras,
+    }
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(config),
+        // Link into the codebase that sits beside the KB — absent in a KB-only checkout
+        [`${cwd}/.pair/knowledge/index.md`]: '# KB\n\nSee [code](../../apps/website/page.tsx).',
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  it('fails on the out-of-tree link when nothing declares it optional (AC-6)', async () => {
+    await expect(handleKbValidateCommand({ command: 'kb-validate' }, seedKb())).rejects.toThrow(
+      'Validation failed',
+    )
+  })
+
+  it('passes when config declares the pattern (AC-1)', async () => {
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } })
+
+    await expect(handleKbValidateCommand({ command: 'kb-validate' }, fs)).resolves.toBeUndefined()
+  })
+
+  it('passes when only the CLI declares the pattern (AC-2)', async () => {
+    await expect(
+      handleKbValidateCommand(
+        { command: 'kb-validate', optionalLinkPatterns: ['../../apps/**'] },
+        seedKb(),
+      ),
+    ).resolves.toBeUndefined()
+  })
+
+  it('merges CLI patterns with config patterns rather than replacing them (AC-2)', async () => {
+    // config pattern matches, CLI pattern does not → union must still cover the link
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } })
+
+    await expect(
+      handleKbValidateCommand(
+        { command: 'kb-validate', optionalLinkPatterns: ['packages/**'] },
+        fs,
+      ),
+    ).resolves.toBeUndefined()
+  })
+
+  it('still fails on a missing link that matches no pattern (AC-3)', async () => {
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['packages/**'] } })
+
+    await expect(handleKbValidateCommand({ command: 'kb-validate' }, fs)).rejects.toThrow(
+      'Validation failed',
+    )
+  })
+
+  it('--strict overrides the configured patterns (AC-4)', async () => {
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } })
+
+    await expect(
+      handleKbValidateCommand({ command: 'kb-validate', strict: true }, fs),
+    ).rejects.toThrow('Validation failed')
+  })
+
+  it('--ignore-config leaves the CLI patterns in force', async () => {
+    await expect(
+      handleKbValidateCommand(
+        { command: 'kb-validate', ignoreConfig: true, optionalLinkPatterns: ['apps/**'] },
+        seedKb(),
+      ),
+    ).resolves.toBeUndefined()
+  })
+})
