@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 import {
   installCommand,
@@ -7,6 +7,7 @@ import {
   handleUpdateLinkCommand,
   handlePackageCommand,
   handleScaffoldKbCommand,
+  handleKbInfoCommand,
 } from './commands'
 
 /**
@@ -170,6 +171,92 @@ describe('pair-cli e2e', () => {
         '# Acme testing\n',
       )
       expect(fs.existsSync(`${consumer}/.claude/skills/acme-kb-acme-review/SKILL.md`)).toBe(true)
+    })
+    /**
+     * #291 / #261 DoD round-trip: install(A) -> kb-info(drift) -> update(B) -> kb-info(clean).
+     * Genuinely e2e and genuinely CHAINED: three independently invoked commands hand state
+     * to each other through ONE filesystem and ONE target — the marker install writes
+     * (`.pair/.kb-version.json`) is exactly what kb-info reads back, and update is what
+     * clears the drift kb-info reported. Asserting the four steps in isolation (which the
+     * per-module tests already do) cannot catch a break in that hand-off, which is the
+     * whole point of the DoD line this closes.
+     */
+    it('installs KB version A, reports drift to B, then reports up-to-date after update', async () => {
+      const projectRoot = '/roundtrip-project'
+      const kbPkg = `${projectRoot}/packages/knowledge-hub/package.json`
+      const datasetFile = `${projectRoot}/packages/knowledge-hub/dataset/test-registry/file1.md`
+      const marker = `${projectRoot}/.pair/.kb-version.json`
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${projectRoot}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+          [kbPkg]: JSON.stringify({ name: '@pair/knowledge-hub', version: '1.1.0' }),
+          [`${projectRoot}/config.json`]: JSON.stringify({
+            asset_registries: {
+              'test-registry': {
+                source: 'test-registry',
+                behavior: 'mirror',
+                targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+                description: 'Test registry',
+              },
+            },
+          }),
+          [datasetFile]: '# Content v1',
+        },
+        projectRoot,
+        projectRoot,
+      )
+
+      /** `pair kb-info --json` (version-check mode), returning exit code + parsed report. */
+      async function versionCheck() {
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+        try {
+          const exitCode = await handleKbInfoCommand(
+            { command: 'kb-info', mode: 'version-check', json: true },
+            fs,
+            { baseTarget: projectRoot },
+          )
+          const output = logSpy.mock.calls.map(args => args.join(' ')).join('\n')
+          return { exitCode, report: JSON.parse(output) }
+        } finally {
+          logSpy.mockRestore()
+        }
+      }
+
+      // 1. Install KB version A (1.1.0) — records the installed-version marker
+      await handleInstallCommand(
+        { command: 'install', resolution: 'default', kb: true, offline: false },
+        fs,
+      )
+      expect(JSON.parse(await fs.readFile(marker)).version).toBe('1.1.0')
+
+      // 2. The source now publishes version B (1.2.0)
+      await fs.writeFile(kbPkg, JSON.stringify({ name: '@pair/knowledge-hub', version: '1.2.0' }))
+      await fs.writeFile(datasetFile, '# Content v2')
+
+      // 3. kb-info reports drift A -> B with the v{A}-to-v{B} migration page
+      const drift = await versionCheck()
+      expect(drift.exitCode).toBe(0)
+      expect(drift.report.status).toBe('drift')
+      expect(drift.report.installed.version).toBe('1.1.0')
+      expect(drift.report.current.version).toBe('1.2.0')
+      expect(drift.report.migrationUrl).toContain('v1.1.0-to-v1.2.0')
+
+      // 4. update applies B and re-records the marker
+      await handleUpdateCommand(
+        { command: 'update', resolution: 'default', kb: true, offline: false },
+        fs,
+      )
+      expect(JSON.parse(await fs.readFile(marker)).version).toBe('1.2.0')
+      expect(fs.readFileSync(`${projectRoot}/.pair/test-registry/file1.md`)).toBe('# Content v2')
+
+      // 5. kb-info now reports up-to-date at B — drift cleared, no migration URL
+      const clean = await versionCheck()
+      expect(clean.exitCode).toBe(0)
+      expect(clean.report.status).toBe('up-to-date')
+      expect(clean.report.installed.version).toBe('1.2.0')
+      expect(clean.report.current.version).toBe('1.2.0')
+      expect(clean.report.migrationUrl).toBeUndefined()
     })
   })
 })
