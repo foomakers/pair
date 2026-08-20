@@ -27,6 +27,7 @@ While the [Knowledge Base](/docs/concepts/knowledge-base) provides general guide
       way-of-working.md         # Process, methodology, quality gates
       ux-ui.md                  # Design system, component library
     automation.md               # Unattended-automation policy (optional)
+    risk-matrix.md              # Project delta to the quality model (optional)
     adr/                        # Architectural Decision Records
 ```
 
@@ -100,6 +101,12 @@ risk:green
 ```
 
 The value is **a single literal label** (recommended `risk:green`), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
+
+### risk-matrix.md
+
+Optional, and the other half of the optional-adoption-file pattern: `tech/risk-matrix.md` records your project's **delta to the quality model** — which classification tags are projected onto cards (`## Tag Projection`), a criticality table (service/domain → High/Medium/Low), and threshold/reviewer overrides. Fully absent means the KB defaults apply and no tags are emitted — nothing fails.
+
+It matters to `tech/automation.md`: eligibility matches the labels Tag Projection actually emits, so with no projection active no card carries a `risk:*` label and nothing is eligible. See [Quality Model — Project Overrides](/docs/reference/quality-model#project-overrides--techrisk-matrixmd).
 
 ## How They Get Created
 
