@@ -1,6 +1,6 @@
 import { Stats } from 'fs'
 import { logger, createError } from '../../observability'
-import { validateSourceExists } from '../../file-system/file-validations'
+import { validateSourceExists, validateSourceContained } from '../../file-system/file-validations'
 import { SyncOptions } from '../SyncOptions'
 import { FileSystemService } from '../../file-system'
 import { Behavior } from '../behavior'
@@ -216,6 +216,13 @@ export async function copyPathOps(params: CopyPathOpsParams): Promise<CopyPathOp
     const prepared = prepareCopyPathOperation(source, target, datasetRoot, options)
     if (prepared.skip) return prepared.result
 
+    await validateSourceContained({
+      fileService,
+      srcPath: prepared.srcPath,
+      datasetRoot,
+      source,
+      target,
+    })
     const stat = await validateSourceExists(fileService, prepared.srcPath)
     return performCopyBasedOnType(stat, {
       fileService,

@@ -3,6 +3,7 @@ import type { Dirent } from 'fs'
 import { FileSystemService } from './file-system-service'
 import { Behavior, normalizeKey, resolveBehavior } from '../ops/behavior'
 import { logger } from '../observability'
+import { resolvesWithin } from './path-containment'
 
 /**
  * Clean up a file, ignoring errors if file doesn't exist
@@ -54,6 +55,12 @@ export type CopyDirContext = {
   exclude?: string[]
   /** The registry source root the `exclude` entries are relative to. */
   excludeRoot?: string
+  /**
+   * The physical root this copy may read from. Defaults to the top-level `oldDir` and is
+   * carried unchanged into every descent, so it stays the ROOT and not the current
+   * directory. An entry whose realpath leaves it is skipped — see `copyDirEntry`.
+   */
+  containmentRoot?: string
 }
 
 /**
@@ -111,14 +118,36 @@ export function isWithinPath(
 
 export async function copyDirHelper(context: CopyDirContext): Promise<void> {
   const { fileService, oldDir, newDir } = context
+  // First call wins: on the recursive descent the root is already set, so it keeps
+  // pointing at the top of the copy rather than sliding down with the walk.
+  const bounded: CopyDirContext = { ...context, containmentRoot: context.containmentRoot ?? oldDir }
 
   return logger.time(async () => {
     await fileService.mkdir(newDir, { recursive: true })
     const entries = await fileService.readdir(oldDir)
     for (const entry of entries) {
-      await copyDirEntry(entry, context)
+      await copyDirEntry(entry, bounded)
     }
   }, 'copyDirHelper')
+}
+
+/**
+ * Whether this entry may be read at all: a symlink is followed only while its target
+ * stays physically inside the copy's root.
+ *
+ * Only symlinks are resolved — an ordinary entry cannot point anywhere, and paying a
+ * `realpath` per file would double the syscalls of every install. A Dirent for a symlink
+ * reports neither `isFile()` nor `isDirectory()`, so before this an escaping link fell
+ * through to the file branch and `copyFileHelper` read the TARGET's bytes: a KB shipping
+ * `key.md -> ../../../.ssh/id_rsa` installed the victim's private key into the repository
+ * they commit (US-396 review round 3).
+ */
+async function entryIsReadable(entry: Dirent, context: CopyDirContext, oldEntry: string) {
+  if (!entry.isSymbolicLink?.()) return true
+  const root = context.containmentRoot ?? context.oldDir
+  if (await resolvesWithin(context.fileService, oldEntry, root)) return true
+  logger.warn(`Skipped ${oldEntry}: a symlink resolving outside ${root} is never copied`)
+  return false
 }
 
 async function destinationExists(fileService: FileSystemService, path: string): Promise<boolean> {
@@ -142,6 +171,7 @@ async function copyDirEntry(entry: Dirent, context: CopyDirContext): Promise<voi
   // Excluded entries are dropped before any behavior resolution or mkdir, so the
   // whole subtree is as if it were never in the source.
   if (isExcludedEntry(context, oldEntry)) return
+  if (!(await entryIsReadable(entry, context, oldEntry))) return
 
   // Determine behavior for this entry
   const relPath = datasetRoot ? normalizeKey(relative(datasetRoot, oldEntry)) : entry.name
@@ -170,8 +200,15 @@ function isExcludedEntry(context: CopyDirContext, oldEntry: string): boolean {
  * source, so entry paths keep resolving against the same base at every depth.
  */
 function descendContext(context: CopyDirContext, oldEntry: string, newEntry: string) {
-  const { fileService, folderBehavior, defaultBehavior, datasetRoot, exclude, excludeRoot } =
-    context
+  const {
+    fileService,
+    folderBehavior,
+    defaultBehavior,
+    datasetRoot,
+    exclude,
+    excludeRoot,
+    containmentRoot,
+  } = context
   return {
     fileService,
     oldDir: oldEntry,
@@ -181,5 +218,6 @@ function descendContext(context: CopyDirContext, oldEntry: string, newEntry: str
     ...(folderBehavior && { folderBehavior }),
     ...(exclude && { exclude }),
     ...(excludeRoot && { excludeRoot }),
+    ...(containmentRoot && { containmentRoot }),
   }
 }

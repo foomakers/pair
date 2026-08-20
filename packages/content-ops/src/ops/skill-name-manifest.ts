@@ -13,6 +13,7 @@
  * instead of guessing from string patterns.
  */
 
+import { dirname } from 'path'
 import { FileSystemService } from '../file-system'
 import type { SkillNameMap } from './skill-reference-rewriter'
 
@@ -55,6 +56,10 @@ export async function writeSkillNameManifest(
     version: 1,
     skills: Object.fromEntries(skillNameMap),
   }
+  // Owns its own directory. `.pair/` used to exist only as a side effect of another
+  // registry's `ensureDir`, so this write failed outright — ENOENT out of the whole
+  // install — the moment a source shipped `skills` and not `knowledge`.
+  await fileService.mkdir(dirname(manifestPath), { recursive: true })
   await fileService.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 }
 

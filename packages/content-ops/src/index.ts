@@ -1,4 +1,5 @@
 export { FileSystemService, fileSystemService } from './file-system'
+export { resolvesWithin, resolvesWithinSync } from './file-system/path-containment'
 export { InMemoryFileSystemService } from './test-utils/in-memory-fs'
 export { MockHttpClientService } from './test-utils/mock-http-client-service'
 export { buildTestResponse, toIncomingMessage } from './test-utils/http-test-helpers'
