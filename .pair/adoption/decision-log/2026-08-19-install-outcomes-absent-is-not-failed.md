@@ -75,9 +75,15 @@ code from that same tally.**
 - **`RegistryResult.ok: boolean` is replaced by `status: 'ok' | 'skipped' | 'failed'`**, with
   `reason` for skips. Both readers (`install`, `update`) and the presenter moved together;
   keeping `ok` alongside `status` would have created two fields that can disagree.
-- **`handleInstallCommand` returns the exit code** and the dispatcher routes it through
-  `dispatchWithExitCode`, like the `kb-*` commands already did. The command is no longer
-  the only one whose status code is "0 unless it threw".
+- **The contract is the same for `install` and `update`.** Both skip a registry the source
+  does not ship, both return an exit code, and both are dispatched through
+  `dispatchWithExitCode`, like the `kb-*` commands already were. Neither command's status
+  code is "0 unless it threw" any more, and `pair update --source <external KB>` no longer
+  reports registries the source does not ship as updated.
+- **A partial run records no version marker.** `recordInstalledVersion` is skipped when
+  anything failed: a `.pair/.kb-version.json` written after a failed registry says the KB
+  is fully installed, silencing the drift hint while content is missing and leaving the
+  re-run to abort on "target already exists".
 - **Behaviour change pinned by an existing test that had to be amended**: a flatten name
   collision no longer rejects out of the handler — it is reported as a failed registry with
   the collision message and exit 1. The guarantee the old test asserted (install does not
@@ -95,6 +101,8 @@ code from that same tally.**
   project adopts.
 - `apps/website/content/docs/customization/external-kb.mdx` — the "counted as failed"
   caveat is replaced by the real output.
-- Sibling record: the source-declaration precedence this story also introduces is
-  documented in `apps/website/content/docs/reference/configuration.mdx` (Resolution
-  Order), where the config schema lives.
+- Sibling record: the source-declaration precedence this story also introduces — and the
+  trust boundary it opens — is decided in
+  [2026-08-20-source-kb-declaration-is-validated-not-trusted.md](2026-08-20-source-kb-declaration-is-validated-not-trusted.md)
+  and documented for users in `apps/website/content/docs/reference/configuration.mdx`
+  (Resolution Order), where the config schema lives.

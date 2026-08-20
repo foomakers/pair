@@ -31,7 +31,17 @@ Developer        CI (version.yml)      CI (tag.yml)          CI (release.yml)
 pnpm exec changeset add
 ```
 
-Select the affected package(s) and bump type (patch/minor/major). Commit the `.changeset/*.md` file with your PR.
+Select the affected package(s) and bump type (patch/minor/major).
+
+**When:** at the moment a release is being scheduled — covering everything merged since the
+last one — not on every PR that changes behaviour. Any file under `.changeset/` keeps the
+Changesets release PR open and continuously regenerating `CHANGELOG.md`, so on a repository
+that releases in deliberate batches the changeset is the first step of the release, not the
+last step of the feature. Decision:
+[`.pair/adoption/decision-log/2026-08-20-a-changeset-is-added-when-a-release-is-scheduled.md`](.pair/adoption/decision-log/2026-08-20-a-changeset-is-added-when-a-release-is-scheduled.md).
+
+A PR that changes published behaviour therefore states the user-visible change in its
+description; the release author turns those into the changeset.
 
 ### 2. Merge to main
 
