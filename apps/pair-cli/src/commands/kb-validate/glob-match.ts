@@ -31,8 +31,6 @@
 
 /** A pattern compiled once and reusable across every link of every file. */
 export interface OptionalLinkMatcher {
-  /** The pattern as declared, kept for diagnostics. */
-  readonly pattern: string
   /** True when the (already normalized) candidate path matches. */
   matches(candidate: string): boolean
 }
@@ -112,7 +110,6 @@ function compileGlob(pattern: string): OptionalLinkMatcher | null {
   }
 
   return {
-    pattern,
     matches: candidate => matchSegments(segments, candidate.split('/')),
   }
 }

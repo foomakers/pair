@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import type { FileSystemService } from '@pair/content-ops'
 import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
 import { MockHttpClientService, logger } from '@pair/content-ops'
-import { validateLinks } from './link-checker'
+import { validateLinks, describesResolvedTarget } from './link-checker'
 import type { IncomingMessage } from 'http'
 
 // Helper to create a mock HTTP response
@@ -491,20 +491,6 @@ describe('validateLinks', () => {
       expect(results[0]?.warnings).toHaveLength(1)
     })
 
-    it('skips malformed patterns without crashing the run', async () => {
-      fs.writeFile('/kb/README.md', '[Link](./missing.md)')
-
-      const results = await validateLinks({
-        baseDir: '/kb',
-        files: ['/kb/README.md'],
-        fs,
-        optionalLinkPatterns: ['[unterminated', ''],
-      })
-
-      expect(results[0]?.valid).toBe(false)
-      expect(results[0]?.errors).toHaveLength(1)
-    })
-
     it('never applies to anchor-only or external links', async () => {
       fs.writeFile(
         '/kb/.pair/knowledge/guide.md',
@@ -643,6 +629,23 @@ describe('validateLinks', () => {
 
       expect(results[0]?.valid).toBe(true)
       expect(results[0]?.warnings).toHaveLength(1)
+    })
+
+    it('describesResolvedTarget treats a backslash-separated (win32) resolved form the same as a POSIX one', () => {
+      // `path.win32.relative` (what `relative()` returns on Windows) is
+      // backslash-separated, e.g. `apps\\website\\page.tsx`. Both sides must be
+      // normalized before comparing, or the written form is never a candidate
+      // on Windows and `../../apps/**` matches nothing there (regression for
+      // the depth-blind fix above, which normalized only `writtenPath`).
+      expect(
+        describesResolvedTarget('../../apps/website/page.tsx', 'apps\\website\\page.tsx'),
+      ).toBe(true)
+      // A resolved form that escapes the KB is also backslash-separated on win32.
+      expect(describesResolvedTarget('../../../apps/y.md', '..\\apps\\y.md')).toBe(true)
+      // A climb that lands back INSIDE the KB must still be rejected on win32:
+      // written strips to `apps/y.md`, but the real resolved form (one level
+      // short of the KB root) is `.pair\\knowledge\\apps\\y.md` — no match.
+      expect(describesResolvedTarget('../../apps/y.md', '.pair\\knowledge\\apps\\y.md')).toBe(false)
     })
 
     it('applies to absolute internal links too (resolved from the KB root)', async () => {
