@@ -9,6 +9,9 @@ describe('compileOptionalLinkPatterns', () => {
     expect(invalid).toEqual([])
   })
 
+  // Module-API guard only: neither entry point can deliver a blank here (the CLI
+  // flag parser and the config reader both drop blanks first), but a direct caller
+  // must not get a matcher that matches everything.
   it('reports blank patterns as invalid instead of compiling a match-everything regex', () => {
     const { matchers, invalid } = compileOptionalLinkPatterns(['', '   ', 'apps/**'])
 

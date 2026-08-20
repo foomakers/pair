@@ -41,8 +41,10 @@ was rejected on review evidence: `[z-a]` (range out of order) makes `new RegExp`
 adjacent `.*` groups backtrack catastrophically (`**a**a**a**b` against a 65-character path did
 not finish in two minutes). Both failure modes are structural, not input-validation gaps, and
 both abort a run the feature exists to keep alive. The two-pointer matcher cannot throw and is
-O(n·m); patterns it cannot compile — blank, unterminated character class, out-of-order range —
-are reported to the caller instead, so a config typo degrades to a warning rather than aborting
+O(n·m); patterns it cannot compile — unterminated character class, out-of-order range (and a
+blank, which no entry point can actually deliver: the CLI flag parser and the config reader both
+drop blank entries first, so that branch guards direct callers of the module) — are reported to
+the caller instead, so a config typo degrades to a warning rather than aborting
 the run (and is warned about under `--strict` too, where the matchers are discarded but the
 diagnostic still matters, CI being where `--strict` runs).
 

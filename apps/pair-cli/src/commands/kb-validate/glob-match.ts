@@ -55,8 +55,12 @@ type Segment = { kind: 'globstar' } | { kind: 'tokens'; tokens: Token[] }
  * Compiles optional-link glob patterns, separating the malformed ones instead of
  * throwing: a typo in config must not abort a whole validation run (US-188 edge case).
  *
- * Malformed = blank, an unterminated character class, or a character class with an
- * out-of-order range (`[z-a]`).
+ * Malformed = an unterminated character class, or a character class with an
+ * out-of-order range (`[z-a]`) — the two shapes a user actually sees warned about.
+ * A blank pattern is also rejected, but never from the CLI: the flag parser drops
+ * blank entries (`parser.ts`) and the config reader drops them with its own
+ * warning (`optional-link-config.ts`), so that branch only guards direct callers
+ * of this module.
  */
 export function compileOptionalLinkPatterns(patterns: string[]): CompiledPatterns {
   const matchers: OptionalLinkMatcher[] = []
