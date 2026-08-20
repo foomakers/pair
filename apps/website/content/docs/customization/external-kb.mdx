@@ -168,8 +168,16 @@ not failed — there is simply nothing to copy. The summary names them and the r
 The exit code follows the failures only, so it never contradicts that line: `0` here, and
 non-zero if a registry the KB **does** ship fails to install, or if the run installs
 nothing at all. A skipped registry never hides a real failure — the two are counted
-separately. See [Install from URL or Path](/docs/customization/install-from-url) for every
-source form.
+separately.
+
+`pair update` follows the same tally, and this is a change in behaviour: an update used to
+exit `0` unless it threw. If your source ships **none** of the registries the project has
+installed, `pair update --source <kb>` now exits non-zero (`Nothing to update`) instead of
+reporting success — a script that treated any update as a success should now check the
+code. `update --source` also reads the KB's own `pair.config.json`, exactly as install
+does, so a declared `prefix` survives the round trip instead of re-installing the same
+skills under a second name. See
+[Install from URL or Path](/docs/customization/install-from-url) for every source form.
 
 A project consumes **one** distribution channel for a given skill set: an external KB
 like this one, or the marketplace — not both.

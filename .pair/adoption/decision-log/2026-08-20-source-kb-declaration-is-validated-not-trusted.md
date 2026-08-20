@@ -47,7 +47,15 @@ fields that describe the source's OWN content and namespacing.**
 
 Honoured, per registry (`SOURCE_DECLARABLE_FIELDS` in `apps/pair-cli/src/config/loader.ts`):
 
-`source` · `include` · `exclude` · `flatten` · `flattenDepth` · `description` · `prefix`
+| Field | Bound |
+| ----- | ----- |
+| `source` | a **KB-relative path that stays inside the KB** — absolute, `..`-escaping (before or after normalisation) and Windows-drive/UNC values are dropped |
+| `include` · `exclude` · `flatten` · `flattenDepth` · `description` | unbounded — they select and shape the KB's own files |
+| `prefix` | a **single path segment** — no `/`, `\` or `..` |
+
+The two path-shaped fields are CONTAINED, not merely allowed (`FIELD_GUARDS`). A field
+failing its check is dropped on its own; the layer beneath supplies the value and the rest
+of the declaration still applies.
 
 Ignored — dropped before the merge, never overridden later:
 
@@ -55,11 +63,28 @@ Ignored — dropped before the merge, never overridden later:
 - every top-level key, including `working_path` and `target`;
 - a `prefix` containing a path separator or `..` (it is a path SEGMENT, so a traversing
   prefix is `targets` by another name);
+- a `source` that is absolute or leaves the KB root;
 - a registry entry that is not a JSON object.
 
-Consequently **a source KB can never decide where the install writes.** Where content
-lands is set by the CLI defaults, the consuming project, and `--config` — the three layers
-the consumer controls.
+Consequently **a source KB can never decide where the install writes, nor where it
+reads.** Where content lands is set by the CLI defaults, the consuming project, and
+`--config` — the three layers the consumer controls; where it comes from is bounded by the
+KB root.
+
+The read side needed the same rule as the write side and did not have it in the first
+implementation. `source` is on the allowlist and is resolved by `resolveRegistryPaths` as
+`resolve(datasetRoot, config.source)`, so `"source": "../home/victim/.ssh"` (or an absolute
+path, which `path.resolve` substitutes outright) made `pair install --source <kb>` copy
+arbitrary local files INTO the consumer's repository — credentials landing in a tree the
+user commits and pushes, and a disk-fill DoS for a large one. "It may describe its own
+content" is not satisfied by a path that leaves the KB.
+
+**Layer 2 applies to `install` and `update` alike.** A named source declares its registries
+on both. Reading the declaration on install only meant the first `update --source` after a
+successful install re-installed the same skills under the CLI's default prefix and left BOTH
+copies in place (skills is `overwrite`, so nothing cleans up the first) — the duplicate
+`prefix` exists to prevent, in a state install alone could never produce. Update surfaces the
+malformed-declaration warning and the declared-but-unknown skips exactly as install does.
 
 Three further rules on layer 2, unchanged in intent but now exhaustive:
 
@@ -112,7 +137,18 @@ someone else's repository.
 - The rule is published in `apps/website/content/docs/reference/configuration.mdx`
   ("What layer 2 may say"), so a KB maintainer reads the same list the CLI enforces.
 - Adding a new registry field is now a two-place decision: the field itself, and whether
-  layer 2 may state it. Default is no.
+  layer 2 may state it — and, if it is path-shaped, what bounds it. Default is no.
+- **`LoadedConfig.source` names the resolution CHAIN**, weakest first
+  (`pair-cli config.json < source KB declaration: /kb < pair.config.json`), instead of the
+  last layer that wrote. A single-valued label described the resolution wrongly in exactly
+  the case this ADL is about. Install and update print it once, when a declaration actually
+  applied, which is also what gives `SourceDeclarationOutcome.applied` a production
+  consumer: a KB maintainer can see the declaration was honoured instead of inferring it
+  from the installed directory names.
+- **`install --list-targets` resolves configuration the same way `install` does** (project
+  root, no `config.json` fallback). It previously resolved from the CLI module directory, so
+  the command whose only job is to say where content lands disagreed with the command that
+  lands it in any project carrying its own `pair.config.json`.
 
 ## Adoption Impact
 

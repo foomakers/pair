@@ -42,13 +42,22 @@ The source KB is the one layer whose content you do not control: it is shipped b
 publishes the KB. So it may describe **its own content and namespacing**, and nothing else.
 Exactly these registry fields are honoured:
 
-`source` · `include` · `exclude` · `flatten` · `flattenDepth` · `description` · `prefix`
+| Field | What a source KB may state |
+| ----- | -------------------------- |
+| `source` | a **KB-relative path that stays inside the KB** — absolute, `..`-escaping and Windows-drive values are dropped |
+| `include` · `exclude` | which of its own files ship |
+| `flatten` · `flattenDepth` | how its own directories collapse |
+| `description` | free text |
+| `prefix` | a **single path segment** — one containing `/`, `\` or `..` is dropped |
 
 Everything else in a source `pair.config.json` is ignored, not merged — `targets`,
 `target_path`, `behavior`, `working_path` and any top-level key. **A KB can never decide
 where the install writes**; that stays with the CLI defaults, your project, and `--config`.
-A declared `prefix` becomes a path segment, so one containing `/`, `\` or `..` is dropped
-too.
+Nor can it decide where the install **reads**: the two path-shaped fields it may state
+(`source`, `prefix`) are bounded to the KB root, so a KB cannot make `pair install` copy
+files from elsewhere on your machine into your repository. A field failing its check is
+dropped on its own — the layer beneath supplies the value and the rest of the declaration
+still applies.
 
 Three further guards apply to layer 2, and only to it:
 
@@ -64,8 +73,10 @@ Three further guards apply to layer 2, and only to it:
   `targets`, …): a partial entry relying on the source for the rest fails validation,
   because the source's version of that registry was never merged beneath yours.
 
-Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`); the default
-KB path resolves exactly as before. `pair package` ships the KB's `pair.config.json` in
+Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`), and it applies
+to `pair install` and `pair update` alike — an update that did not read the declaration
+would re-install the same content under the CLI's default names, leaving both copies
+behind. The default KB path resolves exactly as before. `pair package` ships the KB's `pair.config.json` in
 the release ZIP, so a KB installed from its published artifact declares exactly what the
 same KB installed from a directory or a git clone declares.
 
