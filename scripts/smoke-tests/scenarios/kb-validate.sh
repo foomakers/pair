@@ -14,13 +14,19 @@ if [ ! -d "$KB_SOURCE_PATH/.pair" ]; then
   exit 1
 fi
 
-# Test 1: Source layout structure validation (skip link checking with --ignore-config
-# to avoid failures from pre-existing broken links in the real dataset)
-log_info "Test 1: Validate source layout structure (real dataset)"
+# Test 1: Source layout, real dataset, FULL validation (US-188 dogfood).
+# This used to pass --ignore-config "to avoid pre-existing broken links": that flag
+# consults no config, so no registry resolved, no file was collected and NOTHING was
+# validated — the test could not fail. The dataset has no broken links today, so the
+# real run is the assertion: structure + links + metadata on the shipped KB, and any
+# link that legitimately points outside the KB tree is declared through
+# link_validation.optional_link_patterns rather than switched off wholesale.
+log_info "Test 1: Validate source layout, structure + links (real dataset)"
 TEST_DIR=$(setup_workspace "kb-validate-source")
 cd "$TEST_DIR"
-run_pair kb-validate --path "$KB_SOURCE_PATH" --layout source --ignore-config
+run_pair kb-validate --path "$KB_SOURCE_PATH" --layout source
 assert_success || exit 1
+assert_output_contains "Link Validation:" || exit 1
 
 # Test 2: Target layout validation after install
 log_info "Test 2: Validate target layout after install"
@@ -28,22 +34,30 @@ TEST_DIR=$(setup_workspace "kb-validate-target")
 cd "$TEST_DIR"
 run_pair install --source "$KB_SOURCE_PATH"
 assert_success || exit 1
-run_pair kb-validate --layout target --ignore-config
+run_pair kb-validate --layout target
 assert_success || exit 1
 
 # Test 3: Skip registries flag
 log_info "Test 3: Validate with --skip-registries"
 TEST_DIR=$(setup_workspace "kb-validate-skip")
 cd "$TEST_DIR"
-run_pair kb-validate --path "$KB_SOURCE_PATH" --layout source --skip-registries adoption --ignore-config
+run_pair kb-validate --path "$KB_SOURCE_PATH" --layout source --skip-registries adoption
 assert_success || exit 1
 
-# Test 4: Ignore config flag
+# Test 4: --ignore-config consults no config, so nothing is collected or validated:
+# the run exits 0 without checking a single link (that is the flag's whole contract).
 log_info "Test 4: Validate with --ignore-config"
 TEST_DIR=$(setup_workspace "kb-validate-ignore")
 cd "$TEST_DIR"
 run_pair kb-validate --path "$KB_SOURCE_PATH" --ignore-config
 assert_success || exit 1
+# The green exit above is worthless on its own — no section means nothing was checked.
+if grep -Fq "Link Validation:" "$TMP_DIR/last_cmd_output.log"; then
+  log_fail "--ignore-config validated links: it must resolve no registry and collect no file"
+  exit 1
+fi
+log_succ "--ignore-config emitted no Link Validation section (nothing collected)"
+assert_output_contains "nothing validated" || exit 1
 
 # Test 5: Validation failure on missing registry paths
 log_info "Test 5: Validation detects missing registry paths"

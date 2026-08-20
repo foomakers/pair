@@ -433,7 +433,7 @@ This command takes **no positional argument** — the KB directory is passed as
 | `--path <path>`                   | KB directory to validate (default: current directory)                         |
 | `--layout <mode>`                 | Layout mode: `source` or `target` (default: `target`)                         |
 | `--strict`                        | Enable external link checking via HTTP HEAD (slow)                            |
-| `--ignore-config`                 | Skip config-based registry structure validation                               |
+| `--ignore-config`                 | Consult no config: no registries resolve, so nothing is collected or checked  |
 | `--skip-registries <list>`        | Comma-separated registry names to exclude from validation                     |
 | `--optional-link-patterns <list>` | Comma-separated globs whose **missing** link targets are warnings, not errors |
 | `--log-level <level>`             | Set logging level (trace, debug, info, warn, error)                           |
@@ -497,7 +497,9 @@ Rules:
   `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`. A
   malformed pattern (unterminated class, out-of-order range like `[z-a]`) is reported and
   skipped, never fatal — including under `--strict`, where the matchers are discarded but the
-  typo is still warned about.
+  typo is still warned about. A **blank** entry is not a malformed pattern: on the flag it is
+  dropped silently (`"apps/**,,"` is one pattern), in config it is dropped with its own
+  "not a non-empty string" warning.
 - **Everything outside that list is literal, not an error.** Brace expansion (`{apps,packages}/**`),
   extglob (`+(a|b)`) and leading-`!` negation (`!apps/**`) are compiled character by character, so
   they simply never match — and they are **not** reported as malformed patterns, so nothing warns.
@@ -522,7 +524,13 @@ Rules:
   stderr for immediacy (a long run should not sit on a config typo until the report prints) and
   in the report for the counted summary.
 - `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
-- `--ignore-config` skips the config-declared patterns; CLI-declared ones still apply.
+- `--ignore-config` consults no config at all, so no registries resolve, **no files are
+  collected and nothing is validated** — structure, links and metadata are all skipped, and
+  optional patterns (config or CLI) have no effect, since there is nothing to match against.
+  The run says so rather than passing silently: a `Configuration:` notice
+  (`--ignore-config: … nothing validated …`) is printed on stderr and in the report, counted in
+  the `Warnings:` total. Use it to skip validation entirely, not as a way to run with CLI-only
+  patterns.
 - Config patterns are read from the config of the **KB being validated**
   (`<--path>/pair.config.json`, falling back to `<--path>/config.json` when the former is
   absent), not from the invoking project — the same config `--path` already

@@ -83,10 +83,10 @@ async function collectFiles(
  *
  * They deliberately travel on BOTH channels, so each run-level diagnostic is
  * emitted twice: once on stderr the moment it is detected (immediacy — a long
- * validation run should not sit on a config typo until the report prints, and
- * `validateLinks` is used by callers that never build a report), and once in the
- * report's `Configuration:` section, where it is counted in the `Warnings:`
- * total. Each channel logs its own: the config-shape ones here, the
+ * validation run should not sit on a config typo until the report prints; and
+ * `validateLinks` is a module-level API whose contract cannot assume a report
+ * exists downstream), and once in the report's `Configuration:` section, where
+ * it is counted in the `Warnings:` total. Each channel logs its own: the config-shape ones here, the
  * malformed-pattern ones inside `validateLinks` when it compiles them —
  * `describeInvalidOptionalLinkPatterns` re-derives the latter from the SAME
  * message source, so the two channels cannot drift. Documented as a design
@@ -104,6 +104,22 @@ function resolveOptionalLinks(
     logger.warn(warning)
   }
   return { patterns, runWarnings: [...warnings, ...describeInvalidOptionalLinkPatterns(patterns)] }
+}
+
+/**
+ * `--ignore-config` resolves NO registry, so no file is collected and nothing —
+ * structure, links, metadata — is actually checked: the run exits 0 having
+ * validated zero files. Left silent, that reads exactly like a clean run of a
+ * validation tool, which is the one thing it must never read like. Logged AND
+ * carried into the report's `Configuration:` section, like every other run-level
+ * diagnostic.
+ */
+function describeNoConfigRun(loadedConfig: Config | null): string[] {
+  if (loadedConfig !== null) return []
+  const notice =
+    '--ignore-config: no config consulted, so no registry resolved — zero files collected, nothing validated (structure, links and metadata all skipped)'
+  logger.warn(notice)
+  return [notice]
 }
 
 /** Frontmatter checks: skills are the SKILL.md files, adoption the files under /adoption/. */
@@ -141,6 +157,7 @@ export async function handleKbValidateCommand(
   const loadedConfig = loadKbConfig(config, fs, kbPath)
   const registries = loadRegistries(config, loadedConfig)
   const { patterns: optionalLinkPatterns, runWarnings } = resolveOptionalLinks(config, loadedConfig)
+  const runNotices = [...describeNoConfigRun(loadedConfig), ...runWarnings]
 
   const structure = !config.ignoreConfig
     ? await validateStructure({ registries, layout, baseDir: kbPath, fs })
@@ -163,7 +180,7 @@ export async function handleKbValidateCommand(
     ...(structure && { structure }),
     links,
     metadata,
-    runWarnings,
+    runWarnings: runNotices,
   })
   const output = formatReport(report)
   console.log(output)

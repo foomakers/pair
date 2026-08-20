@@ -27,7 +27,8 @@ export const kbValidateMetadata = {
     },
     {
       flags: '--ignore-config',
-      description: 'Skip config-based registry structure validation',
+      description:
+        'Consult no config: no registries resolve, so no files are collected or validated',
     },
     {
       flags: '--skip-registries <names>',

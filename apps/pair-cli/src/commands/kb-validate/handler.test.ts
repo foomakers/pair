@@ -298,13 +298,33 @@ describe('handleKbValidateCommand - optional link patterns (US-188)', () => {
     ).rejects.toThrow('Validation failed')
   })
 
-  it('--ignore-config leaves the CLI patterns in force', async () => {
-    await expect(
-      handleKbValidateCommand(
-        { command: 'kb-validate', ignoreConfig: true, optionalLinkPatterns: ['apps/**'] },
-        seedKb(),
-      ),
-    ).resolves.toBeUndefined()
+  // --ignore-config consults NO config, so there are no registries, no files collected
+  // and link validation never runs — optional patterns (config or CLI) are moot. The
+  // exit code alone would be green even with the whole feature deleted, so this pins
+  // the observable truth instead: no `Link Validation:` section is emitted at all.
+  it('--ignore-config validates no files, so optional patterns have no effect', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+
+    try {
+      await expect(
+        handleKbValidateCommand(
+          { command: 'kb-validate', ignoreConfig: true, optionalLinkPatterns: ['apps/**'] },
+          seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } }),
+        ),
+      ).resolves.toBeUndefined()
+
+      const output = log.mock.calls.map(call => String(call[0])).join('\n')
+      expect(output).not.toContain('Link Validation:')
+      expect(output).toContain('✓ Validation passed')
+      // ...and the run says so, on both channels, instead of passing silently.
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('nothing validated'))
+      expect(output).toContain('Configuration:')
+      expect(output).toContain('nothing validated')
+    } finally {
+      log.mockRestore()
+      warn.mockRestore()
+    }
   })
 
   // A section of the wrong shape must not read as "no patterns declared": without a
