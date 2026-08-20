@@ -56,10 +56,18 @@ Everything else in a source `pair.config.json` is ignored, not merged — `targe
 where the install writes**; that stays with the CLI defaults, your project, and `--config`.
 
 Nor can it decide where the install **reads**. The bound is physical, not just on the
-name: a declared `source` — and every symlink met while copying — must still resolve
-inside the KB once followed, so a KB cannot make `pair install` copy files from elsewhere
-on your machine into your repository. A symlink pointing back inside the KB is followed
-normally; one pointing out is skipped, with a warning naming it.
+name — each half is checked after every symlink on the path is followed:
+
+- a declared `source` must resolve inside the **KB**;
+- every symlink met while copying must resolve inside **that registry's own source
+  directory** — the narrower bound. One resolving back inside it is followed normally;
+  one resolving anywhere else is skipped, with a warning naming it.
+
+So a KB cannot make `pair install` copy files from elsewhere on your machine into your
+repository, and a registry ships only what physically lives under it. A link like
+`.pair/knowledge/shared -> ../../shared-guidelines` is **not** installed even though its
+target is inside the KB: the target is outside the `knowledge` registry's source. Put
+shared content under the registry's own source directory instead.
 
 **A field failing its check is dropped on its own** — the layer beneath supplies the value
 and the rest of the declaration still applies. If what remains is well-formed but still
@@ -67,7 +75,7 @@ does not add up (`flatten: false` over a registry that sets `flattenDepth`, say)
 declaration is dropped with a warning and your own resolution stands: a source's config
 never aborts your install, and is never half-applied.
 
-Three further guards apply to layer 2, and only to it:
+Four further guards apply to layer 2, and only to it:
 
 - A **malformed** source `pair.config.json` is ignored with a warning printed to the
   console — never partially applied — and installation continues on your project's
