@@ -220,8 +220,9 @@ async function runUpdateSequence(
   backupService: BackupService,
   context: UpdateContext,
 ): Promise<number> {
-  const { fs, options, pushLog } = context
+  const { fs, options, presenter, pushLog } = context
   const shouldBackup = options?.persistBackup || options?.autoRollback !== false
+  const startTime = Date.now()
 
   const results = await updateRegistries(context)
   const tally = tallyRegistries(results)
@@ -230,20 +231,29 @@ async function runUpdateSequence(
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'update')
   }
 
-  await writeProjectLlmsTxt(fs, context.baseTarget, pushLog)
+  // A run that updated nothing writes neither the project index nor the version marker.
   // No `failed === 0` guard here, unlike install: update's failure path is
   // rollback-then-rethrow (`executeUpdate`), so a run that reaches this line has no failed
   // registry to protect the marker from. Guarding on a condition that cannot occur would
   // read as if update shared install's continue-on-failure behaviour, and it does not.
-  await recordInstalledVersion({
-    fs,
-    datasetRoot: context.datasetRoot,
-    baseTarget: context.baseTarget,
-  })
+  if (tally.ok > 0) {
+    await writeProjectLlmsTxt(fs, context.baseTarget, pushLog)
+    await recordInstalledVersion({
+      fs,
+      datasetRoot: context.datasetRoot,
+      baseTarget: context.baseTarget,
+    })
+  }
 
   if (!options?.persistBackup && shouldBackup) {
     await backupService.commit(false)
   }
+
+  // LAST, as install prints it: everything that can still fail and roll the run back has
+  // run. Printed inside `updateRegistries` it preceded the link transformation, so a
+  // throw there put `✓ Update complete` on screen immediately above `Rolling back...`
+  // and a non-zero exit — the text-vs-status disagreement AC5 exists to remove.
+  presenter.summary(results, 'update', Date.now() - startTime)
 
   return exitCodeFor(tally)
 }
@@ -355,7 +365,6 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
   const accumulatedSkillNameMap: SkillNameMap = new Map()
   const accumulatedSkillLinkPathMap: SkillLinkPathMap = new Map()
   const total = Object.keys(registries).length
-  const startTime = Date.now()
 
   presenter.startOperation('update', total)
 
@@ -387,12 +396,10 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     accumulatedSkillLinkPathMap,
   )
 
-  const allResults = [
+  return [
     ...results,
     ...reportDeclaredButUnknown(declaredButUnknownResults(context.sourceDeclaration), presenter),
   ]
-  presenter.summary(allResults, 'update', Date.now() - startTime)
-  return allResults
 }
 
 async function executeRollback(

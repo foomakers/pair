@@ -4,6 +4,7 @@ import type { UpdateCommandConfig } from './parser'
 import { handleInstallCommand } from '../install/handler'
 import type { InstallCommandConfig } from '../install/parser'
 import {
+  BackupService,
   buildTestResponse,
   InMemoryFileSystemService,
   MockHttpClientService,
@@ -1816,6 +1817,54 @@ describe('US-396: update distinguishes skipped from updated, and the exit code f
     expect(exitCode).toBe(1)
     // ...and the old content is still there: "nothing to update" is not "wiped"
     expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toContain('# Old guide')
+  })
+
+  test('a run that updates nothing records no version marker', async () => {
+    // The marker is what `kb-info` and the drift hint read. Written after a run that
+    // applied nothing, it reports the project as running that KB version and SILENCES the
+    // drift warning it exists to raise (US-396 review round 3).
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old guide',
+        [`${kb}/package.json`]: JSON.stringify({ name: 'acme-kb', version: '9.9.9' }),
+        [`${kb}/AGENTS.md`]: '# Agents',
+      },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleUpdateCommand(sourceUpdate, fs, { autoRollback: false })
+
+    expect(exitCode).toBe(1)
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(false)
+  })
+
+  test('the summary prints AFTER the post-copy steps, never above a rollback', async () => {
+    // `--link-style` runs after the copies and can throw, which rolls the whole run back.
+    // Printed inside `updateRegistries`, the summary reached the console FIRST: the user
+    // read `✓ Update complete (…)`, then `Rolling back...`, then an error, then exit 1.
+    const fs = consumerFs()
+    const printed: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      printed.push(String(m))
+    })
+    // The backup commit is the one post-copy step that does NOT swallow its own error
+    // (`applyLinkTransformation`, `writeProjectLlmsTxt` and `recordInstalledVersion` all
+    // do), so it is the reachable path where a run is declared complete and then rolled
+    // back.
+    vi.spyOn(BackupService.prototype, 'commit').mockRejectedValue(
+      new Error('post-copy step exploded'),
+    )
+
+    await expect(handleUpdateCommand(sourceUpdate, fs, { linkStyle: 'relative' })).rejects.toThrow(
+      /exploded/,
+    )
+    consoleSpy.mockRestore()
+
+    expect(printed.join('\n')).toContain('Rolling back')
+    expect(printed.join('\n')).not.toContain('Update complete')
   })
 })
 

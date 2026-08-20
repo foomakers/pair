@@ -773,8 +773,19 @@ describe('install — llms.txt generation', () => {
  * it logs a warning and skips). The handler should reject upfront if the
  * resolved dataset root has no usable content.
  */
+/**
+ * A source that ships nothing installable is a NO-OP, reported as one — not a raw thrown
+ * error (US-396 review round 3).
+ *
+ * The pre-flight this replaces (`validateDatasetContent`) threw
+ * `Dataset root has no content for configured registries (expected: …)` before any summary
+ * was built, so the story's own edge case — "report the no-op and the reason" — was
+ * reachable in `summary.test.ts` and nowhere in the product. Every registry now prints its
+ * resolved source → target, then its skip reason, and the exit code says the run installed
+ * nothing.
+ */
 describe('BUG 2: dataset root validation', () => {
-  test('T2.1 — rejects when resolved dataset root has no content', async () => {
+  test('T2.1 — reports a no-op, and writes nothing, when the dataset root has no content', async () => {
     const cwd = '/test-project'
 
     const testConfig = {
@@ -809,8 +820,22 @@ describe('BUG 2: dataset root validation', () => {
       offline: false,
     }
 
-    // Should reject because dataset root has no usable content for registries
-    await expect(handleInstallCommand(config, fs)).rejects.toThrow(/dataset/i)
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleInstallCommand(config, fs)
+    consoleSpy.mockRestore()
+
+    // Non-zero: nothing was installed, so this is not a success
+    expect(exitCode).toBe(1)
+    expect(lines.join('\n')).toContain('Nothing to install')
+    expect(lines.join('\n')).toContain('not shipped by this source')
+    // ...and the project is untouched: no target, no index, no version marker
+    expect(await fs.exists(`${cwd}/.github`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/llms.txt`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(false)
   })
 })
 
@@ -1783,6 +1808,70 @@ describe('US-396: the source declares, but never decides where the install write
     warnSpy.mockRestore()
 
     expect(warned.join('\n')).toContain('pair.config.json')
+  })
+
+  test('a source-declared source that is a SYMLINK out of the KB is ignored too', async () => {
+    // Lexical containment does not see this: `leak` escapes nothing by name. `fs.stat`
+    // follows the link, reports a directory, and the copy walks the victim's files into
+    // the tree they commit (US-396 review round 3).
+    const fs = consumerFs({ '/home/victim/.ssh/id_rsa': 'PRIVATE KEY' })
+    await fs.symlink('/home/victim/.ssh', `${kb}/leak`)
+    await fs.writeFile(
+      `${kb}/pair.config.json`,
+      JSON.stringify({ asset_registries: { knowledge: { source: 'leak' } } }),
+    )
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.pair/knowledge/id_rsa`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
+  })
+
+  test('a source shipping only skills still writes .pair/ artifacts', async () => {
+    // `.pair/` used to exist only because the SKIPPED `knowledge` registry's `ensureDir`
+    // had created it as a side effect. Deciding "not shipped" before touching the project
+    // removed that accident, and the skill-name manifest write then failed with
+    // `ENOENT: … /.pair/.skill-name-map.json` — out of the whole install. Both writers now
+    // own their directory. (Caught by the `registry-exclude` smoke scenario.)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        // Only `.skills` — nothing the `.pair/`-targeted registries ship
+        [`${kb}/.pair/README.md`]: '# Acme KB',
+        [`${kb}/.skills/example-skill/SKILL.md`]: '---\nname: example-skill\n---\n',
+      },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.pair/.skill-name-map.json`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.pair/llms.txt`)).toBe(true)
+  })
+
+  test("a source's typo never aborts the consumer's install", async () => {
+    // `flatten: false` is a plausible declaration and a well-formed boolean. Over the
+    // base `skills` (flatten: true, flattenDepth: 2) the MERGED entry is invalid
+    // (`flattenDepth requires flatten: true`), and `setupInstallContext` validates with a
+    // hard throw: the user saw `Error: Registry 'skills' flattenDepth requires flatten:
+    // true` — naming their OWN registry — exit 1, nothing installed.
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { flatten: false } },
+      }),
+    })
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => warned.push(String(m)))
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+    warnSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+    expect(warned.join('\n')).toMatch(/pair\.config\.json/)
   })
 })
 

@@ -44,7 +44,9 @@ code from that same tally.**
 - **One broken registry does not abort the ones after it.** A per-registry error is caught,
   reported, and carried out through the exit code, instead of throwing past the summary.
   The reader gets the whole picture in one run rather than one failure at a time.
-- **Exit code = f(tally), computed once.** Non-zero when anything failed, **or** when the
+- **Exit code = f(tally), computed once**, and published as such in the CLI's Exit Code
+  Contract (`reference/specs/cli-contracts.mdx`) — `1` is no longer "validation error"
+  alone for these two commands. Non-zero when anything failed, **or** when the
   run installed nothing at all (a source that ships nothing installable is a no-op, and
   "success" is the wrong answer to it). Zero otherwise, including with any number of
   skips.
@@ -53,6 +55,27 @@ code from that same tally.**
   log — cannot drift apart or from the status code. The log line says
   `finished with errors` / `did nothing` / `complete` exactly as the headline does; a log
   line reading `complete` for a failed run is the same disagreement one channel down.
+- **A no-op is REPORTED, not thrown.** A source that ships nothing installable produces a
+  summary — every registry named with its resolved source → target and its skip reason,
+  `Nothing to install (0 ok, N skipped — not shipped by this source)`, exit 1 — instead of
+  the pre-flight error `Dataset root has no content for configured registries` that used to
+  abort before any summary existed. That pre-flight (`validateDatasetContent`) is removed:
+  it made the story's own edge case reachable in unit tests and nowhere in the product, and
+  its information (which paths were expected) is on screen either way, per registry. Two
+  properties keep the no-op from touching the project: a registry whose source is absent is
+  decided BEFORE `ensureDir`, so no empty parent directories are created, and the project
+  index (`.pair/llms.txt`) is written only when something was installed.
+- **A run that applied nothing records no version marker.** `recordInstalledVersion` is
+  gated on `ok > 0` in BOTH commands, not only on `failed === 0`. A marker written after a
+  run that changed nothing reports the project as running that KB version and silences the
+  drift hint the marker exists to raise.
+- **The summary is the LAST thing both commands print.** Everything that can still fail and
+  roll the run back has run by then. `update` printed it inside `updateRegistries`, before
+  the link transformation, the project index, the marker and the backup commit — so a
+  failing post-copy step put `✓ Update complete` on screen immediately above
+  `Rolling back...` and a non-zero exit, the exact text-vs-status disagreement this decision
+  removes. (`applyLinkTransformation`, `writeProjectLlmsTxt` and `recordInstalledVersion`
+  swallow their own errors; `BackupService.commit` does not, which is the reachable path.)
 - **The exit code has to survive the process, not just the handler.** The CLI entry point
   force-exits (open HTTP handles from a KB download otherwise hang it), and Node's
   `process.exit(0)` with an EXPLICIT code overrides a previously assigned
@@ -97,16 +120,17 @@ code from that same tally.**
   rollback-then-rethrow semantics, so a per-registry error propagates out of
   `updateRegistries`, restores the backup and rethrows. A partial update therefore never
   reaches the version marker at all, and update's exit code can only be 1 through the no-op
-  branch (`total > 0 && ok === 0`), never through `failed > 0`. Update writes the marker
-  unguarded for that reason — a `failed === 0` guard there would read as continue-on-failure
+  branch (`total > 0 && ok === 0`), never through `failed > 0`. Update therefore guards the
+  marker on `ok > 0` only — a `failed === 0` guard there would read as continue-on-failure
   parity the command does not have.
 - **`update`'s user-visible exit code changed** and is documented as such in
   `external-kb.mdx`: a source shipping none of the installed registries now exits non-zero
   where it used to exit 0.
-- **A partial run records no version marker.** `recordInstalledVersion` is skipped when
-  anything failed: a `.pair/.kb-version.json` written after a failed registry says the KB
-  is fully installed, silencing the drift hint while content is missing and leaving the
-  re-run to abort on "target already exists".
+- **A partial run — and an empty one — records no version marker.**
+  `recordInstalledVersion` is skipped when anything failed OR when nothing was installed:
+  a `.pair/.kb-version.json` written in either case says the KB is fully installed,
+  silencing the drift hint while content is missing and leaving the re-run to abort on
+  "target already exists".
 - **Behaviour change pinned by an existing test that had to be amended**: a flatten name
   collision no longer rejects out of the handler — it is reported as a failed registry with
   the collision message and exit 1. The guarantee the old test asserted (install does not

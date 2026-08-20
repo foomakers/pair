@@ -1,6 +1,6 @@
 import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { dirname, join } from 'path'
+import { dirname } from 'path'
 import chalk from 'chalk'
 import {
   loadConfigWithOverrides,
@@ -110,7 +110,6 @@ async function runInstall(ctx: {
   // resolution stands (US-396).
   reportSourceDeclaration({ declaration: sourceDeclaration, resolution, presenter })
   await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
-  validateDatasetContent(fs, datasetRoot, registries)
   await validateInstallContext(fs, registries, baseTarget)
   return executeInstall({
     fs,
@@ -236,24 +235,6 @@ async function setupInstallContext(
   }
 }
 
-function validateDatasetContent(
-  fs: FileSystemService,
-  datasetRoot: string,
-  registries: Record<string, RegistryConfig>,
-): void {
-  // Match resolveRegistryPaths logic: check direct name path first, then config.source
-  const hasContent = Object.entries(registries).some(
-    ([name, reg]) =>
-      fs.existsSync(join(datasetRoot, name)) || fs.existsSync(join(datasetRoot, reg.source)),
-  )
-  if (!hasContent) {
-    const sources = Object.values(registries)
-      .map(r => r.source)
-      .join(', ')
-    throw new Error(`Dataset root has no content for configured registries (expected: ${sources})`)
-  }
-}
-
 async function validateInstallContext(
   fs: FileSystemService,
   registries: Record<string, RegistryConfig>,
@@ -311,7 +292,6 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     target: effectiveTarget,
     effectiveDatasetRoot,
   } = resolveRegistryIO(ctx)
-  await ensureDir(fs, dirname(effectiveTarget))
 
   presenter.registryStart({
     name: registryName,
@@ -320,6 +300,13 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     source: datasetPath,
     target: effectiveTarget,
   })
+  // Decided BEFORE anything is created: a source that ships nothing must leave no trace
+  // in the consumer's project, not even the empty parent directories `ensureDir` makes.
+  if (!(await fs.exists(datasetPath))) {
+    return { result: reportNotShipped(ctx, { effectiveTarget, datasetPath }) }
+  }
+
+  await ensureDir(fs, dirname(effectiveTarget))
   const copyResult = await doCopyAndUpdateLinks(fs, {
     source: datasetPath,
     target: effectiveTarget,
@@ -428,10 +415,15 @@ async function executeInstall(context: InstallContext): Promise<number> {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')
   }
 
-  await writeProjectLlmsTxt(fs, baseTarget, pushLog)
-  // A partial install is not an installed KB: recording the version anyway would silence
-  // the drift hint while a registry is missing, and the re-run aborts on 'already exists'.
-  if (tally.failed === 0) await recordInstalledVersion({ fs, datasetRoot, baseTarget })
+  // Both gated on something having been installed: a run that installed NOTHING must not
+  // write a project index for content that is not there, nor claim the source's version.
+  if (tally.ok > 0) {
+    await writeProjectLlmsTxt(fs, baseTarget, pushLog)
+    // A partial install is not an installed KB either: recording the version anyway would
+    // silence the drift hint while a registry is missing, and the re-run aborts on
+    // 'already exists'.
+    if (tally.failed === 0) await recordInstalledVersion({ fs, datasetRoot, baseTarget })
+  }
 
   presenter.summary(allResults, 'install', Date.now() - startTime)
   return exitCodeFor(tally)

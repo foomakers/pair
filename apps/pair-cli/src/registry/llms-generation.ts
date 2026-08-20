@@ -1,5 +1,5 @@
 import type { FileSystemService } from '@pair/content-ops'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import type { LogEntry } from '#diagnostics'
 
 interface LlmsEntry {
@@ -83,6 +83,9 @@ export async function writeProjectLlmsTxt(
   try {
     const content = await generateLlmsTxt(fs, baseTarget)
     const outputPath = join(baseTarget, '.pair', 'llms.txt')
+    // Owns its own directory: `.pair/` is not guaranteed by any registry having been
+    // installed (a source may ship `skills` and nothing under `.pair/`).
+    await fs.mkdir(dirname(outputPath), { recursive: true })
     await fs.writeFile(outputPath, content)
     pushLog('info', 'Generated .pair/llms.txt')
   } catch (err) {
