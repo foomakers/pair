@@ -55,6 +55,22 @@ describe('.pair/llms.txt — the committed index equals the generator over the r
     expect(generated).not.toMatch(/\.pair\/(product|tech)\/adopted/)
   })
 
+  // 50 ADL / analysis entries live in `.pair/adoption/decision-log/` and were
+  // reachable from no section, while `adoption/tech/adr/**` was indexed — so the
+  // index presented this project's decision record as ADR-only. Concrete failure:
+  // an agent reads `.pair/llms.txt` (the index this story exists to repair) looking
+  // for why eligibility is one literal label, and neither
+  // `2026-08-20-eligibility-is-one-literal-label-until-the-filter-widens.md` nor
+  // `2026-08-20-eligibility-schema-lives-in-collaboration-automation.md` is listed.
+  it('indexes the decision log, not just the ADRs', async () => {
+    const generated = await generateLlmsTxt(fileSystemService, REPO_ROOT)
+
+    expect(generated).toContain('## Adoption — Decisions')
+    expect(generated).toContain(
+      '(.pair/adoption/decision-log/2026-08-20-eligibility-is-one-literal-label-until-the-filter-widens.md)',
+    )
+  })
+
   it('indexes the automation policy shipped by #216', async () => {
     const generated = await generateLlmsTxt(fileSystemService, REPO_ROOT)
 

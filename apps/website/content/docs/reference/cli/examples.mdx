@@ -12,13 +12,50 @@ Copy-paste ready examples for common `pair-cli` workflows. All examples include 
 ```bash
 # Step 1: Discover available registries
 pair install --list-targets
+```
 
-# Output:
-# Available asset registries:
-#   github     .github         GitHub workflows and configuration files
-#   knowledge  .pair            Knowledge base and documentation
-#   adoption   .pair/adoption   Adoption guides and onboarding materials
+Output:
 
+```text
+  Asset Registries
+
+  github
+    target:   .github
+    behavior: mirror
+    GitHub workflows and configuration files
+
+  knowledge
+    target:   .pair/knowledge
+    behavior: mirror
+    Knowledge base and documentation
+
+  adoption
+    target:   .pair/adoption
+    behavior: add
+    Adoption guides and onboarding materials
+
+  agents
+    target:   AGENTS.md
+    behavior: mirror
+    AI agents guidance and session context
+
+  skills
+    target:   .claude/skills/
+    behavior: overwrite
+    Agent skills distributed to AI tool directories
+
+  workflows
+    target:   .claude/workflows/
+    behavior: overwrite
+    Batch orchestration workflows (Claude Code only; inert elsewhere)
+
+  agent-definitions
+    target:   .claude/agents/
+    behavior: overwrite
+    Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-contract-generator)
+```
+
+```bash
 # Step 2: Install with defaults
 pair install
 ```

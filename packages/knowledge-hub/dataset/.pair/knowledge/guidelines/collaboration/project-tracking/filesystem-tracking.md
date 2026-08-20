@@ -148,7 +148,7 @@ echo "Sprint velocity: $COMPLETED_POINTS story points"
 #!/bin/bash
 # generate-dashboard.sh
 
-cat > .pair/adoption/product/current-status.md << EOF
+cat > .pair/product/status/current-status.md << EOF
 # Project Status Dashboard
 Generated: $(date)
 

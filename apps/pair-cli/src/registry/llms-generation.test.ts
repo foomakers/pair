@@ -31,6 +31,37 @@ describe('generateLlmsTxt', () => {
     expect(result).toContain('- [How to Implement a Task](.pair/knowledge/how-to/10-implement.md)')
   })
 
+  it('indexes the decision log — ADRs are not the whole decision record', async () => {
+    // `.pair/adoption/decision-log/` is where ADL/analysis entries land (ADRs live
+    // under `adoption/tech/adr/`, already reached by the Tech section). Scanned by
+    // no section, the index misrepresents the project's decision record as ADR-only:
+    // an agent reading `.pair/llms.txt` for "why is eligibility one literal label"
+    // finds nothing, and re-decides a question that was already settled.
+    const fs = createFs({
+      '/project/.pair/adoption/decision-log/2026-08-20-one-literal-label.md':
+        '# Decision: eligibility is one literal label\n\nContent.',
+    })
+
+    const result = await generateLlmsTxt(fs, '/project')
+
+    expect(result).toContain('## Adoption — Decisions')
+    expect(result).toContain(
+      '- [Decision: eligibility is one literal label](.pair/adoption/decision-log/2026-08-20-one-literal-label.md)',
+    )
+  })
+
+  it('omits the decision-log section when the directory is absent', async () => {
+    // Adopters without a decision log must be unaffected: `scanSection` returns []
+    // for an absent directory and an empty section is never emitted.
+    const fs = createFs({
+      '/project/.pair/adoption/tech/tech-stack.md': '# Tech Stack\n\nContent.',
+    })
+
+    const result = await generateLlmsTxt(fs, '/project')
+
+    expect(result).not.toContain('## Adoption — Decisions')
+  })
+
   it('includes skills guide when present', async () => {
     const fs = createFs({
       '/project/.pair/knowledge/skills-guide.md': '# Skills Guide\n\nSkills overview.',

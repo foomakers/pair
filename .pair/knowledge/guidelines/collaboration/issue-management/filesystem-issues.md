@@ -195,7 +195,7 @@ find .pair/product/backlog/03-user-stories/completed/ -name "*.md" -mtime -7 | s
 
 ```markdown
 
-# .pair/adoption/product/sprint-status.md
+# .pair/product/status/sprint-status.md
 
 # Sprint Status Dashboard
 
@@ -246,8 +246,8 @@ jobs:
       - name: Generate backlog report
 
         run: |
-          ./scripts/backlog-report.sh > .pair/adoption/product/current-backlog.md
-          git add .pair/adoption/product/current-backlog.md
+          ./scripts/backlog-report.sh > .pair/product/status/current-backlog.md
+          git add .pair/product/status/current-backlog.md
           git commit -m "docs: update backlog dashboard" || exit 0
           git push
 

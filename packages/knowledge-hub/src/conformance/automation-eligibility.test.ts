@@ -55,6 +55,26 @@ const docsSources: Array<[string, string]> = [
   ['concepts/adoption-files.mdx', read(join(DOCS, 'concepts/adoption-files.mdx'))],
 ]
 
+// Exhaustive page collection, shared by the two scanning guards at the bottom of
+// this file. A hand-kept list rots: the page that acquires the banned shape is by
+// definition a page nobody added to the list.
+const collect = (dir: string, ext: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+    e.isDirectory()
+      ? collect(join(dir, e.name), ext)
+      : e.name.endsWith(ext)
+        ? [join(dir, e.name)]
+        : [],
+  )
+
+const under = (root: string, label: string, ext: string): Array<[string, string]> =>
+  collect(root, ext).map(
+    f => [`${label}/${f.slice(root.length + 1)}`, readFileSync(f, 'utf-8')] as [string, string],
+  )
+
+// EVERY published docs page (79 at time of writing), not the 3 curated ones above.
+const docsPages: Array<[string, string]> = under(DOCS, 'docs', '.mdx')
+
 // A boolean operator applied TO A LABEL — `risk:green AND team:ui`. Deliberately
 // NOT a bare / (AND|OR|NOT) / grep: prose legitimately contains "What is NOT
 // optional" (quality-gates-configuration.mdx §30), and a guard that trips on
@@ -103,8 +123,9 @@ describe.each(policySources)('automation-policy.md — %s (AC1: the declaration)
 
     // ...and the target must EXIST. The pointer is an absolute GitHub URL by
     // necessity (an uncategorized top-level skill is skipped by the install-time
-    // link rewriter — skill-reference-rewriter.ts, `if (!originalSubDir.includes('/'))
-    // continue` — so a relative `../.skills/next/SKILL.md` would dangle in the
+    // link rewriter — skill-reference-rewriter.ts:204, `if (!isRegistryEntryPath(
+    // originalSubDir, transformOpts.flattenDepth)) continue`, whose depth gate skips a
+    // top-level path — so a relative `../.skills/next/SKILL.md` would dangle in the
     // installed mirror). Absolute http links are SKIPPED by every link checker in
     // this repo (link-rewriter.ts: "External links (http, mailto, anchors) are
     // skipped"), so moving `.skills/next/` or renaming the skill leaves check:links,
@@ -280,6 +301,31 @@ describe.each(policySources)(
       expect(content.toLowerCase()).toMatch(/fenced code block is not a heading/)
     })
 
+    it('bounds the commented-out-alternative example to OUTSIDE the `## Eligibility` section', () => {
+      // The worked example above ("a consumer using a parser would run it") holds
+      // only when the fenced alternative sits outside the section. Put it in its
+      // NATURAL place — directly under the live heading:
+      //
+      //   ## Eligibility
+      //   ```markdown
+      //   ## Eligibility
+      //   risk:yellow
+      //   ```
+      //   risk:green
+      //
+      // A parser-based consumer counts exactly ONE rendered heading, so trigger 7
+      // does not fire, exactly as the paragraph promises — then HALTs anyway: the
+      // section body's first non-empty line is '```markdown' (trigger 4) and the
+      // body carries more than one non-empty line (trigger 2). The document
+      // predicts "runs" for a file its own triggers reject, and an implementer of
+      // #217/#250 reading it builds the wrong expectation for the one shape the
+      // paragraph was written to cover.
+      expect(content).toMatch(
+        /kept \*\*elsewhere in the file, outside the `## Eligibility` section\*\*/,
+      )
+      expect(content).toMatch(/inside the section it is a trigger 2 \/ trigger 4 HALT/)
+    })
+
     it('matches the heading at level 2 exactly — `### Eligibility` is not the declaration', () => {
       // Without this the contract silently routes a half-written declaration to
       // the silent arm: a maintainer nesting `### Eligibility` / `risk:green`
@@ -384,6 +430,20 @@ describe.each(policySources)('automation-policy.md — %s (AC3/AC4: fail-safes)'
     // Absence is a documented state, not an error (D21, same shape as tech/risk-matrix.md).
     expect(content).toMatch(/D21/)
     expect(content.toLowerCase()).toMatch(/never an error/)
+  })
+
+  it('names the MECHANISM that produces the forbidden fall-back, not just the outcome', () => {
+    // The `MUST NOT ... all cards` sentence above states an OUTCOME. The natural
+    // implementation of an empty eligibility set — `filter = eligibility ?? undefined`,
+    // then `pair-next` with no `--filter` — produces that outcome while violating no
+    // sentence a reviewer can point at: per next/SKILL.md Step 0 item 3, an omitted
+    // `--filter` defaults the candidate set to the FULL BACKLOG, every `risk:red` and
+    // untagged card, handed to an unattended loop (#217/#250 are the first consumers
+    // and the story ships no runtime code, so an unstated mechanism is an unbuilt
+    // safeguard). What must be normative is: do not run the selection query AT ALL.
+    expect(content).toMatch(/MUST NOT invoke `pair-next` at all/)
+    expect(content).toMatch(/omitted `--filter`/)
+    expect(content).toMatch(/full backlog/)
   })
 
   it('disambiguates an ABSENT section from a PRESENT but empty one', () => {
@@ -533,10 +593,29 @@ describe('no example filter anywhere carries a boolean operator (AC6)', () => {
     expect(content).not.toMatch(LABEL_BOOLEAN_OPERATOR)
   })
 
+  // EVERY docs page, not the 3 that happen to mention eligibility today. The
+  // 3-page list was the same hand-kept-list rot the `adopted` scan below already
+  // rejects: a future `docs/concepts/automation.mdx` or `docs/reference/cli/*.mdx`
+  // documenting eligibility as `risk:green, team:ui` or `risk:green AND team:ui`
+  // passed this whole suite green, shipped on the docs site, and a maintainer
+  // copying it into `tech/automation.md` HALTed their own automation (trigger 3
+  // or 6). Widening is verified viable: both regexes over all 79 collected `.mdx`
+  // pages match zero times.
+  //
+  // DIVERGENCE from the `adopted` scan below: the KB corpora are NOT in this list.
+  // `automation-policy.md` carries the lower-case negative examples trigger 6 is
+  // written around (checked separately, upper-case-only, above), and the two
+  // accessibility guidelines carry CSS selector lists (`a:focus, button:focus`)
+  // that LABEL_LIST_COMMA cannot distinguish from a label list. The KB stays on
+  // the path guard, which has no such false positives.
   const strictSurfaces: Array<[string, string]> = [
     ...qualityModelSources.map(([k, v]) => [`quality-model:${k}`, v] as [string, string]),
-    ...docsSources,
+    ...docsPages,
   ]
+
+  it('scans every published docs page for the operator/list shapes', () => {
+    expect(docsPages.length).toBeGreaterThan(20)
+  })
 
   it.each(strictSurfaces)(
     '%s — no operator in ANY case, and no comma-separated label list',
@@ -554,26 +633,30 @@ describe('no example filter anywhere carries a boolean operator (AC6)', () => {
 // `tech/tech-stack.md` reads as absent — a silent fall-back to KB defaults, no
 // error anywhere. This scans EVERY docs page rather than a hand-kept list, so the
 // next page to acquire the stale path fails here instead of at an adopter.
-describe('the docs site states ONE adoption layout — no `adopted/` sub-layer anywhere', () => {
-  const collect = (dir: string): string[] =>
-    readdirSync(dir, { withFileTypes: true }).flatMap(e =>
-      e.isDirectory()
-        ? collect(join(dir, e.name))
-        : e.name.endsWith('.mdx')
-          ? [join(dir, e.name)]
-          : [],
-    )
-
+describe('ONE adoption layout — no `adopted/` sub-layer in docs or the KB', () => {
   // Path-shaped only: `[thing] is adopted/required for [purpose]` is prose about
   // the adoption declaration pattern, not a directory, and must stay legal.
   const ADOPTED_SUBLAYER = /\.pair\/[\w./-]*\badopted\b/
 
-  const pages = collect(DOCS).map(
-    f => [f.slice(DOCS.length + 1), readFileSync(f, 'utf-8')] as [string, string],
-  )
+  // The KB is scanned too, and it matters MORE than the docs site: the docs are read
+  // on the web, the KB is what `pair install` copies INTO an adopting project. This
+  // PR had to fix two KB guidelines (filesystem-issues.md, filesystem-tracking.md,
+  // both twins) for exactly this path error, so the class is live here. Concrete
+  // failure otherwise: a guideline edit reintroduces `.pair/product/adopted/current-status.md`
+  // inside a fenced bash snippet — `check:links` does not resolve paths inside fences,
+  // mirror-sync copies it verbatim, every gate stays green, and an adopting project
+  // installs a guideline telling an agent to `cat >` into a directory that exists in
+  // no shipped dataset.
+  const pages: Array<[string, string]> = [
+    ...docsPages,
+    ...under(DATASET_KB, 'dataset-kb', '.md'),
+    ...under(MIRROR_KB, 'mirror-kb', '.md'),
+  ]
 
-  it('scans every published docs page', () => {
-    expect(pages.length).toBeGreaterThan(20)
+  it('scans every published docs page and every KB guideline', () => {
+    expect(pages.filter(([p]) => p.startsWith('docs/')).length).toBeGreaterThan(20)
+    expect(pages.filter(([p]) => p.startsWith('dataset-kb/')).length).toBeGreaterThan(20)
+    expect(pages.filter(([p]) => p.startsWith('mirror-kb/')).length).toBeGreaterThan(20)
   })
 
   it.each(pages)('%s carries no `.pair/**/adopted` path', (_, content) => {

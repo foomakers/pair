@@ -42,6 +42,11 @@ export async function generateLlmsTxt(fs: FileSystemService, baseTarget: string)
   const sectionDefs = [
     { heading: 'Adoption — Product', path: '.pair/adoption/product' },
     { heading: 'Adoption — Tech', path: '.pair/adoption/tech' },
+    // ADRs live under `adoption/tech/adr/` (reached by the Tech section above); ADL
+    // and analysis entries live here. Without this def the index presents the
+    // decision record as ADR-only. Absent directory ⇒ scanSection returns [] ⇒ no
+    // empty section is emitted, so adopters without a decision log are unaffected.
+    { heading: 'Adoption — Decisions', path: '.pair/adoption/decision-log' },
     { heading: 'How-To Guides', path: '.pair/knowledge/how-to' },
     { heading: 'Guidelines', path: '.pair/knowledge/guidelines' },
   ]
