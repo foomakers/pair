@@ -173,4 +173,29 @@ if ! grep -Fqs '"generic-kb"' "$ISOLATED_HOME/.pair/kb/external/"*/manifest.json
 fi
 log_succ "Release ZIP installs into its own source-keyed cache slot"
 
+# 6. The exit code the SHELL sees, not the one the handler returned -----------
+# foomakers/pair#396 AC5: the summary and the status code may never disagree. The handler
+# has always returned a code; the entry point force-exits, and `process.exit(0)` with an
+# explicit code OVERRIDES `process.exitCode` — so this can only be observed through the
+# real process, which is what this scenario does (unit tests see the return value).
+log_info "Test 7: a failing registry makes the PROCESS exit non-zero"
+BROKEN_KB=$(setup_workspace "scaffold-kb-test/broken-kb")
+FAIL_CONSUMER_DIR=$(setup_workspace "scaffold-kb-test/fail-consumer")
+mkdir -p "$BROKEN_KB/.skills/a/b" "$BROKEN_KB/.skills/a-b"
+printf '# agents\n' > "$BROKEN_KB/AGENTS.md"
+# Both flatten (depth 2) to the same installed name → the skills registry fails.
+printf -- '---\nname: b\n---\n' > "$BROKEN_KB/.skills/a/b/SKILL.md"
+printf -- '---\nname: a-b\n---\n' > "$BROKEN_KB/.skills/a-b/SKILL.md"
+
+cd "$FAIL_CONSUMER_DIR"
+run_pair install --source "$BROKEN_KB" --offline
+BROKEN_INSTALL_STATUS=$?
+if [ "$BROKEN_INSTALL_STATUS" -eq 0 ]; then
+  log_fail "install reported errors but the process exited 0 (foomakers/pair#396 AC5)"
+  cat "$TMP_DIR/last_cmd_output.log"
+  exit 1
+fi
+assert_output_contains "finished with errors" || exit 1
+log_succ "Failing install exits $BROKEN_INSTALL_STATUS — text and status agree"
+
 echo "=== $TEST_NAME Completed ==="
