@@ -8,7 +8,7 @@ It is a **read-only input to generation**, not a new capability and not a write 
 
 1. **Architectural decisions** — `adoption/tech/adr/adr-NNN-<topic>.md`.
 2. **Non-architectural decisions** — `adoption/decision-log/YYYY-MM-DD-<topic>.md` (ADL entries; the directory also holds `Category: Analysis` entries — see *Authorities vs context* below).
-3. **Domain map** — `adoption/product/context-map.md` plus, for every subdomain in scope, both its strategic catalog entry `adoption/product/subdomain/<slug>.md` (where its class and volatility are recorded — the file the scope filter resolves a subdomain from) and its `adoption/product/subdomain/<slug>.context.md` sibling, and the bounded-context files under `adoption/tech/boundedcontext/`. Domain decisions (`adoption/product/ddr/`) are reached through the map's decision-backed sections; a DDR the map cites is read with it.
+3. **Domain map** — `adoption/product/context-map.md` plus, for every subdomain in scope, both its strategic catalog entry `adoption/product/subdomain/<slug>.md` (where its class and volatility are recorded — the file the scope filter resolves **the item's** subdomain from; a *record's* subdomain is never resolved here, and is a scope match only where the name is in the text stage 1 indexed — see *Bounded read* stage 2) and its `adoption/product/subdomain/<slug>.context.md` sibling, and the bounded-context files under `adoption/tech/boundedcontext/`. Domain decisions (`adoption/product/ddr/`) are reached through the map's decision-backed sections; a DDR the map cites is read with it.
 
 **Authorities vs context.** Only **ADR, ADL and DDR** entries are *authorities* — what may constrain a candidate, be cited, or be reopened with a `Revisits` flag. A `Category: Analysis` entry is **not** one: it records a technical analysis, concludes in a `## Recommendation` rather than a `## Decision`, and need not conclude in a decision at all (the analysis-log template's own words). It is read as **context** — it may inform wording and scope — and it never drops or reshapes a candidate, never carries a `(per ...)` citation, and never triggers a `Revisits` flag: nobody decided anything to revisit. Everywhere below, **record** means an authority.
 
@@ -70,23 +70,25 @@ Adoption history is **optional context** — its absence is the expected steady 
 Seeded adoption (subject: a story about story generation):
 
 ```text
-adoption/tech/adr/adr-009-assess-output-only.md          Status: Accepted
-adoption/tech/adr/adr-005-skills-infrastructure.md       Status: Superseded by ADR-020
-adoption/decision-log/2026-07-11-agent-execution-layer.md
-adoption/product/context-map.md                          term: "capability skill"
+adoption/tech/adr/adr-009-assess-output-only.md                       Status: Accepted (amended 2026-07-28 — D14 exception)
+adoption/tech/adr/adr-005-skills-infrastructure.md                    Status: Accepted — amended by [ADR-020](...)
+adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md  Status: Accepted — amends ADR-005 (flatten semantics)
+adoption/decision-log/2026-07-11-agent-execution-layer.md             Status: Active
+adoption/product/context-map.md                                       term: "capability skill"
 ```
 
 Generated candidate list, adoption-informed:
 
 ```text
-├── "Assessment skill writes its proposal to adoption"  -> DROPPED (per ADR-009: assess-* are output-only; the recorder persists)
-├── "Capability skill for adoption reading"              -> reshaped: extend the generation flow (per ADR-009), wording uses "capability skill" (per context-map: capability skill)
-└── "Move execution off the agent layer"                 -> CREATE — Revisits decision-log/2026-07-11-agent-execution-layer: the story's premise is that the layer moved
+├── "Assessment skill writes its proposal to adoption"     -> DROPPED (per ADR-009: assess-* are output-only; the recorder persists)
+├── "Capability skill for adoption reading"                -> reshaped: extend the generation flow (per ADR-009), wording uses "capability skill" (per context-map: capability skill)
+├── "Register the new skill under a nested registry path"  -> reshaped to the registry's entry granularity (per ADR-005, amended by ADR-020)
+└── "Move execution off the agent layer"                   -> CREATE — Revisits decision-log/2026-07-11-agent-execution-layer: the story's premise is that the layer moved
 ```
 
-`ADR-005` contributed nothing: it is superseded, so `ADR-020` was read in its place and `ADR-005` is not cited.
+`ADR-005` is **live in its amended form**, so it still constrains and it *is* cited: `Accepted — amended by [ADR-020](...)` and `ADR-009`'s `Accepted (amended 2026-07-28 — ...)` are the same status (*Precedence*), and the amending record — seeded above, because a record that is read must be in the tree — supplies the contract that applies. Only a `Superseded` record would be left uncited with its successor read in its place; an amendment is not a supersession. The `Revisits` flag on the ADL is licensed by its seeded `Status: Active`: a flag may only target a live authority, so a record seeded without a resolvable status could not carry one.
 
-Empty-adoption fixture (same subject, no `adr/`, no `decision-log/`, no map): the same three candidates are generated with **no** citations, **no** DROPPED-by-decision entry and **no** revisit flag — the pre-adoption-informed output, produced without a warning beyond the one-line "no adoption history to read" note.
+Empty-adoption fixture (same subject, no `adr/`, no `decision-log/`, no map): the same four candidates are generated with **no** citations, **no** DROPPED-by-decision entry and **no** revisit flag — the pre-adoption-informed output, produced without a warning beyond the one-line "no adoption history to read" note.
 
 ## Per-skill delta (what stays in the skill, not here)
 

@@ -433,10 +433,11 @@ describe('review round 2 — status authority, kind discriminator, declared chan
 })
 
 // ---------------------------------------------------------------------------
-// Round-3 review findings (#280). One guard per finding, naming it.
+// Round-3 AND round-5 review findings (#280). One guard per finding, naming it —
+// the two stage-2 scope guards at the end of this block are round 5's, not round 3's.
 // ---------------------------------------------------------------------------
 
-describe('review round 3 — head-field spellings, date ordering, sweep cost', () => {
+describe('review rounds 3-5 — head-field spellings, date ordering, sweep cost, stage-2 scope', () => {
   it('resolves Status in BOTH head spellings and never reads silence as "not live" (Major)', () => {
     // Stage 1 keyed liveness on a `## Status` HEADING, and round 2 made liveness a hard
     // gate. On pair's own tree 9 of 20 ADRs carry `**Status:** Accepted` as an inline
@@ -489,7 +490,7 @@ describe('review round 3 — head-field spellings, date ordering, sweep cost', (
     expect(bounded).toMatch(/not one (file )?open per record/i)
   })
 
-  it('scopes stage 2 against the text stage 1 actually indexed (Major)', () => {
+  it('scopes stage 2 against the text stage 1 actually indexed (round 5, Major)', () => {
     // Stage 2 filtered on "same subdomain/bounded context, same touched component" —
     // NONE of which stage 1 indexes (no record template carries such a field), so two of
     // its three criteria were unevaluable and only title-term overlap actually ran.
@@ -512,7 +513,7 @@ describe('review round 3 — head-field spellings, date ordering, sweep cost', (
     expect(determinism).toMatch(/indexed title/i)
   })
 
-  it('never states a within-source READING order by id (Minor)', () => {
+  it('never states a within-source READING order by id (round 5, Minor)', () => {
     // Sources said "files are read in id order (`adr-NNN`)" while Precedence said
     // "**Never by id.** Ids ... are not even unique within a source". Reading order and
     // precedence are different things, but nothing said so and the Sources line is the
@@ -539,5 +540,97 @@ describe('review round 3 — head-field spellings, date ordering, sweep cost', (
     // ...and the word may only survive as the explicit statement that there is none.
     expect(degradation).toMatch(/no record kind here carries frontmatter/i)
     expect(degradation).toMatch(/no title.*Status.*Category/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Round-6 review findings (#280). One guard per finding, naming it.
+// ---------------------------------------------------------------------------
+
+const FIXTURE = CONVENTION.match(/## Fixture example[\s\S]*?(?=\n## )/)?.[0] ?? ''
+/** `adoption/tech/adr/adr-005-skills-infrastructure.md   Status: Accepted ...` */
+const SEEDED = [...FIXTURE.matchAll(/^(adoption\/\S+\.md)(.*)$/gm)].map(m => ({
+  path: m[1],
+  tail: m[2],
+}))
+
+describe('review round 6 — the worked example must obey the rules it illustrates', () => {
+  it('illustrates no REAL live record of this repo as non-live (Major)', () => {
+    // The fixture seeded `adr-005-skills-infrastructure.md  Status: Superseded by ADR-020`
+    // and concluded "`ADR-005` contributed nothing: it is superseded". That file is real
+    // and its real head is `**Status:** Accepted — **amended by [ADR-020](...)**` — which
+    // line 38 of this same convention declares LIVE. Concrete loss: an executor running
+    // /refine-story on a story touching the skills registry in THIS repo reads the
+    // convention, anchors on the Fixture (last + most concrete section), sees the literal
+    // filename paired with ADR-020 and the verdict "not live, contributed nothing, not
+    // cited", pattern-matches the real ADR-005 whose head names ADR-020 in the same
+    // breath, drops it out of the authority set, and authors the story against ADR-005's
+    // flatten contract with no `(per ADR-005)` and no `Revisits` — the single outcome
+    // line 53 forbids, byte-for-byte the round-3 Major lines 24/38 were written to close.
+    expect(SEEDED.length).toBeGreaterThan(0)
+    for (const { path, tail } of SEEDED) {
+      const real = join(REPO_ROOT, '.pair', path)
+      if (!existsSync(real)) continue
+      const head = readFileSync(real, 'utf-8').slice(0, 1200)
+      const realIsLive = /\b(Accepted|Active)\b/.test(head) && !/\bSuperseded by\b/.test(head)
+      if (!realIsLive) continue
+      expect(tail, `${path} is live in this repo but the fixture shows it as`).not.toMatch(
+        /Superseded|Deprecated|Proposed/i,
+      )
+      const id = path.match(/adr-(\d+)/)?.[1]
+      if (!id) continue
+      expect(
+        FIXTURE,
+        `ADR-${id} is live in this repo; the fixture must not narrate it as inert`,
+      ).not.toMatch(new RegExp(`ADR-${id}[^\n]*(contributed nothing|is superseded|not cited)`))
+    }
+  })
+
+  it('narrates no record its own seeded listing does not contain (Minor)', () => {
+    // The prose said `ADR-020` "was read in its place" while adr-020 was not among the
+    // seeded files: an executor tracing the example cannot reproduce the stated outcome,
+    // and learns that a successor may be conjured from a pointer without being in the tree.
+    const seededIds = new Set(
+      SEEDED.map(s => (s.path.match(/adr-(\d+)/)?.[1] ?? '').replace(/^0+/, '')),
+    )
+    const prose = FIXTURE.split('\n')
+      .filter(l => !/^adoption\//.test(l))
+      .join('\n')
+    for (const m of prose.matchAll(/ADR-(\d+)/g)) {
+      expect(
+        seededIds.has(m[1].replace(/^0+/, '')),
+        `ADR-${m[1]} is narrated but never seeded`,
+      ).toBe(true)
+    }
+  })
+
+  it('seeds a Status on every record, so its `Revisits` flag is licensed by the fixture (Minor)', () => {
+    // The decision-log entry was seeded with NO Status while the outcome flagged
+    // `Revisits decision-log/2026-07-11-agent-execution-layer`. Per Precedence a Revisits
+    // may only target a LIVE authority, and an unresolved Status must be opened at stage 2
+    // then surfaced — never silently treated as live. The fixture taught that silent
+    // promotion on the very record it flags.
+    for (const { path, tail } of SEEDED) {
+      if (path.includes('context-map')) continue
+      expect(tail, `${path} is seeded without a Status`).toMatch(/Status:/)
+    }
+  })
+
+  it('says WHOSE subdomain the strategic catalog entry resolves (Minor)', () => {
+    // Sources (read first) called `subdomain/<slug>.md` "the file the scope filter
+    // resolves a subdomain from"; Bounded read stage 2 says a RECORD's subdomain is never
+    // resolved from a field stage 1 did not index. Intended reading: line 11 resolves the
+    // ITEM's subdomain. Neither line said so. Concrete loss: refining a story mapped to
+    // `collaborative-workflow`, the executor takes Sources as licence to resolve each
+    // RECORD's subdomain from the catalog, assigns a live ADR to another subdomain, and
+    // uses that catalog-derived subdomain as the "positively resolves to a different
+    // subject" evidence stage 2 requires — leaving the record unopened and the story
+    // authored against a live decision with no citation: the round-5 Major through a
+    // narrower door.
+    const sources = CONVENTION.match(/## Sources[\s\S]*?(?=\n## )/)?.[0]
+    expect(sources).toBeDefined()
+    expect(sources).toMatch(/\*\*the item's\*\* subdomain/)
+    expect(sources).toMatch(/a \*record's\* subdomain is never resolved here/)
+    expect(sources).toMatch(/Bounded read/)
   })
 })

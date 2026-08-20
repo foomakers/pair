@@ -57,7 +57,7 @@ Each skill states only: what its **subject** is (the epic + its candidates / the
 - `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md` (+ dataset source) — the convention itself; registered in that directory's README index and in `.pair/llms.txt`.
 - `plan-stories` (Step 2b), `refine-story` (Step 1b), `brainstorm` (phase 3 preamble) — pointer + subject delta, in both the dataset source and the installed `.claude/skills/` mirror.
 - `plan-epics` (Steps 3-4) — persists a citation / `Revisits` supplied on `$candidates`; it runs no read of its own.
-- `skill-conventions/skills-guide.md` (+ dataset source) — the Adoption Files matrix lists the three generating skills as readers of ADR and ADL.
+- `.pair/knowledge/skills-guide.md` (+ dataset source) — the Adoption Files matrix lists the three generating skills as readers of ADR and ADL.
 - `packages/knowledge-hub/src/conformance/adoption-informed-generation.test.ts` — the guard.
 - Docs site: `concepts/adoption-files.mdx` and `developer-journey/iteration.mdx`.
 
