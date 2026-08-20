@@ -194,6 +194,61 @@ describe('validateLinks', () => {
     })
   })
 
+  describe('non-http URI schemes', () => {
+    // A scheme other than http/https is not a filesystem path: joining it onto the
+    // source directory and stat-ing it reports a link that is not broken as broken,
+    // and (since the smoke suite link-validates the shipped dataset in CI) the first
+    // `mailto:` in the KB would redden a green pre-merge run.
+    it.each([
+      ['mailto:', '[Mail](mailto:a@b.c)'],
+      ['tel:', '[Call](tel:+390000000)'],
+      ['ftp:', '[Archive](ftp://host/x.tar)'],
+      ['vscode:', '[Open](vscode://file/x)'],
+      ['uppercase scheme', '[Mail](MAILTO:a@b.c)'],
+    ])('%s is not validated as an internal path', async (_name, markdown) => {
+      fs.writeFile('/kb/README.md', markdown)
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toHaveLength(0)
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('is never probed over HTTP, even in strict mode with a client', async () => {
+      // Only http/https are probe-able; a `mailto:` reaching validateExternalLink
+      // would hang to its 2s timeout and warn "Unreachable external link".
+      fs.writeFile('/kb/README.md', '[Mail](mailto:a@b.c)')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+        httpClient,
+        strict: true,
+      })
+
+      expect(results[0]?.errors).toHaveLength(0)
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('a Windows drive letter stays an internal path (it is not a URI scheme)', async () => {
+      fs.writeFile('/kb/README.md', '[Drive](C:/missing.md)')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.errors).toEqual(['Broken internal link: C:/missing.md'])
+    })
+  })
+
   describe('mixed links', () => {
     it('should validate files with both internal and external links', async () => {
       fs.writeFile('/kb/README.md', '[Internal](./valid.md)\n[External](https://example.com)')

@@ -133,4 +133,16 @@ run_pair kb-validate --optional-link-patterns "/apps/**"
 assert_success || exit 1
 assert_output_contains "optional link (pattern-matched)" || exit 1
 
+# 6f: a link carrying a NON-http URI scheme is not a filesystem path. With no pattern
+# declared at all, a KB whose only links are `mailto:`/`tel:` must pass — these used to be
+# joined onto the source dir and stat-ed, so the first `mailto:` in the shipped dataset
+# would have reddened the CI smoke run (Tests 1-3 link-validate it for real).
+cat > .pair/knowledge/index.md <<'EOF'
+# Knowledge
+
+Write to [the team](mailto:team@example.com) or [call](tel:+390000000).
+EOF
+run_pair kb-validate
+assert_success || exit 1
+
 echo "=== $TEST_NAME Completed ==="

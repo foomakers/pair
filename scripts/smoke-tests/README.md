@@ -98,7 +98,8 @@ Verifies the `pair kb-validate` command:
 - **Failure Detection**: Verifies validation fails on a workspace with missing registry paths.
 - **Optional Link Patterns**: a missing out-of-tree link is an error by default, a warning via
   `--optional-link-patterns` or the `link_validation` config, and an error again under `--strict`;
-  the KB-root-anchored spelling `/apps/**` is the same rule as `apps/**`.
+  the KB-root-anchored spelling `/apps/**` is the same rule as `apps/**`. Also pins that a
+  non-http URI scheme (`mailto:`, `tel:`) is not a filesystem path and never reported broken.
 
 ### 7. Configuration Validation (`scenarios/validate-config.sh`)
 

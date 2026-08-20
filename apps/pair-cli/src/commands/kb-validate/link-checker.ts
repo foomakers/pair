@@ -98,38 +98,17 @@ async function validateFileLinks(params: {
   httpClient?: HttpClientService
   optionalMatchers: OptionalLinkMatcher[]
 }): Promise<LinkValidationResult> {
-  const { file, baseDir, fs, httpClient, optionalMatchers } = params
+  const { file, fs } = params
 
   const errors: string[] = []
   const warnings: string[] = []
 
-  // Read file content
   const content = await fs.readFile(file)
 
-  // Extract links from markdown
-  const links = extractLinks(content)
-
-  // Validate each link
-  for (const link of links) {
-    if (isExternalLink(link)) {
-      // External link - only validate if httpClient provided (strict mode)
-      if (httpClient) {
-        const externalResult = await validateExternalLink(link, httpClient)
-        if (!externalResult.valid) {
-          warnings.push(`Unreachable external link: ${link}`)
-        }
-      }
-    } else {
-      // Internal link - always validate
-      const internalResult = await validateInternalLink(link, file, baseDir, fs)
-      if (!internalResult.valid) {
-        if (isOptionalLink(link, internalResult.targetPath, baseDir, optionalMatchers)) {
-          warnings.push(`optional link (pattern-matched), target missing: ${link}`)
-        } else {
-          errors.push(`Broken internal link: ${link}`)
-        }
-      }
-    }
+  for (const link of extractLinks(content)) {
+    const { error, warning } = await classifyLink(link, params)
+    if (error) errors.push(error)
+    if (warning) warnings.push(warning)
   }
 
   return {
@@ -138,6 +117,47 @@ async function validateFileLinks(params: {
     errors,
     warnings,
   }
+}
+
+/**
+ * One link's verdict: an error, a warning, or neither.
+ *
+ * Three families, in order: probe-able external links (`http`/`https`, checked only
+ * when an httpClient is supplied), links carrying ANY other URI scheme, and internal
+ * paths.
+ */
+async function classifyLink(
+  link: string,
+  params: {
+    file: string
+    baseDir: string
+    fs: FileSystemService
+    httpClient?: HttpClientService
+    optionalMatchers: OptionalLinkMatcher[]
+  },
+): Promise<{ error?: string; warning?: string }> {
+  const { file, baseDir, fs, httpClient, optionalMatchers } = params
+
+  if (isExternalLink(link)) {
+    // External link - only validate if httpClient provided (strict mode)
+    if (!httpClient) return {}
+    const externalResult = await validateExternalLink(link, httpClient)
+    return externalResult.valid ? {} : { warning: `Unreachable external link: ${link}` }
+  }
+
+  // Any OTHER URI scheme (`mailto:`, `tel:`, `ftp:`, `vscode:`) addresses something
+  // that is not a file: nothing to stat, and nothing this CLI can fetch. Skipped
+  // entirely — treating it as a relative path would join it onto the source
+  // directory and report a link that is not broken as broken.
+  if (hasNonFileUriScheme(link)) return {}
+
+  // Internal link - always validate
+  const internalResult = await validateInternalLink(link, file, baseDir, fs)
+  if (internalResult.valid) return {}
+
+  return isOptionalLink(link, internalResult.targetPath, baseDir, optionalMatchers)
+    ? { warning: `optional link (pattern-matched), target missing: ${link}` }
+    : { error: `Broken internal link: ${link}` }
 }
 
 /**
@@ -170,10 +190,23 @@ function extractLinks(content: string): string[] {
 }
 
 /**
- * Checks if a link is external (http/https)
+ * Checks if a link is external (http/https) — the only schemes this module can
+ * probe. Every other scheme is handled by `hasNonFileUriScheme`.
  */
 function isExternalLink(link: string): boolean {
-  return link.startsWith('http://') || link.startsWith('https://')
+  return /^https?:\/\//i.test(link)
+}
+
+/**
+ * True for a link carrying an RFC-3986 scheme this module cannot resolve as a
+ * file — `mailto:`, `tel:`, `ftp:`, `vscode:`, … (http/https are handled first).
+ *
+ * A Windows drive letter (`C:/x`, `C:\x`) is deliberately NOT a scheme: it is a
+ * single letter, and it IS a filesystem path, so it keeps going down the
+ * internal-link route.
+ */
+function hasNonFileUriScheme(link: string): boolean {
+  return /^[a-z][a-z0-9+.-]+:/i.test(link)
 }
 
 /**
