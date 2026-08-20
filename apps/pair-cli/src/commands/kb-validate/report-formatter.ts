@@ -19,6 +19,13 @@ export interface ValidationReport {
   structure: StructureValidationResult | null
   links: LinkValidationResult[]
   metadata: MetadataValidationResult[]
+  /**
+   * Warnings about the RUN itself rather than a file — a misshapen
+   * `link_validation` config section, an optional link pattern that does not
+   * compile. They are counted in the summary like any other warning, so the
+   * footer is a truthful total of what the run reported (US-188 review).
+   */
+  runWarnings: string[]
   summary: {
     totalErrors: number
     totalWarnings: number
@@ -34,11 +41,12 @@ export function createValidationReport(results: {
   structure?: StructureValidationResult
   links?: LinkValidationResult[]
   metadata?: MetadataValidationResult[]
+  runWarnings?: string[]
 }): ValidationReport {
-  const { structure = null, links = [], metadata = [] } = results
+  const { structure = null, links = [], metadata = [], runWarnings = [] } = results
 
   let totalErrors = 0
-  let totalWarnings = 0
+  let totalWarnings = runWarnings.length
 
   // Count structure errors/warnings
   if (structure) {
@@ -69,6 +77,7 @@ export function createValidationReport(results: {
     structure,
     links,
     metadata,
+    runWarnings,
     summary: {
       totalErrors,
       totalWarnings,
@@ -76,6 +85,16 @@ export function createValidationReport(results: {
     },
     exitCode,
   }
+}
+
+/**
+ * Formats the run-level diagnostics section (config / pattern warnings)
+ */
+function formatRunWarningsSection(runWarnings: string[]): string[] {
+  const lines: string[] = [chalk.bold('Configuration:')]
+  lines.push(...formatIssues([], runWarnings))
+  lines.push('')
+  return lines
 }
 
 /**
@@ -157,6 +176,10 @@ export function formatReport(report: ValidationReport): string {
   lines.push(chalk.bold('KB Validation Report'))
   lines.push(chalk.dim('='.repeat(60)))
   lines.push('')
+
+  if (report.runWarnings.length > 0) {
+    lines.push(...formatRunWarningsSection(report.runWarnings))
+  }
 
   if (report.structure) {
     lines.push(...formatStructureSection(report.structure))

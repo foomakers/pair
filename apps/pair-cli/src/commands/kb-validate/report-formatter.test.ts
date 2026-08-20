@@ -154,6 +154,17 @@ describe('createValidationReport', () => {
     expect(report.exitCode).toBe(ValidationExitCode.Success)
   })
 
+  it('counts run-level warnings (config / pattern diagnostics) in the summary (US-188)', () => {
+    const report = createValidationReport({
+      runWarnings: ["Config 'link_validation' must be an object, got a string, ignoring it"],
+    })
+
+    expect(report.runWarnings).toHaveLength(1)
+    expect(report.summary.totalWarnings).toBe(1)
+    expect(report.summary.totalErrors).toBe(0)
+    expect(report.exitCode).toBe(ValidationExitCode.Success)
+  })
+
   it('should handle empty results', () => {
     const report = createValidationReport({})
 
@@ -304,6 +315,25 @@ describe('formatReport', () => {
     expect(formatted).toContain('Metadata Validation:')
     expect(formatted).toContain('Errors:   3')
     expect(formatted).toContain('Warnings: 3')
+  })
+
+  it('prints run-level warnings in their own section and in the footer total (US-188)', () => {
+    const report = createValidationReport({
+      runWarnings: ["Invalid optional link pattern '[unterminated', ignoring"],
+    })
+
+    const formatted = formatReport(report)
+
+    expect(formatted).toContain('Configuration:')
+    expect(formatted).toContain("Invalid optional link pattern '[unterminated', ignoring")
+    expect(formatted).toContain('Warnings: 1')
+    expect(formatted).toContain('✓ Validation passed')
+  })
+
+  it('omits the Configuration section when the run reported no diagnostics', () => {
+    const formatted = formatReport(createValidationReport({}))
+
+    expect(formatted).not.toContain('Configuration:')
   })
 
   it('should skip sections with no issues', () => {

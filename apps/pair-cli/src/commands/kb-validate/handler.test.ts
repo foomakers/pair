@@ -339,4 +339,24 @@ describe('handleKbValidateCommand - optional link patterns (US-188)', () => {
     expect(warn.mock.calls.flat().join('\n')).toMatch(expected)
     warn.mockRestore()
   })
+
+  it('carries config and pattern diagnostics into the printed report, not only the log', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const fs = seedKb({ link_validation: { optionalLinkPatterns: ['apps/**'] } })
+
+    await handleKbValidateCommand(
+      { command: 'kb-validate', optionalLinkPatterns: ['[unterminated'] },
+      fs,
+    ).catch(() => undefined)
+
+    const output = log.mock.calls.flat().join('\n')
+    expect(output).toContain('Configuration:')
+    expect(output).toMatch(/declares no 'optional_link_patterns'/)
+    expect(output).toContain("Invalid optional link pattern '[unterminated', ignoring")
+    expect(output).toContain('Warnings: 2')
+
+    log.mockRestore()
+    warn.mockRestore()
+  })
 })

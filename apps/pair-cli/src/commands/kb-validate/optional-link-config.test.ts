@@ -41,6 +41,16 @@ describe('resolveOptionalLinkPatterns', () => {
     expect(resolveOptionalLinkPatterns(null, undefined)).toEqual({ patterns: [], warnings: [] })
   })
 
+  it('is silent on an EMPTY link_validation section (nothing was declared to drop)', () => {
+    // `{ link_validation: {} }` states no rule at all — the camelCase-typo warning
+    // must not fire here, or a section left in place while its keys are commented
+    // out would nag on every run.
+    expect(resolveOptionalLinkPatterns({ link_validation: {} }, undefined)).toEqual({
+      patterns: [],
+      warnings: [],
+    })
+  })
+
   it('warns instead of throwing when link_validation is not an object', () => {
     const resolved = resolveOptionalLinkPatterns({ link_validation: 'apps/**' }, undefined)
 
