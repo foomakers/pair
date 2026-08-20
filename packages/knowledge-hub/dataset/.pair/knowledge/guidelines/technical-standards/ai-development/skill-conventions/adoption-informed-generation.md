@@ -12,7 +12,7 @@ It is a **read-only input to generation**, not a new capability and not a write 
 
 **Authorities vs context.** Only **ADR, ADL and DDR** entries are *authorities* — what may constrain a candidate, be cited, or be reopened with a `Revisits` flag. A `Category: Analysis` entry is **not** one: it records a technical analysis, concludes in a `## Recommendation` rather than a `## Decision`, and need not conclude in a decision at all (the analysis-log template's own words). It is read as **context** — it may inform wording and scope — and it never drops or reshapes a candidate, never carries a `(per ...)` citation, and never triggers a `Revisits` flag: nobody decided anything to revisit. Everywhere below, **record** means an authority.
 
-The order is **fixed** and, within each source, files are read in id order (`adr-NNN`) or date order (`YYYY-MM-DD`) — the read is a function of the adoption tree, never of what happened to be in the assistant's context.
+The **source order is fixed** (1 → 2 → 3), and within a source files are enumerated by `Date` — the indexed head field, or the filename date for `decision-log/` entries — with equal dates enumerated by filename. Enumeration is a **reading sweep, not a ranking**: an id (`adr-NNN`) is a name, and **an id never orders anything**, here or in *Precedence* (where the two live `Accepted` files both numbered `adr-018` are the standing counter-example). Which of two records wins when they answer the same question is decided in *Precedence* alone. The read is a function of the adoption tree, never of what happened to be in the assistant's context.
 
 **Reuse over re-read**: when the caller has **already loaded** one of these in the same run — `/brainstorm`'s phase 2 and `/refine-story`'s Step 2 both load the context map — this step consumes that copy instead of re-reading the file. One run reads each source at most once — and a **composed writer is part of the caller's run**: when a caller performs this read and hands its result to the writer in-band with the candidates, the writer inherits it and does **not** re-derive it. The caller's scope is the run's scope; the writer confirms the applied effects rather than re-scoping them.
 
@@ -26,9 +26,12 @@ Reading full history into a generation prompt is the failure mode this step is d
    - **An absent or unrecognized head field is not a verdict.** A record whose `Category` resolves to neither kind, or whose `Status` matches none of the values in *Precedence*, is **opened at stage 2 before it may act as an authority** — and if the body still leaves it unresolved it is **surfaced to the developer** (the Degradation warning) rather than quietly dropping out of the authority set. Silence is never read as "not live": the same *err toward reading* bias that governs ambiguous scope.
 
    This stage is complete: every record is indexed, none is skipped, and **no record body is read here**.
-2. **Open the body only of the records in scope** — those whose subject overlaps the item being generated: same subdomain/bounded context, same touched component, or a term the item and the record share. Everything else stays at its index line.
+2. **Open the body only of the records in scope.** Scope is decided against **stage 1's only text — the record's verbatim H1 title plus its filename slug**; nothing else was indexed, so nothing else may be filtered on. A record is in scope when that text shares a term with the item being generated: a term of the item's subject, or a term the item's draft will itself use (the entities, states, components it names).
+   - **A subdomain, bounded context or component is a match only when that name appears in the indexed text.** Stage 1 indexes no subdomain, context or component field — no record template carries one — so such a match is never inferred from a field that was never read.
+   - **Terms are compared through the context map**, which source 3 has already loaded: a synonym in the item matches the registered term in a title, so a record is not missed because the item was phrased in the vocabulary the map does *not* register.
+   - **Staying at the index line needs positive evidence.** A record is left unopened only when its indexed text **positively resolves to a different subject**. A title that is generic, or that names a mechanism, schema or artifact rather than the subject it governs (`# ADR-011: Canonical States + n-m State-Mapping Schema`), settles nothing — it is **opened**. The err-toward-reading bias is the ordinary case, not a hedge reserved for flagrant ambiguity.
 
-So the number of full bodies read scales with the item's scope, **never the entire decision history**. When the index makes scope genuinely ambiguous, prefer opening the record — a bounded read errs toward reading one extra body, never toward silently skipping a live decision.
+So the number of full bodies read scales with the item's scope, **never the entire decision history** — and inside that bound the bias runs one way only: a bounded read errs toward opening one extra body, never toward silently skipping a live decision.
 
 ## Precedence — supersession first, then recency
 
@@ -51,7 +54,7 @@ Three concrete effects on generated output, and nothing else:
 
 ## Determinism
 
-Same adoption tree + same subject ⇒ same records read and same influence on the output. The three properties that hold it: the source order and within-source ordering are fixed; the scope filter is content-based (subdomain / context / shared term), not a sample or a "most relevant N"; and precedence is resolved by `Status` and the indexed `Date` — **never by id**, never by preference — with an unorderable tie surfaced rather than broken arbitrarily. A re-run on unchanged adoption produces the same citations, in the same places.
+Same adoption tree + same subject ⇒ same records read and same influence on the output. The three properties that hold it: the source order and within-source ordering are fixed; the scope filter is content-based and runs on the **indexed title + filename slug** (a shared term, with subdomain/context/component counting only where that name is in the indexed text), not a sample or a "most relevant N"; and precedence is resolved by `Status` and the indexed `Date` — **never by id**, never by preference — with an unorderable tie surfaced rather than broken arbitrarily. A re-run on unchanged adoption produces the same citations, in the same places.
 
 ## Degradation
 

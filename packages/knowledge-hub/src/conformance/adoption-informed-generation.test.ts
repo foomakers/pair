@@ -489,6 +489,45 @@ describe('review round 3 — head-field spellings, date ordering, sweep cost', (
     expect(bounded).toMatch(/not one (file )?open per record/i)
   })
 
+  it('scopes stage 2 against the text stage 1 actually indexed (Major)', () => {
+    // Stage 2 filtered on "same subdomain/bounded context, same touched component" —
+    // NONE of which stage 1 indexes (no record template carries such a field), so two of
+    // its three criteria were unevaluable and only title-term overlap actually ran.
+    // Concrete loss on pair's own tree: refining "story generation warns when the PM tool
+    // is unreachable" leaves live ADR-011 (`# ADR-011: Canonical States + n-m
+    // State-Mapping Schema`) at its index line — no shared term, no subdomain field to
+    // match on, and not "genuinely ambiguous" from that title, so the err-toward-reading
+    // hedge never fires. The story is authored naming its own state values and silently
+    // contradicts a live ADR with no `(per ADR-011)` and no `Revisits` — the one outcome
+    // the convention itself declares forbidden.
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    // Stage 2 must name its input: stage 1's only text.
+    expect(bounded).toMatch(/filename slug/i)
+    // A subdomain/context/component is a match only when the NAME is in that text.
+    expect(bounded).toMatch(/only when that name appears in the indexed text/i)
+    // Staying unopened needs positive evidence — an uninformative head is opened.
+    expect(bounded).toMatch(/positively resolves/i)
+    const determinism = CONVENTION.match(/## Determinism[\s\S]*?(?=\n## )/)?.[0]
+    expect(determinism).toMatch(/indexed title/i)
+  })
+
+  it('never states a within-source READING order by id (Minor)', () => {
+    // Sources said "files are read in id order (`adr-NNN`)" while Precedence said
+    // "**Never by id.** Ids ... are not even unique within a source". Reading order and
+    // precedence are different things, but nothing said so and the Sources line is the
+    // one an executor meets first. The two live `Accepted` files numbered 018
+    // (adr-018-code-host-optional-wow-override.md, adr-018-pr-state-flow-required-checks.md)
+    // have NO order under it at all, and an executor that generalizes it into precedence
+    // reintroduces the AC4 defect round 3 closed.
+    const sources = CONVENTION.match(/## Sources[\s\S]*?(?=\n## )/)?.[0]
+    expect(sources).toBeDefined()
+    expect(sources).not.toMatch(/\bid order\b/i)
+    expect(sources).toMatch(/never orders/i)
+    // ...and it must hand ranking to the section that owns it.
+    expect(sources).toMatch(/Precedence/)
+  })
+
   it('states the real malformed shape — no record kind in this KB has frontmatter (Minor)', () => {
     // adr-template / adl-template / analysis-log-template are heading-based markdown,
     // so an executor hunting "malformed frontmatter" finds none and the realistic case
