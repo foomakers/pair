@@ -75,26 +75,6 @@ async function collectFiles(
 }
 
 /**
- * Optional link patterns of this run (US-188), with the diagnostics produced
- * while reading them from config.
- *
- * No module that detects a run-level diagnostic logs it: they are all returned,
- * and this handler is the single place that owns the output channels, so each
- * one reaches BOTH — stderr (visible without scrolling back through the report)
- * and the report's `Configuration:` section, where it is counted in the
- * `Warnings:` total. A diagnostic that only reached the log would leave the
- * footer printing `Warnings: 0` on a run that just reported a config typo.
- * Documented as a design choice in the CLI reference (`kb-validate` → Optional
- * link patterns).
- */
-function resolveOptionalLinks(
-  config: KbValidateCommandConfig,
-  loadedConfig: Config | null,
-): { patterns: string[]; warnings: string[] } {
-  return resolveOptionalLinkPatterns(loadedConfig, config.optionalLinkPatterns)
-}
-
-/**
  * `--ignore-config` resolves NO registry, so no file is collected and nothing —
  * structure, links, metadata — is actually checked: the run exits 0 having
  * validated zero files. Left silent, that reads exactly like a clean run of a
@@ -126,9 +106,17 @@ function validateKbMetadata(params: {
 }
 
 /**
- * The run-level diagnostics of this run: logged once here on stderr, and returned
- * so the report counts them once under `Configuration:` — the two channels every
- * such diagnostic travels on (see `resolveOptionalLinks`).
+ * The run-level diagnostics of this run, on BOTH channels.
+ *
+ * No module that detects a run-level diagnostic logs it: they are all returned
+ * (`resolveOptionalLinkPatterns`, `compileOptionalLinkPatterns`,
+ * `describeNoConfigRun`), and this is the single place that owns the output, so
+ * each one reaches stderr (visible without scrolling back through the report)
+ * AND the report's `Configuration:` section, where it is counted in the
+ * `Warnings:` total. A diagnostic that only reached the log would leave the
+ * footer printing `Warnings: 0` on a run that just reported a config typo.
+ * Documented as a design choice in the CLI reference (`kb-validate` → Optional
+ * link patterns).
  */
 function emitRunNotices(sources: string[][]): string[] {
   const notices = sources.flat()
@@ -169,9 +157,9 @@ export async function handleKbValidateCommand(
 
   const loadedConfig = loadKbConfig(config, fs, kbPath)
   const registries = loadRegistries(config, loadedConfig)
-  const { patterns: optionalLinkPatterns, warnings: configWarnings } = resolveOptionalLinks(
-    config,
+  const { patterns: optionalLinkPatterns, warnings: configWarnings } = resolveOptionalLinkPatterns(
     loadedConfig,
+    config.optionalLinkPatterns,
   )
 
   const structure = !config.ignoreConfig
