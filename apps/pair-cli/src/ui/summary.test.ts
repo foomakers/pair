@@ -142,13 +142,26 @@ describe('buildOperationSummary', () => {
     expect(summary.log).toBe('Update complete: 1 ok, 0 skipped, 0 failed (500ms)')
   })
 
-  it('logs the full tally so the log and the console agree', () => {
+  it('logs the full tally AND the same verdict as the headline', () => {
     const summary = buildOperationSummary(
       [ok('a'), skipped('b', SKIP_NOT_SHIPPED), failed('c', 'nope')],
       'install',
       42,
     )
 
-    expect(summary.log).toBe('Installation complete: 1 ok, 1 skipped, 1 failed (42ms)')
+    // Not "complete": grepping the diagnostics log for `complete` must not read a failed
+    // install as a clean one (US-396 AC5, one channel down from the headline).
+    expect(summary.log).toBe('Installation finished with errors: 1 ok, 1 skipped, 1 failed (42ms)')
+  })
+
+  it.each([
+    ['a clean run', [ok('a')], 'Installation complete: 1 ok, 0 skipped, 0 failed (42ms)'],
+    [
+      'a no-op run',
+      [skipped('a', SKIP_NOT_SHIPPED)],
+      'Installation did nothing: 0 ok, 1 skipped, 0 failed (42ms)',
+    ],
+  ])('the log verdict follows the tone for %s', (_label, results, expected) => {
+    expect(buildOperationSummary(results, 'install', 42).log).toBe(expected)
   })
 })

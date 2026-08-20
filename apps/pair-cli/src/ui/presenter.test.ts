@@ -98,7 +98,7 @@ describe('createCliPresenter', () => {
 
     expect(pushLog).toHaveBeenCalledWith(
       'info',
-      'Update complete: 1 ok, 0 skipped, 1 failed (500ms)',
+      'Update finished with errors: 1 ok, 0 skipped, 1 failed (500ms)',
     )
   })
 
@@ -139,19 +139,27 @@ describe('createSilentPresenter', () => {
     pushLog = vi.fn()
   })
 
-  it('does not write to console', () => {
+  it('does not write to console — including warning(), which the CLI presenter prints', () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    // `warning` is the one method whose CLI counterpart uses console.WARN, so a regression
+    // copying that body here would escape a console.log-only spy — and the silent presenter
+    // exists precisely to keep JSON/scripted output clean.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const presenter = createSilentPresenter(pushLog)
 
     presenter.startOperation('install', 2)
     presenter.registryStart({ name: 'x', index: 0, total: 2, source: '/src', target: '/dst' })
     presenter.registryDone('x')
     presenter.registrySkipped('z', 'not shipped by this source')
+    presenter.warning('the source shipped a broken pair.config.json')
     presenter.phase('backup')
     presenter.summary([{ name: 'x', target: '/dst', status: 'ok' }], 'install', 100)
 
     expect(consoleSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalled()
+    expect(pushLog).toHaveBeenCalledWith('warn', 'the source shipped a broken pair.config.json')
     consoleSpy.mockRestore()
+    warnSpy.mockRestore()
   })
 
   it('still calls pushLog for all operations', () => {
@@ -162,6 +170,7 @@ describe('createSilentPresenter', () => {
     presenter.registryDone('x')
     presenter.registrySkipped('z', 'not shipped by this source')
     presenter.registryError('y', 'fail')
+    presenter.warning('careful')
     presenter.phase('backup')
     presenter.summary(
       [
@@ -172,6 +181,6 @@ describe('createSilentPresenter', () => {
       100,
     )
 
-    expect(pushLog).toHaveBeenCalledTimes(7)
+    expect(pushLog).toHaveBeenCalledTimes(8)
   })
 })

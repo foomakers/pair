@@ -41,7 +41,12 @@ export interface OperationSummary {
   headline: string
   /** One line per distinct skip reason, naming the registries it covers. */
   details: string[]
-  /** Diagnostics line — the same tally as the headline, never a different one. */
+  /**
+   * Diagnostics line — the same tally AND the same verdict as the headline, never a
+   * different one. A failed run logging "complete" is the text-vs-status disagreement
+   * AC5 removes, one channel down (anything grepping the log for `complete` would read a
+   * failed install as clean).
+   */
   log: string
   exitCode: number
 }
@@ -81,6 +86,13 @@ function summaryLabel(operation: 'install' | 'update'): string {
 
 function noopLabel(operation: 'install' | 'update'): string {
   return operation === 'install' ? 'Nothing to install' : 'Nothing to update'
+}
+
+/** The headline's verdict, in the diagnostics log's grammar. */
+function logVerdict(tone: SummaryTone): string {
+  if (tone === 'error') return 'finished with errors'
+  if (tone === 'noop') return 'did nothing'
+  return 'complete'
 }
 
 /** Skip reasons, in first-seen order, each with the registries it covers. */
@@ -151,7 +163,7 @@ export function buildOperationSummary(
     details: [...reasons].map(
       ([reason, names]) => `${names.length} skipped — ${reason}: ${names.join(', ')}`,
     ),
-    log: `${summaryLabel(operation)} complete: ${tally.ok} ok, ${tally.skipped} skipped, ${tally.failed} failed (${elapsed})`,
+    log: `${summaryLabel(operation)} ${logVerdict(tone)}: ${tally.ok} ok, ${tally.skipped} skipped, ${tally.failed} failed (${elapsed})`,
     exitCode: exitCodeFor(tally),
   }
 }
