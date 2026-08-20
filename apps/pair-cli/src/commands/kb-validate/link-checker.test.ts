@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import type { FileSystemService } from '@pair/content-ops'
 import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
 import { MockHttpClientService, logger } from '@pair/content-ops'
-import { validateLinks, describesResolvedTarget } from './link-checker'
+import { validateLinks } from './link-checker'
 import type { IncomingMessage } from 'http'
 
 // Helper to create a mock HTTP response
@@ -379,7 +379,7 @@ describe('validateLinks', () => {
     describe.each([
       ['unterminated character class', 'apps/[ab'],
       ['range out of order', 'docs/[z-a].md'],
-      ['blank pattern', '   '],
+      ['blank pattern (module API only: the CLI and config paths drop blanks first)', '   '],
     ])('malformed pattern (%s)', (_label, malformed) => {
       afterEach(() => {
         vi.restoreAllMocks()
@@ -631,22 +631,9 @@ describe('validateLinks', () => {
       expect(results[0]?.warnings).toHaveLength(1)
     })
 
-    it('describesResolvedTarget treats a backslash-separated (win32) resolved form the same as a POSIX one', () => {
-      // `path.win32.relative` (what `relative()` returns on Windows) is
-      // backslash-separated, e.g. `apps\\website\\page.tsx`. Both sides must be
-      // normalized before comparing, or the written form is never a candidate
-      // on Windows and `../../apps/**` matches nothing there (regression for
-      // the depth-blind fix above, which normalized only `writtenPath`).
-      expect(
-        describesResolvedTarget('../../apps/website/page.tsx', 'apps\\website\\page.tsx'),
-      ).toBe(true)
-      // A resolved form that escapes the KB is also backslash-separated on win32.
-      expect(describesResolvedTarget('../../../apps/y.md', '..\\apps\\y.md')).toBe(true)
-      // A climb that lands back INSIDE the KB must still be rejected on win32:
-      // written strips to `apps/y.md`, but the real resolved form (one level
-      // short of the KB root) is `.pair\\knowledge\\apps\\y.md` — no match.
-      expect(describesResolvedTarget('../../apps/y.md', '.pair\\knowledge\\apps\\y.md')).toBe(false)
-    })
+    // The win32 shape of this same rule (backslash-separated resolved forms)
+    // is covered through `validateLinks` in `link-checker.win32.test.ts`, which
+    // mocks `path` to its win32 flavour for the whole file.
 
     it('applies to absolute internal links too (resolved from the KB root)', async () => {
       fs.writeFile('/kb/docs/guide.md', '[Code](/apps/website/page.tsx)')

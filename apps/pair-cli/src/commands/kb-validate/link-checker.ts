@@ -259,10 +259,7 @@ function isOptionalLink(
  * KB root) — or when `resolved` itself escapes the KB root, where the written
  * form is the only stable way to express the rule.
  */
-export function describesResolvedTarget(
-  writtenPath: string,
-  resolved: string | undefined,
-): boolean {
+function describesResolvedTarget(writtenPath: string, resolved: string | undefined): boolean {
   if (resolved === undefined || !escapesSourceDir(writtenPath)) return false
   const resolvedPosix = toPosix(resolved)
   if (resolvedPosix.startsWith('../')) return true
