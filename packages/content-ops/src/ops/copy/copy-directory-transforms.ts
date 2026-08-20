@@ -1,6 +1,6 @@
 import { join, relative, dirname } from 'path/posix'
 import { logger } from '../../observability'
-import { copyFileHelper, isExcluded, resolvesWithin } from '../../file-system'
+import { copyFileHelper, isExcluded, entryIsCopyable } from '../../file-system'
 import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
 import { transformPath, isRegistryEntryPath } from '../naming-transforms'
@@ -24,11 +24,9 @@ import type { CopyPathOpsResult, TransformOpts } from './copy-types'
  * Recursively collects all files under a directory, returning their paths
  * relative to the given root directory.
  *
- * A symlink is followed only while its target stays physically under `rootPath`. A
- * Dirent for a symlink reports neither `isFile()` nor `isDirectory()`, so an escaping
- * link used to land in this list as an ordinary file and `copyFileHelper` then read the
- * TARGET's bytes — the transform path's half of the same hole `copyDirEntry` had
- * (US-396 review round 3).
+ * Symlinks are classified by `entryIsCopyable` — the same predicate the plain walk uses,
+ * so the transform path cannot disagree with it about what a link means (an escaping one
+ * leaked the target's bytes, a contained one pointing at a directory threw `EISDIR`).
  */
 async function collectFiles(
   fileService: FileSystemService,
@@ -39,10 +37,7 @@ async function collectFiles(
   const entries = await fileService.readdir(dirPath)
   for (const entry of entries) {
     const entryPath = join(dirPath, entry.name)
-    if (entry.isSymbolicLink() && !(await resolvesWithin(fileService, entryPath, rootPath))) {
-      logger.warn(`Skipped ${entryPath}: a symlink resolving outside ${rootPath} is never copied`)
-      continue
-    }
+    if (!(await entryIsCopyable(fileService, entry, entryPath, rootPath))) continue
     if (entry.isDirectory()) {
       const subFiles = await collectFiles(fileService, entryPath, rootPath)
       result.push(...subFiles)

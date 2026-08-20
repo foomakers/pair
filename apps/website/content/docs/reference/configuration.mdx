@@ -60,8 +60,11 @@ name — each half is checked after every symlink on the path is followed:
 
 - a declared `source` must resolve inside the **KB**;
 - every symlink met while copying must resolve inside **that registry's own source
-  directory** — the narrower bound. One resolving back inside it is followed normally;
-  one resolving anywhere else is skipped, with a warning naming it.
+  directory** — the narrower bound. One resolving anywhere else is skipped, with a warning
+  naming it. One resolving back inside it is followed only when it points at a **file**: a
+  symlink to a *directory* is skipped too (also at a warning), because following one would
+  need a cycle guard — `self -> .` is contained as well. Ship a directory of content as a
+  real directory, not as a link to one.
 
 So a KB cannot make `pair install` copy files from elsewhere on your machine into your
 repository, and a registry ships only what physically lives under it. A link like

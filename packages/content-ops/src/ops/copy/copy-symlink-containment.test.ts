@@ -98,6 +98,48 @@ describe('copy — a symlink may not carry content in from outside the read root
     expect(existsSync(join(kb, 'out', 'shared', 'house-style.md'))).toBe(false)
   })
 
+  it('does not fail the copy on a symlink to a DIRECTORY inside the root', async () => {
+    // A KB shipping `latest -> ./v2` inside its own registry source. `resolvesWithin` says
+    // contained, but `readdir` does not follow a link to classify it, so `entry.isDirectory()`
+    // is false and the entry used to fall through to the FILE branch: `readFile` on a
+    // directory throws EISDIR, `installRegistryOrReportFailure` catches it, the whole
+    // registry is reported `failed` and `pair install --source` exits 1 (US-396 round 5).
+    mkdirSync(join(kb, 'content', 'v2'))
+    writeFileSync(join(kb, 'content', 'v2', 'guide.md'), '# v2\n')
+    symlinkSync('./v2', join(kb, 'content', 'latest'))
+
+    await expect(
+      copyPathOps({
+        fileService: fileSystemService,
+        source: 'content',
+        target: 'out',
+        datasetRoot: kb,
+      }),
+    ).resolves.not.toThrow()
+
+    expect(existsSync(join(kb, 'out', 'v2', 'guide.md'))).toBe(true)
+    // Not followed: a directory link is skipped, never read as a file.
+    expect(existsSync(join(kb, 'out', 'latest'))).toBe(false)
+  })
+
+  it('does not fail a flatten/prefix copy on a symlink to a DIRECTORY inside the root', async () => {
+    mkdirSync(join(kb, 'content', 'skill-a'))
+    writeFileSync(join(kb, 'content', 'skill-a', 'SKILL.md'), '# a\n')
+    symlinkSync('./skill-a', join(kb, 'content', 'latest'))
+
+    await expect(
+      copyPathOps({
+        fileService: fileSystemService,
+        source: 'content',
+        target: 'out',
+        datasetRoot: kb,
+        options: { flatten: true, prefix: 'acme' },
+      }),
+    ).resolves.not.toThrow()
+
+    expect(existsSync(join(kb, 'out', 'acme-skill-a', 'SKILL.md'))).toBe(true)
+  })
+
   it('refuses a registry source that is itself a symlink out of the root', async () => {
     symlinkSync('../secrets', join(kb, 'leak'))
 
@@ -167,6 +209,26 @@ describe('copy — the in-memory double reaches the containment guard', () => {
     await copyPathOps({ fileService: fs, source: 'content', target: 'out', datasetRoot: '/kb' })
 
     expect(await fs.readFile('/kb/out/alias.md')).toBe('# inside\n')
+  })
+
+  it('skips a symlink to a directory inside the root instead of reading it as a file', async () => {
+    const fs = new InMemoryFileSystemService(
+      { ...seed, '/kb/content/v2/guide.md': '# v2\n' },
+      '/kb',
+      '/kb',
+    )
+    await fs.symlink('/kb/content/v2', '/kb/content/latest')
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => {
+      warned.push(String(m))
+    })
+
+    await copyPathOps({ fileService: fs, source: 'content', target: 'out', datasetRoot: '/kb' })
+    warnSpy.mockRestore()
+
+    expect(await fs.exists('/kb/out/v2/guide.md')).toBe(true)
+    expect(await fs.exists('/kb/out/latest')).toBe(false)
+    expect(warned.join('\n')).toContain('a symlink to a directory')
   })
 
   it('skips an escaping symlink under flatten/prefix transforms too', async () => {

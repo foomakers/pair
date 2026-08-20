@@ -119,10 +119,24 @@ The read side is therefore bounded PHYSICALLY, in three places:
 
 Only symlinks are resolved during the walk: an ordinary entry cannot point anywhere, and a
 `realpath` per file would double the syscalls of every install. A symlink resolving INSIDE
-the root is still followed — this is a containment bound, not a symlink ban. Both roots are
-resolved too, so a KB cached under a symlinked home directory (or macOS's `/tmp` →
-`/private/tmp`) is unaffected. The primitive is one shared helper,
+the root is still followed **when it points at a file** — this is a containment bound, not a
+symlink ban. Both roots are resolved too, so a KB cached under a symlinked home directory
+(or macOS's `/tmp` → `/private/tmp`) is unaffected. The primitive is one shared helper,
 `resolvesWithin`/`resolvesWithinSync` in `@pair/content-ops`.
+
+**A contained symlink to a DIRECTORY is skipped, not followed** (US-396 review round 5).
+Same Dirent blindness, opposite half: `latest -> ./v2` inside a registry's own source is
+contained, so nothing skipped it, and `entry.isDirectory()` is false for a link, so it took
+the FILE branch — `readFile` on a directory throws `EISDIR`, the registry was reported
+`failed` and `pair install --source` exited 1 on a KB that had done nothing wrong. Following
+it instead would need a visited-realpath cycle guard (`self -> .` is contained too) plus an
+answer for the content it duplicates into the flatten/collision validation, which is more
+machinery than the case earns from untrusted content. So a directory link is skipped at WARN
+— the shape every other unreadable entry already has — and the documented contract
+(`configuration.mdx`) says so: ship a directory of content as a real directory. A link whose
+target cannot be dereferenced at all (broken, or ELOOP) is skipped for the same reason:
+`resolvesWithin` calls a non-existent target contained, and reading it would fail the
+registry. One predicate, `entryIsCopyable`, is shared by both walks.
 
 **Layer 2 applies to `install` and `update` alike.** A named source declares its registries
 on both. Reading the declaration on install only meant the first `update --source` after a
