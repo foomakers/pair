@@ -20,6 +20,8 @@ export interface CliPresenter {
   registryDone(name: string): void
   registrySkipped(name: string, reason: string): void
   registryError(name: string, error: string): void
+  /** Something the user must know about that is not tied to one registry. */
+  warning(message: string): void
   phase(message: string): void
   summary(results: RegistryResult[], operation: 'install' | 'update', elapsedMs: number): void
 }
@@ -48,15 +50,11 @@ function printSummaryBlock(summary: OperationSummary): void {
   console.log()
 }
 
-export function createCliPresenter(pushLog: PushLog): CliPresenter {
+/** The per-registry progress lines: one block, so the run-level reporter stays small. */
+function registryReporter(
+  pushLog: PushLog,
+): Pick<CliPresenter, 'registryStart' | 'registryDone' | 'registrySkipped' | 'registryError'> {
   return {
-    startOperation(operation, registryCount) {
-      const msg = `${opLabel(operation)} ${registryCount} ${plural(registryCount)}`
-      console.log(`\n  ${chalk.bold(msg)}`)
-      console.log(`  ${chalk.dim(SEPARATOR)}\n`)
-      pushLog('info', msg)
-    },
-
     registryStart({ name, index, total, source, target }) {
       const counter = chalk.dim(`[${index + 1}/${total}]`)
       console.log(
@@ -78,6 +76,26 @@ export function createCliPresenter(pushLog: PushLog): CliPresenter {
     registryError(name, error) {
       console.log(`        ${chalk.red('✗')} ${error}`)
       pushLog('error', `Failed to process registry '${name}': ${error}`)
+    },
+  }
+}
+
+export function createCliPresenter(pushLog: PushLog): CliPresenter {
+  return {
+    ...registryReporter(pushLog),
+
+    startOperation(operation, registryCount) {
+      const msg = `${opLabel(operation)} ${registryCount} ${plural(registryCount)}`
+      console.log(`\n  ${chalk.bold(msg)}`)
+      console.log(`  ${chalk.dim(SEPARATOR)}\n`)
+      pushLog('info', msg)
+    },
+
+    // A diagnostics-only warning is a warning nobody reads: nothing consumes the log
+    // array, so this has to reach the console (US-396).
+    warning(message) {
+      console.warn(`  ${chalk.yellow('!')} ${message}`)
+      pushLog('warn', message)
     },
 
     phase(message) {
@@ -110,6 +128,9 @@ export function createSilentPresenter(pushLog: PushLog): CliPresenter {
     },
     registryError(name, error) {
       pushLog('error', `Failed to process registry '${name}': ${error}`)
+    },
+    warning(message) {
+      pushLog('warn', message)
     },
     phase(message) {
       pushLog('info', message)

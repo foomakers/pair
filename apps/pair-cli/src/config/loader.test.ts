@@ -259,3 +259,201 @@ describe('config loader - source KB declaration', () => {
     expect(sourceDeclaration).toEqual({ applied: false, unknownRegistries: [] })
   })
 })
+
+/**
+ * US-396 half B, trust boundary — layer 2 is the ONE layer the consuming project does not
+ * control: it ships inside a remote, third-party KB. It may describe the source's own
+ * content and namespacing; it may never decide WHERE the install writes.
+ */
+describe('config loader - the source declaration is validated, not trusted', () => {
+  function fsWith(files: Record<string, string>) {
+    return new InMemoryFileSystemService(
+      { '/module/config.json': REAL_CONFIG, ...files },
+      '/module',
+      '/project',
+    )
+  }
+
+  function load(files: Record<string, string>) {
+    return loadConfigWithOverrides(fsWith(files), { projectRoot: '/project', sourceRoot: '/kb' })
+  }
+
+  it('ignores targets declared by the source, however innocent they look', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: {
+          agents: { targets: [{ path: '../../.zshenv', mode: 'canonical' }] },
+          knowledge: { targets: [{ path: 'unused-corner', mode: 'canonical' }] },
+        },
+      }),
+    })
+
+    // The CLI's own targets stand — a KB cannot repoint the install, inside or outside the project
+    expect(config.asset_registries['agents']!.targets).toEqual(
+      JSON.parse(REAL_CONFIG).asset_registries.agents.targets,
+    )
+    expect(config.asset_registries['knowledge']!.targets).toEqual(
+      JSON.parse(REAL_CONFIG).asset_registries.knowledge.targets,
+    )
+  })
+
+  it('ignores legacy target_path and behavior from the source', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: { knowledge: { target_path: '/etc', behavior: 'mirror' } },
+      }),
+    })
+
+    const base = JSON.parse(REAL_CONFIG).asset_registries.knowledge
+    expect(config.asset_registries['knowledge']!.targets).toEqual(base.targets)
+    expect(config.asset_registries['knowledge']!.behavior).toBe(base.behavior)
+  })
+
+  it('ignores a source prefix that would traverse — a prefix is a path SEGMENT', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: { skills: { prefix: '../../../tmp/evil' } },
+      }),
+    })
+
+    expect(config.asset_registries['skills']!.prefix).toBe('pair')
+  })
+
+  it('ignores a source prefix carrying a separator', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme/nested' } },
+      }),
+    })
+
+    expect(config.asset_registries['skills']!.prefix).toBe('pair')
+  })
+
+  it('honours the fields that describe the source itself', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: {
+          skills: {
+            prefix: 'acme-kb',
+            source: '.acme-skills',
+            include: ['**/SKILL.md'],
+            exclude: ['internal/**'],
+            flatten: false,
+            flattenDepth: 3,
+            description: 'Acme skills',
+          },
+        },
+      }),
+    })
+
+    const skills = config.asset_registries['skills']!
+    expect(skills.prefix).toBe('acme-kb')
+    expect(skills.source).toBe('.acme-skills')
+    expect(skills.include).toEqual(['**/SKILL.md'])
+    expect(skills.exclude).toEqual(['internal/**'])
+    expect(skills.flatten).toBe(false)
+    expect(skills.flattenDepth).toBe(3)
+    expect(skills.description).toBe('Acme skills')
+  })
+
+  it('ignores top-level keys declared by the source, such as working_path', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        working_path: '../outside/working',
+        target: '/etc',
+        asset_registries: { skills: { prefix: 'acme-kb' } },
+      }),
+    })
+
+    expect(config['working_path']).toBeUndefined()
+    expect(config['target']).toBeUndefined()
+    expect(config.asset_registries['skills']!.prefix).toBe('acme-kb')
+  })
+
+  it.each([
+    ['null', 'null'],
+    ['an array', '[1,2]'],
+    ['a string', '"x"'],
+    ['a number', '42'],
+    ['asset_registries that is not an object', '{"asset_registries": ["skills"]}'],
+  ])('warns and ignores a declaration that is %s', (_label, content) => {
+    const { config, sourceDeclaration } = loadConfigWithOverrides(
+      fsWith({ '/kb/pair.config.json': content }),
+      { projectRoot: '/project', sourceRoot: '/kb' },
+    )
+
+    expect(sourceDeclaration!.applied).toBe(false)
+    expect(sourceDeclaration!.warning).toMatch(/pair\.config\.json/)
+    expect(config.asset_registries['skills']!.prefix).toBe('pair')
+    // Nothing half-parsed leaked in: no index keys, no stray registries
+    expect(config.asset_registries['0']).toBeUndefined()
+  })
+
+  it('drops a non-object registry entry instead of spreading it', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({ asset_registries: { skills: 'evil' } }),
+    })
+
+    expect(config.asset_registries['skills']!.prefix).toBe('pair')
+    expect(config.asset_registries['skills']!.targets).toEqual(
+      JSON.parse(REAL_CONFIG).asset_registries.skills.targets,
+    )
+  })
+})
+
+/**
+ * US-396 — `projectRoot` is the directory being installed INTO. In the released CJS
+ * layout it is NOT the CLI module dir, so the loader must read the consumer's config
+ * where the consumer actually is (AC4), and must not mistake a project's own
+ * `config.json` (a very common name) for a Pair config.
+ */
+describe('config loader - project layer when the module dir is not the project root', () => {
+  const SOURCE_DECLARATION = JSON.stringify({
+    asset_registries: { skills: { prefix: 'acme-kb' } },
+  })
+
+  it("reads the consumer's pair.config.json at a projectRoot far from the module dir", () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/opt/pair-cli/config.json': REAL_CONFIG,
+        '/kb/pair.config.json': SOURCE_DECLARATION,
+        '/consumer/pair.config.json': JSON.stringify({
+          asset_registries: { skills: { prefix: 'house-rules' } },
+        }),
+      },
+      '/opt/pair-cli',
+      '/consumer',
+    )
+
+    const { config } = loadConfigWithOverrides(fs, {
+      projectRoot: '/consumer',
+      sourceRoot: '/kb',
+      projectConfigOnly: true,
+    })
+
+    expect(config.asset_registries['skills']!.prefix).toBe('house-rules')
+  })
+
+  it("does not read an unrelated config.json sitting in the consumer's root", () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/opt/pair-cli/config.json': REAL_CONFIG,
+        '/kb/pair.config.json': SOURCE_DECLARATION,
+        // Someone else's config.json — a webpack/eslint/whatever file, not a Pair config
+        '/consumer/config.json': JSON.stringify({
+          asset_registries: { skills: { prefix: 'not-a-pair-config' } },
+        }),
+      },
+      '/opt/pair-cli',
+      '/consumer',
+    )
+
+    const { config } = loadConfigWithOverrides(fs, {
+      projectRoot: '/consumer',
+      sourceRoot: '/kb',
+      projectConfigOnly: true,
+    })
+
+    expect(config.asset_registries['skills']!.prefix).toBe('acme-kb')
+  })
+})

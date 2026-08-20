@@ -22,6 +22,12 @@ export interface LoadConfigOptions {
   projectRoot?: string
   skipBaseConfig?: boolean
   /**
+   * Layer 3 is the project's OWN `pair.config.json` only — no `config.json` fallback.
+   * Set by install/update, where `projectRoot` is the directory being installed into: a
+   * file named `config.json` there is far too common to be assumed a Pair config.
+   */
+  projectConfigOnly?: boolean
+  /**
    * Root of an explicitly named source KB (`--source`). Its own `pair.config.json` is
    * honoured, so a maintainer's declared namespacing applies without the consuming
    * project copying anything (US-396 AC3). Absent for the default source.
@@ -42,6 +48,9 @@ export interface LoadedConfig {
  * Precedence, weakest first: base CLI config < **source KB declaration** < consuming
  * project `pair.config.json` < explicit `--config`. The source declares, the consumer
  * overrides — stated once here, and documented in the external-KB guide.
+ *
+ * Layer 2 is trusted with a strictly bounded set of fields (`SOURCE_DECLARABLE_FIELDS`):
+ * it is remote content, so it never decides where the install writes.
  */
 export function loadConfigWithOverrides(
   fsService: FileSystemService,
@@ -94,6 +103,7 @@ function layerOverrides(
     ...(options.skipBaseConfig
       ? {}
       : { alreadyLoaded: baseConfigPath(fsService.rootModuleDirectory()) }),
+    ...(options.projectConfigOnly && { pairConfigOnly: true }),
   })
   if (pairApplied) {
     config = pairApplied.config
@@ -123,12 +133,61 @@ function summarizeDeclaration(
 }
 
 /**
+ * The ONLY fields a source KB may contribute (US-396, layer 2).
+ *
+ * Layer 2 is the one layer whose content the consuming project does not control: it is
+ * shipped by a remote, third-party KB. So it may describe its own CONTENT and its own
+ * NAMESPACING, never WHERE the install writes — `targets`, `target_path`, `behavior`,
+ * `working_path` and every other top-level key are dropped, not merged. Without this,
+ * `resolveTarget` would join a source-declared path onto the project root and a KB could
+ * write anywhere on the machine.
+ */
+const SOURCE_DECLARABLE_FIELDS = [
+  'source',
+  'include',
+  'exclude',
+  'flatten',
+  'flattenDepth',
+  'description',
+  'prefix',
+] as const
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * `prefix` becomes a path segment (`${prefix}-${dir}`), so a source-declared one may not
+ * carry a separator or a traversal — that would be `targets` by another name.
+ */
+function isSafePrefix(value: unknown): boolean {
+  return (
+    typeof value === 'string' && value.length > 0 && !/[/\\]/.test(value) && !value.includes('..')
+  )
+}
+
+/** Keeps only the declarable fields of one registry entry; anything else is dropped. */
+function honouredFields(entry: unknown): Record<string, unknown> {
+  if (!isPlainObject(entry)) return {}
+  const kept: Record<string, unknown> = {}
+  for (const field of SOURCE_DECLARABLE_FIELDS) {
+    if (!(field in entry)) continue
+    if (field === 'prefix' && !isSafePrefix(entry[field])) continue
+    kept[field] = entry[field]
+  }
+  return kept
+}
+
+/**
  * Reads a source KB's own `pair.config.json`.
  *
  * A malformed source config never aborts the install and is never half-applied: the
- * consumer's resolution stands and the caller reports the warning. Registries the source
- * declares that this CLI has no definition for are held back (reported as skipped by the
- * install summary) rather than installed on the strength of the source's word alone.
+ * consumer's resolution stands and the caller reports the warning. "Malformed" covers
+ * anything that is not a JSON object with an object `asset_registries` — a valid-JSON
+ * `null`, string or array declares nothing usable and must not report itself as applied.
+ * Registries the source declares that this CLI has no definition for are held back
+ * (reported as skipped by the install summary) rather than installed on the strength of
+ * the source's word alone.
  */
 function readSourceDeclaration(
   fsService: FileSystemService,
@@ -140,26 +199,32 @@ function readSourceDeclaration(
     return { config: null, declaredNames: [] }
   }
 
-  let declared: Config
+  const ignore = (reason: string) => ({
+    config: null,
+    declaredNames: [],
+    warning: `Ignoring the source KB's pair.config.json (${declarationPath}): ${reason}`,
+  })
+
+  let declared: unknown
   try {
-    declared = JSON.parse(fsService.readFileSync(declarationPath)) as Config
+    declared = JSON.parse(fsService.readFileSync(declarationPath))
   } catch (err) {
-    return {
-      config: null,
-      declaredNames: [],
-      warning: `Ignoring the source KB's pair.config.json (${declarationPath}): ${String(err)}`,
-    }
+    return ignore(String(err))
   }
 
-  const declaredNames = Object.keys(declared?.asset_registries ?? {})
-  const applicable: Config = {
-    ...declared,
-    asset_registries: Object.fromEntries(
-      Object.entries(declared?.asset_registries ?? {}).filter(([name]) =>
-        knownRegistries.includes(name),
-      ),
-    ),
-  }
+  if (!isPlainObject(declared)) return ignore('not a JSON object')
+  const registries = declared['asset_registries'] ?? {}
+  if (!isPlainObject(registries)) return ignore('asset_registries is not an object')
+
+  const declaredNames = Object.keys(registries)
+  // Partial by design: a declaration states the few fields it wants, and `mergeConfigs`
+  // lays them over the base entry field by field.
+  const honoured = Object.fromEntries(
+    declaredNames
+      .filter(name => knownRegistries.includes(name))
+      .map(name => [name, honouredFields(registries[name])]),
+  ) as unknown as Config['asset_registries']
+  const applicable: Config = { asset_registries: honoured }
   return { config: applicable, declaredNames }
 }
 
@@ -188,16 +253,21 @@ function applyPairConfigIfExists(
   fsService: FileSystemService,
   baseConfig: Config,
   projectRoot: string,
-  options: { alreadyLoaded?: string } = {},
+  options: { alreadyLoaded?: string; pairConfigOnly?: boolean } = {},
 ): { config: Config } | null {
   const pairConfigPath = join(projectRoot, 'pair.config.json')
   const configJsonPath = join(projectRoot, 'config.json')
 
   // Try pair.config.json first, then fall back to config.json — unless that config.json is
-  // the base config this resolution already started from.
+  // the base config this resolution already started from, or the caller pointed us at a
+  // real project root, where `config.json` is a name any tool may own.
+  const fallbackAllowed =
+    !options.pairConfigOnly &&
+    fsService.existsSync(configJsonPath) &&
+    configJsonPath !== options.alreadyLoaded
   const configPath = fsService.existsSync(pairConfigPath)
     ? pairConfigPath
-    : fsService.existsSync(configJsonPath) && configJsonPath !== options.alreadyLoaded
+    : fallbackAllowed
       ? configJsonPath
       : null
 

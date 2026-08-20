@@ -104,9 +104,10 @@ async function runInstall(ctx: {
     config,
     options,
   )
-  // A source that ships a broken config never aborts the install: it is reported and the
-  // consumer's own resolution stands (US-396).
-  if (sourceDeclaration?.warning) pushLog('warn', sourceDeclaration.warning)
+  // A source that ships a broken config never aborts the install: it is reported — on the
+  // console, not only in the diagnostics log nobody reads — and the consumer's own
+  // resolution stands (US-396).
+  if (sourceDeclaration?.warning) presenter.warning(sourceDeclaration.warning)
   await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
   validateDatasetContent(fs, datasetRoot, registries)
   await validateInstallContext(fs, registries, baseTarget)
@@ -156,12 +157,21 @@ function namesItsOwnSource(config: InstallableConfig): boolean {
   return config.resolution !== 'default'
 }
 
+/**
+ * `projectRoot` is the directory being installed INTO — never the CLI's own module dir,
+ * which is what the loader would default to. In the released (CJS) layout those are two
+ * different places, and defaulting meant the consuming project's own `pair.config.json`
+ * was never read: AC4 held in tests only (US-396).
+ */
 function resolveConfigOptions(
   config: InstallableConfig,
   datasetRoot: string,
+  projectRoot: string,
   options?: InstallHandlerOptions,
 ): LoadConfigOptions {
   return {
+    projectRoot,
+    projectConfigOnly: true,
     ...(options?.config && { customConfigPath: options.config }),
     ...(namesItsOwnSource(config) && { sourceRoot: datasetRoot }),
   }
@@ -184,9 +194,10 @@ async function setupInstallContext(
     // fetch, and the command would otherwise download the KB the user just refused.
     kb: (config as { kb?: boolean }).kb,
   })
+  const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
   const configContent = loadConfigWithOverrides(
     fs,
-    resolveConfigOptions(config, datasetRoot, options),
+    resolveConfigOptions(config, datasetRoot, baseTarget, options),
   )
 
   const registries = extractRegistries(configContent.config)
@@ -196,7 +207,6 @@ async function setupInstallContext(
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
-  const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
   return {
     datasetRoot,
     registries,
@@ -417,6 +427,11 @@ async function executeInstall(context: InstallContext): Promise<number> {
   presenter.startOperation('install', total)
 
   const { results, skillNameMap, skillLinkPathMap } = await installAllRegistries(context)
+  const allResults = [
+    ...results,
+    ...declaredButUnknownResults(context.sourceDeclaration, baseTarget, presenter),
+  ]
+  const tally = tallyRegistries(allResults)
 
   await reconcileSkillNameRegistry(
     { fs, baseTarget, pushLog },
@@ -430,12 +445,10 @@ async function executeInstall(context: InstallContext): Promise<number> {
   }
 
   await writeProjectLlmsTxt(fs, baseTarget, pushLog)
-  await recordInstalledVersion({ fs, datasetRoot, baseTarget })
+  // A partial install is not an installed KB: recording the version anyway would silence
+  // the drift hint while a registry is missing, and the re-run aborts on 'already exists'.
+  if (tally.failed === 0) await recordInstalledVersion({ fs, datasetRoot, baseTarget })
 
-  const allResults = [
-    ...results,
-    ...declaredButUnknownResults(context.sourceDeclaration, baseTarget, presenter),
-  ]
   presenter.summary(allResults, 'install', Date.now() - startTime)
-  return exitCodeFor(tallyRegistries(allResults))
+  return exitCodeFor(tally)
 }

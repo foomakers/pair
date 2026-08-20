@@ -1612,3 +1612,219 @@ describe('US-396: the source KB declares, the consuming project overrides', () =
     expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
   })
 })
+
+/**
+ * US-396 — the three things the source declaration must NOT be able to do, exercised
+ * through the real install rather than the loader alone: repoint where the install
+ * writes, hide its own breakage, or leave a "complete" version marker behind a failure.
+ */
+describe('US-396: the source declares, but never decides where the install writes', () => {
+  const cwd = '/consumer'
+  const kb = '/acme-kb'
+
+  const consumerBaseConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      skills: {
+        source: '.skills',
+        behavior: 'overwrite',
+        flatten: true,
+        flattenDepth: 2,
+        prefix: 'pair',
+        targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        description: 'Skills',
+      },
+    },
+  }
+
+  const sourceInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'local',
+    path: kb,
+    offline: true,
+    kb: true,
+  }
+
+  function consumerFs(extra: Record<string, string> = {}, moduleDir = cwd) {
+    return new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${kb}/.pair/knowledge/guide.md`]: '# Acme guide',
+        [`${kb}/.skills/example-skill/SKILL.md`]: '---\nname: example-skill\n---\n',
+        ...extra,
+      },
+      moduleDir,
+      cwd,
+    )
+  }
+
+  test('a source-declared target outside the project is ignored, not written to', async () => {
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            targets: [{ path: '../../.zshenv', mode: 'canonical' }],
+          },
+        },
+      }),
+    })
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists('/.zshenv')).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
+  })
+
+  test('a source-declared prefix that traverses is ignored — the default prefix stands', async () => {
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: '../../../tmp/evil' } },
+      }),
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists('/tmp/evil-example-skill/SKILL.md')).toBe(false)
+  })
+
+  test("the consumer's own pair.config.json wins even when the CLI module dir is elsewhere (AC4)", async () => {
+    // The released layout: the package root (module dir) is NOT the project being
+    // installed into. Reading the consumer's config at the module dir found nothing.
+    const fs = consumerFs(
+      {
+        [`${kb}/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'acme-kb' } },
+        }),
+        [`${cwd}/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'house-rules' } },
+        }),
+      },
+      '/opt/pair-cli',
+    )
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.claude/skills/house-rules-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test('a malformed source config is warned about where the user can see it', async () => {
+    const fs = consumerFs({ [`${kb}/pair.config.json`]: '{ broken' })
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => {
+      warned.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    warnSpy.mockRestore()
+
+    expect(warned.join('\n')).toContain('pair.config.json')
+  })
+})
+
+/**
+ * US-396 — a partial install is not an installed KB. Recording the version anyway silences
+ * the drift hint while a registry is missing, and the re-run aborts on "already exists".
+ */
+describe('US-396: a failed registry leaves no "installed" version marker', () => {
+  const cwd = '/project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+  const marker = `${cwd}/.pair/.kb-version.json`
+
+  const twoRegistries = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      github: {
+        source: '.github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GH',
+      },
+    },
+  }
+
+  const defaultInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'default',
+    kb: true,
+    offline: false,
+  }
+
+  function projectFs(extra: Record<string, string>) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+          version: '1.4.0',
+        }),
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  function breakingOn(
+    fs: InMemoryFileSystemService,
+    method: keyof InMemoryFileSystemService,
+    pathFragment: string,
+  ): InMemoryFileSystemService {
+    return new Proxy(fs, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown
+        if (typeof value !== 'function') return value
+        const bound = (value as (...args: unknown[]) => unknown).bind(target)
+        if (prop !== method) return bound
+        return (...args: unknown[]) => {
+          if (String(args[0]).includes(pathFragment)) throw new Error('disk on fire')
+          return bound(...args)
+        }
+      },
+    }) as InMemoryFileSystemService
+  }
+
+  test('a clean run does record it', async () => {
+    const fs = projectFs({
+      [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test',
+      [`${datasetSrc}/.github/workflow.yml`]: 'on: push',
+    })
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(marker)).toBe(true)
+  })
+
+  test('a run with one failed registry does not', async () => {
+    const fs = breakingOn(
+      projectFs({
+        [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test',
+        [`${datasetSrc}/.github/workflow.yml`]: 'on: push',
+      }),
+      'readdir',
+      `${datasetSrc}/.github`,
+    )
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(1)
+    expect(await fs.exists(marker)).toBe(false)
+  })
+})
