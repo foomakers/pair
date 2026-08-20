@@ -46,6 +46,7 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 - `qa/release-validation/` contains critical path test cases (CP1–CP10) for release validation. **CP10 is the one path a local session cannot execute** — it exercises pair from inside a cloud/web coding environment, so the environment is the subject under test.
 - Test cases follow the template in `.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md`.
 - When a bug fix or feature changes behavior covered by an existing CP, the corresponding test case MUST be updated.
+- **CP5's docs page list is machine-asserted against the filesystem** — `packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts` compares it to `apps/website/content/docs/**/*.mdx`, so adding a docs page without listing it in CP5 fails CI ([ADL](../decision-log/2026-08-20-cp5-page-list-is-asserted-against-the-filesystem.md)).
 
 ## Quality Gates
 

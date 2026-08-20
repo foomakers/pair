@@ -14,6 +14,11 @@ run where.
 
 ## What works
 
+The statuses below come from the **D16 feasibility assessment**, not from an observed run:
+`qa/release-validation/CP10-web-cloud-environment.md` has not been executed yet, so pair's web
+support is _assessed_, not _verified_. Treat the table as the expected shape of a session and
+confirm it in yours — see [Verifying it yourself](#verifying-it-yourself).
+
 | Capability                | Status | Notes                                                                                             |
 | ------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
 | Skill discovery           | Works  | Skills are read from `.claude/skills/` in the repository — the same directory `pair-cli install` writes |
@@ -51,10 +56,11 @@ one-liner:
 pnpm --filter @pair/website dev
 
 # terminal 2 — inside the same session
-pnpm --filter @pair/website exec playwright screenshot http://localhost:3000/docs preview.png
+pnpm --filter @pair/website exec playwright screenshot http://localhost:3000/docs /tmp/preview.png
 ```
 
-You get a PNG in the workspace instead of an interactive preview: enough to confirm a layout
+You get a PNG at `/tmp/preview.png` — outside the repository, so a stray binary never lands in
+your next commit — instead of an interactive preview: enough to confirm a layout
 renders, a component mounted, or a regression is visible — not enough to click around.
 
 <Callout type="info">
