@@ -97,7 +97,10 @@ export function loadConfigWithOverrides(
  *
  * The fall-back is deliberately all-or-nothing here rather than per field: a declaration
  * that does not resolve is not partially trustworthy, and half-applying it is the one
- * outcome the story rules out explicitly.
+ * outcome the story rules out explicitly. It backs out what the declaration CONTRIBUTES,
+ * not the record of what it DECLARED — `declaredNames` survives, so the registries this
+ * CLI has no definition for are still reported skipped and still counted in the announced
+ * total (US-396 review round 5).
  *
  * A result that is invalid WITHOUT the declaration too means the consumer's own
  * configuration is broken. The declaration is kept and the command reports the real
@@ -128,7 +131,11 @@ function resolveWithDeclaration(
     layered: withoutDeclaration,
     declaration: {
       config: null,
-      declaredNames: [],
+      // What the source DECLARED survives the back-out; only what it CONTRIBUTES is
+      // dropped. `declaredNames` feeds the `skipped — declared by source, unknown to this
+      // CLI` lines and the announced registry total, and a registry this CLI cannot
+      // install is unknown whether or not the rest of the declaration validated.
+      declaredNames: declaration.declaredNames,
       warning:
         `Ignoring the source KB's pair.config.json (${join(options.sourceRoot!, 'pair.config.json')}): ` +
         `it makes the resolved registry configuration invalid (${check.errors.join('; ')})`,

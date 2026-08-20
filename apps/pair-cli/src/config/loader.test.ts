@@ -576,6 +576,23 @@ describe('config loader - a source declaration never aborts the consumer install
     expect(sourceDeclaration!.warning).toMatch(/invalid/i)
   })
 
+  it('still reports the unknown registries of a declaration it backed out', () => {
+    // A KB declares a registry this CLI has no definition for (`mcp`) BESIDE a coherent
+    // typo that costs it the whole declaration. The back-out must not also erase the
+    // record of what was declared: without `mcp` in `unknownRegistries` the install
+    // prints no `skipped — declared by source, unknown to this CLI` line for it and does
+    // not count it in the announced total, so the maintainer debugging why their new
+    // registry never appears gets that line only when the REST of their declaration
+    // happens to validate (US-396 review round 5).
+    const { sourceDeclaration } = load({
+      asset_registries: { mcp: { prefix: 'acme' }, knowledge: { flattenDepth: 2 } },
+    })
+
+    expect(sourceDeclaration!.applied).toBe(false)
+    expect(sourceDeclaration!.warning).toMatch(/invalid/i)
+    expect(sourceDeclaration!.unknownRegistries).toEqual(['mcp'])
+  })
+
   it("reports the consumer's own broken config rather than blaming the source", () => {
     const fs = fsWith({
       '/kb/pair.config.json': JSON.stringify({
