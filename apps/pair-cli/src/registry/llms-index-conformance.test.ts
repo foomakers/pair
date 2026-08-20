@@ -37,6 +37,24 @@ describe('.pair/llms.txt — the committed index equals the generator over the r
     expect(committed).toBe(generated)
   })
 
+  // The generator scanned `.pair/product/adopted` / `.pair/tech/adopted` —
+  // directories no shipped dataset ever created — so the index every agent reads
+  // to find project context carried NO Adoption sections at all: an adopting
+  // project ran `pair install` and got an llms.txt missing its own PRD,
+  // architecture and tech-stack, the highest-value entries in the file, with
+  // nothing reporting it. Byte equality above pins whatever the generator emits,
+  // so without this case the wrong output would be asserted correct.
+  it('indexes the project adoption files from the real layout', async () => {
+    const generated = await generateLlmsTxt(fileSystemService, REPO_ROOT)
+
+    expect(generated).toContain('## Adoption — Product')
+    expect(generated).toContain('## Adoption — Tech')
+    expect(generated).toContain('(.pair/adoption/tech/tech-stack.md)')
+    expect(generated).toContain('(.pair/adoption/tech/architecture.md)')
+    expect(generated).toContain('(.pair/adoption/product/PRD.md)')
+    expect(generated).not.toMatch(/\.pair\/(product|tech)\/adopted/)
+  })
+
   it('indexes the automation policy shipped by #216', async () => {
     const generated = await generateLlmsTxt(fileSystemService, REPO_ROOT)
 

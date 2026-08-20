@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { dirname, join } from 'path'
 
 // Conformance guard for story #216: auto-development eligibility is an
@@ -208,6 +208,13 @@ describe.each(policySources)(
       expect(preamble).toHaveLength(1)
       expect(preamble[0]).toMatch(/section body/)
       expect(preamble[0]).toMatch(/extracted/)
+      // Trigger 7 is a property of NEITHER of those two: the body of a section
+      // starts AFTER its heading, so a single extracted body contains zero
+      // `## Eligibility` headings by construction and the duplicate-heading HALT
+      // can never fire from it. An implementer of #217 who codes exactly the
+      // inputs the preamble names would ship that trigger as dead code.
+      expect(preamble[0]).toMatch(/file/)
+      expect(preamble[0]).toMatch(/trigger 7 is a property of the file/i)
     })
 
     it('enumerates the seven HALT triggers — empty, several lines, comma or operator, markdown marker, over the label cap, several labels on one line, duplicate heading', () => {
@@ -260,6 +267,31 @@ describe.each(policySources)(
       expect(content).not.toMatch(/exactly the (five|six) checks/)
     })
 
+    it('counts `## Eligibility` headings as RENDERED markdown — a fenced occurrence is not one', () => {
+      // Every surface that documents the declaration renders it inside a fence,
+      // so a fenced `## Eligibility` is the shape a maintainer has at hand — e.g.
+      // a ```markdown block holding "what we would switch to next quarter" above
+      // the live declaration. A consumer implementing trigger 7 as a line scan
+      // (`grep -c '^## Eligibility'`) counts 2 and HALTs a file that renders with
+      // exactly one heading; one using a markdown parser counts 1 and runs. Two
+      // conforming consumers, same file, opposite outcomes — the divergence
+      // trigger 7 exists to close.
+      expect(content.toLowerCase()).toMatch(/rendered markdown/)
+      expect(content.toLowerCase()).toMatch(/fenced code block is not a heading/)
+    })
+
+    it('matches the heading at level 2 exactly — `### Eligibility` is not the declaration', () => {
+      // Without this the contract silently routes a half-written declaration to
+      // the silent arm: a maintainer nesting `### Eligibility` / `risk:green`
+      // under their own `## Automation` section has no `## Eligibility` heading,
+      // so a consumer takes the ABSENT-section arm — eligibility set empty,
+      // automation off, no message anywhere — while the file visibly carries a
+      // declaration its author believes is live. That is exactly the collapse the
+      // "absent section ≠ empty section" clause forbids for the empty body.
+      expect(content.toLowerCase()).toMatch(/level 2 exactly/)
+      expect(content).toMatch(/### Eligibility/)
+    })
+
     it('states the residual the seven checks do NOT catch — juxtaposed colon-free labels', () => {
       // `bug enhancement` is 15 chars, one line, comma-free, operator-free,
       // marker-free, zero colons: it passes all seven triggers, reaches
@@ -272,6 +304,22 @@ describe.each(policySources)(
       expect(content.toLowerCase()).toMatch(/colon-free/)
       expect(content.toLowerCase()).toMatch(/deliberately not a halt|not a halt/)
       expect(content).toMatch(/SHOULD report/)
+    })
+
+    it('admits the OVER-inclusive residual too — triggers 3 and 4 reject some legitimate labels', () => {
+      // The under-inclusive residual is admitted; the over-inclusive one was not.
+      // A project whose Tag Projection emits tag-style labels declares
+      // `#tech-debt` — one line, comma-free, operator-free, 10 characters, one
+      // colon-free token, one heading — and trigger 4 HALTs it for "beginning
+      // with a markdown block marker". The consumer then emits an adoption-fix
+      // message saying "the declaration takes exactly one label" against a file
+      // declaring exactly one label the host accepts, and unattended development
+      // is off until the maintainer works out that the schema, not the label, is
+      // the problem. Same shape for a label carrying a comma. Fail-safe, so a
+      // foot-gun rather than a breach — but it must be written down.
+      expect(content).toMatch(/#tech-debt/)
+      expect(content.toLowerCase()).toMatch(/legitimate label/)
+      expect(content.toLowerCase()).toMatch(/rename or re-project/)
     })
 
     it('says the declaration is a bare label line — not a list item, quote or fenced block', () => {
@@ -497,4 +545,38 @@ describe('no example filter anywhere carries a boolean operator (AC6)', () => {
       expect(content).not.toMatch(LABEL_LIST_COMMA)
     },
   )
+})
+
+// One adoption layout, stated once. `.pair/adoption/{product,tech}/` is the real
+// on-disk shape; the `adopted/` sub-layer never existed in any shipped dataset.
+// A docs page that still scaffolds it hands a KB author an empty
+// `.pair/adoption/tech/adopted/` and a `tech-stack.md` that every skill resolving
+// `tech/tech-stack.md` reads as absent — a silent fall-back to KB defaults, no
+// error anywhere. This scans EVERY docs page rather than a hand-kept list, so the
+// next page to acquire the stale path fails here instead of at an adopter.
+describe('the docs site states ONE adoption layout — no `adopted/` sub-layer anywhere', () => {
+  const collect = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap(e =>
+      e.isDirectory()
+        ? collect(join(dir, e.name))
+        : e.name.endsWith('.mdx')
+          ? [join(dir, e.name)]
+          : [],
+    )
+
+  // Path-shaped only: `[thing] is adopted/required for [purpose]` is prose about
+  // the adoption declaration pattern, not a directory, and must stay legal.
+  const ADOPTED_SUBLAYER = /\.pair\/[\w./-]*\badopted\b/
+
+  const pages = collect(DOCS).map(
+    f => [f.slice(DOCS.length + 1), readFileSync(f, 'utf-8')] as [string, string],
+  )
+
+  it('scans every published docs page', () => {
+    expect(pages.length).toBeGreaterThan(20)
+  })
+
+  it.each(pages)('%s carries no `.pair/**/adopted` path', (_, content) => {
+    expect(content).not.toMatch(ADOPTED_SUBLAYER)
+  })
 })

@@ -40,8 +40,8 @@ export async function generateLlmsTxt(fs: FileSystemService, baseTarget: string)
   const sections: { heading: string; entries: LlmsEntry[] }[] = []
 
   const sectionDefs = [
-    { heading: 'Adoption — Product', path: '.pair/product/adopted' },
-    { heading: 'Adoption — Tech', path: '.pair/tech/adopted' },
+    { heading: 'Adoption — Product', path: '.pair/adoption/product' },
+    { heading: 'Adoption — Tech', path: '.pair/adoption/tech' },
     { heading: 'How-To Guides', path: '.pair/knowledge/how-to' },
     { heading: 'Guidelines', path: '.pair/knowledge/guidelines' },
   ]

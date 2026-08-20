@@ -9,9 +9,9 @@ function createFs(files: Record<string, string>): InMemoryFileSystemService {
 describe('generateLlmsTxt', () => {
   it('generates llmstxt.org format with adoption and knowledge sections', async () => {
     const fs = createFs({
-      '/project/.pair/product/adopted/PRD.md': '# Product Requirements Document\n\nContent.',
-      '/project/.pair/tech/adopted/architecture.md': '# Architecture\n\nArch content.',
-      '/project/.pair/tech/adopted/tech-stack.md': '# Tech Stack\n\nStack content.',
+      '/project/.pair/adoption/product/PRD.md': '# Product Requirements Document\n\nContent.',
+      '/project/.pair/adoption/tech/architecture.md': '# Architecture\n\nArch content.',
+      '/project/.pair/adoption/tech/tech-stack.md': '# Tech Stack\n\nStack content.',
       '/project/.pair/knowledge/how-to/01-create-PRD.md': '# How to Create a PRD\n\nGuide content.',
       '/project/.pair/knowledge/how-to/10-implement.md':
         '# How to Implement a Task\n\nImpl content.',
@@ -22,10 +22,10 @@ describe('generateLlmsTxt', () => {
     expect(result).toMatch(/^# pair/)
     expect(result).toContain('> AI-assisted development knowledge base')
     expect(result).toContain('## Adoption — Product')
-    expect(result).toContain('- [Product Requirements Document](.pair/product/adopted/PRD.md)')
+    expect(result).toContain('- [Product Requirements Document](.pair/adoption/product/PRD.md)')
     expect(result).toContain('## Adoption — Tech')
-    expect(result).toContain('- [Architecture](.pair/tech/adopted/architecture.md)')
-    expect(result).toContain('- [Tech Stack](.pair/tech/adopted/tech-stack.md)')
+    expect(result).toContain('- [Architecture](.pair/adoption/tech/architecture.md)')
+    expect(result).toContain('- [Tech Stack](.pair/adoption/tech/tech-stack.md)')
     expect(result).toContain('## How-To Guides')
     expect(result).toContain('- [How to Create a PRD](.pair/knowledge/how-to/01-create-PRD.md)')
     expect(result).toContain('- [How to Implement a Task](.pair/knowledge/how-to/10-implement.md)')
@@ -44,7 +44,7 @@ describe('generateLlmsTxt', () => {
 
   it('skips missing sections gracefully', async () => {
     const fs = createFs({
-      '/project/.pair/tech/adopted/tech-stack.md': '# Tech Stack\n\nContent.',
+      '/project/.pair/adoption/tech/tech-stack.md': '# Tech Stack\n\nContent.',
     })
 
     const result = await generateLlmsTxt(fs, '/project')
@@ -67,7 +67,7 @@ describe('generateLlmsTxt', () => {
 
   it('extracts title from first heading in file', async () => {
     const fs = createFs({
-      '/project/.pair/tech/adopted/way-of-working.md': '# Way of Working\n\nContent.',
+      '/project/.pair/adoption/tech/way-of-working.md': '# Way of Working\n\nContent.',
     })
 
     const result = await generateLlmsTxt(fs, '/project')
@@ -77,7 +77,7 @@ describe('generateLlmsTxt', () => {
 
   it('falls back to filename when no heading found', async () => {
     const fs = createFs({
-      '/project/.pair/tech/adopted/no-heading.md': 'Just content, no heading.',
+      '/project/.pair/adoption/tech/no-heading.md': 'Just content, no heading.',
     })
 
     const result = await generateLlmsTxt(fs, '/project')
@@ -87,8 +87,8 @@ describe('generateLlmsTxt', () => {
 
   it('sorts entries by path within each section', async () => {
     const fs = createFs({
-      '/project/.pair/tech/adopted/z-stack.md': '# Z Stack\nContent.',
-      '/project/.pair/tech/adopted/a-arch.md': '# A Arch\nContent.',
+      '/project/.pair/adoption/tech/z-stack.md': '# Z Stack\nContent.',
+      '/project/.pair/adoption/tech/a-arch.md': '# A Arch\nContent.',
     })
 
     const result = await generateLlmsTxt(fs, '/project')
@@ -102,7 +102,7 @@ describe('generateLlmsTxt', () => {
 describe('writeProjectLlmsTxt', () => {
   it('writes .pair/llms.txt to project root', async () => {
     const fs = createFs({
-      '/project/.pair/tech/adopted/arch.md': '# Architecture\nContent.',
+      '/project/.pair/adoption/tech/arch.md': '# Architecture\nContent.',
     })
     const logs: string[] = []
     const pushLog = (_level: string, msg: string) => logs.push(msg)

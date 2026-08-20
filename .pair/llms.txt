@@ -2,6 +2,54 @@
 
 > AI-assisted development knowledge base for this project.
 
+## Adoption — Product
+
+- [Context Map](.pair/adoption/product/context-map.md)
+- [Product Requirements Document (PRD)](.pair/adoption/product/PRD.md)
+- [Adoption & Guidelines (Supporting Subdomain)](.pair/adoption/product/subdomain/adoption-guidelines.md)
+- [Code & Documentation Generation (Core Subdomain)](.pair/adoption/product/subdomain/code-documentation-generation.md)
+- [Collaborative Workflow — Context](.pair/adoption/product/subdomain/collaborative-workflow.context.md)
+- [Collaborative Workflow (Core Subdomain)](.pair/adoption/product/subdomain/collaborative-workflow.md)
+- [Development Tooling Standards (Generic Subdomain)](.pair/adoption/product/subdomain/development-tooling-standards.md)
+- [How To Knowledge (Supporting Subdomain)](.pair/adoption/product/subdomain/how-to-knowledge.md)
+- [Integration & Process Standardization (Supporting Subdomain)](.pair/adoption/product/subdomain/integration-process-standardization.md)
+- [Subdomain Catalog Index](.pair/adoption/product/subdomain/README.md)
+
+## Adoption — Tech
+
+- [ADR-001: TTY Detection Pattern for CLI UX](.pair/adoption/tech/adr/adr-001-tty-detection-pattern.md)
+- [ADR-002: HTTP Range Requests for Download Resume](.pair/adoption/tech/adr/adr-002-http-range-resume.md)
+- [ADR-003: SHA256 Checksum Validation for File Integrity](.pair/adoption/tech/adr/adr-003-checksum-validation.md)
+- [ADR-004: Streaming Download Implementation](.pair/adoption/tech/adr/adr-004-streaming-downloads.md)
+- [ADR-005: Skills Infrastructure for Agent-Assisted Development](.pair/adoption/tech/adr/adr-005-skills-infrastructure.md)
+- [ADR-006: Shared TypeScript Configuration](.pair/adoption/tech/adr/adr-006-shared-tsconfig.md)
+- [ADR-007: Brand Identity as Importable Component Library](.pair/adoption/tech/adr/adr-007-brand-identity-package.md)
+- [ADR-008: Vercel CLI Deployment via GitHub Actions](.pair/adoption/tech/adr/adr-008-vercel-cli-deployment.md)
+- [ADR-009: assess-* Skills Are Output-Only; record-decision Is the Sole Adoption Writer](.pair/adoption/tech/adr/adr-009-assess-output-only.md)
+- [ADR-010: Skill Authoring Effectiveness Standard](.pair/adoption/tech/adr/adr-010-skill-authoring-effectiveness-standard.md)
+- [ADR-011: Canonical States + n-m State-Mapping Schema](.pair/adoption/tech/adr/adr-011-canonical-states-state-mapping.md)
+- [ADR-012: map-subdomains / map-contexts — Process Skill → Capability (D24)](.pair/adoption/tech/adr/adr-012-map-subdomains-contexts-process-to-capability.md)
+- [ADR-013: Quality Model — Single-Document Resolution Cascade (Argument > Adoption > KB Default)](.pair/adoption/tech/adr/adr-013-quality-model-resolution-cascade.md)
+- [ADR-014: Tool-family packages fold when they share a bounded context — package boundaries track bounded contexts, not folder-level tool groupings](.pair/adoption/tech/adr/adr-014-tool-package-boundary-by-bounded-context.md)
+- [ADR-015: Deterministic Secret Scanning as a CI Layer, Not a Skill (D24)](.pair/adoption/tech/adr/adr-015-security-deterministic-layer-not-a-skill.md)
+- [ADR-016: AI-Generated Machine Contracts from KB Templates (md → contract.json)](.pair/adoption/tech/adr/adr-016-ai-generated-template-contracts.md)
+- [ADR-017: Automation loop architecture — pair-loop over the pair-next atom, implement-batch as its batch engine, workflows shipped in the dataset](.pair/adoption/tech/adr/adr-017-automation-loop-pair-loop-over-atom.md)
+- [ADR-018: Code Host as an Optional Way-of-Working Override, Linked by Text Convention](.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md)
+- [ADR-018: PR State Flow — Required Code-Host Checks as the Merge Authority (Labels Are a View)](.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md)
+- [ADR-020: Bounded flatten depth — a registry's entry granularity, opt-in per registry](.pair/adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md)
+- [Architecture](.pair/adoption/tech/architecture.md)
+- [Development Collaboration Context](.pair/adoption/tech/boundedcontext/development-collaboration.md)
+- [Integration & Process Standardization Context](.pair/adoption/tech/boundedcontext/integration-process-standardization.md)
+- [Knowledge & Standards Context](.pair/adoption/tech/boundedcontext/knowledge-standards.md)
+- [Bounded Context Catalog (Grouped)](.pair/adoption/tech/boundedcontext/README.md)
+- [`tech/coverage-baseline.md` — pair coverage guardrail config](.pair/adoption/tech/coverage-baseline.md)
+- [Infrastructure](.pair/adoption/tech/infrastructure.md)
+- [📋 Adopted Standards & Practices](.pair/adoption/tech/README.md)
+- [`tech/risk-matrix.md`](.pair/adoption/tech/risk-matrix.md)
+- [Tech Stack](.pair/adoption/tech/tech-stack.md)
+- [UX/UI](.pair/adoption/tech/ux-ui.md)
+- [Way of Working](.pair/adoption/tech/way-of-working.md)
+
 ## How-To Guides
 
 - [How to Create a Product Requirements Document (PRD) - AI-Assisted Guide](.pair/knowledge/how-to/01-how-to-create-PRD.md)
