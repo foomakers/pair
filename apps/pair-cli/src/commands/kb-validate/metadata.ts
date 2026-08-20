@@ -10,7 +10,7 @@ export const kbValidateMetadata = {
     'pair kb-validate --layout source',
     'pair kb-validate --strict',
     'pair kb-validate --skip-registries adoption,agents',
-    'pair kb-validate --optional-link-patterns "../../apps/**,../../packages/**"',
+    'pair kb-validate --optional-link-patterns "apps/**,packages/**"',
   ],
   options: [
     {
@@ -47,5 +47,7 @@ export const kbValidateMetadata = {
     'Target layout validation skips symlink targets',
     'No network requests are made: external http/https links are never fetched, with or without --strict',
     'Optional link patterns downgrade MISSING targets to warnings; --strict overrides them back to errors',
+    'Write patterns in the RESOLVED form (relative to the KB root): it does not vary with the depth of the file the link is written in',
+    'Links with a non-http URI scheme (mailto:, tel:, ftp:) are skipped, never reported as broken',
   ],
 } as const
