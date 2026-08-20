@@ -130,6 +130,19 @@ describe('redactGitCredentials', () => {
     )
   })
 
+  it('redacts a token that itself contains `@` (userinfo regex would split it)', () => {
+    // The token is a password with an `@` in it. Injected, the URL carries TWO `@`: the
+    // userinfo regex stops at the first one and leaves `ssw0rd-secret` — the token's tail —
+    // in plain sight, and a literal-value pass running afterwards can no longer find the
+    // token as one string. So the literal pass has to run FIRST.
+    process.env['PAIR_GIT_TOKEN'] = 'p@ssw0rd-secret'
+    const redacted = redactGitCredentials(
+      "fatal: unable to access 'https://p@ssw0rd-secret@gitlab.internal/org/kb.git'",
+    )
+    expect(redacted).not.toContain('ssw0rd-secret')
+    expect(redacted).toBe("fatal: unable to access 'https://***@gitlab.internal/org/kb.git'")
+  })
+
   it('leaves a credential-free message untouched', () => {
     expect(redactGitCredentials('git executable not found.')).toBe('git executable not found.')
   })
@@ -251,6 +264,27 @@ describe('cloneGitRepo', () => {
     expect(rmSyncMock).not.toHaveBeenCalled()
   })
 
+  it('names the time limit when the clone is killed by the timeout, with no auth hint', () => {
+    // spawnSync's own timeout surfaces as code ETIMEDOUT (NOT ENOENT), whose message is the
+    // opaque `spawnSync git ETIMEDOUT`. Falling through to the generic branch tells a user
+    // whose big-repo clone ran past the bound to go set PAIR_GIT_TOKEN — an auth fix for a
+    // duration problem, with the bound itself never mentioned.
+    execFileSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('spawnSync git ETIMEDOUT'), { code: 'ETIMEDOUT' })
+    })
+
+    let message = ''
+    try {
+      cloneGitRepo('https://github.com/org/big-kb.git', destDir)
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+    expect(message).toContain('5-minute')
+    expect(message).not.toContain('PAIR_GIT_TOKEN')
+    // The partial clone is still cleaned up on this path.
+    expect(rmSyncMock).toHaveBeenCalledWith(destDir, { recursive: true, force: true })
+  })
+
   it('redacts the injected token echoed back in git stderr', () => {
     process.env['PAIR_GIT_TOKEN'] = 'ghp_supersecret'
     execFileSyncMock.mockImplementation(() => {
@@ -265,5 +299,30 @@ describe('cloneGitRepo', () => {
     }
     expect(message).not.toContain('ghp_supersecret')
     expect(message).toContain('https://***@github.com/org/kb.git')
+  })
+
+  it('redacts an @-bearing token out of the argv git echoes back', () => {
+    // execFileSync copies the whole command line into its message, argv token included, so
+    // the surfaced reason carries the injected URL twice: once from argv, once from stderr.
+    // With an `@` in the token the userinfo regex alone leaves the tail readable in a CI log.
+    process.env['PAIR_GIT_TOKEN'] = 'p@ssw0rd-secret'
+    execFileSyncMock.mockImplementation(() => {
+      throw Object.assign(
+        new Error(
+          'Command failed: git clone --depth 1 https://p@ssw0rd-secret@gitlab.internal/org/kb.git /tmp/dest\n' +
+            "fatal: unable to access 'https://p@ssw0rd-secret@gitlab.internal/org/kb.git/'",
+        ),
+        { status: 128 },
+      )
+    })
+
+    let message = ''
+    try {
+      cloneGitRepo('https://gitlab.internal/org/kb.git', destDir)
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+    expect(message).not.toContain('ssw0rd-secret')
+    expect(message).toContain('https://***@gitlab.internal/org/kb.git')
   })
 })

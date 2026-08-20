@@ -41,23 +41,31 @@ export function injectToken(repoUrl: string): string {
 
 /**
  * Remove any credential from a git message before it is shown to a user or written to a
- * CI log. Two shapes are stripped: the `scheme://<userinfo>@` segment `injectToken` builds
- * (git echoes the authenticated URL back in its stderr), and the literal `PAIR_GIT_TOKEN`
- * value wherever else it lands. Inverse of `injectToken`, kept in the same module so the
- * only place that knows how a credential enters a URL is the only place that removes it.
+ * CI log. Two shapes are stripped: the literal `PAIR_GIT_TOKEN` value wherever it lands
+ * (argv echoed by execFileSync, stderr, a bare `token X rejected`), and the
+ * `scheme://<userinfo>@` segment `injectToken` builds. Inverse of `injectToken`, kept in the
+ * same module so the only place that knows how a credential enters a URL is the only place
+ * that removes it.
+ *
+ * ORDER IS LOAD-BEARING — literal value first, userinfo regex second. A token may legally
+ * contain `@` (a password, a `user:pass` pair). Injected, it yields TWO `@` in one URL
+ * (`https://p@ssw0rd-secret@host/org/kb.git`); the userinfo regex stops at the FIRST one and
+ * would leave `ssw0rd-secret` — the token's tail — in the surfaced message, after which a
+ * literal pass can no longer find the token as one contiguous string. Stripping the literal
+ * value first collapses the URL to `https://***@host/…` and the regex then only normalizes
+ * whatever userinfo remains.
  */
 export function redactGitCredentials(message: string): string {
+  const token = process.env['PAIR_GIT_TOKEN']
+  const withoutToken = token ? message.split(token).join(REDACTED) : message
   // `git@` is NOT a credential: `injectToken` only rewrites http(s) URLs, so an SSH URL can
   // never carry an injected token — `ssh://git@host/org/kb.git` is the one shape guaranteed
   // credential-free, and redacting it would only hide the repo from a debug message.
-  const withoutUserinfo = message.replace(
+  return withoutToken.replace(
     /([a-z][a-z0-9+.-]*:\/\/)([^/\s@]+)@/gi,
     (whole: string, scheme: string, userinfo: string) =>
       userinfo === 'git' ? whole : `${scheme}${REDACTED}@`,
   )
-  const token = process.env['PAIR_GIT_TOKEN']
-  if (!token) return withoutUserinfo
-  return withoutUserinfo.split(token).join(REDACTED)
 }
 
 /** Deterministic cache key from a git source URL (including optional #ref). */
@@ -115,8 +123,19 @@ export function cloneGitRepo(source: string, destDir: string): void {
     // rewrite `fatal: Remote branch <ref> not found in upstream origin` (bad #ref) and
     // `remote: Repository not found.` (private repo, no credentials) into "install git" —
     // and this message is now the user-visible reason of a read-only version check.
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') {
       throw new Error('git executable not found. Install git to use git repository sources.')
+    }
+    // spawnSync reports its own timeout kill as ETIMEDOUT with the opaque message
+    // `spawnSync git ETIMEDOUT`. Left to the generic branch it reaches the user as an
+    // authentication suggestion for what is a duration problem, and never names the bound
+    // that was hit — so the one actionable fact (a 5-minute limit exists) is stated here.
+    if (code === 'ETIMEDOUT') {
+      throw new Error(
+        `Git clone exceeded the ${CLONE_TIMEOUT_MS / 60_000}-minute limit and was aborted.\n\n` +
+          'Clone the repository yourself and install from the local path, or point at a smaller ref.',
+      )
     }
     // git echoes the AUTHENTICATED url back in its stderr, so redact before the message
     // exists as an Error — every caller (version check, install, update) inherits it.

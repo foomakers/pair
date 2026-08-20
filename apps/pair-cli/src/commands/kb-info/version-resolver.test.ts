@@ -212,12 +212,17 @@ describe('resolveCurrentVersion - git source', () => {
   /** Records what the clone was asked to do, and seeds the destination with the given files. */
   function cloneStub(files: Record<string, string>) {
     const calls: CloneCall[] = []
-    const cloner = (fsService: InMemoryFileSystemService) => (source: string, destDir: string) => {
-      calls.push({ source, destDir })
-      for (const [name, content] of Object.entries(files)) {
-        void fsService.writeFile(`${destDir}/${name}`, content)
+    // `async` + `await`, not a floating `void`: `GitCloner` is `void | Promise<void>` and
+    // resolveGitVersion awaits it, so nothing forces the stub to seed the destination
+    // synchronously. Relying on InMemoryFileSystemService.writeFile mutating before its first
+    // await would make every git success-path test fail the day that helper defers.
+    const cloner =
+      (fsService: InMemoryFileSystemService) => async (source: string, destDir: string) => {
+        calls.push({ source, destDir })
+        for (const [name, content] of Object.entries(files)) {
+          await fsService.writeFile(`${destDir}/${name}`, content)
+        }
       }
-    }
     return { calls, cloner }
   }
 
@@ -276,9 +281,9 @@ describe('resolveCurrentVersion - git source', () => {
       cwd,
       cwd,
     )
-    const cloner = (_source: string, destDir: string) => {
-      void fsService.writeFile(`${destDir}/README.md`, '# kb, no version anywhere')
-      void fsService.writeFile(
+    const cloner = async (_source: string, destDir: string) => {
+      await fsService.writeFile(`${destDir}/README.md`, '# kb, no version anywhere')
+      await fsService.writeFile(
         join(destDir, '..', 'package.json'),
         JSON.stringify({ version: '88.88.88-PLANTED' }),
       )
@@ -426,8 +431,8 @@ describe('resolveCurrentVersion - git source', () => {
   it('redacts credentials embedded in the source URL itself (AC4)', async () => {
     const fsService = new InMemoryFileSystemService({}, cwd, cwd)
     const credentialSource = 'https://alice:s3cret@github.com/org/kb.git'
-    const cloner = (_source: string, destDir: string) => {
-      void fsService.writeFile(`${destDir}/README.md`, '# no version here')
+    const cloner = async (_source: string, destDir: string) => {
+      await fsService.writeFile(`${destDir}/README.md`, '# no version here')
     }
 
     const result = await resolveCurrentVersion(fsService, {

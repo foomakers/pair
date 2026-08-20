@@ -35,13 +35,36 @@ function tempPath(prefix: string): string {
   return path
 }
 
+/**
+ * Run `fn` with git's messages pinned to English. `cloneGitRepo` spreads `process.env` into
+ * the child, so a contributor (or a CI image) whose locale has gettext catalogs installed
+ * gets localized stderr — `fatal : le chemin de destination 'dst' existe deja et n'est pas un
+ * repertoire vide.` under fr_FR against the English text asserted below (reproduced on
+ * git 2.55.0) — i.e. a red suite on an unmodified checkout, for a reason unrelated to the
+ * code under test.
+ */
+function withEnglishGit<T>(fn: () => T): T {
+  const previous = process.env['LC_ALL']
+  process.env['LC_ALL'] = 'C'
+  try {
+    return fn()
+  } finally {
+    if (previous === undefined) delete process.env['LC_ALL']
+    else process.env['LC_ALL'] = previous
+  }
+}
+
 /** A real, committed git repository carrying a KB manifest at its root. */
 function makeFixtureRepo(version: string): string {
   const repo = tempPath('pair-git-fixture')
   mkdirSync(repo, { recursive: true })
   const git = (...args: string[]) =>
     execFileSync('git', args, { cwd: repo, stdio: 'pipe', env: { ...process.env } })
-  git('init', '--quiet', '--initial-branch', 'main')
+  // No `--initial-branch`: it needs git >= 2.28, while the suite guard only checks that a
+  // git binary exists — on git 2.25 (Ubuntu 20.04's default) the flag would FAIL both tests
+  // instead of skipping them. Nothing here names the fixture's branch: the clone is issued
+  // without a `#ref`.
+  git('init', '--quiet')
   git('config', 'user.email', 'fixture@example.invalid')
   git('config', 'user.name', 'Fixture')
   git('config', 'commit.gpgsign', 'false')
@@ -81,7 +104,9 @@ describe.skipIf(!hasGit)('cloneGitRepo (real git)', () => {
     mkdirSync(destDir, { recursive: true })
     writeFileSync(join(destDir, 'already-here.txt'), 'installed KB')
 
-    expect(() => cloneGitRepo(source, destDir)).toThrow(/already exists and is not an empty/)
+    withEnglishGit(() =>
+      expect(() => cloneGitRepo(source, destDir)).toThrow(/already exists and is not an empty/),
+    )
     // And the failure path then recursive-deletes that destination, pre-existing content
     // included — which is the concrete reason the version check clones into a throwaway
     // temp root instead of the source's own cache slot: a READ that failed would otherwise
