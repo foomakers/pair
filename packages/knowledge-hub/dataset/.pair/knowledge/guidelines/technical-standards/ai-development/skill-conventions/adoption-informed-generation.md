@@ -20,17 +20,24 @@ The order is **fixed** and, within each source, files are read in id order (`adr
 
 Reading full history into a generation prompt is the failure mode this step is designed around (large projects have hundreds of records). The read is bounded in two stages:
 
-1. **Index every record, cheaply** — **metadata only, read from the file head**: its id/date (from the filename), its `#` H1 title **verbatim** (that title *is* the one-line summary — none is derived, so no body is opened to produce one), its `## Status`, and its `## Category` — all of them in the first few lines, so the read stays cheap. `Category` is what tells the two `decision-log/` kinds apart (`Analysis` ⇒ context, anything else ⇒ an ADL authority); the H1 prefix carries the same discriminator (`# Decision:` = ADL, `# Analysis Log:` = analysis). An entry whose head resolves to neither kind is **opened at stage 2 before it may act as an authority** — an unclassifiable entry is never assumed to be one. This stage is complete: every record is indexed, none is skipped, and **no record body is read here**.
+1. **Index every record, cheaply** — **metadata only, read from the file head**: its id (from the filename), its `#` H1 title **verbatim** (that title *is* the one-line summary — none is derived, so no body is opened to produce one), its `Date`, its `Status`, and its `Category`. The index is produced by a **single directory-wide head/grep sweep** over those metadata lines — one sweep per source directory, **not one open per record**: stage 1 costs a function of the number of sources, not of the project's age (pair's own tree is 20 ADRs + 48 decision-log entries; per-record opens would spend 68 reads before a word is drafted).
+   - **Two head spellings, both accepted.** Each field is read in the templates' heading form (`## Status`, `## Date`, `## Category`) **and** in the inline head-field form the same records use in the wild (`**Status:** Accepted`, `**Date:** 2026-02-10`) — 9 of pair's own 20 ADRs carry the inline form, all of them live. The sweep matches either; neither spelling is a second-class record.
+   - **`Category` tells the two `decision-log/` kinds apart** (`Analysis` ⇒ context, anything else ⇒ an ADL authority); the H1 prefix carries the same discriminator (`# Decision:` = ADL, `# Analysis Log:` = analysis).
+   - **An absent or unrecognized head field is not a verdict.** A record whose `Category` resolves to neither kind, or whose `Status` matches none of the values in *Precedence*, is **opened at stage 2 before it may act as an authority** — and if the body still leaves it unresolved it is **surfaced to the developer** (the Degradation warning) rather than quietly dropping out of the authority set. Silence is never read as "not live": the same *err toward reading* bias that governs ambiguous scope.
+
+   This stage is complete: every record is indexed, none is skipped, and **no record body is read here**.
 2. **Open the body only of the records in scope** — those whose subject overlaps the item being generated: same subdomain/bounded context, same touched component, or a term the item and the record share. Everything else stays at its index line.
 
 So the number of full bodies read scales with the item's scope, **never the entire decision history**. When the index makes scope genuinely ambiguous, prefer opening the record — a bounded read errs toward reading one extra body, never toward silently skipping a live decision.
 
 ## Precedence — supersession first, then recency
 
-- **Live** = an authority currently in force: `Accepted` for an ADR or a DDR (including the `Accepted (amended YYYY-MM-DD — ...)` form, whose amended contract is the one that applies) and `Active` for an ADL. Only live records constrain, are cited, or can be reopened.
+- **Live** = an authority currently in force: `Accepted` for an ADR or a DDR and `Active` for an ADL. `Accepted` **in any amended form** is live and its amended contract is the one that applies — the template's `Accepted (amended YYYY-MM-DD — ...)` and the `Accepted — amended by [ADR-NNN](...)` spelling used in the wild are the same status. Only live records constrain, are cited, or can be reopened.
+- **A `Status` that did not resolve is not** thereby non-live. It is opened at stage 2 (above) and, if still unresolved, reported — never silently demoted to non-live, which would strip a record of its authority with no warning and no citation.
 - **`Proposed` is not yet an authority.** A draft under review never drops or reshapes a candidate, is never cited, and never triggers a `Revisits` flag — nobody has decided anything yet, and a proposal that silently became a constraint is the same defect as an analysis applied as a decision.
 - **`Deprecated` and `Superseded` are no longer authorities.** A record whose `Status` is `Superseded` (or that carries a "Superseded by" pointer) is **never the authority**; the superseding record is read in its place, and the superseded one is not cited. A `Deprecated` record has no successor to read in its place — it simply stops constraining, and the question it used to answer is open again.
-- When two live records answer the same question, the **most recent** by id/date wins, regardless of which source it came from. Record kind is not a precedence rank: an ADL dated after an ADR refines it.
+- When two live records answer the same question, the **most recent by `Date`** wins — the indexed head field, or the filename date for `decision-log/` entries — regardless of which source it came from. Record kind is not a precedence rank: an ADL dated after an ADR refines it.
+- **Never by id.** Ids are per-source (`adr-020` is not comparable with an ADL's `2026-07-19`) and are not even unique within a source — pair's own `adr/` holds two live `Accepted` files numbered 018. A **same-id** pair is ordered by `Date` like any other. If two live records share the same `Date` too, neither wins: both are read and the conflict is surfaced, so the tie is never broken differently on two runs of the same tree.
 - A registered term, entity, or rule in the context map outranks an informal use of the same word anywhere else — generated wording adopts the registered term rather than a synonym.
 - A `Category: Analysis` entry **takes no part in this order at all**: it is context, not an authority, so however recent it is it never outranks — or supersedes — a live ADR, ADL or DDR.
 
@@ -44,14 +51,14 @@ Three concrete effects on generated output, and nothing else:
 
 ## Determinism
 
-Same adoption tree + same subject ⇒ same records read and same influence on the output. The three properties that hold it: the source order and within-source ordering are fixed; the scope filter is content-based (subdomain / context / shared term), not a sample or a "most relevant N"; and precedence is resolved by `Status` and date, never by preference. A re-run on unchanged adoption produces the same citations, in the same places.
+Same adoption tree + same subject ⇒ same records read and same influence on the output. The three properties that hold it: the source order and within-source ordering are fixed; the scope filter is content-based (subdomain / context / shared term), not a sample or a "most relevant N"; and precedence is resolved by `Status` and the indexed `Date` — **never by id**, never by preference — with an unorderable tie surfaced rather than broken arbitrarily. A re-run on unchanged adoption produces the same citations, in the same places.
 
 ## Degradation
 
 Adoption history is **optional context** — its absence is the expected steady state of a fresh project, so this step degrades and is never a HALT:
 
 - **No adoption directories, or empty ones** → generation proceeds exactly as it would without this step: no citations, no revisit flags, no warning noise beyond a one-line note. An empty-adoption run is indistinguishable from the pre-adoption-informed behavior.
-- **A record is unparseable** (malformed frontmatter, unreadable file) → warn naming that file, skip **that record only**, and continue with the rest. One bad file never disables the step.
+- **A record is unparseable** (unreadable file, or a head that yields no title, `Status` or `Category` even after the stage-2 open — no record kind here carries frontmatter: the ADR, ADL and analysis-log templates are all heading-based markdown) → warn naming that file, skip **that record only**, and continue with the rest. This warning is where a record with an unresolvable `Status` surfaces; one bad file never disables the step.
 - **The whole tree is unreadable** (permissions, missing mount) → warn once and degrade to the no-adoption path above.
 - **A cited record disappears mid-run** → drop the citation rather than emit a dangling id.
 

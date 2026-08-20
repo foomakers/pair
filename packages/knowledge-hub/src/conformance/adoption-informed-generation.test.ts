@@ -431,3 +431,74 @@ describe('review round 2 — status authority, kind discriminator, declared chan
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// Round-3 review findings (#280). One guard per finding, naming it.
+// ---------------------------------------------------------------------------
+
+describe('review round 3 — head-field spellings, date ordering, sweep cost', () => {
+  it('resolves Status in BOTH head spellings and never reads silence as "not live" (Major)', () => {
+    // Stage 1 keyed liveness on a `## Status` HEADING, and round 2 made liveness a hard
+    // gate. On pair's own tree 9 of 20 ADRs carry `**Status:** Accepted` as an inline
+    // head field (adr-001..008, adr-010) — all live Accepted records. Under the old
+    // text ADR-005 indexes with no resolvable Status, so it is not live: a story
+    // touching the skills registry is generated contradicting its flatten contract with
+    // no `(per ADR-005)` and no `Revisits` — the AC1 outcome the convention forbids.
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    expect(bounded).toMatch(/\*\*Status:\*\*/)
+    // The stage-2 fallback the Category rule already had, extended to Status.
+    expect(bounded).toMatch(/absent or unrecognized/i)
+    expect(bounded).toMatch(/surfaced to the developer/i)
+    const precedence = CONVENTION.match(/## Precedence[\s\S]*?(?=\n## )/)?.[0]
+    expect(precedence).toMatch(/not\*\* thereby non-live|never\*\* thereby non-live/)
+  })
+
+  it('accepts the amended-Accepted spelling used in the wild, not only the template form (Major)', () => {
+    // ADR-005 reads `**Status:** Accepted — **amended by [ADR-020](...)**`; the Live
+    // definition enumerated only `Accepted (amended YYYY-MM-DD — ...)`.
+    const precedence = CONVENTION.match(/## Precedence[\s\S]*?(?=\n## )/)?.[0]
+    expect(precedence).toBeDefined()
+    expect(precedence).toMatch(/amended by/)
+  })
+
+  it('indexes `Date` and orders by it, never by id (Minor)', () => {
+    // ADR filenames carry no date, so "most recent by id/date" left cross-source order
+    // undefined (adr-020 vs an ADL dated 2026-07-19) AND same-id order undefined —
+    // `adr/` holds TWO live Accepted files numbered 018, so two runs on the same
+    // unchanged tree could pick different winners and emit different citations (AC4).
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    expect(bounded).toMatch(/\*\*Date:\*\*/)
+    const precedence = CONVENTION.match(/## Precedence[\s\S]*?(?=\n## )/)?.[0]
+    expect(precedence).toMatch(/never by id/i)
+    expect(precedence).toMatch(/same-id/i)
+    const determinism = CONVENTION.match(/## Determinism[\s\S]*?(?=\n## )/)?.[0]
+    expect(determinism).toBeDefined()
+    expect(determinism).toMatch(/never by id/i)
+  })
+
+  it('produces the stage-1 index with one directory-wide sweep, not one open per record (Minor)', () => {
+    // The natural reading was one file-head read per record: 68 tool calls on pair's
+    // own tree (20 ADRs + 48 decision-log entries) on EVERY plan-stories /
+    // refine-story / brainstorm run, growing with project age — the cost the card's
+    // `cost:yellow` class was refined on assumes away.
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    expect(bounded).toMatch(/single directory-wide/i)
+    expect(bounded).toMatch(/not one (file )?open per record/i)
+  })
+
+  it('states the real malformed shape — no record kind in this KB has frontmatter (Minor)', () => {
+    // adr-template / adl-template / analysis-log-template are heading-based markdown,
+    // so an executor hunting "malformed frontmatter" finds none and the realistic case
+    // (a head yielding no title/Status/Category) does not match the stated trigger.
+    const degradation = CONVENTION.match(/## Degradation[\s\S]*?(?=\n## )/)?.[0]
+    expect(degradation).toBeDefined()
+    // The trigger must not be a shape no record in this KB has...
+    expect(degradation).not.toMatch(/malformed frontmatter/i)
+    // ...and the word may only survive as the explicit statement that there is none.
+    expect(degradation).toMatch(/no record kind here carries frontmatter/i)
+    expect(degradation).toMatch(/no title.*Status.*Category/)
+  })
+})
