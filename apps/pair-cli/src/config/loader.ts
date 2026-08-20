@@ -1,5 +1,5 @@
 import { join, posix } from 'path'
-import { FileSystemService } from '@pair/content-ops'
+import { FileSystemService, isValidFlattenDepth, resolvesWithinSync } from '@pair/content-ops'
 import {
   Config,
   extractRegistries,
@@ -72,26 +72,79 @@ export function loadConfigWithOverrides(
     ? { config: { asset_registries: {} } as Config, source: 'empty' }
     : loadBaseConfig(fsService)
 
-  const declaration = sourceRoot
-    ? readSourceDeclaration(fsService, sourceRoot, Object.keys(base.config.asset_registries ?? {}))
-    : null
+  if (!sourceRoot) return layerOverrides(fsService, base, options)
 
-  const layered = layerOverrides(
+  const declared = readSourceDeclaration(
     fsService,
-    applyDeclaration(base, declaration, sourceRoot),
+    sourceRoot,
+    Object.keys(base.config.asset_registries ?? {}),
+  )
+  const { layered, declaration } = resolveWithDeclaration(fsService, base, declared, options)
+  return { ...layered, sourceDeclaration: summarizeDeclaration(declaration, layered.config) }
+}
+
+/**
+ * Applies the declaration, then checks the RESOLVED configuration as a whole — and backs
+ * the declaration out entirely if it is what made the result invalid.
+ *
+ * The per-field guards drop a field that is malformed on its own. They cannot see a field
+ * that is well-formed but incoherent with the layer beneath it: `flattenDepth: 2` over a
+ * registry whose `flatten` is false is a valid positive integer AND a hard validation
+ * error (`flattenDepth requires flatten: true`). Install validates the merged config and
+ * THROWS, so one such typo in a third-party KB aborted the consumer's install with an
+ * error naming the consumer's own registry — a source's bad config must never do that
+ * (US-396 edge case, review round 3).
+ *
+ * The fall-back is deliberately all-or-nothing here rather than per field: a declaration
+ * that does not resolve is not partially trustworthy, and half-applying it is the one
+ * outcome the story rules out explicitly.
+ *
+ * A result that is invalid WITHOUT the declaration too means the consumer's own
+ * configuration is broken. The declaration is kept and the command reports the real
+ * errors — blaming the source there would send the user to a file that is fine.
+ */
+function resolveWithDeclaration(
+  fsService: FileSystemService,
+  base: { config: Config; source: string },
+  declaration: SourceDeclaration,
+  options: LoadConfigOptions,
+): { layered: { config: Config; source: string }; declaration: SourceDeclaration } {
+  const withDeclaration = layerOverrides(
+    fsService,
+    applyDeclaration(base, declaration, options.sourceRoot),
     options,
   )
-  if (!declaration) return layered
-  return { ...layered, sourceDeclaration: summarizeDeclaration(declaration, layered.config) }
+  if (!contributesAnything(declaration.config)) return { layered: withDeclaration, declaration }
+
+  const check = validateConfig(withDeclaration.config)
+  if (check.valid) return { layered: withDeclaration, declaration }
+
+  const withoutDeclaration = layerOverrides(fsService, base, options)
+  if (!validateConfig(withoutDeclaration.config).valid) {
+    return { layered: withDeclaration, declaration }
+  }
+
+  return {
+    layered: withoutDeclaration,
+    declaration: {
+      config: null,
+      declaredNames: [],
+      warning:
+        `Ignoring the source KB's pair.config.json (${join(options.sourceRoot!, 'pair.config.json')}): ` +
+        `it makes the resolved registry configuration invalid (${check.errors.join('; ')})`,
+    },
+  }
 }
 
 /** The source KB's own declaration sits directly above the base config, below the consumer. */
 function applyDeclaration(
   base: { config: Config; source: string },
-  declaration: { config: Config | null } | null,
+  declaration: SourceDeclaration,
   sourceRoot: string | undefined,
 ): { config: Config; source: string } {
-  if (!declaration?.config) return base
+  // A declaration whose every field was dropped contributes nothing AND must not appear
+  // in the chain: the chain is what tells a maintainer their declaration was honoured.
+  if (!declaration.config || !contributesAnything(declaration.config)) return base
   return {
     config: mergeConfigs(base.config, declaration.config),
     source: `${base.source} < source KB declaration: ${sourceRoot}`,
@@ -129,12 +182,27 @@ function layerOverrides(
   return { config, source }
 }
 
+/** At least one registry entry survived the allowlist with at least one field. */
+function contributesAnything(config: Config | null): boolean {
+  if (!config) return false
+  return Object.values(config.asset_registries ?? {}).some(
+    entry => Object.keys(entry as object).length > 0,
+  )
+}
+
+/**
+ * `applied` means the declaration CHANGED the resolution, not that a parseable file was
+ * found. A KB whose whole declaration is dropped by the allowlist (one stating only
+ * `targets`, say) would otherwise be told `Configuration: … < source KB declaration: /kb`
+ * — the one line a maintainer reads to confirm their declaration was honoured, reporting
+ * success in exactly the case where nothing of it survived (US-396 review round 3).
+ */
 function summarizeDeclaration(
-  declaration: { config: Config | null; declaredNames: string[]; warning?: string },
+  declaration: SourceDeclaration,
   resolved: Config,
 ): SourceDeclarationOutcome {
   return {
-    applied: declaration.config !== null,
+    applied: contributesAnything(declaration.config),
     // A name the consumer went on to declare itself is deliberate, not unknown.
     unknownRegistries: declaration.declaredNames.filter(
       name => !(name in (resolved.asset_registries ?? {})),
@@ -171,6 +239,21 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** What `readSourceDeclaration` returns: the honoured subset, plus what to report. */
+interface SourceDeclaration {
+  config: Config | null
+  declaredNames: string[]
+  warning?: string
+}
+
+/** What a field guard may consult beyond the value: the KB it was declared in. */
+interface GuardContext {
+  fsService: FileSystemService
+  sourceRoot: string
+}
+
+type FieldGuard = (value: unknown, ctx: GuardContext) => boolean
+
 /**
  * `prefix` becomes a path segment (`${prefix}-${dir}`), so a source-declared one may not
  * carry a separator or a traversal — that would be `targets` by another name.
@@ -181,6 +264,10 @@ function isSafePrefix(value: unknown): boolean {
   )
 }
 
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
 /**
  * `source` is where the CLI READS from: `resolveRegistryPaths` does
  * `resolve(datasetRoot, config.source)`, so an absolute path replaces the KB root outright
@@ -188,34 +275,54 @@ function isSafePrefix(value: unknown): boolean {
  * into "copy arbitrary local files into the consumer's repository" (SSH keys land in a
  * tree the user commits). Layer 2 describes its OWN content, so the path must stay inside
  * the KB: relative, and still inside after normalisation (`a/../../b` included).
+ *
+ * Lexically contained is NOT contained. `fs.stat` follows symlinks, so a KB shipping
+ * `leak -> ../../../.ssh` and declaring `"source": "leak"` passed every name-based check
+ * — nothing about `leak` escapes anything — and the copier then read the victim's
+ * directory into the repository they commit and push. The name check stays (it rejects
+ * the obvious cases without touching the disk); the decision is the PHYSICAL one
+ * (US-396 review round 3).
+ *
+ * A declared path that does not exist is contained: there is nothing to dereference, and
+ * a registry the KB does not actually ship is reported as skipped, not refused.
  */
-function isContainedSource(value: unknown): boolean {
+function isContainedSource(value: unknown, ctx: GuardContext): boolean {
   if (typeof value !== 'string' || value.length === 0) return false
   // Covers POSIX (`/etc`), Windows drive (`C:\Users`) and UNC/backslash roots alike.
   if (/^([a-zA-Z]:)?[/\\]/.test(value)) return false
   const normalized = posix.normalize(value.replace(/\\/g, '/'))
-  return normalized !== '..' && !normalized.startsWith('../')
+  if (normalized === '..' || normalized.startsWith('../')) return false
+  return resolvesWithinSync(ctx.fsService, join(ctx.sourceRoot, normalized), ctx.sourceRoot)
 }
 
 /**
- * Per-field containment checks. A field that fails its guard is DROPPED (the base
- * config's value stands), never coerced: a KB does not get a second guess at a path.
+ * Per-field checks, one per declarable field — TOTAL, not partial, so adding a field to
+ * `SOURCE_DECLARABLE_FIELDS` cannot compile until its guard is stated.
+ *
+ * A field that fails its guard is DROPPED (the layer beneath supplies the value), never
+ * coerced: a KB does not get a second guess at a path. The two path-shaped fields are
+ * CONTAINED; the rest are TYPE-checked, which is not decoration — the merged config is
+ * validated with a hard throw, so `"include": "*.md"` (string, not array) shipped by any
+ * third-party KB aborted the consumer's whole install with an error naming the CONSUMER's
+ * registry (US-396 review round 3).
  */
-const FIELD_GUARDS: Partial<
-  Record<(typeof SOURCE_DECLARABLE_FIELDS)[number], (value: unknown) => boolean>
-> = {
-  prefix: isSafePrefix,
+const FIELD_GUARDS: Record<(typeof SOURCE_DECLARABLE_FIELDS)[number], FieldGuard> = {
   source: isContainedSource,
+  include: isStringArray,
+  exclude: isStringArray,
+  flatten: value => typeof value === 'boolean',
+  flattenDepth: value => isValidFlattenDepth(value),
+  description: value => typeof value === 'string' && value.length > 0,
+  prefix: isSafePrefix,
 }
 
 /** Keeps only the declarable fields of one registry entry; anything else is dropped. */
-function honouredFields(entry: unknown): Record<string, unknown> {
+function honouredFields(entry: unknown, ctx: GuardContext): Record<string, unknown> {
   if (!isPlainObject(entry)) return {}
   const kept: Record<string, unknown> = {}
   for (const field of SOURCE_DECLARABLE_FIELDS) {
     if (!(field in entry)) continue
-    const guard = FIELD_GUARDS[field]
-    if (guard && !guard(entry[field])) continue
+    if (!FIELD_GUARDS[field](entry[field], ctx)) continue
     kept[field] = entry[field]
   }
   return kept
@@ -236,7 +343,7 @@ function readSourceDeclaration(
   fsService: FileSystemService,
   sourceRoot: string,
   knownRegistries: string[],
-): { config: Config | null; declaredNames: string[]; warning?: string } {
+): SourceDeclaration {
   const declarationPath = join(sourceRoot, 'pair.config.json')
   if (!fsService.existsSync(declarationPath)) {
     return { config: null, declaredNames: [] }
@@ -260,14 +367,26 @@ function readSourceDeclaration(
   if (!isPlainObject(registries)) return ignore('asset_registries is not an object')
 
   const declaredNames = Object.keys(registries)
+  const known = declaredNames.filter(name => knownRegistries.includes(name))
   // Partial by design: a declaration states the few fields it wants, and `mergeConfigs`
   // lays them over the base entry field by field.
   const honoured = Object.fromEntries(
-    declaredNames
-      .filter(name => knownRegistries.includes(name))
-      .map(name => [name, honouredFields(registries[name])]),
+    known.map(name => [name, honouredFields(registries[name], { fsService, sourceRoot })]),
   ) as unknown as Config['asset_registries']
   const applicable: Config = { asset_registries: honoured }
+
+  // Declared something this CLI knows, and not one field of it survived: say so. Silence
+  // here is what let a wholly-discarded declaration read as honoured. A name the CLI does
+  // not know is NOT this case — it already has its own `skipped` reason.
+  if (known.length > 0 && !contributesAnything(applicable)) {
+    return {
+      config: applicable,
+      declaredNames,
+      warning:
+        `The source KB's pair.config.json (${declarationPath}) declares no field this CLI ` +
+        `honours; the consumer's resolution stands`,
+    }
+  }
   return { config: applicable, declaredNames }
 }
 

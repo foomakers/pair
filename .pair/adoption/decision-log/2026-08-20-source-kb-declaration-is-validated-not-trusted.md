@@ -49,13 +49,31 @@ Honoured, per registry (`SOURCE_DECLARABLE_FIELDS` in `apps/pair-cli/src/config/
 
 | Field | Bound |
 | ----- | ----- |
-| `source` | a **KB-relative path that stays inside the KB** — absolute, `..`-escaping (before or after normalisation) and Windows-drive/UNC values are dropped |
-| `include` · `exclude` · `flatten` · `flattenDepth` · `description` | unbounded — they select and shape the KB's own files |
+| `source` | a **KB-relative path that stays inside the KB PHYSICALLY** — absolute, `..`-escaping (before or after normalisation) and Windows-drive/UNC values are dropped by name; what survives must also have a `realpath` under the KB root |
+| `include` · `exclude` | `string[]` |
+| `flatten` | `boolean` |
+| `flattenDepth` | positive integer (`isValidFlattenDepth`, the same predicate `flattenPath` asserts on) |
+| `description` | non-empty string |
 | `prefix` | a **single path segment** — no `/`, `\` or `..` |
 
-The two path-shaped fields are CONTAINED, not merely allowed (`FIELD_GUARDS`). A field
-failing its check is dropped on its own; the layer beneath supplies the value and the rest
-of the declaration still applies.
+`FIELD_GUARDS` is TOTAL over the allowlist — a new declarable field does not compile until
+its guard is stated. The two path-shaped fields are CONTAINED; the rest are TYPE-checked,
+which is not decoration: the merged configuration is validated with a hard throw, so an
+unchecked field of the wrong type in a third-party KB aborted the CONSUMER's install with
+an error naming the consumer's own registry.
+
+**A field failing its check is dropped on its own**; the layer beneath supplies the value
+and the rest of the declaration still applies. **A declaration that is coherent field by
+field and yet makes the RESOLVED configuration invalid is backed out whole**, with a
+warning, and the consumer's resolution stands. Per-field guards cannot see that case:
+`{"skills": {"flatten": false}}` is a well-formed boolean and, over a base entry carrying
+`flattenDepth: 2`, produces `flattenDepth requires flatten: true` — measured on this branch
+as `Error: Registry 'skills' flattenDepth requires flatten: true`, exit 1, nothing
+installed. All-or-nothing rather than per field, deliberately: a declaration that does not
+resolve is not partially trustworthy, and half-applying it is the outcome the story rules
+out explicitly. When the result is invalid WITHOUT the declaration too, the consumer's own
+configuration is what is broken — the declaration is kept and the command reports the real
+errors, because blaming the source there sends the user to a file that is fine.
 
 Ignored — dropped before the merge, never overridden later:
 
@@ -78,6 +96,33 @@ path, which `path.resolve` substitutes outright) made `pair install --source <kb
 arbitrary local files INTO the consumer's repository — credentials landing in a tree the
 user commits and pushes, and a disk-fill DoS for a large one. "It may describe its own
 content" is not satisfied by a path that leaves the KB.
+
+**Lexical containment is not containment.** `fs.stat` follows symlinks, so a KB shipping
+`leak -> ../../../.ssh` (relative — it needs no knowledge of the victim's username) and
+declaring `"source": "leak"` passed every name-based check: nothing about `leak` escapes
+anything, `statSync(symlinkToDir).isDirectory()` is `true`, and the copier walked the
+victim's `~/.ssh` into `.pair/knowledge/` of the repository they then commit and push. The
+same hole existed one level down and needed no declaration at all: a `Dirent` for a symlink
+reports neither `isFile()` nor `isDirectory()`, so an escaping link inside any registry
+source fell through to the file branch and `copyFileHelper` read the TARGET's bytes.
+
+The read side is therefore bounded PHYSICALLY, in three places:
+
+1. `isContainedSource` resolves the declared path and the KB root with `realpath` and drops
+   the field when it escapes (a path that does not exist is contained — there is nothing to
+   dereference, and a registry the KB does not ship is skipped, not refused);
+2. `copyPathOps` refuses a registry source whose `realpath` leaves the dataset root
+   (`PATH_ESCAPE`), which also covers a KB that ships the registry directory ITSELF as a
+   symlink, declaring nothing;
+3. both directory walks — `copyDirEntry` (plain copy) and `collectFiles` (flatten/prefix) —
+   skip a symlinked entry whose `realpath` leaves the copy's root, and say so at WARN.
+
+Only symlinks are resolved during the walk: an ordinary entry cannot point anywhere, and a
+`realpath` per file would double the syscalls of every install. A symlink resolving INSIDE
+the root is still followed — this is a containment bound, not a symlink ban. Both roots are
+resolved too, so a KB cached under a symlinked home directory (or macOS's `/tmp` →
+`/private/tmp`) is unaffected. The primitive is one shared helper,
+`resolvesWithin`/`resolvesWithinSync` in `@pair/content-ops`.
 
 **Layer 2 applies to `install` and `update` alike.** A named source declares its registries
 on both. Reading the declaration on install only meant the first `update --source` after a
@@ -145,6 +190,14 @@ someone else's repository.
   applied, which is also what gives `SourceDeclarationOutcome.applied` a production
   consumer: a KB maintainer can see the declaration was honoured instead of inferring it
   from the installed directory names.
+- **`applied` means the declaration CHANGED the resolution**, not that a parseable
+  `pair.config.json` was found. A KB whose whole declaration is discarded by the allowlist
+  — one stating only `targets`, say — was told `Configuration: … < source KB declaration:
+  /kb`, i.e. the one line a maintainer reads to confirm their declaration was honoured
+  reported success in exactly the malicious/mistaken case. It now takes a surviving field
+  to set `applied`, to put the KB in the chain at all, and a declaration that names a
+  registry this CLI knows and contributes no field to it warns instead (a name the CLI does
+  NOT know already has its own `skipped` reason, and does not warn twice).
 - **`install --list-targets` resolves configuration the same way `install` does** (project
   root, no `config.json` fallback). It previously resolved from the CLI module directory, so
   the command whose only job is to say where content lands disagreed with the command that

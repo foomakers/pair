@@ -394,7 +394,7 @@ describe('config loader - the source declaration is validated, not trusted', () 
             source: '.acme-skills',
             include: ['**/SKILL.md'],
             exclude: ['internal/**'],
-            flatten: false,
+            flatten: true,
             flattenDepth: 3,
             description: 'Acme skills',
           },
@@ -407,7 +407,7 @@ describe('config loader - the source declaration is validated, not trusted', () 
     expect(skills.source).toBe('.acme-skills')
     expect(skills.include).toEqual(['**/SKILL.md'])
     expect(skills.exclude).toEqual(['internal/**'])
-    expect(skills.flatten).toBe(false)
+    expect(skills.flatten).toBe(true)
     expect(skills.flattenDepth).toBe(3)
     expect(skills.description).toBe('Acme skills')
   })
@@ -511,5 +511,138 @@ describe('config loader - project layer when the module dir is not the project r
     })
 
     expect(config.asset_registries['skills']!.prefix).toBe('acme-kb')
+  })
+})
+
+/**
+ * US-396 review round 3 — a source KB's bad config may cost the source its declaration,
+ * never the consumer their install. Every honoured field is type-checked on its own, and
+ * a declaration that is well-formed field-by-field but incoherent with the layer beneath
+ * is backed out whole, with a warning.
+ *
+ * Before this: `pair install --source ./kb` against a KB shipping
+ * `{"asset_registries":{"knowledge":{"include":"*.md"}}}` (string, not array) threw
+ * `Registry 'knowledge' include must be an array of strings` out of `setupInstallContext`,
+ * printed it naming the CONSUMER's registry, exited 1 and installed nothing.
+ */
+describe('config loader - a source declaration never aborts the consumer install', () => {
+  function fsWith(files: Record<string, string>) {
+    return new InMemoryFileSystemService(
+      { '/module/config.json': REAL_CONFIG, ...files },
+      '/module',
+      '/project',
+    )
+  }
+
+  function load(declaration: unknown) {
+    return loadConfigWithOverrides(
+      fsWith({ '/kb/pair.config.json': JSON.stringify(declaration) }),
+      { projectRoot: '/project', sourceRoot: '/kb' },
+    )
+  }
+
+  const base = JSON.parse(REAL_CONFIG).asset_registries
+
+  it.each([
+    ['include as a string', { include: '*.md' }, 'include'],
+    ['include as an array of non-strings', { include: [1, 2] }, 'include'],
+    ['exclude as an object', { exclude: { a: 1 } }, 'exclude'],
+    ['flatten as a string', { flatten: 'true' }, 'flatten'],
+    ['flattenDepth as a string', { flattenDepth: '2' }, 'flattenDepth'],
+    ['flattenDepth as zero', { flattenDepth: 0 }, 'flattenDepth'],
+    ['description as a number', { description: 42 }, 'description'],
+  ])('drops %s and keeps the rest of the declaration', (_label, bad, field) => {
+    const { config } = load({
+      asset_registries: { knowledge: { ...(bad as object), prefix: 'acme' } },
+    })
+
+    const knowledge = config.asset_registries['knowledge']!
+    expect((knowledge as unknown as Record<string, unknown>)[field]).toEqual(base.knowledge[field])
+    // The field beside it survives: a bad field is dropped on its own
+    expect(knowledge.prefix).toBe('acme')
+  })
+
+  it('validates the merged result and backs the whole declaration out when it breaks it', () => {
+    // Field-by-field valid — `flattenDepth: 2` is a positive integer — but the base
+    // registry has `flatten: false`, and `flattenDepth requires flatten: true`.
+    const { config, sourceDeclaration } = load({
+      asset_registries: { knowledge: { flattenDepth: 2, prefix: 'acme' } },
+    })
+
+    expect(validateConfig(config).valid).toBe(true)
+    expect(config.asset_registries['knowledge']!.flattenDepth).toBeUndefined()
+    expect(config.asset_registries['knowledge']!.prefix).toBe(base.knowledge.prefix)
+    expect(sourceDeclaration!.applied).toBe(false)
+    expect(sourceDeclaration!.warning).toMatch(/invalid/i)
+  })
+
+  it("reports the consumer's own broken config rather than blaming the source", () => {
+    const fs = fsWith({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' } },
+      }),
+      '/project/pair.config.json': JSON.stringify({
+        asset_registries: { knowledge: { flattenDepth: 'two' } },
+      }),
+    })
+
+    const { config, sourceDeclaration } = loadConfigWithOverrides(fs, {
+      projectRoot: '/project',
+      sourceRoot: '/kb',
+    })
+
+    expect(validateConfig(config).valid).toBe(false)
+    expect(sourceDeclaration!.warning).toBeUndefined()
+    expect(config.asset_registries['skills']!.prefix).toBe('acme-kb')
+  })
+})
+
+/**
+ * US-396 review round 3 — `applied` means the declaration CHANGED the resolution. It is
+ * what gates the `Configuration: …` chain line, the one place a KB maintainer confirms
+ * their declaration was honoured, so a wholly-discarded declaration reporting itself as
+ * applied misreports exactly the malicious/mistaken case.
+ */
+describe('config loader - applied means honoured, not merely parseable', () => {
+  function load(declaration: unknown) {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/module/config.json': REAL_CONFIG,
+        '/kb/pair.config.json': JSON.stringify(declaration),
+      },
+      '/module',
+      '/project',
+    )
+    return loadConfigWithOverrides(fs, { projectRoot: '/project', sourceRoot: '/kb' })
+  }
+
+  it('is not applied when every declared field was dropped by the allowlist', () => {
+    const { sourceDeclaration, source } = load({
+      asset_registries: { skills: { targets: [{ path: '../../.zshenv', mode: 'canonical' }] } },
+    })
+
+    expect(sourceDeclaration!.applied).toBe(false)
+    expect(source).not.toMatch(/source KB declaration/)
+    expect(sourceDeclaration!.warning).toMatch(/no field this CLI honours/)
+  })
+
+  it('is applied when one honoured field survives, even beside dropped ones', () => {
+    const { sourceDeclaration, source } = load({
+      asset_registries: { skills: { prefix: 'acme-kb', behavior: 'mirror' } },
+    })
+
+    expect(sourceDeclaration!.applied).toBe(true)
+    expect(source).toMatch(/source KB declaration: \/kb/)
+    expect(sourceDeclaration!.warning).toBeUndefined()
+  })
+
+  it('does not warn about honoured fields when the only declared registry is unknown', () => {
+    const { sourceDeclaration } = load({
+      asset_registries: { 'acme-prompts': { prefix: 'acme' } },
+    })
+
+    expect(sourceDeclaration!.applied).toBe(false)
+    expect(sourceDeclaration!.warning).toBeUndefined()
+    expect(sourceDeclaration!.unknownRegistries).toEqual(['acme-prompts'])
   })
 })
