@@ -37,7 +37,8 @@ export async function dispatchCommand(
       // failures, so text and status can never disagree (US-396 AC5).
       return dispatchWithExitCode(() => commandRegistry.install.handle(config, fs, opts))
     case 'update':
-      return commandRegistry.update.handle(config, fs, opts)
+      // Same contract as install: ok / skipped / failed, and the exit code follows.
+      return dispatchWithExitCode(() => commandRegistry.update.handle(config, fs, opts))
     case 'update-link':
       return commandRegistry['update-link'].handle(config, fs)
     case 'package':

@@ -66,7 +66,7 @@ export function exitCodeFor(tally: RegistryTally): number {
   return 0
 }
 
-export function formatElapsed(ms: number): string {
+function formatElapsed(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
 }

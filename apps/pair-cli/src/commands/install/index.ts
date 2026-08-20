@@ -26,9 +26,11 @@ export async function installCommand(
       fs,
       handlerOptions as Parameters<typeof handleInstallCommand>[2],
     )
+    // Exit 1 is also the no-op case ("Nothing to install"), which is not an error: the
+    // wrapper reports the code and lets the caller read the summary (US-396 AC5).
     return exitCode === 0
       ? { success: true, message: 'Installation completed successfully' }
-      : { success: false, message: `Installation finished with errors (exit ${exitCode})` }
+      : { success: false, message: `Installation completed with exit code ${exitCode}` }
   } catch (err) {
     return { success: false, message: `Installation failed: ${String(err)}` }
   }

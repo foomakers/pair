@@ -1728,3 +1728,93 @@ describe('#407: a skill nested references/ dir installs inside the skill via pai
     ).rejects.toThrow(/flattenDepth must be a positive integer/)
   })
 })
+
+/**
+ * US-396 — update reports on the same contract as install: a registry the source does not
+ * ship is SKIPPED (not counted as updated), and the exit code follows the tally instead of
+ * being 0 whatever happened.
+ */
+describe('US-396: update distinguishes skipped from updated, and the exit code follows', () => {
+  const cwd = '/consumer'
+  const kb = '/acme-kb'
+
+  const twoRegistries = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      github: {
+        source: '.github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GH',
+      },
+    },
+  }
+
+  const sourceUpdate: UpdateCommandConfig = {
+    command: 'update',
+    resolution: 'local',
+    path: kb,
+    offline: true,
+    kb: true,
+  }
+
+  function consumerFs(extra: Record<string, string> = {}) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        // Already installed, so update has something to work on
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old guide',
+        [`${kb}/.pair/knowledge/guide.md`]: '# New guide',
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  test('a registry the source does not ship is reported as skipped, not as updated', async () => {
+    const fs = consumerFs()
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleUpdateCommand(sourceUpdate, fs, { autoRollback: false })
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    const printed = lines.join('\n')
+    expect(printed).toContain('1 ok, 1 skipped')
+    expect(printed).toContain('not shipped by this source')
+    expect(printed).toContain('github')
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toContain('# New guide')
+  })
+
+  test('a run that updates nothing does not report success', async () => {
+    // The source ships neither registry — nothing to update, so the status code must say so
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old guide',
+        // A valid KB that simply ships neither of the registries this project installs
+        [`${kb}/AGENTS.md`]: '# Agents',
+        [`${kb}/.pair/other/thing.md`]: '# unrelated',
+      },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleUpdateCommand(sourceUpdate, fs, { autoRollback: false })
+
+    expect(exitCode).toBe(1)
+    // ...and the old content is still there: "nothing to update" is not "wiped"
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toContain('# Old guide')
+  })
+})

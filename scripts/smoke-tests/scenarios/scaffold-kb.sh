@@ -105,8 +105,8 @@ if [ -d "$CONSUMER_DIR/.claude/skills/pair-example-skill" ]; then
 fi
 # ...and the registries this KB does not ship are SKIPPED, not failed: the summary reads
 # green and names them with the reason, and the exit code (asserted above) agrees.
-assert_contains "$TMP_DIR/last_cmd_output.log" "Installation complete" || exit 1
-assert_contains "$TMP_DIR/last_cmd_output.log" "skipped — not shipped by this source" || exit 1
+assert_output_contains "Installation complete" || exit 1
+assert_output_contains "skipped — not shipped by this source" || exit 1
 if grep -Fq "finished with errors" "$TMP_DIR/last_cmd_output.log"; then
   log_fail "External KB install still reports absent registries as errors (foomakers/pair#396)"
   cat "$TMP_DIR/last_cmd_output.log"
