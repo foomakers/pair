@@ -357,7 +357,10 @@ type InstallContext = {
   sourceDeclaration?: SourceDeclarationOutcome | undefined
 }
 
-async function installAllRegistries(ctx: InstallContext): Promise<{
+async function installAllRegistries(
+  ctx: InstallContext,
+  total: number,
+): Promise<{
   results: RegistryResult[]
   skillNameMap: SkillNameMap
   skillLinkPathMap: SkillLinkPathMap
@@ -365,7 +368,6 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
   const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = ctx
   const accumulated: SkillNameMap = new Map()
   const accumulatedLinkMap: SkillLinkPathMap = new Map()
-  const total = Object.keys(registries).length
 
   const results = await forEachRegistry(registries, async (registryName, registryConfig, index) => {
     const out = await installRegistryOrReportFailure({
@@ -392,16 +394,17 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
 
 async function executeInstall(context: InstallContext): Promise<number> {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog, presenter } = context
-  const total = Object.keys(registries).length
+  // Announced BEFORE the loop and counting the source-declared registries this CLI has no
+  // definition for: they end up in the tally the summary prints, so leaving them out of the
+  // header made it account for more outcomes than it announced (US-396 review round 4).
+  const declaredButUnknown = declaredButUnknownResults(context.sourceDeclaration)
+  const total = Object.keys(registries).length + declaredButUnknown.length
   const startTime = Date.now()
 
   presenter.startOperation('install', total)
 
-  const { results, skillNameMap, skillLinkPathMap } = await installAllRegistries(context)
-  const allResults = [
-    ...results,
-    ...reportDeclaredButUnknown(declaredButUnknownResults(context.sourceDeclaration), presenter),
-  ]
+  const { results, skillNameMap, skillLinkPathMap } = await installAllRegistries(context, total)
+  const allResults = [...results, ...reportDeclaredButUnknown(declaredButUnknown, presenter)]
   const tally = tallyRegistries(allResults)
 
   await reconcileSkillNameRegistry(

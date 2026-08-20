@@ -364,7 +364,10 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
   const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = context
   const accumulatedSkillNameMap: SkillNameMap = new Map()
   const accumulatedSkillLinkPathMap: SkillLinkPathMap = new Map()
-  const total = Object.keys(registries).length
+  // Counted into the header before the loop, for the reason install states: these land in
+  // the tally the summary prints (US-396 review round 4).
+  const declaredButUnknown = declaredButUnknownResults(context.sourceDeclaration)
+  const total = Object.keys(registries).length + declaredButUnknown.length
 
   presenter.startOperation('update', total)
 
@@ -396,10 +399,7 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     accumulatedSkillLinkPathMap,
   )
 
-  return [
-    ...results,
-    ...reportDeclaredButUnknown(declaredButUnknownResults(context.sourceDeclaration), presenter),
-  ]
+  return [...results, ...reportDeclaredButUnknown(declaredButUnknown, presenter)]
 }
 
 async function executeRollback(

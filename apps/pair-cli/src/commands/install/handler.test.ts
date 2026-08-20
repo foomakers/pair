@@ -1610,6 +1610,28 @@ describe('US-396: the source KB declares, the consuming project overrides', () =
     expect(printed).toContain('telemetry')
   })
 
+  test('the announced registry count covers every registry the summary tallies', async () => {
+    // 2 known + 1 declared-but-unknown: the header announced the 2 the CLI knows while the
+    // summary accounted for 3 outcomes, so the third skip had nothing on screen explaining
+    // where it came from (US-396 review round 4).
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' }, telemetry: { source: '.telemetry' } },
+      }),
+    })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    const printed = lines.join('\n')
+    expect(printed).toContain('Installing 3 registries')
+    expect(printed).toContain('2 ok, 1 skipped')
+  })
+
   test('the default source path reads no declaration — behaviour is unchanged', async () => {
     const fs = new InMemoryFileSystemService(
       {

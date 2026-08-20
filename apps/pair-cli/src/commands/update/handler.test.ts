@@ -1953,6 +1953,28 @@ describe('US-396: update honours the source KB declaration, like install', () =>
     expect(await fs.exists(`${cwd}/telemetry`)).toBe(false)
   })
 
+  test('the announced registry count covers every registry the summary tallies', async () => {
+    // Same split as install: `startOperation` counted only the known registries while the
+    // tally the summary is built from also carries the declared-but-unknown ones.
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' }, telemetry: { source: '.telemetry' } },
+      }),
+    })
+    await handleInstallCommand(install, fs)
+
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+    await handleUpdateCommand(update, fs, { autoRollback: false })
+    consoleSpy.mockRestore()
+
+    const printed = lines.join('\n')
+    expect(printed).toContain('Updating 3 registries')
+    expect(printed).toContain('2 ok, 1 skipped')
+  })
+
   test('a malformed source declaration is warned about on update, and update continues', async () => {
     const fs = consumerFs({ [`${kb}/pair.config.json`]: '{ broken' })
     await handleInstallCommand(install, fs)
