@@ -19,7 +19,6 @@ import {
   detectOverlappingTargets,
   doCopyAndUpdateLinks,
   buildCopyOptions,
-  postCopyOps,
   reconcileSkillNameRegistry,
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
@@ -33,11 +32,16 @@ import {
   createCliPresenter,
   exitCodeFor,
   tallyRegistries,
-  SKIP_NOT_SHIPPED,
-  SKIP_UNKNOWN_REGISTRY,
   type CliPresenter,
   type RegistryResult,
 } from '#ui'
+import {
+  declaredButUnknownResults,
+  finalizeRegistryCopy,
+  reportDeclaredButUnknown,
+  reportNotShipped,
+  reportSourceDeclaration,
+} from '../registry-run'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
@@ -99,15 +103,12 @@ async function runInstall(ctx: {
   presenter: CliPresenter
 }): Promise<number> {
   const { fs, config, options, pushLog, presenter } = ctx
-  const { datasetRoot, registries, baseTarget, sourceDeclaration } = await setupInstallContext(
-    fs,
-    config,
-    options,
-  )
+  const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =
+    await setupInstallContext(fs, config, options)
   // A source that ships a broken config never aborts the install: it is reported — on the
   // console, not only in the diagnostics log nobody reads — and the consumer's own
   // resolution stands (US-396).
-  if (sourceDeclaration?.warning) presenter.warning(sourceDeclaration.warning)
+  reportSourceDeclaration({ declaration: sourceDeclaration, resolution, presenter })
   await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
   validateDatasetContent(fs, datasetRoot, registries)
   await validateInstallContext(fs, registries, baseTarget)
@@ -123,27 +124,43 @@ async function runInstall(ctx: {
   })
 }
 
+/**
+ * `--list-targets` describes the install that `--list-targets` is asked about, so it must
+ * resolve configuration the way that install does: from the project being installed into,
+ * with the `config.json` fallback off. Resolving from the CLI module dir printed the
+ * CLI-default targets while `install` wrote to the project-overridden ones — the one
+ * command whose whole job is to say where content lands, disagreeing with the command that
+ * lands it (US-396).
+ *
+ * A source KB declaration is deliberately NOT read here: `--list-targets` names no source
+ * (the parser drops every other flag), and layer 2 may not state `targets` anyway.
+ */
 async function listTargets(
   fs: FileSystemService,
   options: InstallHandlerOptions | undefined,
 ): Promise<void> {
-  const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
+  const configOptions: LoadConfigOptions = {
+    projectRoot: options?.baseTarget || fs.currentWorkingDirectory(),
+    projectConfigOnly: true,
+  }
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
   const registries = extractRegistries(configContent.config)
 
   console.log(`\n  ${chalk.bold('Asset Registries')}\n`)
-  for (const [name, reg] of Object.entries(registries)) {
-    const target = reg.targets?.[0]
-    const targetPath = target ? (target as { path: string }).path : '(none)'
-    const behavior = (reg as { behavior?: string }).behavior ?? 'unknown'
-    const description = (reg as { description?: string }).description ?? ''
-    console.log(`  ${chalk.cyan(name)}`)
-    console.log(`    target:   ${targetPath}`)
-    console.log(`    behavior: ${behavior}`)
-    if (description) console.log(`    ${chalk.dim(description)}`)
-    console.log()
-  }
+  for (const [name, reg] of Object.entries(registries)) printTarget(name, reg)
+}
+
+function printTarget(name: string, reg: RegistryConfig): void {
+  const target = reg.targets?.[0]
+  const targetPath = target ? (target as { path: string }).path : '(none)'
+  const behavior = (reg as { behavior?: string }).behavior ?? 'unknown'
+  const description = (reg as { description?: string }).description ?? ''
+  console.log(`  ${chalk.cyan(name)}`)
+  console.log(`    target:   ${targetPath}`)
+  console.log(`    behavior: ${behavior}`)
+  if (description) console.log(`    ${chalk.dim(description)}`)
+  console.log()
 }
 
 type InstallableConfig = Exclude<InstallCommandConfig, { resolution: 'list-targets' }>
@@ -186,6 +203,7 @@ async function setupInstallContext(
   registries: Record<string, RegistryConfig>
   baseTarget: string
   sourceDeclaration?: SourceDeclarationOutcome | undefined
+  resolution: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -211,26 +229,11 @@ async function setupInstallContext(
     datasetRoot,
     registries,
     baseTarget,
+    resolution: configContent.source,
     ...(configContent.sourceDeclaration && {
       sourceDeclaration: configContent.sourceDeclaration,
     }),
   }
-}
-
-/**
- * Registries the source declared that this CLI has no definition for: named as skipped
- * with their own reason, never silently dropped (US-396 edge case: newer KB, older CLI).
- */
-function declaredButUnknownResults(
-  declaration: SourceDeclarationOutcome | undefined,
-  baseTarget: string,
-  presenter: CliPresenter,
-): RegistryResult[] {
-  if (!declaration) return []
-  return declaration.unknownRegistries.map(name => {
-    presenter.registrySkipped(name, SKIP_UNKNOWN_REGISTRY)
-    return { name, target: baseTarget, status: 'skipped' as const, reason: SKIP_UNKNOWN_REGISTRY }
-  })
 }
 
 function validateDatasetContent(
@@ -297,20 +300,12 @@ function resolveRegistryIO(ctx: RegistryInstallCtx) {
   return { source: resolved.source, target: resolved.target, effectiveDatasetRoot }
 }
 
-async function finalizeRegistryCopy(
-  ctx: RegistryInstallCtx,
-  paths: { effectiveTarget: string; datasetPath: string },
-): Promise<void> {
-  const { fs, registryConfig, baseTarget } = ctx
-  await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
-}
-
 async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   skillNameMap?: SkillNameMap | undefined
   skillLinkPathMap?: SkillLinkPathMap | undefined
   result: RegistryResult
 }> {
-  const { fs, registryName, registryConfig, pushLog, presenter, index, total } = ctx
+  const { fs, registryName, registryConfig, presenter, index, total } = ctx
   const {
     source: datasetPath,
     target: effectiveTarget,
@@ -332,19 +327,8 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     options: buildCopyOptions(registryConfig),
   })
 
-  // Absent is not failed: the source simply does not contain this registry, and there is
-  // nothing to copy. Only a registry that IS shipped and breaks is a failure (US-396 AC1/AC2).
   if (copyResult['skipped']) {
-    pushLog('debug', `Registry '${registryName}' has no source at ${datasetPath}`)
-    presenter.registrySkipped(registryName, SKIP_NOT_SHIPPED)
-    return {
-      result: {
-        name: registryName,
-        target: effectiveTarget,
-        status: 'skipped',
-        reason: SKIP_NOT_SHIPPED,
-      },
-    }
+    return { result: reportNotShipped(ctx, { effectiveTarget, datasetPath }) }
   }
 
   await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
@@ -429,7 +413,7 @@ async function executeInstall(context: InstallContext): Promise<number> {
   const { results, skillNameMap, skillLinkPathMap } = await installAllRegistries(context)
   const allResults = [
     ...results,
-    ...declaredButUnknownResults(context.sourceDeclaration, baseTarget, presenter),
+    ...reportDeclaredButUnknown(declaredButUnknownResults(context.sourceDeclaration), presenter),
   ]
   const tally = tallyRegistries(allResults)
 

@@ -6,6 +6,7 @@ import {
   resolveDatasetRoot,
   ensureDir,
   type LoadConfigOptions,
+  type SourceDeclarationOutcome,
 } from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import {
@@ -16,7 +17,6 @@ import {
   forEachRegistry,
   doCopyAndUpdateLinks,
   buildCopyOptions,
-  postCopyOps,
   reconcileSkillNameRegistry,
   handleBackupRollback,
   resolveEffectiveDatasetRoot,
@@ -31,10 +31,16 @@ import {
   createCliPresenter,
   exitCodeFor,
   tallyRegistries,
-  SKIP_NOT_SHIPPED,
   type CliPresenter,
   type RegistryResult,
 } from '#ui'
+import {
+  declaredButUnknownResults,
+  finalizeRegistryCopy,
+  reportDeclaredButUnknown,
+  reportNotShipped,
+  reportSourceDeclaration,
+} from '../registry-run'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
@@ -60,6 +66,7 @@ type UpdateContext = {
   options: UpdateHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
+  sourceDeclaration?: SourceDeclarationOutcome | undefined
 }
 
 /**
@@ -83,7 +90,12 @@ export async function handleUpdateCommand(
   const presenter = options?.presenter ?? createCliPresenter(pushLog)
 
   try {
-    const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
+    const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =
+      await setupUpdateContext(fs, config, options)
+    // Same reporting as install: a source that ships a broken config never aborts the run,
+    // the consumer's own resolution stands, and an applied declaration names its chain
+    // (US-396).
+    reportSourceDeclaration({ declaration: sourceDeclaration, resolution, presenter })
     await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
     validateUpdateContext(fs, registries, baseTarget)
     return await executeUpdate({
@@ -94,10 +106,36 @@ export async function handleUpdateCommand(
       options,
       pushLog,
       presenter,
+      ...(sourceDeclaration && { sourceDeclaration }),
     })
   } catch (err) {
     pushLog('error', `Update failed: ${String(err)}`)
     throw err
+  }
+}
+
+/**
+ * A named source (`--source`, `--url`, `--git`) declares its own registries on update
+ * exactly as it does on install. Reading the declaration on install only meant the FIRST
+ * update after a successful install re-installed the same skills under the CLI's default
+ * prefix, leaving both copies behind — a state install alone could never produce (US-396).
+ */
+function namesItsOwnSource(config: UpdateCommandConfig): boolean {
+  return config.resolution !== 'default'
+}
+
+/** Mirrors install's resolution exactly: layer 2 from a named source, layer 3 = the target. */
+function resolveConfigOptions(
+  config: UpdateCommandConfig,
+  datasetRoot: string,
+  projectRoot: string,
+  options?: UpdateHandlerOptions,
+): LoadConfigOptions {
+  return {
+    projectRoot,
+    projectConfigOnly: true,
+    ...(options?.config && { customConfigPath: options.config }),
+    ...(namesItsOwnSource(config) && { sourceRoot: datasetRoot }),
   }
 }
 
@@ -109,6 +147,8 @@ async function setupUpdateContext(
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
+  sourceDeclaration?: SourceDeclarationOutcome | undefined
+  resolution: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -120,9 +160,10 @@ async function setupUpdateContext(
   // The project being updated is where its own pair.config.json lives — not the CLI's
   // module directory, which is what the loader defaults to (US-396).
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
-  const configOptions: LoadConfigOptions = { projectRoot: baseTarget, projectConfigOnly: true }
-  if (options?.config) configOptions.customConfigPath = options.config
-  const configContent = loadConfigWithOverrides(fs, configOptions)
+  const configContent = loadConfigWithOverrides(
+    fs,
+    resolveConfigOptions(config, datasetRoot, baseTarget, options),
+  )
 
   const registries = extractRegistries(configContent.config)
   const workingPathOverride = resolveWorkingPathOverride(configContent.config)
@@ -131,7 +172,15 @@ async function setupUpdateContext(
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
-  return { datasetRoot, registries, baseTarget }
+  return {
+    datasetRoot,
+    registries,
+    baseTarget,
+    resolution: configContent.source,
+    ...(configContent.sourceDeclaration && {
+      sourceDeclaration: configContent.sourceDeclaration,
+    }),
+  }
 }
 
 function validateUpdateContext(
@@ -182,14 +231,15 @@ async function runUpdateSequence(
   }
 
   await writeProjectLlmsTxt(fs, context.baseTarget, pushLog)
-  // Same rule as install: a partial run must not leave a marker that says "complete".
-  if (tally.failed === 0) {
-    await recordInstalledVersion({
-      fs,
-      datasetRoot: context.datasetRoot,
-      baseTarget: context.baseTarget,
-    })
-  }
+  // No `failed === 0` guard here, unlike install: update's failure path is
+  // rollback-then-rethrow (`executeUpdate`), so a run that reaches this line has no failed
+  // registry to protect the marker from. Guarding on a condition that cannot occur would
+  // read as if update shared install's continue-on-failure behaviour, and it does not.
+  await recordInstalledVersion({
+    fs,
+    datasetRoot: context.datasetRoot,
+    baseTarget: context.baseTarget,
+  })
 
   if (!options?.persistBackup && shouldBackup) {
     await backupService.commit(false)
@@ -238,14 +288,6 @@ interface UpdateRegistryCtx {
   total: number
 }
 
-async function finalizeRegistryCopy(
-  ctx: UpdateRegistryCtx,
-  paths: { effectiveTarget: string; datasetPath: string },
-): Promise<void> {
-  const { fs, registryConfig, baseTarget } = ctx
-  await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
-}
-
 /** Where this registry reads from and writes to, announced to the reader. */
 async function beginRegistryUpdate(ctx: UpdateRegistryCtx): Promise<{
   effectiveTarget: string
@@ -283,7 +325,7 @@ type RegistryOutcome = {
 }
 
 async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<RegistryOutcome> {
-  const { fs, registryName, registryConfig, pushLog, presenter } = ctx
+  const { fs, registryName, registryConfig, presenter } = ctx
   const { effectiveTarget, datasetPath, effectiveDatasetRoot } = await beginRegistryUpdate(ctx)
 
   const copyResult = await doCopyAndUpdateLinks(fs, {
@@ -296,15 +338,7 @@ async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<RegistryOut
   // Absent is not updated: an external source that ships two of the five registries must
   // not be reported as having updated five (US-396 AC1).
   if (copyResult['skipped']) {
-    pushLog('debug', `Registry '${registryName}' has no source at ${datasetPath}`)
-    presenter.registrySkipped(registryName, SKIP_NOT_SHIPPED)
-    const skipped: RegistryResult = {
-      name: registryName,
-      target: effectiveTarget,
-      status: 'skipped',
-      reason: SKIP_NOT_SHIPPED,
-    }
-    return { result: skipped }
+    return { result: reportNotShipped(ctx, { effectiveTarget, datasetPath }) }
   }
 
   await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
@@ -353,8 +387,12 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     accumulatedSkillLinkPathMap,
   )
 
-  presenter.summary(results, 'update', Date.now() - startTime)
-  return results
+  const allResults = [
+    ...results,
+    ...reportDeclaredButUnknown(declaredButUnknownResults(context.sourceDeclaration), presenter),
+  ]
+  presenter.summary(allResults, 'update', Date.now() - startTime)
+  return allResults
 }
 
 async function executeRollback(
