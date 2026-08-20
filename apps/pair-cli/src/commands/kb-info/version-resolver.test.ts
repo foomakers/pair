@@ -326,7 +326,7 @@ describe('resolveCurrentVersion - git source', () => {
     const recordingCloner = (source: string, destDir: string) => {
       // Read the mode WHILE the clone runs: after the check the root is gone.
       modes.push(fsService.getMode(join(destDir, '..')))
-      cloner(fsService)(source, destDir)
+      return cloner(fsService)(source, destDir)
     }
 
     await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: recordingCloner })

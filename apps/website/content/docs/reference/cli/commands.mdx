@@ -301,7 +301,8 @@ the same way it would be installed:
 | Remote URL  | The URL is probed for reachability and the version is parsed out of the URL string itself (the artifact is not downloaded)                           |
 | Git URL     | The repository is shallow-cloned read-only and its root `manifest.json` is read                                                                      |
 
-A git source (`*.git`, `git://…`, `git@…`, `ssh://git@…`, optionally pinned with `#ref`) is cloned
+A git source (`*.git`, `git://…`, `git@…`, `ssh://git@…`, optionally pinned with `#ref` — a branch
+or tag, not a commit SHA) is cloned
 into a throwaway temporary directory that is deleted straight after the read — the shared KB cache
 (`~/.pair/kb`) is never written to, so a version check can never disturb an installed KB. Private
 repositories authenticate exactly as they do for `install`: `PAIR_GIT_TOKEN` or your SSH keys.
