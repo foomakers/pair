@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
 // Conformance guard for story #216: auto-development eligibility is an
@@ -93,6 +93,30 @@ describe.each(policySources)('automation-policy.md — %s (AC1: the declaration)
     expect(deferral[0]).toContain('pair-next')
     // ...and the deferral must be navigable: a reader lands on the source of truth.
     expect(deferral[0]).toMatch(/\]\((https?:\/\/|\.\.?\/)[^)]*SKILL\.md\)/)
+
+    // ...and the target must EXIST. The pointer is an absolute GitHub URL by
+    // necessity (an uncategorized top-level skill is skipped by the install-time
+    // link rewriter — skill-reference-rewriter.ts, `if (!originalSubDir.includes('/'))
+    // continue` — so a relative `../.skills/next/SKILL.md` would dangle in the
+    // installed mirror). Absolute http links are SKIPPED by every link checker in
+    // this repo (link-rewriter.ts: "External links (http, mailto, anchors) are
+    // skipped"), so moving `.skills/next/` or renaming the skill leaves check:links,
+    // docs:staleness and skills:conformance all green while every adopting project's
+    // installed guideline points at a 404 — losing the ONLY reference to the matching
+    // rule this whole schema is defined against. Resolve the URL back to its
+    // repo-relative path and assert the file is on disk.
+    const target = /\]\(https?:\/\/github\.com\/[^/]+\/[^/]+\/blob\/[^/]+\/([^)]*SKILL\.md)\)/.exec(
+      deferral[0],
+    )
+    expect(
+      target,
+      `deferral line carries no resolvable GitHub blob URL: ${deferral[0]}`,
+    ).not.toBeNull()
+    // Deliberately NOT pinned to a literal path: a legitimate move that also
+    // updates the URL must stay green. What must hold is that the URL resolves to
+    // a file that is actually here.
+    const repoRelative = target![1]
+    expect(existsSync(join(REPO_ROOT, repoRelative)), `${repoRelative} does not exist`).toBe(true)
   })
 
   it('tells consumers to pass the declared label verbatim — no tag name in code (D18)', () => {
@@ -135,6 +159,13 @@ describe.each(policySources)(
     // label carrying spaces), while a comma-only split accepts `risk:green
     // risk:yellow` and silently matches nothing. Both are the drift this schema
     // exists to prevent, so the extraction rule is pinned here like the others.
+    //
+    // The two are pinned by DIFFERENT clauses, and neither one implies the other:
+    // the "entire trimmed line is the label" rule keeps `good first issue` valid,
+    // and HALT trigger 6 (more than one colon-carrying token) is what rejects
+    // `risk:green risk:yellow` / `risk:green or risk:yellow`. Extraction alone
+    // does NOT reject them — it accepts any single line — so the trigger is the
+    // load-bearing half and is asserted below on its own.
     it('says WHERE the value lives — the first non-empty line after the heading', () => {
       expect(content.toLowerCase()).toMatch(/first non-empty line/)
     })
@@ -147,7 +178,7 @@ describe.each(policySources)(
       expect(content.toLowerCase()).toMatch(/splits on whitespace is wrong|no whitespace split/)
     })
 
-    it('enumerates the five HALT triggers — empty, several lines, comma or operator, markdown marker, over the label cap', () => {
+    it('enumerates the six HALT triggers — empty, several lines, comma or operator, markdown marker, over the label cap, several labels on one line', () => {
       expect(content.toLowerCase()).toMatch(/no non-empty line/)
       expect(content.toLowerCase()).toMatch(/more than one non-empty line/)
       expect(content.toLowerCase()).toMatch(/contains a \*\*comma\*\*|contains a comma/)
@@ -161,7 +192,21 @@ describe.each(policySources)(
       expect(content.toLowerCase()).toMatch(/begins with a markdown block marker/)
       // 5 — the value has to be able to BE a label on the host.
       expect(content.toLowerCase()).toMatch(/longer than 50 characters/)
-      expect(content).toMatch(/Validation is exactly the five checks/)
+      // 6 — several labels juxtaposed on ONE line. `risk:green risk:yellow` and
+      // `risk:green or risk:yellow` are each a single non-empty line, comma-free,
+      // carrying no STANDALONE upper-case operator and no markdown marker, and are
+      // under the 50-char cap — so triggers 1-5 wave them through, and the value
+      // then matches zero cards and switches automation off SILENTLY: the very
+      // outcome trigger 4 was added for. The test is that the rule COUNTS
+      // colon-carrying tokens rather than splitting on whitespace, so
+      // `good first issue` (zero colons) stays valid.
+      expect(content.toLowerCase()).toMatch(
+        /more than one whitespace-separated token containing a colon/,
+      )
+      expect(content).toContain('risk:green risk:yellow')
+      expect(content).toContain('risk:green or risk:yellow')
+      expect(content).toMatch(/Validation is exactly the six checks/)
+      expect(content).not.toMatch(/exactly the five checks/)
     })
 
     it('says the declaration is a bare label line — not a list item, quote or fenced block', () => {
@@ -186,6 +231,24 @@ describe.each(policySources)(
       expect(content).toMatch(/50 characters/)
       expect(content.toLowerCase()).toMatch(/forbids newlines/)
       expect(content).toMatch(/MUST HALT/)
+      // "No newline" is a property of the extracted value (one trimmed line, by
+      // the extraction rule), NOT a HALT trigger a consumer could ever fire —
+      // stated as a trigger it reads as a check that cannot fail, and invites the
+      // reader to conclude the value may span lines (trigger 2 covers that, and
+      // covers it differently).
+      expect(content).not.toMatch(/or carries a newline/)
+    })
+
+    it('says the 50-char bound is a bound, not a sanitizer, and gives the enforceable half', () => {
+      // `all cards are eligible` is 22 chars, one line, no comma, no operator, no
+      // markdown marker, one colon-free token — it passes every HALT trigger and is
+      // then, by rule, carried verbatim into the prompt of an LLM consumer
+      // (#217/#250). Length filters long prose; it sanitizes nothing. So the
+      // structural defence has to be stated as a MUST of its own.
+      expect(content).toMatch(/a bound, not a sanitizer/)
+      expect(content).toMatch(/MUST[^.\n]*delimited data slot/)
+      expect(content.toLowerCase()).toMatch(/untrusted adoption data/)
+      expect(content).toMatch(/MUST NOT[^.\n]*inlin/)
     })
 
     it('places the "label matches no card" diagnostic with the consumer — report, never HALT', () => {

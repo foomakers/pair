@@ -98,7 +98,7 @@ Optional. `tech/automation.md` declares how much of the delivery flow may run **
 risk:green
 ```
 
-The value is **a single literal label** on a bare line (recommended `risk:green`; the fence above is display only — never write the declaration as a list item or inside a code fence), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
+The value is **a single literal label** on a bare line (recommended `risk:green`; the fence above is display only — never write the declaration as a list item, inside a code fence, or as two labels on one line), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
 
 ### risk-matrix.md
 
