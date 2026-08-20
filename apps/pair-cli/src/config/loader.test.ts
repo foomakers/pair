@@ -329,6 +329,62 @@ describe('config loader - the source declaration is validated, not trusted', () 
     expect(config.asset_registries['skills']!.prefix).toBe('pair')
   })
 
+  it.each([
+    ['an absolute POSIX path', '/home/victim/.ssh'],
+    ['a parent traversal', '../../../../Users'],
+    ['a traversal that only shows up after normalisation', 'a/../../outside'],
+    ['a bare parent', '..'],
+    ['a Windows drive path', 'C:\\Users\\victim'],
+    ['a backslash root', '\\\\server\\share'],
+    ['an empty string', ''],
+    ['a non-string', 42],
+  ])(
+    'ignores a source-declared source that is %s — layer 2 may not read outside the KB',
+    (_label, declared) => {
+      const { config } = load({
+        '/kb/pair.config.json': JSON.stringify({
+          asset_registries: { knowledge: { source: declared } },
+        }),
+      })
+
+      expect(config.asset_registries['knowledge']!.source).toBe(
+        JSON.parse(REAL_CONFIG).asset_registries.knowledge.source,
+      )
+    },
+  )
+
+  it('honours a source-declared source that stays inside the KB', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: { knowledge: { source: 'docs/./knowledge' } },
+      }),
+    })
+
+    expect(config.asset_registries['knowledge']!.source).toBe('docs/./knowledge')
+  })
+
+  it('names the whole resolution chain, weakest first — not just the last writer', () => {
+    const fs = fsWith({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' } },
+      }),
+      '/project/pair.config.json': JSON.stringify({
+        asset_registries: { skills: { prefix: 'house-rules' } },
+      }),
+      '/project/custom.json': JSON.stringify({ asset_registries: {} }),
+    })
+
+    const { source } = loadConfigWithOverrides(fs, {
+      projectRoot: '/project',
+      sourceRoot: '/kb',
+      customConfigPath: '/project/custom.json',
+    })
+
+    expect(source).toBe(
+      'pair-cli config.json < source KB declaration: /kb < pair.config.json < custom config: /project/custom.json',
+    )
+  })
+
   it('honours the fields that describe the source itself', () => {
     const { config } = load({
       '/kb/pair.config.json': JSON.stringify({

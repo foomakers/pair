@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { join, posix } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import {
   Config,
@@ -37,6 +37,17 @@ export interface LoadConfigOptions {
 
 export interface LoadedConfig {
   config: Config
+  /**
+   * The resolution CHAIN that produced `config`, weakest first, joined by ` < ` — e.g.
+   * `pair-cli config.json < source KB declaration: /acme-kb < pair.config.json`.
+   *
+   * Diagnostic, not behavioural: nothing branches on it. It was a last-writer-wins label
+   * before the four-layer model, which described the resolution wrongly in exactly the
+   * case that model is about — a source declaration overwritten by the project layer read
+   * as if the declaration had never applied. Install and update print it (once, when a
+   * source KB declaration actually applied), so a KB maintainer can see whether their
+   * declaration was honoured instead of inferring it from installed directory names.
+   */
   source: string
   /** Present only when a `sourceRoot` was named. */
   sourceDeclaration?: SourceDeclarationOutcome
@@ -83,7 +94,7 @@ function applyDeclaration(
   if (!declaration?.config) return base
   return {
     config: mergeConfigs(base.config, declaration.config),
-    source: `source KB declaration: ${sourceRoot}`,
+    source: `${base.source} < source KB declaration: ${sourceRoot}`,
   }
 }
 
@@ -107,12 +118,12 @@ function layerOverrides(
   })
   if (pairApplied) {
     config = pairApplied.config
-    source = 'pair.config.json'
+    source = `${source} < pair.config.json`
   }
 
   if (customConfigPath) {
     config = mergeWithCustomConfig(fsService, config, customConfigPath)
-    source = `custom config: ${customConfigPath}`
+    source = `${source} < custom config: ${customConfigPath}`
   }
 
   return { config, source }
@@ -141,6 +152,10 @@ function summarizeDeclaration(
  * `working_path` and every other top-level key are dropped, not merged. Without this,
  * `resolveTarget` would join a source-declared path onto the project root and a KB could
  * write anywhere on the machine.
+ *
+ * Two of the honoured fields are still paths and are therefore CONTAINED, not merely
+ * allowed: `prefix` must be a single path segment, and `source` must stay inside the KB
+ * (see `FIELD_GUARDS`). Read side and write side are both bounded by the KB root.
  */
 const SOURCE_DECLARABLE_FIELDS = [
   'source',
@@ -166,13 +181,41 @@ function isSafePrefix(value: unknown): boolean {
   )
 }
 
+/**
+ * `source` is where the CLI READS from: `resolveRegistryPaths` does
+ * `resolve(datasetRoot, config.source)`, so an absolute path replaces the KB root outright
+ * and a `..` walks out of it — a source-declared one would turn `pair install --source`
+ * into "copy arbitrary local files into the consumer's repository" (SSH keys land in a
+ * tree the user commits). Layer 2 describes its OWN content, so the path must stay inside
+ * the KB: relative, and still inside after normalisation (`a/../../b` included).
+ */
+function isContainedSource(value: unknown): boolean {
+  if (typeof value !== 'string' || value.length === 0) return false
+  // Covers POSIX (`/etc`), Windows drive (`C:\Users`) and UNC/backslash roots alike.
+  if (/^([a-zA-Z]:)?[/\\]/.test(value)) return false
+  const normalized = posix.normalize(value.replace(/\\/g, '/'))
+  return normalized !== '..' && !normalized.startsWith('../')
+}
+
+/**
+ * Per-field containment checks. A field that fails its guard is DROPPED (the base
+ * config's value stands), never coerced: a KB does not get a second guess at a path.
+ */
+const FIELD_GUARDS: Partial<
+  Record<(typeof SOURCE_DECLARABLE_FIELDS)[number], (value: unknown) => boolean>
+> = {
+  prefix: isSafePrefix,
+  source: isContainedSource,
+}
+
 /** Keeps only the declarable fields of one registry entry; anything else is dropped. */
 function honouredFields(entry: unknown): Record<string, unknown> {
   if (!isPlainObject(entry)) return {}
   const kept: Record<string, unknown> = {}
   for (const field of SOURCE_DECLARABLE_FIELDS) {
     if (!(field in entry)) continue
-    if (field === 'prefix' && !isSafePrefix(entry[field])) continue
+    const guard = FIELD_GUARDS[field]
+    if (guard && !guard(entry[field])) continue
     kept[field] = entry[field]
   }
   return kept

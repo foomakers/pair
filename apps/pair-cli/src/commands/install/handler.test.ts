@@ -1684,6 +1684,28 @@ describe('US-396: the source declares, but never decides where the install write
     expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
   })
 
+  test('a source-declared source outside the KB is ignored — nothing outside it is read', async () => {
+    // The read side of the same trust boundary as the `targets` case above: `source` is
+    // resolved against the KB root, so `..`/absolute would copy the victim's own files
+    // (SSH keys, anything) into a tree they commit.
+    const fs = consumerFs({
+      '/home/victim/.ssh/id_rsa': 'PRIVATE KEY',
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: { source: '../home/victim/.ssh' },
+          skills: { source: '/home/victim/.ssh' },
+        },
+      }),
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.pair/knowledge/id_rsa`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-id_rsa`)).toBe(false)
+    // ...and the KB's own content still installs: the field was dropped, not the run
+    expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
+  })
+
   test('a source-declared prefix that traverses is ignored — the default prefix stands', async () => {
     const fs = consumerFs({
       [`${kb}/pair.config.json`]: JSON.stringify({
@@ -1716,6 +1738,38 @@ describe('US-396: the source declares, but never decides where the install write
 
     expect(await fs.exists(`${cwd}/.claude/skills/house-rules-example-skill/SKILL.md`)).toBe(true)
     expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test('an applied declaration names the resolution chain on the console', async () => {
+    // `applied` has a consumer: the one layer the consumer did not write says so, and the
+    // KB maintainer can see the declaration was honoured (US-396).
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' } },
+      }),
+    })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    expect(lines.join('\n')).toContain(`source KB declaration: ${kb}`)
+  })
+
+  test('an install with no source declaration says nothing about the chain', async () => {
+    const fs = consumerFs()
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    expect(lines.join('\n')).not.toContain('Configuration:')
   })
 
   test('a malformed source config is warned about where the user can see it', async () => {
@@ -1826,5 +1880,55 @@ describe('US-396: a failed registry leaves no "installed" version marker', () =>
 
     expect(exitCode).toBe(1)
     expect(await fs.exists(marker)).toBe(false)
+  })
+})
+
+/**
+ * US-396 — `--list-targets` and `install` must agree. Resolving from the CLI module dir
+ * made the command whose only job is to say where content lands print the CLI defaults
+ * while `install` wrote to the project's overridden targets.
+ */
+describe('US-396: --list-targets reflects the project it describes', () => {
+  const cwd = '/consumer'
+  const moduleDir = '/opt/pair-cli'
+
+  const baseConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+    },
+  }
+
+  test("prints the project's own pair.config.json override, not the CLI default", async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/config.json`]: JSON.stringify(baseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/pair.config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: { targets: [{ path: 'docs/kb', mode: 'canonical' }] },
+          },
+        }),
+      },
+      moduleDir,
+      cwd,
+    )
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleInstallCommand(
+      { command: 'install', resolution: 'list-targets' },
+      fs,
+    )
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    expect(lines.join('\n')).toContain('docs/kb')
   })
 })
