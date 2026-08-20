@@ -428,15 +428,15 @@ This command takes **no positional argument** — the KB directory is passed as
 
 ### Options
 
-| Option                            | Description                                                                   |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `--path <path>`                   | KB directory to validate (default: current directory)                         |
-| `--layout <mode>`                 | Layout mode: `source` or `target` (default: `target`)                         |
-| `--strict`                        | Enable external link checking via HTTP HEAD (slow)                            |
-| `--ignore-config`                 | Consult no config: no registries resolve, so nothing is collected or checked  |
-| `--skip-registries <list>`        | Comma-separated registry names to exclude from validation                     |
-| `--optional-link-patterns <list>` | Comma-separated globs whose **missing** link targets are warnings, not errors |
-| `--log-level <level>`             | Set logging level (trace, debug, info, warn, error)                           |
+| Option                            | Description                                                                            |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| `--path <path>`                   | KB directory to validate (default: current directory)                                  |
+| `--layout <mode>`                 | Layout mode: `source` or `target` (default: `target`)                                  |
+| `--strict`                        | Zero tolerance: optional link patterns are discarded, every missing target is an error |
+| `--ignore-config`                 | Consult no config: no registries resolve, so nothing is collected or checked           |
+| `--skip-registries <list>`        | Comma-separated registry names to exclude from validation                              |
+| `--optional-link-patterns <list>` | Comma-separated globs whose **missing** link targets are warnings, not errors          |
+| `--log-level <level>`             | Set logging level (trace, debug, info, warn, error)                                    |
 
 ### Examples
 
@@ -450,7 +450,7 @@ pair kb-validate --path ./my-kb
 # Validate source layout
 pair kb-validate --layout source
 
-# Validate with external link checking
+# Validate with zero tolerance (optional link patterns discarded)
 pair kb-validate --strict
 
 # Validate excluding specific registries
@@ -479,7 +479,9 @@ Rules:
 - A pattern only affects a **missing** target. A target that exists is simply valid.
 - A missing target matching a pattern is a **warning** (`optional link (pattern-matched)`)
   and does not fail the run; a missing target matching nothing stays an **error**.
-- Config patterns and `--optional-link-patterns` are **merged** (union), never replaced.
+- Config patterns and `--optional-link-patterns` are **merged** (union), never replaced. Entries
+  are trimmed on both sides before the union, so declaring the same pattern twice (even with
+  different surrounding whitespace) yields one matcher.
 - Each pattern is matched against the target **resolved relative to the KB root**
   (`apps/x.ts`) and — only when the link **as written** is a genuine spelling of that same
   target, i.e. its leading `../` climb lands exactly on the KB root (`../../apps/x.ts` from
@@ -520,10 +522,13 @@ Rules:
   (`"link_validation": {}`) declares nothing and is silent.
 - Config-shape and malformed-pattern diagnostics are printed under **`Configuration:`** in the
   report and counted in its `Warnings:` total, alongside the per-file ones. They are **also
-  logged on stderr** as soon as they are detected, so each one deliberately appears twice: on
-  stderr for immediacy (a long run should not sit on a config typo until the report prints) and
-  in the report for the counted summary.
+  logged on stderr**, so each one deliberately appears twice: on stderr, where it is visible
+  without scrolling back through a long report (and survives piping the report to a file), and
+  in the report itself for the counted summary.
 - `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
+  That is all it does today — the CLI makes **no network requests**, so external (`http`/`https`)
+  links are never fetched, with or without `--strict`. A green `--strict` run in CI means "every
+  internal target exists", never "external links are reachable".
 - `--ignore-config` consults no config at all, so no registries resolve, **no files are
   collected and nothing is validated** — structure, links and metadata are all skipped, and
   optional patterns (config or CLI) have no effect, since there is nothing to match against.

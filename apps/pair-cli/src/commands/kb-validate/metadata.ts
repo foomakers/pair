@@ -23,7 +23,8 @@ export const kbValidateMetadata = {
     },
     {
       flags: '--strict',
-      description: 'Enable strict validation (checks external links via HTTP HEAD)',
+      description:
+        'Zero tolerance: optional link patterns are discarded, every missing link target is an error',
     },
     {
       flags: '--ignore-config',
@@ -44,7 +45,7 @@ export const kbValidateMetadata = {
     'Validates .pair directory structure',
     'Returns exit code 0 if valid, 1 if errors found, 2 if validation fails',
     'Target layout validation skips symlink targets',
-    'Use --strict for external link validation (requires network)',
+    'No network requests are made: external http/https links are never fetched, with or without --strict',
     'Optional link patterns downgrade MISSING targets to warnings; --strict overrides them back to errors',
   ],
 } as const

@@ -7,7 +7,7 @@
 
 - New `--optional-link-patterns "<globs>"` flag (comma-separated) and new top-level
   `link_validation.optional_link_patterns` key in `pair.config.json` / `config.json`.
-  The two are **merged** (union), never replaced.
+  The two are **merged** (union of the trimmed entries, deduplicated), never replaced.
 - A **missing** target matching a pattern is reported as
   `optional link (pattern-matched), target missing: …` — a warning that does not fail the
   run. A target that exists is simply valid; a missing target matching nothing stays an error.

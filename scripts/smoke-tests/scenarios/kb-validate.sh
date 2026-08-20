@@ -17,10 +17,11 @@ fi
 # Test 1: Source layout, real dataset, FULL validation (US-188 dogfood).
 # This used to pass --ignore-config "to avoid pre-existing broken links": that flag
 # consults no config, so no registry resolved, no file was collected and NOTHING was
-# validated — the test could not fail. The dataset has no broken links today, so the
-# real run is the assertion: structure + links + metadata on the shipped KB, and any
-# link that legitimately points outside the KB tree is declared through
-# link_validation.optional_link_patterns rather than switched off wholesale.
+# validated — the test could not fail. The dataset has no broken links and no
+# out-of-tree links today (it declares no link_validation section at all), so the
+# real run is the assertion: structure + links + metadata on the shipped KB. If an
+# out-of-tree link is ever added, declare it through
+# link_validation.optional_link_patterns rather than switching the registry off.
 log_info "Test 1: Validate source layout, structure + links (real dataset)"
 TEST_DIR=$(setup_workspace "kb-validate-source")
 cd "$TEST_DIR"

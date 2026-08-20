@@ -111,10 +111,20 @@ Two consequences of "internal, therefore ours to define" are decided here as wel
      for, since the links this feature tolerates point out of the KB;
   3. a trailing empty segment matches a wildcard (`apps/*` ∋ `apps/`) — irrelevant here, link
      targets are files.
-  All three point the same, riskier way for a feature whose job is downgrading errors to warnings:
-  a maintainer assuming minimatch writes a BROADER rule than intended and can silence a genuinely
-  broken link, with no diagnostic (a too-broad pattern is not "malformed"). Families 1 and 2 are
-  stated in the CLI reference's syntax list, which is the contract.
+     All three point the same, riskier way for a feature whose job is downgrading errors to warnings:
+     a maintainer assuming minimatch writes a BROADER rule than intended and can silence a genuinely
+     broken link, with no diagnostic (a too-broad pattern is not "malformed"). Families 1 and 2 are
+     stated in the CLI reference's syntax list, which is the contract.
+- **Story #188's business rule "patterns use glob syntax consistent with existing `include`
+  patterns in `pair.config.json`" is knowingly NOT met, and the deviation is accepted here.** It
+  cannot be met literally: registry `include` entries are folder prefixes compared with
+  `startsWith`, so there is no existing glob syntax to be consistent with, and reusing prefix
+  matching under glob-looking values is the "syntax that lies about itself" rejected above. What
+  ships is therefore a project-defined syntax whose divergences from minimatch are all MORE
+  permissive (families 1-3 above), on a feature whose job is downgrading errors to warnings — a
+  disclosed risk: pinned by `glob-match.test.ts`, stated in the CLI reference and measured here.
+  `compileOptionalLinkPatterns` / `matchesAnyPattern` stay the swap seam if glob/prefix
+  consistency is ever wanted.
 - Matching cost is bounded by construction (two-pointer, single backtrack anchor at each level),
   so no pattern an operator can write can hang `kb-validate` in CI.
 - A future need for full glob semantics elsewhere in the CLI is the trigger to revisit — the
