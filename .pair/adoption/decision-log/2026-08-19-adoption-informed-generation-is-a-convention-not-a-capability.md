@@ -10,7 +10,7 @@ Active
 
 ## Category
 
-Process Decision
+Convention Adoption
 
 ## Context
 

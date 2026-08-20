@@ -153,8 +153,13 @@ describe.each(GENERATION_SKILLS)('%s — adoption-informed generation wired in (
   })
 
   it('cites the decisions that shaped generated content (AC2)', () => {
+    // Review finding (#280, Minor): this asserted /cite|citation/i, which brainstorm
+    // ALREADY satisfied before this story ("Cite the deciding source for each entry",
+    // phase 2's inline map maintenance) — so for one of the three skills the guard was
+    // vacuous and would not have caught a revert. The NOUN `citation` appears in none
+    // of the three on the pre-change corpus, so it carries signal for all three.
     for (const [label, content] of bothCopies(skill)) {
-      expect(content, label).toMatch(/cite|citation/i)
+      expect(content, label).toMatch(/\bcitations?\b/i)
     }
   })
 
@@ -189,6 +194,108 @@ describe('read-only guarantee at the skill level (business rule)', () => {
         expect(beat, label).toBeDefined()
         expect(beat, label).toMatch(/read-only/i)
       }
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Round-1 review findings (#280). Each guard names the finding it pins so a
+// later edit that reintroduces the defect fails with its reason attached.
+// ---------------------------------------------------------------------------
+
+describe('review round 1 — authorities, bounded read, inherited read', () => {
+  it('reads `Category: Analysis` entries as CONTEXT, never as an authority (Major)', () => {
+    // An analysis concludes in a `## Recommendation`, not a `## Decision`, and need
+    // not conclude in one at all: folding it in with ADLs let a candidate be dropped
+    // as "rejected by a decision" nobody ever took.
+    const authorities = CONVENTION.match(/\*\*Authorities vs context\.\*\*[\s\S]*?\n\n/)?.[0]
+    expect(authorities).toBeDefined()
+    expect(authorities).toMatch(/Category: Analysis/)
+    expect(authorities).toMatch(/never/)
+    expect(authorities).toMatch(/Revisits/)
+  })
+
+  it('keeps an analysis entry out of the precedence order entirely (Major)', () => {
+    // Otherwise a dated analysis outranks a live ADR, since kind is not a rank.
+    const precedence = CONVENTION.match(/## Precedence[\s\S]*?(?=\n## )/)?.[0]
+    expect(precedence).toBeDefined()
+    expect(precedence).toMatch(/Category: Analysis/)
+    expect(precedence).toMatch(/never outranks/)
+  })
+
+  it('indexes records from metadata only — stage 1 opens no body (Major)', () => {
+    // A "one-line summary" is in no record template, so deriving one would have read
+    // all N bodies — the exact cost the bounded read exists to avoid.
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    expect(bounded).toMatch(/metadata only/i)
+    expect(bounded).toMatch(/H1 title/)
+    expect(bounded).toMatch(/no record body is read here/i)
+  })
+
+  it('names the strategic subdomain catalog entry the scope filter resolves from (Minor)', () => {
+    expect(CONVENTION).toMatch(/adoption\/product\/subdomain\/<slug>\.md/)
+    expect(CONVENTION).toMatch(/subdomain\/<slug>\.context\.md/)
+  })
+
+  it('makes a composed writer inherit the caller read instead of re-deriving it (Minor)', () => {
+    // brainstorm phase 3 reads, then composes plan-stories: without this the read is
+    // paid twice in one flow, and the second, differently scoped pass can drop a
+    // candidate the developer just approved.
+    expect(CONVENTION).toMatch(/composed writer is part of the caller's run/i)
+    expect(CONVENTION).toMatch(/caller's scope is the run's scope/i)
+  })
+
+  it('plan-stories takes the caller read in-band and skips its own (Minor)', () => {
+    for (const [label, content] of bothCopies('plan-stories')) {
+      expect(content, label).toMatch(/\$adoption-read/)
+    }
+    for (const [label, content] of bothCopies('brainstorm')) {
+      expect(content, label).toMatch(/\$adoption-read/)
+    }
+  })
+
+  it('refine-story Step 1b has no undecidable skip condition (Major)', () => {
+    // The old gate keyed on "no section is being re-authored" — a fact only Step 6
+    // knows, and Step 6 runs after. The already-Ready update is exactly the path
+    // where a decision recorded since the last refinement must be read.
+    for (const [label, content] of bothCopies('refine-story')) {
+      const beat = content.match(/### Step 1b[\s\S]*?(?=\n### )/)?.[0]
+      expect(beat, label).toBeDefined()
+      expect(beat, label).toMatch(/\*\*Always runs\*\*/)
+      expect(beat, label).not.toMatch(/\*\*Skip if\*\*/)
+      // ...and the forward reference is backed: Step 6 states what it inherits.
+      const step6 = content.match(/### Step 6[\s\S]*?(?=\n## )/)?.[0]
+      expect(step6, label).toBeDefined()
+      expect(step6, label).toMatch(/Step 1b/)
+    }
+  })
+
+  it('refine-story shows a record-attributed DROP before taking the approval (Major)', () => {
+    // Dropping an acceptance criterion is the most consequential of the three
+    // effects; without this line the developer approves a shorter list silently.
+    for (const [label, content] of bothCopies('refine-story')) {
+      const step2 = content.match(/### Step 2: Requirements Analysis[\s\S]*?(?=\n### )/)?.[0]
+      expect(step2, label).toBeDefined()
+      expect(step2, label).toMatch(/Dropped by a recorded decision/)
+      expect(step2, label).toMatch(/an approval is never taken on a list/)
+    }
+  })
+
+  it('plan-epics persists a supplied citation into the epic body (Minor)', () => {
+    // brainstorm claims BOTH writers carry the citation and the revisit flag; without
+    // this, the initiative-root path drops them at the write boundary.
+    const copies: Array<[string, string]> = [
+      ['plan-epics (dataset)', readFileSync(join(DATASET_SKILLS, 'plan-epics/SKILL.md'), 'utf-8')],
+      [
+        'plan-epics (installed mirror)',
+        readFileSync(join(MIRROR, 'pair-process-plan-epics/SKILL.md'), 'utf-8'),
+      ],
+    ]
+    for (const [label, content] of copies) {
+      expect(content, label).toMatch(/\*\*Citations\*\*/)
+      expect(content, label).toMatch(/Revisits/)
+      expect(content, label).toMatch(/runs no adoption read of its own/)
     }
   })
 })

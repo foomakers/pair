@@ -7,18 +7,20 @@ It is a **read-only input to generation**, not a new capability and not a write 
 ## Sources — read in this fixed order
 
 1. **Architectural decisions** — `adoption/tech/adr/adr-NNN-<topic>.md`.
-2. **Non-architectural decisions and analyses** — `adoption/decision-log/YYYY-MM-DD-<topic>.md` (ADL and `Category: Analysis` entries share the directory).
-3. **Domain map** — `adoption/product/context-map.md` plus the `subdomain/<slug>.context.md` of every subdomain in scope, and the bounded-context files under `adoption/tech/boundedcontext/`. Domain decisions (`adoption/product/ddr/`) are reached through the map's decision-backed sections; a DDR the map cites is read with it.
+2. **Non-architectural decisions** — `adoption/decision-log/YYYY-MM-DD-<topic>.md` (ADL entries; the directory also holds `Category: Analysis` entries — see *Authorities vs context* below).
+3. **Domain map** — `adoption/product/context-map.md` plus, for every subdomain in scope, both its strategic catalog entry `adoption/product/subdomain/<slug>.md` (where its class and volatility are recorded — the file the scope filter resolves a subdomain from) and its `adoption/product/subdomain/<slug>.context.md` sibling, and the bounded-context files under `adoption/tech/boundedcontext/`. Domain decisions (`adoption/product/ddr/`) are reached through the map's decision-backed sections; a DDR the map cites is read with it.
+
+**Authorities vs context.** Only **ADR, ADL and DDR** entries are *authorities* — what may constrain a candidate, be cited, or be reopened with a `Revisits` flag. A `Category: Analysis` entry is **not** one: it records a technical analysis, concludes in a `## Recommendation` rather than a `## Decision`, and need not conclude in a decision at all (the analysis-log template's own words). It is read as **context** — it may inform wording and scope — and it never drops or reshapes a candidate, never carries a `(per ...)` citation, and never triggers a `Revisits` flag: nobody decided anything to revisit. Everywhere below, **record** means an authority.
 
 The order is **fixed** and, within each source, files are read in id order (`adr-NNN`) or date order (`YYYY-MM-DD`) — the read is a function of the adoption tree, never of what happened to be in the assistant's context.
 
-**Reuse over re-read**: when the caller has **already loaded** one of these in the same run — `/pair-process-brainstorm`'s phase 2 and `/pair-process-refine-story`'s Step 2 both load the context map — this step consumes that copy instead of re-reading the file. One run reads each source at most once.
+**Reuse over re-read**: when the caller has **already loaded** one of these in the same run — `/pair-process-brainstorm`'s phase 2 and `/pair-process-refine-story`'s Step 2 both load the context map — this step consumes that copy instead of re-reading the file. One run reads each source at most once — and a **composed writer is part of the caller's run**: when a caller performs this read and hands its result to the writer in-band with the candidates, the writer inherits it and does **not** re-derive it. The caller's scope is the run's scope; the writer confirms the applied effects rather than re-scoping them.
 
 ## Bounded read — scope, not the whole log
 
 Reading full history into a generation prompt is the failure mode this step is designed around (large projects have hundreds of records). The read is bounded in two stages:
 
-1. **Index every record, cheaply** — its id/date, title, `Status`, and one-line summary. This stage is complete: every record is indexed, none is skipped.
+1. **Index every record, cheaply** — **metadata only, read from the file head**: its id/date (from the filename), its `#` H1 title **verbatim** (that title *is* the one-line summary — none is derived, so no body is opened to produce one), and its `## Status`. This stage is complete: every record is indexed, none is skipped, and **no record body is read here**.
 2. **Open the body only of the records in scope** — those whose subject overlaps the item being generated: same subdomain/bounded context, same touched component, or a term the item and the record share. Everything else stays at its index line.
 
 So the number of full bodies read scales with the item's scope, **never the entire decision history**. When the index makes scope genuinely ambiguous, prefer opening the record — a bounded read errs toward reading one extra body, never toward silently skipping a live decision.
@@ -28,6 +30,7 @@ So the number of full bodies read scales with the item's scope, **never the enti
 - A record whose `Status` is `Superseded` (or that carries a "Superseded by" pointer) is **never the authority**; the superseding record is read in its place, and the superseded one is not cited.
 - When two live records answer the same question, the **most recent** by id/date wins, regardless of which source it came from. Record kind is not a precedence rank: an ADL dated after an ADR refines it.
 - A registered term, entity, or rule in the context map outranks an informal use of the same word anywhere else — generated wording adopts the registered term rather than a synonym.
+- A `Category: Analysis` entry **takes no part in this order at all**: it is context, not an authority, so however recent it is it never outranks — or supersedes — a live ADR, ADL or DDR.
 
 ## What "informed" means — constrain, cite, flag a revisit
 

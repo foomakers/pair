@@ -83,7 +83,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
 
 ### Step 1b: Adoption Context Read
 
-**Skip if**: the story is already Ready and no section is being re-authored (Step 6's selective update reads it for the selected sections only).
+**Always runs** — there is no skip condition: the read is bounded and metadata-first (per the convention), too cheap to gate, and *which* sections get re-authored is not known here (Step 6 asks that later). The already-Ready update path is precisely where a decision recorded **since** the story was last refined must reach the re-authored section, so this step runs there too.
 
 1. **Check**: Does the project carry adoption history — recorded decisions or a context map?
 2. **Skip**: If none exists (a fresh project, an empty decision log), note it in one line and proceed: refinement authors exactly what it authored before this step, with no citations and no revisit flags.
@@ -107,9 +107,11 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    > [List Given-When-Then scenarios]
    > [Business rules]
    > [Edge cases]
+   > [Dropped by a recorded decision: [criterion] — [decision id] rejected this]
+   > [Reshaped by a recorded decision: [criterion] — [decision id]]
    > Approve or adjust?
 
-5. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). Only an explicit approval finalizes the criteria.
+5. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). **Every criterion a record dropped or reshaped is shown in item 4's prompt with that record named** — an approval is never taken on a list the developer cannot tell is shorter. Only an explicit approval finalizes the criteria.
 
 ### Step 3: Technical Analysis
 
@@ -171,7 +173,7 @@ Reached only when Step 1 detects all sections are present.
    > 3. Sprint Sizing
    > 4. All sections
 
-2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4).
+2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4). Step 1b already ran on this invocation (it has no skip condition), so the in-scope records — including any recorded **since** the last refinement — are available to the re-authored section, with its citations and `Revisits <id>` flags shown in that step's own confirmation prompt.
 3. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and updated `$content`.
 4. **Verify**: Story updated.
 

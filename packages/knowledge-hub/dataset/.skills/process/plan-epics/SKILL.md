@@ -1,7 +1,7 @@
 ---
 name: plan-epics
 description: "Breaks a strategic initiative into epics — each delivering end-to-end value in 2-4 sprints — through structured analysis and validation. Composes /write-issue. Not for filing a single epic issue from text you already wrote (that's /write-issue directly)."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -83,9 +83,10 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    > Epic breakdown for Initiative `#[ID]: [Title]`:
    >
    > [Epic 0: Bootstrap (if needed)] → CREATE (first run) | ALREADY EXISTS #[ID] (skip, on re-run — Epic 0 follows the same triage rule as any other candidate)
-   > Epic 1: [Name] (2-3 sprints) — [user value] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
+   > Epic 1: [Name] (2-3 sprints) — [user value] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale]) [· per [decision id] | · Revisits [decision id]: [why]]
    > Epic 2: [Name] (3-4 sprints) — [user value] → Ambiguous: EXTEND #[ID] or CREATE? [recommendation + rationale]
    > ...
+   > [Dropped by a recorded decision: [candidate] — [decision id] rejected this]
    >
    > Approve or adjust?
 
@@ -109,6 +110,7 @@ Process epics sequentially (Epic 0 first if needed), per its Step 3 proposal:
 
 3. **Act**: Draft the epic following [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - Fill template sections: Epic Statement, Business Value, Solution Overview, Epic Breakdown, Technical Considerations.
+   - **Citations**: when a `$candidates` tree arrives carrying them (a caller like `/brainstorm` applies its own adoption read before handing the tree over), every part of the draft a record shaped keeps that record inline — `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per context-map: <term>)` — and a confirmed revisit keeps its `Revisits <id>: <why>` line. The citation lands in the epic body, so it survives the write instead of stopping at the confirmation list. This skill runs no adoption read of its own.
    - Present to developer for validation.
 4. **Act**: Compose `/write-issue` per the confirmed proposal:
    - **CREATE**: `$type: epic`, `$content`: the filled epic template, `$parent`: the initiative identifier. If the proposal referenced a closed epic (per to-issues-triage.md's closed-item rule), include that reference in `$content`.

@@ -95,7 +95,7 @@ Places the blob in the domain and reconciles it with what the project has alread
 
 ### Phase 3: Tree Triage — Draft Items
 
-**Adoption Context Read** — before item 5 assembles anything, read the recorded decisions and the domain map per [adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md): **read-only**, never a write. **This skill's subject**: the placed blob, scoped to what phase 2 placed and reusing the map it **already loaded**. No adoption history ⇒ a noted skip, no citations.
+**Adoption Context Read** — performed **at item 5**, after the Skip (item 2) and HALT (item 4) checks, before anything is assembled (a re-run that skips or halts never pays for it): read the recorded decisions and the domain map per [adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md): **read-only**, never a write. **This skill's subject**: the placed blob, scoped to what phase 2 placed and reusing the map it **already loaded**. No adoption history ⇒ a noted skip, no citations.
 
 1. **Check**: Was a tree already proposed for this discovery — a confirmed proposal list in this session (evaluated **here**, it needs no backlog read), or items under the resolved parent whose idempotency keys already match the tree's candidates (that half needs the tree of item 5 and the parent of item 6, so it is evaluated **once item 6 has resolved the parent**, before the writer is composed in item 7)?
 2. **Skip**: If so, re-present that outcome instead of re-triaging; a re-run is a no-op because the composed writer re-checks each key and proposes `ALREADY EXISTS #ID` (skip) for it.
@@ -108,7 +108,7 @@ Places the blob in the domain and reconciles it with what the project has alread
    **Discovery never invents a parent**: when the row's parent does not exist, HALT with its remedy named — see [HALT Conditions](#halt-conditions), _No parent to hang the tree from_, which carries all of them (including the untyped root's labelling remedy, and the one case that looks like this HALT and is not).
 7. **Act**: Triage the candidate tree against the **existing** backlog under that parent scope, per the shared [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md) convention — extend-vs-create is decided against the existing tree, so discovery merges into the backlog instead of duplicating it. Compose **exactly one** writer — the one resolved in item 6 — passing **both** the parent and the tree:
    - `/plan-epics` with `$initiative: [the resolved initiative]`, `$candidates: [the candidate tree]` and `$domain-placed: [the areas phase 2 placed or confirmed **in the subdomain catalog**]` — **omitted entirely** when phase 2 composed `/map-contexts` only, since nothing reached that catalog and Step 3.5 must then run `/map-subdomains` as normal.
-   - `/plan-stories` with `$epic: [the resolved epic]` and `$candidates: [the candidate tree]`.
+   - `/plan-stories` with `$epic: [the resolved epic]`, `$candidates: [the candidate tree]` and `$adoption-read: [this phase's read plus the effect applied to each candidate]` — inherited, not re-read.
 
    **One writer per run, one level written**: an initiative-root (or free-theme broad) discovery stops at the confirmed epics — it does **not** cascade into `/plan-stories`, because the tree of item 5 carries no story slices to hand over and inventing them here is exactly how phase 3 would flood the backlog. Slicing a new epic is the next, separately confirmed step: `/plan-stories` with `$epic: [the new epic]`, or `/brainstorm` with `$root: [the new epic]` for another interview-driven pass.
 
@@ -153,11 +153,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 ## Notes
 
-- **Phase order is fixed** (interview → domain → triage) and each phase's output feeds the next — a phase never runs on a blob the previous phase has not produced.
 - **Composes, never re-derives**: the interview is `/grill`'s, the domain placement `/map-*`'s, the writes `/plan-epics`/`/plan-stories`' (which own the to-issues triage). Brainstorm owns the phase order and the level/orientation parametrization only (D24).
-- **The writer is keyed on the root's type, not on the level** — `/plan-epics` writes only under an initiative, `/plan-stories` only under an epic — and it receives the discovery's tree explicitly as `$candidates`, so phase 2's output is what phase 3 triages rather than a tree the writer re-derives from its parent.
-- **One writer per run, one level written**: an initiative-root discovery lands epics and stops; it never cascades into `/plan-stories`. A root with no recognized type label resolves on the matrix's **fallback row** (leaf treatment: siblings under its parent epic — or sibling epics under its parent initiative, when that is where it sits), so an unlabelled issue is a normal input, not an unhandled one.
 - **Branch-specific reference lives beside the skill**, per progressive disclosure: the normative deduction matrix and its rationale in [parametrization.md](parametrization.md), the per-phase resume list in [resume.md](resume.md). The algorithm here stays the path every run walks.
 - **The PRD is never modified** — R3.4: discovery writes to the backlog and to domain context files; product-vision changes are surfaced as a `/specify-prd` recommendation.
 - **Modifies PM tool state** (phase 3, via the composed plan-* skills) **and adoption files** (phase 2, context map + domain catalogs).
-- **Draft is the exit state**: the tree is a planning artifact — `/refine-story` is the single Draft→Ready path (D24), and `/next` picks the tree up from there.

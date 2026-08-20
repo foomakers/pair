@@ -21,6 +21,7 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 | -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$epic`        | No       | Epic identifier (e.g., `#42`). If omitted, selects highest-priority Todo epic.                                                                                                              |
 | `$candidates`  | No       | Caller-supplied candidate tree (story name + user value + rationale each) — e.g. the tree `/brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the epic. |
+| `$adoption-read` | No     | The caller's completed adoption read, in-band — the in-scope records with the effect already applied to each candidate (citation, `Revisits <id>` flag, or a drop with the record named). Supplied by a caller that performed the read itself (`/brainstorm` phase 3) so Step 2b inherits it instead of paying for a second, differently scoped read. |
 
 ## Algorithm
 
@@ -68,8 +69,8 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 
 ### Step 2b: Adoption Context Read
 
-1. **Check**: Does the project carry adoption history — recorded decisions or a context map?
-2. **Skip**: If none exists (a fresh project, an empty decision log), note it in one line and proceed to Step 3: story generation is exactly what it was before this step, with no citations and no revisit flags.
+1. **Check**: Is `$adoption-read` provided, and — if not — does the project carry adoption history (recorded decisions or a context map)?
+2. **Skip**: If `$adoption-read` is provided, that **is** this run's read: the caller already performed it on the same run and its scope is the run's scope (per the convention's reuse rule) — confirm the supplied effects with the candidates and go to Step 3, never re-deriving a second, differently scoped read that could drop a candidate the caller's own confirmation just approved. If no adoption history exists (a fresh project, an empty decision log), note it in one line and proceed to Step 3: story generation is exactly what it was before this step, with no citations and no revisit flags.
 3. **Act**: Read it per the shared [adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md) convention — **read-only**, bounded to the subject's scope, never a write. **This skill's subject**: the selected epic and the candidates derived from (or supplied for) it — the read is scoped to the subdomains, contexts, and terms that epic touches, never the project's whole history. Do not restate the convention's sources or precedence rules here; follow them there.
 4. **Verify**: The in-scope records are available to Steps 3–4 with their ids, so a candidate can be constrained by one, **cite** it, or carry a `Revisits <id>` flag. Absence is a noted skip, never a HALT.
 
