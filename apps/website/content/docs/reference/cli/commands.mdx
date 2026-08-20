@@ -294,12 +294,12 @@ when the version about to be applied differs from what's currently recorded.
 `--source` accepts every kind `install`/`update` accept, and each resolves the current version
 the same way it would be installed:
 
-| Source kind | How the current version is resolved                                                                                           |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| _(none)_    | The KB the CLI resolves by default (bundled dataset, or the cached official release)                                          |
-| Local path  | `manifest.json` in the directory, or the `manifest.json` inside a `.zip`                                                      |
-| Remote URL  | The URL is probed for reachability and the version read from it                                                               |
-| Git URL     | The repository is shallow-cloned read-only and its root `manifest.json` — or, failing that, its root `package.json` — is read |
+| Source kind | How the current version is resolved                                                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _(none)_    | The KB the CLI resolves by default (bundled dataset, or the cached official release)                                                                 |
+| Local path  | `manifest.json` in the directory, the `manifest.json` inside a `.zip`, or the owning package's `package.json` one level up (monorepo dataset layout) |
+| Remote URL  | The URL is probed for reachability and the version is parsed out of the URL string itself (the artifact is not downloaded)                           |
+| Git URL     | The repository is shallow-cloned read-only and its root `manifest.json` is read                                                                      |
 
 A git source (`*.git`, `git@…`, `ssh://git@…`, optionally pinned with `#ref`) is cloned into a
 throwaway temporary directory that is deleted straight after the read — the shared KB cache
@@ -308,8 +308,14 @@ repositories authenticate exactly as they do for `install`: `PAIR_GIT_TOKEN` or 
 Credentials never reach the output — any token in a git error message is redacted before it is
 printed or serialized to JSON.
 
+Only the root `manifest.json` is read from a git repository — never a root `package.json`, even
+when one is present. `install` records the installed version of a git source from its cache slot,
+where only a `manifest.json` is reachable; reporting a `package.json` version as "current" would
+therefore describe a version `install` can never record, leaving the check stuck on "unknown
+installed version" for good. A git KB that wants drift visibility ships a root `manifest.json`.
+
 If the clone cannot run at all — offline, `git` not installed, wrong credentials, a `#ref` that
-does not exist, or a repository carrying no readable version — the check reports **Current
+does not exist, or a repository with no root `manifest.json` — the check reports **Current
 version unavailable** with the reason and still exits **0**, like every other source kind.
 
 ### Examples

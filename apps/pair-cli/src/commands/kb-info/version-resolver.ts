@@ -66,19 +66,27 @@ export function readVersionFromDirectory(fs: FileSystemService, dirPath: string)
 }
 
 /**
- * Read a version string from a directory that IS the repository root: manifest.json first,
- * then the repository's OWN package.json.
+ * Read a version string from a directory that IS the repository root of a fresh clone:
+ * manifest.json ONLY.
  *
- * Deliberately never looks at the PARENT directory. For a git clone the parent is a
- * throwaway temp root, so the sibling fallback would report `<temp-root>/package.json` —
- * a file the cloned repository does not own, and on Linux one any local process can drop
- * into the shared /tmp.
+ * Two files are deliberately not consulted.
+ *
+ * The PARENT directory's package.json, because for a clone the parent is a throwaway temp
+ * root — the sibling fallback `readVersionFromDirectory` applies would report
+ * `<temp-root>/package.json`, a file the repository does not own and, on Linux, one any
+ * local process can drop into the shared /tmp.
+ *
+ * The repository's OWN package.json, because the INSTALL side cannot mirror that read and
+ * the two must agree. `install --url <git url>` records the installed version from the
+ * cache slot through `readVersionFromDirectory` (`<slot>/manifest.json` ??
+ * `~/.pair/kb/external/package.json`, which is never created), so a git KB with a root
+ * package.json but no manifest.json would report a "current" version that install can
+ * never record: the user would be told "installed version unknown" against a known current
+ * one forever, never up-to-date and never drift. Manifest-only makes the same repo report
+ * `available: false` with a reason that names the cure instead.
  */
 function readVersionFromRepoRoot(fs: FileSystemService, dirPath: string): string | null {
-  return (
-    readVersionField(fs, join(dirPath, 'manifest.json')) ??
-    readVersionField(fs, join(dirPath, 'package.json'))
-  )
+  return readVersionField(fs, join(dirPath, 'manifest.json'))
 }
 
 /**
@@ -247,7 +255,7 @@ async function resolveGitVersion(
       return {
         version: null,
         available: false,
-        error: `No KB version found at git source ${redactGitCredentials(source)} (no manifest.json or package.json at the repository root)`,
+        error: `No KB version found at git source ${redactGitCredentials(source)} (no manifest.json at the repository root — add one so install and kb-info report the same version)`,
       }
     }
     return { version, available: true }

@@ -247,7 +247,13 @@ describe('resolveCurrentVersion - git source', () => {
     })
   })
 
-  it('falls back to the cloned repository OWN package.json when it has no manifest.json', async () => {
+  it('does NOT read the repository root package.json — the install side cannot mirror it', async () => {
+    // Git KB whose root carries only package.json {version:'3.0.0'} and no manifest.json.
+    // Reporting 3.0.0 as "current" dead-ends the user: `pair install --url <same git url>`
+    // records from the cache slot (manifest.json absent, `<slot>/../package.json` never
+    // exists), writes NO marker, and every later kb-info prints "installed version unknown"
+    // against a current 3.0.0 — forever, with no hint that a manifest.json is the cure.
+    // Manifest-only keeps both sides agreeing, and the reason names the cure.
     const fsService = new InMemoryFileSystemService({}, cwd, cwd)
     const { cloner } = cloneStub({ 'package.json': JSON.stringify({ version: '3.0.0' }) })
 
@@ -256,7 +262,9 @@ describe('resolveCurrentVersion - git source', () => {
       gitCloner: cloner(fsService),
     })
 
-    expect(result).toMatchObject({ version: '3.0.0', available: true })
+    expect(result).toMatchObject({ sourceKind: 'git', version: null, available: false })
+    expect(result.error).toContain('manifest.json')
+    expect(result.error).not.toContain('3.0.0')
   })
 
   it('never reports a package.json planted OUTSIDE the clone (temp-root regression)', async () => {
