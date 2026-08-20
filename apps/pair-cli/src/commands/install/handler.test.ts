@@ -890,11 +890,14 @@ describe('BUG 4: install precondition — targets must not exist', () => {
 })
 
 /**
- * BUG #03: install must report skipped registries (source missing)
+ * BUG #03: install must report a registry whose source is missing
  *
- * When a registry source does not exist, the install should complete but
- * mark the registry as failed (ok: false) so the summary clearly shows
- * which registries were skipped. Previously this was silently swallowed.
+ * Under the three-outcome model (US-396) a registry the source does not ship is
+ * `skipped — not shipped by this source`, NEVER `failed`: it is absent, not broken,
+ * so it costs the run neither a red summary nor a non-zero exit. `failed` is reserved
+ * for a registry that was shipped and could not be installed. (`RegistryResult.ok` no
+ * longer exists — the field is `status: ok | skipped | failed`.) Before this bug was
+ * fixed the missing source was silently swallowed instead of being reported at all.
  */
 describe('BUG #03: install reports skipped registries', () => {
   test('completes without throw when a registry source is missing', async () => {
@@ -940,9 +943,10 @@ describe('BUG #03: install reports skipped registries', () => {
     }
 
     // Should NOT throw — completes with skipped registries reported in summary
-    await handleInstallCommand(config, fs)
+    const exitCode = await handleInstallCommand(config, fs)
 
-    // Knowledge was installed, github was skipped
+    // Knowledge was installed, github was skipped — a skip is not a failure, so 0.
+    expect(exitCode).toBe(0)
     expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
     expect(await fs.exists(`${cwd}/.github`)).toBe(false)
   })

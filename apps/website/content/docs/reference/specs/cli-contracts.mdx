@@ -270,6 +270,24 @@ from these two commands is not necessarily a validation error (it may be a per-r
 copy failure or a no-op), and `update` returns a non-zero code at all — it previously
 exited `0` unless it threw.
 
+### `kb-verify` / `kb-info` / `kb-cache`: their non-zero code now reaches the shell
+
+Not new behaviour these commands *report* — new behaviour a caller *observes*. All three
+already returned `1` from their handlers (an unreadable or unextractable KB, a checksum
+mismatch, an unknown cache slot), but the entry point force-exited with an explicit
+`process.exit(0)`, and in Node an explicit code OVERRIDES `process.exitCode`. Forwarding
+the reported code (the fix AC5 required for `install`) un-swallows theirs too:
+
+| Command | Printed before and after | Exit code before | Exit code now |
+| ------- | ------------------------ | ---------------- | ------------- |
+| `pair kb-verify <kb>` | the checksum/structure failure | `0` | `1` |
+| `pair kb-info <kb>` | the KB it could not read | `0` | `1` |
+| `pair kb-cache <op>` | the cache operation that failed | `0` | `1` |
+
+A CI step that ran `pair kb-verify ./kb` and passed while printing a checksum mismatch now
+fails that step. That is the contract these commands always described — but a pipeline
+relying on the old code turning green is the one place the change is felt.
+
 ## Test Matrices
 
 ### Install/Update Option Validation Matrix
