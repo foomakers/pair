@@ -480,9 +480,13 @@ Rules:
 - A missing target matching a pattern is a **warning** (`optional link (pattern-matched)`)
   and does not fail the run; a missing target matching nothing stays an **error**.
 - Config patterns and `--optional-link-patterns` are **merged** (union), never replaced.
-- Each pattern is matched against both the link **as written** (`../../apps/x.ts`) and
-  the target **resolved relative to the KB root** (`apps/x.ts`) — a match in either form
-  makes the link optional, and overlapping patterns still produce a single warning.
+- Each pattern is matched against the target **resolved relative to the KB root**
+  (`apps/x.ts`) and — only when the link is written as a **parent-relative** path
+  (`../…`) — against the link **as written** (`../../apps/x.ts`). A match in either form
+  makes the link optional, and overlapping patterns still produce a single warning. A link
+  that stays **inside** the KB (`apps/x.md`, `./apps/x.md`) is matched on its resolved form
+  only: a KB-root-relative rule like `apps/**` cannot silence a broken link that merely
+  starts with `apps/` somewhere deeper in the tree.
 - Glob syntax: `**` (a whole segment: **zero or more** path segments, so `a/**/b` matches
   `a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also
   what a `**` that is not a whole segment means), `?` (one character, never `/`), `[abc]` /
@@ -490,6 +494,13 @@ Rules:
   malformed pattern (unterminated class, out-of-order range like `[z-a]`) is reported and
   skipped, never fatal — including under `--strict`, where the matchers are discarded but the
   typo is still warned about.
+- **Everything outside that list is literal, not an error.** Brace expansion (`{apps,packages}/**`),
+  extglob (`+(a|b)`) and leading-`!` negation (`!apps/**`) are compiled character by character, so
+  they simply never match — and they are **not** reported as malformed patterns, so nothing warns.
+  Write one pattern per alternative instead (`["apps/**", "packages/**"]`).
+- A pattern containing a **comma** cannot be passed on `--optional-link-patterns` (the flag value is
+  split on `,`, so `"[a,b]/*"` becomes two patterns, one of them malformed). Declare such a pattern
+  in `link_validation.optional_link_patterns` instead.
 - Two places this matcher is **more permissive than `minimatch`**, so do not assume parity:
   a trailing `/**` also matches the **directory itself** (`apps/**` matches `apps`, `**/b/**`
   matches `a/b`), and `**` **traverses `..` segments** (`**` matches `../../apps/x.ts`). Both
@@ -499,11 +510,15 @@ Rules:
 - A `link_validation` section of the wrong **shape** — not an object, `optional_link_patterns`
   not an array (`"apps/**"` instead of `["apps/**"]`), a camelCase key, or non-string entries —
   is reported as a warning and ignored, never fatal. Without that warning the run would look
-  like "all these links are broken" rather than "the config key is misspelled".
+  like "all these links are broken" rather than "the config key is misspelled". An empty section
+  (`"link_validation": {}`) declares nothing and is silent.
+- Config-shape and malformed-pattern diagnostics are printed under **`Configuration:`** in the
+  report and counted in its `Warnings:` total, alongside the per-file ones.
 - `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
 - `--ignore-config` skips the config-declared patterns; CLI-declared ones still apply.
 - Config patterns are read from the config of the **KB being validated**
-  (`<--path>/config.json`), not from the invoking project — the same config `--path` already
+  (`<--path>/pair.config.json`, falling back to `<--path>/config.json` when the former is
+  absent), not from the invoking project — the same config `--path` already
   resolves registries from. Validating `--path ./my-kb` therefore ignores a `link_validation`
   section left in the repo-root config.
 

@@ -48,11 +48,16 @@ diagnostic still matters, CI being where `--strict` runs).
 
 Two consequences of "internal, therefore ours to define" are decided here as well:
 
-- **A pattern is matched against two forms of the same link** — as written in the markdown
-  (`../../apps/x.ts`) and resolved relative to the KB root (`apps/x.ts`) — because both are how
-  a maintainer legitimately expresses the rule, and the written form's `../` depth varies with
-  the source file's depth while the resolved form does not. First match wins, so overlapping
-  patterns still produce exactly one warning.
+- **A pattern is matched against the resolved form of every link, and additionally against the
+  written form of the links that leave the source directory.** The resolved form (relative to the
+  KB root, `apps/x.ts`) is always a candidate; the form as written (`../../apps/x.ts`) is a
+  candidate only when it is parent-relative (`../…`), which is the case it exists for — its `../`
+  depth varies with the source file's depth while the resolved form does not, so a maintainer
+  legitimately writes the rule either way. Matching the written form unconditionally was the
+  first implementation and was rejected on review evidence: `apps/**`, meaning "KB-root-relative
+  `apps/`", also silenced `[x](apps/x.md)` written deeper in the KB and resolving INSIDE it — a
+  genuinely broken internal link downgraded to a warning, the exact failure a link validator
+  exists to catch. First match wins, so overlapping patterns still produce exactly one warning.
 - **Matching is pure string work.** Nothing in the matcher touches the filesystem, so an
   optional pattern can never widen what `kb-validate` reads outside the KB root.
 
@@ -78,8 +83,11 @@ Two consequences of "internal, therefore ours to define" are decided here as wel
 - `glob-match.ts` is production code with its own unit tests; the supported syntax is documented
   in the module header and in the CLI reference (`kb-validate` → Optional link patterns), and the
   docs state the anchoring and the two matched forms so behavior is not inferred from source.
-- Unsupported constructs (`{a,b}`, extglob) are matched **literally** rather than rejected. A user
-  who writes them gets no match rather than an error; the documented syntax list is the contract.
+- Unsupported constructs (`{a,b}`, extglob, leading `!`) are matched **literally** rather than
+  rejected. A user who writes them gets no match rather than an error, and they are not classified
+  as malformed, so nothing warns; the documented syntax list is the contract, and it now states
+  this explicitly (CLI reference → Optional link patterns), as it states that a pattern containing
+  a comma cannot travel through the comma-split CLI flag.
 - `**` matches **zero or more** segments when it is a whole segment (`a/**/b` matches `a/b`,
   `**/apps/**` matches `apps/x.ts`, `apps/**` matches `apps` itself), and means `*` when it is not
   (`a**b` cannot cross `/`).

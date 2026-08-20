@@ -186,11 +186,16 @@ A top-level `link_validation` field, a sibling of `asset_registries`, tunes how
 `optional_link_patterns` marks matched-but-missing targets as warnings instead of
 errors, so a KB can be validated in isolation without disabling whole registries.
 Patterns merge (union) with `--optional-link-patterns`, and `--strict` overrides
-them back to errors.
+them back to errors. A pattern is matched against the target resolved relative to the
+KB root, and — only for links written as parent-relative paths (`../…`) — against the
+link as written; only the documented glob syntax is supported, anything else (brace
+expansion, extglob, leading `!`) is matched literally and therefore never matches.
 
-The section is read from the config of the **KB being validated** — `<--path>/config.json`,
-the same config the registries are resolved from — so validating `pair kb-validate --path ./my-kb`
-uses `./my-kb/config.json`, not the config of the directory you run the command in.
+The section is read from the config of the **KB being validated** — `<--path>/pair.config.json`,
+falling back to `<--path>/config.json` when there is no `pair.config.json`, the same config the
+registries are resolved from — so validating `pair kb-validate --path ./my-kb` uses
+`./my-kb/pair.config.json` (or `./my-kb/config.json`), not the config of the directory you run the
+command in.
 
 Full semantics and glob syntax:
 [kb-validate — Optional link patterns](/docs/reference/cli/commands#optional-link-patterns).
