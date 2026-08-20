@@ -47,6 +47,7 @@ The rule generalizes beyond this call site: **a read path may only report a vers
 - A git KB with only a root `package.json` moves from "reports 3.0.0, drift never resolvable" to "reports current version unavailable, with the reason". No user gains a false version; the affected shape gains a message it can act on.
 - The canonical git-hosted KB layout must ship a root `manifest.json` to get drift visibility. Stated in `apps/website/content/docs/reference/cli/commands.mdx` (kb-info → Sources).
 - The `install`/`kb-info` pair is consistent for every source kind: both read `manifest.json` first, and neither reports a version the other cannot record.
+- **This decision SUPERSEDES the wording of story #291's AC3 and of its "Clone succeeds but the repo has no `manifest.json` and no sibling `package.json`" edge case**, both of which described the git version as also resolvable from a `package.json`. The card carries a pointer back to this ADL, so the merge gate reads the AC against shipped behavior rather than against the pre-implementation text.
 
 ## Adoption Impact
 

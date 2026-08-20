@@ -369,36 +369,57 @@ describe('handleKbInfoCommand - version-check mode', () => {
     expect(parsed.current.version).toBe('1.2.0')
     expect(parsed.current.sourceKind).toBe('remote')
   })
+
+  // AC1 requires the git result to be correct in BOTH renderers, so both are exercised here:
+  // a branch added to the human formatter on `current.sourceKind` (e.g. printing the migration
+  // URL for `registry` only) would otherwise leave the suite green — no other test reaches the
+  // human renderer on a git SUCCESS path.
   it('reports drift for a git --source whose clone carries a newer manifest (AC1)', async () => {
-    const fsService = new InMemoryFileSystemService(
-      { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
-      cwd,
-      cwd,
-    )
+    for (const json of [false, true]) {
+      logSpy.mockClear()
+      const fsService = new InMemoryFileSystemService(
+        { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
+        cwd,
+        cwd,
+      )
 
-    const exitCode = await handleKbInfoCommand(
-      {
-        command: 'kb-info',
-        mode: 'version-check',
-        json: true,
-        source: 'https://github.com/org/kb.git#v1.2.0',
-      },
-      fsService,
-      {
-        baseTarget: cwd,
-        gitCloner: (_source, destDir) => {
-          void fsService.writeFile(`${destDir}/manifest.json`, JSON.stringify({ version: '1.2.0' }))
+      const exitCode = await handleKbInfoCommand(
+        {
+          command: 'kb-info',
+          mode: 'version-check',
+          json,
+          source: 'https://github.com/org/kb.git#v1.2.0',
         },
-      },
-    )
+        fsService,
+        {
+          baseTarget: cwd,
+          gitCloner: (_source, destDir) => {
+            void fsService.writeFile(
+              `${destDir}/manifest.json`,
+              JSON.stringify({ version: '1.2.0' }),
+            )
+          },
+        },
+      )
 
-    expect(exitCode).toBe(0)
-    const parsed = JSON.parse(capturedOutput())
-    expect(parsed.status).toBe('drift')
-    expect(parsed.current.sourceKind).toBe('git')
-    expect(parsed.current.version).toBe('1.2.0')
-    expect(parsed.current.available).toBe(true)
-    expect(parsed.migrationUrl).toContain('v1.1.0-to-v1.2.0')
+      expect(exitCode).toBe(0)
+
+      if (json) {
+        const parsed = JSON.parse(capturedOutput())
+        expect(parsed.status).toBe('drift')
+        expect(parsed.current.sourceKind).toBe('git')
+        expect(parsed.current.version).toBe('1.2.0')
+        expect(parsed.current.available).toBe(true)
+        expect(parsed.migrationUrl).toContain('v1.1.0-to-v1.2.0')
+      } else {
+        const output = capturedOutput()
+        expect(output).toContain('Version drift detected')
+        expect(output).toContain('1.2.0')
+        expect(output).toContain('git')
+        expect(output).not.toContain('unavailable')
+        expect(output).toContain('v1.1.0-to-v1.2.0')
+      }
+    }
   })
 
   it('reports current-unavailable with exit code 0 when a git clone fails (AC3)', async () => {
