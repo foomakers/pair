@@ -18,7 +18,10 @@ Story #188 gives `pair kb-validate` declarative optional link patterns
 (`link_validation.optional_link_patterns` + `--optional-link-patterns`), so a KB validated in
 isolation stops failing on relative links into a codebase that is not checked out beside it.
 That requires glob matching, which the CLI did not have: registry `include` entries are folder
-prefixes compared with `startsWith`, not globs, so there was nothing to reuse.
+entries matched by PATH SEGMENT — `buildCopyOptions` (`registry/operations.ts`) turns each into a
+`folderBehavior` key `<source>/<entry>`, and `resolveBehavior` (`content-ops/ops/behavior.ts`)
+resolves it by exact key then by truncating the path to successive ancestors — not globs, so
+there was nothing to reuse.
 
 The story's technical analysis proposed `picomatch` or `minimatch` and left the choice to
 implementation. `@pair/pair-cli` is **published to npm** (`apps/pair-cli/package.json`,
@@ -109,17 +112,24 @@ Two consequences of "internal, therefore ours to define" are decided here as wel
   2. `**` **traverses `..` segments** (`**`, `**/apps/**`, `**/x.ts` all match `../../apps/x.ts`),
      which minimatch's globstar refuses — and `..` is exactly the shape these patterns are written
      for, since the links this feature tolerates point out of the KB;
-  3. a trailing empty segment matches a wildcard (`apps/*` ∋ `apps/`) — irrelevant here, link
-     targets are files.
-     All three point the same, riskier way for a feature whose job is downgrading errors to warnings:
-     a maintainer assuming minimatch writes a BROADER rule than intended and can silence a genuinely
-     broken link, with no diagnostic (a too-broad pattern is not "malformed"). Families 1 and 2 are
-     stated in the CLI reference's syntax list, which is the contract.
+  3. redundant spellings of the same anchored path are collapsed on BOTH sides — a leading `/`
+     or `./`, a trailing `/`, repeated `/` — so `/apps/**`, `./apps/**` and `apps/**` are one
+     rule and `apps/` is `apps`, where minimatch keeps them distinct. This family exists because
+     the alternative is worse: those spellings used to compile into an empty segment that could
+     match NO candidate, and an inert pattern is not "malformed", so nothing warned about it
+     (`/apps/**` is not exotic — it is exactly how an absolute internal link is written).
+
+  All three point the same, riskier way for a feature whose job is downgrading errors to warnings:
+  a maintainer assuming minimatch writes a BROADER rule than intended and can silence a genuinely
+  broken link, with no diagnostic (a too-broad pattern is not "malformed"). All three are stated
+  in the CLI reference's syntax list, which is the contract. Re-measured over the same grid after
+  the normalization landed: 36 divergences, every one of them ours=true / minimatch=false.
 - **Story #188's business rule "patterns use glob syntax consistent with existing `include`
   patterns in `pair.config.json`" is knowingly NOT met, and the deviation is accepted here.** It
-  cannot be met literally: registry `include` entries are folder prefixes compared with
-  `startsWith`, so there is no existing glob syntax to be consistent with, and reusing prefix
-  matching under glob-looking values is the "syntax that lies about itself" rejected above. What
+  cannot be met literally: registry `include` entries are folder entries matched by path segment
+  (exact `folderBehavior` key, then ancestor truncation — no wildcard is ever interpreted), so
+  there is no existing glob syntax to be consistent with, and reusing segment/prefix matching
+  under glob-looking values is the "syntax that lies about itself" rejected above. What
   ships is therefore a project-defined syntax whose divergences from minimatch are all MORE
   permissive (families 1-3 above), on a feature whose job is downgrading errors to warnings — a
   disclosed risk: pinned by `glob-match.test.ts`, stated in the CLI reference and measured here.

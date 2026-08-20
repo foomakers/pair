@@ -496,9 +496,13 @@ Rules:
 - Glob syntax: `**` (a whole segment: **zero or more** path segments, so `a/**/b` matches
   `a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also
   what a `**` that is not a whole segment means), `?` (one character, never `/`), `[abc]` /
-  `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`. A
-  malformed pattern (unterminated class, out-of-order range like `[z-a]`) is reported and
-  skipped, never fatal — including under `--strict`, where the matchers are discarded but the
+  `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`.
+  Anchoring is on the KB root, so the decorations that would only restate it are stripped from
+  the pattern and from the path alike: a leading `/` or `./`, a trailing `/`, repeated `/`.
+  `/apps/**` (how an absolute internal link is written) and `./apps/**` are the same rule as
+  `apps/**`, and `apps/` the same as `apps` — note that is the directory itself, NOT everything
+  under it: write `apps/**` for that. A malformed pattern (unterminated class, out-of-order
+  range like `[z-a]`) is reported and skipped, never fatal — including under `--strict`, where the matchers are discarded but the
   typo is still warned about. A **blank** entry is not a malformed pattern: on the flag it is
   dropped silently (`"apps/**,,"` is one pattern), in config it is dropped with its own
   "not a non-empty string" warning.
@@ -509,11 +513,12 @@ Rules:
 - A pattern containing a **comma** cannot be passed on `--optional-link-patterns` (the flag value is
   split on `,`, so `"[a,b]/*"` becomes two patterns, one of them malformed). Declare such a pattern
   in `link_validation.optional_link_patterns` instead.
-- Two places this matcher is **more permissive than `minimatch`**, so do not assume parity:
+- Three places this matcher is **more permissive than `minimatch`**, so do not assume parity:
   a trailing `/**` also matches the **directory itself** (`apps/**` matches `apps`, `**/b/**`
-  matches `a/b`), and `**` **traverses `..` segments** (`**` matches `../../apps/x.ts`). Both
-  make a pattern broader than a minimatch habit suggests — and a too-broad pattern is not
-  malformed, so nothing warns about it. Prefer the narrowest pattern that covers the links you
+  matches `a/b`), `**` **traverses `..` segments** (`**` matches `../../apps/x.ts`), and the
+  normalization above collapses spellings minimatch keeps distinct (`/apps/**` matches
+  `apps/x.ts`). All three make a pattern broader than a minimatch habit suggests — and a
+  too-broad pattern is not malformed, so nothing warns about it. Prefer the narrowest pattern that covers the links you
   mean to tolerate.
 - A `link_validation` section of the wrong **shape** — not an object, `optional_link_patterns`
   not an array (`"apps/**"` instead of `["apps/**"]`), a camelCase key, or non-string entries —

@@ -94,11 +94,15 @@ pair update --source https://github.com/org/repo/releases/download/v2.0.0/kb.zip
 pair kb-validate
 ```
 
-### 11. Validate with External Link Checking
+### 11. Validate with Zero Tolerance
 
 ```bash
 pair kb-validate --strict
 ```
+
+Every missing internal target is an error and any declared optional link patterns are
+discarded. It checks **no external links**: the CLI makes no network requests, so
+`http`/`https` links are never fetched, with or without `--strict`.
 
 ### 12. Validate Source Layout
 
@@ -117,6 +121,10 @@ pair kb-validate --skip-registries github,adoption
 ```bash
 pair kb-validate --ignore-config
 ```
+
+No config is consulted, so no registry resolves, no file is collected and **nothing is
+validated** — structure, links and metadata are all skipped, and the run says so with a
+`Configuration:` notice. Use it to skip validation, not to run with CLI-only patterns.
 
 ### 15. Validate Default Configuration
 

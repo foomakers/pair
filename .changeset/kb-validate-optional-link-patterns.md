@@ -17,8 +17,10 @@
   form is a spelling of the same resolved target — its `../` climb lands on the KB root — or
   where the target leaves the KB tree. A link resolving back INSIDE the KB is matched on its
   resolved form only, so a broken in-KB link is still an error. Glob syntax: `**`, `*`, `?`,
-  `[abc]`, anchored to the whole path. A malformed pattern is warned about and skipped, never
-  fatal.
+  `[abc]`, anchored to the whole path — and anchored on the KB ROOT, so a leading `/` or `./`,
+  a trailing `/` and repeated `/` are stripped from pattern and path alike (`/apps/**`, the way
+  an absolute internal link is written, is the same rule as `apps/**`). A malformed pattern is
+  warned about and skipped, never fatal.
 
 Fully backward compatible: with no patterns declared, every missing internal link is an
 error exactly as before.

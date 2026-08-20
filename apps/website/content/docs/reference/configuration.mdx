@@ -24,43 +24,45 @@ Override with `--config <path>` on any command.
     "source": ".source-dir",
     "behavior": "mirror",
     "description": "Human-readable description",
-    "include": ["**/*.md"],
+    "include": ["/agents"],
     "flatten": false,
     "prefix": "",
-    "targets": [{ "path": ".target-dir/", "mode": "canonical" }]
+    "targets": [
+      { "path": ".target-dir/", "mode": "canonical" }
+    ]
   }
 }
 ```
 
 ## Registry Fields
 
-| Field          | Type       | Required | Description                                                                                                                                                                                                                            |
-| -------------- | ---------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`       | `string`   | Yes      | Source directory within the KB dataset                                                                                                                                                                                                 |
-| `behavior`     | `string`   | Yes      | Sync behavior: `mirror`, `add`, `overwrite`, `skip`                                                                                                                                                                                    |
-| `description`  | `string`   | Yes      | Human-readable description shown by `--list-targets`                                                                                                                                                                                   |
-| `include`      | `string[]` | No       | Glob patterns for files to include (default: all)                                                                                                                                                                                      |
-| `exclude`      | `string[]` | No       | Source-relative entries never installed — the whole subtree is skipped                                                                                                                                                                 |
-| `flatten`      | `boolean`  | No       | Flatten directory hierarchy into dash-separated names                                                                                                                                                                                  |
-| `flattenDepth` | `number`   | No       | Bound flattening to the registry's entry depth — the first N source segments are joined, anything deeper is preserved as a real sub-path. Requires `flatten: true`; must be a positive integer. Omitted = every separator is flattened |
-| `prefix`       | `string`   | No       | Prefix to prepend to flattened directory names                                                                                                                                                                                         |
-| `targets`      | `Target[]` | No       | Multi-target distribution configuration                                                                                                                                                                                                |
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `source` | `string` | Yes | Source directory within the KB dataset |
+| `behavior` | `string` | Yes | Sync behavior: `mirror`, `add`, `overwrite`, `skip` |
+| `description` | `string` | Yes | Human-readable description shown by `--list-targets` |
+| `include` | `string[]` | No | Source-relative folder entries to mirror, matched by **path segment**, not globs (default: the whole source) |
+| `exclude` | `string[]` | No | Source-relative entries never installed — the whole subtree is skipped |
+| `flatten` | `boolean` | No | Flatten directory hierarchy into dash-separated names |
+| `flattenDepth` | `number` | No | Bound flattening to the registry's entry depth — the first N source segments are joined, anything deeper is preserved as a real sub-path. Requires `flatten: true`; must be a positive integer. Omitted = every separator is flattened |
+| `prefix` | `string` | No | Prefix to prepend to flattened directory names |
+| `targets` | `Target[]` | No | Multi-target distribution configuration |
 
 `exclude` matches **path segments**, not string prefixes: `"process/setup"` skips
 `process/setup` and everything under it, and leaves a sibling `process/setup-helper`
-alone. It means _never install_, not _uninstall_ — `behavior: overwrite` performs no
+alone. It means *never install*, not *uninstall* — `behavior: overwrite` performs no
 cleanup, so an entry already present in the target from an earlier run stays there when
 it later becomes excluded. Remove it by hand, or use `behavior: mirror` for a registry
 whose target should track the source exactly.
 
 ## Behavior Modes
 
-| Mode        | Description                                          | Use Case                           |
-| ----------- | ---------------------------------------------------- | ---------------------------------- |
-| `mirror`    | Overwrite all files, delete removed files            | Knowledge layer (upstream content) |
-| `add`       | Add new files only, never overwrite existing         | Adoption layer (user decisions)    |
-| `overwrite` | Overwrite existing files, add new ones, don't delete | Partial updates                    |
-| `skip`      | Do nothing if target exists                          | One-time initialization            |
+| Mode | Description | Use Case |
+| ---- | ----------- | -------- |
+| `mirror` | Overwrite all files, delete removed files | Knowledge layer (upstream content) |
+| `add` | Add new files only, never overwrite existing | Adoption layer (user decisions) |
+| `overwrite` | Overwrite existing files, add new ones, don't delete | Partial updates |
+| `skip` | Do nothing if target exists | One-time initialization |
 
 ### Behavior Summary
 
@@ -85,14 +87,13 @@ Each registry can distribute to multiple targets:
 
 ### Target Modes
 
-| Mode        | Description                                            |
-| ----------- | ------------------------------------------------------ |
-| `canonical` | Physical copy of files (primary target)                |
-| `symlink`   | Relative symlink to canonical target                   |
-| `copy`      | Independent copy (used when symlinks aren't supported) |
+| Mode | Description |
+| ---- | ----------- |
+| `canonical` | Physical copy of files (primary target) |
+| `symlink` | Relative symlink to canonical target |
+| `copy` | Independent copy (used when symlinks aren't supported) |
 
 **Notes:**
-
 - Exactly one target must be `canonical`
 - `symlink` targets create relative symlinks to the canonical copy
 - Windows falls back to `copy` mode (symlinks not reliably supported)
@@ -109,7 +110,6 @@ Target:  .claude/skills/pair-capability-verify-quality/SKILL.md
 ```
 
 The transform also updates:
-
 - YAML frontmatter values (e.g., `name: verify-quality` → `name: pair-capability-verify-quality`)
 - Markdown links between transformed files
 - Skill cross-references (e.g., `/verify-quality` → `/pair-capability-verify-quality`)
@@ -128,7 +128,6 @@ Target:  .claude/skills/pair-process-review/references/deep.md
 Compare with the unbounded result for the same source: `.claude/skills/pair-process-review-references/deep.md` — a sibling directory outside the skill, with the skill's own `./references/deep.md` link pointing at nothing.
 
 Notes:
-
 - Set it when your registry's entries own sub-directories (e.g. an Agent Skills `references/` progressive-disclosure directory).
 - A directory deeper than `flattenDepth` is treated as **content**, not an entry: it gets no prefix, no frontmatter `name` sync, and no skill-reference mapping.
 - Entries normally all sit at that depth, and a mixed-depth corpus is still workable: a shallower entry is fine while it owns no sub-directory (pair's own root-level `next` skill installs beside 39 two-segment ones), and **aborts the copy** only once it does. So does an entry deeper than the depth that nothing owns as content. Either way the copy fails with an explicit error before writing anything, instead of installing something broken.
@@ -223,12 +222,12 @@ pair validate-config --config ./custom-config.json
 
 ## Environment Variables
 
-| Variable              | Description                                                                                                                                                                   | Default               |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| `PAIR_KB_CACHE_DIR`   | Override the KB cache root; slots are created under it. Must be an ABSOLUTE path with no `..` segments — the CLI rejects anything else, because slots are deleted recursively | `~/.pair/kb`          |
-| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL                                                                                                                                           | GitHub latest release |
-| `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos                                                                                                                    | Not set               |
-| `PAIR_DIAG`           | Enable diagnostic logging (`1` to enable)                                                                                                                                     | `0`                   |
+| Variable | Description | Default |
+| -------- | ----------- | ------- |
+| `PAIR_KB_CACHE_DIR` | Override the KB cache root; slots are created under it. Must be an ABSOLUTE path with no `..` segments — the CLI rejects anything else, because slots are deleted recursively | `~/.pair/kb` |
+| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL | GitHub latest release |
+| `PAIR_GIT_TOKEN` | Token injected into HTTPS git clone URLs for private repos | Not set |
+| `PAIR_DIAG` | Enable diagnostic logging (`1` to enable) | `0` |
 
 ## Related
 
