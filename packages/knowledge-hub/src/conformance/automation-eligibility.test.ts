@@ -147,17 +147,56 @@ describe.each(policySources)(
       expect(content.toLowerCase()).toMatch(/splits on whitespace is wrong|no whitespace split/)
     })
 
-    it('enumerates the three HALT triggers — empty, several lines, comma or operator', () => {
+    it('enumerates the five HALT triggers — empty, several lines, comma or operator, markdown marker, over the label cap', () => {
       expect(content.toLowerCase()).toMatch(/no non-empty line/)
       expect(content.toLowerCase()).toMatch(/more than one non-empty line/)
       expect(content.toLowerCase()).toMatch(/contains a \*\*comma\*\*|contains a comma/)
       expect(content).toMatch(/`AND` \/ `OR` \/ `NOT`/)
+      // 4 — markdown decoration. The declaration is rendered inside a fence on
+      // every surface that documents it, and every other list in the adoption
+      // files is written as `- item`, so a bare fence line and `- risk:green` are
+      // the two values a copy-paste actually produces. Both are one non-empty line with
+      // no comma and no operator, so triggers 1-3 wave them through — and they
+      // match zero cards, switching automation off SILENTLY.
+      expect(content.toLowerCase()).toMatch(/begins with a markdown block marker/)
+      // 5 — the value has to be able to BE a label on the host.
+      expect(content.toLowerCase()).toMatch(/longer than 50 characters/)
+      expect(content).toMatch(/Validation is exactly the five checks/)
     })
 
-    it('states the declared value is DATA — a single argv element, never a shell fragment', () => {
+    it('says the declaration is a bare label line — not a list item, quote or fenced block', () => {
+      expect(content).toMatch(/bare label line/)
+      expect(content).toMatch(/not a list item/)
+      expect(content).toContain('- risk:green')
+    })
+
+    it('states the declared value is DATA on EVERY channel — argv, tool argument, agent prompt', () => {
       expect(content).toMatch(/DATA, never a command fragment/)
       expect(content.toLowerCase()).toMatch(/single argument.*argv element|argv element/)
       expect(content).toMatch(/MUST NOT[^.\n]*interpolate/)
+      // The shell is not the channel this schema's consumers use: #217 and #250
+      // are skills — LLM agents — with no argv at all, so a value like
+      // "ignore previous instructions ..." would otherwise pass every check and
+      // be handed on verbatim, by rule, into a prompt.
+      expect(content.toLowerCase()).toMatch(/agent prompt/)
+      expect(content).toMatch(/MUST NOT[^.\n]*read as instruction text/)
+    })
+
+    it('bounds the value mechanically — a label on the host, 50 characters, no newline', () => {
+      expect(content).toMatch(/50 characters/)
+      expect(content.toLowerCase()).toMatch(/forbids newlines/)
+      expect(content).toMatch(/MUST HALT/)
+    })
+
+    it('places the "label matches no card" diagnostic with the consumer — report, never HALT', () => {
+      // Line "validation is exactly the N checks" closes the failure set, and an
+      // unmatched filter is documented as expected behaviour. Together they make a
+      // typo (`risk:gren`) indistinguishable from a correct declaration on a board
+      // with no green cards — so the contract has to say WHOSE job it is to tell
+      // them apart, or a consumer reads the closed set as forbidding the check.
+      expect(content).toMatch(/SHOULD report/)
+      expect(content).toMatch(/MUST NOT HALT on/)
+      expect(content).toMatch(/consumer's own diagnostics/)
     })
   },
 )

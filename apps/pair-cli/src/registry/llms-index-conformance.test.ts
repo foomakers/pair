@@ -17,6 +17,15 @@ import { generateLlmsTxt } from './llms-generation'
 // tree and compare byte-for-byte with the committed file. It re-uses the production
 // `generateLlmsTxt` (no parallel implementation), so a generator change and a KB
 // change both surface here.
+//
+// OVERLAPS #416 ("tech-debt: no gate covers .pair/llms.txt drift"), which owns this
+// coverage properly. What lands here is #416's AC1 only — the byte-for-byte
+// comparison — reached through `turbo test` (root `quality-gate` + ci.yml). What
+// #416 still owns: an actionable failure message (the missing/extra lines, not a
+// raw vitest diff over a 400-line file), naming the command that regenerates the
+// index, fixture-tree + determinism tests, and MOVING the check to
+// `packages/dev-tools/src/quality-gates` so gate composition stays uniform. Do not
+// duplicate this file there — replace it.
 
 const REPO_ROOT = join(__dirname, '../../../..')
 

@@ -12,20 +12,18 @@ While the [Knowledge Base](/docs/concepts/knowledge-base) provides general guide
 ```text
 .pair/adoption/
   product/                      # Product decisions
-    adopted/
-      PRD.md                    # Product Requirements Document
+    PRD.md                      # Product Requirements Document
     context-map.md              # Domain glossary, entities, common rules (optional)
     subdomain/                  # Domain-Driven Design subdomains
       <slug>.md                 # Subdomain catalog entry
       <slug>.context.md         # Lazy per-subdomain context split (optional)
 
   tech/                         # Technical decisions
-    adopted/
-      architecture.md           # Architecture pattern and style
-      tech-stack.md             # Languages, frameworks, libraries
-      infrastructure.md         # Hosting, CI/CD, deployment
-      way-of-working.md         # Process, methodology, quality gates
-      ux-ui.md                  # Design system, component library
+    architecture.md             # Architecture pattern and style
+    tech-stack.md               # Languages, frameworks, libraries
+    infrastructure.md           # Hosting, CI/CD, deployment
+    way-of-working.md           # Process, methodology, quality gates
+    ux-ui.md                    # Design system, component library
     automation.md               # Unattended-automation policy (optional)
     risk-matrix.md              # Project delta to the quality model (optional)
     adr/                        # Architectural Decision Records
@@ -100,7 +98,7 @@ Optional. `tech/automation.md` declares how much of the delivery flow may run **
 risk:green
 ```
 
-The value is **a single literal label** (recommended `risk:green`), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
+The value is **a single literal label** on a bare line (recommended `risk:green`; the fence above is display only — never write the declaration as a list item or inside a code fence), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
 
 ### risk-matrix.md
 
@@ -110,11 +108,13 @@ It matters to `tech/automation.md`: eligibility matches the labels Tag Projectio
 
 ## How They Get Created
 
-You don't write adoption files by hand. There are two paths:
+You don't write adoption files by hand — with one exception, noted at the end of this section. There are two paths:
 
 **New project** — Run `/pair-next` in your AI assistant. It guides you through the full structured process: PRD creation, bootstrap checklist, architecture assessment, tech stack evaluation, and so on. Each step produces the corresponding adoption file automatically.
 
 **Existing project** — Ask your AI assistant to analyze the codebase and generate adoption files from what already exists. For example: *"Analyze this project and write the adoption files — architecture, tech stack, way of working."* The AI inspects your dependencies, folder structure, CI config, and conventions, then produces adoption files that reflect your current reality. From there, skills stay aligned with your actual stack.
+
+**The exception — the two optional files above.** `tech/automation.md` and `tech/risk-matrix.md` are the ones you author yourself: nothing scaffolds them (`classify` and `bootstrap` may *propose* a section, and write only what you confirm), and their absence is a valid state that turns the corresponding behaviour off rather than failing.
 
 Either way, once adoption files exist, every subsequent AI session reads them and stays consistent.
 
