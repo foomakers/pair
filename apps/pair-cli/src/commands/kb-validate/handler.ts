@@ -12,7 +12,7 @@ import {
   type RegistryConfig,
 } from '#registry'
 import { validateStructure } from './structure-validator'
-import { validateLinks, describeInvalidOptionalLinkPatterns } from './link-checker'
+import { validateLinks } from './link-checker'
 import { validateMetadata } from './metadata-validator'
 import { createValidationReport, formatReport, ValidationExitCode } from './report-formatter'
 import { resolveOptionalLinkPatterns } from './optional-link-config'
@@ -75,51 +75,38 @@ async function collectFiles(
 }
 
 /**
- * Optional link patterns of this run (US-188), with their diagnostics.
+ * Optional link patterns of this run (US-188), with the diagnostics produced
+ * while reading them from config.
  *
- * The diagnostics are RETURNED, not just logged, so they reach the report as
- * run-level warnings: a warning that only went to the log would leave the report
+ * No module that detects a run-level diagnostic logs it: they are all returned,
+ * and this handler is the single place that owns the output channels, so each
+ * one reaches BOTH — stderr (visible without scrolling back through the report)
+ * and the report's `Configuration:` section, where it is counted in the
+ * `Warnings:` total. A diagnostic that only reached the log would leave the
  * footer printing `Warnings: 0` on a run that just reported a config typo.
- *
- * They deliberately travel on BOTH channels, so each run-level diagnostic is
- * emitted twice: once on stderr the moment it is detected (immediacy — a long
- * validation run should not sit on a config typo until the report prints; and
- * `validateLinks` is a module-level API whose contract cannot assume a report
- * exists downstream), and once in the report's `Configuration:` section, where
- * it is counted in the `Warnings:` total. Each channel logs its own: the config-shape ones here, the
- * malformed-pattern ones inside `validateLinks` when it compiles them —
- * `describeInvalidOptionalLinkPatterns` re-derives the latter from the SAME
- * message source, so the two channels cannot drift. Documented as a design
- * choice in the CLI reference (`kb-validate` → Optional link patterns).
+ * Documented as a design choice in the CLI reference (`kb-validate` → Optional
+ * link patterns).
  */
 function resolveOptionalLinks(
   config: KbValidateCommandConfig,
   loadedConfig: Config | null,
-): { patterns: string[]; runWarnings: string[] } {
-  const { patterns, warnings } = resolveOptionalLinkPatterns(
-    loadedConfig,
-    config.optionalLinkPatterns,
-  )
-  for (const warning of warnings) {
-    logger.warn(warning)
-  }
-  return { patterns, runWarnings: [...warnings, ...describeInvalidOptionalLinkPatterns(patterns)] }
+): { patterns: string[]; warnings: string[] } {
+  return resolveOptionalLinkPatterns(loadedConfig, config.optionalLinkPatterns)
 }
 
 /**
  * `--ignore-config` resolves NO registry, so no file is collected and nothing —
  * structure, links, metadata — is actually checked: the run exits 0 having
  * validated zero files. Left silent, that reads exactly like a clean run of a
- * validation tool, which is the one thing it must never read like. Logged AND
- * carried into the report's `Configuration:` section, like every other run-level
- * diagnostic.
+ * validation tool, which is the one thing it must never read like. Returned like
+ * every other run-level diagnostic, so the caller logs it AND carries it into
+ * the report's `Configuration:` section.
  */
 function describeNoConfigRun(loadedConfig: Config | null): string[] {
   if (loadedConfig !== null) return []
-  const notice =
-    '--ignore-config: no config consulted, so no registry resolved — zero files collected, nothing validated (structure, links and metadata all skipped)'
-  logger.warn(notice)
-  return [notice]
+  return [
+    '--ignore-config: no config consulted, so no registry resolved — zero files collected, nothing validated (structure, links and metadata all skipped)',
+  ]
 }
 
 /** Frontmatter checks: skills are the SKILL.md files, adoption the files under /adoption/. */
@@ -139,6 +126,35 @@ function validateKbMetadata(params: {
 }
 
 /**
+ * The run-level diagnostics of this run: logged once here on stderr, and returned
+ * so the report counts them once under `Configuration:` — the two channels every
+ * such diagnostic travels on (see `resolveOptionalLinks`).
+ */
+function emitRunNotices(sources: string[][]): string[] {
+  const notices = sources.flat()
+  for (const notice of notices) {
+    logger.warn(notice)
+  }
+  return notices
+}
+
+/** A KB is a directory with a `.pair/` in it; anything else is a usage error. */
+async function assertKbRoot(kbPath: string, fs: FileSystemService): Promise<void> {
+  const pairDir = `${kbPath}/.pair`
+  if (!(await fs.exists(pairDir))) {
+    throw new Error(`Invalid KB: missing .pair directory at ${pairDir}`)
+  }
+}
+
+/** Prints the report and turns a failing exit code into the thrown CLI failure. */
+function emitReport(report: ReturnType<typeof createValidationReport>): void {
+  console.log(formatReport(report))
+  if (report.exitCode !== ValidationExitCode.Success) {
+    throw new Error(`Validation failed with ${report.summary.totalErrors} error(s)`)
+  }
+}
+
+/**
  * Handles the kb-validate command execution.
  * Validates KB structure, links, and metadata using layout.ts utilities.
  */
@@ -149,15 +165,14 @@ export async function handleKbValidateCommand(
   const kbPath = config.path || fs.currentWorkingDirectory()
   const layout: LayoutMode = config.layout || 'target'
 
-  const pairDir = `${kbPath}/.pair`
-  if (!(await fs.exists(pairDir))) {
-    throw new Error(`Invalid KB: missing .pair directory at ${pairDir}`)
-  }
+  await assertKbRoot(kbPath, fs)
 
   const loadedConfig = loadKbConfig(config, fs, kbPath)
   const registries = loadRegistries(config, loadedConfig)
-  const { patterns: optionalLinkPatterns, runWarnings } = resolveOptionalLinks(config, loadedConfig)
-  const runNotices = [...describeNoConfigRun(loadedConfig), ...runWarnings]
+  const { patterns: optionalLinkPatterns, warnings: configWarnings } = resolveOptionalLinks(
+    config,
+    loadedConfig,
+  )
 
   const structure = !config.ignoreConfig
     ? await validateStructure({ registries, layout, baseDir: kbPath, fs })
@@ -166,7 +181,7 @@ export async function handleKbValidateCommand(
   const allFiles = await collectFiles(registries, layout, kbPath, fs)
   const mdFiles = allFiles.filter(f => f.endsWith('.md'))
 
-  const links = await validateLinks({
+  const { results: links, diagnostics: patternDiagnostics } = await validateLinks({
     baseDir: kbPath,
     files: mdFiles,
     fs,
@@ -174,18 +189,20 @@ export async function handleKbValidateCommand(
     ...(optionalLinkPatterns.length > 0 && { optionalLinkPatterns }),
   })
 
+  const runNotices = emitRunNotices([
+    describeNoConfigRun(loadedConfig),
+    configWarnings,
+    patternDiagnostics,
+  ])
+
   const metadata = await validateKbMetadata({ allFiles, mdFiles, kbPath, fs })
 
-  const report = createValidationReport({
-    ...(structure && { structure }),
-    links,
-    metadata,
-    runWarnings: runNotices,
-  })
-  const output = formatReport(report)
-  console.log(output)
-
-  if (report.exitCode !== ValidationExitCode.Success) {
-    throw new Error(`Validation failed with ${report.summary.totalErrors} error(s)`)
-  }
+  emitReport(
+    createValidationReport({
+      ...(structure && { structure }),
+      links,
+      metadata,
+      runWarnings: runNotices,
+    }),
+  )
 }

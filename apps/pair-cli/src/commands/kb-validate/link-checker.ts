@@ -1,6 +1,5 @@
 import type { FileSystemService } from '@pair/content-ops'
 import type { HttpClientService } from '@pair/content-ops'
-import { logger } from '@pair/content-ops'
 import { join, dirname, isAbsolute, relative } from 'path'
 import type { OptionalLinkMatcher } from './glob-match'
 import { compileOptionalLinkPatterns, matchesAnyPattern } from './glob-match'
@@ -22,7 +21,13 @@ export interface LinkValidationOptions {
   baseDir: string
   files: string[]
   fs: FileSystemService
+  /**
+   * When supplied AND `strict` is set, external (`http`/`https`) links are probed
+   * with an HTTP HEAD. No CLI path supplies one today — `pair kb-validate --strict`
+   * makes zero network requests — so this is a module-level capability only.
+   */
   httpClient?: HttpClientService
+  /** Zero tolerance: optional link patterns are discarded, every miss is an error. */
   strict?: boolean
   /**
    * Globs (US-188) marking a MISSING internal link target as optional: matched
@@ -34,13 +39,26 @@ export interface LinkValidationOptions {
 }
 
 /**
+ * Outcome of one link-validation run: the per-file results, plus the run-level
+ * diagnostics (today: one message per optional link pattern that cannot be
+ * compiled).
+ *
+ * The diagnostics are RETURNED rather than logged here so this module stays
+ * pure — results in, results out — and the caller owns every output channel:
+ * the CLI handler logs them on stderr AND counts them in the report footer,
+ * which a module writing straight to stderr could not offer.
+ */
+export interface LinkValidationRun {
+  results: LinkValidationResult[]
+  diagnostics: string[]
+}
+
+/**
  * Validates links in markdown files
  * @param options - Validation options
- * @returns Validation results per file
+ * @returns Per-file validation results plus run-level diagnostics
  */
-export async function validateLinks(
-  options: LinkValidationOptions,
-): Promise<LinkValidationResult[]> {
+export async function validateLinks(options: LinkValidationOptions): Promise<LinkValidationRun> {
   const { baseDir, files, fs, httpClient, strict, optionalLinkPatterns } = options
 
   // Compiled ONCE per run, not per file: a malformed pattern must be reported
@@ -49,9 +67,7 @@ export async function validateLinks(
   // nothing), but a typo in the config must still be reported — CI is exactly
   // where `--strict` runs and where a silent typo would go unnoticed.
   const { matchers, invalid } = compileOptionalLinkPatterns(optionalLinkPatterns ?? [])
-  for (const pattern of invalid) {
-    logger.warn(formatInvalidOptionalLinkPattern(pattern))
-  }
+  const diagnostics = invalid.map(formatInvalidOptionalLinkPattern)
   const optionalMatchers = strict ? [] : matchers
 
   const results: LinkValidationResult[] = []
@@ -64,28 +80,12 @@ export async function validateLinks(
     results.push(result)
   }
 
-  return results
+  return { results, diagnostics }
 }
 
-/** The one wording for "this pattern could not be compiled", logged and reported. */
+/** The one wording for "this pattern could not be compiled". */
 function formatInvalidOptionalLinkPattern(pattern: string): string {
   return `Invalid optional link pattern '${pattern}', ignoring`
-}
-
-/**
- * Run-level diagnostics for a set of optional link patterns — one message per
- * pattern that cannot be compiled.
- *
- * Exported so a caller can put the SAME messages `validateLinks` logs into the
- * validation report as well: a diagnostic that only reaches the log would leave
- * the report footer printing `Warnings: 0` on a run that just reported a typo.
- * Compiling twice (here and inside `validateLinks`) is pure string work on a
- * handful of patterns — cheaper than threading a second return value through
- * every call site of `validateLinks`.
- */
-export function describeInvalidOptionalLinkPatterns(patterns: string[] | undefined): string[] {
-  const { invalid } = compileOptionalLinkPatterns(patterns ?? [])
-  return invalid.map(formatInvalidOptionalLinkPattern)
 }
 
 /**

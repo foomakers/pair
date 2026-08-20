@@ -13,7 +13,8 @@ export interface ResolvedOptionalLinkPatterns {
 }
 
 /**
- * Union of config-declared and CLI-declared patterns, config first, deduplicated.
+ * Union of config-declared and CLI-declared patterns, config first, deduplicated
+ * (both sides are trimmed before the `Set`, so the dedup is not whitespace-blind).
  *
  * Union — not override — on purpose (AC-2): the config states what this KB always
  * tolerates, the flag adds what this particular run tolerates; making the flag
@@ -74,11 +75,20 @@ function readPatternsField(section: Record<string, unknown>): ResolvedOptionalLi
   return acceptStrings(patterns)
 }
 
-/** Keeps the non-blank string entries, reporting how many were dropped. */
+/**
+ * Keeps the non-blank string entries TRIMMED, reporting how many were dropped.
+ *
+ * Trimmed here, before the caller's `Set`: dedup is byte-exact, so a config
+ * entry `' apps/**'` and a CLI entry `'apps/**'` (the flag parser already trims)
+ * would otherwise survive as two distinct strings and compile into two matchers
+ * for the same rule — "deduplicated" would only be true up to whitespace.
+ */
 function acceptStrings(patterns: unknown[]): ResolvedOptionalLinkPatterns {
-  const accepted = patterns.filter(
-    (pattern): pattern is string => typeof pattern === 'string' && pattern.trim().length > 0,
-  )
+  const accepted = patterns
+    .filter(
+      (pattern): pattern is string => typeof pattern === 'string' && pattern.trim().length > 0,
+    )
+    .map(pattern => pattern.trim())
 
   const droppedCount = patterns.length - accepted.length
   if (droppedCount === 0) return { patterns: accepted, warnings: [] }

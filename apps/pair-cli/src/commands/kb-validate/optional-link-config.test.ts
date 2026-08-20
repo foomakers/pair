@@ -36,6 +36,16 @@ describe('resolveOptionalLinkPatterns', () => {
     expect(resolved.patterns).toEqual(['apps/**', 'docs/**'])
   })
 
+  it('trims config entries before deduplicating (dedup is not whitespace-blind)', () => {
+    const resolved = resolveOptionalLinkPatterns(
+      { link_validation: { optional_link_patterns: ['  apps/** ', '\tdocs/**'] } },
+      ['apps/**'],
+    )
+
+    expect(resolved.patterns).toEqual(['apps/**', 'docs/**'])
+    expect(resolved.warnings).toEqual([])
+  })
+
   it('is empty and silent when neither side declares patterns (AC-6)', () => {
     expect(resolveOptionalLinkPatterns({}, undefined)).toEqual({ patterns: [], warnings: [] })
     expect(resolveOptionalLinkPatterns(null, undefined)).toEqual({ patterns: [], warnings: [] })

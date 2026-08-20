@@ -34,7 +34,7 @@ describe('validateLinks - optional link patterns on win32 paths', () => {
     const source = `${kb}\\.pair\\knowledge\\guide.md`
     fs.writeFile(source, '[Code](../../apps/website/page.tsx)')
 
-    const results = await validateLinks({
+    const { results } = await validateLinks({
       baseDir: kb,
       files: [source],
       fs,
@@ -52,7 +52,7 @@ describe('validateLinks - optional link patterns on win32 paths', () => {
     const source = `${kb}\\.pair\\knowledge\\guide.md`
     fs.writeFile(source, '[Code](../../../apps/y.md)')
 
-    const results = await validateLinks({
+    const { results } = await validateLinks({
       baseDir: kb,
       files: [source],
       fs,
@@ -70,7 +70,7 @@ describe('validateLinks - optional link patterns on win32 paths', () => {
     const source = `${kb}\\.pair\\knowledge\\a\\b\\guide.md`
     fs.writeFile(source, '[Code](../../apps/y.md)')
 
-    const results = await validateLinks({
+    const { results } = await validateLinks({
       baseDir: kb,
       files: [source],
       fs,
@@ -85,7 +85,7 @@ describe('validateLinks - optional link patterns on win32 paths', () => {
     const source = `${kb}\\.pair\\knowledge\\guide.md`
     fs.writeFile(source, '[Code](../../apps/website/page.tsx)')
 
-    const results = await validateLinks({
+    const { results } = await validateLinks({
       baseDir: kb,
       files: [source],
       fs,

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import type { FileSystemService } from '@pair/content-ops'
 import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
-import { MockHttpClientService, logger } from '@pair/content-ops'
+import { MockHttpClientService } from '@pair/content-ops'
 import { validateLinks } from './link-checker'
 import type { IncomingMessage } from 'http'
 
@@ -28,7 +28,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/README.md', '[Link](./other.md)')
       fs.writeFile('/kb/other.md', '# Other')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -42,7 +42,7 @@ describe('validateLinks', () => {
     it('should detect broken relative links', async () => {
       fs.writeFile('/kb/README.md', '[Link](./missing.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -58,7 +58,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/docs/README.md', '[Link](/other.md)')
       fs.writeFile('/kb/other.md', '# Other')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/docs/README.md'],
         fs,
@@ -71,7 +71,7 @@ describe('validateLinks', () => {
     it('should detect broken absolute internal links', async () => {
       fs.writeFile('/kb/docs/README.md', '[Link](/missing.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/docs/README.md'],
         fs,
@@ -86,7 +86,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/README.md', '[Link](./other.md#section)')
       fs.writeFile('/kb/other.md', '# Other')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -99,7 +99,7 @@ describe('validateLinks', () => {
     it('should ignore anchor-only links', async () => {
       fs.writeFile('/kb/README.md', '[Link](#section)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -117,7 +117,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/valid.md', '# Valid')
       fs.writeFile('/kb/also-valid.md', '# Also Valid')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -133,7 +133,7 @@ describe('validateLinks', () => {
     it('should skip external links when strict mode is disabled', async () => {
       fs.writeFile('/kb/README.md', '[Link](https://example.com)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -148,7 +148,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/README.md', '[Link](https://example.com)')
       httpClient.setRequestResponses([createMockResponse(200)])
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -163,7 +163,7 @@ describe('validateLinks', () => {
     it('should warn about unreachable external links in strict mode', async () => {
       fs.writeFile('/kb/README.md', '[Link](https://unreachable.example.com)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -181,7 +181,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/README.md', '[Link](http://example.com)')
       httpClient.setRequestResponses([createMockResponse(200)])
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -200,7 +200,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/valid.md', '# Valid')
       httpClient.setRequestResponses([createMockResponse(200)])
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -216,7 +216,7 @@ describe('validateLinks', () => {
     it('should report both broken internal and unreachable external links', async () => {
       fs.writeFile('/kb/README.md', '[Internal](./missing.md)\n[External](https://unreachable.com)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -238,7 +238,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/other.md', '[Link](./missing.md)')
       fs.writeFile('/kb/valid.md', '# Valid')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md', '/kb/other.md'],
         fs,
@@ -275,7 +275,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/README.md', content)
       fs.writeFile('/kb/valid.md', '# Valid')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -295,7 +295,7 @@ describe('validateLinks', () => {
     it('AC-1: downgrades a pattern-matched missing target to a labelled warning', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -312,7 +312,7 @@ describe('validateLinks', () => {
     it('AC-1: matches on the path resolved relative to the KB root, not only the written link', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -327,7 +327,7 @@ describe('validateLinks', () => {
     it('AC-3: a missing target matching NO pattern stays an error', async () => {
       fs.writeFile('/kb/README.md', '[Link](./missing.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -343,7 +343,7 @@ describe('validateLinks', () => {
     it('AC-4: --strict overrides the optional treatment (error, not warning)', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -361,7 +361,7 @@ describe('validateLinks', () => {
     it('AC-4: --strict overrides even without an httpClient', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -381,15 +381,10 @@ describe('validateLinks', () => {
       ['range out of order', 'docs/[z-a].md'],
       ['blank pattern (module API only: the CLI and config paths drop blanks first)', '   '],
     ])('malformed pattern (%s)', (_label, malformed) => {
-      afterEach(() => {
-        vi.restoreAllMocks()
-      })
-
       it('completes the run, skips the pattern, and keeps the valid ones working', async () => {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
         fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/x.ts)')
 
-        const results = await validateLinks({
+        const { results, diagnostics } = await validateLinks({
           baseDir: '/kb',
           files: ['/kb/.pair/knowledge/guide.md'],
           fs,
@@ -399,14 +394,13 @@ describe('validateLinks', () => {
         expect(results).toHaveLength(1)
         expect(results[0]?.valid).toBe(true)
         expect(results[0]?.warnings).toHaveLength(1)
-        expect(warn).toHaveBeenCalledWith(`Invalid optional link pattern '${malformed}', ignoring`)
+        expect(diagnostics).toEqual([`Invalid optional link pattern '${malformed}', ignoring`])
       })
 
       it('is still reported in --strict mode, where CI runs', async () => {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
         fs.writeFile('/kb/README.md', '[Link](./missing.md)')
 
-        const results = await validateLinks({
+        const { results, diagnostics } = await validateLinks({
           baseDir: '/kb',
           files: ['/kb/README.md'],
           fs,
@@ -415,15 +409,28 @@ describe('validateLinks', () => {
         })
 
         expect(results[0]?.valid).toBe(false)
-        expect(warn).toHaveBeenCalledWith(`Invalid optional link pattern '${malformed}', ignoring`)
+        expect(diagnostics).toEqual([`Invalid optional link pattern '${malformed}', ignoring`])
       })
+    })
+
+    it('reports no diagnostics when every pattern compiles', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/x.ts)')
+
+      const { diagnostics } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(diagnostics).toEqual([])
     })
 
     it('AC-5: a pattern-matched target that EXISTS is simply valid — no warning', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
       fs.writeFile('/kb/apps/website/page.tsx', 'export default null')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -438,7 +445,7 @@ describe('validateLinks', () => {
     it('AC-6: no patterns at all keeps every missing link an error', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/website/page.tsx)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -451,7 +458,7 @@ describe('validateLinks', () => {
     it('AC-6: an empty pattern list is identical to no patterns', async () => {
       fs.writeFile('/kb/README.md', '[Link](./missing.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -465,7 +472,7 @@ describe('validateLinks', () => {
     it('matches only the intended pattern when several are configured', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/x.ts)\n[Gone](./missing.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -481,7 +488,7 @@ describe('validateLinks', () => {
     it('emits ONE warning when several patterns match the same link', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../apps/x.ts)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -497,7 +504,7 @@ describe('validateLinks', () => {
         '[Anchor](#section)\n[External](https://apps.example.com/x)',
       )
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -515,7 +522,7 @@ describe('validateLinks', () => {
       // source directory (`../`). A broken internal link must stay an error.
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](apps/x.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -531,7 +538,7 @@ describe('validateLinks', () => {
     it('AC-3: the same in-KB link written `./apps/x.md` is not silenced either', async () => {
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](./apps/x.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -547,7 +554,7 @@ describe('validateLinks', () => {
       // coincide, so the KB-root-relative pattern legitimately applies.
       fs.writeFile('/kb/guide.md', '[Code](apps/x.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/guide.md'],
         fs,
@@ -566,7 +573,7 @@ describe('validateLinks', () => {
       // root, so neither the written nor the resolved rule applies here.
       fs.writeFile('/kb/.pair/knowledge/a/b/guide.md', '[Code](../../apps/y.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/a/b/guide.md'],
         fs,
@@ -584,7 +591,7 @@ describe('validateLinks', () => {
       // `.pair/knowledge/apps/y.md`, still inside the KB.
       fs.writeFile('/kb/.pair/knowledge/a/guide.md', '[Code](../apps/y.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/a/guide.md'],
         fs,
@@ -602,7 +609,7 @@ describe('validateLinks', () => {
       // genuine spelling of `apps/y.md` and the rule applies.
       fs.writeFile('/kb/.pair/knowledge/a/guide.md', '[Code](../../../apps/y.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/a/guide.md'],
         fs,
@@ -620,7 +627,7 @@ describe('validateLinks', () => {
       // resolved form escapes the KB, so the written form stays a candidate.
       fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../../apps/y.md)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/.pair/knowledge/guide.md'],
         fs,
@@ -638,7 +645,7 @@ describe('validateLinks', () => {
     it('applies to absolute internal links too (resolved from the KB root)', async () => {
       fs.writeFile('/kb/docs/guide.md', '[Code](/apps/website/page.tsx)')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/docs/guide.md'],
         fs,
@@ -654,7 +661,7 @@ describe('validateLinks', () => {
     it('should handle files with no links', async () => {
       fs.writeFile('/kb/README.md', 'No links here')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/README.md'],
         fs,
@@ -668,7 +675,7 @@ describe('validateLinks', () => {
       fs.writeFile('/kb/docs/nested/file.md', '[Link](../../README.md)')
       fs.writeFile('/kb/README.md', '# Root')
 
-      const results = await validateLinks({
+      const { results } = await validateLinks({
         baseDir: '/kb',
         files: ['/kb/docs/nested/file.md'],
         fs,
