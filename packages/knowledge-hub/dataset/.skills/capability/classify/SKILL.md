@@ -1,7 +1,7 @@
 ---
 name: classify
 description: "Builds the classification matrix by applying the quality model (KB default + `tech/risk-matrix.md` adoption delta) — from the story context in refinement, from the code/diff in review (confirm-or-raise, never lower). Emits chromatic tags only when the adoption declares the matrix→tag projection. Composed by /refine-story (refinement context) and /review (review context); invoke directly to classify a card or PR on demand."
-version: 0.2.0
+version: 0.2.1
 author: Foomakers
 ---
 
@@ -184,5 +184,5 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **Deterministic**: same input (card/PR + model + adoption) ⇒ same matrix and tags every run. No randomness, no time-dependence.
 - **Reading budget** (D22): the body/report output is 1 line + `<details>`, never an inline table.
 - **Writes two kinds of thing itself**: the matrix into the card/PR body (Step 4) and — only on a confirmed first-run proposal — the `## Tag Projection` registry section in `tech/risk-matrix.md` (Step 5, the quality-model §5 self-write precedent, mirroring `/verify-quality`'s Custom Gate Registry). Adoption **decision** content is never self-written — that routes through `/record-decision`; the Tag Projection section is config-registry state, not a decision record.
-- **No eligibility tag**: automation eligibility is an adoption-declared filter over classification tags (a single literal label, e.g. `risk:green` — schema in `collaboration/automation/automation-policy.md`), not a special tag — `/next` consumes it generically (quality-model §5, D18).
+- **No eligibility tag**: automation eligibility is an adoption-declared filter over classification tags (a single literal label, e.g. `risk:green` — schema in [automation-policy.md](../../../.pair/knowledge/guidelines/collaboration/automation/automation-policy.md)), not a special tag — `/next` consumes it generically (quality-model §5, D18).
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): re-running on an already-classified card recomputes the same matrix; a declared or opted-out Tag Projection is never re-proposed. Review re-runs recompute against the current diff (a raise can happen commit-to-commit; a lower never can).

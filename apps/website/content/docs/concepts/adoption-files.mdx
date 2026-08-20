@@ -114,7 +114,7 @@ You don't write adoption files by hand — with one exception, noted at the end 
 
 **Existing project** — Ask your AI assistant to analyze the codebase and generate adoption files from what already exists. For example: *"Analyze this project and write the adoption files — architecture, tech stack, way of working."* The AI inspects your dependencies, folder structure, CI config, and conventions, then produces adoption files that reflect your current reality. From there, skills stay aligned with your actual stack.
 
-**The exception — the two optional files above.** `tech/automation.md` and `tech/risk-matrix.md` are the ones you author yourself: nothing scaffolds them (`classify` and `bootstrap` may *propose* a section, and write only what you confirm), and their absence is a valid state that turns the corresponding behaviour off rather than failing.
+**The exception — the two optional files above.** `tech/automation.md` and `tech/risk-matrix.md` are the ones you author yourself: nothing scaffolds them — for `risk-matrix.md`, `classify` and `bootstrap` may *propose* a section and write only what you confirm, while `automation.md` is never proposed and is created entirely by you. Their absence is a valid state that turns the corresponding behaviour off rather than failing.
 
 Either way, once adoption files exist, every subsequent AI session reads them and stays consistent.
 

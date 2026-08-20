@@ -28,7 +28,7 @@ Eligibility is **exactly one literal label**, matched by string equality against
 
 ## Consequences
 
-- `automation-policy.md` defines malformed operationally (empty / more than one non-empty line / comma or operator / markdown block marker / over the 50-char label cap / more than one colon-carrying token) and HALTs on it; `automation-eligibility.test.ts` pins the rule and forbids any example filter carrying an operator.
+- `automation-policy.md` defines malformed operationally (empty / more than one non-empty line / comma or operator / markdown block marker / over the host's label-name cap, 50 characters on GitHub / more than one colon-carrying token / more than one `## Eligibility` heading) and HALTs on it, while naming the one residual it deliberately does not catch (two colon-free labels on one line, indistinguishable from a spaced label name — reported as a 0-match, never HALTed); `automation-eligibility.test.ts` pins the rule and forbids any example filter carrying an operator.
 - The day the product wants multi-label eligibility, the order of work is fixed: widen `--filter` (new story, ADR-017 §1 amendment), then this schema and its guard.
 - A project needing "green OR my-team" today expresses it upstream — in what `classify` projects onto labels (`tech/risk-matrix.md` Tag Projection) — not in the eligibility declaration.
 

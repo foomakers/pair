@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 // Conformance guard for story #216: auto-development eligibility is an
 // ADOPTION-DECLARED FILTER over the classification tags `classify` already emits
@@ -62,6 +62,13 @@ const docsSources: Array<[string, string]> = [
 // an example FILTER carrying an operator, since `--filter` cannot express one.
 const LABEL_BOOLEAN_OPERATOR =
   /(?:[a-z][a-z-]*:[a-z]+\s+(?:AND|OR|NOT)\s|\s(?:AND|OR|NOT)\s+[a-z][a-z-]*:[a-z]+)/
+
+// The same shape in ANY case, plus the comma-separated list form. Applied only to
+// the surfaces that carry NO negative examples (see the split at the bottom of
+// this file).
+const LABEL_BOOLEAN_OPERATOR_ANY_CASE =
+  /(?:[a-z][a-z-]*:[a-z]+\s+(?:AND|OR|NOT)\s|\s(?:AND|OR|NOT)\s+[a-z][a-z-]*:[a-z]+)/i
+const LABEL_LIST_COMMA = /[a-z][a-z-]*:[a-z]+\s*,\s*[a-z][a-z-]*:[a-z]+/i
 
 describe.each(policySources)('automation-policy.md — %s (AC1: the declaration)', (_, content) => {
   it('names the adoption file and the section that holds the declaration', () => {
@@ -170,6 +177,14 @@ describe.each(policySources)(
       expect(content.toLowerCase()).toMatch(/first non-empty line/)
     })
 
+    it('says WHICH `## Eligibility` heading is the declaration when the file carries two', () => {
+      // "Everything after the heading up to the next heading" is ambiguous the
+      // moment the file carries two `## Eligibility` headings — a shape #250 makes
+      // plausible, since it adds sibling sections to the same file.
+      const body = content.toLowerCase()
+      expect(body).toMatch(/more than one `## eligibility` heading/)
+    })
+
     it('says the whole trimmed line is the label, and that labels may contain spaces', () => {
       expect(content.toLowerCase()).toMatch(/entire trimmed line is the label/)
       expect(content.toLowerCase()).toMatch(/may contain spaces/)
@@ -178,7 +193,24 @@ describe.each(policySources)(
       expect(content.toLowerCase()).toMatch(/splits on whitespace is wrong|no whitespace split/)
     })
 
-    it('enumerates the six HALT triggers — empty, several lines, comma or operator, markdown marker, over the label cap, several labels on one line', () => {
+    it('scopes the HALT list to BOTH inputs — the section body and the value extracted from it', () => {
+      // Triggers 1 and 2 are properties of the SECTION BODY, not of the extracted
+      // value: by the extraction rule the value is exactly one trimmed line, so
+      // against it trigger 1 can never fire (a value exists ⇒ non-empty) and
+      // trigger 2 can never fire (one line has no second line). A preamble that
+      // says only "against the extracted value" therefore sends an implementer of
+      // #217/#250 down a path where the present-but-empty section — the
+      // half-written declaration the fail-safe above deliberately routes to HALT —
+      // falls through to a "no value" arm the contract never defines.
+      const preamble = content
+        .split('\n')
+        .filter(line => /MUST HALT\*\* when any of these holds/.test(line))
+      expect(preamble).toHaveLength(1)
+      expect(preamble[0]).toMatch(/section body/)
+      expect(preamble[0]).toMatch(/extracted/)
+    })
+
+    it('enumerates the seven HALT triggers — empty, several lines, comma or operator, markdown marker, over the label cap, several labels on one line, duplicate heading', () => {
       expect(content.toLowerCase()).toMatch(/no non-empty line/)
       expect(content.toLowerCase()).toMatch(/more than one non-empty line/)
       expect(content.toLowerCase()).toMatch(/contains a \*\*comma\*\*|contains a comma/)
@@ -190,8 +222,17 @@ describe.each(policySources)(
       // no comma and no operator, so triggers 1-3 wave them through — and they
       // match zero cards, switching automation off SILENTLY.
       expect(content.toLowerCase()).toMatch(/begins with a markdown block marker/)
-      // 5 — the value has to be able to BE a label on the host.
-      expect(content.toLowerCase()).toMatch(/longer than 50 characters/)
+      // 5 — the value has to be able to BE a label on the host. The bound is the
+      // HOST's label-name cap, not GitHub's number: pair resolves the tracker from
+      // way-of-working (Jira / Linear / Azure DevOps are all supported), and a
+      // Jira-tracked project declaring `automation-eligible-supporting-domain-green`
+      // (54 chars) is declaring a label its host accepts. Hardcoding 50 turns that
+      // correct declaration into a HALT, switching unattended development off and
+      // telling the maintainer to shorten a label that was never too long. GitHub's
+      // 50 stays in the sentence as the stated default.
+      expect(content.toLowerCase()).toMatch(/host's label-name cap|label-name cap on the host/)
+      expect(content).toMatch(/50 characters/)
+      expect(content).toMatch(/GitHub/)
       // 6 — several labels juxtaposed on ONE line. `risk:green risk:yellow` and
       // `risk:green or risk:yellow` are each a single non-empty line, comma-free,
       // carrying no STANDALONE upper-case operator and no markdown marker, and are
@@ -205,8 +246,32 @@ describe.each(policySources)(
       )
       expect(content).toContain('risk:green risk:yellow')
       expect(content).toContain('risk:green or risk:yellow')
-      expect(content).toMatch(/Validation is exactly the six checks/)
-      expect(content).not.toMatch(/exactly the five checks/)
+      // 7 — more than one `## Eligibility` heading in the file. #250 adds sibling
+      // sections to this same file, so a maintainer merging two snippets can end up
+      // with two Eligibility headings — one `risk:green`, one `risk:yellow`. The
+      // extraction contract said "everything after the heading up to the next
+      // heading" without saying WHICH heading, so a first-wins consumer (#217) and a
+      // last-wins consumer (#250) legitimately disagree, and the last-wins one
+      // auto-develops business-critical-adjacent cards from a file its owner reads
+      // as green. HALT is the fail-safe reading and matches "not exactly one
+      // declaration".
+      expect(content.toLowerCase()).toMatch(/more than one `## eligibility` heading/)
+      expect(content).toMatch(/Validation is exactly the seven checks/)
+      expect(content).not.toMatch(/exactly the (five|six) checks/)
+    })
+
+    it('states the residual the seven checks do NOT catch — juxtaposed colon-free labels', () => {
+      // `bug enhancement` is 15 chars, one line, comma-free, operator-free,
+      // marker-free, zero colons: it passes all seven triggers, reaches
+      // `pair-next --filter` verbatim, matches zero cards and switches automation
+      // off silently. The residual is genuinely undecidable — `good first issue` is
+      // one real label with spaces — so it is deliberately NOT an eighth trigger.
+      // What the contract must not do is leave a reader believing the checks are
+      // exhaustive of "not exactly one label", because then nobody routes this case
+      // to the 0-match diagnostic that does cover it.
+      expect(content.toLowerCase()).toMatch(/colon-free/)
+      expect(content.toLowerCase()).toMatch(/deliberately not a halt|not a halt/)
+      expect(content).toMatch(/SHOULD report/)
     })
 
     it('says the declaration is a bare label line — not a list item, quote or fenced block', () => {
@@ -355,16 +420,81 @@ describe('docs site — the same rule from every surface (AC6)', () => {
   it.each(docsSources)('%s names the adoption file that holds it', (_, content) => {
     expect(content).toContain('tech/automation.md')
   })
+
+  it('adoption-files.mdx does not promise that anything PROPOSES the Eligibility section', () => {
+    // Nothing scaffolds `tech/automation.md` — by design (A3/A4: no dataset stub, no
+    // self-write, no consumer yet). `classify` DOES propose `## Tag Projection` in
+    // `risk-matrix.md`, so a sentence attributing propose-and-confirm to both optional
+    // files leaves a reader waiting for a prompt that never comes: they never create
+    // `tech/automation.md`, their automation stays off, and nothing anywhere errors.
+    const content = read(join(DOCS, 'concepts/adoption-files.mdx'))
+    const exception = content.split('\n').filter(line => /nothing scaffolds them/.test(line))
+    expect(exception).toHaveLength(1)
+    expect(exception[0]).toMatch(/`automation\.md` is never proposed|never proposed/)
+    // ...and the propose-and-confirm clause must be scoped to risk-matrix.md.
+    const proposeClause = /for `risk-matrix\.md`[^;]*\*propose\*/.test(exception[0])
+    expect(
+      proposeClause,
+      `propose-and-confirm is not scoped to risk-matrix.md: ${exception[0]}`,
+    ).toBe(true)
+  })
+})
+
+describe('classify SKILL.md — the schema pointer is navigable (AC6)', () => {
+  // Both twins gained a pointer to this schema in this story. A BARE CODE SPAN is
+  // not one: a reader in an installed project cannot click through and must guess
+  // which root `collaboration/automation/automation-policy.md` hangs off, while the
+  // neighbouring bullets in the same list (idempotency convention, quality model)
+  // resolve in one click. The install-time link rewriter also only retargets what it
+  // sees as a link, so a future guideline move silently strands a bare span.
+  const classifySkills: Array<[string, string]> = [
+    ['.claude twin', join(REPO_ROOT, '.claude/skills/pair-capability-classify/SKILL.md')],
+    ['dataset', join(__dirname, '../../dataset/.skills/capability/classify/SKILL.md')],
+  ]
+
+  it.each(classifySkills)('%s links automation-policy.md, and the target exists', (_, path) => {
+    const content = read(path)
+    const line = content
+      .split('\n')
+      .filter(l => l.includes('automation-policy.md'))
+      .find(l => l.includes('No eligibility tag'))
+    expect(line, 'no eligibility-tag bullet naming automation-policy.md').toBeDefined()
+
+    const link = /\[[^\]]*\]\((\.\.?\/[^)]*automation-policy\.md)\)/.exec(line!)
+    expect(link, `pointer is not a relative markdown link: ${line}`).not.toBeNull()
+    expect(existsSync(join(dirname(path), link![1])), `${link![1]} does not resolve`).toBe(true)
+  })
 })
 
 describe('no example filter anywhere carries a boolean operator (AC6)', () => {
-  const everySurface: Array<[string, string]> = [
-    ...policySources.map(([k, v]) => [`policy:${k}`, v] as [string, string]),
+  // The guard is deliberately NOT uniform across surfaces. The policy file carries
+  // the LOWERCASE negative examples trigger 6 is written around (`risk:green or
+  // risk:yellow`, `risk:green, risk:yellow`), so on it only a STANDALONE UPPER-CASE
+  // operator can be forbidden. The quality model and the three docs pages carry no
+  // negative examples at all and are checked strictly — any case, plus the
+  // comma-separated list form. Without the split, a later docs edit adding
+  // "e.g. `risk:green and team:ui`" or "`risk:green, team:ui`" leaves every case
+  // green while the docs site ships an example filter naming a grammar `--filter`
+  // never shipped — which a maintainer then copies into `tech/automation.md`, where
+  // trigger 3 or 6 HALTs their automation.
+  const policySurfaces: Array<[string, string]> = policySources.map(
+    ([k, v]) => [`policy:${k}`, v] as [string, string],
+  )
+
+  it.each(policySurfaces)('%s — no upper-case operator applied to a label', (_, content) => {
+    expect(content).not.toMatch(LABEL_BOOLEAN_OPERATOR)
+  })
+
+  const strictSurfaces: Array<[string, string]> = [
     ...qualityModelSources.map(([k, v]) => [`quality-model:${k}`, v] as [string, string]),
     ...docsSources,
   ]
 
-  it.each(everySurface)('%s', (_, content) => {
-    expect(content).not.toMatch(LABEL_BOOLEAN_OPERATOR)
-  })
+  it.each(strictSurfaces)(
+    '%s — no operator in ANY case, and no comma-separated label list',
+    (_, content) => {
+      expect(content).not.toMatch(LABEL_BOOLEAN_OPERATOR_ANY_CASE)
+      expect(content).not.toMatch(LABEL_LIST_COMMA)
+    },
+  )
 })
