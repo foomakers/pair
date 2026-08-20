@@ -143,7 +143,7 @@ export async function copyDirHelper(context: CopyDirContext): Promise<void> {
  * they commit (US-396 review round 3).
  */
 async function entryIsReadable(entry: Dirent, context: CopyDirContext, oldEntry: string) {
-  if (!entry.isSymbolicLink?.()) return true
+  if (!entry.isSymbolicLink()) return true
   const root = context.containmentRoot ?? context.oldDir
   if (await resolvesWithin(context.fileService, oldEntry, root)) return true
   logger.warn(`Skipped ${oldEntry}: a symlink resolving outside ${root} is never copied`)

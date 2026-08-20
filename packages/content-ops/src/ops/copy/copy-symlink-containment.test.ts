@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, existsSync } from 'fs'
 import { readFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { fileSystemService } from '../../file-system'
+import { InMemoryFileSystemService } from '../../test-utils'
 import { copyPathOps } from './copyPathOps'
 
 /**
@@ -76,6 +77,27 @@ describe('copy — a symlink may not carry content in from outside the read root
     expect(existsSync(join(kb, 'out', 'acme-skill-a', 'key.md'))).toBe(false)
   })
 
+  it('skips a symlink to elsewhere INSIDE the KB but outside the registry source', async () => {
+    // The bound is the registry's own source directory, not the KB root: `containmentRoot`
+    // is the top of THIS copy. A KB shipping `content/shared -> ../shared-guidelines`
+    // keeps that content out of every consumer's install — reported at WARN, the registry
+    // still `ok`, the summary still green. Documented in configuration.mdx, pinned here so
+    // the doc and the code cannot drift apart (US-396 review round 4).
+    mkdirSync(join(kb, 'shared-guidelines'))
+    writeFileSync(join(kb, 'shared-guidelines', 'house-style.md'), '# house style\n')
+    symlinkSync('../shared-guidelines', join(kb, 'content', 'shared'))
+
+    await copyPathOps({
+      fileService: fileSystemService,
+      source: 'content',
+      target: 'out',
+      datasetRoot: kb,
+    })
+
+    expect(existsSync(join(kb, 'out', 'real.md'))).toBe(true)
+    expect(existsSync(join(kb, 'out', 'shared', 'house-style.md'))).toBe(false)
+  })
+
   it('refuses a registry source that is itself a symlink out of the root', async () => {
     symlinkSync('../secrets', join(kb, 'leak'))
 
@@ -102,5 +124,74 @@ describe('copy — a symlink may not carry content in from outside the read root
     })
 
     expect(readFileSync(join(kb, 'out', 'alias.md'), 'utf-8')).toBe('# inside\n')
+  })
+})
+
+/**
+ * The same guard, exercised through the in-memory double.
+ *
+ * The double used to model half a symlink: `symlink()` recorded one and `realpath()`
+ * resolved it, but `readdir` enumerated only files and directories and its Dirents
+ * hardcoded `isSymbolicLink: () => false`. So an in-memory test that symlinked a secret
+ * in and asserted it absent from the copy passed for the WRONG reason — the entry was
+ * never listed — and kept passing with the guard deleted (US-396 review round 4).
+ */
+describe('copy — the in-memory double reaches the containment guard', () => {
+  const seed = { '/kb/content/real.md': '# real\n', '/outside/secrets/id_rsa': 'PRIVATE KEY' }
+
+  it('skips an escaping symlink because the guard fired, not because the entry was invisible', async () => {
+    const fs = new InMemoryFileSystemService(seed, '/kb', '/kb')
+    await fs.symlink('/outside/secrets', '/kb/content/leak')
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => {
+      warned.push(String(m))
+    })
+
+    await copyPathOps({ fileService: fs, source: 'content', target: 'out', datasetRoot: '/kb' })
+    warnSpy.mockRestore()
+
+    expect(await fs.exists('/kb/out/leak/id_rsa')).toBe(false)
+    // Absence alone proves nothing — this is what says the skip came from the guard.
+    expect(warned.join('\n')).toContain('a symlink resolving outside')
+    expect(await fs.exists('/kb/out/real.md')).toBe(true)
+  })
+
+  it('still copies a symlink resolving inside the root', async () => {
+    const fs = new InMemoryFileSystemService(
+      { ...seed, '/kb/content/target.md': '# inside\n' },
+      '/kb',
+      '/kb',
+    )
+    await fs.symlink('/kb/content/target.md', '/kb/content/alias.md')
+
+    await copyPathOps({ fileService: fs, source: 'content', target: 'out', datasetRoot: '/kb' })
+
+    expect(await fs.readFile('/kb/out/alias.md')).toBe('# inside\n')
+  })
+
+  it('skips an escaping symlink under flatten/prefix transforms too', async () => {
+    const fs = new InMemoryFileSystemService(
+      { ...seed, '/kb/content/skill-a/SKILL.md': '# a\n' },
+      '/kb',
+      '/kb',
+    )
+    await fs.symlink('/outside/secrets/id_rsa', '/kb/content/skill-a/key.md')
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => {
+      warned.push(String(m))
+    })
+
+    await copyPathOps({
+      fileService: fs,
+      source: 'content',
+      target: 'out',
+      datasetRoot: '/kb',
+      options: { flatten: true, prefix: 'acme' },
+    })
+    warnSpy.mockRestore()
+
+    expect(await fs.exists('/kb/out/acme-skill-a/SKILL.md')).toBe(true)
+    expect(await fs.exists('/kb/out/acme-skill-a/key.md')).toBe(false)
+    expect(warned.join('\n')).toContain('a symlink resolving outside')
   })
 })

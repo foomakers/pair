@@ -2,9 +2,23 @@ import type { Dirent, Stats } from 'fs'
 import { dirname } from 'path'
 import { InMemoryFsState } from './in-memory-fs-state'
 
-export function readFileSync(state: InMemoryFsState, path: string): string {
+/**
+ * The path a read lands on: the given one, or what it dereferences to when a symlink
+ * stands anywhere on it. Every read in this double FOLLOWS links, as the real syscalls
+ * do — `unlink` and `getSymlinks()` are the two that address the link itself.
+ */
+function physicalPath(state: InMemoryFsState, path: string): string {
   const resolvedPath = state.resolvePath(path)
-  const file = state.files.get(resolvedPath)
+  if (state.files.has(resolvedPath) || state.dirs.has(resolvedPath)) return resolvedPath
+  try {
+    return realpathSync(state, path)
+  } catch {
+    return resolvedPath
+  }
+}
+
+export function readFileSync(state: InMemoryFsState, path: string): string {
+  const file = state.files.get(physicalPath(state, path))
   if (!file) throw new Error(`File not found: ${path}`)
   return file
 }
@@ -18,12 +32,12 @@ export function readFileBytes(state: InMemoryFsState, path: string): Buffer {
 }
 
 export function existsSync(state: InMemoryFsState, path: string): boolean {
-  const resolvedPath = state.resolvePath(path)
+  const resolvedPath = physicalPath(state, path)
   return state.files.has(resolvedPath) || state.dirs.has(resolvedPath)
 }
 
 export async function stat(state: InMemoryFsState, path: string): Promise<Stats> {
-  const resolvedPath = state.resolvePath(path)
+  const resolvedPath = physicalPath(state, path)
   if (state.dirs.has(resolvedPath)) {
     return { isDirectory: () => true, isFile: () => false } as Stats
   }
@@ -89,14 +103,25 @@ export async function readdir(state: InMemoryFsState, path: string): Promise<Dir
     if (d === resolvedPath) continue
     if (dirname(d) === resolvedPath) {
       const name = d.replace(`${resolvedPath}/`, '')
-      entries.push(state.makeDirent(name, true))
+      entries.push(state.makeDirent(name, 'dir'))
     }
   }
 
   for (const filePath of state.files.keys()) {
     if (dirname(filePath) === resolvedPath) {
       const name = filePath.replace(`${resolvedPath}/`, '')
-      entries.push(state.makeDirent(name, false))
+      entries.push(state.makeDirent(name, 'file'))
+    }
+  }
+
+  // Symlinks are entries too. Leaving them out made every traversal guard keyed on
+  // `isSymbolicLink()` unreachable through this double: a test asserting an escaping
+  // link is not copied passed because the link was never listed, and kept passing with
+  // the guard removed (US-396 review round 4).
+  for (const linkPath of state.symlinks.keys()) {
+    if (dirname(linkPath) === resolvedPath) {
+      const name = linkPath.replace(`${resolvedPath}/`, '')
+      entries.push(state.makeDirent(name, 'symlink'))
     }
   }
 

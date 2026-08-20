@@ -1,6 +1,8 @@
 import type { Dirent } from 'fs'
 import { dirname, resolve, isAbsolute } from 'path'
 
+export type DirentKind = 'file' | 'dir' | 'symlink'
+
 /**
  * Mutable in-memory filesystem state shared by the read/write/seed operation
  * modules. Holds the file/dir/symlink maps plus the low-level path primitives
@@ -46,16 +48,22 @@ export class InMemoryFsState {
     return resolve(this.workingDirectory, ...paths)
   }
 
-  makeDirent(name: string, isDir: boolean): Dirent {
+  /**
+   * A Dirent as the real one reports itself. A symlink is `isSymbolicLink()` and
+   * NEITHER `isFile()` nor `isDirectory()` — `fs.readdir` does not follow the link to
+   * classify it, which is exactly why an unguarded escaping link falls through to a
+   * caller's file branch (US-396).
+   */
+  makeDirent(name: string, kind: DirentKind): Dirent {
     return {
       name,
-      isDirectory: () => isDir,
-      isFile: () => !isDir,
+      isDirectory: () => kind === 'dir',
+      isFile: () => kind === 'file',
       isBlockDevice: () => false,
       isCharacterDevice: () => false,
       isFIFO: () => false,
       isSocket: () => false,
-      isSymbolicLink: () => false,
+      isSymbolicLink: () => kind === 'symlink',
     } as Dirent
   }
 }

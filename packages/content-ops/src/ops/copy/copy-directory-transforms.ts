@@ -39,7 +39,7 @@ async function collectFiles(
   const entries = await fileService.readdir(dirPath)
   for (const entry of entries) {
     const entryPath = join(dirPath, entry.name)
-    if (entry.isSymbolicLink?.() && !(await resolvesWithin(fileService, entryPath, rootPath))) {
+    if (entry.isSymbolicLink() && !(await resolvesWithin(fileService, entryPath, rootPath))) {
       logger.warn(`Skipped ${entryPath}: a symlink resolving outside ${rootPath} is never copied`)
       continue
     }

@@ -54,6 +54,33 @@ describe('in-memory-fs-read', () => {
         "no such file or directory '/nonexistent'",
       )
     })
+
+    it('enumerates a symlink, reported as a real Dirent reports one', async () => {
+      // Until US-396 review round 4 a symlinked entry was simply never listed, so every
+      // traversal guard keyed on `isSymbolicLink()` was UNREACHABLE through this double:
+      // a regression test for the guard passed whether the guard was there or not.
+      await fs.writeFile('/dir/real.txt', 'x')
+      await fs.symlink('/elsewhere/target.txt', '/dir/link.txt')
+
+      const link = (await fs.readdir('/dir')).find(e => e.name === 'link.txt')
+
+      expect(link).toBeDefined()
+      expect(link!.isSymbolicLink()).toBe(true)
+      // A real Dirent for a symlink reports NEITHER — that is what made an unguarded
+      // escaping link fall through to the file branch in the first place.
+      expect(link!.isFile()).toBe(false)
+      expect(link!.isDirectory()).toBe(false)
+    })
+
+    it('lists a symlinked directory once, as a symlink and not as a directory', async () => {
+      await fs.mkdir('/target')
+      await fs.symlink('/target', '/dir/alias')
+
+      const entries = (await fs.readdir('/dir')).filter(e => e.name === 'alias')
+
+      expect(entries).toHaveLength(1)
+      expect(entries[0]!.isSymbolicLink()).toBe(true)
+    })
   })
 
   describe('stat', () => {
