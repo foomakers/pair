@@ -393,8 +393,8 @@ describe('handleKbInfoCommand - version-check mode', () => {
         fsService,
         {
           baseTarget: cwd,
-          gitCloner: async (_source, destDir) => {
-            await fsService.writeFile(
+          gitCloner: (_source, destDir) => {
+            void fsService.writeFile(
               `${destDir}/manifest.json`,
               JSON.stringify({ version: '1.2.0' }),
             )
