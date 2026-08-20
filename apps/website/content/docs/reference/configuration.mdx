@@ -187,8 +187,9 @@ A top-level `link_validation` field, a sibling of `asset_registries`, tunes how
 errors, so a KB can be validated in isolation without disabling whole registries.
 Patterns merge (union) with `--optional-link-patterns`, and `--strict` overrides
 them back to errors. A pattern is matched against the target resolved relative to the
-KB root, and — only for links written as parent-relative paths (`../…`) — against the
-link as written; only the documented glob syntax is supported, anything else (brace
+KB root, and — only where the link as written is a genuine spelling of that same target (its
+`../` climb lands on the KB root) or the target leaves the KB tree — against the link as
+written; only the documented glob syntax is supported, anything else (brace
 expansion, extglob, leading `!`) is matched literally and therefore never matches.
 
 The section is read from the config of the **KB being validated** — `<--path>/pair.config.json`,

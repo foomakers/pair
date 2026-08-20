@@ -218,13 +218,19 @@ async function validateInternalLink(
  *
  * The resolved target relative to the KB root (`apps/x.ts`) is ALWAYS a candidate.
  * The path as written (`../../apps/x.ts`) is offered as a second candidate ONLY
- * when it escapes the source file's directory (leading `..`), which is the case
- * the written form exists for: its `../` depth varies with the source file's depth
- * while the resolved form does not, so a maintainer legitimately writes the rule
- * either way. An in-tree link (`apps/x.md`, `./apps/x.md`) is matched on its
- * resolved form only — otherwise a pattern meaning "KB-root-relative `apps/`"
- * would also silence a broken link that merely STARTS with `apps/` somewhere
- * deeper in the KB, which is the exact failure a link validator exists to catch.
+ * when it is a genuine SPELLING of that same resolved target — i.e. stripping its
+ * leading `../` segments yields exactly the resolved form (the `../` climb lands
+ * on the KB root) — or when the resolved form itself leaves the KB tree.
+ *
+ * That is the case the written form exists for: for a target outside the KB the
+ * `../` depth varies with the source file's depth while the resolved form does
+ * not, so a maintainer legitimately writes the rule either way. Every other
+ * link — in-tree (`apps/x.md`, `./apps/x.md`) or parent-relative but landing
+ * back INSIDE the KB (`../../apps/y.md` from `.pair/knowledge/a/b/`) — is
+ * matched on its resolved form only. Otherwise a rule meaning "KB-root-relative
+ * `apps/`" would also silence a broken link that merely LOOKS like it (a moved
+ * file whose `../` depth is now wrong resolves to a path that will never exist),
+ * which is the exact failure a link validator exists to catch.
  *
  * String matching only: nothing here reads the filesystem, so an optional
  * pattern can never widen what kb-validate touches outside the KB root.
@@ -238,19 +244,37 @@ function isOptionalLink(
   if (optionalMatchers.length === 0) return false
 
   const [writtenPath] = link.split('#')
+  const resolved = targetPath ? relative(baseDir, targetPath) : undefined
   const candidates = [
-    ...(writtenPath && escapesSourceDir(writtenPath) ? [writtenPath] : []),
-    ...(targetPath ? [relative(baseDir, targetPath)] : []),
+    ...(writtenPath && describesResolvedTarget(writtenPath, resolved) ? [writtenPath] : []),
+    ...(resolved === undefined ? [] : [resolved]),
   ]
 
   return matchesAnyPattern(candidates, optionalMatchers)
 }
 
+/**
+ * True when the link AS WRITTEN is a legitimate spelling of `resolved` — its
+ * leading `../` segments stripped equal the resolved form (the climb reaches the
+ * KB root) — or when `resolved` itself escapes the KB root, where the written
+ * form is the only stable way to express the rule.
+ */
+function describesResolvedTarget(writtenPath: string, resolved: string | undefined): boolean {
+  if (resolved === undefined || !escapesSourceDir(writtenPath)) return false
+  if (resolved.startsWith('../')) return true
+  return toPosix(writtenPath).replace(/^(?:\.\/)?(?:\.\.\/)+/, '') === resolved
+}
+
 /** True for a link written as a parent-relative path (`../x`, `..\\x`, `./../x`). */
 function escapesSourceDir(writtenPath: string): boolean {
-  const posix = writtenPath.replace(/\\/g, '/')
+  const posix = toPosix(writtenPath)
   const withoutDotSlash = posix.startsWith('./') ? posix.slice(2) : posix
   return withoutDotSlash.startsWith('../')
+}
+
+/** Windows-style separators normalized, so written and resolved forms compare. */
+function toPosix(path: string): string {
+  return path.replace(/\\/g, '/')
 }
 
 /**

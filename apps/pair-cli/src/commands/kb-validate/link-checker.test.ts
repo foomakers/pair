@@ -572,6 +572,79 @@ describe('validateLinks', () => {
       expect(results[0]?.warnings).toHaveLength(1)
     })
 
+    it('AC-3: `../../apps/**` does not silence a DEEPER source whose climb lands back in the KB', async () => {
+      // `../../apps/y.md` from `.pair/knowledge/a/b/` resolves to
+      // `.pair/knowledge/apps/y.md` — INSIDE the KB, and a path that will never
+      // exist even with the codebase checked out (the classic moved-file break).
+      // The written form is a candidate only when its `../` climb reaches the KB
+      // root, so neither the written nor the resolved rule applies here.
+      fs.writeFile('/kb/.pair/knowledge/a/b/guide.md', '[Code](../../apps/y.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/a/b/guide.md'],
+        fs,
+        optionalLinkPatterns: ['../../apps/**', 'apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+      expect(results[0]?.errors[0]).toContain('Broken internal link: ../../apps/y.md')
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('AC-3: `../apps/**` does not silence a one-level climb landing back in the KB', async () => {
+      // `../apps/y.md` from `.pair/knowledge/a/` resolves to
+      // `.pair/knowledge/apps/y.md`, still inside the KB.
+      fs.writeFile('/kb/.pair/knowledge/a/guide.md', '[Code](../apps/y.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/a/guide.md'],
+        fs,
+        optionalLinkPatterns: ['../apps/**', 'apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('matches the written form at any depth when the climb reaches the KB root', async () => {
+      // Same rule `../../apps/**`, deeper source, CORRECT depth: three climbs
+      // from `.pair/knowledge/a/` reach the KB root, so the written form is a
+      // genuine spelling of `apps/y.md` and the rule applies.
+      fs.writeFile('/kb/.pair/knowledge/a/guide.md', '[Code](../../../apps/y.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/a/guide.md'],
+        fs,
+        // Matches the written form only — the resolved form is `apps/y.md`.
+        optionalLinkPatterns: ['../../../apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.warnings).toHaveLength(1)
+      expect(results[0]?.warnings[0]).toContain('../../../apps/y.md')
+    })
+
+    it('matches the written form when the target leaves the KB tree entirely', async () => {
+      // Resolves to `/apps/y.md`, i.e. `../apps/y.md` from the KB root: the
+      // resolved form escapes the KB, so the written form stays a candidate.
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](../../../apps/y.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['../../../apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.warnings).toHaveLength(1)
+    })
+
     it('applies to absolute internal links too (resolved from the KB root)', async () => {
       fs.writeFile('/kb/docs/guide.md', '[Code](/apps/website/page.tsx)')
 

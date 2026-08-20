@@ -12,9 +12,13 @@
   `optional link (pattern-matched), target missing: …` — a warning that does not fail the
   run. A target that exists is simply valid; a missing target matching nothing stays an error.
 - `--strict` overrides optional patterns: in strict mode every missing target is an error.
-- Patterns match against both the link as written (`../../apps/x.ts`) and the target
-  resolved relative to the KB root (`apps/x.ts`). Glob syntax: `**`, `*`, `?`, `[abc]`,
-  anchored to the whole path. A malformed pattern is warned about and skipped, never fatal.
+- Patterns always match against the target resolved relative to the KB root (`apps/x.ts`),
+  and additionally against the link as written (`../../apps/x.ts`) only where that written
+  form is a spelling of the same resolved target — its `../` climb lands on the KB root — or
+  where the target leaves the KB tree. A link resolving back INSIDE the KB is matched on its
+  resolved form only, so a broken in-KB link is still an error. Glob syntax: `**`, `*`, `?`,
+  `[abc]`, anchored to the whole path. A malformed pattern is warned about and skipped, never
+  fatal.
 
 Fully backward compatible: with no patterns declared, every missing internal link is an
 error exactly as before.

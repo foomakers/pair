@@ -49,15 +49,22 @@ diagnostic still matters, CI being where `--strict` runs).
 Two consequences of "internal, therefore ours to define" are decided here as well:
 
 - **A pattern is matched against the resolved form of every link, and additionally against the
-  written form of the links that leave the source directory.** The resolved form (relative to the
-  KB root, `apps/x.ts`) is always a candidate; the form as written (`../../apps/x.ts`) is a
-  candidate only when it is parent-relative (`../…`), which is the case it exists for — its `../`
-  depth varies with the source file's depth while the resolved form does not, so a maintainer
-  legitimately writes the rule either way. Matching the written form unconditionally was the
-  first implementation and was rejected on review evidence: `apps/**`, meaning "KB-root-relative
-  `apps/`", also silenced `[x](apps/x.md)` written deeper in the KB and resolving INSIDE it — a
-  genuinely broken internal link downgraded to a warning, the exact failure a link validator
-  exists to catch. First match wins, so overlapping patterns still produce exactly one warning.
+  written form when that written form is a genuine SPELLING of the same resolved target.** The
+  resolved form (relative to the KB root, `apps/x.ts`) is always a candidate; the form as written
+  (`../../apps/x.ts`) is a candidate only when stripping its leading `../` segments yields exactly
+  the resolved form — i.e. the `../` climb lands on the KB root — or when the resolved form itself
+  leaves the KB tree, where the written form is the only stable spelling. That is the case it
+  exists for: for a target outside the KB the `../` depth varies with the source file's depth while
+  the resolved form does not, so a maintainer legitimately writes the rule either way. Two weaker
+  gates were implemented first and rejected on review evidence: matching the written form
+  unconditionally let `apps/**` (meaning "KB-root-relative `apps/`") silence `[x](apps/x.md)`
+  written deeper in the KB and resolving INSIDE it; gating merely on a leading `../` is
+  DEPTH-BLIND and let `../../apps/**` silence `[x](../../apps/y.md)` from
+  `.pair/knowledge/a/b/`, which resolves to `.pair/knowledge/apps/y.md` — inside the KB, and a
+  path that will never exist even with the codebase checked out (a file moved deeper keeping its
+  old climb). Both downgraded a genuinely broken internal link to a warning, the exact failure a
+  link validator exists to catch. First match wins, so overlapping patterns still produce exactly
+  one warning.
 - **Matching is pure string work.** Nothing in the matcher touches the filesystem, so an
   optional pattern can never widen what `kb-validate` reads outside the KB root.
 

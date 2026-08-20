@@ -481,12 +481,16 @@ Rules:
   and does not fail the run; a missing target matching nothing stays an **error**.
 - Config patterns and `--optional-link-patterns` are **merged** (union), never replaced.
 - Each pattern is matched against the target **resolved relative to the KB root**
-  (`apps/x.ts`) and — only when the link is written as a **parent-relative** path
-  (`../…`) — against the link **as written** (`../../apps/x.ts`). A match in either form
-  makes the link optional, and overlapping patterns still produce a single warning. A link
-  that stays **inside** the KB (`apps/x.md`, `./apps/x.md`) is matched on its resolved form
-  only: a KB-root-relative rule like `apps/**` cannot silence a broken link that merely
-  starts with `apps/` somewhere deeper in the tree.
+  (`apps/x.ts`) and — only when the link **as written** is a genuine spelling of that same
+  target, i.e. its leading `../` climb lands exactly on the KB root (`../../apps/x.ts` from
+  `.pair/knowledge/`), or the resolved target leaves the KB tree — against the written form
+  too. A match in either form makes the link optional, and overlapping patterns still produce
+  a single warning. Every other link is matched on its **resolved form only**: one that stays
+  inside the KB (`apps/x.md`, `./apps/x.md`), and one whose `../` climb lands back inside the
+  KB (`../../apps/y.md` from `.pair/knowledge/a/b/`, resolving to
+  `.pair/knowledge/apps/y.md`). So a rule like `apps/**` or `../../apps/**` cannot silence a
+  broken link that merely **looks** like it — typically a file moved deeper, whose `../` depth
+  is now wrong and whose target will never exist.
 - Glob syntax: `**` (a whole segment: **zero or more** path segments, so `a/**/b` matches
   `a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also
   what a `**` that is not a whole segment means), `?` (one character, never `/`), `[abc]` /
@@ -513,7 +517,10 @@ Rules:
   like "all these links are broken" rather than "the config key is misspelled". An empty section
   (`"link_validation": {}`) declares nothing and is silent.
 - Config-shape and malformed-pattern diagnostics are printed under **`Configuration:`** in the
-  report and counted in its `Warnings:` total, alongside the per-file ones.
+  report and counted in its `Warnings:` total, alongside the per-file ones. They are **also
+  logged on stderr** as soon as they are detected, so each one deliberately appears twice: on
+  stderr for immediacy (a long run should not sit on a config typo until the report prints) and
+  in the report for the counted summary.
 - `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
 - `--ignore-config` skips the config-declared patterns; CLI-declared ones still apply.
 - Config patterns are read from the config of the **KB being validated**
