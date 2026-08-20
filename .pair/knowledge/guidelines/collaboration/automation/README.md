@@ -15,6 +15,7 @@ This framework covers:
 - Development workflow automation (branch, PR, deployment)
 - Project management automation (sprint planning, progress reporting)
 - Notification and communication automation
+- Unattended-development policy: which cards may run without a human (`tech/automation.md` — [automation-policy.md](automation-policy.md))
 
 ## Out of Scope
 

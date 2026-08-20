@@ -78,8 +78,21 @@ describe.each(policySources)('automation-policy.md — %s (AC1: the declaration)
     expect(content).toMatch(/string equality|string-equality/)
     // The matching rule has ONE owner. This guideline must point at it rather
     // than restate it, or the two drift (the story's top technical risk).
-    expect(content).toContain('pair-next')
-    expect(content).toContain('SKILL.md')
+    //
+    // Asserted as a SENTENCE SHAPE, not as two loose tokens: `toContain('pair-next')`
+    // + `toContain('SKILL.md')` passes on a document that restates the whole matching
+    // algorithm inline and then adds a courtesy "see SKILL.md" — i.e. on exactly the
+    // drift this guard exists to catch. What must hold is that the line naming
+    // SKILL.md is the line that DEFERS to it.
+    const deferral = content
+      .split('\n')
+      .filter(line => line.includes('SKILL.md'))
+      .filter(line => /owned by/.test(line) && /referenced here, never restated/.test(line))
+
+    expect(deferral).toHaveLength(1)
+    expect(deferral[0]).toContain('pair-next')
+    // ...and the deferral must be navigable: a reader lands on the source of truth.
+    expect(deferral[0]).toMatch(/\]\((https?:\/\/|\.\.?\/)[^)]*SKILL\.md\)/)
   })
 
   it('tells consumers to pass the declared label verbatim — no tag name in code (D18)', () => {
@@ -113,6 +126,42 @@ describe.each(policySources)('automation-policy.md — %s (AC2: default + caveat
   })
 })
 
+describe.each(policySources)(
+  'automation-policy.md — %s (AC4: extraction contract)',
+  (_, content) => {
+    // "Malformed = anything that is not exactly one label" is only a rule if "one
+    // label" has an operational definition. Without one, each consumer invents its
+    // own: a whitespace split HALTs on `good first issue` (a valid single GitHub
+    // label carrying spaces), while a comma-only split accepts `risk:green
+    // risk:yellow` and silently matches nothing. Both are the drift this schema
+    // exists to prevent, so the extraction rule is pinned here like the others.
+    it('says WHERE the value lives — the first non-empty line after the heading', () => {
+      expect(content.toLowerCase()).toMatch(/first non-empty line/)
+    })
+
+    it('says the whole trimmed line is the label, and that labels may contain spaces', () => {
+      expect(content.toLowerCase()).toMatch(/entire trimmed line is the label/)
+      expect(content.toLowerCase()).toMatch(/may contain spaces/)
+      expect(content).toContain('good first issue')
+      // No tokenisation: a consumer that splits on whitespace is explicitly wrong.
+      expect(content.toLowerCase()).toMatch(/splits on whitespace is wrong|no whitespace split/)
+    })
+
+    it('enumerates the three HALT triggers — empty, several lines, comma or operator', () => {
+      expect(content.toLowerCase()).toMatch(/no non-empty line/)
+      expect(content.toLowerCase()).toMatch(/more than one non-empty line/)
+      expect(content.toLowerCase()).toMatch(/contains a \*\*comma\*\*|contains a comma/)
+      expect(content).toMatch(/`AND` \/ `OR` \/ `NOT`/)
+    })
+
+    it('states the declared value is DATA — a single argv element, never a shell fragment', () => {
+      expect(content).toMatch(/DATA, never a command fragment/)
+      expect(content.toLowerCase()).toMatch(/single argument.*argv element|argv element/)
+      expect(content).toMatch(/MUST NOT[^.\n]*interpolate/)
+    })
+  },
+)
+
 describe.each(policySources)('automation-policy.md — %s (AC3/AC4: fail-safes)', (_, content) => {
   it('states absent file or absent section ⇒ empty eligibility set, as a MUST', () => {
     expect(content).toMatch(/MUST treat the eligibility set as empty/)
@@ -120,6 +169,14 @@ describe.each(policySources)('automation-policy.md — %s (AC3/AC4: fail-safes)'
     // Absence is a documented state, not an error (D21, same shape as tech/risk-matrix.md).
     expect(content).toMatch(/D21/)
     expect(content.toLowerCase()).toMatch(/never an error/)
+  })
+
+  it('disambiguates an ABSENT section from a PRESENT but empty one', () => {
+    // Both arms are fail-safe, but they are DIFFERENT arms: absent = no policy was
+    // ever declared (silently off); present-and-empty = a half-written declaration
+    // (HALT). Left overlapping, two consumers behave differently on the same file.
+    expect(content).toMatch(/Absent section ≠ empty section/)
+    expect(content.toLowerCase()).toMatch(/half-written declaration/)
   })
 
   it('states a value that is not exactly one label ⇒ HALT, as a MUST', () => {

@@ -16,9 +16,19 @@ risk:green
 
 That is the whole schema: a heading and **a single literal label**.
 
-- **Exactly one label.** Not a list, not an expression. `pair-next --filter` — the query every consumer ultimately runs — takes one label string and matches it with plain **string equality** against each issue's labels; there is **no AND/OR/NOT grammar**. That matching rule is owned by `pair-next`'s own `SKILL.md` (`--filter <tag>` — generic tag match) and is **referenced here, never restated**, so the two cannot drift apart.
-- **Consumers pass the declared string verbatim.** An automation consumer reads the label out of the adoption file and hands it to `pair-next --filter` unchanged — no parsing, no interpretation, no expansion. Which means **no classification tag name is ever hardcoded in a skill or a module** (D18): the label is adoption data, and the code that carries it stays tag-agnostic.
+- **Exactly one label.** Not a list, not an expression. `pair-next --filter` — the query every consumer ultimately runs — takes one label string and matches it with plain **string equality** against each issue's labels; there is **no AND/OR/NOT grammar**. That matching rule is owned by [`pair-next`'s own `SKILL.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.skills/next/SKILL.md) (`--filter <tag>` — generic tag match) and is **referenced here, never restated**, so the two cannot drift apart.
+- **Consumers validate, then pass the declared string verbatim.** A consumer first **validates** the declaration against the [extraction contract](#reading-the-declaration--the-extraction-contract) below, then hands the validated string to `pair-next --filter` **verbatim** — never rewritten, expanded, normalised or re-interpreted. Validating is not transforming: the check decides *whether* to run, it never changes the value that runs. Which means **no classification tag name is ever hardcoded in a skill or a module** (D18): the label is adoption data, and the code that carries it stays tag-agnostic.
 - **No dedicated eligibility tag** (ADR-013 Q2b). Eligibility is a *filter over the classification tags `classify` already emits*, not a tag family of its own. Nothing new is ever written onto a card to make it eligible.
+
+## Reading the declaration — the extraction contract
+
+Every consumer extracts the value the same way, or the same adoption file means different things to different tools:
+
+- The declaration is the **first non-empty line after the `## Eligibility` heading**, trimmed. Lines before it inside the section (blank lines) are skipped; everything after the heading up to the next heading is the section body.
+- **The entire trimmed line is the label.** There is no tokenisation beyond the trim — no whitespace split, no quoting, no escaping, no comment syntax. Labels **may contain spaces**: `good first issue` is **one** label, not three, and a consumer that splits on whitespace is wrong.
+- The value is **DATA, never a command fragment**. A consumer **MUST** pass it as a **single argument** (one argv element) to `pair-next --filter`, and **MUST NOT** interpolate it into a shell command string — the adoption file is not an execution surface.
+
+Validation is exactly the three checks in [Not exactly one label ⇒ HALT](#not-exactly-one-label--halt) below. A value that passes them is used as-is.
 
 ## Recommended default — `risk:green`
 
@@ -28,7 +38,7 @@ The KB's **recommended default** is `risk:green`: only the lowest risk tier is e
 
 Two caveats belong to the default, and both are properties of the projection, not of this file:
 
-- **Tag projection has to be on.** The filter only selects something when `## Tag Projection` in [`tech/risk-matrix.md`](../../quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) actually emits that label family — `Active: risk`. With `Active: none`, or with the projection proposal never answered, no card carries a `risk:*` label at all, so the filter matches nothing and **nothing is eligible**. That is expected behaviour, not an error: the matrix is still computed and written to every story and PR body, it is simply not projected onto labels.
+- **Tag projection has to be on.** The filter only selects something when `## Tag Projection` in [`quality-model.md` §6 — the `tech/risk-matrix.md` adoption delta](../../quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) actually emits that label family — `Active: risk`. With `Active: none`, or with the projection proposal never answered, no card carries a `risk:*` label at all, so the filter matches nothing and **nothing is eligible**. That is expected behaviour, not an error: the matrix is still computed and written to every story and PR body, it is simply not projected onto labels.
 - **A renamed family must be named as emitted.** A project may rename `risk` to something else in its Tag Projection declaration (e.g. `priority`). Because matching is string equality against the **emitted** label, the declaration must then read `priority:green` — writing `risk:green` there would silently match nothing.
 
 ## Fail-safes
@@ -41,9 +51,17 @@ Both of the following are **MUST** rules for any consumer of this declaration. N
 
 When the file is absent, or present with no `## Eligibility` section, a consumer **MUST treat the eligibility set as empty**: no card is eligible, automation is off. It **MUST NOT** fall back to `all cards`, and MUST NOT substitute the recommended default on the project's behalf — a default nobody declared is not a decision.
 
+**Absent section ≠ empty section.** The two are deliberately different outcomes, and a consumer must not collapse them: an **absent** `## Eligibility` heading means the project never declared a policy ⇒ empty eligibility set, silently, automation off. A **present** heading with an empty body is a **half-written declaration**, not the absence of one ⇒ HALT, per the next rule.
+
 ### Not exactly one label ⇒ HALT
 
-A value that is not exactly one label — empty, several labels, or one carrying a boolean operator (`AND` / `OR` / `NOT`, which the filter cannot express) — is a **broken adoption file**, not a policy.
+Against the extracted value, a consumer **MUST HALT** when any of these holds:
+
+1. the section body contains **no non-empty line** (an empty declaration);
+2. the section body contains **more than one non-empty line**;
+3. the line contains a **comma**, or a standalone upper-case `AND` / `OR` / `NOT` token — a list or an expression the filter cannot express.
+
+Nothing else is a validation failure: a single trimmed line free of those three is the label, spaces and all.
 
 The consumer **MUST HALT** with an **adoption-fix message** naming the file and the offending value, e.g.:
 
