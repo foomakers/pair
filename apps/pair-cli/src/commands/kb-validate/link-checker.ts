@@ -50,7 +50,7 @@ export async function validateLinks(
   // where `--strict` runs and where a silent typo would go unnoticed.
   const { matchers, invalid } = compileOptionalLinkPatterns(optionalLinkPatterns ?? [])
   for (const pattern of invalid) {
-    logger.warn(`Invalid optional link pattern '${pattern}', ignoring`)
+    logger.warn(formatInvalidOptionalLinkPattern(pattern))
   }
   const optionalMatchers = strict ? [] : matchers
 
@@ -65,6 +65,27 @@ export async function validateLinks(
   }
 
   return results
+}
+
+/** The one wording for "this pattern could not be compiled", logged and reported. */
+function formatInvalidOptionalLinkPattern(pattern: string): string {
+  return `Invalid optional link pattern '${pattern}', ignoring`
+}
+
+/**
+ * Run-level diagnostics for a set of optional link patterns — one message per
+ * pattern that cannot be compiled.
+ *
+ * Exported so a caller can put the SAME messages `validateLinks` logs into the
+ * validation report as well: a diagnostic that only reaches the log would leave
+ * the report footer printing `Warnings: 0` on a run that just reported a typo.
+ * Compiling twice (here and inside `validateLinks`) is pure string work on a
+ * handful of patterns — cheaper than threading a second return value through
+ * every call site of `validateLinks`.
+ */
+export function describeInvalidOptionalLinkPatterns(patterns: string[] | undefined): string[] {
+  const { invalid } = compileOptionalLinkPatterns(patterns ?? [])
+  return invalid.map(formatInvalidOptionalLinkPattern)
 }
 
 /**
@@ -195,10 +216,16 @@ async function validateInternalLink(
 /**
  * Whether a MISSING internal link target is declared optional (US-188).
  *
- * A pattern is matched against two forms of the same link — the path as written
- * in the markdown (`../../apps/x.ts`, stable whatever the file's depth) and the
- * resolved target relative to the KB root (`apps/x.ts`, stable whatever the link
- * text) — because both are how a maintainer legitimately expresses the rule.
+ * The resolved target relative to the KB root (`apps/x.ts`) is ALWAYS a candidate.
+ * The path as written (`../../apps/x.ts`) is offered as a second candidate ONLY
+ * when it escapes the source file's directory (leading `..`), which is the case
+ * the written form exists for: its `../` depth varies with the source file's depth
+ * while the resolved form does not, so a maintainer legitimately writes the rule
+ * either way. An in-tree link (`apps/x.md`, `./apps/x.md`) is matched on its
+ * resolved form only — otherwise a pattern meaning "KB-root-relative `apps/`"
+ * would also silence a broken link that merely STARTS with `apps/` somewhere
+ * deeper in the KB, which is the exact failure a link validator exists to catch.
+ *
  * String matching only: nothing here reads the filesystem, so an optional
  * pattern can never widen what kb-validate touches outside the KB root.
  */
@@ -212,11 +239,18 @@ function isOptionalLink(
 
   const [writtenPath] = link.split('#')
   const candidates = [
-    ...(writtenPath ? [writtenPath] : []),
+    ...(writtenPath && escapesSourceDir(writtenPath) ? [writtenPath] : []),
     ...(targetPath ? [relative(baseDir, targetPath)] : []),
   ]
 
   return matchesAnyPattern(candidates, optionalMatchers)
+}
+
+/** True for a link written as a parent-relative path (`../x`, `..\\x`, `./../x`). */
+function escapesSourceDir(writtenPath: string): boolean {
+  const posix = writtenPath.replace(/\\/g, '/')
+  const withoutDotSlash = posix.startsWith('./') ? posix.slice(2) : posix
+  return withoutDotSlash.startsWith('../')
 }
 
 /**

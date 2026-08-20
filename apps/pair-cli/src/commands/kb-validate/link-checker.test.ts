@@ -522,6 +522,56 @@ describe('validateLinks', () => {
       expect(results[0]?.warnings).toHaveLength(0)
     })
 
+    it('AC-3: an IN-KB broken link is NOT silenced by a pattern its written form starts with', async () => {
+      // `apps/x.md` from `.pair/knowledge/` resolves INSIDE the KB
+      // (`.pair/knowledge/apps/x.md`), so the KB-root-relative rule `apps/**` does
+      // not describe it: the written form is only a candidate when it escapes the
+      // source directory (`../`). A broken internal link must stay an error.
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](apps/x.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+      expect(results[0]?.errors[0]).toContain('Broken internal link: apps/x.md')
+      expect(results[0]?.warnings).toHaveLength(0)
+    })
+
+    it('AC-3: the same in-KB link written `./apps/x.md` is not silenced either', async () => {
+      fs.writeFile('/kb/.pair/knowledge/guide.md', '[Code](./apps/x.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/.pair/knowledge/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(false)
+      expect(results[0]?.errors).toHaveLength(1)
+    })
+
+    it('matches the written form of an in-KB link only where it IS the resolved form', async () => {
+      // Same `apps/x.md` written from the KB ROOT: written and resolved forms
+      // coincide, so the KB-root-relative pattern legitimately applies.
+      fs.writeFile('/kb/guide.md', '[Code](apps/x.md)')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/guide.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.warnings).toHaveLength(1)
+    })
+
     it('applies to absolute internal links too (resolved from the KB root)', async () => {
       fs.writeFile('/kb/docs/guide.md', '[Code](/apps/website/page.tsx)')
 
