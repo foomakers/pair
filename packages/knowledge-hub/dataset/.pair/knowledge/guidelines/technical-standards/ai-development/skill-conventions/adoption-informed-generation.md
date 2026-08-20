@@ -20,14 +20,16 @@ The order is **fixed** and, within each source, files are read in id order (`adr
 
 Reading full history into a generation prompt is the failure mode this step is designed around (large projects have hundreds of records). The read is bounded in two stages:
 
-1. **Index every record, cheaply** — **metadata only, read from the file head**: its id/date (from the filename), its `#` H1 title **verbatim** (that title *is* the one-line summary — none is derived, so no body is opened to produce one), and its `## Status`. This stage is complete: every record is indexed, none is skipped, and **no record body is read here**.
+1. **Index every record, cheaply** — **metadata only, read from the file head**: its id/date (from the filename), its `#` H1 title **verbatim** (that title *is* the one-line summary — none is derived, so no body is opened to produce one), its `## Status`, and its `## Category` — all of them in the first few lines, so the read stays cheap. `Category` is what tells the two `decision-log/` kinds apart (`Analysis` ⇒ context, anything else ⇒ an ADL authority); the H1 prefix carries the same discriminator (`# Decision:` = ADL, `# Analysis Log:` = analysis). An entry whose head resolves to neither kind is **opened at stage 2 before it may act as an authority** — an unclassifiable entry is never assumed to be one. This stage is complete: every record is indexed, none is skipped, and **no record body is read here**.
 2. **Open the body only of the records in scope** — those whose subject overlaps the item being generated: same subdomain/bounded context, same touched component, or a term the item and the record share. Everything else stays at its index line.
 
 So the number of full bodies read scales with the item's scope, **never the entire decision history**. When the index makes scope genuinely ambiguous, prefer opening the record — a bounded read errs toward reading one extra body, never toward silently skipping a live decision.
 
 ## Precedence — supersession first, then recency
 
-- A record whose `Status` is `Superseded` (or that carries a "Superseded by" pointer) is **never the authority**; the superseding record is read in its place, and the superseded one is not cited.
+- **Live** = an authority currently in force: `Accepted` for an ADR or a DDR (including the `Accepted (amended YYYY-MM-DD — ...)` form, whose amended contract is the one that applies) and `Active` for an ADL. Only live records constrain, are cited, or can be reopened.
+- **`Proposed` is not yet an authority.** A draft under review never drops or reshapes a candidate, is never cited, and never triggers a `Revisits` flag — nobody has decided anything yet, and a proposal that silently became a constraint is the same defect as an analysis applied as a decision.
+- **`Deprecated` and `Superseded` are no longer authorities.** A record whose `Status` is `Superseded` (or that carries a "Superseded by" pointer) is **never the authority**; the superseding record is read in its place, and the superseded one is not cited. A `Deprecated` record has no successor to read in its place — it simply stops constraining, and the question it used to answer is open again.
 - When two live records answer the same question, the **most recent** by id/date wins, regardless of which source it came from. Record kind is not a precedence rank: an ADL dated after an ADR refines it.
 - A registered term, entity, or rule in the context map outranks an informal use of the same word anywhere else — generated wording adopts the registered term rather than a synonym.
 - A `Category: Analysis` entry **takes no part in this order at all**: it is context, not an authority, so however recent it is it never outranks — or supersedes — a live ADR, ADL or DDR.

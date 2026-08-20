@@ -299,3 +299,135 @@ describe('review round 1 — authorities, bounded read, inherited read', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// Round-2 review findings (#280). Same rule as above: one guard per finding,
+// naming it, so a later edit that reopens the gap fails with the reason attached.
+// ---------------------------------------------------------------------------
+
+const DATASET_KNOWLEDGE = join(__dirname, '../../dataset/.pair/knowledge')
+const SKILLS_GUIDE_COPIES: Array<[string, string]> = [
+  ['skills-guide (dataset)', readFileSync(join(DATASET_KNOWLEDGE, 'skills-guide.md'), 'utf-8')],
+  [
+    'skills-guide (installed mirror)',
+    readFileSync(join(REPO_ROOT, '.pair/knowledge/skills-guide.md'), 'utf-8'),
+  ],
+]
+
+const PLAN_EPICS_COPIES: Array<[string, string]> = [
+  ['plan-epics (dataset)', readFileSync(join(DATASET_SKILLS, 'plan-epics/SKILL.md'), 'utf-8')],
+  [
+    'plan-epics (installed mirror)',
+    readFileSync(join(MIRROR, 'pair-process-plan-epics/SKILL.md'), 'utf-8'),
+  ],
+]
+
+describe('review round 2 — status authority, kind discriminator, declared channels', () => {
+  it('defines the LIVE set, so a `Proposed` draft never constrains generation (Major)', () => {
+    // Supersession was the only authority test: everything not `Superseded` counted
+    // as live, so an ADR left at `Status: Proposed` pending review would DROP a
+    // candidate and be cited as if the team had decided — and a `Deprecated` record
+    // with no successor would keep constraining forever.
+    const precedence = CONVENTION.match(/## Precedence[\s\S]*?(?=\n## )/)?.[0]
+    expect(precedence).toBeDefined()
+    expect(precedence).toMatch(/\*\*Live\*\*/)
+    expect(precedence).toMatch(/Accepted/)
+    expect(precedence).toMatch(/Active/)
+    // The two non-live statuses the supersession test used to let through.
+    expect(precedence).toMatch(/Proposed/)
+    expect(precedence).toMatch(/Deprecated/)
+  })
+
+  it('indexes the kind discriminator, so an analysis is told from an ADL at stage 1 (Minor)', () => {
+    // ADL and `Category: Analysis` entries share `decision-log/`. Without `Category`
+    // (or the H1 prefix) in the indexed metadata, stage 1 could not classify them —
+    // forcing either a body read (defeating "metadata only") or a precedence pass in
+    // which an analysis is indistinguishable from an authority.
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    expect(bounded).toMatch(/## Category/)
+    expect(bounded).toMatch(/# Analysis Log:/)
+    expect(bounded).toMatch(/opened at stage 2 before it may act as an authority/)
+  })
+
+  it('lists the generating skills as readers of ADR and ADL in the skills-guide matrix (Minor)', () => {
+    // The matrix is the single index of which skill consumes which adoption artifact;
+    // this story makes three generating skills first-class readers of both.
+    for (const [label, content] of SKILLS_GUIDE_COPIES) {
+      for (const row of ['| Decisions (ADR) |', '| Decisions (ADL) |']) {
+        const line = content.split('\n').find(l => l.startsWith(row))
+        expect(line, `${label} — ${row}`).toBeDefined()
+        for (const reader of ['plan-stories', 'refine-story', 'brainstorm']) {
+          expect(line, `${label} — ${row} — ${reader}`).toContain(reader)
+        }
+      }
+    }
+  })
+
+  it('declares the citation annotations on plan-epics `$candidates`, its only channel (Minor)', () => {
+    // plan-epics persists a supplied citation but runs no read of its own: if the
+    // argument contract does not carry the annotation, a caller building the
+    // documented shape drops it at the write boundary.
+    for (const [label, content] of PLAN_EPICS_COPIES) {
+      const row = content.split('\n').find(l => l.startsWith('| `$candidates`'))
+      expect(row, label).toBeDefined()
+      expect(row, label).toMatch(/citation/i)
+      expect(row, label).toMatch(/Revisits/)
+    }
+    // Same shape on plan-stories, so the two writers declare one contract.
+    for (const [label, content] of bothCopies('plan-stories')) {
+      const row = content.split('\n').find(l => l.startsWith('| `$candidates`'))
+      expect(row, label).toBeDefined()
+      expect(row, label).toMatch(/Revisits/)
+    }
+  })
+
+  it('couples `$adoption-read` to `$candidates` — supplied alone it is not the run read (Minor)', () => {
+    // The effects it carries are computed per candidate: honouring it without the
+    // candidate set would skip Step 2b's own read and check Step 3's freshly derived
+    // candidates against effects for candidates that do not exist — a silent no-op.
+    for (const [label, content] of bothCopies('plan-stories')) {
+      const row = content.split('\n').find(l => l.startsWith('| `$adoption-read`'))
+      expect(row, label).toBeDefined()
+      expect(row, label).toMatch(/only together with `\$candidates`/)
+      const step2b = content.match(/### Step 2b[\s\S]*?(?=\n### )/)?.[0]
+      expect(step2b, label).toBeDefined()
+      expect(step2b, label).toMatch(/without\*\* `\$candidates`/)
+    }
+  })
+
+  it('refine-story routes the already-Ready path THROUGH Step 1b (Minor)', () => {
+    // Step 6 asserts as fact that Step 1b already ran; the route that reaches it
+    // named Step 6 directly, so an executor could re-author sections with no records.
+    for (const [label, content] of bothCopies('refine-story')) {
+      const route = content.split('\n').find(l => l.includes('**All sections present**'))
+      expect(route, label).toBeDefined()
+      expect(route, label).toMatch(/Step 1b/)
+    }
+  })
+
+  it('lists the DDR citation form wherever a skill enumerates the forms (Minor)', () => {
+    // DDRs are authorities and are reachable on the read path; a skill list missing
+    // the form leaves an executor to invent one, breaking the single-form guarantee.
+    const enumerating: Array<[string, string]> = [
+      ...bothCopies('plan-stories'),
+      ...bothCopies('refine-story'),
+      ...PLAN_EPICS_COPIES,
+    ]
+    for (const [label, content] of enumerating) {
+      expect(content, label).toMatch(/\(per ADR-013\)/)
+      expect(content, label).toMatch(/\(per DDR-004\)/)
+    }
+  })
+
+  it('brainstorm keeps the Draft-exit attribution and the `/next` hand-off (Minor)', () => {
+    // Removed with the Notes restatements to fund the byte budget, but item 8 carried
+    // only the Draft landing — D24 and the `/next` pointer were not preserved anywhere.
+    for (const [label, content] of bothCopies('brainstorm')) {
+      const item8 = content.split('\n').find(l => l.includes('Items land as **Draft**'))
+      expect(item8, label).toBeDefined()
+      expect(item8, label).toMatch(/D24/)
+      expect(item8, label).toMatch(/\/(pair-)?next/)
+    }
+  })
+})

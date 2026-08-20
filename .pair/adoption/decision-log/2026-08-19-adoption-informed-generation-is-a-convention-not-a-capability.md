@@ -27,8 +27,8 @@ The second temptation is a new `/pair-capability-read-adoption`. D24 constrains 
 Concretely, the convention owns and the skills do not restate:
 
 - **Sources and read order** — `adoption/tech/adr/`, `adoption/decision-log/`, then the context map (DDRs reached through it). Fixed order, id/date order within each source.
-- **Bounded read** — every record is indexed (id, title, `Status`, one-line summary); only the bodies of records in the item's scope are opened. This is the mitigation for the story's own cost signal (adoption history bloating every generation prompt), and it is why the class stayed `cost:yellow`.
-- **Precedence** — `Superseded` never wins; among live records the most recent does, regardless of record kind.
+- **Bounded read** — every record is indexed from its **metadata alone**, read from the file head: id/date (from the filename), the `#` H1 title **verbatim** (that title *is* the summary — none is derived), `## Status`, and the `## Category` that tells an ADL from a `Category: Analysis` entry. No body is opened at that stage; only the bodies of records in the item's scope are. This is the mitigation for the story's own cost signal (adoption history bloating every generation prompt), and it is why the class stayed `cost:yellow`.
+- **Precedence** — only *live* authorities take part: `Accepted` (ADR/DDR, amended form included) and `Active` (ADL). `Proposed` is not yet an authority and `Deprecated`/`Superseded` no longer are — for `Superseded` the successor is read in its place. Among the live ones the most recent wins, regardless of record **kind** — with one exception that is decided by kind: a `Category: Analysis` entry is context and takes no part in the order at all.
 - **The three effects** — constrain, cite, flag a revisit — with one citation form: `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per DDR-004)`, `(per context-map: <term>)`.
 - **The degradation ladder** — no adoption ⇒ today's behavior exactly; one unparseable record ⇒ skip that record with a warning; whole tree unreadable ⇒ the no-adoption path. Never a HALT (D21).
 
@@ -49,7 +49,7 @@ Each skill states only: what its **subject** is (the epic + its candidates / the
 
 - A change to how generation reads adoption is a one-file edit plus a mirror, not a three-skill sweep — and the guard fails if a skill starts re-describing the mechanics.
 - Generated stories carry citations in the body. Reviewers and refiners get the "why this shape" without opening the adoption tree; the cost is slightly longer story bodies.
-- `/pair-process-brainstorm`'s SKILL.md absorbed ~700 B against its 28 KB progressive-disclosure budget (145 B of headroom left). The degradation ladder for the adoption read was disclosed into its `degradation.md` sibling rather than inlined — the next addition to that skill needs another split.
+- `/pair-process-brainstorm`'s SKILL.md absorbed the addition against its 28 KB progressive-disclosure budget, which binds on the **installed mirror** (the copy an assistant loads, systematically larger than its dataset source): mirror 28,478 B, ~194 B of headroom. The budget was not raised — room was made by disclosing the adoption-read degradation ladder into the `degradation.md` sibling and by removing four Notes restatements duplicated in the preamble, Parametrization and Phase 3. The next addition to that skill needs another split.
 - Verification for this class of change stays a **hand-traced fixture dry-run** (seeded adoption + empty adoption), reported on the PR, plus the static conformance guard. There is no runtime to assert against, and pretending otherwise would mean writing the parallel implementation this decision rejects.
 
 ## Adoption Impact

@@ -74,7 +74,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    | Validation Strategy                   | Has testing approach                                                       |
 
 2. **Act**: Determine refinement state:
-   - **All sections present** → story is already Ready. Offer selective update (Step 6).
+   - **All sections present** → story is already Ready. Run Step 1b, then offer selective update (Step 6) — the route passes **through** Step 1b, which has no skip condition and is what Step 6 relies on having run.
    - **Some sections present** → partial refinement. Resume from first missing section (Steps 2–5).
    - **No sections (only Initial Breakdown)** → full refinement needed (Steps 2–5).
 3. **Verify**: Refinement state determined. Report:
@@ -98,7 +98,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    - Convert requirements into **Given-When-Then** scenarios.
    - Identify **business rules** with measurable criteria.
    - Address **edge cases** and error handling conditions.
-   - **Adoption-informed** (Step 1b): a criterion contradicting a live record is reshaped to fit it or dropped with that record named; one that genuinely reopens it is kept and labelled `Revisits <id>: <one-line why>`, never silently contradicted. Every criterion a record shaped **cites** it inline in the convention's form — `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per context-map: <term>)` — and registered terms are used rather than synonyms.
+   - **Adoption-informed** (Step 1b): a criterion contradicting a live record is reshaped to fit it or dropped with that record named; one that genuinely reopens it is kept and labelled `Revisits <id>: <one-line why>`, never silently contradicted. Every criterion a record shaped **cites** it inline in the convention's form — `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per DDR-004)`, `(per context-map: <term>)`, the convention's complete list — and registered terms are used rather than synonyms.
 2. **Act**: Domain check — the map half of Step 1b's read (loaded once, not twice). If `context-map.md` (in `.pair/adoption/product/`) exists, read it (plus any linked `subdomain/<slug>.context.md` this story touches). When the story introduces or sharpens a domain term, update the map inline per the [Context Map Maintenance](../../../.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) guideline. When a proposed criterion conflicts with a registered rule, flag it citing that rule (and the DDR, when one exists) and resolve with the developer before proceeding. Skip this step entirely if the map doesn't exist — its absence is expected, not an error.
 3. **Act**: Domain placement (functional). Is `/pair-capability-map-subdomains` installed? Compose `/pair-capability-map-subdomains` with `$scope: [the business capability this story touches]` — **scoped to the story, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It classifies the touched capability as core/supporting/generic with a Volatility rating; that placement feeds the **Business impact** dimension of the classification matrix (Step 3b) and the volatility input to coupling (Step 3). Not installed, or no domain artifacts and no PRD/initiatives to classify from → degrade: skip domain placement with a note, still produce the functional analysis.
 4. **Act**: Present the proposed criteria to the developer for validation:
