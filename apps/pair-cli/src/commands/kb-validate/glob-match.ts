@@ -14,12 +14,15 @@
  * - everything else is literal
  *
  * A pattern is anchored: it must match the WHOLE candidate path, so `apps/**`
- * does not match `vendor/apps/x.md`.
+ * does not match `vendor/apps/x.md`. Anchoring is on the KB root, so a leading
+ * `./` or `/`, a trailing `/` and repeated `/` are stripped from BOTH sides
+ * (`/apps/**` === `./apps/**` === `apps/**`; `apps/` === `apps`).
  *
  * NOT minimatch-equivalent, and every divergence measured is MORE permissive: a
- * trailing `/**` also matches the directory itself (`apps/**` matches `apps`), and
+ * trailing `/**` also matches the directory itself (`apps/**` matches `apps`),
  * `**` traverses `..` segments (`**` matches `../../apps/x.ts` — which is the point
- * here, the tolerated links leave the KB). Both are pinned in `glob-match.test.ts`
+ * here, the tolerated links leave the KB), and the normalization above collapses
+ * spellings minimatch keeps distinct. All three are pinned in `glob-match.test.ts`
  * and stated in the CLI reference; see the ADL's Consequences.
  *
  * Matching is NOT regex-based, on purpose: patterns come from a config file and
@@ -287,8 +290,22 @@ function matchToken(token: Token, char: string): boolean {
   }
 }
 
-/** Windows separators to POSIX, and a leading `./` dropped, on both sides. */
+/**
+ * One spelling per path, applied to BOTH pattern and candidate: Windows
+ * separators to POSIX, repeated separators collapsed, and the three redundant
+ * decorations dropped — a leading `./`, a leading `/` and a trailing `/`.
+ *
+ * Every candidate is already anchored on the KB root, so `/apps/**` (which is
+ * exactly how an ABSOLUTE internal link is written in markdown) states the same
+ * rule as `apps/**`, and `apps/` the same as `apps`. Left unnormalized they
+ * compiled into an empty segment that could never match ANY candidate, and an
+ * inert pattern is not "malformed" — nothing warned, so the operator saw only
+ * the original link error and widened the rule or switched the registry off.
+ */
 function normalizePath(value: string): string {
-  const posix = value.replace(/\\/g, '/')
-  return posix.startsWith('./') ? posix.slice(2) : posix
+  return value
+    .replace(/\\/g, '/')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^(?:\.\/|\/)+/, '')
+    .replace(/\/+$/, '')
 }

@@ -655,6 +655,23 @@ describe('validateLinks', () => {
       expect(results[0]?.valid).toBe(true)
       expect(results[0]?.warnings).toHaveLength(1)
     })
+
+    it('accepts the pattern spelled with a leading `/`, like the link itself', async () => {
+      // Candidates are KB-root-anchored, so `/apps/**` is the same rule as
+      // `apps/**` — it used to compile into a matcher that matched nothing,
+      // silently, leaving the link an ERROR with no hint the pattern was inert.
+      fs.writeFile('/kb/docs/guide.md', '[Code](/apps/website/page.tsx)')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/docs/guide.md'],
+        fs,
+        optionalLinkPatterns: ['/apps/**'],
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.warnings).toHaveLength(1)
+    })
   })
 
   describe('edge cases', () => {

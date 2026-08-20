@@ -126,4 +126,11 @@ assert_success || exit 1
 run_pair kb-validate --strict
 assert_failure || exit 1
 
+# 6e: the same rule spelled `/apps/**` — how an ABSOLUTE internal link is written, and
+# the spelling that used to compile into a matcher matching nothing, silently.
+rm -f config.json
+run_pair kb-validate --optional-link-patterns "/apps/**"
+assert_success || exit 1
+assert_output_contains "optional link (pattern-matched)" || exit 1
+
 echo "=== $TEST_NAME Completed ==="

@@ -80,6 +80,25 @@ describe('matchesAnyPattern', () => {
     expect(match(['apps/x.md'], ['./apps/**'])).toBe(true)
   })
 
+  it('normalizes a leading / on both candidate and pattern', () => {
+    // `/apps/x.tsx` is how an ABSOLUTE internal link is written, and every
+    // candidate is already KB-root-anchored, so the leading `/` is redundant
+    // rather than a different rule. Left in place it compiled to an empty
+    // first segment that could never match anything, with no diagnostic.
+    expect(match(['apps/x.md'], ['/apps/**'])).toBe(true)
+    expect(match(['/apps/x.md'], ['apps/**'])).toBe(true)
+    expect(match(['/apps/x.md'], ['/apps/**'])).toBe(true)
+  })
+
+  it('normalizes a trailing / and repeated separators on both sides', () => {
+    // `apps/` is `apps`: still anchored (it does NOT imply `apps/**`), but it
+    // now matches the directory itself instead of nothing at all.
+    expect(match(['apps'], ['apps/'])).toBe(true)
+    expect(match(['apps/'], ['apps'])).toBe(true)
+    expect(match(['apps/x.md'], ['apps//**'])).toBe(true)
+    expect(match(['apps//x.md'], ['apps/**'])).toBe(true)
+  })
+
   it('matches when ANY candidate form matches (written link OR resolved path)', () => {
     expect(match(['../../apps/x.md', 'apps/x.md'], ['apps/**'])).toBe(true)
   })
