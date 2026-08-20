@@ -10,7 +10,7 @@ export interface GitRef {
   ref?: string
 }
 
-/** Split `url#ref` into repo URL and optional ref (branch/tag/commit). */
+/** Split `url#ref` into repo URL and optional ref (branch or tag — not a commit SHA). */
 export function parseGitRef(source: string): GitRef {
   const hashIndex = source.indexOf('#')
   if (hashIndex === -1) return { repoUrl: source }

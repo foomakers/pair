@@ -7,12 +7,16 @@ import { join } from 'path'
 import { cloneGitRepo } from './git-clone'
 
 /**
- * Integration test for the ONE wiring nothing else exercises: `resolvePartialCurrentVersion`
- * defaults to the real `cloneGitRepo` (`options.gitCloner ?? cloneGitRepo`), every unit test
- * injects a stub cloner, and `git-clone.test.ts` mocks `execFileSync` away. So the contract
- * the version check's temp-dir design rests on — `git clone` CREATES a destination that does
- * not exist yet, inside a parent that was just mkdir'd 0700 — was asserted only by a code
- * comment. Here it runs against a real `git` and a real fixture repository.
+ * Integration test for `cloneGitRepo`'s DESTINATION contract, the one the version check's
+ * temp-dir design rests on: `git clone` CREATES a destination that does not exist yet inside a
+ * parent just mkdir'd 0700, and REFUSES a populated one (recursive-deleting it on the way out).
+ * `git-clone.test.ts` mocks `execFileSync` away, so until this file that contract was asserted
+ * by a code comment only. Here it runs against a real `git` and a real fixture repository.
+ *
+ * It does NOT cover the `options.gitCloner ?? cloneGitRepo` default in
+ * `resolvePartialCurrentVersion` — that seam is pinned by
+ * `commands/kb-info/version-resolver.integration.test.ts`, which calls `resolveCurrentVersion`
+ * with no cloner injected.
  *
  * No network: the source is a local repository path, which `git clone` accepts like any
  * other URL.
