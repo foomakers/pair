@@ -51,12 +51,18 @@ describe('resolveOptionalLinkPatterns', () => {
     })
   })
 
-  it('warns instead of throwing when link_validation is not an object', () => {
-    const resolved = resolveOptionalLinkPatterns({ link_validation: 'apps/**' }, undefined)
+  // The three shapes a config author actually types instead of an object; each
+  // must be NAMED the way they wrote it, so the message points at the typo.
+  it.each([
+    ['a string', 'apps/**', 'a string'],
+    ['null', null, 'null'],
+    ['an array', [], 'an array'],
+  ])('warns instead of throwing when link_validation is %s', (_label, value, described) => {
+    const resolved = resolveOptionalLinkPatterns({ link_validation: value }, undefined)
 
     expect(resolved.patterns).toEqual([])
     expect(resolved.warnings).toEqual([
-      "Config 'link_validation' must be an object, got a string, ignoring it",
+      `Config 'link_validation' must be an object, got ${described}, ignoring it`,
     ])
   })
 

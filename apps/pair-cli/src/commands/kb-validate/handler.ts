@@ -80,8 +80,17 @@ async function collectFiles(
  * The diagnostics are RETURNED, not just logged, so they reach the report as
  * run-level warnings: a warning that only went to the log would leave the report
  * footer printing `Warnings: 0` on a run that just reported a config typo.
- * Only the config ones are logged here — `validateLinks` logs the malformed
- * patterns itself, when it compiles them.
+ *
+ * They deliberately travel on BOTH channels, so each run-level diagnostic is
+ * emitted twice: once on stderr the moment it is detected (immediacy — a long
+ * validation run should not sit on a config typo until the report prints, and
+ * `validateLinks` is used by callers that never build a report), and once in the
+ * report's `Configuration:` section, where it is counted in the `Warnings:`
+ * total. Each channel logs its own: the config-shape ones here, the
+ * malformed-pattern ones inside `validateLinks` when it compiles them —
+ * `describeInvalidOptionalLinkPatterns` re-derives the latter from the SAME
+ * message source, so the two channels cannot drift. Documented as a design
+ * choice in the CLI reference (`kb-validate` → Optional link patterns).
  */
 function resolveOptionalLinks(
   config: KbValidateCommandConfig,

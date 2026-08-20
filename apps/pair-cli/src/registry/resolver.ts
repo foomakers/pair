@@ -57,8 +57,8 @@ export interface Config {
    * Tuning for `pair kb-validate`'s markdown link checking (US-188):
    * `optional_link_patterns` downgrades a MISSING target matching a glob to a
    * warning, so a KB can be validated in isolation. Read from the config of the
-   * KB being validated (`<--path>/config.json`), merged with
-   * `--optional-link-patterns`.
+   * KB being validated (`<--path>/pair.config.json`, falling back to
+   * `config.json`), merged with `--optional-link-patterns`.
    */
   link_validation?: LinkValidationConfig
   [key: string]: unknown
