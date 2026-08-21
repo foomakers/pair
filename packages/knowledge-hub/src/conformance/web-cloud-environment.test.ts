@@ -101,10 +101,20 @@ const caseBody = (id: string): string => {
 // makes a real regression (dropped from one sweep) fail red instead of reading as "still covered".
 const e2eTestBody = (name: string): string => {
   const c = read(E2E)
-  const start = c.indexOf(`test('${name}'`)
-  if (start === -1) return ''
+  // Indentation-tolerant on BOTH ends, not just anchored to column 0: today every `test(` in
+  // this file sits at column 0 with no `describe()` wrapper, but nothing enforces that, and a
+  // routine `describe('docs', () => { ... })` refactor would make a column-0-only `^test\(`
+  // terminator match nothing, WIDEN the body to end-of-file (the exact fail-open shape this
+  // suite has closed eight times over), and silently pick up "coverage" from an unrelated test
+  // further down the file instead of failing red on a real regression.
+  const startMatch = new RegExp(
+    `^[ \\t]*test\\('${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`,
+    'm',
+  ).exec(c)
+  if (!startMatch) return ''
+  const start = startMatch.index
   const rest = c.slice(start)
-  const nextTest = rest.slice(1).search(/^test\(/m)
+  const nextTest = rest.slice(1).search(/^[ \t]*test\(/m)
   return nextTest === -1 ? rest : rest.slice(0, nextTest + 1)
 }
 
@@ -512,6 +522,13 @@ describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () 
   // depend on turbo invalidating on — not just "the arrays are equal to EACH OTHER" (which `[]`
   // vs `[]`, or two arrays each missing the same real entry, also satisfies).
   const REQUIRED_INPUTS = [
+    // Without this, turbo drops the PACKAGE'S OWN files from the cache key — verified
+    // empirically in a scratch workspace: a task with inputs = ["$TURBO_ROOT$/x/**"] and no
+    // $TURBO_DEFAULT$ hashes only that root path, not the package's own source. Both arrays
+    // being identically missing it is a strictly WORSE false-green than the one this whole
+    // turbo.json entry exists to close: editing this very test file would then replay a stale
+    // local PASS.
+    '$TURBO_DEFAULT$',
     '$TURBO_ROOT$/.pair/**',
     '$TURBO_ROOT$/apps/website/content/docs/**',
     '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',

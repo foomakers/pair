@@ -79,6 +79,24 @@
         "$TURBO_ROOT$/turbo.json"
       ]
     },
+    // packages/dev-tools/src/quality-gates/run-format.test.ts exercises
+    // scripts/format-lib/run-format.sh directly (execFileSync against the real script), which
+    // lives OUTSIDE this package. MEASURED: `turbo run test --filter @pair/dev-tools --dry=json`
+    // hashes 17 inputs, all under packages/dev-tools — scripts/format-lib/** is not among them,
+    // and globalDependencies does not cover it either. A revert of run-format.sh's exit-code
+    // logic would therefore replay a cached PASS on this test locally — the identical
+    // local-false-green class this same PR's knowledge-hub#test entry above exists to close,
+    // for the one test file in this PR that most needs to actually run.
+    "@pair/dev-tools#test": {
+      "dependsOn": ["build"],
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
+    },
+    "@pair/dev-tools#test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
+    },
     "ts:check": {
       "dependsOn": ["^build"],
       "outputs": []
