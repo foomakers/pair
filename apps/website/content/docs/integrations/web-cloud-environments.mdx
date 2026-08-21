@@ -4,9 +4,9 @@ description: Running pair from Claude Code Web and similar cloud coding environm
 ---
 
 pair is a knowledge base plus a skill catalog in your repository. Nothing about it is tied to a
-laptop, so a cloud coding environment that clones the repo — [Claude Code
-Web](https://docs.anthropic.com/en/docs/claude-code) is the one this page describes — reads the
-same `.pair/` files and runs the same skills your local session does.
+laptop, so a cloud coding environment that clones the repo — [Claude Code on the
+web](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web) is the one this page
+describes — reads the same `.pair/` files and runs the same skills your local session does.
 
 One thing is genuinely different, and it is a deliberate exclusion rather than a gap: **there is no
 live preview of a dev server**. This page states both halves honestly, so you can decide what to
@@ -14,10 +14,12 @@ run where.
 
 ## What works
 
-The statuses below come from the **D16 feasibility assessment**, not from an observed run:
+The statuses below come from a **feasibility assessment**, not from an observed run:
 `qa/release-validation/CP10-web-cloud-environment.md` has not been executed yet, so pair's web
-support is _assessed_, not _verified_. Treat the table as the expected shape of a session and
-confirm it in yours — see [Verifying it yourself](#verifying-it-yourself).
+support is _assessed_, not _verified_ — [the decision record states exactly
+that](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md).
+Treat the table as the expected shape of a session and confirm it in yours — see [Verifying it
+yourself](#verifying-it-yourself).
 
 | Capability                | Status | Notes                                                                                             |
 | ------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
@@ -35,9 +37,15 @@ confirm it in yours — see [Verifying it yourself](#verifying-it-yourself).
 A dev server started in the session is **not exposed on the public internet**, so you cannot open
 it from your own browser and click through the running app.
 
-This is a decision, not a defect. Requirement **R9.4** excludes public dev-server exposure: a
-port that anyone can reach turns every ad-hoc `pnpm dev` into an unauthenticated deployment of
-unreviewed code. The environment declining to do that is the environment behaving correctly.
+This is a decision, not a defect, on both sides. The environment's side: cloud sessions run in
+isolated VMs whose [network access is limited by
+default](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web#security-and-isolation),
+so nothing publishes the port. pair's side: **pair does not tunnel around it** — no reverse proxy,
+no port-sharing service, documented or scripted. A port anyone can reach turns every ad-hoc
+`pnpm dev` into an unauthenticated public deployment of unreviewed code, from a sandbox that holds
+your repository credentials. That reasoning is recorded in [no public dev-server preview from cloud
+sessions](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md),
+which is where a future "can we have a preview URL?" gets answered.
 
 <Callout type="warn">
   Do not plan work that depends on a human eyeballing a running UI from a cloud session. Visual
@@ -63,12 +71,35 @@ You get a PNG at `/tmp/preview.png` — outside the repository, so a stray binar
 your next commit — instead of an interactive preview: enough to confirm a layout
 renders, a component mounted, or a regression is visible — not enough to click around.
 
+<Callout type="warning">
+  **Do not run `playwright install chromium` if the command above fails.** Verified in Claude Code
+  Web (2026-08-20): the browser-download CDN is not on that environment's network allowlist, so
+  `playwright install` fails outright with a `403` — and it is unnecessary anyway, since the
+  environment ships Chromium **pre-installed**, with `PLAYWRIGHT_BROWSERS_PATH` already pointing at
+  it. If the CLI command instead fails on a **browser-revision mismatch** (the project's
+  `playwright-core` expects a newer revision than the one pre-installed), launch the pre-installed
+  binary directly instead:
+
+  ```bash
+  node -e "
+  const { chromium } = require('@playwright/test');
+  (async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH + '/chromium' });
+    const page = await browser.newPage();
+    await page.goto('http://localhost:3000/docs');
+    await page.screenshot({ path: '/tmp/preview.png' });
+    await browser.close();
+  })();
+  "
+  ```
+</Callout>
+
 <Callout type="info">
   **Check this in your own environment before you rely on it.** Whether a headless browser is
   installable and runnable depends on the sandbox you are in, and a workaround that only works on a
-  dev machine is not a workaround for a cloud session. Run the two commands above once; if the
-  screenshot is not produced, the honest state for that environment is "no visual verification at
-  all", and you should plan around it rather than around this page.
+  dev machine is not a workaround for a cloud session. Run the commands above once; if no screenshot
+  is produced by either the CLI or the fallback script, the honest state for that environment is "no
+  visual verification at all", and you should plan around it rather than around this page.
 </Callout>
 
 For the full end-to-end browser suite (rather than a single screenshot), the same reasoning
