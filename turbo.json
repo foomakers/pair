@@ -47,7 +47,9 @@
         "$TURBO_ROOT$/apps/pair-cli/config.json",
         "$TURBO_ROOT$/apps/website/content/docs/**",
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
-        "$TURBO_ROOT$/qa/**"
+        "$TURBO_ROOT$/qa/**",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/scripts/**"
       ]
     },
     "test:coverage": {
@@ -70,7 +72,9 @@
         "$TURBO_ROOT$/apps/pair-cli/config.json",
         "$TURBO_ROOT$/apps/website/content/docs/**",
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
-        "$TURBO_ROOT$/qa/**"
+        "$TURBO_ROOT$/qa/**",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/scripts/**"
       ]
     },
     "ts:check": {

@@ -74,7 +74,7 @@ You get a PNG at `/tmp/preview.png` — outside the repository, so a stray binar
 your next commit — instead of an interactive preview: enough to confirm a layout
 renders, a component mounted, or a regression is visible — not enough to click around.
 
-<Callout type="warning">
+<Callout type="warn">
   **Do not run `playwright install chromium` if the command above fails.** Verified in Claude Code
   Web (2026-08-20): the browser-download CDN is not on that environment's network allowlist, so
   `playwright install` fails outright with a `403` — and it is unnecessary anyway, since the
@@ -156,6 +156,8 @@ no "wait for it to finish, then type" order; the prompt is what starts the clock
   also works, but it is not necessary — reload first. Only treat it as genuinely `BLOCKED` if a
   reload still shows no progress.
 </Callout>
+
+The network-trust setting itself was not what was being tested: every attempt used the **"Attendibili"** (trusted) level, and it was ruled out only as a *cause of the stuck stepper* — varying it made no difference there. Whether a less-trusted network setting would also unblock the `playwright install` `403` from [the CDN allowlist](#the-workaround-drive-the-app-headlessly) was not tested; do not assume raising trust fixes that specific limitation.
 
 **The session may not start from a clean `main`.** If the cloud environment is configured against a
 particular branch (this project's own `pair` environment, for instance, tracks whichever branch was

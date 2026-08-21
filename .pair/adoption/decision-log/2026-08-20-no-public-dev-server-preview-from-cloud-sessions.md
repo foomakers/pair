@@ -43,7 +43,7 @@ The documented mitigation is to drive the app **headlessly, from inside the sess
 browser (Playwright, already in pair's stack) can reach `localhost` because it runs in the same
 sandbox, and can capture a screenshot as evidence that a layout renders or a regression is visible
 — enough to confirm the app works, not enough to click around. See
-[Web and Cloud Environments](https://pair.build/docs/integrations/web-cloud-environments) for the
+[Web and Cloud Environments](https://pair.foomakers.com/docs/integrations/web-cloud-environments) for the
 verified command sequence.
 
 ## Alternatives Considered

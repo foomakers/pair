@@ -1043,10 +1043,12 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
   }
 
   // A selector that stops matching (a fumadocs class rename) makes both loops above no-ops —
-  // `circular` stays empty and this test passes for the wrong reason, silently, forever. Every
-  // page in `allPages` has at least a "Previous" or a "Next" (only the very first and very last
-  // page in the whole doc tree could lack one side), so the seen-count floor below is the
-  // presence guard the original bare-count checks never had.
+  // `circular` stays empty and this test passes for the wrong reason, silently, forever. Most
+  // pages carry BOTH a "Previous" and a "Next" (only the very first and very last page in the
+  // whole nav tree have just one side, and a page absent from the nav tree — Footer's `idx === -1`
+  // branch — contributes neither), so the real count is close to 2x `allPages.length`, not 1x.
+  // The floor below is set at `allPages.length` deliberately slack, not as the tight expected
+  // value: it is the presence guard the original bare-count checks never had, not a precise count.
   expect(footerLinksSeen).toBeGreaterThan(allPages.length)
 
   expect(circular, `Circular navigation links found:\n${circular.join('\n')}`).toHaveLength(0)
