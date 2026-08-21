@@ -645,10 +645,10 @@ test('smoke: all integrations + pm-tools pages return 200', async ({ page }) => 
     { url: '/docs/integrations/web-cloud-environments', title: 'Web and Cloud Environments' },
     { url: '/docs/integrations/windsurf', title: 'Windsurf' },
     { url: '/docs/pm-tools', title: 'Project Management Tools' },
+    { url: '/docs/pm-tools/azure-devops', title: 'Azure DevOps' },
     { url: '/docs/pm-tools/filesystem', title: 'Filesystem' },
     { url: '/docs/pm-tools/github-projects', title: 'GitHub Projects' },
     { url: '/docs/pm-tools/linear', title: 'Linear' },
-    { url: '/docs/pm-tools/azure-devops', title: 'Azure DevOps' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)

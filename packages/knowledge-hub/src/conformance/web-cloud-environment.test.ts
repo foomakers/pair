@@ -407,13 +407,35 @@ describe('AC8 — "Using pair on Claude Code Web" is a real section, not just a 
 
   it('states the load-bearing facts a session-setup guide needs, not just a title', () => {
     const c = read(DOCS_PAGE)
-    const section = c.slice(
-      c.indexOf('## Using pair on Claude Code Web'),
-      c.indexOf('### What still does not work here'),
-    )
+    const start = c.indexOf('## Using pair on Claude Code Web')
+    const end = c.indexOf('### What still does not work here')
+    // Fail CLOSED, not open: `String#indexOf` returns -1 on a miss, and `slice(start, -1)`
+    // silently WIDENS to nearly the whole file instead of shrinking to nothing — the opposite of
+    // what a missing subsection should do to this guard. `caseBody()` above already guards this
+    // exact `-1` case explicitly; this assertion is what makes that same mistake impossible here.
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const section = c.slice(start, end)
     expect(section.toLowerCase()).toMatch(/reload/) // the provisioning-stepper workaround
     expect(section).toMatch(/\$story=/) // the $story requirement for write-mode skills
     expect(section).toMatch(/merge-base/) // the branch-collision check
+  })
+
+  it('carries an explicit "what still does not work" list, not left implicit', () => {
+    const c = read(DOCS_PAGE)
+    const start = c.indexOf('### What still does not work here')
+    expect(start).toBeGreaterThan(-1)
+    const rest = c.slice(start)
+    // `### ` is 4 characters — slicing off only 1 (as `caseBody()` does for its own `## `
+    // headings) would leave `## What still…` at position 0, matching the terminator against
+    // ITSELF instead of the next h2. Slice off the full `###` prefix before searching for `## `.
+    const end = rest.slice(3).search(/^## /m)
+    const section = end === -1 ? rest : rest.slice(0, end + 3)
+    const bullets = [...section.matchAll(/^- \*\*/gm)]
+    expect(bullets.length).toBeGreaterThanOrEqual(4)
+    expect(section).toMatch(/gh.*is not installed/)
+    expect(section).toMatch(/playwright install.*403/)
+    expect(section).toMatch(/node_modules/)
   })
 
   it('every in-page anchor link resolves to a real heading', () => {
@@ -453,10 +475,28 @@ describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () 
     const c = read(TURBO)
     const keyStart = c.indexOf(`"${taskKey}"`)
     expect(keyStart, `task "${taskKey}" not found in turbo.json`).toBeGreaterThan(-1)
-    const inputsStart = c.indexOf('"inputs"', keyStart)
-    const arrStart = c.indexOf('[', inputsStart)
-    const arrEnd = c.indexOf(']', arrStart)
-    return c.slice(arrStart, arrEnd + 1)
+    // Bounded to the task's OWN object (brace-matched), not an unbounded forward scan for the
+    // next "inputs" — an unbounded scan falls through to the NEXT task's inputs if this task's
+    // own array is ever deleted, and both calls would then return the same (wrong) string,
+    // passing a guard whose entire purpose is to catch exactly that deletion.
+    const braceOpen = c.indexOf('{', keyStart)
+    expect(braceOpen, `no opening brace for task "${taskKey}"`).toBeGreaterThan(-1)
+    let depth = 0
+    let i = braceOpen
+    for (; i < c.length; i++) {
+      if (c[i] === '{') depth++
+      else if (c[i] === '}') {
+        depth--
+        if (depth === 0) break
+      }
+    }
+    expect(i, `no matching closing brace for task "${taskKey}"`).toBeLessThan(c.length)
+    const taskBlock = c.slice(braceOpen, i + 1)
+    const inputsStart = taskBlock.indexOf('"inputs"')
+    expect(inputsStart, `task "${taskKey}" has no "inputs" key of its own`).toBeGreaterThan(-1)
+    const arrStart = taskBlock.indexOf('[', inputsStart)
+    const arrEnd = taskBlock.indexOf(']', arrStart)
+    return taskBlock.slice(arrStart, arrEnd + 1)
   }
 
   it('has byte-identical inputs for #test and #test:coverage', () => {
