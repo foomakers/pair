@@ -114,8 +114,15 @@ const e2eTestBody = (name: string): string => {
   if (!startMatch) return ''
   const start = startMatch.index
   const rest = c.slice(start)
-  const nextTest = rest.slice(1).search(/^[ \t]*test\(/m)
-  return nextTest === -1 ? rest : rest.slice(0, nextTest + 1)
+  // Skip past the WHOLE matched start (indentation + `test('name'`), not just 1 character. A
+  // fixed `slice(1)` only ever strips the marker's first character — fine when the marker starts
+  // at column 0, but when it is itself indented, `rest.slice(1)` still begins with leading
+  // whitespace, so `^[ \t]*test\(` matches AT INDEX 0 (the indented `test(` re-matching itself)
+  // instead of skipping to the real next test. That is not fail-open (the near-empty result goes
+  // red), but it is not the "indentation-tolerant" fix its own earlier comment claimed either —
+  // it points a future reader at the wrong file for a regression that does not exist there.
+  const nextTest = rest.slice(startMatch[0].length).search(/^[ \t]*test\(/m)
+  return nextTest === -1 ? rest : rest.slice(0, nextTest + startMatch[0].length)
 }
 
 // Credential shapes that must never appear in a checked-in test artifact: GitHub tokens
@@ -295,6 +302,15 @@ describe('CP10 — the web/cloud verification is a re-runnable critical path', (
     expect(read(CP10)).toMatch(/^## Execution Log$/m)
   })
 
+  it("the Execution Log actually carries AC2's primary evidence, not just the heading", () => {
+    // Previously only the heading was asserted — the log could be trimmed to empty and 64/64
+    // would stay green, losing AC2's whole reason for existing: $STORY and $PR named as real,
+    // checkable evidence rather than a claim.
+    const log = sectionBetween(read(CP10), '## Execution Log', '## Changelog')
+    expect(log).toMatch(/#414/)
+    expect(log).toMatch(/#454/)
+  })
+
   it('states MT-CP1006: the real observed result stands, and the executor never files a card', () => {
     // AC7's only prior guard was membership in CP10_CASES — a case gutted to its three
     // structural headings (Priority/Steps/Expected Result) with empty bodies stayed green. This
@@ -455,9 +471,14 @@ describe('AC8 — "Using pair on Claude Code Web" is a real section, not just a 
     expect(start).toBeGreaterThan(-1)
     const rest = c.slice(start)
     // `### ` is 4 characters — slicing off only 1 (as `caseBody()` does for its own `## `
-    // headings) would leave `## What still…` at position 0, matching the terminator against
-    // ITSELF instead of the next h2. Slice off the full `###` prefix before searching for `## `.
-    const end = rest.slice(3).search(/^## /m)
+    // headings) would leave `### What still…` at position 0, matching the terminator against
+    // ITSELF. Slice off the full `###` prefix before searching. And the terminator must stop at
+    // an h2 OR an h3 (`#{2,3} `) — stopping only at `## ` let a sibling h3 appended right after
+    // this section (e.g. "### Known workarounds") get swallowed into `section`, so the real list
+    // could be emptied down to nothing and the following h3's own bullets/text would satisfy
+    // every assertion below instead. Mutation-proven: emptying the real list and adding such a
+    // sibling h3 with 4 placeholder bullets passed this test before this fix.
+    const end = rest.slice(3).search(/^#{2,3} /m)
     const section = end === -1 ? rest : rest.slice(0, end + 3)
     const bullets = [...section.matchAll(/^- \*\*/gm)]
     expect(bullets.length).toBeGreaterThanOrEqual(4)
@@ -518,36 +539,49 @@ describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () 
     return tasks as Record<string, { inputs?: unknown }>
   }
 
-  // The actual repo-wide reads `web-cloud-environment.test.ts` and `docs-page-coverage.test.ts`
-  // depend on turbo invalidating on — not just "the arrays are equal to EACH OTHER" (which `[]`
-  // vs `[]`, or two arrays each missing the same real entry, also satisfies).
-  const REQUIRED_INPUTS = [
-    // Without this, turbo drops the PACKAGE'S OWN files from the cache key — verified
-    // empirically in a scratch workspace: a task with inputs = ["$TURBO_ROOT$/x/**"] and no
-    // $TURBO_DEFAULT$ hashes only that root path, not the package's own source. Both arrays
-    // being identically missing it is a strictly WORSE false-green than the one this whole
-    // turbo.json entry exists to close: editing this very test file would then replay a stale
-    // local PASS.
-    '$TURBO_DEFAULT$',
-    '$TURBO_ROOT$/.pair/**',
-    '$TURBO_ROOT$/apps/website/content/docs/**',
-    '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',
-    '$TURBO_ROOT$/qa/**',
-    '$TURBO_ROOT$/turbo.json',
+  // The actual repo-wide reads each package's tests depend on turbo invalidating on — not just
+  // "the arrays are equal to EACH OTHER" (which `[]` vs `[]`, or two arrays each missing the
+  // same real entry, also satisfies). `$TURBO_DEFAULT$` is required in every entry: without it,
+  // turbo drops the PACKAGE'S OWN files from the cache key — verified empirically in a scratch
+  // workspace: a task with inputs = ["$TURBO_ROOT$/x/**"] and no $TURBO_DEFAULT$ hashes only
+  // that root path, not the package's own source.
+  //
+  // Covers BOTH #test(:coverage) pairs this story's own fix rounds added turbo.json overrides
+  // for — @pair/knowledge-hub's (round 5-7, the CP5/docs-page/CP10 repo-wide reads) and
+  // @pair/dev-tools's (round 8, run-format.test.ts's execFileSync of the real
+  // scripts/format-lib/run-format.sh). Asserting only the first pair left the second an
+  // unguarded hand-maintained duplicate — the exact class this describe block exists to close,
+  // reintroduced by its own follow-up fix one round later.
+  const TASK_PAIRS: Array<{ pkg: string; requiredInputs: string[] }> = [
+    {
+      pkg: '@pair/knowledge-hub',
+      requiredInputs: [
+        '$TURBO_DEFAULT$',
+        '$TURBO_ROOT$/.pair/**',
+        '$TURBO_ROOT$/apps/website/content/docs/**',
+        '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',
+        '$TURBO_ROOT$/qa/**',
+        '$TURBO_ROOT$/turbo.json',
+      ],
+    },
+    {
+      pkg: '@pair/dev-tools',
+      requiredInputs: ['$TURBO_DEFAULT$', '$TURBO_ROOT$/scripts/format-lib/**'],
+    },
   ]
 
-  it('has identical, non-empty inputs for #test and #test:coverage, covering the real repo-wide reads', () => {
-    const tasks = readTurboTasks()
-    const testInputs = tasks['@pair/knowledge-hub#test']?.inputs
-    const coverageInputs = tasks['@pair/knowledge-hub#test:coverage']?.inputs
-    expect(Array.isArray(testInputs), '@pair/knowledge-hub#test has no inputs array').toBe(true)
-    expect(
-      Array.isArray(coverageInputs),
-      '@pair/knowledge-hub#test:coverage has no inputs array',
-    ).toBe(true)
-    for (const path of REQUIRED_INPUTS) {
-      expect(testInputs, `@pair/knowledge-hub#test is missing ${path}`).toContain(path)
-    }
-    expect(coverageInputs).toEqual(testInputs)
-  })
+  it.each(TASK_PAIRS)(
+    '$pkg has identical, non-empty inputs for #test and #test:coverage, covering the real repo-wide reads',
+    ({ pkg, requiredInputs }) => {
+      const tasks = readTurboTasks()
+      const testInputs = tasks[`${pkg}#test`]?.inputs
+      const coverageInputs = tasks[`${pkg}#test:coverage`]?.inputs
+      expect(Array.isArray(testInputs), `${pkg}#test has no inputs array`).toBe(true)
+      expect(Array.isArray(coverageInputs), `${pkg}#test:coverage has no inputs array`).toBe(true)
+      for (const path of requiredInputs) {
+        expect(testInputs, `${pkg}#test is missing ${path}`).toContain(path)
+      }
+      expect(coverageInputs).toEqual(testInputs)
+    },
+  )
 })
