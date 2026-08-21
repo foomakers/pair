@@ -648,6 +648,7 @@ test('smoke: all integrations + pm-tools pages return 200', async ({ page }) => 
     { url: '/docs/pm-tools/filesystem', title: 'Filesystem' },
     { url: '/docs/pm-tools/github-projects', title: 'GitHub Projects' },
     { url: '/docs/pm-tools/linear', title: 'Linear' },
+    { url: '/docs/pm-tools/azure-devops', title: 'Azure DevOps' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -970,11 +971,11 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/contributing/writing-guidelines',
     '/docs/contributing/release-process',
     // Backfill: these pages existed on disk but were in neither e2e list, so a broken meta.json
-    // entry or a self-referential prev/next on any of them passed the whole suite. The list is
-    // machine-asserted equal to `content/docs/**/*.mdx` by
-    // packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts, so ORDER carries no
-    // meaning here and a new page must be added to this array (adding it only to the smoke sweep
-    // below is not enough).
+    // entry or a self-referential prev/next on any of them passed the whole suite.
+    // `docs-page-coverage.test.ts` machine-asserts CP5's own bullets against
+    // `content/docs/**/*.mdx` — it does NOT assert THIS array. This list is hand-maintained and
+    // unguarded: a new page must be added here manually (adding it only to the smoke sweep below
+    // is not enough), and nothing fails red if that step is skipped.
     '/docs/concepts',
     '/docs/concepts/canonical-states',
     '/docs/concepts/code-host',
@@ -997,6 +998,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
   ]
 
   const circular: string[] = []
+  let footerLinksSeen = 0
 
   for (const url of allPages) {
     await page.goto(url)
@@ -1012,9 +1014,17 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     // caught. Discovered when this backfill first swept `/docs/reference/pair-next` — MT-CP1006
     // territory, but on the test harness itself, not the site.
 
+    // `bg-fd-card` alone is not unique to the footer: fumadocs' in-article <Card> component
+    // (dist/components/card.js) renders the SAME class in the article body, before the footer in
+    // DOM order — `/docs/tutorials` and `/docs/contributing` both use <Cards> and are in
+    // `allPages`, so `.first()` without excluding `[data-card]` silently resolves to a content
+    // card instead of the real nav link on those two pages. fumadocs marks its own Card
+    // `data-card`; the footer nav links carry no such attribute.
+
     // Check "Next" footer link
-    const nextLink = page.locator('a.bg-fd-card.text-end').first()
+    const nextLink = page.locator('a.bg-fd-card.text-end:not([data-card])').first()
     if ((await nextLink.count()) > 0) {
+      footerLinksSeen++
       const href = await nextLink.getAttribute('href')
       if (href && new URL(href, 'http://localhost').pathname === url) {
         circular.push(`${url} → next points to itself`)
@@ -1022,14 +1032,22 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     }
 
     // Check "Previous" footer link
-    const prevLink = page.locator('a.bg-fd-card:not(.text-end)').first()
+    const prevLink = page.locator('a.bg-fd-card:not(.text-end):not([data-card])').first()
     if ((await prevLink.count()) > 0) {
+      footerLinksSeen++
       const href = await prevLink.getAttribute('href')
       if (href && new URL(href, 'http://localhost').pathname === url) {
         circular.push(`${url} → prev points to itself`)
       }
     }
   }
+
+  // A selector that stops matching (a fumadocs class rename) makes both loops above no-ops —
+  // `circular` stays empty and this test passes for the wrong reason, silently, forever. Every
+  // page in `allPages` has at least a "Previous" or a "Next" (only the very first and very last
+  // page in the whole doc tree could lack one side), so the seen-count floor below is the
+  // presence guard the original bare-count checks never had.
+  expect(footerLinksSeen).toBeGreaterThan(allPages.length)
 
   expect(circular, `Circular navigation links found:\n${circular.join('\n')}`).toHaveLength(0)
 })

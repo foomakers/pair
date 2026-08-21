@@ -39,7 +39,7 @@ the failure that actually happened, eighteen times.
 **The set of URLs CP5 lists must equal the set of routable pages on disk, and that equality is a
 test.**
 
-1. `packages/knowledge-hub/src/conformance/web-cloud-environment.test.ts` derives the expected URL
+1. `packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts` derives the expected URL
    set from `apps/website/content/docs/**/*.mdx` (mapping `index.mdx` to its directory URL) and
    asserts it equals the `- $BASE_URL/docs/...` bullets in CP5's MT-CP501. Filesystem is the source
    of truth; CP5 is the projection.

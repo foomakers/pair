@@ -19,7 +19,7 @@ observed run. It is now **verified, not assessed**: `qa/release-validation/CP10-
 has been executed end to end from inside a real Claude Code Web session — story
 [#414](https://github.com/foomakers/pair/issues/414) went from `Ready` to merged pull request
 [#454](https://github.com/foomakers/pair/pull/454) without a local terminal, and every row here was
-observed, not predicted. See [Setting up a session](#setting-up-a-session) for what that run found
+observed, not predicted. See [Using pair on Claude Code Web](#using-pair-on-claude-code-web) for what that run found
 about actually getting a session working, and its [Execution
 Log](https://github.com/foomakers/pair/blob/main/qa/release-validation/CP10-web-cloud-environment.md#execution-log)
 for the full evidence.
@@ -30,8 +30,8 @@ for the full evidence.
 | Skill execution           | Works  | Including skills that **write files** (adoption files, decision records, checkpoints)              |
 | Reading the knowledge base | Works  | `.pair/knowledge/` and `.pair/adoption/` are ordinary repository files                              |
 | Git: branch and commit    | Works  | The environment carries its own git identity                                                       |
-| Pull requests             | Works  | Via `gh`, authenticated by the environment — a full story can go from `Ready` to an open pull request without a local terminal |
-| Running tests and builds  | Works  | The usual `pnpm` scripts run in the session                                                        |
+| Pull requests             | Works  | Via the environment's GitHub access path — a GitHub MCP tool on Claude Code Web (`gh` is not installed there) — a full story can go from `Ready` to an open pull request without a local terminal |
+| Running tests and builds  | Works, with one exception | The usual `pnpm` scripts run in the session — except the website's own Playwright test target, which cannot run in this sandbox; see [Using pair on Claude Code Web](#using-pair-on-claude-code-web) |
 | Dev server, inside the session | Works | The server binds and is reachable **from within** the session                                    |
 | Dev server, live preview from outside | **Not available** | Excluded by design — see below                                              |
 
@@ -138,7 +138,7 @@ pull-request step does not — stop there and finish it from an environment that
 rather than improvising. If MCP servers are unavailable, skills that reach a project-management
 tool or the code host through MCP degrade accordingly; the rest are unaffected.
 
-## Setting up a session
+## Using pair on Claude Code Web
 
 This is what actually getting a session to a working state looks like, grounded in a real run
 (2026-08-20/21) rather than in what the interface implies.
@@ -198,6 +198,25 @@ smoke) is green. If you hit this and every other check is confirmed green, bypas
 *this specific, understood reason* is defensible — GitHub Actions CI, unlike this sandbox, has real
 network access and will exercise Playwright for real; state the reason explicitly rather than
 silently skipping the hook.
+
+### What still does not work here
+
+Everything below was observed directly in this run, not inferred — each is covered in more detail
+where it is linked:
+
+- **No live preview of the dev server**, by design — see [What does not
+  work](#what-does-not-work-a-live-dev-server-preview).
+- **`gh` is not installed at all.** GitHub access is exclusively through a GitHub MCP tool — see
+  [Prerequisites](#prerequisites).
+- **`playwright install` fails with a `403`** — the browser-download CDN is not on this sandbox's
+  network allowlist, and it is not needed anyway (Chromium ships pre-installed) — see [the
+  workaround](#the-workaround-drive-the-app-headlessly).
+- **The website's own Playwright test target cannot run here** (`pnpm --filter @pair/website test`)
+  — the pre-installed Chromium's revision does not match what this project's `playwright-core`
+  expects, and there is no way to install a matching one in this sandbox.
+- **`node_modules` was missing on first dev-server start** in one run, despite the session's own
+  "Esegui script di configurazione" provisioning step reporting complete — `pnpm install` before
+  `pnpm dev` if this happens; not yet confirmed as reproducible every time.
 
 ## Verifying it yourself
 

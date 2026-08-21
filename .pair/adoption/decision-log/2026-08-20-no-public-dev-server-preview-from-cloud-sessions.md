@@ -60,6 +60,14 @@ verified command sequence.
   reads as a bug until someone reports it and someone else explains it; naming it up front, with the
   reasoning, is the same effort as answering the question once.
 
+**Identifier note.** The identifiers "R9.4" and "D16" were used for this exclusion in epic #213's
+requirements triage and resolve to **no record under `.pair/`** — verified: neither string appears
+anywhere in the committed adoption tree, only in this story's own ephemeral `.pair/working/`
+scratch files. Per the same precedent as
+[2026-07-28-marketplace-plugin-packaging.md](./2026-07-28-marketplace-plugin-packaging.md)'s
+Decision 5 identifier note, this ADL is the record: code, tests, docs and the release-validation
+suite cite **this ADL by link**, never the bare identifiers.
+
 ## Consequences
 
 - No live-preview UI for cloud sessions is planned or promised anywhere in pair's docs, CLI, or

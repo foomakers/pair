@@ -7,8 +7,9 @@ Post-release manual tests that validate the pair website, CLI artifacts, and pub
 No special auth scopes needed for CP1–CP9 — the package is public on npmjs.org.
 
 **CP10 is the exception**: it exercises pair from a cloud/web coding environment, so it requires a
-Claude Code Web session with this repository open and `gh` authenticated **inside that session**
-(it opens a real pull request). Its preconditions are written as verifiable checks — see
+Claude Code Web session with this repository open and a working GitHub access path **inside that
+session** — `gh` authenticated, or a GitHub MCP tool (Claude Code Web does not ship `gh` at all) —
+since it opens a real pull request. Its preconditions are written as verifiable checks — see
 [CP10-web-cloud-environment.md](CP10-web-cloud-environment.md) — and no credential is ever
 recorded in the suite or in a report.
 

@@ -2,7 +2,7 @@
 
 **Priority**: P1
 **Scope**: pair running from a cloud/web coding environment — Claude Code Web. Skills visible and executable, a full story carried end-to-end to a pull request, and the known dev-server limit (no public preview — [ADL: no public dev-server preview from cloud sessions](../../.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md)) observed as the by-design result it is
-**Preconditions**: A Claude Code Web session with this repository open. `gh` reachable inside that session. **Nothing is installed from this file** — CP10 exercises the environment, not the release artifacts, so it needs no `$CLI` build and no `$WORKDIR`.
+**Preconditions**: A Claude Code Web session with this repository open. A working GitHub access path reachable inside that session — `gh`, **or** a GitHub MCP tool (verified: Claude Code Web does not ship `gh` at all; see MT-CP1001's Auth Preconditions table). **Nothing is installed from this file** — CP10 exercises the environment, not the release artifacts, so it needs no `$CLI` build and no `$WORKDIR`.
 
 **Why P1 and not P0**: the web environment is a **channel**, not the released artifact. A red here tells the team a channel regressed; it must not block release sign-off.
 
@@ -98,7 +98,7 @@ This is the path's primary evidence: not "the tool opened", but "the work shippe
 2. In the web session, run `/pair-process-implement $STORY` and carry it through its task cycle
 3. `git log --oneline -1` and `git branch --show-current` — record the branch and the commit
 4. Let the flow publish the pull request (or run `/pair-capability-publish-pr`)
-5. `gh pr view --json number,url,state` — record `$PR`
+5. `gh pr view --json number,url,state` **if `gh` is installed**; otherwise ask the assistant to report the PR number, URL and state through its GitHub MCP tool — record `$PR`
 6. Open `$PR` in the browser and confirm the PR page renders with the branch's commits
 
 ### Expected Result
@@ -169,7 +169,7 @@ A path that only describes the happy run leaves the executor to improvise the mo
 
 ### Steps
 
-1. `gh` not authenticated (`gh auth status` non-zero): **stop at MT-CP1003**. Record every case that was reachable and mark MT-CP1003 `BLOCKED — gh unauthenticated`
+1. No working GitHub access path — `gh auth status` non-zero **and** no GitHub MCP tool present or working: **stop at MT-CP1003**. Record every case that was reachable and mark MT-CP1003 `BLOCKED — no GitHub access path`. A missing `gh` binary alone is not this condition (see MT-CP1001's Auth Preconditions table) — check the MCP path before concluding access is absent
 2. MCP servers unavailable: continue, and record **which** skills degrade as a consequence (the ones whose PM-tool or code-host access routes through MCP), as an **environment limit**, not a test failure
 3. Playwright headless unavailable: MT-CP1004's mitigation step is recorded `FAILED — mitigation unavailable in this environment`, while MT-CP1004's dev-server observation stays an expected result
 4. Session interrupted or timed out mid-story: record the run as **PARTIAL**, naming the last case reached and its state. Do not re-label it a pass

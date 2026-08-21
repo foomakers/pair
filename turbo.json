@@ -54,6 +54,11 @@
       "dependsOn": ["build"],
       "outputs": ["coverage/**"]
     },
+    // Same repo-wide-artifact reasoning as "@pair/knowledge-hub#test" above, run through the
+    // coverage variant instead of the plain one. `inputs` is intentionally identical to that
+    // block's — JSON/turbo.json has no anchor or extends mechanism to de-duplicate it — so if you
+    // change one list, change the other the same way, or this task silently falls back to a stale
+    // local cache that the plain "test" task above has already stopped serving.
     "@pair/knowledge-hub#test:coverage": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],

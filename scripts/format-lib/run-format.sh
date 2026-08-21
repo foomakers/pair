@@ -15,11 +15,13 @@
 #   2 — broken: derivation failed (missing git, empty set — see
 #       git-tracked-paths.sh) or the formatter could not even be invoked
 #
-# `xargs` itself collapses any invocation exit of 1-125 into its OWN exit 123 —
-# conflating "violations found" with a great many unrelated failures. The
-# derivation's own exit code (0/2) is captured BEFORE xargs ever runs, so that
-# distinction survives intact; only 123 (from a batch reporting differences) maps
-# to our 1, everything else xargs can return maps to our 2.
+# `xargs` itself collapses any invocation exit of 1-125 into its OWN exit 123 on
+# GNU xargs, but BSD xargs (macOS) instead passes the child's own exit code
+# through unchanged when there is a single batch — so both `1` (BSD, direct) and
+# `123` (GNU, collapsed) mean "violations found (or a batch reporting
+# differences)" and map to our 1; anything else xargs can return maps to our 2.
+# The derivation's own exit code (0/2) is captured BEFORE xargs ever runs, so
+# that distinction survives intact regardless of which xargs is running it.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
