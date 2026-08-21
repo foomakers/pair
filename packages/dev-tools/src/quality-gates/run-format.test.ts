@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { execFileSync } from 'child_process'
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 
@@ -104,5 +104,72 @@ describe('run-format.sh — prettier composition (#414)', () => {
 
     const result = run(tmp, ['check', 'prettier', 'json'])
     expect(result.status).toBe(2)
+  })
+})
+
+describe('run-format.sh — markdownlint composition (#414)', () => {
+  let tmp: string
+
+  afterEach(() => {
+    if (tmp) rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('exits 0 on an already-conforming tracked markdown file', () => {
+    tmp = mkdtempSync(join(tmpdir(), 'rf-md-'))
+    initRepo(tmp)
+    writeFileSync(join(tmp, 'a.md'), '# Title\n\nBody.\n')
+    commitAll(tmp)
+
+    const result = run(tmp, ['check', 'markdownlint', 'md'])
+    expect(result.status).toBe(0)
+  })
+
+  it('reaches a markdown file outside every workspace member (AC1)', () => {
+    // The bug this story fixes: root mdlint:check used to pass a non-recursive
+    // '*.md' glob, so nothing below the root — e.g. under an adoption-shaped
+    // directory — was ever checked.
+    tmp = mkdtempSync(join(tmpdir(), 'rf-md-'))
+    initRepo(tmp)
+    mkdirSync(join(tmp, 'adoption', 'nested'), { recursive: true })
+    writeFileSync(
+      join(tmp, 'adoption', 'nested', 'bad.md'),
+      '#Title\nBody without a blank line above\n',
+    )
+    commitAll(tmp)
+
+    const result = run(tmp, ['check', 'markdownlint', 'md'])
+    expect(result.status).toBe(1)
+  })
+
+  it('fix mode rewrites exactly the file check flagged (AC4: check set == fix set)', () => {
+    tmp = mkdtempSync(join(tmpdir(), 'rf-md-'))
+    initRepo(tmp)
+    // Trailing whitespace (MD009) — a rule markdownlint-cli's --fix resolves outright,
+    // unlike MD018/MD022 which it only reports.
+    writeFileSync(join(tmp, 'bad.md'), '# Title\n\nBody with trailing space \n')
+    commitAll(tmp)
+
+    const before = run(tmp, ['check', 'markdownlint', 'md'])
+    expect(before.status).toBe(1)
+
+    const fixResult = run(tmp, ['fix', 'markdownlint', 'md'])
+    expect(fixResult.status).toBe(0)
+
+    const after = run(tmp, ['check', 'markdownlint', 'md'])
+    expect(after.status).toBe(0)
+    expect(readFileSync(join(tmp, 'bad.md'), 'utf-8')).toBe('# Title\n\nBody with trailing space\n')
+  })
+
+  it('never emits a markdown file under a nested .gitignore', () => {
+    tmp = mkdtempSync(join(tmpdir(), 'rf-md-'))
+    initRepo(tmp)
+    mkdirSync(join(tmp, 'pkg', 'gen'), { recursive: true })
+    writeFileSync(join(tmp, 'pkg', '.gitignore'), 'gen/\n')
+    writeFileSync(join(tmp, 'pkg', 'gen', 'ignored.md'), '#Bad title, would fail if checked\n')
+    writeFileSync(join(tmp, 'a.md'), '# Title\n\nBody.\n')
+    commitAll(tmp)
+
+    const result = run(tmp, ['check', 'markdownlint', 'md'])
+    expect(result.status).toBe(0)
   })
 })
