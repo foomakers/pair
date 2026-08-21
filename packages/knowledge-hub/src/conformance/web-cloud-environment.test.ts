@@ -38,6 +38,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { sectionBetween } from './test-utils'
 
 const ROOT = join(__dirname, '../../../..')
 const CP10 = join(ROOT, 'qa/release-validation/CP10-web-cloud-environment.md')
@@ -105,21 +106,6 @@ const e2eTestBody = (name: string): string => {
   const rest = c.slice(start)
   const nextTest = rest.slice(1).search(/^test\(/m)
   return nextTest === -1 ? rest : rest.slice(0, nextTest + 1)
-}
-
-/**
- * `text.slice(text.indexOf(a), text.indexOf(b))`, but FAILS CLOSED: `indexOf` returns -1 on a
- * miss, and a bare `slice(start, -1)` WIDENS to nearly the whole string instead of narrowing to
- * nothing — the exact bug this helper replaces (round 4 found it once at this file's own AC8
- * assertion; round 5 found two more instances of the same class). Both markers missing throws
- * before any keyword assertion runs, rather than silently degrading to a whole-document grep.
- */
-const sectionBetween = (text: string, startMarker: string, endMarker: string): string => {
-  const start = text.indexOf(startMarker)
-  const end = text.indexOf(endMarker)
-  expect(start, `"${startMarker}" not found`).toBeGreaterThan(-1)
-  expect(end, `"${endMarker}" not found after "${startMarker}"`).toBeGreaterThan(start)
-  return text.slice(start, end)
 }
 
 // Credential shapes that must never appear in a checked-in test artifact: GitHub tokens
@@ -238,6 +224,17 @@ describe('CP10 — the web/cloud verification is a re-runnable critical path', (
     expect(c).toMatch(/do not use `git status` as the evidence/)
   })
 
+  it('states MT-CP1001: every precondition check produces a recorded observation', () => {
+    // Previously unguarded (AC4's only prior defense was the exact-id list, same gap MT-CP1006
+    // had): a case gutted to its three structural headings stayed green. Checks the two
+    // load-bearing facts this case's Expected Result names — the gh-or-MCP branch, and
+    // repository visibility recorded as evidence.
+    const c = caseBody('MT-CP1001').toLowerCase()
+    expect(c).toMatch(/gh auth status/)
+    expect(c).toMatch(/mcp/)
+    expect(c).toMatch(/private.*public|public.*private/)
+  })
+
   it('states MT-CP1003: branch, commit and a PR visible on GitHub', () => {
     const c = caseBody('MT-CP1003').toLowerCase()
     expect(c).toMatch(/\bbranch\b/)
@@ -286,6 +283,16 @@ describe('CP10 — the web/cloud verification is a re-runnable critical path', (
 
   it('gives the observed run a home, so evidence is recorded rather than remembered', () => {
     expect(read(CP10)).toMatch(/^## Execution Log$/m)
+  })
+
+  it('states MT-CP1006: the real observed result stands, and the executor never files a card', () => {
+    // AC7's only prior guard was membership in CP10_CASES — a case gutted to its three
+    // structural headings (Priority/Steps/Expected Result) with empty bodies stayed green. This
+    // asserts the two rules the story actually names: evidence isn't smoothed over, and filing a
+    // backlog card is the maintainer's call, not the executor's.
+    const c = caseBody('MT-CP1006').toLowerCase()
+    expect(c).toMatch(/real observed result/)
+    expect(c).toMatch(/not\*{0,2} file a backlog card/)
   })
 
   it.each(CREDENTIAL_SHAPES)('embeds no %s', (_label, shape) => {
@@ -480,54 +487,50 @@ describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () 
   // with byte-identical `inputs` arrays, kept equal only by a comment asking humans to edit both.
   // That is exactly the hand-maintained-invariant class this same story's CP5 ADL argues should
   // be a test, applied here to the fix this story shipped for a different repo-wide read.
+  //
+  // This used to be hand-rolled indexOf/slice string surgery (keyStart/braceOpen/brace-matching)
+  // — three rounds of independent review found it fail-open six times over: an unanchored
+  // `indexOf('"key"')` matches the SAME key quoted inside another task's explanatory comment
+  // (turbo.json quotes `"@pair/knowledge-hub#test"` in the #test:coverage block's own comment,
+  // a few lines above the real key), landing brace-matching on the WRONG task's object and
+  // making both calls return the SAME array — passing a guard whose only job is to catch that.
+  // turbo.json's only non-standard-JSON feature is `//` line comments (JSONC); stripping those
+  // and parsing for real removes every one of those failure modes at once: no substring search,
+  // no comment capture, no brace-matching over string contents, keys accessed by exact property
+  // name.
   const TURBO = join(ROOT, 'turbo.json')
 
-  const inputsArrayFor = (taskKey: string): string => {
-    const c = read(TURBO)
-    const keyStart = c.indexOf(`"${taskKey}"`)
-    expect(keyStart, `task "${taskKey}" not found in turbo.json`).toBeGreaterThan(-1)
-    // Bounded to the task's OWN object (brace-matched), not an unbounded forward scan for the
-    // next "inputs" — an unbounded scan falls through to the NEXT task's inputs if this task's
-    // own array is ever deleted, and both calls would then return the same (wrong) string,
-    // passing a guard whose entire purpose is to catch exactly that deletion.
-    const braceOpen = c.indexOf('{', keyStart)
-    expect(braceOpen, `no opening brace for task "${taskKey}"`).toBeGreaterThan(-1)
-    let depth = 0
-    let i = braceOpen
-    for (; i < c.length; i++) {
-      if (c[i] === '{') depth++
-      else if (c[i] === '}') {
-        depth--
-        if (depth === 0) break
-      }
-    }
-    expect(i, `no matching closing brace for task "${taskKey}"`).toBeLessThan(c.length)
-    const taskBlock = c.slice(braceOpen, i + 1)
-    const inputsStart = taskBlock.indexOf('"inputs"')
-    expect(inputsStart, `task "${taskKey}" has no "inputs" key of its own`).toBeGreaterThan(-1)
-    // These two were the ones round 5's own review found still unguarded in this very function:
-    // with arrStart === -1, `indexOf(']', -1)` restarts from 0 and `slice(-1, small)` returns
-    // '' for BOTH calls — an emptied `inputs: []` (or a value that is not an array at all) then
-    // makes this whole guard compare '' === '', green, while the cache key it exists to protect
-    // is gone. Fail closed on both boundaries, the same as every other read in this function.
-    const arrStart = taskBlock.indexOf('[', inputsStart)
-    expect(arrStart, `task "${taskKey}" has no "[" after "inputs"`).toBeGreaterThan(-1)
-    const arrEnd = taskBlock.indexOf(']', arrStart)
-    expect(arrEnd, `task "${taskKey}" has no closing "]" for inputs`).toBeGreaterThan(arrStart)
-    const arr = taskBlock.slice(arrStart, arrEnd + 1)
-    // Non-empty AND containing the specific path this guard's own header note (and Minor #1's
-    // fix) argues must be there — otherwise `[]` vs `[]`, or two arrays each missing the SAME
-    // entry, are byte-identical and this test cannot tell that from two correct copies.
-    expect(arr.length, `task "${taskKey}"'s inputs array must not be empty`).toBeGreaterThan(2)
-    expect(arr, `task "${taskKey}" is missing $TURBO_ROOT$/turbo.json`).toContain(
-      '$TURBO_ROOT$/turbo.json',
-    )
-    return arr
+  const readTurboTasks = (): Record<string, { inputs?: unknown }> => {
+    const stripped = read(TURBO).replace(/^[ \t]*\/\/.*$/gm, '')
+    const parsed: unknown = JSON.parse(stripped)
+    const tasks = (parsed as { tasks?: unknown }).tasks
+    expect(tasks, 'turbo.json has no top-level "tasks" object').toBeTypeOf('object')
+    return tasks as Record<string, { inputs?: unknown }>
   }
 
-  it('has byte-identical inputs for #test and #test:coverage', () => {
-    expect(inputsArrayFor('@pair/knowledge-hub#test:coverage')).toBe(
-      inputsArrayFor('@pair/knowledge-hub#test'),
-    )
+  // The actual repo-wide reads `web-cloud-environment.test.ts` and `docs-page-coverage.test.ts`
+  // depend on turbo invalidating on — not just "the arrays are equal to EACH OTHER" (which `[]`
+  // vs `[]`, or two arrays each missing the same real entry, also satisfies).
+  const REQUIRED_INPUTS = [
+    '$TURBO_ROOT$/.pair/**',
+    '$TURBO_ROOT$/apps/website/content/docs/**',
+    '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',
+    '$TURBO_ROOT$/qa/**',
+    '$TURBO_ROOT$/turbo.json',
+  ]
+
+  it('has identical, non-empty inputs for #test and #test:coverage, covering the real repo-wide reads', () => {
+    const tasks = readTurboTasks()
+    const testInputs = tasks['@pair/knowledge-hub#test']?.inputs
+    const coverageInputs = tasks['@pair/knowledge-hub#test:coverage']?.inputs
+    expect(Array.isArray(testInputs), '@pair/knowledge-hub#test has no inputs array').toBe(true)
+    expect(
+      Array.isArray(coverageInputs),
+      '@pair/knowledge-hub#test:coverage has no inputs array',
+    ).toBe(true)
+    for (const path of REQUIRED_INPUTS) {
+      expect(testInputs, `@pair/knowledge-hub#test is missing ${path}`).toContain(path)
+    }
+    expect(coverageInputs).toEqual(testInputs)
   })
 })

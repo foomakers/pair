@@ -23,6 +23,7 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { sectionBetween } from './test-utils'
 
 const ROOT = join(__dirname, '../../../..')
 const CP5 = join(ROOT, 'qa/release-validation/CP5-website-docs-completeness.md')
@@ -30,21 +31,6 @@ const DOCS_CONTENT = join(ROOT, 'apps/website/content/docs')
 const E2E = join(ROOT, 'apps/website/e2e/docs.e2e.test.ts')
 
 const read = (p: string): string => readFileSync(p, 'utf-8')
-
-/**
- * `text.slice(text.indexOf(a), text.indexOf(b))`, but FAILS CLOSED: `indexOf` returns -1 on a
- * miss, and a bare `slice(start, -1)` WIDENS to nearly the whole string instead of narrowing to
- * nothing. Renaming `## MT-CP502` (the boundary these two tests scope against) would otherwise
- * silently expand `mt501` to the rest of the file, defeating the very scoping this file's own
- * comments argue for.
- */
-const sectionBetween = (text: string, startMarker: string, endMarker: string): string => {
-  const start = text.indexOf(startMarker)
-  const end = text.indexOf(endMarker)
-  expect(start, `"${startMarker}" not found`).toBeGreaterThan(-1)
-  expect(end, `"${endMarker}" not found after "${startMarker}"`).toBeGreaterThan(start)
-  return text.slice(start, end)
-}
 
 /**
  * Every routable docs URL, derived from the filesystem: `index.mdx` maps to its directory.
