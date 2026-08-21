@@ -12,13 +12,7 @@
       "source": "./packages/knowledge-hub/dataset/plugin",
       "description": "pair bootstrap skill: installs pair-cli and lets the CLI produce this project's knowledge base and skill catalog.",
       "category": "workflow",
-      "tags": [
-        "sdlc",
-        "agile",
-        "ddd",
-        "code-review",
-        "project-management"
-      ]
+      "tags": ["sdlc", "agile", "ddd", "code-review", "project-management"]
     }
   ]
 }

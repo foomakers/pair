@@ -969,6 +969,31 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/contributing/writing-skills',
     '/docs/contributing/writing-guidelines',
     '/docs/contributing/release-process',
+    // Backfill: these pages existed on disk but were in neither e2e list, so a broken meta.json
+    // entry or a self-referential prev/next on any of them passed the whole suite. The list is
+    // machine-asserted equal to `content/docs/**/*.mdx` by
+    // packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts, so ORDER carries no
+    // meaning here and a new page must be added to this array (adding it only to the smoke sweep
+    // below is not enough).
+    '/docs/concepts',
+    '/docs/concepts/canonical-states',
+    '/docs/concepts/code-host',
+    '/docs/concepts/definition-of-ready-and-done',
+    '/docs/concepts/pr-state-flow',
+    '/docs/concepts/tag-driven-gates',
+    '/docs/contributing/writing-migration-pages',
+    '/docs/customization/external-kb',
+    '/docs/migrations',
+    '/docs/migrations/v0.4-to-v0.5',
+    '/docs/pm-tools/azure-devops',
+    '/docs/reference',
+    '/docs/reference/batch-engine',
+    '/docs/reference/coupling-model',
+    '/docs/reference/pair-next',
+    '/docs/reference/quality-gates-configuration',
+    '/docs/reference/quality-model',
+    '/docs/tutorials/managing-ai-artifacts',
+    '/docs/tutorials/release-testing',
   ]
 
   const circular: string[] = []

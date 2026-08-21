@@ -14,12 +14,15 @@ run where.
 
 ## What works
 
-The table below started life as the **D16 feasibility assessment** — an educated guess, not an
+The table below started life as an internal feasibility assessment — an educated guess, not an
 observed run. It is now **verified, not assessed**: `qa/release-validation/CP10-web-cloud-environment.md`
-has been executed end to end from inside a real Claude Code Web session — a story went from `Ready`
-to a merged pull request without a local terminal, and every row here was observed, not predicted.
-See [Setting up a session](#setting-up-a-session) for what that run found about actually getting a
-session working, and [Verifying it yourself](#verifying-it-yourself) for the evidence.
+has been executed end to end from inside a real Claude Code Web session — story
+[#414](https://github.com/foomakers/pair/issues/414) went from `Ready` to merged pull request
+[#454](https://github.com/foomakers/pair/pull/454) without a local terminal, and every row here was
+observed, not predicted. See [Setting up a session](#setting-up-a-session) for what that run found
+about actually getting a session working, and its [Execution
+Log](https://github.com/foomakers/pair/blob/main/qa/release-validation/CP10-web-cloud-environment.md#execution-log)
+for the full evidence.
 
 | Capability                | Status | Notes                                                                                             |
 | ------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
@@ -40,9 +43,8 @@ it from your own browser and click through the running app.
 This is a decision, not a defect, on both sides. The environment's side: cloud sessions run in
 isolated VMs whose [network access is limited by
 default](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web#security-and-isolation),
-so nothing publishes the port. pair's side: **pair does not tunnel around it** — Requirement **R9.4**
-excludes public dev-server exposure by design: no reverse proxy, no port-sharing service, documented
-or scripted. A port anyone can reach turns every ad-hoc `pnpm dev` into an unauthenticated public
+so nothing publishes the port. pair's side: **pair does not tunnel around it** — no reverse proxy,
+no port-sharing service, documented or scripted. A port anyone can reach turns every ad-hoc `pnpm dev` into an unauthenticated public
 deployment of unreviewed code, from a sandbox that holds your repository credentials. That reasoning
 is recorded in [no public dev-server preview from cloud
 sessions](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md),

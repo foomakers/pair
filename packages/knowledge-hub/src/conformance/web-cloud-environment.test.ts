@@ -1,9 +1,9 @@
 /**
  * Conformance guard for the web/cloud-environment deliverables of story #225.
  *
- * pair had a feasibility assessment for Claude Code Web (D16) and nothing durable: a
- * one-shot verification would have said whether web support held on the day it ran and
- * nothing about the next release. The durable artifact is therefore a critical path in the
+ * pair had a feasibility assessment for Claude Code Web and nothing durable: a one-shot
+ * verification would have said whether web support held on the day it ran and nothing about
+ * the next release. The durable artifact is therefore a critical path in the
  * release-validation suite (CP10) plus a docs page, and this guard asserts the two exist in
  * the shape the suite and the site expect — registered, executable, and honest about the
  * limit they document.
@@ -17,12 +17,18 @@
  *   needed" prerequisite is qualified where CP10 is registered. CP10 is the first path that
  *   needs an authenticated environment, so leaving that sentence unconditional would have the
  *   suite index contradict one of its own paths.
- * - The dev-server limit is recorded as an EXPECTED result. R9.4 excludes public dev-server
- *   exposure by design; a path that marked it failed would report a red for a decision.
+ * - The dev-server limit is recorded as an EXPECTED result, cited by LINK to its adoption
+ *   record (`decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md`) and
+ *   never as the bare identifier `R9.4`, which resolves to no file here. A path that marked the
+ *   limit failed would report a red for a decision.
  * - No credential, token or secret appears in either artifact. The preconditions describe how
  *   to CHECK that auth is present, never how to embed it.
  * - The docs page is registered in the sidebar, swept by CP5, covered by the website e2e
  *   page lists, and does not promise a live preview it cannot deliver.
+ *
+ * The repo-wide invariant this story also introduced — CP5's URL list must equal every `.mdx` on
+ * disk — lives in `docs-page-coverage.test.ts`, NOT here: an author adding an unrelated docs page
+ * must not read a red from a suite named after Claude Code Web.
  *
  * The execution itself is deliberately NOT guarded here: it is human and manual, performed
  * inside a Claude Code Web session because that environment is the subject under test. What
@@ -30,7 +36,7 @@
  * record what they observed.
  */
 import { describe, expect, it } from 'vitest'
-import { existsSync, readdirSync, readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
 const ROOT = join(__dirname, '../../../..')
@@ -48,6 +54,14 @@ const DOCS_CONTENT = join(ROOT, 'apps/website/content/docs')
 const DOCS_INDEX = join(DOCS_CONTENT, 'integrations/index.mdx')
 
 const read = (p: string): string => readFileSync(p, 'utf-8')
+
+/**
+ * The record of the exclusion this story documents. Both artifacts cite it by link; neither
+ * carries the bare identifiers `R9.4` / `D16` (epic #213's requirements triage), which resolve to
+ * no file under `.pair/` — see the ADL's own identifier note and the precedent it cites.
+ */
+const ADL_SLUG = '2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md'
+const ADL_LINK = `../../.pair/adoption/decision-log/${ADL_SLUG}`
 
 /**
  * Every case CP10 must carry. Asserting the LIST (not a count) is what makes the deletion of a
@@ -78,13 +92,6 @@ const caseBody = (id: string): string => {
   return nextHeading === -1 ? rest : rest.slice(0, nextHeading + 1)
 }
 
-/** Every routable docs URL, derived from the filesystem: `index.mdx` maps to its directory. */
-const docsUrlsOnDisk = (): string[] =>
-  readdirSync(DOCS_CONTENT, { recursive: true, encoding: 'utf-8' })
-    .filter(f => f.endsWith('.mdx'))
-    .map(f => `/docs/${f.replace(/\.mdx$/, '').replace(/(^|\/)index$/, '')}`.replace(/\/$/, ''))
-    .sort()
-
 // Credential shapes that must never appear in a checked-in test artifact: GitHub tokens
 // (every documented prefix), Anthropic keys, and an assignment that puts a VALUE on a
 // token-named variable. `gh auth status` and `$GITHUB_TOKEN` are checks, not secrets, so a
@@ -95,9 +102,57 @@ const CREDENTIAL_SHAPES: Array<[string, RegExp]> = [
   ['Anthropic key literal', /\bsk-ant-[A-Za-z0-9-]{16,}/],
   [
     'token variable assigned a value',
-    /\b(?:TOKEN|SECRET|API_KEY|PAT)\s*=\s*["']?[A-Za-z0-9_-]{12,}/,
+    // NOT a leading `\b`: `_` is a word character, so `\bTOKEN` cannot match after the underscore
+    // in `GITHUB_TOKEN=` — i.e. the most common spelling of the thing this shape exists to catch
+    // would have slipped through. The name is instead allowed an underscore-separated prefix,
+    // anchored on a non-alphanumeric so `COMPAT=` is not read as `…PAT=`.
+    /(?:^|[^A-Za-z0-9])(?:[A-Za-z0-9]+_)*(?:TOKEN|SECRET|API_KEY|PAT)\s*=\s*["']?[A-Za-z0-9_-]{12,}/,
   ],
 ]
+
+/**
+ * The credential guard guards nothing unless it matches the spellings people actually write, so
+ * the shapes are exercised against samples before they are trusted against the artifacts. Every
+ * sample is assembled at runtime from fragments: a literal `ghp_…` in this file would be a
+ * committed secret shape and gitleaks (the repo's deterministic scan) would fail the PR on the
+ * test that exists to prevent exactly that.
+ */
+const shape = (label: string): RegExp => CREDENTIAL_SHAPES.find(([l]) => l === label)![1]
+
+describe('the credential shapes match what people actually write', () => {
+  const A36 = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8'
+
+  it.each([
+    ['GitHub token literal', 'gh' + 'p_' + A36],
+    ['GitHub token literal', 'GH_TOKEN is set from gh' + 'o_' + A36],
+    ['GitHub fine-grained token literal', 'github' + '_pat_' + A36],
+    ['Anthropic key literal', 'sk-' + 'ant-' + 'api03-' + A36],
+    ['token variable assigned a value', 'TOKEN=' + A36],
+    // The env-var spellings the guard exists for. Each carries a VALUE — no `ghp_`/`sk-ant-`
+    // prefix, so the three literal shapes above do not see them; this shape is their only net.
+    ['token variable assigned a value', 'export GITHUB_TOKEN=aBcD1234efGH5678ijKL'],
+    ['token variable assigned a value', 'export GH_TOKEN="aBcD1234efGH5678ijKL"'],
+    ['token variable assigned a value', 'AZURE_PAT=aBcD1234efGH5678ijKL'],
+    ['token variable assigned a value', 'ANTHROPIC_API_KEY=aBcD1234efGH5678ijKL'],
+    ['token variable assigned a value', 'MY_SECRET = aBcD1234efGH5678ijKL'],
+  ])('%s matches %s', (label, sample) => {
+    expect(shape(label).test(sample)).toBe(true)
+  })
+
+  it.each([
+    // Checks, not secrets: CP10 and the docs page are full of these and must stay green.
+    'gh auth status',
+    'echo $GITHUB_TOKEN',
+    'gh pr create --token=$GITHUB_TOKEN',
+    'git config user.email',
+    '| GitHub CLI auth | `gh auth status` | Exit code 0 |',
+    'PATH=/usr/local/bin:/usr/bin',
+    'COMPAT=aBcD1234efGH5678ijKL',
+    'TOKEN=short',
+  ])('leaves %s alone', sample => {
+    for (const [, re] of CREDENTIAL_SHAPES) expect(re.test(sample)).toBe(false)
+  })
+})
 
 describe('CP10 — the web/cloud verification is a re-runnable critical path', () => {
   it('exists in the release-validation suite', () => {
@@ -136,7 +191,21 @@ describe('CP10 — the web/cloud verification is a re-runnable critical path', (
     expect(c).toMatch(/\/pair-next/)
     // The write is the case's point: a skill that only *runs* proves nothing about the sandbox.
     expect(c).toMatch(/writes? a file|write-mode/)
-    expect(c).toMatch(/git status/)
+    // The evidence is a PATH check. The case names `/pair-capability-checkpoint $mode=write`,
+    // which writes under `.pair/working/` — gitignored (`git check-ignore -v
+    // .pair/working/checkpoints/x.md` -> `.gitignore:35 .pair/working`). An executor told to
+    // confirm the write "appears in git status" sees an empty `git status --short` on a
+    // SUCCESSFUL write and records the story's AC1 evidence as a red.
+    expect(c).toMatch(/ls -l/)
+    expect(c).toMatch(/read it back|reads back/)
+  })
+
+  it('warns MT-CP1002 that the gitignored working area makes git status the wrong check', () => {
+    const c = caseBody('MT-CP1002').toLowerCase()
+    expect(c).toMatch(/gitignored/)
+    // Stated as a trap, not as a step: whoever re-reads the case must learn WHY an empty
+    // `git status` is not a failure, or the removed check comes back on the next edit.
+    expect(c).toMatch(/do not use `git status` as the evidence/)
   })
 
   it('states MT-CP1003: branch, commit and a PR visible on GitHub', () => {
@@ -149,7 +218,12 @@ describe('CP10 — the web/cloud verification is a re-runnable critical path', (
 
   it('records MT-CP1004: the dev-server limit as an expected result, never as a failure', () => {
     const c = caseBody('MT-CP1004')
-    expect(c).toMatch(/R9\.4/)
+    // The exclusion is cited by LINK to its record, never as the bare identifier `R9.4`: that
+    // identifier comes from epic #213's requirements triage and resolves to no file under
+    // `.pair/`, so an executor asked to re-check the exclusion has nothing to open. Same
+    // precedent as the marketplace ADL's identifier note for `D23`/`R9.3`.
+    expect(c).toContain(ADL_LINK)
+    expect(c).not.toMatch(/R9\.4/)
     // The absence of a live preview is the expected observation, and the case says so in
     // those terms so an executor cannot log it as a red.
     expect(c.toLowerCase()).toMatch(/expected result, not a failure/)
@@ -222,7 +296,11 @@ describe('the docs page tells the reader what holds on web/cloud and what does n
 
   it('states what does not work, without promising a live preview', () => {
     const c = read(DOCS_PAGE)
-    expect(c).toMatch(/R9\.4/)
+    // Prose + a followable link, never `R9.4` — a public page whose central claim rests on an
+    // identifier that resolves nowhere is an unverifiable claim to its reader.
+    expect(c).toContain(ADL_SLUG)
+    expect(c).not.toMatch(/R9\.4/)
+    expect(c.toLowerCase()).toMatch(/does not tunnel around it/)
     expect(c.toLowerCase()).toMatch(/live preview/)
     // The failure mode this guards is a docs page that sells the workaround as the
     // feature. Any sentence claiming a live preview is available fails here.
@@ -237,14 +315,18 @@ describe('the docs page tells the reader what holds on web/cloud and what does n
     expect(c).toMatch(/screenshot/)
   })
 
-  it('marks the "What works" table as assessed, not yet observed', () => {
+  it('marks the "What works" table as verified by a real run, not a bare claim', () => {
     const c = read(DOCS_PAGE)
     const table = c.slice(c.indexOf('## What works'), c.indexOf('## What does not work'))
-    // CP10 has never run. A flat `Works` column presented as established fact lets a reader
-    // plan a sprint of cloud work on an assessment — the page must say which it is, in the
-    // same terms CP10 uses ("assessed, not verified").
+    // CP10 HAS run (2026-08-20/21: story #414 carried end to end to merged PR #454, from inside
+    // a real Claude Code Web session). A flat `Works` column is no longer an overclaim — but it
+    // must point at the evidence that makes it true, not just assert it. `D16` is dropped for the
+    // same reason it is dropped everywhere else in this file: it resolves to no file under
+    // `.pair/`, so a reader who tries to open it finds nothing.
     expect(table.toLowerCase()).toMatch(/assess/)
-    expect(table).toMatch(/D16/)
+    expect(table.toLowerCase()).toMatch(/verified/)
+    expect(table).not.toMatch(/\bD16\b/)
+    expect(table).toMatch(/#454|Execution Log/)
     expect(table).toMatch(/CP10/)
   })
 
@@ -286,36 +368,6 @@ describe('the docs page tells the reader what holds on web/cloud and what does n
 describe('the new page is swept by the existing coverage, not left unwatched', () => {
   it('is listed in CP5 (docs completeness)', () => {
     expect(read(CP5)).toContain(DOCS_URL)
-  })
-
-  it('keeps CP5 self-consistent — every stated count matches what is listed', () => {
-    const c = read(CP5)
-    const mt501 = c.slice(c.indexOf('## MT-CP501'), c.indexOf('## MT-CP502'))
-
-    // Per-section: `**Integrations** (7 pages):` must match the bullets under it.
-    const sections = [...mt501.matchAll(/\*\*(.+?)\*\* \((\d+) pages?\):\n((?:- `.+`\n)+)/g)]
-    expect(sections.length).toBeGreaterThan(0)
-    let listed = 0
-    for (const [, name, declared, bullets] of sections) {
-      const urls = bullets.trim().split('\n').length
-      expect(urls, `${name} declares ${declared} pages but lists ${urls}`).toBe(Number(declared))
-      listed += urls
-    }
-
-    // And the totals quoted in the expected result + notes must equal the sum.
-    for (const quoted of [...mt501.matchAll(/All (\d+) URLs return HTTP 200/g)])
-      expect(Number(quoted[1])).toBe(listed)
-    for (const quoted of [...mt501.matchAll(/Total: (\d+) pages/g)])
-      expect(Number(quoted[1])).toBe(listed)
-  })
-
-  it('sweeps every page that actually exists — CP5 vs the filesystem', () => {
-    const listed = [...read(CP5).matchAll(/^- `\$BASE_URL(\/docs[^`]*)`$/gm)].map(m => m[1]).sort()
-    const onDisk = docsUrlsOnDisk()
-    // Self-consistency (below) only catches an author who edits CP5 *partially*. An author who
-    // adds a page and never touches CP5 keeps every count matching while CP5 under-sweeps, and
-    // a 404 on the unlisted page passes release sign-off.
-    expect(listed).toEqual(onDisk)
   })
 
   it('is covered by the website e2e page sweeps', () => {

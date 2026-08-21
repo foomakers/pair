@@ -24,9 +24,49 @@
       "dependsOn": ["build"],
       "outputs": []
     },
+    // @pair/knowledge-hub's conformance suite asserts on REPO-WIDE artifacts that live OUTSIDE its
+    // own package: the KB under .pair/, the installed skills under .claude/, the docs content, and
+    // the release-validation paths under qa/. The default cache key ($TURBO_DEFAULT$ = the
+    // package's own files + globalDependencies) sees none of them, so the guards replayed a stale
+    // PASS. MEASURED before this entry: adding apps/website/content/docs/reference/zz-cache-probe.mdx
+    // and running `turbo run test --filter @pair/knowledge-hub` printed `3 successful, 3 cached
+    // >>> FULL TURBO`, while the same suite run through vitest directly printed `1 failed | 1
+    // passed` on the CP5-vs-filesystem assertion. CI was never affected (no remote cache, no .turbo
+    // restore in ci.yml — every CI run is cold), so this closed a LOCAL false green, not a
+    // merge-gate hole. $TURBO_ROOT$ (turbo >= 2.1) is what makes these paths expressible without
+    // hardcoding a ../../ depth — the objection that ruled the same treatment out for the formatter
+    // tasks in the note above.
+    "@pair/knowledge-hub#test": {
+      "dependsOn": ["build"],
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.claude/**",
+        "$TURBO_ROOT$/.claude-plugin/marketplace.json",
+        "$TURBO_ROOT$/.pair/**",
+        "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/apps/website/content/docs/**",
+        "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
+        "$TURBO_ROOT$/qa/**"
+      ]
+    },
     "test:coverage": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"]
+    },
+    "@pair/knowledge-hub#test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.claude/**",
+        "$TURBO_ROOT$/.claude-plugin/marketplace.json",
+        "$TURBO_ROOT$/.pair/**",
+        "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/apps/website/content/docs/**",
+        "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
+        "$TURBO_ROOT$/qa/**"
+      ]
     },
     "ts:check": {
       "dependsOn": ["^build"],
