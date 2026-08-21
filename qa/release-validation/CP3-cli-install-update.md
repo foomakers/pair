@@ -423,6 +423,7 @@
 ### Steps
 
 1. Save the CLI `config.json` and change skills source to match the repo layout:
+
    ```bash
    CLI_DIR=$(dirname $(dirname $CLI))   # pair-cli package root
    cp $CLI_DIR/config.json $WORKDIR/config.json.bak
@@ -433,6 +434,7 @@
      fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
    "
    ```
+
 2. `rm -rf ~/.pair/kb/git-*` (clear git KB cache entries)
 3. `mkdir -p $WORKDIR/project-git && cd $WORKDIR/project-git`
 4. `$CLI install --source https://github.com/foomakers/pair.git#main`

@@ -76,13 +76,13 @@ Verifies the `pair update-link` command:
 
 Simulates a real KB release and update flow in an **Offline** environment:
 
-1.  **Dev Env**: Install base KB (v1).
-2.  **Package v1**: Create v1 zip package.
-3.  **Client Install**: A "user" installs v1 from the zip package.
-4.  **Dev Update**: Update contents to v2 in Dev Env.
-5.  **Package v2**: Create v2 zip package.
-6.  **Client Update**: The user updates their installation using the v2 package.
-7.  **Verification**: Check that files were updated correctly.
+1. **Dev Env**: Install base KB (v1).
+2. **Package v1**: Create v1 zip package.
+3. **Client Install**: A "user" installs v1 from the zip package.
+4. **Dev Update**: Update contents to v2 in Dev Env.
+5. **Package v2**: Create v2 zip package.
+6. **Client Update**: The user updates their installation using the v2 package.
+7. **Verification**: Check that files were updated correctly.
 
 ### 6. KB Validation (`scenarios/kb-validate.sh`)
 

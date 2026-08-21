@@ -32,6 +32,15 @@ OFFLINE_SAFE=true
 #
 # Per the gate-tooling ADL (2026-07-13) this shell surface is verified with a smoke
 # test, not a vitest unit test.
+#
+# Story #414 added run-format.sh — root `format:check`/`format` now derive the file
+# list via `git ls-files` (scripts/format-lib/git-tracked-paths.sh) instead of the
+# wrappers' own ignore assembly. That did NOT replace the mechanism this file already
+# verified: `--filter <pkg> prettier:check`/`mdlint:check` still call the wrappers with
+# zero path arguments (glob mode), which still sources _ignore-args.sh/_ignore-file.sh
+# exactly as before (#414's T-5 found removing them would break that live path). So the
+# assertions above stand unchanged, and a second block below adds the same four
+# guarantees against the git-delegated mechanism, run through run-format.sh.
 source "$(dirname "$0")/../lib/utils.sh"
 ensure_tmp_dir
 
@@ -44,9 +53,10 @@ PRETTIER_FIX="$REPO_ROOT/tools/prettier-config/bin/prettier-fix.sh"
 MDLINT_CHECK="$REPO_ROOT/tools/markdownlint-config/bin/markdownlint-check.sh"
 MDLINT_FIX="$REPO_ROOT/tools/markdownlint-config/bin/markdownlint-fix.sh"
 REANCHOR_AWK="$REPO_ROOT/tools/markdownlint-config/bin/_reanchor-gitignore.awk"
+RUN_FORMAT="$REPO_ROOT/scripts/format-lib/run-format.sh"
 
 FAILED=0
-for f in "$PRETTIER_CHECK" "$PRETTIER_FIX" "$MDLINT_CHECK" "$MDLINT_FIX" "$REANCHOR_AWK"; do
+for f in "$PRETTIER_CHECK" "$PRETTIER_FIX" "$MDLINT_CHECK" "$MDLINT_FIX" "$REANCHOR_AWK" "$RUN_FORMAT"; do
   assert_file "$f" || exit 1
 done
 
@@ -183,7 +193,13 @@ SPACED="$WORKSPACE/with space/repo"
 mkdir -p "$SPACED/pkg/gen" "$SPACED/pkg/src"
 git -C "$SPACED" init --quiet
 cp "$PROBE/.gitignore" "$SPACED/.gitignore"
-cp "$PROBE/package.json" "$SPACED/package.json"
+# NOT a straight copy of $PROBE/package.json: prettier applies its `json-stringify`
+# parser (forced multi-line) to any file literally NAMED package.json, unlike a
+# generic .json file — $PROBE's single-line form is only ever fed to prettier as
+# CONFIG DISCOVERY context (from inside pkg/, never checked directly by the old
+# glob-mode fixture). This one IS checked directly below (git-delegated section),
+# so it has to already be in prettier's canonical multi-line form.
+printf '{\n  "name": "probe",\n  "private": true\n}\n' > "$SPACED/package.json"
 cp "$PROBE/.prettierrc.json" "$SPACED/.prettierrc.json"
 # Only the gitignored probes here: with the delegation intact both wrappers must exit
 # CLEAN, which is what makes an unquoted-args failure unambiguous.
@@ -195,6 +211,74 @@ assert_exits_clean "prettier-check (repo path with a space)" "$spaced_status" "$
 spaced_md="$(cd "$SPACED/pkg" && "$MDLINT_CHECK" 2>&1)"
 spaced_md_status=$?
 assert_exits_clean "markdownlint-check (repo path with a space)" "$spaced_md_status" "$spaced_md"
+
+# --- Same four guarantees, against the GIT-DELEGATED mechanism (story #414) ---
+# The above exercises the wrappers in their zero-argument, glob + _ignore-*.sh mode
+# (still live: `--filter <pkg> prettier:check`/`mdlint:check` calls them exactly this
+# way). Root `format:check`/`format` no longer do — they go through run-format.sh,
+# which derives the file list via git-tracked-paths.sh (`git ls-files`) instead.
+# _ignore-*.sh and _reanchor-gitignore.awk were NOT deleted (#414's T-5 found the
+# glob-mode path above still depends on them), so nothing here is left pointing at a
+# removed helper — this section ADDS coverage for the new mechanism rather than
+# replacing the assertions above. Exercised from the fixture's REPO ROOT (not pkg/):
+# git-tracked-paths.sh's paths are repo-root-relative, matching how root package.json
+# actually invokes run-format.sh.
+write_probes
+rf_prettier_out="$(cd "$PROBE" && "$RUN_FORMAT" check prettier json 2>&1)"
+rf_prettier_status=$?
+assert_violations_reported "run-format.sh (prettier check)" "$rf_prettier_status" "$rf_prettier_out"
+if echo "$rf_prettier_out" | grep -q 'pkg/gen/bad.json'; then
+  log_fail "run-format.sh (prettier check) reported a gitignored file (would block every push)"
+  echo "$rf_prettier_out"; FAILED=1
+else
+  log_succ "run-format.sh (prettier check) ignores pkg/gen/bad.json (git-delegated)"
+fi
+if echo "$rf_prettier_out" | grep -qx 'pkg/src/bad.json'; then
+  log_succ "run-format.sh (prettier check) still reports pkg/src/bad.json (not ignored)"
+else
+  log_fail "run-format.sh (prettier check) did not report pkg/src/bad.json — it now ignores too much"
+  echo "$rf_prettier_out"; FAILED=1
+fi
+
+rf_mdlint_out="$(cd "$PROBE" && "$RUN_FORMAT" check markdownlint md 2>&1)"
+rf_mdlint_status=$?
+assert_violations_reported "run-format.sh (markdownlint check)" "$rf_mdlint_status" "$rf_mdlint_out"
+if echo "$rf_mdlint_out" | grep -q 'pkg/gen/bad.md'; then
+  log_fail "run-format.sh (markdownlint check) reported a gitignored file (would block every push)"
+  echo "$rf_mdlint_out"; FAILED=1
+else
+  log_succ "run-format.sh (markdownlint check) ignores pkg/gen/bad.md (git-delegated)"
+fi
+if echo "$rf_mdlint_out" | grep -q 'pkg/src/bad.md.*MD009'; then
+  log_succ "run-format.sh (markdownlint check) still reports pkg/src/bad.md (not ignored)"
+else
+  log_fail "run-format.sh (markdownlint check) did not report pkg/src/bad.md — it now ignores too much"
+  echo "$rf_mdlint_out"; FAILED=1
+fi
+
+# FIX mode: same file set as check (AC4), through the git-delegated path too.
+write_probes
+(cd "$PROBE" && "$RUN_FORMAT" fix prettier json >/dev/null 2>&1 || true)
+assert_unchanged "run-format.sh (prettier fix)" "$PROBE/pkg/gen/bad.json" "$PRISTINE/bad.json"
+assert_rewritten "run-format.sh (prettier fix)" "$PROBE/pkg/src/bad.json" "$PRISTINE/bad.json"
+
+write_probes
+(cd "$PROBE" && "$RUN_FORMAT" fix markdownlint md >/dev/null 2>&1 || true)
+assert_unchanged "run-format.sh (markdownlint fix)" "$PROBE/pkg/gen/bad.md" "$PRISTINE/bad.md"
+assert_rewritten "run-format.sh (markdownlint fix)" "$PROBE/pkg/src/bad.md" "$PRISTINE/bad.md"
+
+# Spaced path, through the git-delegated mechanism: needs at least one NON-ignored,
+# CLEAN file, or the derived set is empty and run-format.sh exits 2 by design (T-1's
+# "empty set is a broken wrapper, not zero violations" rule) — a different, deliberate
+# guarantee from "exits clean", not a bug in this fixture.
+printf '{ "a": 1 }\n' > "$SPACED/pkg/src/clean.json"
+printf '# Title\n\nBody.\n' > "$SPACED/pkg/src/clean.md"
+rf_spaced_out="$(cd "$SPACED" && "$RUN_FORMAT" check prettier json 2>&1)"
+rf_spaced_status=$?
+assert_exits_clean "run-format.sh check prettier (repo path with a space)" "$rf_spaced_status" "$rf_spaced_out"
+rf_spaced_md_out="$(cd "$SPACED" && "$RUN_FORMAT" check markdownlint md 2>&1)"
+rf_spaced_md_status=$?
+assert_exits_clean "run-format.sh check markdownlint (repo path with a space)" "$rf_spaced_md_status" "$rf_spaced_md_out"
 
 # --- _reanchor-gitignore.awk, table-driven: one fixture, three cwd positions ---
 # Every branch of the translation is an OVER-ignore risk: get it wrong and files stop

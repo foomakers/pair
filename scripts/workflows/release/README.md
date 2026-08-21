@@ -271,7 +271,7 @@ PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0
 
 The release workflow creates **dual artifacts** (CLI + KB dataset) in a single GitHub release:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │ 1. TRIGGER                                                      │
 │    - Tag push (v*)                                              │
@@ -442,7 +442,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 
 The scripts are called in the following order within the `release.yml` workflow:
 
-```
+```text
 1. @pair/dev-tools determine-version → Determines VERSION
 2. package-manual.sh           → Creates CLI ZIP artifact
 3. create-registry-tgz.sh      → Creates CLI TGZ from ZIP

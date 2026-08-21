@@ -108,7 +108,9 @@ function parseArgs(raw) {
     // whitelist to save it — and it makes "every caller value is type-checked" read true when
     // it is not.
     if (m !== undefined && m !== null && typeof m !== 'string')
-      throw new Error(`analyze-pr-batch: ${where} has model of type ${Array.isArray(m) ? 'array' : typeof m}, which is not a string. Pass one of ${MODELS.join(' | ')}, or omit the key.`)
+      throw new Error(
+        `analyze-pr-batch: ${where} has model of type ${Array.isArray(m) ? 'array' : typeof m}, which is not a string. Pass one of ${MODELS.join(' | ')}, or omit the key.`,
+      )
     // PRESENT-BUT-EMPTY IS AN ERROR: `model: cfg.model ?? ''` used to be read as ABSENT and the
     // batch ran on the inherited tier while the caller believed they had chosen one.
     if (typeof m === 'string' && !m.trim())
@@ -119,7 +121,9 @@ function parseArgs(raw) {
     const v = String(m ?? '').trim()
     if (!v) return undefined
     if (!MODELS.includes(v))
-      throw new Error(`analyze-pr-batch: ${where} has unknown model ${JSON.stringify(v)}; expected one of ${MODELS.join(' | ')}.`)
+      throw new Error(
+        `analyze-pr-batch: ${where} has unknown model ${JSON.stringify(v)}; expected one of ${MODELS.join(' | ')}.`,
+      )
     return v
   }
   batchModel = checkModel(a.model, '`args.model`')
@@ -132,15 +136,26 @@ function parseArgs(raw) {
     // arg looks like — both are coerced deliberately. Anything else is not: `number: ['424']`
     // survived `String()` as "424" and named a PR the caller never wrote. Same rule as the two
     // sibling engines apply to `id`.
-    if (p.number !== undefined && p.number !== null && typeof p.number !== 'string' && typeof p.number !== 'number')
+    if (
+      p.number !== undefined &&
+      p.number !== null &&
+      typeof p.number !== 'string' &&
+      typeof p.number !== 'number'
+    )
       throw new Error(
         `analyze-pr-batch: prs[${i}] has number of type ${Array.isArray(p.number) ? 'array' : typeof p.number}, which is not a string or a number. ` +
           `It would be COERCED (an array joins on commas, a boolean becomes "true") and could then name a PR the caller never wrote. ` +
           `Pass the PR number as a string or a number.`,
       )
-    const number = Number(String(p.number ?? '').trim().replace(/^#/, ''))
+    const number = Number(
+      String(p.number ?? '')
+        .trim()
+        .replace(/^#/, ''),
+    )
     if (!isPosInt(number))
-      throw new Error(`analyze-pr-batch: prs[${i}] has no usable PR number: ${JSON.stringify(p.number)} — it must be a positive integer (>= 1).`)
+      throw new Error(
+        `analyze-pr-batch: prs[${i}] has no usable PR number: ${JSON.stringify(p.number)} — it must be a positive integer (>= 1).`,
+      )
     // Presence is not validity. Every field below is interpolated VERBATIM into the prompt of a
     // `general-purpose` agent — the WIDEST tool grant of the three engines, `Bash` included —
     // and `branch` lands inside `git fetch origin <branch>` / `git rev-parse origin/<branch>`,
@@ -232,27 +247,41 @@ const SAFETY = `SAFETY (mandatory, read-only): do NOT switch the main checkout's
 
 const results = await pipeline(
   PRS,
-  (pr) =>
+  pr =>
     agent(
       `Analyze pull request #${pr.number} (branch \`${pr.branch}\`${pr.story ? `, story #${pr.story}` : ''}) by invoking the **/analyze-pr** skill with $PR=${pr.number}. ${SAFETY} Follow that skill exactly — every count must come from the real \`git\`/\`gh\` commands it prescribes, never an estimate, and where a fact cannot be derived say so instead of guessing. Run \`git fetch origin ${pr.branch}\` first, and capture the head SHA you analysed with \`git rev-parse origin/${pr.branch}\` BEFORE you start counting. Write the skill's six sections to \`${OUT_DIR}/PR-${pr.number}-${pr.branch.replace(/[^A-Za-z0-9._-]/g, '-')}.md\`, creating the directory if needed. Begin the file with a short front-matter block giving: PR number, branch${pr.story ? ', story' : ''}, the head SHA you analysed, and the diff base (\`origin/main\`, three-dot). That stamp is what lets a later reader tell whether the analysis still describes the PR. Return the path, the head SHA, and — in \`verdictRisk\` — the ONE thing a person about to merge this PR should see first (a red check, a finding the PR does not address, a surprising blast radius); write \`none\` if the analysis surfaced nothing of the kind.`,
       // `args.model` routes the ANALYSIS stage. The freshness check below stays pinned to
       // sonnet/low: it exists to be reliable, and what counts as 'still current' must not
       // shift with the tier chosen for the analysis itself.
-      { agentType: 'general-purpose', phase: 'Analyze', label: `analyze:PR#${pr.number}`, effort: 'medium', schema: ANALYSIS_SCHEMA, ...(pr.model || batchModel ? { model: pr.model || batchModel } : {}) },
+      {
+        agentType: 'general-purpose',
+        phase: 'Analyze',
+        label: `analyze:PR#${pr.number}`,
+        effort: 'medium',
+        schema: ANALYSIS_SCHEMA,
+        ...(pr.model || batchModel ? { model: pr.model || batchModel } : {}),
+      },
     ),
   async (wrote, pr) => ({
     pr,
     wrote,
     check: await agent(
       `Check the freshness of the PR analysis at \`${wrote?.path ?? `${OUT_DIR}/PR-${pr.number}-*.md`}\`. ${SAFETY} Read the file's front-matter stamp to get \`stampedSha\`, then run \`git fetch origin ${pr.branch} -q\` and \`git rev-parse origin/${pr.branch}\` to get \`currentSha\`. Report \`fresh\` = true ONLY if the two SHAs are equal — if the PR moved while the analysis was being written, the file describes a commit that is no longer the head and must be reported stale, not passed off as current. Also report \`sectionsPresent\`: how many of the analyse-pr skill's SIX required sections the file actually contains. Do NOT edit or regenerate the file; just report.`,
-      { agentType: 'general-purpose', phase: 'Freshness', label: `fresh:PR#${pr.number}`, model: 'sonnet', effort: 'low', schema: FRESHNESS_SCHEMA },
+      {
+        agentType: 'general-purpose',
+        phase: 'Freshness',
+        label: `fresh:PR#${pr.number}`,
+        model: 'sonnet',
+        effort: 'low',
+        schema: FRESHNESS_SCHEMA,
+      },
     ),
   }),
 )
 
 const rows = results.filter(Boolean)
 return {
-  analyses: rows.map((r) => ({
+  analyses: rows.map(r => ({
     pr: r.pr.number,
     story: r.pr.story,
     path: r.wrote?.path,
@@ -262,8 +291,12 @@ return {
     verdictRisk: r.wrote?.verdictRisk,
   })),
   // Called out separately so a stale artifact is never read as a current one.
-  stale: rows.filter((r) => r.check?.fresh !== true).map((r) => ({ pr: r.pr.number, stamped: r.check?.stampedSha, current: r.check?.currentSha })),
-  incomplete: rows.filter((r) => (r.check?.sectionsPresent ?? 0) < 6).map((r) => ({ pr: r.pr.number, sections: r.check?.sectionsPresent })),
-  failed: PRS.filter((p) => !rows.some((r) => r.pr.number === p.number)).map((p) => p.number),
+  stale: rows
+    .filter(r => r.check?.fresh !== true)
+    .map(r => ({ pr: r.pr.number, stamped: r.check?.stampedSha, current: r.check?.currentSha })),
+  incomplete: rows
+    .filter(r => (r.check?.sectionsPresent ?? 0) < 6)
+    .map(r => ({ pr: r.pr.number, sections: r.check?.sectionsPresent })),
+  failed: PRS.filter(p => !rows.some(r => r.pr.number === p.number)).map(p => p.number),
   outputDir: OUT_DIR,
 }

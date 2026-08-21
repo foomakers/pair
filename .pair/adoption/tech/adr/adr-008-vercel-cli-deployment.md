@@ -86,5 +86,5 @@ Deploy `apps/website/` to Vercel Hobby plan using the Vercel CLI from GitHub Act
 
 - Story: #132 (CI/CD + Hosting)
 - Epic: #93 (Website & Documentation)
-- Vercel Hobby plan docs: https://vercel.com/docs/plans/hobby
-- Community workaround guide: https://gist.github.com/ky28059/1c9af929a9030105da8cf00006b50484
+- Vercel Hobby plan docs: <https://vercel.com/docs/plans/hobby>
+- Community workaround guide: <https://gist.github.com/ky28059/1c9af929a9030105da8cf00006b50484>

@@ -17,6 +17,7 @@
 1. For each URL below, issue an HTTP request and check status code
 
 **Getting Started** (7 pages):
+
 - `$BASE_URL/docs/getting-started`
 - `$BASE_URL/docs/getting-started/quickstart`
 - `$BASE_URL/docs/getting-started/quickstart-solo`
@@ -26,6 +27,7 @@
 - `$BASE_URL/docs/getting-started/checklist`
 
 **Concepts** (7 pages):
+
 - `$BASE_URL/docs/concepts`
 - `$BASE_URL/docs/concepts/ai-assisted-sdlc`
 - `$BASE_URL/docs/concepts/knowledge-base`
@@ -35,6 +37,7 @@
 - `$BASE_URL/docs/concepts/llms-txt`
 
 **Process Lifecycle** (5 pages):
+
 - `$BASE_URL/docs/developer-journey`
 - `$BASE_URL/docs/developer-journey/induction`
 - `$BASE_URL/docs/developer-journey/strategic-planning`
@@ -42,6 +45,7 @@
 - `$BASE_URL/docs/developer-journey/execution`
 
 **Customization** (6 pages):
+
 - `$BASE_URL/docs/customization`
 - `$BASE_URL/docs/customization/adopt`
 - `$BASE_URL/docs/customization/install-from-url`
@@ -50,6 +54,7 @@
 - `$BASE_URL/docs/customization/organization`
 
 **Integrations** (6 pages):
+
 - `$BASE_URL/docs/integrations`
 - `$BASE_URL/docs/integrations/claude-code`
 - `$BASE_URL/docs/integrations/cursor`
@@ -58,12 +63,14 @@
 - `$BASE_URL/docs/integrations/codex`
 
 **PM Tools** (4 pages):
+
 - `$BASE_URL/docs/pm-tools`
 - `$BASE_URL/docs/pm-tools/github-projects`
 - `$BASE_URL/docs/pm-tools/filesystem`
 - `$BASE_URL/docs/pm-tools/linear`
 
 **Reference** (12 pages):
+
 - `$BASE_URL/docs/reference`
 - `$BASE_URL/docs/reference/cli/commands`
 - `$BASE_URL/docs/reference/cli/examples`
@@ -78,11 +85,13 @@
 - `$BASE_URL/docs/reference/configuration`
 
 **Support** (3 pages):
+
 - `$BASE_URL/docs/support`
 - `$BASE_URL/docs/support/general-faq`
 - `$BASE_URL/docs/support/troubleshooting`
 
 **Tutorials** (5 pages):
+
 - `$BASE_URL/docs/tutorials`
 - `$BASE_URL/docs/tutorials/first-project`
 - `$BASE_URL/docs/tutorials/existing-project`
@@ -90,6 +99,7 @@
 - `$BASE_URL/docs/tutorials/enterprise-adoption`
 
 **Contributing** (6 pages):
+
 - `$BASE_URL/docs/contributing`
 - `$BASE_URL/docs/contributing/development-setup`
 - `$BASE_URL/docs/contributing/architecture`
