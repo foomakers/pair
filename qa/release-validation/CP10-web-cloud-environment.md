@@ -1,7 +1,7 @@
 # CP10 — Web / Cloud Environment (Claude Code Web)
 
 **Priority**: P1
-**Scope**: pair running from a cloud/web coding environment — Claude Code Web. Skills visible and executable, a full story carried end-to-end to a pull request, and the known dev-server limit (R9.4) observed as the by-design result it is
+**Scope**: pair running from a cloud/web coding environment — Claude Code Web. Skills visible and executable, a full story carried end-to-end to a pull request, and the known dev-server limit (no public preview — [ADL: no public dev-server preview from cloud sessions](../../.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md)) observed as the by-design result it is
 **Preconditions**: A Claude Code Web session with this repository open. `gh` reachable inside that session. **Nothing is installed from this file** — CP10 exercises the environment, not the release artifacts, so it needs no `$CLI` build and no `$WORKDIR`.
 
 **Why P1 and not P0**: the web environment is a **channel**, not the released artifact. A red here tells the team a channel regressed; it must not block release sign-off.
@@ -68,14 +68,16 @@ If a check fails, do **not** improvise a fix: record what was reachable and foll
 1. List the skills the session discovers (`.claude/skills/` is the canonical directory)
 2. Confirm the pair skills appear under their installed names (`/pair-next`, `/pair-process-implement`, …)
 3. Invoke `/pair-next` — a read-only skill — and observe that it reads the adoption files
-4. Invoke a skill that **writes a file** (e.g. `/pair-capability-checkpoint $mode=write`, which writes under `.pair/working/checkpoints/`)
-5. `git status --short` and read the written file back
+4. Invoke a skill that **writes a file** (e.g. `/pair-capability-checkpoint $mode=write`, which writes under `.pair/working/checkpoints/`) and note the path it reports
+5. Verify that path on the **filesystem**: `ls -l <path>` (the file exists, non-zero size) and read it back (`cat <path>`) — its content is what the skill said it wrote
+
+> **Do not use `git status` as the evidence here.** `.pair/working/` is gitignored on purpose — `git check-ignore -v .pair/working/checkpoints/x.md` prints `.gitignore:35 .pair/working`. A successful checkpoint write therefore leaves `git status --short` **empty**, and an executor who expects a line there records a red for a working write. If you want a git-visible write instead, pick a skill that writes under `.pair/adoption/` (e.g. `/pair-capability-record-decision`) — and then `git status` is the right check.
 
 ### Expected Result
 
 - The pair skills are listed and invocable by name from the web session
 - `/pair-next` returns a recommendation derived from this repository's adoption files, not a generic answer
-- The write-mode skill **actually creates or updates its file**: it appears in `git status` and its content reads back
+- The write-mode skill **actually creates or updates its file**: `ls -l` shows it at the reported path with a non-zero size, and its content reads back. Whether git sees it depends on where the skill writes — that is not what this case measures
 - Any skill that degrades (because an MCP server or a tool is unavailable) is named with **what** degraded and **why**, per MT-CP1005
 
 ---
@@ -116,7 +118,7 @@ This is the path's primary evidence: not "the tool opened", but "the work shippe
 **Preconditions**: MT-CP1001 recorded
 **Category**: Environment limit
 
-R9.4 excludes public dev-server exposure **by design**. This case exists to record that limit as an **expected result, not a failure**, and to establish whether the documented mitigation actually holds in this environment.
+A cloud session exposes **no public dev server**, by design on both sides: the environment isolates the session's network, and pair does not tunnel around it — recorded in [ADL: no public dev-server preview from cloud sessions](../../.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md). This case exists to record that limit as an **expected result, not a failure**, and to establish whether the documented mitigation actually holds in this environment.
 
 ### Steps
 
@@ -133,7 +135,7 @@ R9.4 excludes public dev-server exposure **by design**. This case exists to reco
 
 ### Expected Result
 
-- **There is no live preview: the dev server is not reachable from outside the session. This is the expected result, not a failure** — R9.4 excludes it deliberately, and recording it as a red would report a decision as a defect
+- **There is no live preview: the dev server is not reachable from outside the session. This is the expected result, not a failure** — the [ADL](../../.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md) excludes it deliberately, and recording it as a red would report a decision as a defect
 - The dev server **is** reachable from inside the session, so the app can still be exercised
 - The mitigation is recorded **as observed here, not as assumed**: either the headless screenshot is produced inside the web environment (mitigation holds), or it is not, and the real state is written down — a mitigation that only works on a dev machine is not a mitigation for this environment
 - If the mitigation does **not** hold, that is a finding for the maintainer and a correction to the docs page, not a rewrite of this expected result
@@ -173,7 +175,7 @@ A path that only describes the happy run leaves the executor to improvise the mo
 
 ### Steps
 
-1. Separate the observation into one of two buckets: **by-design limit** (R9.4 and anything else an adopted decision excludes) or **genuine defect**
+1. Separate the observation into one of two buckets: **by-design limit** (the [absent public dev-server preview](../../.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md), and anything else an adopted decision excludes) or **genuine defect**
 2. For a genuine defect, write the observed result into the execution log **as observed**
 3. Report it to the maintainer. Do **not** file a backlog card as part of executing this path — the maintainer decides whether it becomes one
 
@@ -191,11 +193,12 @@ One row per execution. `$STORY` and `$PR` are what make a run evidence rather th
 
 | Date | Environment | Repo (visibility) | `$STORY` | `$PR` | Result | Notes |
 | ---- | ----------- | ----------------- | -------- | ----- | ------ | ----- |
-| _(pending first execution — see Notes)_ | Claude Code Web | — | — | — | — | — |
+| 2026-08-20 | Claude Code Web | foomakers/pair (private) | — (not reached) | — (not reached) | `BLOCKED — session provisioning did not complete` | Session creation stalled at the first of four provisioning steps ("Configurazione di un container cloud") for 16+ minutes with no error surfaced and no progress to "Clona repository". The chat input became typeable, but no command executed inside it produced output — the container itself never came up. MT-CP1001 could not start: no auth check, no skill check, nothing pair-specific was exercised. This is an environment-provisioning failure, not a `gh auth`/permissions failure (MT-CP1005 row 1) and not a repository-visibility refusal (row 5) — neither existing degraded-path row names it. Recorded per MT-CP1005 ("no case is silently skipped... a truncated run is reported as PARTIAL, never as a pass"): this run is `BLOCKED`, not `PARTIAL`, because no case body ever ran.
 
 ### Notes
 
-- **This path has not been executed yet.** It is authored here so that it _can_ be, and its first execution — inside a real Claude Code Web session — is what turns the feasibility assessment (D16) into evidence. Until a row above is filled, pair's web support is _assessed_, not _verified_.
+- **This path has been attempted once and did not complete.** The 2026-08-20 run above never got past environment provisioning — see its Notes for the stall point. `pair`'s web support therefore remains _assessed, not verified_: no row above yet carries a `$STORY`/`$PR` pair, so AC1, AC2 and AC7 of the story that authored this path stay unmet. Re-attempt in a fresh session (a new cloud environment, not a retry inside the stalled one) rather than waiting indefinitely on a provisioning step that shows no progress.
+- **MT-CP1005 gap surfaced by this run**: none of its five degraded-path rows name "session/container provisioning never completes" as a stop condition — they all assume the container is up and something *inside* it fails (`gh` unauthenticated, MCP unavailable, Playwright unavailable, mid-run interruption, a refused operation). A provisioning stall precedes all of those. Consider adding a sixth row for it if a second occurrence confirms this is not a one-off.
 - Re-run at each release, alongside the rest of the suite. The point of a critical path over a one-off report is that the answer stays current.
 
 ---
