@@ -109,6 +109,22 @@ describe('run-format.sh — prettier composition (#414)', () => {
     const result = run(tmp, ['check', 'prettier', 'json'])
     expect(result.status).toBe(2)
   })
+
+  // The distinction this regression test exists for: `xargs` collapses child exit codes
+  // differently on GNU vs BSD, and trusting that collapsed code was tried and found to
+  // lose this exact distinction on whichever platform wasn't being tested against at the
+  // time (see git history on run-format.sh). A genuinely unparseable file makes prettier
+  // itself exit 2 ("broken"), never 1 ("violations found") — the two must stay
+  // distinguishable regardless of which xargs implementation runs the checker.
+  it('exits 2 (broken), not 1 (violations), when prettier itself cannot parse a file', () => {
+    tmp = mkdtempSync(join(tmpdir(), 'rf-'))
+    initRepo(tmp)
+    writeFileSync(join(tmp, 'bad.ts'), 'const x = {{{{ broken syntax !!!\n')
+    commitAll(tmp)
+
+    const result = run(tmp, ['check', 'prettier', 'ts'])
+    expect(result.status).toBe(2)
+  })
 })
 
 describe('run-format.sh — markdownlint composition (#414)', () => {

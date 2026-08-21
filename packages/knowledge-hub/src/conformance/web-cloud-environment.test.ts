@@ -107,6 +107,21 @@ const e2eTestBody = (name: string): string => {
   return nextTest === -1 ? rest : rest.slice(0, nextTest + 1)
 }
 
+/**
+ * `text.slice(text.indexOf(a), text.indexOf(b))`, but FAILS CLOSED: `indexOf` returns -1 on a
+ * miss, and a bare `slice(start, -1)` WIDENS to nearly the whole string instead of narrowing to
+ * nothing — the exact bug this helper replaces (round 4 found it once at this file's own AC8
+ * assertion; round 5 found two more instances of the same class). Both markers missing throws
+ * before any keyword assertion runs, rather than silently degrading to a whole-document grep.
+ */
+const sectionBetween = (text: string, startMarker: string, endMarker: string): string => {
+  const start = text.indexOf(startMarker)
+  const end = text.indexOf(endMarker)
+  expect(start, `"${startMarker}" not found`).toBeGreaterThan(-1)
+  expect(end, `"${endMarker}" not found after "${startMarker}"`).toBeGreaterThan(start)
+  return text.slice(start, end)
+}
+
 // Credential shapes that must never appear in a checked-in test artifact: GitHub tokens
 // (every documented prefix), Anthropic keys, and an assignment that puts a VALUE on a
 // token-named variable. `gh auth status` and `$GITHUB_TOKEN` are checks, not secrets, so a
@@ -290,7 +305,7 @@ describe('CP10 is registered in the suite index', () => {
 
   it('qualifies the blanket "no special auth scopes needed" prerequisite', () => {
     const c = read(SUITE_README)
-    const prerequisites = c.slice(c.indexOf('## Prerequisites'), c.indexOf('## Variables'))
+    const prerequisites = sectionBetween(c, '## Prerequisites', '## Variables')
     // CP10 is the first path that needs an authenticated environment. The promise above it
     // has to name the exception, or the next executor trusts a prerequisite that no longer holds.
     expect(prerequisites).toMatch(/CP10/)
@@ -340,7 +355,7 @@ describe('the docs page tells the reader what holds on web/cloud and what does n
 
   it('marks the "What works" table as verified by a real run, not a bare claim', () => {
     const c = read(DOCS_PAGE)
-    const table = c.slice(c.indexOf('## What works'), c.indexOf('## What does not work'))
+    const table = sectionBetween(c, '## What works', '## What does not work')
     // CP10 HAS run (2026-08-20/21: story #414 carried end to end to merged PR #454, from inside
     // a real Claude Code Web session). A flat `Works` column is no longer an overclaim — but it
     // must point at the evidence that makes it true, not just assert it. `D16` is dropped for the

@@ -973,9 +973,10 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     // Backfill: these pages existed on disk but were in neither e2e list, so a broken meta.json
     // entry or a self-referential prev/next on any of them passed the whole suite.
     // `docs-page-coverage.test.ts` machine-asserts CP5's own bullets against
-    // `content/docs/**/*.mdx` — it does NOT assert THIS array. This list is hand-maintained and
-    // unguarded: a new page must be added here manually (adding it only to the smoke sweep below
-    // is not enough), and nothing fails red if that step is skipped.
+    // `content/docs/**/*.mdx`, AND (separately) asserts THIS `allPages` array equals that same
+    // set — so a new page must still be added here manually, but forgetting to now fails red
+    // there instead of silently passing. The per-section smoke arrays below (integrations,
+    // guides, tutorials, …) are a different list and remain hand-maintained and unguarded.
     '/docs/concepts',
     '/docs/concepts/canonical-states',
     '/docs/concepts/code-host',

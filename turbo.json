@@ -49,7 +49,8 @@
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
         "$TURBO_ROOT$/qa/**",
         "$TURBO_ROOT$/.github/workflows/**",
-        "$TURBO_ROOT$/scripts/**"
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/turbo.json"
       ]
     },
     "test:coverage": {
@@ -74,7 +75,8 @@
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
         "$TURBO_ROOT$/qa/**",
         "$TURBO_ROOT$/.github/workflows/**",
-        "$TURBO_ROOT$/scripts/**"
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/turbo.json"
       ]
     },
     "ts:check": {

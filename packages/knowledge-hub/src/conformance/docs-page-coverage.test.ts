@@ -27,8 +27,24 @@ import { join } from 'path'
 const ROOT = join(__dirname, '../../../..')
 const CP5 = join(ROOT, 'qa/release-validation/CP5-website-docs-completeness.md')
 const DOCS_CONTENT = join(ROOT, 'apps/website/content/docs')
+const E2E = join(ROOT, 'apps/website/e2e/docs.e2e.test.ts')
 
 const read = (p: string): string => readFileSync(p, 'utf-8')
+
+/**
+ * `text.slice(text.indexOf(a), text.indexOf(b))`, but FAILS CLOSED: `indexOf` returns -1 on a
+ * miss, and a bare `slice(start, -1)` WIDENS to nearly the whole string instead of narrowing to
+ * nothing. Renaming `## MT-CP502` (the boundary these two tests scope against) would otherwise
+ * silently expand `mt501` to the rest of the file, defeating the very scoping this file's own
+ * comments argue for.
+ */
+const sectionBetween = (text: string, startMarker: string, endMarker: string): string => {
+  const start = text.indexOf(startMarker)
+  const end = text.indexOf(endMarker)
+  expect(start, `"${startMarker}" not found`).toBeGreaterThan(-1)
+  expect(end, `"${endMarker}" not found after "${startMarker}"`).toBeGreaterThan(start)
+  return text.slice(start, end)
+}
 
 /**
  * Every routable docs URL, derived from the filesystem: `index.mdx` maps to its directory.
@@ -52,14 +68,14 @@ describe('CP5 sweeps every docs page that exists', () => {
     // ever added under MT-CP502/503 (unlikely by their subject, but not impossible) must not be
     // pulled into a filesystem-equality check that has nothing to do with those cases.
     const c = read(CP5)
-    const mt501 = c.slice(c.indexOf('## MT-CP501'), c.indexOf('## MT-CP502'))
+    const mt501 = sectionBetween(c, '## MT-CP501', '## MT-CP502')
     const listed = [...mt501.matchAll(/^- `\$BASE_URL(\/docs[^`]*)`$/gm)].map(m => m[1]).sort()
     expect(listed).toEqual(docsUrlsOnDisk())
   })
 
   it('keeps CP5 self-consistent — every stated count matches what is listed', () => {
     const c = read(CP5)
-    const mt501 = c.slice(c.indexOf('## MT-CP501'), c.indexOf('## MT-CP502'))
+    const mt501 = sectionBetween(c, '## MT-CP501', '## MT-CP502')
 
     // Per-section: `**Integrations** (7 pages):` must match the bullets under it.
     // A blank line between the header and its list is `\n\n?`, not `\n`: markdownlint's MD032
@@ -79,5 +95,23 @@ describe('CP5 sweeps every docs page that exists', () => {
       expect(Number(quoted[1])).toBe(listed)
     for (const quoted of [...mt501.matchAll(/Total: (\d+) pages/g)])
       expect(Number(quoted[1])).toBe(listed)
+  })
+})
+
+describe('the e2e circular-nav sweep is not a narrower, silently-drifting copy of the same set', () => {
+  // The ADL's Consequences call this sweep "a separate, narrower sweep" left deliberately
+  // unguarded. It was never narrower than CP5/the filesystem — it happened to be exactly
+  // co-extensive with it — so this assertion makes that claim either true by construction or
+  // caught the next time either set moves, instead of trusting a description that was already
+  // stale by the time it was written.
+  it('allPages equals the same filesystem-derived set CP5 is asserted against', () => {
+    const c = read(E2E)
+    const start = c.indexOf('const allPages = [')
+    expect(start, 'allPages array not found in docs.e2e.test.ts').toBeGreaterThan(-1)
+    const end = c.indexOf('\n  ]', start)
+    expect(end, 'closing bracket for allPages not found').toBeGreaterThan(start)
+    const block = c.slice(start, end)
+    const listed = [...block.matchAll(/'(\/docs[^']*)'/g)].map(m => m[1]).sort()
+    expect(listed).toEqual(docsUrlsOnDisk())
   })
 })

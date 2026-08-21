@@ -74,8 +74,12 @@ test.**
   named cost paid to keep the sweep honest.
 - A page **deleted** from the site is caught symmetrically: CP5 listing a URL that no longer exists
   fails the same assertion.
-- The website e2e page lists (`apps/website/e2e/docs.e2e.test.ts`) are still maintained by hand and
-  are **not** covered by this decision. They remain a separate, narrower sweep.
+- The website e2e page lists (`apps/website/e2e/docs.e2e.test.ts`) are still maintained by hand.
+  The `allPages` circular-nav sweep specifically is now separately asserted equal to the same
+  filesystem-derived set (`docs-page-coverage.test.ts`), not left to drift silently — it was never
+  actually narrower than CP5, only undescribed as anything else. The per-section smoke arrays
+  (integrations, guides, tutorials, …) remain outside this decision's scope and outside that
+  assertion.
 
 ## Adoption Impact
 

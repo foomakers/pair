@@ -167,7 +167,11 @@ no "wait for it to finish, then type" order; the prompt is what starts the clock
   reload still shows no progress.
 </Callout>
 
-The network-trust setting itself was not what was being tested: every attempt used the **"Attendibili"** (trusted) level, and it was ruled out only as a *cause of the stuck stepper* — varying it made no difference there. Whether a less-trusted network setting would also unblock the `playwright install` `403` from [the CDN allowlist](#the-workaround-drive-the-app-headlessly) was not tested; do not assume raising trust fixes that specific limitation.
+The network-trust setting itself was not what was being tested: every attempt used the
+**"Attendibili"** (trusted) level, and it was ruled out only as a *cause of the stuck stepper* —
+varying it made no difference there. Whether a less-trusted network setting would also unblock the
+`playwright install` `403` from [the CDN allowlist](#the-workaround-drive-the-app-headlessly) was
+not tested; do not assume raising trust fixes that specific limitation.
 
 **The session may not start from a clean `main`.** If the cloud environment is configured against a
 particular branch (this project's own `pair` environment, for instance, tracks whichever branch was
