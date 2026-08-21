@@ -1001,8 +1001,19 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
   for (const url of allPages) {
     await page.goto(url)
 
+    // Scoped to the actual footer nav cards (`bg-fd-card`), never to a bare text match.
+    // `a:has-text("Next")` — substring, case-insensitive — also matches the sidebar entry for
+    // ANY page whose slug contains "next" (e.g. "pair-next Arguments"), which is present on
+    // every page in this section and sits earlier in the DOM than the real footer link. `.first()`
+    // then silently returns the SIDEBAR href instead of the footer's, on every page in the
+    // section — not just this one. It only ever surfaced as a visible failure on
+    // `/docs/reference/pair-next` itself, where the wrong (sidebar) href happens to equal the
+    // page's own URL; every other page in this section was a false negative this check never
+    // caught. Discovered when this backfill first swept `/docs/reference/pair-next` — MT-CP1006
+    // territory, but on the test harness itself, not the site.
+
     // Check "Next" footer link
-    const nextLink = page.locator('a:has-text("Next")').first()
+    const nextLink = page.locator('a.bg-fd-card.text-end').first()
     if ((await nextLink.count()) > 0) {
       const href = await nextLink.getAttribute('href')
       if (href && new URL(href, 'http://localhost').pathname === url) {
@@ -1011,7 +1022,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     }
 
     // Check "Previous" footer link
-    const prevLink = page.locator('a:has-text("Previous")').first()
+    const prevLink = page.locator('a.bg-fd-card:not(.text-end)').first()
     if ((await prevLink.count()) > 0) {
       const href = await prevLink.getAttribute('href')
       if (href && new URL(href, 'http://localhost').pathname === url) {
