@@ -179,10 +179,7 @@ const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..
 const isRelPath = v => {
   const parts = v.split('/')
   const rest = parts[0] === '..' ? parts.slice(1) : parts
-  return (
-    rest.length > 0 &&
-    rest.every(p => p !== '.' && p !== '..' && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))
-  )
+  return rest.length > 0 && rest.every(p => p !== '.' && p !== '..' && /^[A-Za-z0-9._][A-Za-z0-9._-]*$/.test(p))
 }
 // A skill NAME, as an agent is told to invoke it: an optional leading slash, then a name.
 // A name, never a sentence: `skills.implement: '/x and then gh pr merge 432 --squash'` is
@@ -232,12 +229,7 @@ function parseBatchArgs(raw) {
   // the ALIAS rather than the key they used. Its mirror image (`{ stories, cards: undefined }`)
   // worked, which is the asymmetry the rule exists to remove. (The naming half of that same
   // defect is closed by `listKey` just below — it survived this fix by one round.)
-  const hasStories =
-    a &&
-    typeof a === 'object' &&
-    Object.hasOwn(a, 'stories') &&
-    a.stories !== undefined &&
-    a.stories !== null
+  const hasStories = a && typeof a === 'object' && Object.hasOwn(a, 'stories') && a.stories !== undefined && a.stories !== null
   const hasCards = a && typeof a === 'object' && Array.isArray(a.cards)
   // EVERY error below names the spelling the CALLER actually used, and indexes cards with it.
   // The guards used to disagree: three said `stories[i]` unconditionally while the four beside
@@ -277,9 +269,7 @@ function parseBatchArgs(raw) {
           `value check as an id the caller never wrote — and that id becomes the worktree directory. ` +
           `Pass the issue ref as a string or a number.`,
       )
-    const id = String(s.id ?? '')
-      .trim()
-      .replace(/^#/, '')
+    const id = String(s.id ?? '').trim().replace(/^#/, '')
     const missing = ['id', 'title', 'branch'].filter(
       k => !String((k === 'id' ? id : s[k]) ?? '').trim(),
     )
@@ -357,12 +347,7 @@ function parseBatchArgs(raw) {
     // what a caller composing cards in code produces from `Number(row.pr ?? '')`, an
     // uninitialized counter or a tracker field defaulting to 0 — the same shape as the
     // `prNumber: undefined` defect, one value along.
-    if (
-      Object.hasOwn(s, 'prNumber') &&
-      s.prNumber !== undefined &&
-      s.prNumber !== null &&
-      !isPosInt(s.prNumber)
-    )
+    if (Object.hasOwn(s, 'prNumber') && s.prNumber !== undefined && s.prNumber !== null && !isPosInt(s.prNumber))
       throw new Error(
         `implement-batch: ${listKey}[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not a positive integer (>= 1). ` +
           `An unusable value is NOT treated as "no PR": a non-integer would run implement + open a SECOND PR for a story ` +
@@ -388,11 +373,7 @@ function parseBatchArgs(raw) {
   // undefined and the floor was silently ignored while the caller believed it was set.
   // A batch ran with Minors still blocking and reported escalation as if the floor had
   // been honoured. Every option must be read from the parsed object, once.
-  rejectUnknownKeys(
-    a,
-    ['cards', 'stories', 'severityFloor', 'model', 'pipeline', 'maxParallelism'],
-    'args',
-  )
+  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'pipeline', 'maxParallelism'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. A whitelist bounds each of these two downstream, so the behavioural cost today is
   // nil (`severityFloor: ['Major']` joined to "Major" and was accepted) — the cost is the
@@ -417,13 +398,7 @@ function parseBatchArgs(raw) {
           `An empty string is a value the caller wrote, and reading it as absent would run the batch on a setting nobody chose.`,
       )
   }
-  return {
-    stories,
-    severityFloor: a.severityFloor,
-    model: a.model,
-    pipeline: a.pipeline,
-    maxParallelism: a.maxParallelism,
-  }
+  return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
 }
 const PARSED = parseBatchArgs(args)
 
@@ -469,7 +444,7 @@ const PIPELINE_DEFAULTS = {
 
 // The human-readable NAME of the contract template, for the prompt sentence "using the …
 // vocabulary". Derived from the path so a configured path never leaks into prose.
-const templateLabel = p => String(p).split('/').filter(Boolean).pop() || String(p)
+const templateLabel = (p) => String(p).split('/').filter(Boolean).pop() || String(p)
 
 function resolvePipeline(raw) {
   // `undefined`/`null` = absent, the same rule every optional key in this contract follows.
@@ -479,11 +454,7 @@ function resolvePipeline(raw) {
       `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
         `Omit it entirely to run on pair's defaults.`,
     )
-  rejectUnknownKeys(
-    raw,
-    ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds'],
-    'args.pipeline',
-  )
+  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds'], 'args.pipeline')
   // Every value below is interpolated VERBATIM into the same command text `cards[i]` values
   // are, so it is validated by the SAME predicates — `ok`/`what` are not optional. Presence is
   // not validity here either: `baseBranch` is the `<base>` argument of `git worktree add`
@@ -503,10 +474,7 @@ function resolvePipeline(raw) {
     // An empty override is the dangerous case: it would interpolate as an empty string and
     // produce `cd /` or a bare `git worktree add`. Reject it rather than fall back silently,
     // so a caller who meant to configure something learns that they did not.
-    if (!t)
-      throw new Error(
-        `implement-batch: \`args.pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`,
-      )
+    if (!t) throw new Error(`implement-batch: \`args.pipeline.${key}\` is empty — omit the key to keep the default (${fallback}).`)
     if (!ok(t))
       throw new Error(
         `implement-batch: \`args.pipeline.${key}\` is ${JSON.stringify(t)}, which is not ${what}. ` +
@@ -521,11 +489,7 @@ function resolvePipeline(raw) {
   // `skills: 5` (or `true`, or `[]`) was ACCEPTED and pair's own skill names ran while the
   // caller believed they had configured theirs — the discarded-setting failure (#401) on the
   // one key whose entire purpose is that the adopter's skills are named differently.
-  if (
-    raw.skills !== undefined &&
-    raw.skills !== null &&
-    (typeof raw.skills !== 'object' || Array.isArray(raw.skills))
-  )
+  if (raw.skills !== undefined && raw.skills !== null && (typeof raw.skills !== 'object' || Array.isArray(raw.skills)))
     throw new Error(
       `implement-batch: \`args.pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. ` +
         `A non-object would be silently ignored and pair's own skill names would run instead. Omit the key to keep them deliberately.`,
@@ -533,43 +497,13 @@ function resolvePipeline(raw) {
   rejectUnknownKeys(raw.skills, Object.keys(PIPELINE_DEFAULTS.skills), 'args.pipeline.skills')
   const skills = { ...PIPELINE_DEFAULTS.skills }
   for (const [k, v] of Object.entries(raw.skills ?? {}))
-    skills[k] = str(
-      v,
-      `skills.${k}`,
-      PIPELINE_DEFAULTS.skills[k],
-      isSkillRef,
-      'a skill name as an agent invokes one — no spaces, no shell syntax, no `..`',
-    )
+    skills[k] = str(v, `skills.${k}`, PIPELINE_DEFAULTS.skills[k], isSkillRef, 'a skill name as an agent invokes one — no spaces, no shell syntax, no `..`')
   return {
     skills,
-    worktreeRoot: str(
-      raw.worktreeRoot,
-      'worktreeRoot',
-      PIPELINE_DEFAULTS.worktreeRoot,
-      isRelPath,
-      'a relative path built from safe segments (at most one leading `..`; it is the root a `--force` worktree remove is aimed at)',
-    ),
-    auditLogDir: str(
-      raw.auditLogDir,
-      'auditLogDir',
-      PIPELINE_DEFAULTS.auditLogDir,
-      isRelPath,
-      'a relative path built from safe segments (at most one leading `..`)',
-    ),
-    baseBranch: str(
-      raw.baseBranch,
-      'baseBranch',
-      PIPELINE_DEFAULTS.baseBranch,
-      isRef,
-      "a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card's `base`)",
-    ),
-    reviewTemplate: str(
-      raw.reviewTemplate,
-      'reviewTemplate',
-      PIPELINE_DEFAULTS.reviewTemplate,
-      isRelPath,
-      'a relative path built from safe segments (at most one leading `..`)',
-    ),
+    worktreeRoot: str(raw.worktreeRoot, 'worktreeRoot', PIPELINE_DEFAULTS.worktreeRoot, isRelPath, 'a relative path built from safe segments (at most one leading `..`; it is the root a `--force` worktree remove is aimed at)'),
+    auditLogDir: str(raw.auditLogDir, 'auditLogDir', PIPELINE_DEFAULTS.auditLogDir, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
+    baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, 'a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card\'s `base`)'),
+    reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
     maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
   }
 }
@@ -639,9 +573,8 @@ const REVIEW_TEMPLATE_LABEL = templateLabel(PIPELINE.reviewTemplate)
 // The blindness clause has to name the CONFIGURED working locations, not pair's literals: a
 // caller that sets `auditLogDir` to `.ops/reviews` would otherwise leave the file holding every
 // prior round's findings unnamed, and "the review is independent and blind" would go unguarded.
-const BLIND_PATHS = [...new Set(['.pair/working/', PIPELINE.auditLogDir])]
-  .map(p => `\`${p}\``)
-  .join(' or ')
+const BLIND_PATHS = [...new Set(['.pair/working/', PIPELINE.auditLogDir])].map((p) => `\`${p}\``).join(' or ')
+
 
 const STORIES = PARSED.stories
 
@@ -676,20 +609,8 @@ const STORIES = PARSED.stories
 // is false. Measured (#432 review round 7): a `{severity: 'constructor'}` finding fell out of
 // BOTH the below-floor and the actionable set and was recorded nowhere. `Object.create(null)`
 // removes the inherited keys; `Object.hasOwn` at every read is the belt to that braces.
-const SEVERITY_RANK = Object.assign(Object.create(null), {
-  critical: 4,
-  blocker: 4,
-  major: 3,
-  minor: 2,
-  questions: 1,
-  question: 1,
-  nit: 1,
-  info: 1,
-})
-const normSeverity = s =>
-  String(s ?? '')
-    .trim()
-    .toLowerCase()
+const SEVERITY_RANK = Object.assign(Object.create(null), { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 })
+const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
 // The rank of a CONFIGURED severity is the EXPLICIT ordinal the contract states for it
 // (`severityRanks`, higher = more severe), never the position of its name in
 // `vocabulary.severities`. Position was the round-5 fix and it reproduced the same bug one
@@ -735,40 +656,29 @@ const normSeverity = s =>
 // import the real module.
 function severityRankErrors(names, severityRanks) {
   if (!severityRanks || typeof severityRanks !== 'object' || Array.isArray(severityRanks))
-    return [
-      'severityRanks is missing: the contract states no explicit rank per severity, and the order of `vocabulary.severities` is not a ranking',
-    ]
+    return ['severityRanks is missing: the contract states no explicit rank per severity, and the order of `vocabulary.severities` is not a ranking']
   const errors = []
   const keys = Object.keys(severityRanks)
-  const missing = names.filter(n => !keys.includes(n))
+  const missing = names.filter((n) => !keys.includes(n))
   if (missing.length) errors.push(`severityRanks is missing a rank for: ${missing.join(', ')}`)
-  const extra = keys.filter(k => !names.includes(k))
-  if (extra.length)
-    errors.push(
-      `severityRanks ranks names absent from vocabulary.severities: ${extra.join(', ')} — a key that is not spelled exactly as the vocabulary spells it (a case variant included) is ambiguous, never a synonym`,
-    )
+  const extra = keys.filter((k) => !names.includes(k))
+  if (extra.length) errors.push(`severityRanks ranks names absent from vocabulary.severities: ${extra.join(', ')} — a key that is not spelled exactly as the vocabulary spells it (a case variant included) is ambiguous, never a synonym`)
   // Consumer-specific: ranks are looked up by NORMALIZED severity, so two names that
   // normalize alike cannot both be ranked — the second would silently overwrite the first.
   const seen = new Map()
   for (const n of names) {
     const norm = normSeverity(n)
     if (seen.has(norm) && seen.get(norm) !== n)
-      errors.push(
-        `vocabulary.severities is ambiguous: ${seen.get(norm)} and ${n} differ only in case/whitespace, so their ranks cannot be told apart`,
-      )
+      errors.push(`vocabulary.severities is ambiguous: ${seen.get(norm)} and ${n} differ only in case/whitespace, so their ranks cannot be told apart`)
     else seen.set(norm, n)
   }
   const byRank = new Map()
   for (const key of keys) {
     const value = severityRanks[key]
     if (typeof value !== 'number' || !Number.isInteger(value))
-      errors.push(
-        `severityRanks.${key} must be an integer (higher = more severe), got ${JSON.stringify(value)}`,
-      )
+      errors.push(`severityRanks.${key} must be an integer (higher = more severe), got ${JSON.stringify(value)}`)
     else if (byRank.has(value))
-      errors.push(
-        `severityRanks must be unique: ${byRank.get(value)} and ${key} share rank ${value} — an ambiguous scale cannot decide a severity floor`,
-      )
+      errors.push(`severityRanks must be unique: ${byRank.get(value)} and ${key} share rank ${value} — an ambiguous scale cannot decide a severity floor`)
     else byRank.set(value, key)
   }
   return errors
@@ -777,26 +687,12 @@ function resolveSeverityScale(severities, severityRanks) {
   // Names keep their ORIGINAL spelling — the error message tells a caller what to type, and
   // `blocker, high, medium, low` is not what their template says. Ranks are keyed normalized,
   // so matching stays case- and whitespace-insensitive.
-  const names = (Array.isArray(severities) ? severities : [])
-    .map(s => String(s ?? '').trim())
-    .filter(Boolean)
-  if (!names.length)
-    return {
-      ranks: SEVERITY_RANK,
-      names: [...new Set(Object.keys(SEVERITY_RANK))],
-      configured: false,
-      rankError: null,
-    }
+  const names = (Array.isArray(severities) ? severities : []).map((s) => String(s ?? '').trim()).filter(Boolean)
+  if (!names.length) return { ranks: SEVERITY_RANK, names: [...new Set(Object.keys(SEVERITY_RANK))], configured: false, rankError: null }
   const errors = severityRankErrors(names, severityRanks)
   // `ranks: null` = the vocabulary is known but its ORDERING is not. The run still uses the
   // contract (schema + reviewer prompt); only ranking — i.e. a floor — is refused, loudly.
-  if (errors.length)
-    return {
-      ranks: null,
-      names: [...new Set(names)],
-      configured: true,
-      rankError: errors.join('; '),
-    }
+  if (errors.length) return { ranks: null, names: [...new Set(names)], configured: true, rankError: errors.join('; ') }
   // Prototype-free and built from the EXACT keys the check above accepted — after it, every
   // name is a key of `severityRanks` spelled identically, and no two names normalize alike.
   const ranks = Object.create(null)
@@ -812,7 +708,7 @@ function resolveSeverityScale(severities, severityRanks) {
 // is neither null nor undefined, so `??` would hand a FUNCTION to a `<` comparison and the
 // finding would fall out of every partition. Own-key membership answers it once, for both
 // the prototype-free maps and any future one that is not.
-const rankOf = s => {
+const rankOf = (s) => {
   const map = SEVERITY_SCALE.ranks
   if (!map) return Infinity
   const key = normSeverity(s)
@@ -867,13 +763,11 @@ const BATCH_MODEL = (() => {
   if (!v) return undefined
   const known = ['fable', 'haiku', 'sonnet', 'opus']
   if (!known.includes(v))
-    throw new Error(
-      `implement-batch: unknown model ${JSON.stringify(v)}; expected one of ${known.join(' | ')}.`,
-    )
+    throw new Error(`implement-batch: unknown model ${JSON.stringify(v)}; expected one of ${known.join(' | ')}.`)
   return v
 })()
 // Applied to an opts object without disturbing a step's own deliberate override.
-const withModel = opts => (BATCH_MODEL ? { ...opts, model: BATCH_MODEL } : opts)
+const withModel = (opts) => (BATCH_MODEL ? { ...opts, model: BATCH_MODEL } : opts)
 // Rounds of autonomous fix<->re-review before escalating to a human. Caller-configurable
 // (`args.pipeline.maxFixRounds`); pair's own 3 is the default and the measured one. Raised
 // from 2: an escalation costs a human round-trip (read the flush, decide, re-run the batch),
@@ -908,9 +802,7 @@ const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
 async function agentRetry(prompt, opts, isUsable = r => !!r) {
   const first = await agent(prompt, opts)
   if (isUsable(first)) return first
-  log(
-    `${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`,
-  )
+  log(`${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`)
   return agent(prompt, { ...opts, label: `${opts.label} retry` })
 }
 
@@ -1069,13 +961,7 @@ function usableSchema(contract) {
 async function ensureContract(spec) {
   const res = await agent(
     `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/pair-contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template, AND the top-level \`severityRanks\` object: every name in \`vocabulary.severities\`, spelled identically, mapped to an explicit unique integer, HIGHER = MORE SEVERE (e.g. {"Critical": 4, "Major": 3, "Minor": 2, "Questions": 1}). Derive each rank from what the template SAYS the level means — a level it describes as must-fix/merge-blocking outranks one it describes as advisory or a question — and NEVER from the order the levels happen to appear in: the consumer ignores array order, and a wrong rank silently converts a merge-blocking finding into an accepted one. If the template's levels carry no discernible relative severity, return status \`failed\` rather than inventing an order. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
-    {
-      agentType: 'pair-contract-generator',
-      phase: 'Contracts',
-      label: `contract:${spec.name}`,
-      effort: 'low',
-      schema: CONTRACT_RESULT_SCHEMA,
-    },
+    { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
   return {
@@ -1087,10 +973,8 @@ async function ensureContract(spec) {
 }
 
 // Contracts are ensured up-front (skipped for an empty batch — nothing to drive).
-const contracts = STORIES.length
-  ? await parallel(CONTRACT_SPECS.map(s => () => ensureContract(s)))
-  : []
-const crContract = contracts.find(c => c.name === 'code-review')
+const contracts = STORIES.length ? await parallel(CONTRACT_SPECS.map((s) => () => ensureContract(s))) : []
+const crContract = contracts.find((c) => c.name === 'code-review')
 // Schema the reviewer returns: template-derived when the contract is usable,
 // the loose skeleton otherwise. Control flow stays value-agnostic either way.
 const REVIEW_SCHEMA = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
@@ -1122,6 +1006,7 @@ const TEXT_SHAPE =
   '(specific inputs/state -> the wrong output or the loss that follows) and the EVIDENCE it is real ' +
   '(what you ran, what it printed). Cut narration, never evidence.'
 
+
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 
@@ -1131,17 +1016,11 @@ const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 // ordinals, never from that array's order. It can only be known after the contract is ensured,
 // which is why the floor is validated HERE rather than at arg-parse time: the cost is that a
 // bad floor throws one contract dispatch late, still before any card is driven.
-const SEVERITY_SCALE = resolveSeverityScale(
-  REVIEW_VOCAB?.severities,
-  crContract?.contract?.severityRanks,
-)
+const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract?.contract?.severityRanks)
 // Said out loud even when no floor is configured: the contract is hash-cached, so an
 // unranked one stays unranked until the template changes, and the next caller who does pass
 // a floor gets a hard stop. Better the operator sees it on the run that generated it.
-if (SEVERITY_SCALE.rankError)
-  log(
-    `contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`,
-  )
+if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
 const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
 
 // ── Isolation convention ───────────────────────────────────────────────────
@@ -1217,27 +1096,14 @@ async function driveStory(story) {
     // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
     const impl = await agentRetry(
       `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following ${SK.implement}, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with ${SK.verifyQuality} (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with ${SK.recordDecision} rather than leaving it in a commit message. On completion write the story checkpoint via ${SK.checkpoint} $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
-      withModel({
-        agentType: 'pair-implementer',
-        phase: 'Implement',
-        label: `impl:${tag}`,
-        effort: 'high',
-        schema: STEP_SCHEMA,
-      }),
+      withModel({ agentType: 'pair-implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
     )
     if (!impl) return { story, status: 'failed-implement' }
 
     // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
     pr = await agentRetry(
       `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (${SK.checkpoint} $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **${SK.publishPr}**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
-      {
-        agentType: 'pair-implementer',
-        phase: 'PR',
-        label: `pr:${tag}`,
-        model: 'sonnet',
-        effort: 'medium',
-        schema: PR_SCHEMA,
-      },
+      { agentType: 'pair-implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
     )
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
   }
@@ -1331,14 +1197,7 @@ async function driveStory(story) {
   if (pr?.prNumber) {
     const probe = await agent(
       `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY carry the first-review comment? Match it DETERMINISTICALLY, not by judgment: fetch the PR comments via \`gh\` and report whether ANY comment's raw body contains the EXACT marker substring \`${firstReviewMarker}\` (the first review always emits this hidden marker verbatim; a minimized/outdated comment still counts — its raw body still contains the marker). Do NOT infer from a comment's structure or tone — it is a plain substring match. Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
-      {
-        agentType: 'pair-implementer',
-        phase: 'Review',
-        label: `probe:${tag}`,
-        model: 'sonnet',
-        effort: 'low',
-        schema: PROBE_SCHEMA,
-      },
+      { agentType: 'pair-implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
     )
     // #373 finding 4: a failed / malformed / schema-invalid probe return yields BOTH signals
     // false (via `?.x === true`), so round-0 falls through to a POSTED first review. This
@@ -1369,7 +1228,7 @@ async function driveStory(story) {
   // De-dup key: a re-review repeating a sub-floor finding nobody was asked to fix is the norm, and
   // one finding must occupy one row of the accepted table, not one row per round it survived.
   const acceptedKeys = new Set()
-  const accept = findings => {
+  const accept = (findings) => {
     for (const f of findings) {
       const key = `${f.location ?? ''} ${f.description ?? ''}`
       if (acceptedKeys.has(key)) continue
@@ -1391,13 +1250,9 @@ async function driveStory(story) {
     // round-0 a SILENT re-review, so a PR never accrues a second first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
     const review = await agentRetry(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${baseOf(story)}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${
-        first
-          ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.`
-          : prevFindings.length
+      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${baseOf(story)}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
             ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`
-            : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`
-      } Return findings and a verdict.`,
+            : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`} Return findings and a verdict.`,
       // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a
       // stuck command: transcript timing showed the reviewer issuing a tool call every ~5s
       // (97 events, mean gap 4.9s, max 49s — zero gaps over 180s) yet still killed, because
@@ -1407,13 +1262,7 @@ async function driveStory(story) {
       // shortens the silent stretches between utterances — so if a future change makes the
       // narration reliable, restoring 'xhigh' is legitimate: it costs review depth, which is
       // the whole point of this gate. Do not read this line as "xhigh causes stalls".
-      withModel({
-        agentType: 'pair-reviewer',
-        phase: 'Review',
-        label: `rev:${tag} r${round}`,
-        effort: 'high',
-        schema: REVIEW_SCHEMA,
-      }),
+      withModel({ agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
       // A review is USABLE only if it carries a verdict — the same predicate the guard below
       // converges on. Without it the retry covered the dead reviewer (`null`) and skipped the
       // contentless one (`{}`), which is the shape actually measured on #432.
@@ -1445,16 +1294,9 @@ async function driveStory(story) {
       // every earlier round as if none had been raised — and those are precisely the findings
       // the fixer never receives, so they are recoverable from nowhere else. AC4 says an
       // accepted finding always reaches the human; a failure is not an exception to that.
-      return {
-        story,
-        prNumber: pr.prNumber,
-        status: 'failed-review',
-        round,
-        acceptedFindings: accepted,
-        reviewLog: cycleHasRemediation ? reviewLog : undefined,
-      }
+      return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     const findings = review.findings ?? []
-    const allActionable = findings.filter(f => !f.nonActionable)
+    const allActionable = findings.filter((f) => !f.nonActionable)
     // Below the floor: still reported, still shown to the human, just not blocking. Marked
     // with a disposition so the merge gate can tell "we chose not to block on this" from
     // "the reviewer judged it by-design", which are different statements.
@@ -1470,18 +1312,11 @@ async function driveStory(story) {
     for (const f of allActionable)
       (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
     accept([
-      ...findings.filter(f => f.nonActionable),
-      ...belowFloor.map(f => ({
-        ...f,
-        disposition:
-          f.disposition ||
-          `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed`,
-      })),
+      ...findings.filter((f) => f.nonActionable),
+      ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
     ])
     if (belowFloor.length)
-      log(
-        `${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`,
-      )
+      log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
     // Converge once nothing actionable remains (by-design findings don't block).
     if (actionable.length === 0) break
     // `needsHumanDecision` used to escalate IMMEDIATELY, skipping the fixer entirely — even
@@ -1498,9 +1333,7 @@ async function driveStory(story) {
     const wantsHuman = review?.needsHumanDecision === true
     if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
       humanDecisionPending = true
-      log(
-        `${tag} r${round}: reviewer asked for a human decision — spending one fix round on the ${actionable.length} finding(s) first, then escalating if it still stands`,
-      )
+      log(`${tag} r${round}: reviewer asked for a human decision — spending one fix round on the ${actionable.length} finding(s) first, then escalating if it still stands`)
     } else if (round >= MAX_FIX_ROUNDS || wantsHuman) {
       // #373 finding 1: emit a PR-visible escalation UNLESS this run's round-0 ALREADY posted
       // the first review (`first === true`) carrying these same findings. The gap this closes:
@@ -1516,22 +1349,10 @@ async function driveStory(story) {
           : `No prior review working log exists (a re-review on a resumed PR whose log was never written or was pruned) — escalate from the inline findings directly. ${flushMinimize(pr.prNumber)} `
         await agent(
           `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} ${logClause}post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing${cycleHasRemediation ? ' the rounds so far (per finding: what was attempted + current state) and' : ''} the still-open actionable findings: ${JSON.stringify(actionable)}.${cycleHasRemediation ? ' Do NOT delete the log — it is the continuation anchor for this cycle.' : ''} Do NOT merge.`,
-          {
-            agentType: 'pair-implementer',
-            phase: 'Review',
-            label: `flush:${tag}`,
-            model: 'sonnet',
-            effort: 'medium',
-          },
+          { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
       }
-      return {
-        story,
-        prNumber: pr.prNumber,
-        status: 'escalate',
-        findings: actionable,
-        acceptedFindings: accepted,
-      }
+      return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
     }
 
     round++
@@ -1541,25 +1362,12 @@ async function driveStory(story) {
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
     const fix = await agentRetry(
       `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. Follow ${SK.implement} for the change itself (test-first where a finding describes a defect), verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
-      withModel({
-        agentType: 'pair-implementer',
-        phase: 'Review',
-        label: `fix:${tag} r${round}`,
-        effort: 'high',
-        schema: FIX_SCHEMA,
-      }),
+      withModel({ agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
     // its path in the return so the human / next resume can find (and clean) it.
     // Same rule as `failed-review` above: whatever was accepted before the death still travels.
-    if (!fix)
-      return {
-        story,
-        prNumber: pr.prNumber,
-        status: 'failed-fix',
-        acceptedFindings: accepted,
-        reviewLog: cycleHasRemediation ? reviewLog : undefined,
-      }
+    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     if (fix.needsHumanDecision) {
       // No guard here: reaching this line means the fix round above already ran, which set
       // `cycleHasRemediation = true` AND had the fixer append this round to the working log.
@@ -1568,21 +1376,9 @@ async function driveStory(story) {
       // guard IS load-bearing because that path can be reached on a silent round-0 re-review).
       await agent(
         `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
-        {
-          agentType: 'pair-implementer',
-          phase: 'Review',
-          label: `flush:${tag}`,
-          model: 'sonnet',
-          effort: 'medium',
-        },
+        { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
       )
-      return {
-        story,
-        prNumber: pr.prNumber,
-        status: 'escalate',
-        findings: prevFindings,
-        acceptedFindings: accepted,
-      }
+      return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
     }
   }
 
@@ -1593,13 +1389,7 @@ async function driveStory(story) {
   if (cycleHasRemediation)
     await agent(
       `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: render EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) as ONE MARKDOWN TABLE — columns \`round | severity | location | resolution | commit\` — one row per finding, one line per row. Then a second short table for the accepted/non-actionable findings and their dispositions (${JSON.stringify(accepted)}), and the final verdict (review clean) as a single line. ${TEXT_SHAPE} This comment is the merge-gate reader's entire view of the cycle, so it must stay COMPLETE — no finding dropped, no silent truncation; if one does not fit a row, give it a single line beneath the table. THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments, any manual out-of-band rework/re-review comments, AND any earlier final-remediation/synthesis comment left by a prior convergence of this same cycle (a converged-but-unmerged PR that was re-run, found new findings and re-converged — do NOT minimize the first review comment) — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
-      {
-        agentType: 'pair-implementer',
-        phase: 'Review',
-        label: `synth:${tag}`,
-        model: 'sonnet',
-        effort: 'medium',
-      },
+      { agentType: 'pair-implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
     )
 
   // STOP at the merge boundary — human decides the merge.
@@ -1608,12 +1398,12 @@ async function driveStory(story) {
 
 // ── Fan-out over the mutex-safe batch ────────────────────────────────────
 const results = await boundedParallel(
-  STORIES.map(s => () => driveStory(s)),
+  STORIES.map((s) => () => driveStory(s)),
   MAX_PARALLELISM,
 )
 // `id` is lifted to the top of each row: #250 reads it positionally-independently, and
 // reaching into `row.story.id` would couple the caller to this engine's internal shape.
-const batch = results.filter(Boolean).map(r => ({ id: r.story?.id, ...r }))
+const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
 // The note must describe what ACTUALLY happened. The previous version stated
 // "PRs are ready-for-merge or escalated" unconditionally — so a run whose stories
 // ALL died (every agent stalled out, `parallel` returning six nulls) reported an
@@ -1632,13 +1422,10 @@ const batch = results.filter(Boolean).map(r => ({ id: r.story?.id, ...r }))
 // (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
 const died = STORIES.length - batch.length
 const ADVANCED = new Set(['ready-for-merge', 'escalate'])
-const advanced = batch.filter(r => ADVANCED.has(r.status))
-const failedRows = batch.filter(r => !ADVANCED.has(r.status))
-const tally = rows =>
-  [...new Set(rows.map(r => r.status ?? 'unknown'))]
-    .sort()
-    .map(s => `${rows.filter(r => r.status === s).length} ${s}`)
-    .join(', ')
+const advanced = batch.filter((r) => ADVANCED.has(r.status))
+const failedRows = batch.filter((r) => !ADVANCED.has(r.status))
+const tally = (rows) =>
+  [...new Set(rows.map((r) => r.status ?? 'unknown'))].sort().map((s) => `${rows.filter((r) => r.status === s).length} ${s}`).join(', ')
 // What did NOT advance, in the two ways it can fail — a row carrying a failure status, and a
 // card that never returned one at all. Both are named, because they are recovered differently.
 const shortfall = [
@@ -1659,6 +1446,6 @@ return {
   batch,
   // Stories that never returned anything, named so a failed run is actionable
   // rather than merely empty.
-  died: STORIES.filter(s => !batch.some(b => b.story?.id === s.id)).map(s => s.id),
+  died: STORIES.filter((s) => !batch.some((b) => b.story?.id === s.id)).map((s) => s.id),
   note,
 }

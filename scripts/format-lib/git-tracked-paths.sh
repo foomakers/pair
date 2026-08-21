@@ -23,6 +23,15 @@
 # the push (AC9, story #414). `.claude/skills/pair-*/**` (mirrors of this
 # repo's own KB dataset) stay covered like anything else.
 #
+# A second exception, found while landing this story: .claude/workflows/**
+# and .claude/agents/** are VERBATIM, byte-identical mirrors of
+# packages/knowledge-hub/dataset/.workflows|.agents (guarded by
+# src/tools/workflow-mirror.test.ts, no transform — unlike the skills mirror
+# above). Checking/fixing the installed copy directly can format it away from
+# its dataset source and trip that guard; the remedy is the AC7 one (fix the
+# dataset, resync), so these two trees are excluded here the same way
+# .pair/knowledge/** would be if it ever drifted.
+#
 # Exit codes:
 #   0 — at least one path found, written to stdout
 #   2 — git is unavailable / this is not a git work tree, OR the derived set
@@ -57,6 +66,7 @@ git_tracked_paths() {
               *) continue ;;
             esac
             ;;
+          .claude/workflows/* | .claude/agents/*) continue ;;
         esac
         for _gtp_ext in $_gtp_exts; do
           case "$_gtp_path" in

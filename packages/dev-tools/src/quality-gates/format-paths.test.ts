@@ -142,6 +142,21 @@ describe('git-tracked-paths.sh — shared derivation for the formatter wrappers 
     expect(result.stderr).toContain('empty')
   })
 
+  it('excludes .claude/workflows/** and .claude/agents/** (verbatim dataset mirrors)', () => {
+    tmp = mkdtempSync(join(tmpdir(), 'gtp-'))
+    initRepo(tmp)
+    mkdirSync(join(tmp, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmp, '.claude', 'agents'), { recursive: true })
+    writeFileSync(join(tmp, '.claude', 'workflows', 'a-workflow.md'), '# workflow\n')
+    writeFileSync(join(tmp, '.claude', 'agents', 'an-agent.md'), '# agent\n')
+    writeFileSync(join(tmp, 'kept.md'), '# kept\n')
+    commitAll(tmp)
+
+    const result = runGitTrackedPaths(tmp, ['md'])
+    expect(result.status).toBe(0)
+    expect(result.paths).toEqual(['kept.md'])
+  })
+
   it('excludes a third-party skill file but keeps a pair-* one (AC9)', () => {
     tmp = mkdtempSync(join(tmpdir(), 'gtp-'))
     initRepo(tmp)

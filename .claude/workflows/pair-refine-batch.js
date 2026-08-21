@@ -97,9 +97,7 @@ function parseArgs(raw) {
     // would inherit without a whitelist to save it — and it makes "every caller value is
     // type-checked" read true when it is not.
     if (m !== undefined && m !== null && typeof m !== 'string')
-      throw new Error(
-        `refine-batch: ${where} has model of type ${Array.isArray(m) ? 'array' : typeof m}, which is not a string. Pass one of ${MODELS.join(' | ')}, or omit the key.`,
-      )
+      throw new Error(`refine-batch: ${where} has model of type ${Array.isArray(m) ? 'array' : typeof m}, which is not a string. Pass one of ${MODELS.join(' | ')}, or omit the key.`)
     // PRESENT-BUT-EMPTY IS AN ERROR, the same rule `constrain` applies to the string fields and
     // the sibling engine applies to `args.model`/`args.severityFloor`. `String(m ?? '').trim()`
     // read `''` as ABSENT, so `model: cfg.model ?? ''` (or a JSON template rendering an unset
@@ -113,9 +111,7 @@ function parseArgs(raw) {
     const v = String(m ?? '').trim()
     if (!v) return undefined
     if (!MODELS.includes(v))
-      throw new Error(
-        `refine-batch: ${where} has unknown model ${JSON.stringify(v)}; expected one of ${MODELS.join(' | ')}.`,
-      )
+      throw new Error(`refine-batch: ${where} has unknown model ${JSON.stringify(v)}; expected one of ${MODELS.join(' | ')}.`)
     return v
   }
   const batchModel = checkModel(a.model, '`args.model`')
@@ -123,30 +119,19 @@ function parseArgs(raw) {
   const items = a.items.map((it, i) => {
     if (!it || typeof it !== 'object' || Array.isArray(it))
       throw new Error(`refine-batch: items[${i}] is not an object: ${JSON.stringify(it)}.`)
-    rejectUnknownKeys(
-      it,
-      ['id', 'mode', 'notes', 'breakdown', 'fixStatusLine', 'model'],
-      `items[${i}]`,
-    )
+    rejectUnknownKeys(it, ['id', 'mode', 'notes', 'breakdown', 'fixStatusLine', 'model'], `items[${i}]`)
     // A number is lossless and unambiguous for an issue ref (`{"id":218}` is what a caller
     // composing JSON from an issue number writes), so it is coerced deliberately. Anything
     // else is not: `id: ['218']` and `id: true` both used to survive `String()` and then PASS
     // the safe-path-segment test as "218"/"true", so a caller who passed the wrong shape got a
     // plausible-looking run against an id they never named. See `constrain` below.
-    if (
-      it.id !== undefined &&
-      it.id !== null &&
-      typeof it.id !== 'string' &&
-      typeof it.id !== 'number'
-    )
+    if (it.id !== undefined && it.id !== null && typeof it.id !== 'string' && typeof it.id !== 'number')
       throw new Error(
         `refine-batch: items[${i}] has id of type ${Array.isArray(it.id) ? 'array' : typeof it.id}, which is not a string or a number. ` +
           `It would be COERCED (an array joins on commas, a boolean becomes "true") and could then pass every ` +
           `value check as an id the caller never wrote. Pass the issue ref as a string or a number.`,
       )
-    const id = String(it.id ?? '')
-      .trim()
-      .replace(/^#/, '')
+    const id = String(it.id ?? '').trim().replace(/^#/, '')
     if (!id) throw new Error(`refine-batch: items[${i}] is missing id.`)
     // Presence is not validity. `id` and `notes` are interpolated VERBATIM into the prompt of a
     // `general-purpose` agent — a host built-in with UNRESTRICTED tools, `Bash` included — and
@@ -209,9 +194,7 @@ function parseArgs(raw) {
       )
     const mode = String(it.mode ?? 'classify').trim()
     if (!MODES.includes(mode))
-      throw new Error(
-        `refine-batch: items[${i}] (#${id}) has unknown mode ${JSON.stringify(mode)}; expected one of ${MODES.join(' | ')}.`,
-      )
+      throw new Error(`refine-batch: items[${i}] (#${id}) has unknown mode ${JSON.stringify(mode)}; expected one of ${MODES.join(' | ')}.`)
     // A boolean field is validated as a boolean and coerced NOWHERE. The two flags used to
     // disagree with each other, in opposite directions and with nothing reported either way:
     // `breakdown` was read `=== true` (a wrong-typed YES silently ignored) while
@@ -231,12 +214,7 @@ function parseArgs(raw) {
     // in JS (`{ id, mode, breakdown: state.breakdown }`, #250) lost a whole batch at parse time
     // on a field nobody set. `Object.hasOwn`, not `in`: `in` walks the prototype chain.
     const checkFlag = key => {
-      if (
-        Object.hasOwn(it, key) &&
-        it[key] !== undefined &&
-        it[key] !== null &&
-        typeof it[key] !== 'boolean'
-      )
+      if (Object.hasOwn(it, key) && it[key] !== undefined && it[key] !== null && typeof it[key] !== 'boolean')
         throw new Error(
           `refine-batch: items[${i}] (#${id}) has ${key} ${JSON.stringify(it[key]) ?? String(it[key])} ` +
             `(${Array.isArray(it[key]) ? 'array' : typeof it[key]}), which is not a boolean. ` +
@@ -348,21 +326,14 @@ async function verify(item, wrote) {
       : `: a \`## Classification\` section with the matrix in the body, a \`risk:*\` label, and a board column of EXACTLY \`Refined\` — any other column, \`Todo\` included, means NOT verified however plausible the writer's report.${item.fixStatusLine === true ? ` ALSO required for this card: the body's own \`**Status**:\` line must now read \`Refined\`. Ignore the \`### Status Workflow\` legend — it lists every state by design and is NOT the card's status.` : ''}${item.breakdown ? ` ALSO required: an implementation task checklist in the body AND an AC-coverage table mapping tasks to acceptance criteria. Check the table is COMPLETE — every acceptance criterion covered by at least one task; report an uncovered criterion in \`missing\`, since a breakdown with a hole is what silently ships an unimplemented AC.` : ''} List anything you expected but could NOT find in \`missing\`.`
   return agent(
     `Re-read issue #${item.id} from the tracker and report its CURRENT state as stored. ${READONLY} Fetch the issue (body + labels) and its project-board item. Report: \`riskTag\` (the \`risk:*\` label actually present, '' if none), \`boardStatus\` (the board column actually set, '' if the issue is not on the board), and \`verified\` — true ONLY if the issue now genuinely carries what this mode was supposed to produce${expected} The writing agent reported: ${JSON.stringify(wrote ?? null)} — treat that as a CLAIM to check, not as fact. Do NOT fix anything you find missing; just report it.`,
-    {
-      agentType: 'general-purpose',
-      phase: 'Verify',
-      label: `verify:#${item.id}`,
-      model: 'sonnet',
-      effort: 'low',
-      schema: VERIFY_SCHEMA,
-    },
+    { agentType: 'general-purpose', phase: 'Verify', label: `verify:#${item.id}`, model: 'sonnet', effort: 'low', schema: VERIFY_SCHEMA },
   )
 }
 
 const PROMPTS = {
   // The body is already complete; only the matrix + tag are missing. Uniform, mechanical,
   // low effort — this is the group that makes the batch worth running wide.
-  classify: item =>
+  classify: (item) =>
     `Classify backlog card #${item.id}. ${READONLY} Its body ALREADY has Given-When-Then acceptance criteria, a Definition of Done and story points — do NOT rewrite, re-scope or re-estimate any of that. The ONLY thing missing is the classification. Run /pair-capability-classify against the existing content to build the classification matrix, then apply it with /pair-capability-write-issue: add the \`## Classification\` section to the body, apply the resulting \`risk:*\` label, and set the board status to Refined. Follow the project's quality model (KB default + any \`tech/risk-matrix.md\` adoption delta) — do not invent criteria.${item.fixStatusLine === true ? ` ALSO: this card's body declares a status line that CONTRADICTS its own content (it says Todo while carrying AC, DoD and points). Correct the body's status line to match the content, and say so in \`changed\`.` : ''}${item.notes ? ` CONTEXT: ${item.notes}` : ''} Remember the tracker invariant: \`gh project item-add\` exits 0 WITHOUT creating the item — re-read every write before reporting it. Return what you changed.`,
 
   // Full Draft->Ready path. Covers BOTH shapes: a genuinely empty card, and a card whose
@@ -371,18 +342,14 @@ const PROMPTS = {
   // dangerous one — an agent told "this card has no AC" when it HAS them will append a second
   // set beside the broken ones instead of replacing them, leaving a body that contradicts
   // itself. So the instruction is to read what is there and decide, per section, replace vs keep.
-  refine: item =>
+  refine: (item) =>
     `Refine backlog card #${item.id} to Ready via /pair-process-refine-story. ${READONLY} Deliver the full path: Given-When-Then acceptance criteria, Definition of Done, subdomain/context mapping scoped to what it touches, the classification matrix, the \`risk:*\` label, story points, and board status Refined.
 
 FIRST read the card as it stands. It may be empty, or it may already carry content that is WRONG — acceptance criteria presuming a capability that was never shipped, a plan for something merged since, a body superseded by a reformulation whose old sections were never removed. Where existing content is wrong, REPLACE it; do not append a second version beside it, and do not leave a body that contradicts itself (that includes the title: if it names a superseded framing, say so in your return so it can be corrected). Where it is right, keep it and say so rather than rewriting for the sake of it.
 
-Ground every criterion in the repository as it is TODAY — read the code and the KB before asserting what a card must do, and never write an AC against a capability you have not verified exists.${
-      item.notes
-        ? `
+Ground every criterion in the repository as it is TODAY — read the code and the KB before asserting what a card must do, and never write an AC against a capability you have not verified exists.${item.notes ? `
 
-TRIAGE FINDINGS for this card (an independent read; treat as strong evidence, verify before acting): ${item.notes}`
-        : ''
-    }
+TRIAGE FINDINGS for this card (an independent read; treat as strong evidence, verify before acting): ${item.notes}` : ''}
 
 NON-INTERACTIVE (mandatory): you are running unattended in a batch — there is NO human to answer questions. /pair-process-refine-story opens with a grill interview: do NOT ask questions and do NOT stall waiting for input. Resolve each question yourself from the code, the KB and the linked context, choose the most defensible answer, and RECORD the assumption in the card body (an \`## Assumptions\` section) so the maintainer can overturn it later. If a question genuinely cannot be settled from the repository — it needs a product decision only a human can make — do not invent an answer: leave that part explicitly marked as an open question in the body, keep the rest of the refinement complete, and name it in your \`note\`.
 
@@ -392,7 +359,7 @@ PACING (mandatory): a supervisor kills any agent that goes 180 seconds without e
 Do NOT expand the scope beyond what the card states, and do NOT file any new issue — this is binding: refinement records what a card must do, it never spawns a second card to hold the overflow. Where scope exceeds the card, say so in your return and let the maintainer decide. Remember: \`gh project item-add\` exits 0 WITHOUT creating the item — re-read every write. Return what you changed.`,
 
   // Read-only: decide what the card IS before spending refinement on it.
-  triage: item =>
+  triage: (item) =>
     `TRIAGE card #${item.id} — READ-ONLY, write NOTHING. ${READONLY} Do not edit the issue, do not comment, do not label, do not touch the board. Read the issue, its linked context, and the CURRENT state of the code it concerns, then judge: is it genuinely Ready to implement as written, does it still need refinement, is it already obsolete/duplicated by work merged since it was filed, or is it blocked? Report \`recommendation\` as exactly one of: \`ready\` | \`needs-refinement\` | \`obsolete\` | \`blocked\`, with \`blockedBy\` naming the blocker when blocked, and \`note\` giving the one-sentence reason and — if it is ready — which FILES it touches, so the orchestrator can place it in the mutex graph against the cards already in flight.${item.notes ? ` CONTEXT: ${item.notes}` : ''}`,
 }
 
@@ -407,7 +374,7 @@ const EFFORT = { classify: 'medium', refine: 'high', triage: 'medium' }
 // cost the difference between the slowest and the fastest item.
 const results = await pipeline(
   ITEMS,
-  item =>
+  (item) =>
     agentRetry(PROMPTS[item.mode](item), {
       agentType: 'general-purpose',
       phase: 'Work',
@@ -424,41 +391,24 @@ const results = await pipeline(
   // stage is what makes a write trustworthy; where there is no write, it is ceremony.
   async (wrote, item) =>
     item.mode === 'triage'
-      ? {
-          item,
-          wrote,
-          check: {
-            number: Number(item.id),
-            verified: true,
-            note: 'triage: read-only, nothing to verify',
-          },
-        }
+      ? { item, wrote, check: { number: Number(item.id), verified: true, note: 'triage: read-only, nothing to verify' } }
       : { item, wrote, check: await verify(item, wrote) },
 )
 
 const rows = results.filter(Boolean)
-const failed = ITEMS.filter(it => !rows.some(r => r.item.id === it.id)).map(it => it.id)
-const unverified = rows.filter(r => r.check?.verified !== true)
+const failed = ITEMS.filter((it) => !rows.some((r) => r.item.id === it.id)).map((it) => it.id)
+const unverified = rows.filter((r) => r.check?.verified !== true)
 
 return {
   ready: rows
-    .filter(r => r.item.mode !== 'triage' && r.check?.verified === true)
-    .map(r => ({ id: r.item.id, riskTag: r.check.riskTag, boardStatus: r.check.boardStatus })),
+    .filter((r) => r.item.mode !== 'triage' && r.check?.verified === true)
+    .map((r) => ({ id: r.item.id, riskTag: r.check.riskTag, boardStatus: r.check.boardStatus })),
   triage: rows
-    .filter(r => r.item.mode === 'triage')
-    .map(r => ({
-      id: r.item.id,
-      recommendation: r.wrote?.recommendation,
-      blockedBy: r.wrote?.blockedBy,
-      note: r.wrote?.note,
-    })),
+    .filter((r) => r.item.mode === 'triage')
+    .map((r) => ({ id: r.item.id, recommendation: r.wrote?.recommendation, blockedBy: r.wrote?.blockedBy, note: r.wrote?.note })),
   // Surfaced, never swallowed: a card whose write could not be READ BACK is not Ready,
   // however confidently the writing agent reported success.
-  unverified: unverified.map(r => ({
-    id: r.item.id,
-    missing: r.check?.missing ?? ['(no verify result)'],
-    note: r.check?.note,
-  })),
+  unverified: unverified.map((r) => ({ id: r.item.id, missing: r.check?.missing ?? ['(no verify result)'], note: r.check?.note })),
   failed,
   note: 'Cards in `ready` were re-read from the tracker and carry a matrix, a risk tag and a board status. `unverified` needs a human look. `triage` wrote nothing — it is advice.',
 }
