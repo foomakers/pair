@@ -71,6 +71,10 @@ describe('run-format.sh — prettier composition (#414)', () => {
     expect(result.status).toBe(0)
   })
 
+  // Three run-format.sh round trips (check, fix, check), each spawning git + xargs +
+  // the formatter binary — comfortably under a second locally, but CI's slower/loaded
+  // runners pushed this past vitest's default 5000ms once (6059ms observed in review).
+  // Not flaky logic, just tight for genuine subprocess overhead — give it real headroom.
   it('fix mode rewrites exactly the file check flagged (AC4: check set == fix set)', () => {
     tmp = mkdtempSync(join(tmpdir(), 'rf-'))
     initRepo(tmp)
@@ -86,7 +90,7 @@ describe('run-format.sh — prettier composition (#414)', () => {
     const after = run(tmp, ['check', 'prettier', 'json'])
     expect(after.status).toBe(0)
     expect(readFileSync(join(tmp, 'bad.json'), 'utf-8')).toBe('{ "a": 1 }\n')
-  })
+  }, 15000)
 
   it('exits 2 when run outside a git work tree — never collapsed into 1 (violations)', () => {
     tmp = mkdtempSync(join(tmpdir(), 'rf-'))
@@ -141,6 +145,8 @@ describe('run-format.sh — markdownlint composition (#414)', () => {
     expect(result.status).toBe(1)
   })
 
+  // Same three-round-trip subprocess overhead as the prettier AC4 test above — see its
+  // comment for why this one gets an explicit timeout too.
   it('fix mode rewrites exactly the file check flagged (AC4: check set == fix set)', () => {
     tmp = mkdtempSync(join(tmpdir(), 'rf-md-'))
     initRepo(tmp)
@@ -158,7 +164,7 @@ describe('run-format.sh — markdownlint composition (#414)', () => {
     const after = run(tmp, ['check', 'markdownlint', 'md'])
     expect(after.status).toBe(0)
     expect(readFileSync(join(tmp, 'bad.md'), 'utf-8')).toBe('# Title\n\nBody with trailing space\n')
-  })
+  }, 15000)
 
   it('never emits a markdown file under a nested .gitignore', () => {
     tmp = mkdtempSync(join(tmpdir(), 'rf-md-'))
