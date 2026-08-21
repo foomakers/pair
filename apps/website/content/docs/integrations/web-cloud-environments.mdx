@@ -14,12 +14,12 @@ run where.
 
 ## What works
 
-The statuses below come from a **feasibility assessment**, not from an observed run:
-`qa/release-validation/CP10-web-cloud-environment.md` has not been executed yet, so pair's web
-support is _assessed_, not _verified_ — [the decision record states exactly
-that](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md).
-Treat the table as the expected shape of a session and confirm it in yours — see [Verifying it
-yourself](#verifying-it-yourself).
+The table below started life as the **D16 feasibility assessment** — an educated guess, not an
+observed run. It is now **verified, not assessed**: `qa/release-validation/CP10-web-cloud-environment.md`
+has been executed end to end from inside a real Claude Code Web session — a story went from `Ready`
+to a merged pull request without a local terminal, and every row here was observed, not predicted.
+See [Setting up a session](#setting-up-a-session) for what that run found about actually getting a
+session working, and [Verifying it yourself](#verifying-it-yourself) for the evidence.
 
 | Capability                | Status | Notes                                                                                             |
 | ------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
@@ -40,10 +40,11 @@ it from your own browser and click through the running app.
 This is a decision, not a defect, on both sides. The environment's side: cloud sessions run in
 isolated VMs whose [network access is limited by
 default](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web#security-and-isolation),
-so nothing publishes the port. pair's side: **pair does not tunnel around it** — no reverse proxy,
-no port-sharing service, documented or scripted. A port anyone can reach turns every ad-hoc
-`pnpm dev` into an unauthenticated public deployment of unreviewed code, from a sandbox that holds
-your repository credentials. That reasoning is recorded in [no public dev-server preview from cloud
+so nothing publishes the port. pair's side: **pair does not tunnel around it** — Requirement **R9.4**
+excludes public dev-server exposure by design: no reverse proxy, no port-sharing service, documented
+or scripted. A port anyone can reach turns every ad-hoc `pnpm dev` into an unauthenticated public
+deployment of unreviewed code, from a sandbox that holds your repository credentials. That reasoning
+is recorded in [no public dev-server preview from cloud
 sessions](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md),
 which is where a future "can we have a preview URL?" gets answered.
 
@@ -113,9 +114,16 @@ never asks you to. What is worth checking, once, at the start of a session:
 | Check                                  | Confirms                                     |
 | -------------------------------------- | -------------------------------------------- |
 | `git config user.email`                | The session can author commits               |
-| `gh auth status`                        | The session can open pull requests           |
-| `gh repo view --json viewerPermission`  | You have write access to this repository     |
+| A working GitHub access path            | The session can open pull requests — see below |
 | The session's MCP server list          | Which integrations are available             |
+
+<Callout type="warn">
+  **A working GitHub access path is `gh auth status` exiting 0, *or* a GitHub MCP tool being
+  present and named — check both, not just the first.** Verified: Claude Code Web does not ship the
+  `gh` CLI at all (`gh: command not found`, not an auth failure), and routes GitHub access
+  exclusively through `mcp__github__*` MCP tools instead. Treating a missing `gh` binary alone as a
+  failed precondition is itself the bug — confirm the MCP path before concluding access is absent.
+</Callout>
 
 <Callout type="warn">
   **Never commit a token.** These are checks that authentication is *present*; none of them
@@ -123,19 +131,82 @@ never asks you to. What is worth checking, once, at the start of a session:
   reporting, not a reason to paste a secret into the repo.
 </Callout>
 
-If `gh` is not authenticated, everything up to the commit still works and the pull-request step
-does not — stop there and finish it from an environment that is authenticated, rather than
-improvising. If MCP servers are unavailable, skills that reach a project-management tool or the
-code host through MCP degrade accordingly; the rest are unaffected.
+If neither `gh` nor a GitHub MCP tool works, everything up to the commit still works and the
+pull-request step does not — stop there and finish it from an environment that is authenticated,
+rather than improvising. If MCP servers are unavailable, skills that reach a project-management
+tool or the code host through MCP degrade accordingly; the rest are unaffected.
+
+## Setting up a session
+
+This is what actually getting a session to a working state looks like, grounded in a real run
+(2026-08-20/21) rather than in what the interface implies.
+
+**Nothing starts until you send a message.** Creating the session does not begin provisioning —
+the container, the clone and the setup script all run only once you send the first prompt. There is
+no "wait for it to finish, then type" order; the prompt is what starts the clock.
+
+<Callout type="warn">
+  **If the provisioning stepper is stuck on its first step, reload the browser tab — do not wait,
+  and you do not need the desktop app.** Verified across four independent attempts, varying network
+  trust, prompt content and client: the container can be fully provisioned and ready while the
+  **browser tab's own status display** stays stuck on step one indefinitely, with no error. A plain
+  reload of the same tab picks up the real state every time. Opening the session in the desktop app
+  also works, but it is not necessary — reload first. Only treat it as genuinely `BLOCKED` if a
+  reload still shows no progress.
+</Callout>
+
+**The session may not start from a clean `main`.** If the cloud environment is configured against a
+particular branch (this project's own `pair` environment, for instance, tracks whichever branch was
+last used to open it), a fresh session starts *there*, not from `origin/main`. Before carrying a
+story end-to-end (see below), check:
+
+```bash
+git merge-base HEAD origin/main
+git log --oneline -1 origin/main
+```
+
+If the two commits differ, the current branch carries history unrelated to the story you are about
+to implement — branch fresh off `origin/main` first, or that story's pull request will bundle in
+commits that have nothing to do with it.
+
+**A story-scoped skill needs `$story` passed explicitly.** A session's auto-generated branch name
+(`claude/adjective-noun-hash`, not `feature/#<id>-*`) does not resolve to any story on its own. A
+skill like `/pair-capability-checkpoint` correctly refuses to guess:
+
+```
+/pair-capability-checkpoint $mode=write $story=414
+```
+
+rather than
+
+```
+/pair-capability-checkpoint $mode=write
+```
+
+which halts with "Cannot detect story context" instead of writing anything — by design, not a bug,
+but easy to hit if you assume the session's branch carries a story like a local `feature/` branch
+would.
+
+**The full local `quality-gate` may fail on one step that CI does not.** `pnpm --filter @pair/website
+test`'s Playwright component-test target needs a browser revision this sandbox's pre-installed
+Chromium does not have, and `playwright install` cannot download one — the same limitation described
+above under [the workaround](#the-workaround-drive-the-app-headlessly). A pre-push hook that runs the
+full gate will block on this even when every other check (lint, types, build, unit tests, format,
+smoke) is green. If you hit this and every other check is confirmed green, bypassing the hook for
+*this specific, understood reason* is defensible — GitHub Actions CI, unlike this sandbox, has real
+network access and will exercise Playwright for real; state the reason explicitly rather than
+silently skipping the hook.
 
 ## Verifying it yourself
 
 None of the above is a permanent guarantee: cloud environments change under you. pair keeps the
 claim honest with a critical path in the release-validation suite,
 `qa/release-validation/CP10-web-cloud-environment.md`, executed from **inside** a web session — a
-local run cannot observe a web environment. It walks the same ground this page describes: skills
-visible and executable, a story carried end-to-end to a pull request, the dev-server limit recorded
-as the expected result it is, and the headless workaround verified rather than assumed.
+local run cannot observe a web environment. Its [Execution
+Log](https://github.com/foomakers/pair/blob/main/qa/release-validation/CP10-web-cloud-environment.md#execution-log)
+carries the real run this page is grounded in: story [#414](https://github.com/foomakers/pair/issues/414)
+carried end to end to pull request [#454](https://github.com/foomakers/pair/pull/454), reviewed
+twice independently, and merged — plus every defect that run found and fixed along the way.
 
 Re-run it at each release. If what it observes and what this page says diverge, the observation
 wins.

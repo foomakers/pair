@@ -120,7 +120,7 @@ This is the path's primary evidence: not "the tool opened", but "the work shippe
 **Preconditions**: MT-CP1001 recorded
 **Category**: Environment limit
 
-A cloud session exposes **no public dev server**, by design on both sides: the environment isolates the session's network, and pair does not tunnel around it — recorded in [ADL: no public dev-server preview from cloud sessions](../../.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md). This case exists to record that limit as an **expected result, not a failure**, and to establish whether the documented mitigation actually holds in this environment.
+A cloud session exposes **no public dev server**, by design on both sides: the environment isolates the session's network, and pair does not tunnel around it — Requirement **R9.4** excludes public dev-server exposure by design, recorded in [ADL: no public dev-server preview from cloud sessions](../../.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md). This case exists to record that limit as an **expected result, not a failure**, and to establish whether the documented mitigation actually holds in this environment.
 
 ### Steps
 
