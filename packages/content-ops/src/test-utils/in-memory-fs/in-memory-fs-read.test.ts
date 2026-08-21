@@ -72,6 +72,28 @@ describe('in-memory-fs-read', () => {
       expect(link!.isDirectory()).toBe(false)
     })
 
+    it('follows a symlink to a directory, as the real syscall does', async () => {
+      // The read side of this double is documented as FOLLOWING links; `readdir` alone
+      // resolved lexically, so a walk that reached a directory THROUGH a link got
+      // `Directory not found` where node returns the target's entries — the same class of
+      // divergence round 4 fixed, one call site away (US-396 review round 6).
+      await fs.writeFile('/target/inside.txt', 'x')
+      await fs.symlink('/target', '/dir/alias')
+
+      const entries = await fs.readdir('/dir/alias')
+
+      expect(entries.map(e => e.name)).toEqual(['inside.txt'])
+    })
+
+    it('follows a symlinked ANCESTOR of the directory read', async () => {
+      await fs.writeFile('/target/sub/deep.txt', 'x')
+      await fs.symlink('/target', '/dir/alias')
+
+      const entries = await fs.readdir('/dir/alias/sub')
+
+      expect(entries.map(e => e.name)).toEqual(['deep.txt'])
+    })
+
     it('lists a symlinked directory once, as a symlink and not as a directory', async () => {
       await fs.mkdir('/target')
       await fs.symlink('/target', '/dir/alias')

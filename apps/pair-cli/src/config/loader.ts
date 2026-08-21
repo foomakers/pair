@@ -246,6 +246,27 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/**
+ * `prefix` becomes a directory name; `source` and `description` are echoed on a single
+ * terminal line by `registryStart` and similar reporters. A declared value that survives
+ * shape/containment checks is not yet safe: a C0/C1 control character in it can move the
+ * cursor, erase a line, or forge output the operator reads to judge whether an install
+ * from a THIRD-PARTY KB went well (US-396 review round 6) — or, for `prefix`, land in a
+ * path a line-oriented script (e.g. `ls`) then misreads. A loop, not a control-character
+ * regex literal: this repo's code-hygiene gate flags every linter-suppression comment
+ * with no exception mechanism, and a loop needs none. Unlike the display-only sanitizer
+ * in `@pair/content-ops` (which keeps `\t`/`\n` as real formatting), a config-declared
+ * value is a path segment or a single report line — ANY control character, `\n`/`\r`
+ * included, invalidates it outright rather than being escaped for display.
+ */
+function hasControlCharacters(value: string): boolean {
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true
+  }
+  return false
+}
+
 /** What `readSourceDeclaration` returns: the honoured subset, plus what to report. */
 interface SourceDeclaration {
   config: Config | null
@@ -267,7 +288,11 @@ type FieldGuard = (value: unknown, ctx: GuardContext) => boolean
  */
 function isSafePrefix(value: unknown): boolean {
   return (
-    typeof value === 'string' && value.length > 0 && !/[/\\]/.test(value) && !value.includes('..')
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !/[/\\]/.test(value) &&
+    !value.includes('..') &&
+    !hasControlCharacters(value)
   )
 }
 
@@ -295,6 +320,7 @@ function isStringArray(value: unknown): boolean {
  */
 function isContainedSource(value: unknown, ctx: GuardContext): boolean {
   if (typeof value !== 'string' || value.length === 0) return false
+  if (hasControlCharacters(value)) return false
   // Covers POSIX (`/etc`), Windows drive (`C:\Users`) and UNC/backslash roots alike.
   if (/^([a-zA-Z]:)?[/\\]/.test(value)) return false
   const normalized = posix.normalize(value.replace(/\\/g, '/'))
@@ -319,7 +345,8 @@ const FIELD_GUARDS: Record<(typeof SOURCE_DECLARABLE_FIELDS)[number], FieldGuard
   exclude: isStringArray,
   flatten: value => typeof value === 'boolean',
   flattenDepth: value => isValidFlattenDepth(value),
-  description: value => typeof value === 'string' && value.length > 0,
+  description: value =>
+    typeof value === 'string' && value.length > 0 && !hasControlCharacters(value),
   prefix: isSafePrefix,
 }
 

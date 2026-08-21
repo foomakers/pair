@@ -363,6 +363,39 @@ describe('config loader - the source declaration is validated, not trusted', () 
     expect(config.asset_registries['knowledge']!.source).toBe('docs/./knowledge')
   })
 
+  /**
+   * A declared value that survives the guards becomes a DIRECTORY NAME in the consumer's
+   * repository (`prefix`) or a line on their terminal (`source`, `description`), so shape
+   * and containment are not the whole boundary — the character set is part of it.
+   *
+   * Before this: a KB shipping `{"skills":{"prefix":"<ESC>[31mACME<ESC>[0m"}}` passed
+   * `isSafePrefix` (no `/`, `\`, `..`) and the consumer's skills installed into
+   * `.claude/skills/<ESC>[31mACME<ESC>[0m-example-skill`; a prefix carrying a newline
+   * yielded a directory name that breaks any line-oriented script reading `ls`. And
+   * `{"knowledge":{"source":"docs<ESC>[2K<ESC>[1A"}}` was echoed raw by `registryStart`
+   * as `source: <path>`, letting remote content erase or forge the very lines the user
+   * reads to judge whether the install went well (US-396 review round 6).
+   */
+  it.each([
+    ['a prefix carrying an ANSI colour escape', { prefix: '\u001b[31mACME\u001b[0m' }, 'prefix'],
+    ['a prefix carrying a newline', { prefix: 'acme\nEvil' }, 'prefix'],
+    ['a prefix carrying a NUL byte', { prefix: 'acme\u0000evil' }, 'prefix'],
+    ['a source carrying an erase-line sequence', { source: 'docs\u001b[2K\u001b[1A' }, 'source'],
+    ['a source carrying a carriage return', { source: 'docs\rknowledge' }, 'source'],
+    [
+      'a description carrying a cursor-up sequence',
+      { description: 'Acme\u001b[1AInstallation complete' },
+      'description',
+    ],
+  ])('ignores %s — a declared value is plain text, never terminal control', (_l, bad, field) => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({ asset_registries: { knowledge: bad } }),
+    })
+
+    const knowledge = config.asset_registries['knowledge']! as unknown as Record<string, unknown>
+    expect(knowledge[field]).toBe(JSON.parse(REAL_CONFIG).asset_registries.knowledge[field])
+  })
+
   it('names the whole resolution chain, weakest first — not just the last writer', () => {
     const fs = fsWith({
       '/kb/pair.config.json': JSON.stringify({

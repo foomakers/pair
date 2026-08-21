@@ -89,7 +89,11 @@ function firstSymlinkedAncestor(
 }
 
 export async function readdir(state: InMemoryFsState, path: string): Promise<Dirent[]> {
-  const resolvedPath = state.resolvePath(path)
+  // Dereferenced like every other read: `fs.readdir` follows a link (leaf or ancestor)
+  // and lists the TARGET's entries. Resolving lexically here left a walk that reached a
+  // directory through a link with `no such file or directory` — behaviour production does
+  // not have (US-396 review round 6).
+  const resolvedPath = physicalPath(state, path)
   if (!state.dirs.has(resolvedPath)) {
     // Carries the errno node's `fs.readdir` carries. Callers on the DESTRUCTIVE mirror
     // path branch on it — "absent" (ENOENT: the target goes too) vs. "unreadable"
