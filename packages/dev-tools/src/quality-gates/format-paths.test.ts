@@ -141,4 +141,19 @@ describe('git-tracked-paths.sh — shared derivation for the formatter wrappers 
     expect(result.status).toBe(2)
     expect(result.stderr).toContain('empty')
   })
+
+  it('excludes a third-party skill file but keeps a pair-* one (AC9)', () => {
+    tmp = mkdtempSync(join(tmpdir(), 'gtp-'))
+    initRepo(tmp)
+    mkdirSync(join(tmp, '.claude', 'skills', 'agent-browser'), { recursive: true })
+    mkdirSync(join(tmp, '.claude', 'skills', 'pair-next'), { recursive: true })
+    writeFileSync(join(tmp, '.claude', 'skills', 'agent-browser', 'SKILL.md'), '# third-party\n')
+    writeFileSync(join(tmp, '.claude', 'skills', 'pair-next', 'SKILL.md'), '# pair\n')
+    commitAll(tmp)
+
+    const result = runGitTrackedPaths(tmp, ['md'])
+    expect(result.status).toBe(0)
+    expect(result.paths).toContain('.claude/skills/pair-next/SKILL.md')
+    expect(result.paths).not.toContain('.claude/skills/agent-browser/SKILL.md')
+  })
 })
