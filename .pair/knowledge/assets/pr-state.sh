@@ -27,9 +27,9 @@
 
 # resolve_pr_state <gates> <review> <tier> <explicit_approval>
 #   gates             : pass | fail | pending | <anything else ⇒ treated as not-passing>
-#   review            : approved | tech-debt | changes-requested | pending | missing | error
-#                       (`tech-debt` is an approving verdict — approve now, track the debt
-#                       separately; anything unrecognized is treated as no decision yet)
+#   review            : approved | changes-requested | pending | missing | error
+#                       (anything unrecognized, including the retired `tech-debt` token, is
+#                       treated as no decision yet, fail-safe)
 #   tier              : green | yellow | red | <anything else ⇒ red (fail-safe)>
 #   explicit_approval : 1 when a human approval is recorded on the CURRENT head, else 0
 #
@@ -53,7 +53,7 @@ resolve_pr_state() {
 
   # Review must be an approving verdict; pending/missing/error/unknown stay blocked.
   case "$review" in
-  approved | tech-debt) ;;
+  approved) ;;
   *)
     echo "pr-state: review is '${review:-unknown}', not an approving verdict — staying to-be-reviewed (fail-safe)" >&2
     echo "to-be-reviewed"
@@ -123,14 +123,14 @@ human_approval_jq_filter() {
 
 # review_check_conclusion <verdict> — maps a review verdict onto the conclusion the
 # REQUIRED `pair-review` check must carry on the code host (R5.7):
-#   approved | tech-debt   ⇒ success
+#   approved               ⇒ success
 #   changes-requested      ⇒ failure
 #   anything else (pending, missing, crashed, timed out, unknown) ⇒ pending
 # A pending check blocks the merge exactly like a failing one — a crashed or skipped
 # review can never leave the PR mergeable.
 review_check_conclusion() {
   case "${1:-}" in
-  approved | tech-debt) echo "success" ;;
+  approved) echo "success" ;;
   changes-requested) echo "failure" ;;
   *)
     echo "pr-state: review verdict '${1:-}' is not a decision — check stays pending (blocks merge)" >&2

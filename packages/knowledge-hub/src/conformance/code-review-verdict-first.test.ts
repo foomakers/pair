@@ -62,7 +62,17 @@ describe('code-review-template — verdict-first reading budget (AC3, D22) (#228
       expect(firstSection).toMatch(/##\s+Verdict/)
       expect(firstSection).toMatch(/risk:/)
       expect(firstSection).toMatch(/cost:/)
-      expect(firstSection).toMatch(/APPROVED|CHANGES-REQUESTED|TECH-DEBT/)
+      expect(firstSection).toMatch(/APPROVED|CHANGES-REQUESTED/)
+      // No TECH-DEBT verdict ON THE VERDICT LINE ITSELF: ADL
+      // 2026-08-21-review-severity-classification-and-convergence.md retires it as an option —
+      // Minor findings block merge exactly like Major. Scoped to the `risk:`/`cost:` line, not the
+      // whole section, because the explanatory HTML comment right below it legitimately mentions
+      // the retired token by name to explain why it is gone.
+      const verdictLine = firstSection
+        .split('\n')
+        .find(line => line.includes('risk:') && line.includes('cost:'))
+      expect(verdictLine, 'verdict line not found').toBeDefined()
+      expect(verdictLine).not.toMatch(/TECH-DEBT/)
     })
 
     it(`${label} states the ~30-second reading budget (D22, R6.6)`, () => {

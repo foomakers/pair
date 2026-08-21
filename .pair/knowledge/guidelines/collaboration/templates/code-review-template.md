@@ -6,7 +6,12 @@
 
 ## Verdict
 
-`risk:<tier>` · `cost:<class>` — **[APPROVED | CHANGES-REQUESTED | TECH-DEBT]** — [one-line reason]
+`risk:<tier>` · `cost:<class>` — **[APPROVED | CHANGES-REQUESTED]** — [one-line reason]
+
+<!-- No TECH-DEBT verdict. Minor findings block merge exactly like Major (11-how-to-code-review.md's
+Convergence section) — a review does not converge by waving real findings through as tracked debt.
+What used to get filed as "only minor, approve as debt" either meets the Minor bar (fix it) or
+doesn't meet any bar at all (file it as a Question instead — informational, never blocking). -->
 
 <!-- Open-findings count: the ONE number a merger needs above the fold. A report that
 lists resolved findings under a heading like "Remaining Minor" reads as if work is
@@ -136,19 +141,36 @@ Feeds from `/pair-capability-assess-cost` against the diff. A **red** cost class
 <details>
 <summary>Findings by severity</summary>
 
+<!-- Classification criteria: severity is capped by HOW a finding is reached, not just by what
+it would do if it happened.
+
+1. Realistic-trigger test: does this fire on a plausible edit/usage, or only on a contrived
+   scenario constructed to defeat the code (an unmotivated reorder, wrapping something in a
+   construct that does not exist today, an adversarial input to a script nothing untrusted
+   feeds)? If the trigger is contrived, the finding is a Question, full stop — never
+   Critical/Major/Minor, no matter how bad the consequence would be if it happened.
+2. Deliverable vs. test-infrastructure test: a bug in the shipped code/docs/config is
+   Critical/Major/Minor per the normal bar below. A robustness gap in a helper that exists only
+   to scope a TEST's own assertion (e.g. a string-boundary function) is Minor only if a realistic
+   edit to the file it reads would hit it; otherwise it is a Question.
+
+Apply both tests BEFORE assigning severity below, not after — this is what makes "fix every
+Critical/Major/Minor, always" (the default per 11-how-to-code-review.md) converge instead of
+looping: the bar for entering the Minor bucket at all is the control, not a relaxed exit policy. -->
+
 **Critical (must fix before merge)**
 
 - [ ] **[File:Line]** — [issue + impact]
 
-**Major (should fix before merge)**
+**Major (must fix before merge)**
 
 - [ ] **[File:Line]** — [issue + suggested fix]
 
-**Minor (consider)**
+**Minor (must fix before merge — same bar as Major, just lower impact)**
 
-- [ ] **[File:Line]** — [suggestion]
+- [ ] **[File:Line]** — [issue + suggested fix]
 
-**Questions**
+**Questions (informational, never blocking — includes anything that only fires on a contrived scenario)**
 
 - [ ] **[File:Line]** — [clarification]
 

@@ -615,7 +615,7 @@ GitHub mechanics for the two pair checks the [PR state flow](pr-states.md) requi
 
 | Check | Published by | Semantics |
 | --- | --- | --- |
-| `pair-review` | `/pair-process-review`, as a **commit status** (registered `pending` at PR creation by `/pair-capability-publish-pr`) | `success` on APPROVED/TECH-DEBT, `failure` on CHANGES-REQUESTED, `pending` when the review has not produced a decision (never ran, crashed, timed out) |
+| `pair-review` | `/pair-process-review`, as a **commit status** (registered `pending` at PR creation by `/pair-capability-publish-pr`) | `success` on APPROVED, `failure` on CHANGES-REQUESTED, `pending` when the review has not produced a decision (never ran, crashed, timed out) |
 | `pair-explicit-approval` | a workflow job (below), also as a **commit status pinned to the PR head SHA** | `success` when the tier does not require explicit approval, or when a **human** approving review exists on the current head; `failure` at 🔴 without one |
 
 Both are **required status checks** — a `pending` or absent required check blocks the merge on GitHub exactly like a failing one, which is what makes the review unskippable (R5.7).

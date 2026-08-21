@@ -56,7 +56,7 @@ Accepted
 - **Description**: `pair-review` (published by the review flow on the head commit as a **commit status**
   — the Checks API is writable only by a GitHub App installation token, while branch protection accepts a
   status context as a required check identically: `success` on
-  APPROVED/TECH-DEBT, `failure` on CHANGES-REQUESTED, left **pending** when no decision exists) plus
+  APPROVED, `failure` on CHANGES-REQUESTED, left **pending** when no decision exists) plus
   `pair-explicit-approval` (a deterministic host job that reads the `risk:*` label only, auto-passes
   below 🔴, and at 🔴 asserts a non-bot, non-author approving review on the current head). Both are
   required status checks; `pr-state:*` labels are a **view** of the same synthesis.

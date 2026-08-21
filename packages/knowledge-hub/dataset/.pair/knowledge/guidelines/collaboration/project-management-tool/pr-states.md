@@ -24,7 +24,7 @@ Two enforcers act on a PR, and they never blur:
 | Enforcer | Nature | Produces | Judgment |
 | --- | --- | --- | --- |
 | **Gate** (CI checks) | deterministic, mechanical pass/fail | green / red checks | **zero judgment** — no opinions, no severity calls |
-| **Review** (`/review`) | judgment on the change | a verdict (APPROVED / CHANGES-REQUESTED / TECH-DEBT) in the native code-host review | **zero mechanical checks** — it reads gate results, it never re-runs them |
+| **Review** (`/review`) | judgment on the change | a verdict (APPROVED / CHANGES-REQUESTED) in the native code-host review | **zero mechanical checks** — it reads gate results, it never re-runs them |
 
 **The gate is the first filter** (R5.4). Review runs at green gates; while any mechanical gate is red the review may still report findings, but it can produce **no merge-enabling verdict** — a red or failing gate **never** yields `ready-to-merge`, regardless of the judgment verdict. This ordering is what makes the two enforcers composable instead of competing: the gate answers "does it build and pass", the review answers "should it exist".
 
@@ -37,9 +37,9 @@ The synthesis is a table, not a heuristic. It is implemented once, in the shippe
 | any | CHANGES-REQUESTED | any | any | `not-approved` |
 | red / pending | any other | any | any | `to-be-reviewed` |
 | green | pending / missing / crashed | any | any | `to-be-reviewed` |
-| green | APPROVED / TECH-DEBT | 🟢 / 🟡 | not required | `ready-to-merge` |
-| green | APPROVED / TECH-DEBT | 🔴 | absent | `to-be-reviewed` |
-| green | APPROVED / TECH-DEBT | 🔴 | present on current head | `ready-to-merge` |
+| green | APPROVED | 🟢 / 🟡 | not required | `ready-to-merge` |
+| green | APPROVED | 🔴 | absent | `to-be-reviewed` |
+| green | APPROVED | 🔴 | present on current head | `ready-to-merge` |
 
 - **Green gates AND an approved review ⇒ `ready-to-merge`** at 🟢/🟡; the same combination at 🔴 additionally needs the explicit approval row.
 - **A `not-approved` state routes to a human** — the author addresses the findings and the review re-runs; no automation clears it.

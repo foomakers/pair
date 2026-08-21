@@ -68,7 +68,7 @@ source "$EVALUATOR"
 # --- AC3: the happy paths (green gates + approved review) ---
 check "🟢 gates green + approved"        ready-to-merge "$(resolve_pr_state pass approved green 0 2>/dev/null)"
 check "🟡 gates green + approved"        ready-to-merge "$(resolve_pr_state pass approved yellow 0 2>/dev/null)"
-check "tech-debt verdict is approving"  ready-to-merge "$(resolve_pr_state pass tech-debt yellow 0 2>/dev/null)"
+check "retired tech-debt token is not approving (fail-safe)" to-be-reviewed "$(resolve_pr_state pass tech-debt yellow 0 2>/dev/null)"
 
 # --- AC3: a changes-requested verdict routes to a human ---
 check "changes-requested"               not-approved "$(resolve_pr_state pass changes-requested green 0 2>/dev/null)"
@@ -130,7 +130,7 @@ done
 
 # --- The required `pair-review` check conclusion mapping (AC5) ---
 check "approved => success"             success "$(review_check_conclusion approved 2>/dev/null)"
-check "tech-debt => success"            success "$(review_check_conclusion tech-debt 2>/dev/null)"
+check "retired tech-debt token => pending (fail-safe)" pending "$(review_check_conclusion tech-debt 2>/dev/null)"
 check "changes-requested => failure"    failure "$(review_check_conclusion changes-requested 2>/dev/null)"
 check "no decision => pending"          pending "$(review_check_conclusion '' 2>/dev/null)"
 check "crashed => pending"              pending "$(review_check_conclusion crashed 2>/dev/null)"

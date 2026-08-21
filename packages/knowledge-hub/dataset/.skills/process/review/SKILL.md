@@ -57,7 +57,7 @@ CODE REVIEW STATE:
 ├── Review Type: [feature | bug | refactor | docs | config]
 ├── Issues: [critical: N | major: N | minor: N]
 ├── Debt Items: [N flagged]
-└── Decision: [pending | APPROVED | CHANGES-REQUESTED | TECH-DEBT]
+└── Decision: [pending | APPROVED | CHANGES-REQUESTED]
 ```
 
 ## Phase 1: PR Validation (BLOCKING)
@@ -138,7 +138,7 @@ Ask: _"Proceed with review?"_ — **only in an interactive run**. A **dispatched
    - **Why those two are excluded** — they are **this flow's own outputs**, already carried on their own axes by `resolve_pr_state <gates> <review> <tier> <explicit_approval>`: `pair-review` is registered _pending_ at t0 by `/publish-pr` and concluded only in Step 5.4 below, and `pair-explicit-approval` fails at 🔴 until a human approves. Folding either into `gates` double-counts it and — since the evaluator short-circuits on a non-`pass` gate — makes `pr-state:ready-to-merge` unreachable **by construction** on every advisory arm (the loop's normal state), capping this review's verdict on its own pending self-check.
    - **Fallback when the target branch is not protected** (no branch protection at all), or its required set cannot be read — the degraded configuration [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md) documents as non-blocking: use **every non-`pair-*` check reported on the head commit**, and if **none** is reported there, `Gates: pending`.
    - **No published conclusion is not a green** — CI having published no conclusion on that head commit is the normal state in the first minutes after a push and the permanent state on a host that runs no checks: pass `gates` as **not green** (`Gates: pending`), so Step 5.4 yields `pr-state:to-be-reviewed` and **never** `ready-to-merge`. The remedy is re-reading the check once CI reports, never a promotion on absence of evidence.
-   - **Which signal caps the verdict** — the same resolved value decides, with no second phrasing: the cap keys on the **authoritative** signal (the local run on `match`, CI's conclusion on the head commit on every other arm). With the authoritative gates red the review can **never** reach APPROVED / TECH-DEBT and the Step 5.4 synthesis can **never** yield `ready-to-merge` — the judgment review does not override a mechanical failure; continue the review (the findings are still useful to the author) but carry `Gates: red` into Step 5.2. An advisory run contributes review **findings only** and never caps the verdict on its own, since the PR would otherwise be blocked on evidence this same step just declared advisory.
+   - **Which signal caps the verdict** — the same resolved value decides, with no second phrasing: the cap keys on the **authoritative** signal (the local run on `match`, CI's conclusion on the head commit on every other arm). With the authoritative gates red the review can **never** reach APPROVED and the Step 5.4 synthesis can **never** yield `ready-to-merge` — the judgment review does not override a mechanical failure; continue the review (the findings are still useful to the author) but carry `Gates: red` into Step 5.2. An advisory run contributes review **findings only** and never caps the verdict on its own, since the PR would otherwise be blocked on evidence this same step just declared advisory.
    - **A raise landing after this step** (Steps 2.4 / 2.6 reconcile Security relevance and Coupling balance, raise-only per D17) retro-narrows nothing: the set that ran is Phase 1's tier, and the remedy is a **re-run** of this step at the higher tier, never a report rewritten to a narrower one.
 
 ### Step 2.2: Code Quality Assessment
@@ -232,7 +232,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
 3. **Act**: Compose `/analyze-debt` with `$scope = all`. `/analyze-debt` is **output-only** — it returns a report and creates nothing.
 4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR. Do **not** auto-create a tech-debt issue.
 5. **Act**: If a debt item is worth scheduling, record it in the report as a recommendation and stop there — **the review never creates a work item** (ADL `2026-08-12-implementation-never-files-a-card-it-extends-the-story`). Cite an **already-existing** card by number when one covers it; otherwise the debt is fixed in this PR (extending the story that surfaced it), or left as an **actionable finding** the maintainer judges at the **merge gate**. Whether it ever becomes a new card is the maintainer's deliberate call, taken outside the review — never this skill's, and never a side effect of reading a diff.
-6. **Verify**: Debt items recorded in the report. High-severity items may inform the review verdict (TECH-DEBT: approve + track separately) but never force CHANGES-REQUESTED on debt grounds alone.
+6. **Verify**: Debt items recorded in the report. High-severity items may inform the review verdict as Minor/Major findings under the same severity-classification rules (see [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md#findings-by-severity)) but never force CHANGES-REQUESTED on debt grounds alone when they don't clear that bar.
 
 ## Phase 5: Review Decision
 
@@ -252,9 +252,8 @@ Based on compiled findings:
 
 | Decision              | Condition                                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------- |
-| **APPROVED**          | No critical or major issues. All AC met. Quality gates pass (a red gate caps the decision — Step 2.1). |
+| **APPROVED**          | No open Critical, Major, or Minor issues. All AC met. Quality gates pass (a red gate caps the decision — Step 2.1). |
 | **CHANGES-REQUESTED** | Critical issues found, missing ADRs, any **introduced** red security finding from `/assess-security`, failing tests, AC not met. A **red** `cost:*` class does not itself block — it surfaces a **blocking human sign-off** requirement in the Verdict (the human, not the skill, gates on cost). |
-| **TECH-DEBT**         | Only minor issues or debt items. Approve current PR, track debt separately.               |
 
 ### Step 5.3: Submit Review
 
@@ -263,11 +262,11 @@ The compiled report **is the body of the native review on the code host** — th
 The review is submitted on the **code host only** (where it gates the merge). It is **never mirrored** onto the PM tool: the board reaches the outcome through the linked PR reference, so no review state is duplicated. See the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
 1. **Act**: Submit the native review on the code host (for GitHub, per [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md); another host's implementation guide supplies the equivalent commands), passing the compiled verdict-first report as the review **body**:
-   - **APPROVED / TECH-DEBT**: `event = APPROVE`.
+   - **APPROVED**: `event = APPROVE`.
    - **CHANGES-REQUESTED**: `event = REQUEST_CHANGES`.
    - MCP-first: `pull_request_review_write` with `method = create`, the report as `body`, and the appropriate `event`.
    - CLI fallback: `gh pr review <number> --approve|--request-changes --body-file <report>`.
-   - **Self-authored PR** (solo/self-review): GitHub rejects `APPROVE` / `REQUEST_CHANGES` on your own PR. Submit the same verdict-first report with `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`) — the verdict token (APPROVED / CHANGES-REQUESTED / TECH-DEBT) still leads the body, so the decision and full report are recorded, never lost. See Graceful Degradation.
+   - **Self-authored PR** (solo/self-review): GitHub rejects `APPROVE` / `REQUEST_CHANGES` on your own PR. Submit the same verdict-first report with `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`) — the verdict token (APPROVED / CHANGES-REQUESTED) still leads the body, so the decision and full report are recorded, never lost. See Graceful Degradation.
 2. **Act**: On re-review, submit a **fresh** native review — both documented paths append (MCP `create`; `gh pr review` CLI), neither edits a submitted body. GitHub's latest-review-governs semantics mean the newest review carries the verdict while earlier reviews stay as visible history, so re-invocation is safe without editing in place (idempotency).
 3. **Verify**: The native review is submitted with the verdict-first body — no separate review-comment artifact exists.
 
@@ -277,7 +276,7 @@ The verdict is judgment; the **merge block is mechanical**. This step turns the 
 
 1. **Check**: Does the current head commit already carry a `pair-review` check whose conclusion matches this verdict, and a matching `pr-state:*` label?
 2. **Skip**: If yes — nothing to publish, move to Step 5.5 (idempotent re-invocation).
-3. **Act — publish the check**: source the shipped [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh) and map the verdict with `review_check_conclusion` (`approved`/`tech-debt` ⇒ `success`, `changes-requested` ⇒ `failure`, anything else ⇒ `pending`). Publish `pair-review` on the **head commit** with that conclusion, through the mechanism the host guide prescribes for an ordinary agent token — on GitHub a **commit status** (the Checks API is writable only by a GitHub App). A `pending` result is never published as resolved — the required check stays unsatisfied so the merge stays blocked. If publication is **refused** (missing scope, no status API), report `pair-review: NOT PUBLISHED — advisory` and continue: the verdict still lives in the native review, but never claim a merge is blocked when it is not.
+3. **Act — publish the check**: source the shipped [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh) and map the verdict with `review_check_conclusion` (`approved` ⇒ `success`, `changes-requested` ⇒ `failure`, anything else ⇒ `pending`). Publish `pair-review` on the **head commit** with that conclusion, through the mechanism the host guide prescribes for an ordinary agent token — on GitHub a **commit status** (the Checks API is writable only by a GitHub App). A `pending` result is never published as resolved — the required check stays unsatisfied so the merge stays blocked. If publication is **refused** (missing scope, no status API), report `pair-review: NOT PUBLISHED — advisory` and continue: the verdict still lives in the native review, but never claim a merge is blocked when it is not.
 4. **Act — resolve the requirements for the tier**: read the tier from the PR labels (`resolve_tier`, tags only, **untagged/malformed ⇒ 🔴 fail-safe**), then read that tier's row from quality-model §4 through its `Argument > Adoption > KB default` cascade: reviewer count, SLA, **checklist depth** — `standard` vs `extended` as [quality-model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 defines it (there is no separate extended-checklist artifact: `extended` is the same code-review template with **no section skipped**, "not applicable" written out rather than omitted) — and whether **explicit approval** is required. Record them in the review output; never invent or hardcode a threshold here. At 🔴, state the explicit-approval requirement in the Verdict block so the human reading the PR knows what is still missing (D10).
 5. **Act — synthesize the state**: `resolve_pr_state <gates> <verdict> <tier> <explicit-approval>` — `gates` from Step 2.1, `explicit-approval` = a **non-author human** approval recorded on the current head (the pair review itself never counts; on a single-maintainer repo 🔴 therefore needs a second human account — see pr-states.md). Apply the resulting `pr-state:to-be-reviewed` / `pr-state:ready-to-merge` / `pr-state:not-approved` label, removing any other `pr-state:*` label (exactly one at a time); the labels are provisioned once per repository and if absent this step is **non-blocking** (degradation below). A red gate or a 🔴 tier without explicit approval yields `to-be-reviewed`, never `ready-to-merge`.
 6. **Verify**: The head commit carries the `pair-review` check (or the publication failure is reported), the PR carries exactly one `pr-state:*` label matching the synthesis (or its absence is reported), and the tier requirements are recorded in the output. The label is a **view** — enforcement is the required checks (R5.7); this skill never edits branch protection and never bypasses a check.
@@ -287,7 +286,7 @@ The verdict is judgment; the **merge block is mechanical**. This step turns the 
 1. **Check**: What was the review decision?
 2. **Skip**: If CHANGES-REQUESTED → output review report and stop. Author addresses findings, then re-invokes `/review`.
 3. **Act — dispatched run**: if this run is **dispatched** (non-interactive — see the contract in Arguments), do **not** ask and do **not** self-answer: the outcome is option 2 below (the human merges). Output the report and stop. A self-answered "Merge now" here would let the reviewing agent merge on its own verdict, which is exactly what the human merge gate forbids.
-4. **Act — interactive run**: If APPROVED or TECH-DEBT → ask reviewer:
+4. **Act — interactive run**: If APPROVED → ask reviewer:
 
    > PR approved. Merge now or let the author merge?
    > 1. **Merge now** — proceed to Phase 6
@@ -309,7 +308,7 @@ At review decision (Phase 5):
 REVIEW COMPLETE:
 ├── PR:         [#NUMBER: Title]
 ├── Story:      [#ID: Title | N/A]
-├── Decision:   [APPROVED | CHANGES-REQUESTED | TECH-DEBT]
+├── Decision:   [APPROVED | CHANGES-REQUESTED]
 ├── Issues:     [critical: N | major: N | minor: N]
 ├── Security:   [green | yellow | red — N findings, N introduced | not assessed]
 ├── Cost:       [green | yellow | orange | red | not assessed]
