@@ -249,6 +249,121 @@ describe('validateLinks', () => {
     })
   })
 
+  describe('link destinations (CommonMark title / angle brackets)', () => {
+    // `[a](./b.md "Title")` is valid CommonMark: the destination is `./b.md` and
+    // `"Title"` is a title. Capturing the whole parenthesised run stats a path that
+    // can never exist, so a perfectly valid link is reported broken (absorbed from
+    // the closed #452 into story #188).
+    it.each([
+      ['double-quoted title', '[Doc](./other.md "The Other")'],
+      ['single-quoted title', "[Doc](./other.md 'The Other')"],
+      ['padded destination', '[Doc](  ./other.md   "The Other"  )'],
+      ['angle-bracket destination', '[Doc](<./other.md>)'],
+      ['angle brackets plus title', '[Doc](<./other.md> "The Other")'],
+    ])('%s: an EXISTING target validates clean', async (_name, markdown) => {
+      fs.writeFile('/kb/README.md', markdown)
+      fs.writeFile('/kb/other.md', '# Other')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toEqual([])
+      expect(results[0]?.warnings).toEqual([])
+    })
+
+    it('a MISSING titled target errors on the destination, without the title', async () => {
+      fs.writeFile('/kb/README.md', '[Doc](./missing.md "The Other")')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.errors).toEqual(['Broken internal link: ./missing.md'])
+    })
+
+    it('an angle-bracket destination may contain spaces', async () => {
+      fs.writeFile('/kb/README.md', '[Doc](<./my file.md>)')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.errors).toEqual(['Broken internal link: ./my file.md'])
+    })
+
+    it('OUT OF SCOPE: a parenthesised title `[a](./b.md (T))` is not parsed (the extractor stops at the first `)`)', async () => {
+      fs.writeFile('/kb/README.md', '[Doc](./other.md (The Other))')
+      fs.writeFile('/kb/other.md', '# Other')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.errors).toEqual(['Broken internal link: ./other.md (The Other'])
+    })
+
+    it('a title is stripped before an optional pattern is matched', async () => {
+      fs.writeFile('/kb/README.md', '[Code](./apps/x.ts "Source")')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+        optionalLinkPatterns: ['apps/**'],
+      })
+
+      expect(results[0]?.errors).toEqual([])
+      expect(results[0]?.warnings).toEqual([
+        'optional link (pattern-matched), target missing: ./apps/x.ts',
+      ])
+    })
+  })
+
+  describe('protocol-relative URLs', () => {
+    // `//cdn.example.com/logo.png` is an external URL inheriting the page scheme.
+    // `isAbsolute('//…')` is true, so it used to be joined onto the KB root and
+    // stat-ed: the first such link committed to the shipped dataset would redden a
+    // green pre-merge CI run (the smoke suite link-validates it for real).
+    it('is treated as external — neither error nor warning', async () => {
+      fs.writeFile('/kb/README.md', '[Logo](//cdn.example.com/logo.png)')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toEqual([])
+      expect(results[0]?.warnings).toEqual([])
+    })
+
+    it('is not probed over HTTP either (no scheme to request)', async () => {
+      fs.writeFile('/kb/README.md', '[Logo](//cdn.example.com/logo.png)')
+
+      const { results } = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+        httpClient,
+        strict: true,
+      })
+
+      expect(results[0]?.errors).toEqual([])
+      expect(results[0]?.warnings).toEqual([])
+    })
+  })
+
   describe('mixed links', () => {
     it('should validate files with both internal and external links', async () => {
       fs.writeFile('/kb/README.md', '[Internal](./valid.md)\n[External](https://example.com)')

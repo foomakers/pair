@@ -1,4 +1,5 @@
 import chalk from 'chalk'
+import { sanitizeControlCharacters } from '@pair/content-ops'
 import type { StructureValidationResult } from './structure-validator'
 import type { LinkValidationResult } from './link-checker'
 import type { MetadataValidationResult } from './metadata-validator'
@@ -106,7 +107,7 @@ function formatStructureSection(structure: StructureValidationResult): string[] 
 
   for (const reg of structure.registries) {
     const status = reg.valid ? chalk.green('✓') : chalk.red('✗')
-    lines.push(`  ${status} ${reg.registry}`)
+    lines.push(`  ${status} ${sanitizeControlCharacters(reg.registry)}`)
     lines.push(...formatIssues(reg.errors, reg.warnings))
   }
 
@@ -123,7 +124,7 @@ function formatLinkSection(links: LinkValidationResult[]): string[] {
 
   for (const link of links) {
     if (link.errors.length > 0 || link.warnings.length > 0) {
-      lines.push(`  ${link.file}`)
+      lines.push(`  ${sanitizeControlCharacters(link.file)}`)
       lines.push(...formatIssues(link.errors, link.warnings))
     }
   }
@@ -141,7 +142,7 @@ function formatMetadataSection(metadata: MetadataValidationResult[]): string[] {
 
   for (const meta of metadata) {
     if (meta.errors.length > 0 || meta.warnings.length > 0) {
-      lines.push(`  ${meta.file}`)
+      lines.push(`  ${sanitizeControlCharacters(meta.file)}`)
       lines.push(...formatIssues(meta.errors, meta.warnings))
     }
   }
@@ -151,17 +152,23 @@ function formatMetadataSection(metadata: MetadataValidationResult[]): string[] {
 }
 
 /**
- * Formats errors and warnings
+ * Formats errors and warnings.
+ *
+ * Every message is escaped through `sanitizeControlCharacters` because its text
+ * quotes content from the KB being validated — a config key, a pattern, a link
+ * as written — which an ESC/OSC run would turn into terminal commands (screen
+ * clear, title rewrite) on `pair kb-validate --path ./a-kb-you-did-not-author`.
+ * The formatter's OWN colouring is applied outside the escape, so it survives.
  */
 function formatIssues(errors: string[], warnings: string[]): string[] {
   const lines: string[] = []
 
   for (const error of errors) {
-    lines.push(chalk.red(`    ERROR: ${error}`))
+    lines.push(chalk.red(`    ERROR: ${sanitizeControlCharacters(error)}`))
   }
 
   for (const warning of warnings) {
-    lines.push(chalk.yellow(`    WARNING: ${warning}`))
+    lines.push(chalk.yellow(`    WARNING: ${sanitizeControlCharacters(warning)}`))
   }
 
   return lines

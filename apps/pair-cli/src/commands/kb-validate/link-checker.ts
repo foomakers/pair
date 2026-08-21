@@ -139,8 +139,9 @@ async function classifyLink(
   const { file, baseDir, fs, httpClient, optionalMatchers } = params
 
   if (isExternalLink(link)) {
-    // External link - only validate if httpClient provided (strict mode)
-    if (!httpClient) return {}
+    // External link - only validate if httpClient provided (strict mode), and only
+    // when it carries a scheme to request: a protocol-relative `//host/x` has none.
+    if (!httpClient || !isProbeableExternalLink(link)) return {}
     const externalResult = await validateExternalLink(link, httpClient)
     return externalResult.valid ? {} : { warning: `Unreachable external link: ${link}` }
   }
@@ -182,7 +183,8 @@ function extractLinks(content: string): string[] {
   while ((match = linkRegex.exec(stripped)) !== null) {
     const url = match[2]
     if (url) {
-      links.push(url)
+      const destination = linkDestination(url)
+      if (destination) links.push(destination)
     }
   }
 
@@ -190,10 +192,39 @@ function extractLinks(content: string): string[] {
 }
 
 /**
- * Checks if a link is external (http/https) — the only schemes this module can
- * probe. Every other scheme is handled by `hasNonFileUriScheme`.
+ * The DESTINATION of a CommonMark inline link, from everything the extractor
+ * captured between the parentheses.
+ *
+ * Two forms are unwrapped, because both are valid markdown that used to be
+ * stat-ed verbatim and reported broken while the file existed:
+ * - an optional title after the destination — `[a](./b.md "T")`, `'T'`;
+ * - an angle-bracket destination — `[a](<./my file.md>)`, the only way to spell
+ *   a destination containing spaces.
+ *
+ * A parenthesised title (`[a](./b.md (T))`) is NOT handled: the extractor's regex
+ * stops at the first `)`, so the destination never reaches here whole. Out of
+ * scope (pinned by a test) — it needs balanced-paren parsing, i.e. a real parser.
+ */
+function linkDestination(raw: string): string {
+  const withoutTitle = raw.trim().replace(/\s+(?:"[^"]*"|'[^']*')$/, '')
+  const angled = /^<(.*)>$/.exec(withoutTitle)
+  return (angled?.[1] ?? withoutTitle).trim()
+}
+
+/**
+ * Checks if a link is external: `http(s)://…`, or the PROTOCOL-RELATIVE form
+ * `//cdn.example.com/x.png`, which inherits the page's scheme and is a URL, not
+ * a path — `isAbsolute('//…')` is true, so without this it was joined onto the
+ * KB root and reported broken. Only the `http(s)` form is probe-able (a
+ * protocol-relative URL carries no scheme to request); every other scheme is
+ * handled by `hasNonFileUriScheme`.
  */
 function isExternalLink(link: string): boolean {
+  return /^(?:https?:)?\/\//i.test(link)
+}
+
+/** External AND carrying an explicit http(s) scheme, so it can be HEAD-requested. */
+function isProbeableExternalLink(link: string): boolean {
   return /^https?:\/\//i.test(link)
 }
 
