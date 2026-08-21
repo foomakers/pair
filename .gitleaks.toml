@@ -9,4 +9,5 @@ regexes = [
   '''AKIAABCDEFGHIJKLMNOP''', # documented worked example in secret-scanning.md/ADR-015 — a synthetic, illustrative AWS-key-shaped string, not a real credential
   '''usr_abc123def456''', # placeholder userToken example in observability/structured-logging/sensitive-data-protection.md — not a real credential
   '''sess_xyz789uvw012''', # placeholder sessionToken example in the same file — not a real credential
+  '''aBcD1234efGH5678ijKL''', # synthetic token-shaped value in web-cloud-environment.test.ts (credential-shape fixtures) — not a real credential
 ]
