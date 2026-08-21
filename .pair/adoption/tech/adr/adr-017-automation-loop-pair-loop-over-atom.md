@@ -22,12 +22,15 @@ Accepted
 ## Options Considered
 
 ### Option 1: `--steps/--until` on `pair-next`; the atom loops itself
+
 Rejected — breaks pair-next's atomicity (it would hold loop state), and if realized as in-context iteration it burns the context window on many cards.
 
 ### Option 2: the loop as a skill executed in-context (LLM re-reads instructions each turn)
+
 Rejected — an LLM "looping" in one context is fragile, non-deterministic, non-auditable, and accumulates context. Control flow belongs in deterministic orchestration.
 
 ### Option 3 (chosen): the loop is a fan-out workflow composing a generalized batch workflow; pair-next frozen; a thin portable skill fronts it; workflows shipped in the dataset; policy in a dedicated adoption file
+
 See Decision.
 
 ## Decision
@@ -50,6 +53,7 @@ See Decision.
 ## Consequences
 
 ### Benefits
+
 - pair-next stays pure/deterministic; automation is a thin declarative loop over it, with no criteria of its own (D18 preserved).
 - Context-safe by construction (fan-out per card) — scales to many cards without context burn, proven by this project's own delivery.
 - Automation becomes a shippable product feature (pair-loop + generalized implement-batch), not just a dogfood tool.
@@ -57,10 +61,12 @@ See Decision.
 - Auto-advance reuses the existing per-tier quality-model policy.
 
 ### Trade-offs and Limitations
+
 - The dataset now carries Claude-Code-specific artifacts (workflows + the agent-execution-layer they spawn), installed for all tools; non-Claude-Code users receive content they can't run unattended until they follow a docs-configured path or use the degraded skill. Accepted for simplicity; tool-gating is a deferred follow-up.
 - Generalizing implement-batch (#219) depends on shipping the agent-execution-layer (implementer/reviewer agents) as product — a larger surface than the original story.
 - No portable unattended loop: portable tools get one-card-per-invocation, re-triggered externally.
 
 ## Related
+
 - Supersedes the framing of **#250** (loop flags on pair-next) and **#219** (standalone supervisor); both reformulated under this ADR.
 - ADL `2026-07-11-agent-execution-layer` (the workflow/agent substrate). Quality model D10 (per-tier policy). Epic #212 (supervised automation), #204 (pair-next), #254 (checkpoints).
