@@ -422,15 +422,11 @@ describe('AC8 — "Using pair on Claude Code Web" is a real section, not just a 
 
   it('states the load-bearing facts a session-setup guide needs, not just a title', () => {
     const c = read(DOCS_PAGE)
-    const start = c.indexOf('## Using pair on Claude Code Web')
-    const end = c.indexOf('### What still does not work here')
-    // Fail CLOSED, not open: `String#indexOf` returns -1 on a miss, and `slice(start, -1)`
-    // silently WIDENS to nearly the whole file instead of shrinking to nothing — the opposite of
-    // what a missing subsection should do to this guard. `caseBody()` above already guards this
-    // exact `-1` case explicitly; this assertion is what makes that same mistake impossible here.
-    expect(start).toBeGreaterThan(-1)
-    expect(end).toBeGreaterThan(start)
-    const section = c.slice(start, end)
+    const section = sectionBetween(
+      c,
+      '## Using pair on Claude Code Web',
+      '### What still does not work here',
+    )
     expect(section.toLowerCase()).toMatch(/reload/) // the provisioning-stepper workaround
     expect(section).toMatch(/\$story=/) // the $story requirement for write-mode skills
     expect(section).toMatch(/merge-base/) // the branch-collision check
@@ -509,9 +505,24 @@ describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () 
     const taskBlock = c.slice(braceOpen, i + 1)
     const inputsStart = taskBlock.indexOf('"inputs"')
     expect(inputsStart, `task "${taskKey}" has no "inputs" key of its own`).toBeGreaterThan(-1)
+    // These two were the ones round 5's own review found still unguarded in this very function:
+    // with arrStart === -1, `indexOf(']', -1)` restarts from 0 and `slice(-1, small)` returns
+    // '' for BOTH calls — an emptied `inputs: []` (or a value that is not an array at all) then
+    // makes this whole guard compare '' === '', green, while the cache key it exists to protect
+    // is gone. Fail closed on both boundaries, the same as every other read in this function.
     const arrStart = taskBlock.indexOf('[', inputsStart)
+    expect(arrStart, `task "${taskKey}" has no "[" after "inputs"`).toBeGreaterThan(-1)
     const arrEnd = taskBlock.indexOf(']', arrStart)
-    return taskBlock.slice(arrStart, arrEnd + 1)
+    expect(arrEnd, `task "${taskKey}" has no closing "]" for inputs`).toBeGreaterThan(arrStart)
+    const arr = taskBlock.slice(arrStart, arrEnd + 1)
+    // Non-empty AND containing the specific path this guard's own header note (and Minor #1's
+    // fix) argues must be there — otherwise `[]` vs `[]`, or two arrays each missing the SAME
+    // entry, are byte-identical and this test cannot tell that from two correct copies.
+    expect(arr.length, `task "${taskKey}"'s inputs array must not be empty`).toBeGreaterThan(2)
+    expect(arr, `task "${taskKey}" is missing $TURBO_ROOT$/turbo.json`).toContain(
+      '$TURBO_ROOT$/turbo.json',
+    )
+    return arr
   }
 
   it('has byte-identical inputs for #test and #test:coverage', () => {

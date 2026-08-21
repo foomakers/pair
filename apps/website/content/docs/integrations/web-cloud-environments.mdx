@@ -44,8 +44,9 @@ This is a decision, not a defect, on both sides. The environment's side: cloud s
 isolated VMs whose [network access is limited by
 default](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web#security-and-isolation),
 so nothing publishes the port. pair's side: **pair does not tunnel around it** — no reverse proxy,
-no port-sharing service, documented or scripted. A port anyone can reach turns every ad-hoc `pnpm dev` into an unauthenticated public
-deployment of unreviewed code, from a sandbox that holds your repository credentials. That reasoning
+no port-sharing service, documented or scripted. A port anyone can reach turns every ad-hoc
+`pnpm dev` into an unauthenticated public deployment of unreviewed code, from a sandbox that holds
+your repository credentials. That reasoning
 is recorded in [no public dev-server preview from cloud
 sessions](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md),
 which is where a future "can we have a preview URL?" gets answered.
@@ -231,8 +232,8 @@ where it is linked:
   — the pre-installed Chromium's revision does not match what this project's `playwright-core`
   expects, and there is no way to install a matching one in this sandbox.
 - **`node_modules` was missing on first dev-server start** in one run, despite the session's own
-  "Esegui script di configurazione" ("Run setup script") provisioning step reporting complete — `pnpm install` before
-  `pnpm dev` if this happens; not yet confirmed as reproducible every time.
+  "Esegui script di configurazione" ("Run setup script") provisioning step reporting complete —
+  `pnpm install` before `pnpm dev` if this happens; not yet confirmed as reproducible every time.
 
 ## Verifying it yourself
 

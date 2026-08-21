@@ -90,11 +90,17 @@ describe('CP5 sweeps every docs page that exists', () => {
       listed += urls
     }
 
-    // And the totals quoted in the expected result + notes must equal the sum.
-    for (const quoted of [...mt501.matchAll(/All (\d+) URLs return HTTP 200/g)])
-      expect(Number(quoted[1])).toBe(listed)
-    for (const quoted of [...mt501.matchAll(/Total: (\d+) pages/g)])
-      expect(Number(quoted[1])).toBe(listed)
+    // And the totals quoted in the expected result + notes must equal the sum. Each floored at
+    // exactly 1 match — without it, rewording either quoted sentence in CP5 silently retires
+    // this half of the check with no red, the same way the per-section floor above already
+    // guards against rewording a section header out of existence.
+    const httpTotals = [...mt501.matchAll(/All (\d+) URLs return HTTP 200/g)]
+    expect(httpTotals.length, 'expected exactly one "All N URLs return HTTP 200" statement').toBe(1)
+    for (const quoted of httpTotals) expect(Number(quoted[1])).toBe(listed)
+
+    const pageTotals = [...mt501.matchAll(/Total: (\d+) pages/g)]
+    expect(pageTotals.length, 'expected exactly one "Total: N pages" statement').toBe(1)
+    for (const quoted of pageTotals) expect(Number(quoted[1])).toBe(listed)
   })
 })
 
