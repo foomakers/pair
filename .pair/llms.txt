@@ -339,6 +339,7 @@
 - [Skill Conventions — Shared KB References](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/README.md)
 - [`/pair-capability-record-decision` Invocation Contract](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md)
 - [Resolution Cascade](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md)
+- [Story-Local Acceptance-Criterion Markers — Banned](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/story-local-markers.md)
 - [Template Resolution](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)
 - [To-Issues Triage (Extend vs Create)](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)
 - [Way-of-Working / PM-Tool + Code-Host Resolution](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)
