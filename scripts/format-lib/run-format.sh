@@ -67,6 +67,12 @@ rm -f "$_rf_list"
 
 case "$_rf_xargs_status" in
   0) exit 0 ;;
-  123) exit 1 ;;
+  # GNU xargs (Linux — CI, Claude Code Web) collapses any 1-125 child exit into its
+  # OWN 123. BSD xargs (macOS's system xargs) does not: it propagates the child's
+  # exit status directly, so a wrapper that exits 1 on violations found makes BSD
+  # xargs itself exit 1, not 123. Accepting both keeps "violations found" correct
+  # on both platforms without touching the broken/empty-set branch above, which
+  # already returns before xargs ever runs.
+  1 | 123) exit 1 ;;
   *) exit 2 ;;
 esac

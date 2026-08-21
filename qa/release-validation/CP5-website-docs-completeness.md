@@ -17,9 +17,11 @@
 1. For each URL below, issue an HTTP request and check status code
 
 **Docs Root** (1 page):
+
 - `$BASE_URL/docs`
 
 **Getting Started** (7 pages):
+
 - `$BASE_URL/docs/getting-started`
 - `$BASE_URL/docs/getting-started/quickstart`
 - `$BASE_URL/docs/getting-started/quickstart-solo`
@@ -29,6 +31,7 @@
 - `$BASE_URL/docs/getting-started/checklist`
 
 **Concepts** (12 pages):
+
 - `$BASE_URL/docs/concepts`
 - `$BASE_URL/docs/concepts/ai-assisted-sdlc`
 - `$BASE_URL/docs/concepts/knowledge-base`
@@ -43,6 +46,7 @@
 - `$BASE_URL/docs/concepts/tag-driven-gates`
 
 **Process Lifecycle** (5 pages):
+
 - `$BASE_URL/docs/developer-journey`
 - `$BASE_URL/docs/developer-journey/induction`
 - `$BASE_URL/docs/developer-journey/strategic-planning`
@@ -50,6 +54,7 @@
 - `$BASE_URL/docs/developer-journey/execution`
 
 **Customization** (7 pages):
+
 - `$BASE_URL/docs/customization`
 - `$BASE_URL/docs/customization/adopt`
 - `$BASE_URL/docs/customization/install-from-url`
@@ -59,6 +64,7 @@
 - `$BASE_URL/docs/customization/external-kb`
 
 **Integrations** (7 pages):
+
 - `$BASE_URL/docs/integrations`
 - `$BASE_URL/docs/integrations/claude-code`
 - `$BASE_URL/docs/integrations/cursor`
@@ -68,6 +74,7 @@
 - `$BASE_URL/docs/integrations/web-cloud-environments`
 
 **PM Tools** (5 pages):
+
 - `$BASE_URL/docs/pm-tools`
 - `$BASE_URL/docs/pm-tools/github-projects`
 - `$BASE_URL/docs/pm-tools/filesystem`
@@ -75,6 +82,7 @@
 - `$BASE_URL/docs/pm-tools/azure-devops`
 
 **Reference** (17 pages):
+
 - `$BASE_URL/docs/reference`
 - `$BASE_URL/docs/reference/cli/commands`
 - `$BASE_URL/docs/reference/cli/examples`
@@ -94,15 +102,18 @@
 - `$BASE_URL/docs/reference/pair-next`
 
 **Migrations** (2 pages):
+
 - `$BASE_URL/docs/migrations`
 - `$BASE_URL/docs/migrations/v0.4-to-v0.5`
 
 **Support** (3 pages):
+
 - `$BASE_URL/docs/support`
 - `$BASE_URL/docs/support/general-faq`
 - `$BASE_URL/docs/support/troubleshooting`
 
 **Tutorials** (7 pages):
+
 - `$BASE_URL/docs/tutorials`
 - `$BASE_URL/docs/tutorials/first-project`
 - `$BASE_URL/docs/tutorials/existing-project`
@@ -112,6 +123,7 @@
 - `$BASE_URL/docs/tutorials/release-testing`
 
 **Contributing** (7 pages):
+
 - `$BASE_URL/docs/contributing`
 - `$BASE_URL/docs/contributing/development-setup`
 - `$BASE_URL/docs/contributing/architecture`

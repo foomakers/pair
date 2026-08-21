@@ -48,7 +48,10 @@ describe('CP5 sweeps every docs page that exists', () => {
     const mt501 = c.slice(c.indexOf('## MT-CP501'), c.indexOf('## MT-CP502'))
 
     // Per-section: `**Integrations** (7 pages):` must match the bullets under it.
-    const sections = [...mt501.matchAll(/\*\*(.+?)\*\* \((\d+) pages?\):\n((?:- `.+`\n)+)/g)]
+    // A blank line between the header and its list is `\n\n?`, not `\n`: markdownlint's MD032
+    // (blanks-around-lists) requires one, and `pnpm format` inserts it — the regex must accept
+    // the formatter's own output, not assume the un-formatted shape that predates this fix.
+    const sections = [...mt501.matchAll(/\*\*(.+?)\*\* \((\d+) pages?\):\n\n?((?:- `.+`\n)+)/g)]
     expect(sections.length).toBeGreaterThan(0)
     let listed = 0
     for (const [, name, declared, bullets] of sections) {
