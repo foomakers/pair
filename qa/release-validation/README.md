@@ -4,7 +4,14 @@ Post-release manual tests that validate the pair website, CLI artifacts, and pub
 
 ## Prerequisites
 
-No special auth scopes needed — the package is public on npmjs.org.
+No special auth scopes needed for CP1–CP9 — the package is public on npmjs.org.
+
+**CP10 is the exception**: it exercises pair from a cloud/web coding environment, so it requires a
+Claude Code Web session with this repository open and a working GitHub access path **inside that
+session** — `gh` authenticated, or a GitHub MCP tool (Claude Code Web does not ship `gh` at all) —
+since it opens a real pull request. Its preconditions are written as verifiable checks — see
+[CP10-web-cloud-environment.md](CP10-web-cloud-environment.md) — and no credential is ever
+recorded in the suite or in a report.
 
 ## Variables
 
@@ -32,6 +39,7 @@ Execute in order. P0 blocks release sign-off.
 | CP7 | [CP7-registry-publish.md](CP7-registry-publish.md) | P0 | npmjs.org visibility, install from public registry |
 | CP8 | [CP8-packaging.md](CP8-packaging.md) | P1 | `pair package` with source/target layouts, metadata, validation |
 | CP9 | [CP9-quickstart-onboarding.md](CP9-quickstart-onboarding.md) | P1 | Timed quickstart onboarding: bootstrap `$mode: quick` under 10 min, guided regression |
+| CP10 | [CP10-web-cloud-environment.md](CP10-web-cloud-environment.md) | P1 | pair from Claude Code Web: skills executable, story end-to-end to a PR, dev-server limit as expected result. **Manual, run inside the web session** |
 
 ## Execution by AI Assistant
 
@@ -73,7 +81,7 @@ This suite is designed to be executed by an AI coding assistant (Claude Code, Cu
 
 ```text
 1. Resolve $VERSION, $BASE_URL, $RELEASE_URL, create $WORKDIR
-2. Execute CP1 → CP2 → CP3 → ... → CP7
+2. Execute CP1 → CP2 → CP3 → ... → CP9 (CP10 is executed separately, from inside a Claude Code Web session — a local run cannot observe it)
 3. For each test: record PASS/FAIL/SKIP with evidence
 4. Generate report using manual-test-report-template.md
 5. Save to .tmp/manual-test-reports/release-validation-$VERSION-$(date +%Y-%m-%d).md
@@ -96,5 +104,6 @@ Consult before each release. If any condition is true, update the corresponding 
 - [ ] npmjs.org publish config changed → update CP7
 - [ ] Landing page sections changed → update CP1
 - [ ] Bootstrap resolution depths or their defaults changed → update CP9
+- [ ] Web/cloud environment capabilities changed (skill discovery, `gh`/MCP availability, dev-server exposure) → update CP10
 
 When updating, increment the test count in this README and add a changelog entry at the bottom of the affected CP file.

@@ -24,9 +24,78 @@
       "dependsOn": ["build"],
       "outputs": []
     },
+    // @pair/knowledge-hub's conformance suite asserts on REPO-WIDE artifacts that live OUTSIDE its
+    // own package: the KB under .pair/, the installed skills under .claude/, the docs content, and
+    // the release-validation paths under qa/. The default cache key ($TURBO_DEFAULT$ = the
+    // package's own files + globalDependencies) sees none of them, so the guards replayed a stale
+    // PASS. MEASURED before this entry: adding apps/website/content/docs/reference/zz-cache-probe.mdx
+    // and running `turbo run test --filter @pair/knowledge-hub` printed `3 successful, 3 cached
+    // >>> FULL TURBO`, while the same suite run through vitest directly printed `1 failed | 1
+    // passed` on the CP5-vs-filesystem assertion. CI was never affected (no remote cache, no .turbo
+    // restore in ci.yml — every CI run is cold), so this closed a LOCAL false green, not a
+    // merge-gate hole. $TURBO_ROOT$ (turbo >= 2.1) is what makes these paths expressible without
+    // hardcoding a ../../ depth — the objection that ruled the same treatment out for the formatter
+    // tasks in the note above.
+    "@pair/knowledge-hub#test": {
+      "dependsOn": ["build"],
+      "outputs": [],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.claude/**",
+        "$TURBO_ROOT$/.claude-plugin/marketplace.json",
+        "$TURBO_ROOT$/.pair/**",
+        "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/apps/website/content/docs/**",
+        "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
+        "$TURBO_ROOT$/qa/**",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/turbo.json"
+      ]
+    },
     "test:coverage": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"]
+    },
+    // Same repo-wide-artifact reasoning as "@pair/knowledge-hub#test" above, run through the
+    // coverage variant instead of the plain one. `inputs` is intentionally identical to that
+    // block's — JSON/turbo.json has no anchor or extends mechanism to de-duplicate it — so if you
+    // change one list, change the other the same way, or this task silently falls back to a stale
+    // local cache that the plain "test" task above has already stopped serving.
+    "@pair/knowledge-hub#test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.claude/**",
+        "$TURBO_ROOT$/.claude-plugin/marketplace.json",
+        "$TURBO_ROOT$/.pair/**",
+        "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/apps/website/content/docs/**",
+        "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
+        "$TURBO_ROOT$/qa/**",
+        "$TURBO_ROOT$/.github/workflows/**",
+        "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/turbo.json"
+      ]
+    },
+    // packages/dev-tools/src/quality-gates/run-format.test.ts exercises
+    // scripts/format-lib/run-format.sh directly (execFileSync against the real script), which
+    // lives OUTSIDE this package. MEASURED: `turbo run test --filter @pair/dev-tools --dry=json`
+    // hashes 17 inputs, all under packages/dev-tools — scripts/format-lib/** is not among them,
+    // and globalDependencies does not cover it either. A revert of run-format.sh's exit-code
+    // logic would therefore replay a cached PASS on this test locally — the identical
+    // local-false-green class this same PR's knowledge-hub#test entry above exists to close,
+    // for the one test file in this PR that most needs to actually run.
+    "@pair/dev-tools#test": {
+      "dependsOn": ["build"],
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
+    },
+    "@pair/dev-tools#test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
     },
     "ts:check": {
       "dependsOn": ["^build"],

@@ -1,0 +1,256 @@
+---
+title: Web and Cloud Environments
+description: Running pair from Claude Code Web and similar cloud coding environments — what works, what does not, and the workaround for the one thing that does not.
+---
+
+pair is a knowledge base plus a skill catalog in your repository. Nothing about it is tied to a
+laptop, so a cloud coding environment that clones the repo — [Claude Code on the
+web](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web) is the one this page
+describes — reads the same `.pair/` files and runs the same skills your local session does.
+
+One thing is genuinely different, and it is a deliberate exclusion rather than a gap: **there is no
+live preview of a dev server**. This page states both halves honestly, so you can decide what to
+run where.
+
+## What works
+
+The table below started life as an internal feasibility assessment — an educated guess, not an
+observed run. It is now **verified, not assessed**: `qa/release-validation/CP10-web-cloud-environment.md`
+has been executed end to end from inside a real Claude Code Web session — story
+[#414](https://github.com/foomakers/pair/issues/414) went from `Ready` to merged pull request
+[#454](https://github.com/foomakers/pair/pull/454) without a local terminal, and every row here was
+observed, not predicted. See [Using pair on Claude Code Web](#using-pair-on-claude-code-web) for what that run found
+about actually getting a session working, and its [Execution
+Log](https://github.com/foomakers/pair/blob/main/qa/release-validation/CP10-web-cloud-environment.md#execution-log)
+for the full evidence.
+
+| Capability                | Status | Notes                                                                                             |
+| ------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| Skill discovery           | Works  | Skills are read from `.claude/skills/` in the repository — the same directory `pair-cli install` writes |
+| Skill execution           | Works  | Including skills that **write files** (adoption files, decision records, checkpoints)              |
+| Reading the knowledge base | Works  | `.pair/knowledge/` and `.pair/adoption/` are ordinary repository files                              |
+| Git: branch and commit    | Works  | The environment carries its own git identity                                                       |
+| Pull requests             | Works  | Via the environment's GitHub access path — a GitHub MCP tool on Claude Code Web (`gh` is not installed there) — a full story can go from `Ready` to an open pull request without a local terminal |
+| Running tests and builds  | Works, with one exception | The usual `pnpm` scripts run in the session — except the website's own Playwright test target, which cannot run in this sandbox; see [Using pair on Claude Code Web](#using-pair-on-claude-code-web) |
+| Dev server, inside the session | Works | The server binds and is reachable **from within** the session                                    |
+| Dev server, live preview from outside | **Not available** | Excluded by design — see below                                              |
+
+## What does not work: a live dev-server preview
+
+A dev server started in the session is **not exposed on the public internet**, so you cannot open
+it from your own browser and click through the running app.
+
+This is a decision, not a defect, on both sides. The environment's side: cloud sessions run in
+isolated VMs whose [network access is limited by
+default](https://docs.claude.com/en/docs/claude-code/claude-code-on-the-web#security-and-isolation),
+so nothing publishes the port. pair's side: **pair does not tunnel around it** — no reverse proxy,
+no port-sharing service, documented or scripted. A port anyone can reach turns every ad-hoc
+`pnpm dev` into an unauthenticated public deployment of unreviewed code, from a sandbox that holds
+your repository credentials. That reasoning
+is recorded in [no public dev-server preview from cloud
+sessions](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md),
+which is where a future "can we have a preview URL?" gets answered.
+
+<Callout type="warn">
+  Do not plan work that depends on a human eyeballing a running UI from a cloud session. Visual
+  review of a running app is a local-session job, or a job for a deployed preview environment your
+  own pipeline builds — not something the coding environment will hand you.
+</Callout>
+
+## The workaround: drive the app headlessly
+
+The dev server is reachable **inside** the session, so a headless browser inside the session can
+reach it too. Playwright does not need to already be a project dependency — `npx` fetches it on
+demand — so a screenshot of a real rendered page is a one-liner, run against **your own** dev
+server and port:
+
+```bash
+# terminal 1 — inside the cloud session, using YOUR project's own dev command
+npm run dev   # or `pnpm dev` / `yarn dev` — whatever starts your app
+
+# terminal 2 — inside the same session; replace the URL with your app's own
+npx playwright screenshot http://localhost:3000 /tmp/preview.png
+```
+
+(This project's own dev server happens to be `pnpm --filter @pair/website dev`, since pair's
+website lives in a monorepo workspace — that command is specific to **this** repository, not a
+Claude Code Web requirement. Substitute whatever starts your project.)
+
+You get a PNG at `/tmp/preview.png` — outside the repository, so a stray binary never lands in
+your next commit — instead of an interactive preview: enough to confirm a layout
+renders, a component mounted, or a regression is visible — not enough to click around.
+
+<Callout type="warn">
+  **Do not run `playwright install chromium` if the command above fails.** Verified in Claude Code
+  Web (2026-08-20): the browser-download CDN is not on that environment's network allowlist, so
+  `playwright install` fails outright with a `403` — and it is unnecessary anyway, since the
+  environment ships Chromium **pre-installed**, with `PLAYWRIGHT_BROWSERS_PATH` already pointing at
+  it. If the CLI command instead fails on a **browser-revision mismatch** — and the plain `npx`
+  form above is, if anything, *more* exposed to this than a pinned project dependency: `npx`
+  fetches the latest Playwright, which typically expects a newer bundled browser revision than
+  whatever the sandbox happens to have pre-installed — the fallback below is a launch-the-binary
+  workaround, but it needs `playwright` or `@playwright/test` **resolvable as a project
+  dependency** (`require()` cannot resolve either from a bare `npx` invocation with no local
+  install). If your project has neither and hits this mismatch, the fallback script below does
+  not help either — the honest state is "no visual verification here", per the Callout after it.
+
+  ```bash
+  node -e "
+  const { chromium } = require('@playwright/test');
+  (async () => {
+    const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH + '/chromium' });
+    const page = await browser.newPage();
+    await page.goto('http://localhost:3000/docs');
+    await page.screenshot({ path: '/tmp/preview.png' });
+    await browser.close();
+  })();
+  "
+  ```
+</Callout>
+
+<Callout type="info">
+  **Check this in your own environment before you rely on it.** Whether a headless browser is
+  installable and runnable depends on the sandbox you are in, and a workaround that only works on a
+  dev machine is not a workaround for a cloud session. Run the commands above once; if no screenshot
+  is produced by either the CLI or the fallback script, the honest state for that environment is "no
+  visual verification at all", and you should plan around it rather than around this page.
+</Callout>
+
+For the full end-to-end browser suite (rather than a single screenshot), the same reasoning
+applies: it runs against `localhost` inside the session, so it works wherever the browsers install.
+
+## Prerequisites
+
+The environment supplies its own credentials — you do not paste any into the repository, and pair
+never asks you to. What is worth checking, once, at the start of a session:
+
+| Check                                  | Confirms                                     |
+| -------------------------------------- | -------------------------------------------- |
+| `git config user.email`                | The session can author commits               |
+| A working GitHub access path            | The session can open pull requests — see below |
+| The session's MCP server list          | Which integrations are available             |
+
+<Callout type="warn">
+  **A working GitHub access path is `gh auth status` exiting 0, *or* a GitHub MCP tool being
+  present and named — check both, not just the first.** Verified: Claude Code Web does not ship the
+  `gh` CLI at all (`gh: command not found`, not an auth failure), and routes GitHub access
+  exclusively through `mcp__github__*` MCP tools instead. Treating a missing `gh` binary alone as a
+  failed precondition is itself the bug — confirm the MCP path before concluding access is absent.
+</Callout>
+
+<Callout type="warn">
+  **Never commit a token.** These are checks that authentication is *present*; none of them
+  involves writing a credential into a file. If a skill appears to need one, that is a bug worth
+  reporting, not a reason to paste a secret into the repo.
+</Callout>
+
+If neither `gh` nor a GitHub MCP tool works, everything up to the commit still works and the
+pull-request step does not — stop there and finish it from an environment that is authenticated,
+rather than improvising. If MCP servers are unavailable, skills that reach a project-management
+tool or the code host through MCP degrade accordingly; the rest are unaffected.
+
+## Using pair on Claude Code Web
+
+This is what actually getting a session to a working state looks like, grounded in a real run
+(2026-08-20/21) rather than in what the interface implies.
+
+**Nothing starts until you send a message.** Creating the session does not begin provisioning —
+the container, the clone and the setup script all run only once you send the first prompt. There is
+no "wait for it to finish, then type" order; the prompt is what starts the clock.
+
+<Callout type="warn">
+  **If the provisioning stepper is stuck on its first step, reload the browser tab — do not wait,
+  and you do not need the desktop app.** Verified across four independent attempts, varying network
+  trust, prompt content and client: the container can be fully provisioned and ready while the
+  **browser tab's own status display** stays stuck on step one indefinitely, with no error. A plain
+  reload of the same tab picks up the real state every time. Opening the session in the desktop app
+  also works, but it is not necessary — reload first. Only treat it as genuinely `BLOCKED` if a
+  reload still shows no progress.
+</Callout>
+
+The network-trust setting itself was not what was being tested: every attempt used the
+**"Attendibili"** (trusted) level, and it was ruled out only as a *cause of the stuck stepper* —
+varying it made no difference there. Whether a less-trusted network setting would also unblock the
+`playwright install` `403` from [the CDN allowlist](#the-workaround-drive-the-app-headlessly) was
+not tested; do not assume raising trust fixes that specific limitation.
+
+**The session may not start from a clean `main`.** If the cloud environment is configured against a
+particular branch (this project's own `pair` environment, for instance, tracks whichever branch was
+last used to open it), a fresh session starts *there*, not from `origin/main`. Before carrying a
+story end-to-end (see below), check:
+
+```bash
+git merge-base HEAD origin/main
+git log --oneline -1 origin/main
+```
+
+If the two commits differ, the current branch carries history unrelated to the story you are about
+to implement — branch fresh off `origin/main` first, or that story's pull request will bundle in
+commits that have nothing to do with it.
+
+**A story-scoped skill needs `$story` passed explicitly.** A session's auto-generated branch name
+(`claude/adjective-noun-hash`, not `feature/#<id>-*`) does not resolve to any story on its own. A
+skill like `/pair-capability-checkpoint` correctly refuses to guess:
+
+```
+/pair-capability-checkpoint $mode=write $story=414
+```
+
+rather than
+
+```
+/pair-capability-checkpoint $mode=write
+```
+
+which halts with "Cannot detect story context" instead of writing anything — by design, not a bug,
+but easy to hit if you assume the session's branch carries a story like a local `feature/` branch
+would.
+
+**The full local `quality-gate` may fail on one step that CI does not.** `pnpm --filter @pair/website
+test`'s Playwright component-test target needs a browser revision this sandbox's pre-installed
+Chromium does not have, and `playwright install` cannot download one — the same limitation described
+above under [the workaround](#the-workaround-drive-the-app-headlessly). A pre-push hook that runs the
+full gate will block on this even when every other check (lint, types, build, unit tests, format,
+smoke) is green. If you hit this and every other check is confirmed green, bypassing the hook for
+*this specific, understood reason* is defensible — GitHub Actions CI, unlike this sandbox, has real
+network access and will exercise Playwright for real; state the reason explicitly rather than
+silently skipping the hook.
+
+### What still does not work here
+
+Everything below was observed directly in this run, not inferred — each is covered in more detail
+where it is linked:
+
+- **No live preview of the dev server**, by design — see [What does not
+  work](#what-does-not-work-a-live-dev-server-preview).
+- **`gh` is not installed at all.** GitHub access is exclusively through a GitHub MCP tool — see
+  [Prerequisites](#prerequisites).
+- **`playwright install` fails with a `403`** — the browser-download CDN is not on this sandbox's
+  network allowlist, and it is not needed anyway (Chromium ships pre-installed) — see [the
+  workaround](#the-workaround-drive-the-app-headlessly).
+- **The website's own Playwright test target cannot run here** (`pnpm --filter @pair/website test`)
+  — the pre-installed Chromium's revision does not match what this project's `playwright-core`
+  expects, and there is no way to install a matching one in this sandbox.
+- **`node_modules` was missing on first dev-server start** in one run, despite the session's own
+  "Esegui script di configurazione" ("Run setup script") provisioning step reporting complete —
+  `pnpm install` before `pnpm dev` if this happens; not yet confirmed as reproducible every time.
+
+## Verifying it yourself
+
+None of the above is a permanent guarantee: cloud environments change under you. pair keeps the
+claim honest with a critical path in the release-validation suite,
+`qa/release-validation/CP10-web-cloud-environment.md`, executed from **inside** a web session — a
+local run cannot observe a web environment. Its [Execution
+Log](https://github.com/foomakers/pair/blob/main/qa/release-validation/CP10-web-cloud-environment.md#execution-log)
+carries the real run this page is grounded in: story [#414](https://github.com/foomakers/pair/issues/414)
+carried end to end to pull request [#454](https://github.com/foomakers/pair/pull/454), reviewed
+twice independently, and merged — plus every defect that run found and fixed along the way.
+
+Re-run it at each release. If what it observes and what this page says diverge, the observation
+wins.
+
+## Related
+
+- [Claude Code](/docs/integrations/claude-code) — installing and configuring pair for Claude Code
+- [Agent Integration](/docs/concepts/agent-integration) — how the bridge pattern reaches every tool
+- [Skills](/docs/concepts/skills) — what skills are and how they are discovered

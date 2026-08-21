@@ -1,4 +1,11 @@
 {
   "title": "Integrations",
-  "pages": ["claude-code", "codex", "cursor", "github-copilot", "windsurf"]
+  "pages": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "github-copilot",
+    "web-cloud-environments",
+    "windsurf"
+  ]
 }
