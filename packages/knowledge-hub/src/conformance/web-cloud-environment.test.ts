@@ -92,6 +92,20 @@ const caseBody = (id: string): string => {
   return nextHeading === -1 ? rest : rest.slice(0, nextHeading + 1)
 }
 
+// Same scoping idea as `caseBody`, applied to the e2e file: a whole-file `String#includes`
+// degrades silently the moment a THIRD mention of a URL appears anywhere in the file (a
+// comment, an unrelated array) — the count stays >= 2 even after the URL is deleted from one
+// of the two sweeps it actually needs to be in. Scoping to each test's own source text is what
+// makes a real regression (dropped from one sweep) fail red instead of reading as "still covered".
+const e2eTestBody = (name: string): string => {
+  const c = read(E2E)
+  const start = c.indexOf(`test('${name}'`)
+  if (start === -1) return ''
+  const rest = c.slice(start)
+  const nextTest = rest.slice(1).search(/^test\(/m)
+  return nextTest === -1 ? rest : rest.slice(0, nextTest + 1)
+}
+
 // Credential shapes that must never appear in a checked-in test artifact: GitHub tokens
 // (every documented prefix), Anthropic keys, and an assignment that puts a VALUE on a
 // token-named variable. `gh auth status` and `$GITHUB_TOKEN` are checks, not secrets, so a
@@ -371,8 +385,12 @@ describe('the new page is swept by the existing coverage, not left unwatched', (
   })
 
   it('is covered by the website e2e page sweeps', () => {
-    const c = read(E2E)
-    // Both lists: the integrations smoke sweep and the prev/next integrity sweep.
-    expect(c.split(DOCS_URL).length - 1).toBeGreaterThanOrEqual(2)
+    // Membership in each of the two sweeps that actually matter, not a whole-file occurrence
+    // count — a page can vanish from one sweep while a stray comment mention keeps the count
+    // green.
+    const smoke = e2eTestBody('smoke: all integrations + pm-tools pages return 200')
+    const circular = e2eTestBody('no circular prev/next footer links on any docs page')
+    expect(smoke, 'missing from the integrations+pm-tools smoke sweep').toContain(DOCS_URL)
+    expect(circular, 'missing from the circular-nav allPages sweep').toContain(DOCS_URL)
   })
 })

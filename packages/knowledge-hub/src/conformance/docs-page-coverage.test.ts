@@ -30,7 +30,15 @@ const DOCS_CONTENT = join(ROOT, 'apps/website/content/docs')
 
 const read = (p: string): string => readFileSync(p, 'utf-8')
 
-/** Every routable docs URL, derived from the filesystem: `index.mdx` maps to its directory. */
+/**
+ * Every routable docs URL, derived from the filesystem: `index.mdx` maps to its directory.
+ *
+ * Treats EVERY `.mdx` under `content/docs` as routable — `apps/website/lib/source.ts`'s
+ * `loader()` call has no exclude/filter option configured, so that is the real current behavior,
+ * not an assumption. If a non-page convention (a shared include, a leading-underscore file) is
+ * ever adopted, it must be excluded from BOTH the loader config and this function, or this guard
+ * starts asserting CP5 lists a URL that never resolves.
+ */
 const docsUrlsOnDisk = (): string[] =>
   readdirSync(DOCS_CONTENT, { recursive: true, encoding: 'utf-8' })
     .filter(f => f.endsWith('.mdx'))

@@ -59,16 +59,21 @@ which is where a future "can we have a preview URL?" gets answered.
 ## The workaround: drive the app headlessly
 
 The dev server is reachable **inside** the session, so a headless browser inside the session can
-reach it too. Playwright is already in pair's stack, so a screenshot of a real rendered page is a
-one-liner:
+reach it too. Playwright does not need to already be a project dependency — `npx` fetches it on
+demand — so a screenshot of a real rendered page is a one-liner, run against **your own** dev
+server and port:
 
 ```bash
-# terminal 1 — inside the cloud session
-pnpm --filter @pair/website dev
+# terminal 1 — inside the cloud session, using YOUR project's own dev command
+npm run dev   # or `pnpm dev` / `yarn dev` — whatever starts your app
 
-# terminal 2 — inside the same session
-pnpm --filter @pair/website exec playwright screenshot http://localhost:3000/docs /tmp/preview.png
+# terminal 2 — inside the same session; replace the URL with your app's own
+npx playwright screenshot http://localhost:3000 /tmp/preview.png
 ```
+
+(This project's own dev server happens to be `pnpm --filter @pair/website dev`, since pair's
+website lives in a monorepo workspace — that command is specific to **this** repository, not a
+Claude Code Web requirement. Substitute whatever starts your project.)
 
 You get a PNG at `/tmp/preview.png` — outside the repository, so a stray binary never lands in
 your next commit — instead of an interactive preview: enough to confirm a layout
@@ -79,9 +84,11 @@ renders, a component mounted, or a regression is visible — not enough to click
   Web (2026-08-20): the browser-download CDN is not on that environment's network allowlist, so
   `playwright install` fails outright with a `403` — and it is unnecessary anyway, since the
   environment ships Chromium **pre-installed**, with `PLAYWRIGHT_BROWSERS_PATH` already pointing at
-  it. If the CLI command instead fails on a **browser-revision mismatch** (the project's
-  `playwright-core` expects a newer revision than the one pre-installed), launch the pre-installed
-  binary directly instead:
+  it. If the CLI command instead fails on a **browser-revision mismatch** (a project that already
+  has Playwright as a dependency can expect a newer revision than the one pre-installed), launch
+  the pre-installed binary directly instead — this fallback needs `playwright` or `@playwright/test`
+  resolvable as a project dependency, so it applies when Playwright is already part of your stack,
+  not to the plain `npx` form above:
 
   ```bash
   node -e "
