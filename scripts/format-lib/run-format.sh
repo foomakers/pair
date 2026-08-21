@@ -20,12 +20,16 @@
 # Web) maps every 1-125 child exit to its OWN 123. BSD xargs (macOS's system
 # xargs) does NOT propagate the child's exit code — verified empirically, a
 # child exiting 1 and a child exiting 2 both make BSD xargs itself exit 1. So
-# `123` (GNU) and `1` (BSD) both need to map to our `1`, and on macOS that
-# mapping is imprecise: a wrapper that dies with its own "broken" exit (e.g.
-# prettier's exit 2 on a parse error) is indistinguishable, through BSD xargs,
-# from "violations found", and gets reported as our 1 rather than our 2. The
-# derivation's own exit code (0/2, captured BEFORE xargs ever runs) is not
-# affected by this — only a genuinely broken *formatter invocation* is.
+# `123` (GNU) and `1` (BSD) both need to map to our `1`, and on BOTH platforms
+# that mapping is imprecise, not just on macOS: on macOS, a wrapper that dies
+# with its own "broken" exit (e.g. prettier's exit 2 on a parse error) is
+# indistinguishable, through BSD xargs, from "violations found"; on GNU xargs,
+# its OWN documented exit `1` ("some other error occurred" — distinct from the
+# `123` child-violation case) collapses into the same `1 | 123)` arm below, so
+# a genuine xargs-level failure on Linux/CI is also read as "violations found"
+# rather than "broken". The derivation's own exit code (0/2, captured BEFORE
+# xargs ever runs) is not affected by either case — only a failure that
+# reaches xargs itself is.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -74,12 +78,14 @@ rm -f "$_rf_list"
 case "$_rf_xargs_status" in
   0) exit 0 ;;
   # GNU xargs (Linux — CI, Claude Code Web) collapses any 1-125 child exit into its
-  # OWN 123. BSD xargs (macOS's system xargs) returns 1 for ANY child failure — it
-  # does not propagate the child's real exit code. Accepting both keeps
-  # "violations found" (our 1) correct on both platforms; the known imprecision
-  # this leaves on macOS (a wrapper's own "broken" exit also reads as our 1, not
-  # our 2) is documented in the header above. The derivation's broken/empty-set
-  # branch above returns before xargs ever runs, so it is unaffected either way.
+  # OWN 123, but also returns its OWN 1 on an xargs-level "some other error" unrelated
+  # to the child. BSD xargs (macOS's system xargs) returns 1 for ANY child failure — it
+  # does not propagate the child's real exit code. Accepting both keeps "violations
+  # found" (our 1) correct for the common case on both platforms; the known imprecision
+  # this leaves on EACH platform (macOS: a wrapper's own "broken" exit also reads as our
+  # 1; GNU: xargs's own internal-error 1 also reads as our 1) is documented in the
+  # header above. The derivation's broken/empty-set branch above returns before xargs
+  # ever runs, so it is unaffected either way.
   1 | 123) exit 1 ;;
   *) exit 2 ;;
 esac

@@ -62,6 +62,7 @@ const read = (p: string): string => readFileSync(p, 'utf-8')
  */
 const ADL_SLUG = '2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md'
 const ADL_LINK = `../../.pair/adoption/decision-log/${ADL_SLUG}`
+const ADL_PATH = join(ROOT, '.pair/adoption/decision-log', ADL_SLUG)
 
 /**
  * Every case CP10 must carry. Asserting the LIST (not a count) is what makes the deletion of a
@@ -244,6 +245,14 @@ describe('CP10 — the web/cloud verification is a re-runnable critical path', (
     expect(c.toLowerCase()).toMatch(/live preview/)
   })
 
+  it('the ADL both artifacts link to actually exists on disk, not just as link text', () => {
+    // Both assertions above only check that ADL_LINK/ADL_SLUG appear as TEXT in the artifacts —
+    // neither proves the file resolves. A rename or move of the ADL would leave both a dead
+    // link on the public docs page and a dead citation in CP10 while every text-match assertion
+    // stayed green — the exact decay class this file exists to close for R9.4/D16.
+    expect(existsSync(ADL_PATH)).toBe(true)
+  })
+
   it('asks MT-CP1004 to VERIFY the mitigation in that environment, not assume it', () => {
     const c = caseBody('MT-CP1004').toLowerCase()
     expect(c).toMatch(/playwright/)
@@ -379,6 +388,43 @@ describe('the docs page tells the reader what holds on web/cloud and what does n
   })
 })
 
+/** Slugifies a heading the same way fumadocs/GitHub do, to check in-page anchor links resolve. */
+const slugify = (heading: string): string =>
+  heading
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+
+describe('AC8 — "Using pair on Claude Code Web" is a real section, not just a heading', () => {
+  // Deleting this whole section left every other assertion in this file green before this
+  // describe block existed — the exact "the assertions are the deliverable's only defense"
+  // principle this file states in its own header comment, applied to the one AC that had no
+  // guard of its own.
+  it('carries the exact section title AC8 requires', () => {
+    expect(read(DOCS_PAGE)).toMatch(/^## Using pair on Claude Code Web$/m)
+  })
+
+  it('states the load-bearing facts a session-setup guide needs, not just a title', () => {
+    const c = read(DOCS_PAGE)
+    const section = c.slice(
+      c.indexOf('## Using pair on Claude Code Web'),
+      c.indexOf('### What still does not work here'),
+    )
+    expect(section.toLowerCase()).toMatch(/reload/) // the provisioning-stepper workaround
+    expect(section).toMatch(/\$story=/) // the $story requirement for write-mode skills
+    expect(section).toMatch(/merge-base/) // the branch-collision check
+  })
+
+  it('every in-page anchor link resolves to a real heading', () => {
+    const c = read(DOCS_PAGE)
+    const headings = [...c.matchAll(/^#{2,3} (.+)$/gm)].map(m => slugify(m[1]))
+    const anchors = [...c.matchAll(/\]\(#([a-z0-9-]+)\)/g)].map(m => m[1])
+    expect(anchors.length).toBeGreaterThan(0)
+    for (const a of anchors) expect(headings, `#${a} has no matching heading`).toContain(a)
+  })
+})
+
 describe('the new page is swept by the existing coverage, not left unwatched', () => {
   it('is listed in CP5 (docs completeness)', () => {
     expect(read(CP5)).toContain(DOCS_URL)
@@ -392,5 +438,30 @@ describe('the new page is swept by the existing coverage, not left unwatched', (
     const circular = e2eTestBody('no circular prev/next footer links on any docs page')
     expect(smoke, 'missing from the integrations+pm-tools smoke sweep').toContain(DOCS_URL)
     expect(circular, 'missing from the circular-nav allPages sweep').toContain(DOCS_URL)
+  })
+})
+
+describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () => {
+  // turbo.json has no anchor/extends mechanism, so this story's own fix for the repo-wide-read
+  // false-green (this file's own header note) left @pair/knowledge-hub#test and #test:coverage
+  // with byte-identical `inputs` arrays, kept equal only by a comment asking humans to edit both.
+  // That is exactly the hand-maintained-invariant class this same story's CP5 ADL argues should
+  // be a test, applied here to the fix this story shipped for a different repo-wide read.
+  const TURBO = join(ROOT, 'turbo.json')
+
+  const inputsArrayFor = (taskKey: string): string => {
+    const c = read(TURBO)
+    const keyStart = c.indexOf(`"${taskKey}"`)
+    expect(keyStart, `task "${taskKey}" not found in turbo.json`).toBeGreaterThan(-1)
+    const inputsStart = c.indexOf('"inputs"', keyStart)
+    const arrStart = c.indexOf('[', inputsStart)
+    const arrEnd = c.indexOf(']', arrStart)
+    return c.slice(arrStart, arrEnd + 1)
+  }
+
+  it('has byte-identical inputs for #test and #test:coverage', () => {
+    expect(inputsArrayFor('@pair/knowledge-hub#test:coverage')).toBe(
+      inputsArrayFor('@pair/knowledge-hub#test'),
+    )
   })
 })

@@ -47,7 +47,13 @@ const docsUrlsOnDisk = (): string[] =>
 
 describe('CP5 sweeps every docs page that exists', () => {
   it('lists exactly the routable pages on disk — no page unswept, no URL that 404s', () => {
-    const listed = [...read(CP5).matchAll(/^- `\$BASE_URL(\/docs[^`]*)`$/gm)].map(m => m[1]).sort()
+    // Scoped to MT-CP501 specifically — the ADL's own Decision §1 and this file's header both
+    // state the equality is against MT-CP501's bullets, not the whole CP5 file. A page-list bullet
+    // ever added under MT-CP502/503 (unlikely by their subject, but not impossible) must not be
+    // pulled into a filesystem-equality check that has nothing to do with those cases.
+    const c = read(CP5)
+    const mt501 = c.slice(c.indexOf('## MT-CP501'), c.indexOf('## MT-CP502'))
+    const listed = [...mt501.matchAll(/^- `\$BASE_URL(\/docs[^`]*)`$/gm)].map(m => m[1]).sort()
     expect(listed).toEqual(docsUrlsOnDisk())
   })
 

@@ -84,11 +84,14 @@ renders, a component mounted, or a regression is visible — not enough to click
   Web (2026-08-20): the browser-download CDN is not on that environment's network allowlist, so
   `playwright install` fails outright with a `403` — and it is unnecessary anyway, since the
   environment ships Chromium **pre-installed**, with `PLAYWRIGHT_BROWSERS_PATH` already pointing at
-  it. If the CLI command instead fails on a **browser-revision mismatch** (a project that already
-  has Playwright as a dependency can expect a newer revision than the one pre-installed), launch
-  the pre-installed binary directly instead — this fallback needs `playwright` or `@playwright/test`
-  resolvable as a project dependency, so it applies when Playwright is already part of your stack,
-  not to the plain `npx` form above:
+  it. If the CLI command instead fails on a **browser-revision mismatch** — and the plain `npx`
+  form above is, if anything, *more* exposed to this than a pinned project dependency: `npx`
+  fetches the latest Playwright, which typically expects a newer bundled browser revision than
+  whatever the sandbox happens to have pre-installed — the fallback below is a launch-the-binary
+  workaround, but it needs `playwright` or `@playwright/test` **resolvable as a project
+  dependency** (`require()` cannot resolve either from a bare `npx` invocation with no local
+  install). If your project has neither and hits this mismatch, the fallback script below does
+  not help either — the honest state is "no visual verification here", per the Callout after it.
 
   ```bash
   node -e "
@@ -224,7 +227,7 @@ where it is linked:
   — the pre-installed Chromium's revision does not match what this project's `playwright-core`
   expects, and there is no way to install a matching one in this sandbox.
 - **`node_modules` was missing on first dev-server start** in one run, despite the session's own
-  "Esegui script di configurazione" provisioning step reporting complete — `pnpm install` before
+  "Esegui script di configurazione" ("Run setup script") provisioning step reporting complete — `pnpm install` before
   `pnpm dev` if this happens; not yet confirmed as reproducible every time.
 
 ## Verifying it yourself
