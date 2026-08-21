@@ -50,8 +50,21 @@ case "$_rf_tool" in
     ;;
 esac
 
-_rf_list="$(mktemp "${TMPDIR:-/tmp}/run-format.XXXXXX")"
-_rf_codes="$(mktemp "${TMPDIR:-/tmp}/run-format-codes.XXXXXX")"
+# Explicitly guarded rather than left to `set -e`: an unguarded failed `mktemp` still aborts the
+# script (that part `set -e` does catch), but with MKTEMP'S OWN exit status (typically 1) — and
+# this script's documented contract reserves 1 for "violations found (or `pnpm format` applied
+# fixes)", 2 for "broken". A full or read-only $TMPDIR would then report "run `pnpm format`" for
+# an environment problem `pnpm format` cannot touch — the exact violations-vs-broken conflation
+# the rest of this script exists to keep apart.
+_rf_list="$(mktemp "${TMPDIR:-/tmp}/run-format.XXXXXX")" || {
+  echo "run-format: cannot create a temporary file (checked TMPDIR=${TMPDIR:-/tmp})" >&2
+  exit 2
+}
+_rf_codes="$(mktemp "${TMPDIR:-/tmp}/run-format-codes.XXXXXX")" || {
+  echo "run-format: cannot create a temporary file (checked TMPDIR=${TMPDIR:-/tmp})" >&2
+  rm -f "$_rf_list"
+  exit 2
+}
 
 # Deliberately not `if ! git_tracked_paths ...; then` — `!` reports the NEGATED
 # status, so `$?` inside that branch would always read 0 and the real failure

@@ -512,7 +512,7 @@ describe('the new page is swept by the existing coverage, not left unwatched', (
   })
 })
 
-describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () => {
+describe("turbo.json keeps each package's #test / #test:coverage inputs in sync", () => {
   // turbo.json has no anchor/extends mechanism, so this story's own fix for the repo-wide-read
   // false-green (this file's own header note) left @pair/knowledge-hub#test and #test:coverage
   // with byte-identical `inputs` arrays, kept equal only by a comment asking humans to edit both.
@@ -555,12 +555,23 @@ describe('turbo.json keeps the two knowledge-hub#test inputs lists in sync', () 
   const TASK_PAIRS: Array<{ pkg: string; requiredInputs: string[] }> = [
     {
       pkg: '@pair/knowledge-hub',
+      // The FULL 11-entry list this PR ships, not a subset — a round-9 review found the guard
+      // only checking 6 of them (missing `.claude/**`, `.claude-plugin/marketplace.json`,
+      // `apps/pair-cli/config.json`, `.github/workflows/**`, `scripts/**`), and mutation-proved
+      // that deleting `.claude/**` from BOTH arrays — read by 20+ conformance files in this
+      // package — stayed green. A partial floor is exactly the "we asserted the ONE entry that
+      // matters least" mistake this describe block's own history keeps making one level down.
       requiredInputs: [
         '$TURBO_DEFAULT$',
+        '$TURBO_ROOT$/.claude/**',
+        '$TURBO_ROOT$/.claude-plugin/marketplace.json',
         '$TURBO_ROOT$/.pair/**',
+        '$TURBO_ROOT$/apps/pair-cli/config.json',
         '$TURBO_ROOT$/apps/website/content/docs/**',
         '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',
         '$TURBO_ROOT$/qa/**',
+        '$TURBO_ROOT$/.github/workflows/**',
+        '$TURBO_ROOT$/scripts/**',
         '$TURBO_ROOT$/turbo.json',
       ],
     },

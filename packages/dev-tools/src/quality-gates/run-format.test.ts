@@ -11,9 +11,13 @@ import { REPO_ROOT } from './repo-root'
 // prettier path here; T-3 adds the markdownlint-specific cases to this file.
 const RUN_FORMAT = resolve(REPO_ROOT, 'scripts/format-lib/run-format.sh')
 
-function run(cwd: string, args: string[]): { status: number; stderr: string } {
+function run(
+  cwd: string,
+  args: string[],
+  env?: Record<string, string>,
+): { status: number; stderr: string } {
   try {
-    execFileSync(RUN_FORMAT, args, { cwd })
+    execFileSync(RUN_FORMAT, args, { cwd, env: env ? { ...process.env, ...env } : undefined })
     return { status: 0, stderr: '' }
   } catch (error) {
     const e = error as { status: number; stderr: Buffer }
@@ -123,6 +127,20 @@ describe('run-format.sh — prettier composition (#414)', () => {
     commitAll(tmp)
 
     const result = run(tmp, ['check', 'prettier', 'ts'])
+    expect(result.status).toBe(2)
+  })
+
+  it("exits 2, not mktemp's own 1, when TMPDIR cannot be written to", () => {
+    tmp = mkdtempSync(join(tmpdir(), 'rf-'))
+    initRepo(tmp)
+    writeFileSync(join(tmp, 'a.json'), '{ "a": 1 }\n')
+    commitAll(tmp)
+
+    // A nonexistent TMPDIR makes `mktemp` itself fail with exit 1 — this script's own contract
+    // reserves 1 for "violations found", so an unguarded mktemp would misreport a broken
+    // environment as "run `pnpm format`", the exact conflation the rest of this file exists to
+    // avoid for the xargs/formatter case.
+    const result = run(tmp, ['check', 'prettier', 'json'], { TMPDIR: '/nonexistent-dir-xyz' })
     expect(result.status).toBe(2)
   })
 })
