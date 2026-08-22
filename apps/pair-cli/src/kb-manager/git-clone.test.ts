@@ -72,17 +72,18 @@ describe('gitCacheKey', () => {
 
 /**
  * Auth now travels via the CHILD PROCESS ENVIRONMENT (`GIT_CONFIG_KEY_0`/`_VALUE_0` setting
- * `http.extraheader`), never argv or the URL's userinfo (US-291 review round 2 escalation
- * of #448 — the prior `https://<token>@host` scheme put the token in `git clone`'s argv,
- * readable via `/proc/<pid>/cmdline` for the clone's duration).
+ * `http.<origin>.extraheader`), never argv or the URL's userinfo (US-291 review round 2
+ * escalation of #448 — the prior `https://<token>@host` scheme put the token in `git
+ * clone`'s argv, readable via `/proc/<pid>/cmdline` for the clone's duration).
  *
- * KNOWN RESIDUAL, not fixed here (review round 4/5, empirically confirmed with a real HTTP
- * trace through a redirecting server): `http.extraheader` is NOT host-scoped, unlike the
- * URL-userinfo scheme it replaced (which curl answers only to the SAME host that issued the
- * `401` challenge). If the git remote redirects to a different host or port, every request
- * AFTER the redirect carries `AUTHORIZATION: basic <token>` to a host the caller never
- * named. Cheap mitigation, not applied: a host-scoped config key
- * (`http.<https://host[:port]>.extraheader`) instead of the bare `http.extraheader`.
+ * FIXED, round 6 (was a known residual in round 4/5, empirically confirmed with a real
+ * HTTP trace through a redirecting server): an earlier version of this function used the
+ * bare, unscoped `http.extraheader`, which is NOT host-scoped — unlike the URL-userinfo
+ * scheme it replaced (which curl answers only to the SAME host that issued the `401`
+ * challenge) — so a redirecting remote got the header sent to every host it redirected to.
+ * The config key is now scoped to the request's own origin (`http.<https://host[:port]>.
+ * extraheader`), which git only attaches to a request whose URL that origin prefixes — a
+ * cross-host or cross-port redirect target does not match and never sees the header.
  */
 describe('cloneGitRepo — auth', () => {
   beforeEach(() => {
@@ -115,10 +116,25 @@ describe('cloneGitRepo — auth', () => {
 
     const env = envOf()
     expect(env['GIT_CONFIG_COUNT']).toBe('1')
-    expect(env['GIT_CONFIG_KEY_0']).toBe('http.extraheader')
+    expect(env['GIT_CONFIG_KEY_0']).toBe('http.https://github.com.extraheader')
     expect(env['GIT_CONFIG_VALUE_0']).toBe(
       `AUTHORIZATION: basic ${Buffer.from('ghp_abc123:').toString('base64')}`,
     )
+  })
+
+  it('scopes the config key to the request origin, including a non-default port', () => {
+    process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
+    cloneGitRepo('https://git.internal:8443/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
+
+    expect(envOf()['GIT_CONFIG_KEY_0']).toBe('http.https://git.internal:8443.extraheader')
+  })
+
+  it('falls back to no auth env at all on an unparseable URL — fails closed, never unscoped', () => {
+    process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
+    // Passes the https:// prefix test but is not a valid URL (embedded whitespace).
+    cloneGitRepo('https://not a valid url', join(tmpdir(), `pgc-${randomUUID()}`))
+
+    expect(envOf()['GIT_CONFIG_COUNT']).toBeUndefined()
   })
 
   it('never attaches the header to a plain http:// URL — cleartext transport', () => {

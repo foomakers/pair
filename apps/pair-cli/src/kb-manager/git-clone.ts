@@ -22,7 +22,7 @@ export function parseGitRef(source: string): GitRef {
 
 /**
  * Auth for an HTTPS git clone, added to the CHILD PROCESS ENVIRONMENT rather than argv
- * or the URL's userinfo (US-396/US-291 review round 2 escalation of #448).
+ * or the URL's userinfo (US-291 review round 2 escalation of #448).
  *
  * The prior scheme built `https://<token>@host/…` and passed that URL as a `git clone`
  * argument: readable by any local user through `/proc/<pid>/cmdline` on Linux for the
@@ -30,8 +30,8 @@ export function parseGitRef(source: string): GitRef {
  * same path. `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` (git >= 2.31 —
  * an OLDER git silently ignores all three, so the clone runs unauthenticated and the
  * resulting failure recommends `PAIR_GIT_TOKEN`, which is already set) set a one-shot,
- * child-process-scoped `http.extraheader` carrying a Basic auth header WITHOUT ever
- * putting the token on the command line or in the URL.
+ * child-process-scoped `http.<origin>.extraheader` carrying a Basic auth header WITHOUT
+ * ever putting the token on the command line or in the URL.
  *
  * **The prior scheme DID authenticate, and DID transmit the credential — the argv
  * exposure is the whole reason for this change, not a side effect of it being broken.**
@@ -45,14 +45,16 @@ export function parseGitRef(source: string): GitRef {
  * the challenge with. So `http://` exposed the token on the wire in cleartext on that
  * second request, same as any other Basic auth — never "moot".
  *
- * What `http.extraheader` actually changes: it is sent PRE-EMPTIVELY, on every request,
- * with no 401 challenge required — unlike curl's userinfo handling, which git's HTTP
- * backend uses and which only answers a challenge from the SAME host. That is a real
- * behaviour difference, not "this now authenticates when it didn't before" — and it is a
- * known residual, not fixed here: `http.extraheader` is not host-scoped, so a redirecting
- * remote gets the header sent to every host it redirects to (see the KNOWN RESIDUAL note
- * on the `cloneGitRepo — auth` describe block in `git-clone.test.ts`, empirically confirmed
- * through a real redirect).
+ * What `http.<origin>.extraheader` actually changes: it is sent PRE-EMPTIVELY, on every
+ * request to that origin, with no 401 challenge required — unlike curl's userinfo
+ * handling, which git's HTTP backend uses and which only answers a challenge from the SAME
+ * host. **`<origin>` is the scheme+host(+port) git config subsection form** (round 5/6
+ * escalation): an EARLIER version of this function used the bare, unscoped `http.
+ * extraheader`, which git attaches to every request regardless of host — confirmed by a
+ * real redirect trace to leak the header to a host the caller never named. Scoping the
+ * config key to the request's own origin closes that: git only applies an `http.<url>.*`
+ * key to a request whose URL the key's origin is a prefix of, so a cross-host (or
+ * cross-port) redirect target simply does not match and never sees the header.
  *
  * `http://` is excluded because `http.extraheader` has no transport guard: unlike the
  * prior scheme's challenge/response (which happens over whatever transport the URL names,
@@ -62,10 +64,18 @@ export function parseGitRef(source: string): GitRef {
 function gitAuthEnv(repoUrl: string): Record<string, string> {
   const token = process.env['PAIR_GIT_TOKEN']
   if (!token || !/^https:\/\//i.test(repoUrl)) return {}
+  // A malformed URL cannot be scoped safely — fail closed (no header) rather than send it
+  // unscoped, which would reintroduce the cross-host leak this function exists to close.
+  let origin: string
+  try {
+    origin = new URL(repoUrl).origin
+  } catch {
+    return {}
+  }
   const basic = Buffer.from(`${token}:`).toString('base64')
   return {
     GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'http.extraheader',
+    GIT_CONFIG_KEY_0: `http.${origin}.extraheader`,
     GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
   }
 }
