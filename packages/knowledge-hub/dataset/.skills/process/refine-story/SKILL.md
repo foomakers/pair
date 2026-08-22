@@ -1,7 +1,7 @@
 ---
 name: refine-story
 description: "Refines a user story from Draft to Ready — the single Draft→Ready path (D24): phase 0 grill(sync), Given-When-Then acceptance criteria, map-subdomains/map-contexts scoped analysis, classify matrix, sprint readiness. Composes /grill, /map-subdomains, /map-contexts, /classify, /write-issue. Not for sizing an already-refined story (use /estimate)."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -74,12 +74,21 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    | Validation Strategy                   | Has testing approach                                                       |
 
 2. **Act**: Determine refinement state:
-   - **All sections present** → story is already Ready. Offer selective update (Step 6).
+   - **All sections present** → story is already Ready. Run Step 1b, then offer selective update (Step 6) — the route passes **through** Step 1b, which has no skip condition and is what Step 6 relies on having run.
    - **Some sections present** → partial refinement. Resume from first missing section (Steps 2–5).
    - **No sections (only Initial Breakdown)** → full refinement needed (Steps 2–5).
 3. **Verify**: Refinement state determined. Report:
 
    > Refinement state: [N/M sections complete]. [Resuming from: Section X | Full refinement | Already Ready — offering update].
+
+### Step 1b: Adoption Context Read
+
+**Always runs** — there is no skip condition: the read is bounded and metadata-first (per the convention), too cheap to gate, and *which* sections get re-authored is not known here (Step 6 asks that later). The already-Ready update path is precisely where a decision recorded **since** the story was last refined must reach the re-authored section, so this step runs there too.
+
+1. **Check**: Does the project carry adoption history — recorded decisions or a context map?
+2. **Skip**: If none exists (a fresh project, an empty decision log), note it in one line and proceed: refinement authors exactly what it authored before this step, with no citations and no revisit flags.
+3. **Act**: Read it per the shared [adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md) convention — **read-only**, bounded to the subject's scope, never a write (recording stays with `/record-decision`). **This skill's subject**: this one story — the read is scoped to the subdomains, contexts, and terms the story touches, never the project's whole history. Step 2's context-map load and this read are **one** load, not two. Do not restate the convention's sources or precedence rules here; follow them there.
+4. **Verify**: The in-scope records are available to Steps 2–4 with their ids, so a criterion or an approach can be constrained by one, **cite** it, or carry a `Revisits <id>` flag. Absence is a noted skip, never a HALT.
 
 ### Step 2: Requirements Analysis
 
@@ -89,7 +98,8 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    - Convert requirements into **Given-When-Then** scenarios.
    - Identify **business rules** with measurable criteria.
    - Address **edge cases** and error handling conditions.
-2. **Act**: Domain check — if `context-map.md` (in `.pair/adoption/product/`) exists, read it (plus any linked `subdomain/<slug>.context.md` this story touches). When the story introduces or sharpens a domain term, update the map inline per the [Context Map Maintenance](../../../.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) guideline. When a proposed criterion conflicts with a registered rule, flag it citing that rule (and the DDR, when one exists) and resolve with the developer before proceeding. Skip this step entirely if the map doesn't exist — its absence is expected, not an error.
+   - **Adoption-informed** (Step 1b): a criterion contradicting a live record is reshaped to fit it or dropped with that record named; one that genuinely reopens it is kept and labelled `Revisits <id>: <one-line why>`, never silently contradicted. Every criterion a record shaped **cites** it inline in the convention's form — `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per DDR-004)`, `(per context-map: <term>)`, the convention's complete list — and registered terms are used rather than synonyms.
+2. **Act**: Domain check — the map half of Step 1b's read (loaded once, not twice). If `context-map.md` (in `.pair/adoption/product/`) exists, read it (plus any linked `subdomain/<slug>.context.md` this story touches). When the story introduces or sharpens a domain term, update the map inline per the [Context Map Maintenance](../../../.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) guideline. When a proposed criterion conflicts with a registered rule, flag it citing that rule (and the DDR, when one exists) and resolve with the developer before proceeding. Skip this step entirely if the map doesn't exist — its absence is expected, not an error.
 3. **Act**: Domain placement (functional). Is `/map-subdomains` installed? Compose `/map-subdomains` with `$scope: [the business capability this story touches]` — **scoped to the story, never `$scope: all`** (that is `/bootstrap`-only). It classifies the touched capability as core/supporting/generic with a Volatility rating; that placement feeds the **Business impact** dimension of the classification matrix (Step 3b) and the volatility input to coupling (Step 3). Not installed, or no domain artifacts and no PRD/initiatives to classify from → degrade: skip domain placement with a note, still produce the functional analysis.
 4. **Act**: Present the proposed criteria to the developer for validation:
 
@@ -97,9 +107,11 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    > [List Given-When-Then scenarios]
    > [Business rules]
    > [Edge cases]
+   > [Dropped by a recorded decision: [criterion] — [decision id] rejected this]
+   > [Reshaped by a recorded decision: [criterion] — [decision id]]
    > Approve or adjust?
 
-5. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). Only an explicit approval finalizes the criteria.
+5. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). **Every criterion a record dropped or reshaped is shown in item 4's prompt with that record named** — an approval is never taken on a list the developer cannot tell is shorter. Only an explicit approval finalizes the criteria.
 
 ### Step 3: Technical Analysis
 
@@ -111,8 +123,9 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    - **Risks**: technical unknowns, complexity, dependencies.
    - **Design flag** (DoR criterion 6): set the `Design:` line under Implementation Approach to `not required` when the approach is understood, or `required — reference: <link>` when a design doc/spike is needed — per [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md). This is the criterion Step 5 verifies as the sixth DoR criterion.
    - Reference [architecture.md](../../../.pair/adoption/tech/architecture.md) and [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
+   - **Adoption-informed** (Step 1b): an approach a live record already settled is followed and **cited** rather than re-proposed; an approach a live record rejected is not proposed at all, and the rejection is reported instead. An approach that genuinely reopens a record is presented in item 3 labelled `Revisits <id>: <one-line why>` for the developer to accept or reject.
 2. **Act**: Touched-context mapping (technical). Is `/map-contexts` installed? Compose `/map-contexts` with `$scope: [the contexts/services this story touches]` — **scoped, never `$scope: all`** (that is `/bootstrap`-only). It maps the touched subdomains to bounded contexts and assesses each relationship (integration strength, socio-technical distance, volatility) to derive a balanced/unbalanced verdict. **When it reports an unbalanced integration this story introduces — strong coupling toward a distant and/or volatile context — record it as a row in the Technical Risks and Mitigation table** (D38): the coupling risk this story adds, its impact, and the mitigation. This same map-contexts output feeds the **Coupling balance** dimension of the classification matrix (Step 3b) — refine-story runs no coupling assessment of its own; the inputs come from the scoped map-contexts output and the subdomain catalog volatility (D24). Not installed, or no domain artifacts → coupling is "not assessed", excluded from the matrix max, never blocks (D21).
-3. **Act**: Present technical analysis (strategy, key components, integration points, and any coupling risk from the mapping) to developer for validation.
+3. **Act**: Present technical analysis (strategy, key components, integration points, and any coupling risk from the mapping) to developer for validation — with each decision cited and each `Revisits <id>` flag shown, so the developer approves the decisions applied, not just the approach.
 4. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis.
 
 ### Step 3b: Classification (shift-left matrix)
@@ -160,7 +173,7 @@ Reached only when Step 1 detects all sections are present.
    > 3. Sprint Sizing
    > 4. All sections
 
-2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4).
+2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4). Step 1b already ran on this invocation (it has no skip condition), so the in-scope records — including any recorded **since** the last refinement — are available to the re-authored section, with its citations and `Revisits <id>` flags shown in that step's own confirmation prompt.
 3. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and updated `$content`.
 4. **Verify**: Story updated.
 
@@ -174,6 +187,7 @@ STORY REFINEMENT COMPLETE:
 ├── Sections: [N/N complete]
 ├── Matrix:   [risk:<tier> · cost:<class> | classify not installed — no matrix]
 ├── Domain:   [subdomain placement + touched contexts | map-* not installed — skipped]
+├── Adoption: [N decisions cited · M revisits flagged | no adoption history]
 ├── Sizing:   [X points — fits sprint: Yes/No]
 ├── PM Tool:  [Issue updated — #ID]
 └── Next:     /plan-tasks to create task breakdown
@@ -197,12 +211,14 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **No state mapping resolves to `Ready`** (Step 5): the completed DoR sections on the body are the readiness signal (definition-of-ready-and-done.md Readiness Fallback) — not an error.
 - If adoption files (architecture, tech-stack) are not found, skip technical analysis alignment checks and warn.
 - If `context-map.md` is not found, skip the domain check in Step 2 — its absence is the expected steady state, not an error.
+- **No adoption history, or an unreadable record** (Step 1b): adoption-informed refinement degrades to today's behavior — sections are authored with no citations and no revisit flags; a single unparseable record is skipped with a warning naming it and the rest still apply. Never a HALT ([adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md)).
 
 ## Notes
 
 - **The single Draft→Ready path** (R3.12, D24): refinement IS the transition to `Ready` — there is no separate "make-ready" skill and none is ever added. Phase 0's grill sync is the R3.11 alignment gate that makes this one skill sufficient.
 - **R3.11 is "not optional" as a gate, not as a specific skill**: the AI↔human alignment gate always runs. When `/grill` is installed it runs the systematic phase 0 sync; when it is not, the explicit per-step human-judgment approval gates in Steps 2–4 are the accepted satisfaction of R3.11 (graceful-degradation convention). What is never skipped is explicit human alignment before the story reaches `Ready`.
 - This skill **modifies PM tool state** — it updates story issues and transitions the item to `Ready`.
+- **Adoption-informed** (Step 1b) — the read is **read-only**: refinement never writes a decision record. Recording stays with the developer and `/record-decision`; what refinement does with the records is constrain, cite, and flag a revisit, per the shared convention. The context map's inline glossary maintenance (Step 2) is the separate, guideline-authorized write — not part of this read.
 - **Composes, never re-derives**: domain placement comes from `/map-subdomains`, touched-context/coupling from `/map-contexts`, the matrix from `/classify` — refine-story orchestrates them scoped to the story and owns no assessment criteria of its own (D24).
 - Template ordering (Step 5) positions Technical Analysis as the bridge to Task Breakdown (added by `/plan-tasks`).
 - INVEST validation: the refined story must satisfy Independent, Negotiable, Valuable, Estimable, Small, Testable criteria.

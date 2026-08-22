@@ -803,7 +803,7 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     })
   }
 
-  it('dataset SKILL.md stays inside the progressive-disclosure byte budget', () => {
+  it('BOTH copies stay inside the progressive-disclosure byte budget', () => {
     // Review finding (round 4, Minor): the first version of this guard asserted a
     // CORPUS RANK (brainstorm < max(all other SKILL.md)) and called itself
     // "self-maintaining". It was the opposite: it coupled this skill's guard to every
@@ -817,12 +817,25 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     // as 28,607 "B" was really 28,927 B — already 255 B OVER the budget this guard
     // claimed to enforce, and the failure message would have printed the wrong
     // number. Measure what the name says.
+    // #280 review finding (Minor): it measured the DATASET copy only. The budget
+    // exists to bound the entrypoint an assistant actually LOADS, and that is the
+    // INSTALLED MIRROR — `pair install`'s output, systematically larger than its
+    // source because the transform expands every `/skill` reference to its namespaced
+    // form. A dataset-only guard therefore reported green on a tree whose SHIPPED file
+    // was already over budget. The overshoot is this branch's, not `main`'s — on
+    // `origin/main` the mirror measured 28,599 B, 73 B inside the budget; it was #280's
+    // own adoption additions that pushed it to 29,326 B at commit 26ef23b1, 654 B over,
+    // with the dataset copy still green. Both copies are measured now, the MIRROR is the binding one, and
+    // the budget was NOT raised to absorb it: brainstorm's Notes restatements were
+    // disclosed away (they duplicated the preamble, Parametrization and Phase 3).
     const BUDGET_BYTES = 28 * 1024
-    const size = Buffer.byteLength(BRAINSTORM_DATASET, 'utf-8')
-    expect(size).toBeGreaterThan(0)
-    expect(size, `brainstorm/SKILL.md is ${size} B, budget ${BUDGET_BYTES} B`).toBeLessThan(
-      BUDGET_BYTES,
-    )
+    for (const v of VARIANTS) {
+      const size = Buffer.byteLength(v.content, 'utf-8')
+      expect(size).toBeGreaterThan(0)
+      expect(size, `${v.label} SKILL.md is ${size} B, budget ${BUDGET_BYTES} B`).toBeLessThan(
+        BUDGET_BYTES,
+      )
+    }
   })
 
   for (const v of VARIANTS) {

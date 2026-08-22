@@ -257,8 +257,8 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 | Tech stack | `tech/tech-stack.md` | `/verify-adoption`, `/review` | `/assess-stack`, `/bootstrap` |
 | Architecture | `tech/architecture.md` | `/verify-adoption`, `/review` | `/assess-architecture` |
 | Way of working | `tech/way-of-working.md` | `/implement`, `/review`, `/estimate` | `/assess-methodology`, `/setup-pm` |
-| Decisions (ADR) | `tech/adr/*.md` | `/verify-adoption`, `/review` | `/record-decision` |
-| Decisions (ADL) | `decision-log/*.md` | `/verify-adoption` | `/record-decision` |
+| Decisions (ADR) | `tech/adr/*.md` | `/verify-adoption`, `/review`, `/plan-stories`, `/refine-story`, `/brainstorm` (adoption-informed generation) | `/record-decision` |
+| Decisions (ADL) | `decision-log/*.md` | `/verify-adoption`, `/plan-stories`, `/refine-story`, `/brainstorm` (adoption-informed generation) | `/record-decision` |
 | Domain (context map / subdomain contexts) | `product/context-map.md`, `product/subdomain/*.context.md` | `/brainstorm`, `/refine-story`, `/plan-initiatives`, `/plan-epics`, `/plan-stories`, `/plan-tasks` | `/record-decision` (decision-backed sections), `/brainstorm`, `/refine-story` (inline glossary/entity/rule maintenance) |
 | Classification delta | `tech/risk-matrix.md` | `/classify`, `/review` | `/classify` (`## Tag Projection`), `/bootstrap` (`## Criticality Table`, `## Overrides`) — **section ownership is the invariant**: writers of this file share it section by section, never whole-file |
 

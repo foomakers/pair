@@ -25,6 +25,8 @@ The AI applies **vertical slicing** — each story delivers a thin slice of func
 - **S**mall — fits in a single sprint
 - **T**estable — has clear pass/fail criteria
 
+Before candidates are even triaged, the AI reads the project's recorded decisions (ADRs, decision log) and its context map, scoped to what the epic touches: a candidate contradicting a live decision is reshaped or dropped, whatever a decision shaped is **cited** in the generated story (`(per ADR-013)`, `(per context-map: macrostate)`), and a candidate that genuinely reopens a decision is flagged `Revisits <id>` in the proposal rather than silently contradicting it. Fresh project with no decisions yet? Generation behaves exactly as before — see [Adoption files](/docs/concepts/adoption-files).
+
 Before a story is created, it's triaged against stories already linked to the epic — proposed as **EXTEND #ID** or **CREATE**, same pattern as epic breakdown (see [Strategic Planning](/docs/developer-journey/strategic-planning#triage-against-the-existing-backlog)). INVEST validation still applies to every CREATE candidate; an EXTEND re-validates INVEST for the merged scope.
 
 ## Step 6: Refine a User Story
@@ -39,6 +41,8 @@ Transform a rough story into a development-ready specification.
 | **Output** | Story updated with acceptance criteria, technical analysis, and sizing (status: Ready) |
 
 Refinement opens with a **phase 0 alignment gate**: the AI runs a `/pair-capability-grill` shared-understanding sync — goal, acceptance criteria, edge cases, dependencies, design, and risks — one question at a time, and no readiness section is authored until you and the AI explicitly agree. It's a blocking gate: an unaligned story never proceeds to Ready.
+
+Refinement reads the same adoption context as story breakdown — acceptance criteria and the technical approach follow (and cite) decisions already recorded, and an approach that reopens one is flagged `Revisits <id>` for you to accept or reject.
 
 Refinement then adds these to a story:
 

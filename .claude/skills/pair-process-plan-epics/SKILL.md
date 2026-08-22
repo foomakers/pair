@@ -1,7 +1,7 @@
 ---
 name: pair-process-plan-epics
 description: "Breaks a strategic initiative into epics — each delivering end-to-end value in 2-4 sprints — through structured analysis and validation. Composes /pair-capability-write-issue. Not for filing a single epic issue from text you already wrote (that's /pair-capability-write-issue directly)."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -21,7 +21,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 | Argument       | Required | Description                                                                                                                                                                                        |
 | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$initiative`  | No       | Initiative identifier (e.g., `#10`). If omitted, selects highest-priority Todo initiative.                                                                                                         |
-| `$candidates`  | No       | Caller-supplied candidate tree (epic name + user value + rationale each) — e.g. the tree `/pair-process-brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the initiative. |
+| `$candidates`  | No       | Caller-supplied candidate tree (epic name + user value + rationale each, **plus** — optionally — the per-candidate adoption annotation the caller's own read produced: a `(per <record id>)` citation, a `Revisits <id>: <why>` label, or a drop with the record named) — e.g. the tree `/pair-process-brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the initiative, shows the annotation in its dry-run prompt, and Step 4 persists it into the epic body. This skill runs no adoption read of its own, so an annotation absent here is an annotation the epic will not carry. |
 | `$domain-placed` | No     | Capability areas the **caller** has already placed **or confirmed** in the subdomain catalog for this run (e.g. `/pair-process-brainstorm` phase 2). When it covers the approved breakdown's areas, Step 3.5 confirms that placement instead of re-composing `/pair-capability-map-subdomains` — one subdomain-catalog delta per run, not two. Carried in-band precisely so the fact survives a fresh session, rather than depending on same-session context. |
 
 ## Algorithm
@@ -83,9 +83,10 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    > Epic breakdown for Initiative `#[ID]: [Title]`:
    >
    > [Epic 0: Bootstrap (if needed)] → CREATE (first run) | ALREADY EXISTS #[ID] (skip, on re-run — Epic 0 follows the same triage rule as any other candidate)
-   > Epic 1: [Name] (2-3 sprints) — [user value] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
+   > Epic 1: [Name] (2-3 sprints) — [user value] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale]) [· per [decision id] | · Revisits [decision id]: [why]]
    > Epic 2: [Name] (3-4 sprints) — [user value] → Ambiguous: EXTEND #[ID] or CREATE? [recommendation + rationale]
    > ...
+   > [Dropped by a recorded decision: [candidate] — [decision id] rejected this]
    >
    > Approve or adjust?
 
@@ -109,6 +110,7 @@ Process epics sequentially (Epic 0 first if needed), per its Step 3 proposal:
 
 3. **Act**: Draft the epic following [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - Fill template sections: Epic Statement, Business Value, Solution Overview, Epic Breakdown, Technical Considerations.
+   - **Citations**: when a `$candidates` tree arrives carrying them (a caller like `/pair-process-brainstorm` applies its own adoption read before handing the tree over), every part of the draft a record shaped keeps that record inline — `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per DDR-004)`, `(per context-map: <term>)`, the convention's complete list — and a confirmed revisit keeps its `Revisits <id>: <why>` line. The citation lands in the epic body, so it survives the write instead of stopping at the confirmation list. This skill runs no adoption read of its own.
    - Present to developer for validation.
 4. **Act**: Compose `/pair-capability-write-issue` per the confirmed proposal:
    - **CREATE**: `$type: epic`, `$content`: the filled epic template, `$parent`: the initiative identifier. If the proposal referenced a closed epic (per to-issues-triage.md's closed-item rule), include that reference in `$content`.

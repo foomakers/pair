@@ -1,7 +1,7 @@
 ---
 name: pair-process-plan-stories
 description: "Slices an epic into user stories via vertical slicing and INVEST validation, each sized for one sprint. Composes /pair-capability-write-issue."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -20,7 +20,8 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 | Argument       | Required | Description                                                                                                                                                                                 |
 | -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$epic`        | No       | Epic identifier (e.g., `#42`). If omitted, selects highest-priority Todo epic.                                                                                                              |
-| `$candidates`  | No       | Caller-supplied candidate tree (story name + user value + rationale each) — e.g. the tree `/pair-process-brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the epic. |
+| `$candidates`  | No       | Caller-supplied candidate tree (story name + user value + rationale each, **plus** — optionally — the per-candidate adoption annotation the caller's own read produced: a `(per <record id>)` citation, a `Revisits <id>: <why>` label, or a drop with the record named) — e.g. the tree `/pair-process-brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the epic, and Step 4 persists any annotation carried here. |
+| `$adoption-read` | No     | The caller's completed adoption read, in-band — the in-scope records with the effect already applied to each candidate (citation, `Revisits <id>` flag, or a drop with the record named). Supplied by a caller that performed the read itself (`/pair-process-brainstorm` phase 3) so Step 2b inherits it instead of paying for a second, differently scoped read. **Honoured only together with `$candidates`**: the effects are computed against the caller's candidate set, so supplied alone it applies to nothing and Step 2b performs its own read as normal. |
 
 ## Algorithm
 
@@ -66,6 +67,13 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 
 3. **Verify**: Registry built — available to Step 3's triage.
 
+### Step 2b: Adoption Context Read
+
+1. **Check**: Is `$adoption-read` provided **together with `$candidates`**, and — if not — does the project carry adoption history (recorded decisions or a context map)?
+2. **Skip**: If `$adoption-read` is provided **with** `$candidates`, that **is** this run's read: the caller already performed it on the same run and its scope is the run's scope (per the convention's reuse rule) — confirm the supplied effects with the candidates and go to Step 3, never re-deriving a second, differently scoped read that could drop a candidate the caller's own confirmation just approved. Supplied **without** `$candidates` it is not this run's read — its effects were computed for a candidate set this run does not have, so applying it to Step 3's derived candidates would make the pass a silent no-op: fall through to the Act and read as normal. If no adoption history exists (a fresh project, an empty decision log), note it in one line and proceed to Step 3: story generation is exactly what it was before this step, with no citations and no revisit flags.
+3. **Act**: Read it per the shared [adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md) convention — **read-only**, bounded to the subject's scope, never a write. **This skill's subject**: the selected epic and the candidates derived from (or supplied for) it — the read is scoped to the subdomains, contexts, and terms that epic touches, never the project's whole history. Do not restate the convention's sources or precedence rules here; follow them there.
+4. **Verify**: The in-scope records are available to Steps 3–4 with their ids, so a candidate can be constrained by one, **cite** it, or carry a `Revisits <id>` flag. Absence is a noted skip, never a HALT.
+
 ### Step 3: Story Identification & Triage Proposal
 
 1. **Check**: Is `$candidates` provided?
@@ -76,17 +84,20 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
    - **Business rules**: different scenarios and conditions.
    - **User roles**: admin, member, guest variations.
 4. **Act**: Apply vertical slicing — every story must deliver end-to-end user value with visible UI manifestation — to every candidate, supplied or derived. This rule governs CREATE candidates only — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)'s per-skill-delta note.
+
+   **Adoption-informed, same pass**: apply Step 2b's in-scope records to those same candidates — a candidate contradicting a live record is reshaped to fit it or dropped with that record named; a candidate re-proposing what a live record already rejected is not carried forward; a candidate that genuinely reopens one is kept and labelled `Revisits <id>: <one-line why>`, never silently contradicted. Generated wording uses the context map's registered terms rather than a synonym. Step 2b skipped (no adoption history) ⇒ this paragraph is a no-op.
 5. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** story is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
 
    > Story candidates for Epic `#[ID]: [Title]`:
    >
-   > 1. [Story name] — [user value] — [UI manifestation] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
+   > 1. [Story name] — [user value] — [UI manifestation] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale]) [· per [decision id] | · Revisits [decision id]: [why]]
    > 2. [Story name] — [user value] — [UI manifestation] → Ambiguous: EXTEND #[ID] or CREATE? [recommendation + rationale]
    > ...
+   > [Dropped by a recorded decision: [candidate] — [decision id] rejected this]
    >
    > Approve or adjust?
 
-6. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
+6. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write. Every candidate a Step 2b record shaped shows that record — as a citation or a `Revisits` flag — in this same list, so the developer confirms the decisions applied, not just the slices.
 
 ### Step 4: Story Definition & INVEST Validation
 
@@ -102,6 +113,7 @@ For each approved story, per its Step 3 proposal:
    - Rough scope boundaries with expected uncertainty.
    - Initial sizing: XS(1), S(2), M(3), L(5), XL(8).
    - UI value manifestation for sprint demo readiness.
+   - **Citations**: every part of the definition a Step 2b record shaped carries that record inline in the convention's form — `(per ADR-013)`, `(per decision-log/<date>-<topic>)`, `(per DDR-004)`, `(per context-map: <term>)`, the convention's complete list — and a confirmed revisit carries its `Revisits <id>: <why>` line. The citation lands in the story body, so the reader sees why the story is shaped that way without opening the adoption tree.
 4. **Act**: For CREATE candidates, validate against INVEST criteria (existing rule, unaffected by triage):
    - **I**ndependent: can be planned separately.
    - **N**egotiable: focuses on user value, not implementation.
@@ -137,6 +149,7 @@ STORIES COMPLETE:
 ├── Extended: [Y existing, scope merged]
 ├── Skipped:  [Z exact-match already-present]
 ├── Points:   [total estimated points]
+├── Adoption: [N decisions cited · M revisits flagged | no adoption history]
 ├── INVEST:   [all CREATE candidates validated]
 ├── PM Tool:  [adopted tool]
 └── Next:     /refine-story
@@ -154,11 +167,13 @@ STORIES COMPLETE:
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce story documents, ask developer to create/enter manually) for the standard scenarios. Additional cases:
 
 - If epic documentation is sparse, proceed with available context and flag gaps.
+- **No adoption history, or an unreadable record** (Step 2b): adoption-informed generation degrades to today's behavior — stories are generated with no citations and no revisit flags; a single unparseable record is skipped with a warning naming it and the rest still apply. Never a HALT ([adoption-informed-generation.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/adoption-informed-generation.md)).
 
 ## Notes
 
 - This skill **modifies PM tool state** — creates and extends story issues linked to epics.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
 - **Caller-supplied tree** — with `$candidates` (e.g. `/pair-process-brainstorm` phase 3), Step 3 triages the supplied candidates and derives none: the caller owns the slicing, this skill owns triage, INVEST validation, and the writes. Without it, behaviour is unchanged.
+- **Adoption-informed** (Step 2b) — the read is **read-only**: this skill never writes a decision record. Recording stays with the developer and `/pair-capability-record-decision`; what generation does with the records is constrain, cite, and flag a revisit, per the shared convention.
 - Stories at breakdown stage are rough planning units — detailed requirements are added during `/pair-process-refine-story`.
 - INVEST validation is mandatory for CREATE candidates — stories failing INVEST must be reworked before creation. EXTEND candidates re-validate INVEST for the merged scope (Step 4).
