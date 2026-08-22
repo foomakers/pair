@@ -738,7 +738,7 @@ Options available for all commands:
   **`--no-kb` takes effect again, and now conflicts with `--url`.** The flag skips the KB
   pre-flight that `install` and `update` run before their work, so nothing is fetched and the
   command proceeds with whatever KB is already on disk. It was a **no-op** in every release up to
-  and including 0.4.3: its only consumer was that pre-flight, and a guard in the `preAction` hook
+  and including 0.5.0: its only consumer was that pre-flight, and a guard in the `preAction` hook
   returned before it on every invocation. Two consequences of reviving it, both user-visible:
   `pair install --no-kb` no longer downloads a KB, and `--url <source>` together with `--no-kb` is
   now **rejected** (`Cannot use --url and --no-kb together`) where it was previously accepted and

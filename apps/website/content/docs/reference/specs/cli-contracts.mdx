@@ -40,7 +40,7 @@ export interface CliOptions {
 
 `kb` is read by the KB pre-flight (`bootstrapEnvironment`), which runs before `install` and
 `update`: `false` skips the pre-flight fetch, and `false` together with a `url` is rejected by
-`validateCliOptions`. Both were dead through 0.4.3 — the pre-flight was unreachable, so
+`validateCliOptions`. Both were dead through 0.5.0 — the pre-flight was unreachable, so
 `pair install --no-kb` installed a KB anyway and the conflict never fired. See the
 [`--no-kb` note in the CLI reference](/docs/reference/cli/commands).
 
