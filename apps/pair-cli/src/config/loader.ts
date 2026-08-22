@@ -382,6 +382,18 @@ function honouredFields(entry: unknown, ctx: GuardContext): Record<string, unkno
  * (reported as skipped by the install summary) rather than installed on the strength of
  * the source's word alone.
  */
+/**
+ * `declaredNames` reaches the terminal verbatim — `unknownRegistries` names print via
+ * `registrySkipped` in the install summary. A registry KEY carrying a control character
+ * is the same forged-output risk `hasControlCharacters` exists for on `prefix` /
+ * `source` / `description` (US-396 review round 6), just on a field with no allowlist
+ * guard of its own because it is never merged into the config — it is dropped here,
+ * before any reporting path sees it, rather than escaped for display.
+ */
+function declaredRegistryNames(registries: Record<string, unknown>): string[] {
+  return Object.keys(registries).filter(name => !hasControlCharacters(name))
+}
+
 function readSourceDeclaration(
   fsService: FileSystemService,
   sourceRoot: string,
@@ -409,13 +421,7 @@ function readSourceDeclaration(
   const registries = declared['asset_registries'] ?? {}
   if (!isPlainObject(registries)) return ignore('asset_registries is not an object')
 
-  // `declaredNames` reaches the terminal verbatim — `unknownRegistries` names print via
-  // `registrySkipped` in the install summary. A registry KEY carrying a control character
-  // is the same forged-output risk `hasControlCharacters` exists for on `prefix` /
-  // `source` / `description` (US-396 review round 6), just on a field with no allowlist
-  // guard of its own because it is never merged into the config — it is dropped here,
-  // before any reporting path sees it, rather than escaped for display.
-  const declaredNames = Object.keys(registries).filter(name => !hasControlCharacters(name))
+  const declaredNames = declaredRegistryNames(registries)
   const known = declaredNames.filter(name => knownRegistries.includes(name))
   // Partial by design: a declaration states the few fields it wants, and `mergeConfigs`
   // lays them over the base entry field by field.
