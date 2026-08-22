@@ -16,6 +16,25 @@ async function dispatchWithExitCode(handler: () => Promise<number>): Promise<voi
   }
 }
 
+/**
+ * The code the CLI entry point must hand to `process.exit()`.
+ *
+ * `dispatchWithExitCode` sets `process.exitCode`, but the entry point force-exits (open
+ * HTTP handles from a KB download would otherwise hang the process) — and Node's
+ * `process.exit(0)` with an EXPLICIT code OVERRIDES a previously assigned
+ * `process.exitCode`. Calling `process.exit(0)` unconditionally therefore threw away every
+ * non-zero code a command had just reported: `install` printed "finished with errors" and
+ * exited 0, which is verbatim the disagreement US-396 AC5 exists to remove.
+ *
+ * Accepts `unknown` because `process.exitCode` is `number | string | undefined` at runtime
+ * (a string is legal and coerced by Node); anything not a finite number means "nothing was
+ * reported", which is success.
+ */
+export function finalExitCode(pending: unknown): number {
+  const code = typeof pending === 'string' ? Number(pending) : pending
+  return typeof code === 'number' && Number.isFinite(code) ? code : 0
+}
+
 type ResolvedOptions = ReturnType<typeof resolveOptions>
 
 /** kb-* inspection/validation commands, split out to keep each dispatch small */
@@ -33,9 +52,12 @@ export async function dispatchCommand(
   const opts = resolveOptions(ctx)
   switch (config.command) {
     case 'install':
-      return commandRegistry.install.handle(config, fs, opts)
+      // The install summary distinguishes ok / skipped / failed; the exit code follows the
+      // failures, so text and status can never disagree (US-396 AC5).
+      return dispatchWithExitCode(() => commandRegistry.install.handle(config, fs, opts))
     case 'update':
-      return commandRegistry.update.handle(config, fs, opts)
+      // Same contract as install: ok / skipped / failed, and the exit code follows.
+      return dispatchWithExitCode(() => commandRegistry.update.handle(config, fs, opts))
     case 'update-link':
       return commandRegistry['update-link'].handle(config, fs)
     case 'package':

@@ -245,12 +245,48 @@ function validateInstallUpdateOptions(options: InstallOptions | UpdateOptions): 
 
 ## Exit Code Contract
 
-| Code | Meaning                | Examples                                            |
-| ---- | ---------------------- | --------------------------------------------------- |
-| `0`  | Success                | Command completed successfully                      |
-| `1`  | Validation Error       | Invalid options, config errors, KB structure errors |
-| `2`  | Download/Network Error | Network timeout, checksum mismatch, packaging error |
-| `3`  | File System Error      | Disk full, permission denied during operation       |
+| Code | Meaning                | Examples                                                                    |
+| ---- | ---------------------- | --------------------------------------------------------------------------- |
+| `0`  | Success                | Command completed successfully                                              |
+| `1`  | Validation Error, or an `install`/`update` run that did not fully apply | Invalid options, config errors, KB structure errors; **a shipped registry that failed to copy; a run that installed/updated nothing** |
+| `2`  | Download/Network Error | Network timeout, checksum mismatch, packaging error                         |
+| `3`  | File System Error      | Disk full, permission denied during operation                               |
+
+### `install` / `update`: the code follows the tally
+
+Both commands classify every registry as `ok`, `skipped` or `failed` and derive the status
+code from that one tally — the same tally the printed summary is built from, so the text
+and the code cannot disagree:
+
+| Tally | Summary | Code |
+| ----- | ------- | ---- |
+| any `failed` | `… finished with errors (…)` | `1` |
+| no `failed`, no `ok` (everything skipped) | `Nothing to install/update (…)` | `1` |
+| at least one `ok`, no `failed` | `Installation/Update complete (…)` | `0` |
+
+A registry the source does not ship is `skipped`, never `failed`, and any number of skips
+still exits `0` as long as something was installed. Two consequences for automation: `1`
+from these two commands is not necessarily a validation error (it may be a per-registry
+copy failure or a no-op), and `update` returns a non-zero code at all — it previously
+exited `0` unless it threw.
+
+### `kb-verify` / `kb-info` / `kb-cache`: their non-zero code now reaches the shell
+
+Not new behaviour these commands *report* — new behaviour a caller *observes*. All three
+already returned `1` from their handlers (an unreadable or unextractable KB, a checksum
+mismatch, an unknown cache slot), but the entry point force-exited with an explicit
+`process.exit(0)`, and in Node an explicit code OVERRIDES `process.exitCode`. Forwarding
+the reported code (the fix AC5 required for `install`) un-swallows theirs too:
+
+| Command | Printed before and after | Exit code before | Exit code now |
+| ------- | ------------------------ | ---------------- | ------------- |
+| `pair kb-verify <kb>` | the checksum/structure failure | `0` | `1` |
+| `pair kb-info <kb>` | the KB it could not read | `0` | `1` |
+| `pair kb-cache <op>` | the cache operation that failed | `0` | `1` |
+
+A CI step that ran `pair kb-verify ./kb` and passed while printing a checksum mismatch now
+fails that step. That is the contract these commands always described — but a pipeline
+relying on the old code turning green is the one place the change is felt.
 
 ## Test Matrices
 
@@ -265,6 +301,10 @@ function validateInstallUpdateOptions(options: InstallOptions | UpdateOptions): 
 | `./local`     | Yes         | -        | Use local (offline)  | 0 or 1    |
 | -             | Yes         | -        | ERROR                | 1         |
 | `https://...` | Yes         | -        | ERROR                | 1         |
+
+The codes above are the OPTION-validation outcome only. A run that gets past validation
+still exits per the tally above — `1` when a shipped registry fails or when nothing was
+installed, whatever the source.
 
 ---
 

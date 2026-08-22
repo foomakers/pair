@@ -48,6 +48,14 @@ export class InMemoryFileSystemService implements FileSystemService {
     return read.stat(this.state, path)
   }
 
+  async realpath(path: string): Promise<string> {
+    return read.realpathSync(this.state, path)
+  }
+
+  realpathSync(path: string): string {
+    return read.realpathSync(this.state, path)
+  }
+
   async readdir(path: string): Promise<Dirent[]> {
     return read.readdir(this.state, path)
   }

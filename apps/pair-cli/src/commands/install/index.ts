@@ -21,12 +21,16 @@ export async function installCommand(
   try {
     const config = parseInstallArgs(args)
     const handlerOptions = buildInstallHandlerOptions(options)
-    await handleInstallCommand(
+    const exitCode = await handleInstallCommand(
       config,
       fs,
       handlerOptions as Parameters<typeof handleInstallCommand>[2],
     )
-    return { success: true, message: 'Installation completed successfully' }
+    // Exit 1 is also the no-op case ("Nothing to install"), which is not an error: the
+    // wrapper reports the code and lets the caller read the summary (US-396 AC5).
+    return exitCode === 0
+      ? { success: true, message: 'Installation completed successfully' }
+      : { success: false, message: `Installation completed with exit code ${exitCode}` }
   } catch (err) {
     return { success: false, message: `Installation failed: ${String(err)}` }
   }

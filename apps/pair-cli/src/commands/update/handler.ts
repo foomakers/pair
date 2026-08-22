@@ -1,7 +1,13 @@
 import type { UpdateCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname } from 'path'
-import { loadConfigWithOverrides, resolveDatasetRoot, ensureDir } from '#config'
+import {
+  loadConfigWithOverrides,
+  resolveDatasetRoot,
+  ensureDir,
+  type LoadConfigOptions,
+  type SourceDeclarationOutcome,
+} from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import {
   extractRegistries,
@@ -11,7 +17,6 @@ import {
   forEachRegistry,
   doCopyAndUpdateLinks,
   buildCopyOptions,
-  postCopyOps,
   reconcileSkillNameRegistry,
   handleBackupRollback,
   resolveEffectiveDatasetRoot,
@@ -22,7 +27,20 @@ import {
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { BackupService, type SkillNameMap, type SkillLinkPathMap } from '@pair/content-ops'
-import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
+import {
+  createCliPresenter,
+  exitCodeFor,
+  tallyRegistries,
+  type CliPresenter,
+  type RegistryResult,
+} from '#ui'
+import {
+  declaredButUnknownResults,
+  finalizeRegistryCopy,
+  reportDeclaredButUnknown,
+  reportNotShipped,
+  reportSourceDeclaration,
+} from '../registry-run'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
@@ -48,17 +66,22 @@ type UpdateContext = {
   options: UpdateHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
+  sourceDeclaration?: SourceDeclarationOutcome | undefined
 }
 
 /**
  * Handles the update command execution.
  * Processes UpdateCommandConfig to update KB content from various sources.
+ *
+ * Returns the process exit code, on the same contract as install: a registry the source
+ * does not ship is skipped (not ok, not failed), and a run that updated nothing does not
+ * report success (US-396 AC1/AC5).
  */
 export async function handleUpdateCommand(
   config: UpdateCommandConfig,
   fs: FileSystemService,
   options?: UpdateHandlerOptions,
-): Promise<void> {
+): Promise<number> {
   const logLevel =
     (config as unknown as { logLevel?: LogEntry['level'] }).logLevel ??
     options?.minLogLevel ??
@@ -67,10 +90,15 @@ export async function handleUpdateCommand(
   const presenter = options?.presenter ?? createCliPresenter(pushLog)
 
   try {
-    const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
+    const { datasetRoot, registries, baseTarget, sourceDeclaration, resolution } =
+      await setupUpdateContext(fs, config, options)
+    // Same reporting as install: a source that ships a broken config never aborts the run,
+    // the consumer's own resolution stands, and an applied declaration names its chain
+    // (US-396).
+    reportSourceDeclaration({ declaration: sourceDeclaration, resolution, presenter })
     await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
     validateUpdateContext(fs, registries, baseTarget)
-    await executeUpdate({
+    return await executeUpdate({
       fs,
       datasetRoot,
       registries,
@@ -78,10 +106,36 @@ export async function handleUpdateCommand(
       options,
       pushLog,
       presenter,
+      ...(sourceDeclaration && { sourceDeclaration }),
     })
   } catch (err) {
     pushLog('error', `Update failed: ${String(err)}`)
     throw err
+  }
+}
+
+/**
+ * A named source (`--source`, `--url`, `--git`) declares its own registries on update
+ * exactly as it does on install. Reading the declaration on install only meant the FIRST
+ * update after a successful install re-installed the same skills under the CLI's default
+ * prefix, leaving both copies behind — a state install alone could never produce (US-396).
+ */
+function namesItsOwnSource(config: UpdateCommandConfig): boolean {
+  return config.resolution !== 'default'
+}
+
+/** Mirrors install's resolution exactly: layer 2 from a named source, layer 3 = the target. */
+function resolveConfigOptions(
+  config: UpdateCommandConfig,
+  datasetRoot: string,
+  projectRoot: string,
+  options?: UpdateHandlerOptions,
+): LoadConfigOptions {
+  return {
+    projectRoot,
+    projectConfigOnly: true,
+    ...(options?.config && { customConfigPath: options.config }),
+    ...(namesItsOwnSource(config) && { sourceRoot: datasetRoot }),
   }
 }
 
@@ -93,6 +147,8 @@ async function setupUpdateContext(
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
+  sourceDeclaration?: SourceDeclarationOutcome | undefined
+  resolution: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -101,9 +157,13 @@ async function setupUpdateContext(
     // fetch, and the command would otherwise download the KB the user just refused.
     kb: (config as { kb?: boolean }).kb,
   })
-  const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
-  if (options?.config) configOptions.customConfigPath = options.config
-  const configContent = loadConfigWithOverrides(fs, configOptions)
+  // The project being updated is where its own pair.config.json lives — not the CLI's
+  // module directory, which is what the loader defaults to (US-396).
+  const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
+  const configContent = loadConfigWithOverrides(
+    fs,
+    resolveConfigOptions(config, datasetRoot, baseTarget, options),
+  )
 
   const registries = extractRegistries(configContent.config)
   const workingPathOverride = resolveWorkingPathOverride(configContent.config)
@@ -112,8 +172,15 @@ async function setupUpdateContext(
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
-  const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
-  return { datasetRoot, registries, baseTarget }
+  return {
+    datasetRoot,
+    registries,
+    baseTarget,
+    resolution: configContent.source,
+    ...(configContent.sourceDeclaration && {
+      sourceDeclaration: configContent.sourceDeclaration,
+    }),
+  }
 }
 
 function validateUpdateContext(
@@ -130,7 +197,7 @@ function validateUpdateContext(
   }
 }
 
-async function executeUpdate(context: UpdateContext): Promise<void> {
+async function executeUpdate(context: UpdateContext): Promise<number> {
   const { fs, options } = context
   const backupService = new BackupService(fs)
   const shouldBackup = options?.persistBackup || options?.autoRollback !== false
@@ -140,7 +207,7 @@ async function executeUpdate(context: UpdateContext): Promise<void> {
   }
 
   try {
-    await runUpdateSequence(backupService, context)
+    return await runUpdateSequence(backupService, context)
   } catch (err) {
     if (shouldBackup) {
       await executeRollback(backupService, err, context)
@@ -152,26 +219,43 @@ async function executeUpdate(context: UpdateContext): Promise<void> {
 async function runUpdateSequence(
   backupService: BackupService,
   context: UpdateContext,
-): Promise<void> {
-  const { fs, options, pushLog } = context
+): Promise<number> {
+  const { fs, options, presenter, pushLog } = context
   const shouldBackup = options?.persistBackup || options?.autoRollback !== false
+  const startTime = Date.now()
 
-  await updateRegistries(context)
+  const results = await updateRegistries(context)
+  const tally = tallyRegistries(results)
 
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'update')
   }
 
-  await writeProjectLlmsTxt(fs, context.baseTarget, pushLog)
-  await recordInstalledVersion({
-    fs,
-    datasetRoot: context.datasetRoot,
-    baseTarget: context.baseTarget,
-  })
+  // A run that updated nothing writes neither the project index nor the version marker.
+  // No `failed === 0` guard here, unlike install: update's failure path is
+  // rollback-then-rethrow (`executeUpdate`), so a run that reaches this line has no failed
+  // registry to protect the marker from. Guarding on a condition that cannot occur would
+  // read as if update shared install's continue-on-failure behaviour, and it does not.
+  if (tally.ok > 0) {
+    await writeProjectLlmsTxt(fs, context.baseTarget, pushLog)
+    await recordInstalledVersion({
+      fs,
+      datasetRoot: context.datasetRoot,
+      baseTarget: context.baseTarget,
+    })
+  }
 
   if (!options?.persistBackup && shouldBackup) {
     await backupService.commit(false)
   }
+
+  // LAST, as install prints it: everything that can still fail and roll the run back has
+  // run. Printed inside `updateRegistries` it preceded the link transformation, so a
+  // throw there put `✓ Update complete` on screen immediately above `Rolling back...`
+  // and a non-zero exit — the text-vs-status disagreement AC5 exists to remove.
+  presenter.summary(results, 'update', Date.now() - startTime)
+
+  return exitCodeFor(tally)
 }
 
 async function performBackup(backupService: BackupService, context: UpdateContext): Promise<void> {
@@ -214,48 +298,46 @@ interface UpdateRegistryCtx {
   total: number
 }
 
-async function finalizeRegistryCopy(
-  ctx: UpdateRegistryCtx,
-  paths: { effectiveTarget: string; datasetPath: string },
-): Promise<void> {
-  const { fs, registryConfig, baseTarget } = ctx
-  await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
-}
-
-async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<{
-  skillNameMap?: SkillNameMap | undefined
-  skillLinkPathMap?: SkillLinkPathMap | undefined
-  result: RegistryResult
+/** Where this registry reads from and writes to, announced to the reader. */
+async function beginRegistryUpdate(ctx: UpdateRegistryCtx): Promise<{
+  effectiveTarget: string
+  datasetPath: string
+  effectiveDatasetRoot: string
 }> {
-  const {
-    fs,
-    datasetRoot,
-    registryName,
-    registryConfig,
-    baseTarget,
-    pushLog,
-    presenter,
-    index,
-    total,
-  } = ctx
-  const resolved = resolveRegistryPaths({
+  const { fs, datasetRoot, registryName, registryConfig, baseTarget, pushLog, presenter } = ctx
+  const { target: effectiveTarget, source: datasetPath } = resolveRegistryPaths({
     name: registryName,
     config: registryConfig,
     datasetRoot,
     fs,
     baseTarget,
   })
-  const { target: effectiveTarget, source: datasetPath } = resolved
   await ensureDir(fs, dirname(effectiveTarget))
-  const effectiveDatasetRoot = resolveEffectiveDatasetRoot(registryConfig, baseTarget, datasetRoot)
   await logDatasetEntries(fs, datasetPath, pushLog)
   presenter.registryStart({
     name: registryName,
-    index,
-    total,
+    index: ctx.index,
+    total: ctx.total,
     source: datasetPath,
     target: effectiveTarget,
   })
+  return {
+    effectiveTarget,
+    datasetPath,
+    effectiveDatasetRoot: resolveEffectiveDatasetRoot(registryConfig, baseTarget, datasetRoot),
+  }
+}
+
+type RegistryOutcome = {
+  skillNameMap?: SkillNameMap | undefined
+  skillLinkPathMap?: SkillLinkPathMap | undefined
+  result: RegistryResult
+}
+
+async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<RegistryOutcome> {
+  const { fs, registryName, registryConfig, presenter } = ctx
+  const { effectiveTarget, datasetPath, effectiveDatasetRoot } = await beginRegistryUpdate(ctx)
+
   const copyResult = await doCopyAndUpdateLinks(fs, {
     source: datasetPath,
     target: effectiveTarget,
@@ -263,12 +345,18 @@ async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<{
     options: buildCopyOptions(registryConfig),
   })
 
+  // Absent is not updated: an external source that ships two of the five registries must
+  // not be reported as having updated five (US-396 AC1).
+  if (copyResult['skipped']) {
+    return { result: reportNotShipped(ctx, { effectiveTarget, datasetPath }) }
+  }
+
   await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
     skillLinkPathMap: copyResult['skillLinkPathMap'] as SkillLinkPathMap | undefined,
-    result: { name: registryName, target: effectiveTarget, ok: true },
+    result: { name: registryName, target: effectiveTarget, status: 'ok' },
   }
 }
 
@@ -276,8 +364,10 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
   const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = context
   const accumulatedSkillNameMap: SkillNameMap = new Map()
   const accumulatedSkillLinkPathMap: SkillLinkPathMap = new Map()
-  const total = Object.keys(registries).length
-  const startTime = Date.now()
+  // Counted into the header before the loop, for the reason install states: these land in
+  // the tally the summary prints (US-396 review round 4).
+  const declaredButUnknown = declaredButUnknownResults(context.sourceDeclaration)
+  const total = Object.keys(registries).length + declaredButUnknown.length
 
   presenter.startOperation('update', total)
 
@@ -309,8 +399,7 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     accumulatedSkillLinkPathMap,
   )
 
-  presenter.summary(results, 'update', Date.now() - startTime)
-  return results
+  return [...results, ...reportDeclaredButUnknown(declaredButUnknown, presenter)]
 }
 
 async function executeRollback(

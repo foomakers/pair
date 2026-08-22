@@ -759,3 +759,53 @@ describe('createPackageZip - content checksum', () => {
     }
   })
 })
+
+/**
+ * US-396: a released KB has to carry its OWN registry declaration, or the prefix it
+ * declares applies from a directory/git source but silently not from the release ZIP —
+ * the very artifact the docs present as the equivalent install form.
+ */
+describe('createPackageZip - source KB declaration', () => {
+  beforeEach(setupTest)
+  afterEach(cleanupTest)
+
+  async function packagedEntries(): Promise<Record<string, string>> {
+    return JSON.parse(await fsService.readFile(outputPath)) as Record<string, string>
+  }
+
+  it("ships the KB's pair.config.json at the package root when it declares one", async () => {
+    const projectRoot = '/test-project'
+    const declaration = JSON.stringify({ asset_registries: { skills: { prefix: 'acme-kb' } } })
+    await fsService.writeFile(`${projectRoot}/.pair/knowledge/README.md`, 'KB content')
+    await fsService.writeFile(`${projectRoot}/pair.config.json`, declaration)
+
+    await createPackageZip(
+      {
+        projectRoot,
+        registries: [testRegistry('.pair/knowledge', '.pair-knowledge')],
+        manifest: testManifest({ registries: ['knowledge'] }),
+        outputPath,
+      },
+      fsService,
+    )
+
+    expect((await packagedEntries())['pair.config.json']).toBe(declaration)
+  })
+
+  it('packages a KB without a declaration exactly as before', async () => {
+    const projectRoot = '/test-project'
+    await fsService.writeFile(`${projectRoot}/.pair/knowledge/README.md`, 'KB content')
+
+    await createPackageZip(
+      {
+        projectRoot,
+        registries: [testRegistry('.pair/knowledge', '.pair-knowledge')],
+        manifest: testManifest({ registries: ['knowledge'] }),
+        outputPath,
+      },
+      fsService,
+    )
+
+    expect(Object.keys(await packagedEntries())).not.toContain('pair.config.json')
+  })
+})

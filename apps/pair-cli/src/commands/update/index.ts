@@ -21,12 +21,14 @@ export async function updateCommand(
   try {
     const config = parseUpdateArgs(args)
     const handlerOptions = buildUpdateHandlerOptions(options)
-    await handleUpdateCommand(
+    const exitCode = await handleUpdateCommand(
       config,
       fs,
       handlerOptions as Parameters<typeof handleUpdateCommand>[2],
     )
-    return { success: true, message: 'Update completed successfully' }
+    return exitCode === 0
+      ? { success: true, message: 'Update completed successfully' }
+      : { success: false, message: `Update completed with exit code ${exitCode}` }
   } catch (err) {
     return { success: false, message: `Update failed: ${String(err)}` }
   }

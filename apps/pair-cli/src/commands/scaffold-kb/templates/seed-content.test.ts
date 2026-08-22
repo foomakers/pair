@@ -24,4 +24,10 @@ describe('renderExampleSkill', () => {
   it('states the installed skill name so the prefix convention is visible', () => {
     expect(skill).toContain('acme-kb-example-skill')
   })
+
+  // US-396: the prefix now applies straight from this KB's pair.config.json.
+  it('carries no stale prefix caveat telling the reader to copy the config in', () => {
+    expect(skill).not.toContain('Prefix caveat')
+    expect(skill).not.toContain('pair-example-skill')
+  })
 })

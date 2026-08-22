@@ -1,6 +1,6 @@
 import { join, relative, dirname } from 'path/posix'
 import { logger } from '../../observability'
-import { copyFileHelper, isExcluded } from '../../file-system'
+import { copyFileHelper, isExcluded, entryIsCopyable } from '../../file-system'
 import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
 import { transformPath, isRegistryEntryPath } from '../naming-transforms'
@@ -23,6 +23,10 @@ import type { CopyPathOpsResult, TransformOpts } from './copy-types'
 /**
  * Recursively collects all files under a directory, returning their paths
  * relative to the given root directory.
+ *
+ * Symlinks are classified by `entryIsCopyable` — the same predicate the plain walk uses,
+ * so the transform path cannot disagree with it about what a link means (an escaping one
+ * leaked the target's bytes, a contained one pointing at a directory threw `EISDIR`).
  */
 async function collectFiles(
   fileService: FileSystemService,
@@ -33,6 +37,7 @@ async function collectFiles(
   const entries = await fileService.readdir(dirPath)
   for (const entry of entries) {
     const entryPath = join(dirPath, entry.name)
+    if (!(await entryIsCopyable(fileService, entry, entryPath, rootPath))) continue
     if (entry.isDirectory()) {
       const subFiles = await collectFiles(fileService, entryPath, rootPath)
       result.push(...subFiles)

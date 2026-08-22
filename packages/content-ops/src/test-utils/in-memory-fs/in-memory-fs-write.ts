@@ -37,6 +37,9 @@ export async function chmod(state: InMemoryFsState, path: string, mode: number):
 
 export async function unlink(state: InMemoryFsState, path: string): Promise<void> {
   const resolvedPath = state.resolvePath(path)
+  // A symlink is removed BY ITS OWN PATH, never followed — the one read/write asymmetry
+  // the real syscall has, and what lets a link be replaced in place.
+  if (state.symlinks.delete(resolvedPath)) return
   if (!state.files.has(resolvedPath)) {
     throw new Error(`File not found: ${path}`)
   }

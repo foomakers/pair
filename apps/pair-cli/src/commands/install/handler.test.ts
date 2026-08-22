@@ -773,8 +773,19 @@ describe('install — llms.txt generation', () => {
  * it logs a warning and skips). The handler should reject upfront if the
  * resolved dataset root has no usable content.
  */
+/**
+ * A source that ships nothing installable is a NO-OP, reported as one — not a raw thrown
+ * error (US-396 review round 3).
+ *
+ * The pre-flight this replaces (`validateDatasetContent`) threw
+ * `Dataset root has no content for configured registries (expected: …)` before any summary
+ * was built, so the story's own edge case — "report the no-op and the reason" — was
+ * reachable in `summary.test.ts` and nowhere in the product. Every registry now prints its
+ * resolved source → target, then its skip reason, and the exit code says the run installed
+ * nothing.
+ */
 describe('BUG 2: dataset root validation', () => {
-  test('T2.1 — rejects when resolved dataset root has no content', async () => {
+  test('T2.1 — reports a no-op, and writes nothing, when the dataset root has no content', async () => {
     const cwd = '/test-project'
 
     const testConfig = {
@@ -809,8 +820,22 @@ describe('BUG 2: dataset root validation', () => {
       offline: false,
     }
 
-    // Should reject because dataset root has no usable content for registries
-    await expect(handleInstallCommand(config, fs)).rejects.toThrow(/dataset/i)
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleInstallCommand(config, fs)
+    consoleSpy.mockRestore()
+
+    // Non-zero: nothing was installed, so this is not a success
+    expect(exitCode).toBe(1)
+    expect(lines.join('\n')).toContain('Nothing to install')
+    expect(lines.join('\n')).toContain('not shipped by this source')
+    // ...and the project is untouched: no target, no index, no version marker
+    expect(await fs.exists(`${cwd}/.github`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/llms.txt`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(false)
   })
 })
 
@@ -865,11 +890,14 @@ describe('BUG 4: install precondition — targets must not exist', () => {
 })
 
 /**
- * BUG #03: install must report skipped registries (source missing)
+ * BUG #03: install must report a registry whose source is missing
  *
- * When a registry source does not exist, the install should complete but
- * mark the registry as failed (ok: false) so the summary clearly shows
- * which registries were skipped. Previously this was silently swallowed.
+ * Under the three-outcome model (US-396) a registry the source does not ship is
+ * `skipped — not shipped by this source`, NEVER `failed`: it is absent, not broken,
+ * so it costs the run neither a red summary nor a non-zero exit. `failed` is reserved
+ * for a registry that was shipped and could not be installed. (`RegistryResult.ok` no
+ * longer exists — the field is `status: ok | skipped | failed`.) Before this bug was
+ * fixed the missing source was silently swallowed instead of being reported at all.
  */
 describe('BUG #03: install reports skipped registries', () => {
   test('completes without throw when a registry source is missing', async () => {
@@ -915,9 +943,10 @@ describe('BUG #03: install reports skipped registries', () => {
     }
 
     // Should NOT throw — completes with skipped registries reported in summary
-    await handleInstallCommand(config, fs)
+    const exitCode = await handleInstallCommand(config, fs)
 
-    // Knowledge was installed, github was skipped
+    // Knowledge was installed, github was skipped — a skip is not a failure, so 0.
+    expect(exitCode).toBe(0)
     expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
     expect(await fs.exists(`${cwd}/.github`)).toBe(false)
   })
@@ -1039,6 +1068,9 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
     expect(agentsContent).toContain('/ext-catalog-next')
   })
 
+  // US-396: a collision is REPORTED, not thrown past the summary. The run no longer
+  // succeeds silently and no longer aborts the registries after it — the registry is
+  // marked failed with the collision message and the exit code carries it out (AC2).
   test('name collision after flattening fails install with an explicit error', async () => {
     const fs = new InMemoryFileSystemService(
       {
@@ -1075,7 +1107,15 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
       offline: false,
     }
 
-    await expect(handleInstallCommand(installConfig, fs)).rejects.toThrow(/collision/i)
+    const printed: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      printed.push(String(m))
+    })
+    const exitCode = await handleInstallCommand(installConfig, fs)
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(1)
+    expect(printed.join('\n')).toMatch(/collision/i)
   })
 })
 
@@ -1338,5 +1378,672 @@ describe('US-395: `pair install --url <mirror>` installs what the mirror served'
     )
 
     consoleLogSpy.mockRestore()
+  })
+})
+
+/**
+ * US-396 half A — a registry the source does not ship is NOT a failure.
+ *
+ * The install summary used to count every absent registry as failed while the command
+ * exited 0, so a legitimate external KB (knowledge + skills, never adoption) ended on a
+ * red line that contradicted the status code.
+ */
+describe('US-396: absent registries are skipped, real failures are not', () => {
+  const cwd = '/project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+  const twoRegistries = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      github: {
+        source: '.github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GH',
+      },
+    },
+  }
+
+  const defaultInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'default',
+    kb: true,
+    offline: false,
+  }
+
+  function projectFs(extra: Record<string, string>) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  /** In-memory double: everything real except one operation on one path. */
+  function breakingOn(
+    fs: InMemoryFileSystemService,
+    method: keyof InMemoryFileSystemService,
+    pathFragment: string,
+  ): InMemoryFileSystemService {
+    return new Proxy(fs, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown
+        if (typeof value !== 'function') return value
+        const bound = (value as (...args: unknown[]) => unknown).bind(target)
+        if (prop !== method) return bound
+        return (...args: unknown[]) => {
+          if (String(args[0]).includes(pathFragment)) throw new Error('disk on fire')
+          return bound(...args)
+        }
+      },
+    }) as InMemoryFileSystemService
+  }
+
+  test('an absent registry does not fail the run — exit code stays 0', async () => {
+    const fs = projectFs({ [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test' })
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.github`)).toBe(false)
+  })
+
+  test('the summary names the skipped registry and its reason, and reads as success', async () => {
+    const fs = projectFs({ [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test' })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(defaultInstall, fs)
+    consoleSpy.mockRestore()
+
+    const printed = lines.join('\n')
+    expect(printed).toContain('Installation complete (1 ok, 1 skipped')
+    expect(printed).toContain('not shipped by this source')
+    expect(printed).toContain('github')
+    expect(printed).not.toContain('finished with errors')
+  })
+
+  test('a registry present in the source that fails is still reported as failed (exit 1)', async () => {
+    const fs = breakingOn(
+      projectFs({
+        [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test',
+        [`${datasetSrc}/.github/workflow.yml`]: 'on: push',
+      }),
+      'readdir',
+      `${datasetSrc}/.github`,
+    )
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(1)
+    // The healthy registry still installed — one broken registry does not abort the rest
+    expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
+  })
+})
+
+/**
+ * US-396 half B — `install --source` honours the source KB's own declaration.
+ *
+ * The KB declares its registries (notably `skills.prefix`) in its own pair.config.json.
+ * Install used to resolve the CONSUMING project's config only, so the declared
+ * namespacing silently did not apply and the maintainer had to tell every consumer to
+ * copy the file in.
+ */
+describe('US-396: the source KB declares, the consuming project overrides', () => {
+  const cwd = '/consumer'
+  const kb = '/acme-kb'
+
+  const consumerBaseConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      skills: {
+        source: '.skills',
+        behavior: 'overwrite',
+        flatten: true,
+        flattenDepth: 2,
+        prefix: 'pair',
+        targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        description: 'Skills',
+      },
+    },
+  }
+
+  const sourceInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'local',
+    path: kb,
+    offline: true,
+    kb: true,
+  }
+
+  function consumerFs(extra: Record<string, string> = {}) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${kb}/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'acme-kb' } },
+        }),
+        [`${kb}/.pair/knowledge/guide.md`]: '# Acme guide',
+        [`${kb}/.skills/example-skill/SKILL.md`]: '---\nname: example-skill\n---\n',
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  test('installs the skills under the prefix the source declares, with no config copied (AC3)', async () => {
+    const fs = consumerFs()
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test("the consuming project's deliberate override beats the source declaration (AC4)", async () => {
+    const fs = consumerFs({
+      [`${cwd}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'house-rules' } },
+      }),
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.claude/skills/house-rules-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test('a malformed source config never aborts the install and is never half-applied', async () => {
+    const fs = consumerFs({ [`${kb}/pair.config.json`]: '{ broken' })
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+  })
+
+  test('a registry the source declares but this CLI does not know is skipped, not dropped', async () => {
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: {
+          skills: { prefix: 'acme-kb' },
+          telemetry: {
+            source: '.telemetry',
+            behavior: 'mirror',
+            targets: [{ path: '.telemetry', mode: 'canonical' }],
+          },
+        },
+      }),
+      [`${kb}/.telemetry/traces.md`]: '# traces',
+    })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.telemetry/traces.md`)).toBe(false)
+    const printed = lines.join('\n')
+    expect(printed).toContain('declared by source, unknown to this CLI')
+    expect(printed).toContain('telemetry')
+  })
+
+  test('the announced registry count covers every registry the summary tallies', async () => {
+    // 2 known + 1 declared-but-unknown: the header announced the 2 the CLI knows while the
+    // summary accounted for 3 outcomes, so the third skip had nothing on screen explaining
+    // where it came from (US-396 review round 4).
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' }, telemetry: { source: '.telemetry' } },
+      }),
+    })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    const printed = lines.join('\n')
+    expect(printed).toContain('Installing 3 registries')
+    expect(printed).toContain('2 ok, 1 skipped')
+  })
+
+  test('the default source path reads no declaration — behaviour is unchanged', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        // A stray declaration at the dataset root must not be read on the default path
+        [`${cwd}/packages/knowledge-hub/dataset/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'acme-kb' } },
+        }),
+        [`${cwd}/packages/knowledge-hub/dataset/.skills/example-skill/SKILL.md`]:
+          '---\nname: example-skill\n---\n',
+      },
+      cwd,
+      cwd,
+    )
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+  })
+})
+
+/**
+ * US-396 — the three things the source declaration must NOT be able to do, exercised
+ * through the real install rather than the loader alone: repoint where the install
+ * writes, hide its own breakage, or leave a "complete" version marker behind a failure.
+ */
+describe('US-396: the source declares, but never decides where the install writes', () => {
+  const cwd = '/consumer'
+  const kb = '/acme-kb'
+
+  const consumerBaseConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      skills: {
+        source: '.skills',
+        behavior: 'overwrite',
+        flatten: true,
+        flattenDepth: 2,
+        prefix: 'pair',
+        targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        description: 'Skills',
+      },
+    },
+  }
+
+  const sourceInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'local',
+    path: kb,
+    offline: true,
+    kb: true,
+  }
+
+  function consumerFs(extra: Record<string, string> = {}, moduleDir = cwd) {
+    return new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${kb}/.pair/knowledge/guide.md`]: '# Acme guide',
+        [`${kb}/.skills/example-skill/SKILL.md`]: '---\nname: example-skill\n---\n',
+        ...extra,
+      },
+      moduleDir,
+      cwd,
+    )
+  }
+
+  test('a source-declared target outside the project is ignored, not written to', async () => {
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            targets: [{ path: '../../.zshenv', mode: 'canonical' }],
+          },
+        },
+      }),
+    })
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists('/.zshenv')).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
+  })
+
+  test('a source-declared source outside the KB is ignored — nothing outside it is read', async () => {
+    // The read side of the same trust boundary as the `targets` case above: `source` is
+    // resolved against the KB root, so `..`/absolute would copy the victim's own files
+    // (SSH keys, anything) into a tree they commit.
+    const fs = consumerFs({
+      '/home/victim/.ssh/id_rsa': 'PRIVATE KEY',
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: { source: '../home/victim/.ssh' },
+          skills: { source: '/home/victim/.ssh' },
+        },
+      }),
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.pair/knowledge/id_rsa`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-id_rsa`)).toBe(false)
+    // ...and the KB's own content still installs: the field was dropped, not the run
+    expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
+  })
+
+  test('a source-declared prefix that traverses is ignored — the default prefix stands', async () => {
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: '../../../tmp/evil' } },
+      }),
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists('/tmp/evil-example-skill/SKILL.md')).toBe(false)
+  })
+
+  test("the consumer's own pair.config.json wins even when the CLI module dir is elsewhere (AC4)", async () => {
+    // The released layout: the package root (module dir) is NOT the project being
+    // installed into. Reading the consumer's config at the module dir found nothing.
+    const fs = consumerFs(
+      {
+        [`${kb}/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'acme-kb' } },
+        }),
+        [`${cwd}/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'house-rules' } },
+        }),
+      },
+      '/opt/pair-cli',
+    )
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.claude/skills/house-rules-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test('an applied declaration names the resolution chain on the console', async () => {
+    // `applied` has a consumer: the one layer the consumer did not write says so, and the
+    // KB maintainer can see the declaration was honoured (US-396).
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' } },
+      }),
+    })
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    expect(lines.join('\n')).toContain(`source KB declaration: ${kb}`)
+  })
+
+  test('an install with no source declaration says nothing about the chain', async () => {
+    const fs = consumerFs()
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    consoleSpy.mockRestore()
+
+    expect(lines.join('\n')).not.toContain('Configuration:')
+  })
+
+  test('a malformed source config is warned about where the user can see it', async () => {
+    const fs = consumerFs({ [`${kb}/pair.config.json`]: '{ broken' })
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => {
+      warned.push(String(m))
+    })
+
+    await handleInstallCommand(sourceInstall, fs)
+    warnSpy.mockRestore()
+
+    expect(warned.join('\n')).toContain('pair.config.json')
+  })
+
+  test('a source-declared source that is a SYMLINK out of the KB is ignored too', async () => {
+    // Lexical containment does not see this: `leak` escapes nothing by name. `fs.stat`
+    // follows the link, reports a directory, and the copy walks the victim's files into
+    // the tree they commit (US-396 review round 3).
+    const fs = consumerFs({ '/home/victim/.ssh/id_rsa': 'PRIVATE KEY' })
+    await fs.symlink('/home/victim/.ssh', `${kb}/leak`)
+    await fs.writeFile(
+      `${kb}/pair.config.json`,
+      JSON.stringify({ asset_registries: { knowledge: { source: 'leak' } } }),
+    )
+
+    await handleInstallCommand(sourceInstall, fs)
+
+    expect(await fs.exists(`${cwd}/.pair/knowledge/id_rsa`)).toBe(false)
+    expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
+  })
+
+  test('a source shipping only skills still writes .pair/ artifacts', async () => {
+    // `.pair/` used to exist only because the SKIPPED `knowledge` registry's `ensureDir`
+    // had created it as a side effect. Deciding "not shipped" before touching the project
+    // removed that accident, and the skill-name manifest write then failed with
+    // `ENOENT: … /.pair/.skill-name-map.json` — out of the whole install. Both writers now
+    // own their directory. (Caught by the `registry-exclude` smoke scenario.)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(consumerBaseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        // Only `.skills` — nothing the `.pair/`-targeted registries ship
+        [`${kb}/.pair/README.md`]: '# Acme KB',
+        [`${kb}/.skills/example-skill/SKILL.md`]: '---\nname: example-skill\n---\n',
+      },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.pair/.skill-name-map.json`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.pair/llms.txt`)).toBe(true)
+  })
+
+  test("a source's typo never aborts the consumer's install", async () => {
+    // `flatten: false` is a plausible declaration and a well-formed boolean. Over the
+    // base `skills` (flatten: true, flattenDepth: 2) the MERGED entry is invalid
+    // (`flattenDepth requires flatten: true`), and `setupInstallContext` validates with a
+    // hard throw: the user saw `Error: Registry 'skills' flattenDepth requires flatten:
+    // true` — naming their OWN registry — exit 1, nothing installed.
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { flatten: false } },
+      }),
+    })
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => warned.push(String(m)))
+
+    const exitCode = await handleInstallCommand(sourceInstall, fs)
+    warnSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(true)
+    expect(warned.join('\n')).toMatch(/pair\.config\.json/)
+  })
+})
+
+/**
+ * US-396 — a partial install is not an installed KB. Recording the version anyway silences
+ * the drift hint while a registry is missing, and the re-run aborts on "already exists".
+ */
+describe('US-396: a failed registry leaves no "installed" version marker', () => {
+  const cwd = '/project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+  const marker = `${cwd}/.pair/.kb-version.json`
+
+  const twoRegistries = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      github: {
+        source: '.github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GH',
+      },
+    },
+  }
+
+  const defaultInstall: InstallCommandConfig = {
+    command: 'install',
+    resolution: 'default',
+    kb: true,
+    offline: false,
+  }
+
+  function projectFs(extra: Record<string, string>) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+          version: '1.4.0',
+        }),
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  function breakingOn(
+    fs: InMemoryFileSystemService,
+    method: keyof InMemoryFileSystemService,
+    pathFragment: string,
+  ): InMemoryFileSystemService {
+    return new Proxy(fs, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver) as unknown
+        if (typeof value !== 'function') return value
+        const bound = (value as (...args: unknown[]) => unknown).bind(target)
+        if (prop !== method) return bound
+        return (...args: unknown[]) => {
+          if (String(args[0]).includes(pathFragment)) throw new Error('disk on fire')
+          return bound(...args)
+        }
+      },
+    }) as InMemoryFileSystemService
+  }
+
+  test('a clean run does record it', async () => {
+    const fs = projectFs({
+      [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test',
+      [`${datasetSrc}/.github/workflow.yml`]: 'on: push',
+    })
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(0)
+    expect(await fs.exists(marker)).toBe(true)
+  })
+
+  test('a run with one failed registry does not', async () => {
+    const fs = breakingOn(
+      projectFs({
+        [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test',
+        [`${datasetSrc}/.github/workflow.yml`]: 'on: push',
+      }),
+      'readdir',
+      `${datasetSrc}/.github`,
+    )
+
+    const exitCode = await handleInstallCommand(defaultInstall, fs)
+
+    expect(exitCode).toBe(1)
+    expect(await fs.exists(marker)).toBe(false)
+  })
+})
+
+/**
+ * US-396 — `--list-targets` and `install` must agree. Resolving from the CLI module dir
+ * made the command whose only job is to say where content lands print the CLI defaults
+ * while `install` wrote to the project's overridden targets.
+ */
+describe('US-396: --list-targets reflects the project it describes', () => {
+  const cwd = '/consumer'
+  const moduleDir = '/opt/pair-cli'
+
+  const baseConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+    },
+  }
+
+  test("prints the project's own pair.config.json override, not the CLI default", async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/config.json`]: JSON.stringify(baseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/pair.config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: { targets: [{ path: 'docs/kb', mode: 'canonical' }] },
+          },
+        }),
+      },
+      moduleDir,
+      cwd,
+    )
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleInstallCommand(
+      { command: 'install', resolution: 'list-targets' },
+      fs,
+    )
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    expect(lines.join('\n')).toContain('docs/kb')
   })
 })

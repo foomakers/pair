@@ -2,6 +2,7 @@ import { relative } from 'path'
 import { Stats } from 'fs'
 import { FileSystemService } from '.'
 import { createError } from '../observability'
+import { resolvesWithin } from './path-containment'
 
 type PathValidationContext = {
   source: string
@@ -32,6 +33,32 @@ export function validatePaths(context: PathValidationContext): void {
       target,
     })
   }
+}
+
+/**
+ * The same rule as `validatePaths`, decided on the PHYSICAL path.
+ *
+ * `validatePaths` compares names, and a name cannot describe where a symlink points:
+ * a source root that IS a symlink out of the dataset (`leak -> ../../.ssh`) reads as
+ * contained and is then `stat`ed through the link, so the copy walks someone else's
+ * directory. Untrusted dataset content (an external KB, US-396) makes that reachable
+ * from configuration, so containment is checked where the read actually happens.
+ */
+export async function validateSourceContained(context: {
+  fileService: FileSystemService
+  srcPath: string
+  datasetRoot: string
+  source: string
+  target: string
+}): Promise<void> {
+  const { fileService, srcPath, datasetRoot, source, target } = context
+  if (await resolvesWithin(fileService, srcPath, datasetRoot)) return
+  throw createError({
+    type: 'PATH_ESCAPE',
+    message: `Source escapes the dataset root once symlinks are resolved: ${srcPath}. Aborting.`,
+    source,
+    target,
+  })
 }
 
 /**

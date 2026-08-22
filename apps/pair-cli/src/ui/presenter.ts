@@ -1,12 +1,8 @@
 import chalk from 'chalk'
 import type { LogEntry } from '#diagnostics'
+import { buildOperationSummary, type OperationSummary, type RegistryResult } from './summary'
 
-export interface RegistryResult {
-  name: string
-  target: string
-  ok: boolean
-  error?: string | undefined
-}
+export type { RegistryResult, RegistryStatus, RegistryTally, OperationSummary } from './summary'
 
 type PushLog = (level: LogEntry['level'], message: string) => void
 
@@ -22,63 +18,43 @@ export interface CliPresenter {
   startOperation(operation: 'install' | 'update', registryCount: number): void
   registryStart(reg: RegistryProgress): void
   registryDone(name: string): void
+  registrySkipped(name: string, reason: string): void
   registryError(name: string, error: string): void
+  /** Something the user must know about that is not tied to one registry. */
+  warning(message: string): void
   phase(message: string): void
   summary(results: RegistryResult[], operation: 'install' | 'update', elapsedMs: number): void
 }
 
 const SEPARATOR = '──────────────────────────────────────'
 
-function formatElapsed(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
-
 function opLabel(operation: 'install' | 'update'): string {
   return operation === 'install' ? 'Installing' : 'Updating'
-}
-
-function summaryLabel(operation: 'install' | 'update'): string {
-  return operation === 'install' ? 'Installation' : 'Update'
 }
 
 function plural(count: number): string {
   return count === 1 ? 'registry' : 'registries'
 }
 
-function printSummaryBlock(
-  results: RegistryResult[],
-  operation: 'install' | 'update',
-  elapsedMs: number,
-): string {
-  const ok = results.filter(r => r.ok).length
-  const failed = results.length - ok
-  const elapsed = formatElapsed(elapsedMs)
-  const label = summaryLabel(operation)
-
-  console.log(`\n  ${chalk.dim(SEPARATOR)}`)
-  if (failed === 0) {
-    console.log(
-      `  ${chalk.green('✓')} ${label} complete (${results.length} ${plural(results.length)}, ${elapsed})`,
-    )
-  } else {
-    console.log(
-      `  ${chalk.yellow('!')} ${label} finished with errors (${ok} ok, ${failed} failed, ${elapsed})`,
-    )
-  }
-  console.log()
-  return `${label} complete: ${ok} ok, ${failed} failed (${elapsed})`
+/** ✓ for a clean run, ! for anything the reader has to act on (failure or no-op). */
+function marker(tone: OperationSummary['tone']): string {
+  return tone === 'success' ? chalk.green('✓') : chalk.yellow('!')
 }
 
-export function createCliPresenter(pushLog: PushLog): CliPresenter {
-  return {
-    startOperation(operation, registryCount) {
-      const msg = `${opLabel(operation)} ${registryCount} ${plural(registryCount)}`
-      console.log(`\n  ${chalk.bold(msg)}`)
-      console.log(`  ${chalk.dim(SEPARATOR)}\n`)
-      pushLog('info', msg)
-    },
+function printSummaryBlock(summary: OperationSummary): void {
+  console.log(`\n  ${chalk.dim(SEPARATOR)}`)
+  console.log(`  ${marker(summary.tone)} ${summary.headline}`)
+  for (const detail of summary.details) {
+    console.log(`    ${chalk.dim(detail)}`)
+  }
+  console.log()
+}
 
+/** The per-registry progress lines: one block, so the run-level reporter stays small. */
+function registryReporter(
+  pushLog: PushLog,
+): Pick<CliPresenter, 'registryStart' | 'registryDone' | 'registrySkipped' | 'registryError'> {
+  return {
     registryStart({ name, index, total, source, target }) {
       const counter = chalk.dim(`[${index + 1}/${total}]`)
       console.log(
@@ -92,9 +68,34 @@ export function createCliPresenter(pushLog: PushLog): CliPresenter {
       pushLog('info', `Successfully processed registry '${name}'`)
     },
 
+    registrySkipped(name, reason) {
+      console.log(`        ${chalk.dim(`- skipped — ${reason}`)}`)
+      pushLog('info', `Registry '${name}' skipped: ${reason}`)
+    },
+
     registryError(name, error) {
       console.log(`        ${chalk.red('✗')} ${error}`)
       pushLog('error', `Failed to process registry '${name}': ${error}`)
+    },
+  }
+}
+
+export function createCliPresenter(pushLog: PushLog): CliPresenter {
+  return {
+    ...registryReporter(pushLog),
+
+    startOperation(operation, registryCount) {
+      const msg = `${opLabel(operation)} ${registryCount} ${plural(registryCount)}`
+      console.log(`\n  ${chalk.bold(msg)}`)
+      console.log(`  ${chalk.dim(SEPARATOR)}\n`)
+      pushLog('info', msg)
+    },
+
+    // A diagnostics-only warning is a warning nobody reads: nothing consumes the log
+    // array, so this has to reach the console (US-396).
+    warning(message) {
+      console.warn(`  ${chalk.yellow('!')} ${message}`)
+      pushLog('warn', message)
     },
 
     phase(message) {
@@ -103,7 +104,9 @@ export function createCliPresenter(pushLog: PushLog): CliPresenter {
     },
 
     summary(results, operation, elapsedMs) {
-      pushLog('info', printSummaryBlock(results, operation, elapsedMs))
+      const built = buildOperationSummary(results, operation, elapsedMs)
+      printSummaryBlock(built)
+      pushLog('info', built.log)
     },
   }
 }
@@ -120,17 +123,20 @@ export function createSilentPresenter(pushLog: PushLog): CliPresenter {
     registryDone(name) {
       pushLog('info', `Successfully processed registry '${name}'`)
     },
+    registrySkipped(name, reason) {
+      pushLog('info', `Registry '${name}' skipped: ${reason}`)
+    },
     registryError(name, error) {
       pushLog('error', `Failed to process registry '${name}': ${error}`)
+    },
+    warning(message) {
+      pushLog('warn', message)
     },
     phase(message) {
       pushLog('info', message)
     },
     summary(results, operation, elapsedMs) {
-      const ok = results.filter(r => r.ok).length
-      const failed = results.length - ok
-      const label = operation === 'install' ? 'Installation' : 'Update'
-      pushLog('info', `${label} complete: ${ok} ok, ${failed} failed (${formatElapsed(elapsedMs)})`)
+      pushLog('info', buildOperationSummary(results, operation, elapsedMs).log)
     },
   }
 }

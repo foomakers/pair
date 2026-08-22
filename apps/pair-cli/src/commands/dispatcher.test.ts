@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, vi } from 'vitest'
-import { dispatchCommand } from './dispatcher'
+import { dispatchCommand, finalExitCode } from './dispatcher'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createTestFs } from '#test-utils'
 import type {
@@ -287,5 +287,24 @@ describe('dispatchCommand() - real handlers integration', () => {
     await dispatchCommand(config, fs)
 
     expect(process.exitCode).toBe(0)
+  })
+})
+
+/**
+ * US-396 AC5 — the CLI entry point force-exits, and `process.exit(0)` with an explicit
+ * code OVERRIDES `process.exitCode`. Everything above sets `process.exitCode`; without
+ * this forwarding the shell saw 0 for every one of them.
+ */
+describe('US-396 — finalExitCode forwards what the dispatcher reported', () => {
+  test.each([
+    ['a reported failure', 1, 1],
+    ['a reported non-1 code', 2, 2],
+    ['nothing reported', undefined, 0],
+    ['an explicit success', 0, 0],
+    ['a string code, which Node allows', '1', 1],
+    ['a non-numeric string', 'boom', 0],
+    ['a null', null, 0],
+  ])('%s → exit %s', (_label, pending, expected) => {
+    expect(finalExitCode(pending)).toBe(expected)
   })
 })

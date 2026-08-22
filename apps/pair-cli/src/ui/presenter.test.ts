@@ -76,31 +76,59 @@ describe('createCliPresenter', () => {
   it('summary prints success when all ok', () => {
     const presenter = createCliPresenter(pushLog)
     const results: RegistryResult[] = [
-      { name: 'a', target: '/a', ok: true },
-      { name: 'b', target: '/b', ok: true },
+      { name: 'a', target: '/a', status: 'ok' },
+      { name: 'b', target: '/b', status: 'ok' },
     ]
     presenter.summary(results, 'install', 1234)
 
     expect(consoleSpy).toHaveBeenCalledTimes(3)
-    expect(pushLog).toHaveBeenCalledWith('info', 'Installation complete: 2 ok, 0 failed (1.2s)')
+    expect(pushLog).toHaveBeenCalledWith(
+      'info',
+      'Installation complete: 2 ok, 0 skipped, 0 failed (1.2s)',
+    )
   })
 
   it('summary prints warning when some failed', () => {
     const presenter = createCliPresenter(pushLog)
     const results: RegistryResult[] = [
-      { name: 'a', target: '/a', ok: true },
-      { name: 'b', target: '/b', ok: false, error: 'bad' },
+      { name: 'a', target: '/a', status: 'ok' },
+      { name: 'b', target: '/b', status: 'failed', error: 'bad' },
     ]
     presenter.summary(results, 'update', 500)
 
-    expect(pushLog).toHaveBeenCalledWith('info', 'Update complete: 1 ok, 1 failed (500ms)')
+    expect(pushLog).toHaveBeenCalledWith(
+      'info',
+      'Update finished with errors: 1 ok, 0 skipped, 1 failed (500ms)',
+    )
+  })
+
+  it('summary prints a green line plus one detail per skip reason', () => {
+    const printed: string[] = []
+    consoleSpy.mockImplementation(m => {
+      printed.push(String(m))
+    })
+    const presenter = createCliPresenter(pushLog)
+    const results: RegistryResult[] = [
+      { name: 'knowledge', target: '/k', status: 'ok' },
+      { name: 'adoption', target: '/a', status: 'skipped', reason: 'not shipped by this source' },
+      { name: 'github', target: '/g', status: 'skipped', reason: 'not shipped by this source' },
+    ]
+    presenter.summary(results, 'install', 79)
+
+    const output = printed.join('\n')
+    expect(output).toContain('Installation complete (1 ok, 2 skipped — not shipped by this source')
+    expect(output).toContain('2 skipped — not shipped by this source: adoption, github')
+    expect(output).not.toContain('failed')
   })
 
   it('summary formats sub-second elapsed as ms', () => {
     const presenter = createCliPresenter(pushLog)
-    presenter.summary([{ name: 'a', target: '/a', ok: true }], 'install', 42)
+    presenter.summary([{ name: 'a', target: '/a', status: 'ok' }], 'install', 42)
 
-    expect(pushLog).toHaveBeenCalledWith('info', 'Installation complete: 1 ok, 0 failed (42ms)')
+    expect(pushLog).toHaveBeenCalledWith(
+      'info',
+      'Installation complete: 1 ok, 0 skipped, 0 failed (42ms)',
+    )
   })
 })
 
@@ -111,18 +139,27 @@ describe('createSilentPresenter', () => {
     pushLog = vi.fn()
   })
 
-  it('does not write to console', () => {
+  it('does not write to console — including warning(), which the CLI presenter prints', () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    // `warning` is the one method whose CLI counterpart uses console.WARN, so a regression
+    // copying that body here would escape a console.log-only spy — and the silent presenter
+    // exists precisely to keep JSON/scripted output clean.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const presenter = createSilentPresenter(pushLog)
 
     presenter.startOperation('install', 2)
     presenter.registryStart({ name: 'x', index: 0, total: 2, source: '/src', target: '/dst' })
     presenter.registryDone('x')
+    presenter.registrySkipped('z', 'not shipped by this source')
+    presenter.warning('the source shipped a broken pair.config.json')
     presenter.phase('backup')
-    presenter.summary([{ name: 'x', target: '/dst', ok: true }], 'install', 100)
+    presenter.summary([{ name: 'x', target: '/dst', status: 'ok' }], 'install', 100)
 
     expect(consoleSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalled()
+    expect(pushLog).toHaveBeenCalledWith('warn', 'the source shipped a broken pair.config.json')
     consoleSpy.mockRestore()
+    warnSpy.mockRestore()
   })
 
   it('still calls pushLog for all operations', () => {
@@ -131,17 +168,19 @@ describe('createSilentPresenter', () => {
     presenter.startOperation('install', 2)
     presenter.registryStart({ name: 'x', index: 0, total: 2, source: '/src', target: '/dst' })
     presenter.registryDone('x')
+    presenter.registrySkipped('z', 'not shipped by this source')
     presenter.registryError('y', 'fail')
+    presenter.warning('careful')
     presenter.phase('backup')
     presenter.summary(
       [
-        { name: 'x', target: '/dst', ok: true },
-        { name: 'y', target: '/dst2', ok: false },
+        { name: 'x', target: '/dst', status: 'ok' },
+        { name: 'y', target: '/dst2', status: 'failed' },
       ],
       'install',
       100,
     )
 
-    expect(pushLog).toHaveBeenCalledTimes(6)
+    expect(pushLog).toHaveBeenCalledTimes(8)
   })
 })

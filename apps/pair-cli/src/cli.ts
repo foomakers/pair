@@ -5,7 +5,7 @@ import { join } from 'path'
 import chalk from 'chalk'
 
 import { commandRegistry } from './commands'
-import { dispatchCommand } from './commands/dispatcher'
+import { dispatchCommand, finalExitCode } from './commands/dispatcher'
 import { requiresKbBootstrap } from './commands/bootstrap-policy'
 import {
   fileSystemService,
@@ -118,8 +118,10 @@ export async function main() {
   try {
     await runCli(process.argv)
     // exitOverride() prevents Commander from calling process.exit() automatically.
-    // Force exit so open handles (e.g. HTTP sockets from KB download) don't hang.
-    process.exit(0)
+    // Force exit so open handles (e.g. HTTP sockets from KB download) don't hang — but
+    // forward the code the dispatcher reported: an explicit `process.exit(0)` OVERRIDES
+    // `process.exitCode`, which is what made a failing install exit 0 (US-396 AC5).
+    process.exit(finalExitCode(process.exitCode))
   } catch (err: unknown) {
     // Handling Commander specific errors (like --help or invalid command)
     // that should not result in a red "failed" message if they are just info requests.

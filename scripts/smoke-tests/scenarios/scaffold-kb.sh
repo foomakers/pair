@@ -96,12 +96,23 @@ cd "$CONSUMER_DIR"
 run_pair install --source "$KB_DIR" --offline
 assert_success || exit 1
 assert_file "$CONSUMER_DIR/.pair/knowledge/mine.md" || exit 1
-# Exact name, no wildcard: `install` resolves the CONSUMER's config, so the KB's own
-# `skills.prefix` (acme-kb) does NOT apply — the skill lands under the default `pair-`
-# prefix. Pinned deliberately; foomakers/pair#397 tracks honouring the source KB's
-# registry declaration, and this assertion is what will flip when it lands.
-assert_dir "$CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
-log_succ "Scaffolded KB installed into a separate project via --source"
+# foomakers/pair#396: `install --source` reads the SOURCE KB's own pair.config.json, so
+# the `skills.prefix` (acme-kb) it declares applies with nothing copied into the consumer.
+assert_dir "$CONSUMER_DIR/.claude/skills/acme-kb-example-skill" || exit 1
+if [ -d "$CONSUMER_DIR/.claude/skills/pair-example-skill" ]; then
+  log_fail "Source KB's declared prefix ignored — skill installed under the default prefix"
+  exit 1
+fi
+# ...and the registries this KB does not ship are SKIPPED, not failed: the summary reads
+# green and names them with the reason, and the exit code (asserted above) agrees.
+assert_output_contains "Installation complete" || exit 1
+assert_output_contains "skipped — not shipped by this source" || exit 1
+if grep -Fq "finished with errors" "$TMP_DIR/last_cmd_output.log"; then
+  log_fail "External KB install still reports absent registries as errors (foomakers/pair#396)"
+  cat "$TMP_DIR/last_cmd_output.log"
+  exit 1
+fi
+log_succ "Scaffolded KB installed via --source: declared prefix honoured, green summary"
 
 # 5. The published ZIP is a distinct install form — and it must not touch the official slot
 # AC3 documents the ZIP as a distribution artifact, so the form must be exercised.
@@ -135,7 +146,8 @@ if [ "$ZIP_INSTALL_STATUS" -ne 0 ]; then
   exit 1
 fi
 assert_file "$ZIP_CONSUMER_DIR/.pair/knowledge/README.md" || exit 1
-assert_dir "$ZIP_CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
+# Same declaration path through the ZIP form: the packaged KB carries its pair.config.json
+assert_dir "$ZIP_CONSUMER_DIR/.claude/skills/generic-kb-example-skill" || exit 1
 
 # foomakers/pair#395: the external KB must NOT occupy the official KB's cache slot.
 # This was a pinned bug (assert_pinned_bug) until the fix landed; it is now a positive
@@ -160,5 +172,30 @@ if ! grep -Fqs '"generic-kb"' "$ISOLATED_HOME/.pair/kb/external/"*/manifest.json
   exit 1
 fi
 log_succ "Release ZIP installs into its own source-keyed cache slot"
+
+# 6. The exit code the SHELL sees, not the one the handler returned -----------
+# foomakers/pair#396 AC5: the summary and the status code may never disagree. The handler
+# has always returned a code; the entry point force-exits, and `process.exit(0)` with an
+# explicit code OVERRIDES `process.exitCode` — so this can only be observed through the
+# real process, which is what this scenario does (unit tests see the return value).
+log_info "Test 7: a failing registry makes the PROCESS exit non-zero"
+BROKEN_KB=$(setup_workspace "scaffold-kb-test/broken-kb")
+FAIL_CONSUMER_DIR=$(setup_workspace "scaffold-kb-test/fail-consumer")
+mkdir -p "$BROKEN_KB/.skills/a/b" "$BROKEN_KB/.skills/a-b"
+printf '# agents\n' > "$BROKEN_KB/AGENTS.md"
+# Both flatten (depth 2) to the same installed name → the skills registry fails.
+printf -- '---\nname: b\n---\n' > "$BROKEN_KB/.skills/a/b/SKILL.md"
+printf -- '---\nname: a-b\n---\n' > "$BROKEN_KB/.skills/a-b/SKILL.md"
+
+cd "$FAIL_CONSUMER_DIR"
+run_pair install --source "$BROKEN_KB" --offline
+BROKEN_INSTALL_STATUS=$?
+if [ "$BROKEN_INSTALL_STATUS" -eq 0 ]; then
+  log_fail "install reported errors but the process exited 0 (foomakers/pair#396 AC5)"
+  cat "$TMP_DIR/last_cmd_output.log"
+  exit 1
+fi
+assert_output_contains "finished with errors" || exit 1
+log_succ "Failing install exits $BROKEN_INSTALL_STATUS — text and status agree"
 
 echo "=== $TEST_NAME Completed ==="

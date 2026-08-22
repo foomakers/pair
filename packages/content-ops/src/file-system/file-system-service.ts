@@ -1,5 +1,5 @@
 import { constants, Dirent, promises as fs, Stats, copyFileSync, mkdirSync } from 'fs'
-import { readFileSync, existsSync, accessSync } from 'fs'
+import { readFileSync, existsSync, accessSync, realpathSync } from 'fs'
 import { dirname, resolve as pathResolve } from 'path'
 import AdmZip from 'adm-zip'
 
@@ -27,6 +27,16 @@ export interface FileSystemService {
   rename: (oldPath: string, newPath: string) => Promise<void>
   rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>
   stat: (path: string) => Promise<Stats>
+  /**
+   * The PHYSICAL path, every symlink component resolved. Rejects/throws when the path
+   * does not exist.
+   *
+   * The one primitive a lexical path check cannot substitute for: `stat` FOLLOWS
+   * symlinks, so a name that looks contained can still read from anywhere on the
+   * machine. Containment of untrusted content (an external KB) is decided on this.
+   */
+  realpath: (path: string) => Promise<string>
+  realpathSync: (path: string) => string
   copy: (oldPath: string, newPath: string) => Promise<void>
   copySync: (oldPath: string, newPath: string) => void
   rootModuleDirectory: () => string
@@ -74,6 +84,8 @@ export const fileSystemService: FileSystemService = {
     await fs.rm(path, options)
   },
   stat: path => fs.stat(path),
+  realpath: path => fs.realpath(path),
+  realpathSync: path => realpathSync(path),
   rootModuleDirectory: () => {
     // Return the directory of the main module, or fallback to cwd
     return typeof require !== 'undefined' && require.main?.path

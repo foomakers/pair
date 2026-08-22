@@ -16,6 +16,97 @@ packages/knowledge-hub/dataset/config.json    # In monorepo (source)
 
 Override with `--config <path>` on any command.
 
+## Resolution Order
+
+More than one configuration can be in play at once — the CLI's own defaults, the KB you
+are installing, and your project. They are merged per registry, weakest first:
+
+| Layer | Source | Wins over |
+| ----- | ------ | --------- |
+| 1. CLI defaults | `config.json` shipped with pair-cli | — |
+| 2. Source KB declaration | `pair.config.json` at the root of the KB named by `install --source` | CLI defaults |
+| 3. Project configuration | `pair.config.json` in the project being installed into | the source KB |
+| 4. Explicit `--config <path>` | the file you name | everything |
+
+**The source declares, the consumer overrides.** An external KB that declares
+`skills.prefix: "acme-kb"` installs its skills under that prefix with nothing to copy
+into your project — and if your project declares a `skills.prefix` of its own, yours
+wins. Only the fields a layer actually states are overridden; the rest fall through.
+
+Layer 3 is your project's `pair.config.json` only. A `config.json` in your project root is
+not read as a Pair configuration — the name is too common to claim.
+
+### What layer 2 may say
+
+The source KB is the one layer whose content you do not control: it is shipped by whoever
+publishes the KB. So it may describe **its own content and namespacing**, and nothing else.
+Exactly these registry fields are honoured:
+
+| Field | What a source KB may state | Checked as |
+| ----- | -------------------------- | ---------- |
+| `source` | a **KB-relative path that stays inside the KB** | absolute, `..`-escaping, Windows-drive and control-character values are dropped — and so is a path that only *resolves* outside the KB, through a symlink |
+| `exclude` | which of its own files are narrowed out | array of strings |
+| `flatten` | whether its own directories collapse | boolean |
+| `flattenDepth` | how far they collapse | positive integer |
+| `description` | free text | non-empty string, no control character |
+| `prefix` | a **single path segment** | one containing `/`, `\`, `..`, or a control character is dropped |
+
+`include` is **not** honoured, even though it looks like a content field: for a `mirror`
+registry it controls which target folders are cleaned up when absent from the source —
+a WRITE decision, not a content one — so a declared `include` is dropped like `targets`.
+
+Everything else in a source `pair.config.json` is ignored, not merged — `targets`,
+`target_path`, `behavior`, `working_path` and any top-level key. **A KB can never decide
+where the install writes**; that stays with the CLI defaults, your project, and `--config`.
+
+Nor can it decide where the install **reads**. The bound is physical, not just on the
+name — each half is checked after every symlink on the path is followed:
+
+- a declared `source` must resolve inside the **KB**;
+- every symlink met while copying must resolve inside **that registry's own source
+  directory** — the narrower bound. One resolving anywhere else is skipped, with a warning
+  naming it. One resolving back inside it is followed only when it points at a **file**: a
+  symlink to a *directory* is skipped too (also at a warning), because following one would
+  need a cycle guard — `self -> .` is contained as well. Ship a directory of content as a
+  real directory, not as a link to one.
+
+So a KB cannot make `pair install` copy files from elsewhere on your machine into your
+repository, and a registry ships only what physically lives under it. A link like
+`.pair/knowledge/shared -> ../../shared-guidelines` is **not** installed even though its
+target is inside the KB: the target is outside the `knowledge` registry's source. Put
+shared content under the registry's own source directory instead.
+
+**A field failing its check is dropped on its own** — the layer beneath supplies the value
+and the rest of the declaration still applies. If what remains is well-formed but still
+does not add up (`flatten: false` over a registry that sets `flattenDepth`, say), the whole
+declaration is dropped with a warning and your own resolution stands: a source's config
+never aborts your install, and is never half-applied.
+
+Four further guards apply to layer 2, and only to it:
+
+- A **malformed** source `pair.config.json` is ignored with a warning printed to the
+  console — never partially applied — and installation continues on your project's
+  resolution. "Malformed" also covers valid JSON that is not an object, or whose
+  `asset_registries` is not an object.
+- A declaration whose fields are **all dropped** does not report itself as applied: the
+  `Configuration: …` line naming the KB is printed only when at least one declared field
+  actually survived, and a KB that declared something and contributed nothing gets its own
+  warning.
+- A registry the source declares that this CLI has **no definition for** (a newer KB read
+  by an older CLI) is not installed: it is reported as skipped, with the reason
+  `declared by source, unknown to this CLI`.
+- Layer 2 never **introduces** a registry. To adopt one the CLI does not know, declare it
+  **in full** in your own `pair.config.json` (`source`, `behavior`, `description`,
+  `targets`, …): a partial entry relying on the source for the rest fails validation,
+  because the source's version of that registry was never merged beneath yours.
+
+Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`), and it applies
+to `pair install` and `pair update` alike — an update that did not read the declaration
+would re-install the same content under the CLI's default names, leaving both copies
+behind. The default KB path resolves exactly as before. `pair package` ships the KB's `pair.config.json` in
+the release ZIP, so a KB installed from its published artifact declares exactly what the
+same KB installed from a directory or a git clone declares.
+
 ## Structure
 
 ```json

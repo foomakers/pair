@@ -4,6 +4,7 @@ import type { UpdateCommandConfig } from './parser'
 import { handleInstallCommand } from '../install/handler'
 import type { InstallCommandConfig } from '../install/parser'
 import {
+  BackupService,
   buildTestResponse,
   InMemoryFileSystemService,
   MockHttpClientService,
@@ -1726,5 +1727,266 @@ describe('#407: a skill nested references/ dir installs inside the skill via pai
     await expect(
       handleUpdateCommand(updateConfig, fs, { httpClient: new MockHttpClientService() }),
     ).rejects.toThrow(/flattenDepth must be a positive integer/)
+  })
+})
+
+/**
+ * US-396 — update reports on the same contract as install: a registry the source does not
+ * ship is SKIPPED (not counted as updated), and the exit code follows the tally instead of
+ * being 0 whatever happened.
+ */
+describe('US-396: update distinguishes skipped from updated, and the exit code follows', () => {
+  const cwd = '/consumer'
+  const kb = '/acme-kb'
+
+  const twoRegistries = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      github: {
+        source: '.github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GH',
+      },
+    },
+  }
+
+  const sourceUpdate: UpdateCommandConfig = {
+    command: 'update',
+    resolution: 'local',
+    path: kb,
+    offline: true,
+    kb: true,
+  }
+
+  function consumerFs(extra: Record<string, string> = {}) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        // Already installed, so update has something to work on
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old guide',
+        [`${kb}/.pair/knowledge/guide.md`]: '# New guide',
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  test('a registry the source does not ship is reported as skipped, not as updated', async () => {
+    const fs = consumerFs()
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+
+    const exitCode = await handleUpdateCommand(sourceUpdate, fs, { autoRollback: false })
+    consoleSpy.mockRestore()
+
+    expect(exitCode).toBe(0)
+    const printed = lines.join('\n')
+    expect(printed).toContain('1 ok, 1 skipped')
+    expect(printed).toContain('not shipped by this source')
+    expect(printed).toContain('github')
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toContain('# New guide')
+  })
+
+  test('a run that updates nothing does not report success', async () => {
+    // The source ships neither registry — nothing to update, so the status code must say so
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old guide',
+        // A valid KB that simply ships neither of the registries this project installs
+        [`${kb}/AGENTS.md`]: '# Agents',
+        [`${kb}/.pair/other/thing.md`]: '# unrelated',
+      },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleUpdateCommand(sourceUpdate, fs, { autoRollback: false })
+
+    expect(exitCode).toBe(1)
+    // ...and the old content is still there: "nothing to update" is not "wiped"
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toContain('# Old guide')
+  })
+
+  test('a run that updates nothing records no version marker', async () => {
+    // The marker is what `kb-info` and the drift hint read. Written after a run that
+    // applied nothing, it reports the project as running that KB version and SILENCES the
+    // drift warning it exists to raise (US-396 review round 3).
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(twoRegistries),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old guide',
+        [`${kb}/package.json`]: JSON.stringify({ name: 'acme-kb', version: '9.9.9' }),
+        [`${kb}/AGENTS.md`]: '# Agents',
+      },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleUpdateCommand(sourceUpdate, fs, { autoRollback: false })
+
+    expect(exitCode).toBe(1)
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(false)
+  })
+
+  test('the summary prints AFTER the post-copy steps, never above a rollback', async () => {
+    // `--link-style` runs after the copies and can throw, which rolls the whole run back.
+    // Printed inside `updateRegistries`, the summary reached the console FIRST: the user
+    // read `✓ Update complete (…)`, then `Rolling back...`, then an error, then exit 1.
+    const fs = consumerFs()
+    const printed: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      printed.push(String(m))
+    })
+    // The backup commit is the one post-copy step that does NOT swallow its own error
+    // (`applyLinkTransformation`, `writeProjectLlmsTxt` and `recordInstalledVersion` all
+    // do), so it is the reachable path where a run is declared complete and then rolled
+    // back.
+    vi.spyOn(BackupService.prototype, 'commit').mockRejectedValue(
+      new Error('post-copy step exploded'),
+    )
+
+    await expect(handleUpdateCommand(sourceUpdate, fs, { linkStyle: 'relative' })).rejects.toThrow(
+      /exploded/,
+    )
+    consoleSpy.mockRestore()
+
+    expect(printed.join('\n')).toContain('Rolling back')
+    expect(printed.join('\n')).not.toContain('Update complete')
+  })
+})
+
+/**
+ * US-396 — `update --source` reads the source KB's declaration exactly as `install --source`
+ * does. It did not, and the FIRST update after a successful install therefore re-installed
+ * the same skills under the CLI's default prefix, leaving both copies behind (skills is
+ * `overwrite`, so nothing cleans the first one up) — the very duplicate `prefix` exists to
+ * prevent, in a state install alone could never produce.
+ */
+describe('US-396: update honours the source KB declaration, like install', () => {
+  const cwd = '/consumer'
+  const kb = '/acme-kb'
+
+  const baseConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'KB',
+      },
+      skills: {
+        source: '.skills',
+        behavior: 'overwrite',
+        flatten: true,
+        flattenDepth: 2,
+        prefix: 'pair',
+        targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        description: 'Skills',
+      },
+    },
+  }
+
+  const named = { path: kb, offline: true, kb: true } as const
+  const install: InstallCommandConfig = { command: 'install', resolution: 'local', ...named }
+  const update: UpdateCommandConfig = { command: 'update', resolution: 'local', ...named }
+
+  function consumerFs(extra: Record<string, string> = {}) {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(baseConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'consumer', version: '0.1.0' }),
+        [`${kb}/.pair/knowledge/guide.md`]: '# Acme guide',
+        [`${kb}/.skills/example-skill/SKILL.md`]: '---\nname: example-skill\n---\n',
+        [`${kb}/pair.config.json`]: JSON.stringify({
+          asset_registries: { skills: { prefix: 'acme-kb' } },
+        }),
+        ...extra,
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  test('the declared prefix survives an install → update round trip, with no duplicate skill', async () => {
+    const fs = consumerFs()
+
+    expect(await handleInstallCommand(install, fs)).toBe(0)
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(true)
+
+    expect(await handleUpdateCommand(update, fs, { autoRollback: false })).toBe(0)
+
+    expect(await fs.exists(`${cwd}/.claude/skills/acme-kb-example-skill/SKILL.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.claude/skills/pair-example-skill/SKILL.md`)).toBe(false)
+  })
+
+  test('a registry the source declares but this CLI does not know is skipped on update too', async () => {
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' }, telemetry: { source: '.telemetry' } },
+      }),
+    })
+    await handleInstallCommand(install, fs)
+
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+    await handleUpdateCommand(update, fs, { autoRollback: false })
+    consoleSpy.mockRestore()
+
+    const printed = lines.join('\n')
+    expect(printed).toContain('declared by source, unknown to this CLI')
+    expect(printed).toContain('telemetry')
+    expect(await fs.exists(`${cwd}/telemetry`)).toBe(false)
+  })
+
+  test('the announced registry count covers every registry the summary tallies', async () => {
+    // Same split as install: `startOperation` counted only the known registries while the
+    // tally the summary is built from also carries the declared-but-unknown ones.
+    const fs = consumerFs({
+      [`${kb}/pair.config.json`]: JSON.stringify({
+        asset_registries: { skills: { prefix: 'acme-kb' }, telemetry: { source: '.telemetry' } },
+      }),
+    })
+    await handleInstallCommand(install, fs)
+
+    const lines: string[] = []
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(m => {
+      lines.push(String(m))
+    })
+    await handleUpdateCommand(update, fs, { autoRollback: false })
+    consoleSpy.mockRestore()
+
+    const printed = lines.join('\n')
+    expect(printed).toContain('Updating 3 registries')
+    expect(printed).toContain('2 ok, 1 skipped')
+  })
+
+  test('a malformed source declaration is warned about on update, and update continues', async () => {
+    const fs = consumerFs({ [`${kb}/pair.config.json`]: '{ broken' })
+    await handleInstallCommand(install, fs)
+
+    const warned: string[] = []
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(m => {
+      warned.push(String(m))
+    })
+    const exitCode = await handleUpdateCommand(update, fs, { autoRollback: false })
+    warnSpy.mockRestore()
+
+    expect(warned.join('\n')).toContain('pair.config.json')
+    expect(exitCode).toBe(0)
   })
 })

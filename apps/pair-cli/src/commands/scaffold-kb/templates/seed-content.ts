@@ -57,10 +57,9 @@ export function renderExampleSkill(options: { identity: KbIdentity }): string {
     `skill with \`${identity.skillPrefix}\`, so this KB's skills do not collide with`,
     "another KB's.",
     '',
-    "> **Prefix caveat:** `pair install --source` resolves the **consuming** project's",
-    "> config, not this KB's. The prefix above therefore only applies once that project",
-    '> adopts this `pair.config.json` (copy it in); with the default config the skill',
-    `> installs as \`pair-example-skill\`, not \`${identity.skillPrefix}-example-skill\`.`,
+    `So this skill installs as \`${identity.skillPrefix}-example-skill\` in any consuming`,
+    "project — `pair install --source` reads this KB's `pair.config.json`, so nothing has",
+    'to be copied. A project that declares its own `skills.prefix` overrides this one.',
     '',
   ].join('\n')
 }
