@@ -13,6 +13,9 @@ This guide covers implementing issue tracking using local markdown files, git wo
 ```text
 project-root/
 ├── .pair/
+│   ├── adoption/
+│   │   └── tech/
+│   │       └── tech-stack.md
 │   ├── product/
 │   │   └── backlog/
 │   │       ├── 01-initiatives/
@@ -32,8 +35,6 @@ project-root/
 │   │           └── completed/
 │   │               └── 01-01-000-initial-setup.md
 │   └── tech/
-│       ├── adopted/
-│       │   └── tech-stack.md
 │       └── knowledge-base/
 │           └── technical-decisions.md
 ```
@@ -195,7 +196,7 @@ find .pair/product/backlog/03-user-stories/completed/ -name "*.md" -mtime -7 | s
 
 ```markdown
 
-# .pair/product/adopted/sprint-status.md
+# .pair/product/status/sprint-status.md
 
 # Sprint Status Dashboard
 
@@ -246,8 +247,8 @@ jobs:
       - name: Generate backlog report
 
         run: |
-          ./scripts/backlog-report.sh > .pair/product/adopted/current-backlog.md
-          git add .pair/product/adopted/current-backlog.md
+          ./scripts/backlog-report.sh > .pair/product/status/current-backlog.md
+          git add .pair/product/status/current-backlog.md
           git commit -m "docs: update backlog dashboard" || exit 0
           git push
 

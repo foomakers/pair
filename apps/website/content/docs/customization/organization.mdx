@@ -34,10 +34,8 @@ A Knowledge Base follows the `.pair/` directory convention:
 │       ├── index.json        # Task-to-guide mapping
 │       └── *.md              # Individual how-to files
 ├── adoption/
-│   ├── product/              # Product context templates
-│   │   └── adopted/          # PRD, subdomains, contexts
-│   └── tech/                 # Technical decision templates
-│       └── adopted/          # Architecture, stack, way-of-working
+│   ├── product/              # PRD, subdomains, contexts
+│   └── tech/                 # Architecture, stack, way-of-working
 └── skills/                   # Agent skills (optional)
     └── <category>/<name>/
         └── SKILL.md
@@ -58,7 +56,7 @@ Or create the directory structure manually:
 
 ```bash
 mkdir -p .pair/knowledge/guidelines .pair/knowledge/how-to
-mkdir -p .pair/adoption/product/adopted .pair/adoption/tech/adopted
+mkdir -p .pair/adoption/product .pair/adoption/tech
 ```
 
 ### Forking an existing KB
@@ -99,7 +97,7 @@ The pattern `[tool] is adopted for [purpose]` tells the AI assistant this is a d
 Include empty adoption files that adopters will fill in:
 
 ```markdown
-<!-- .pair/adoption/tech/adopted/tech-stack.md -->
+<!-- .pair/adoption/tech/tech-stack.md -->
 
 # Tech Stack
 

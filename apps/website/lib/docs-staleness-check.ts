@@ -716,6 +716,97 @@ export function batchEngineErrors(paths: {
   ]
 }
 
+/**
+ * The docs pages whose fenced sample block claims to BE the output of
+ * `pair install --list-targets`. These are transcripts a reader compares their own
+ * terminal against line for line, so drift here does not read as a stale doc — it reads
+ * as a broken install, and the reader has no way to tell the two apart.
+ */
+export const LIST_TARGETS_PAGES = [
+  'getting-started/checklist.mdx',
+  'getting-started/quickstart-solo.mdx',
+  'reference/cli/examples.mdx',
+]
+
+/** The header `listTargets` (apps/pair-cli/src/commands/install/handler.ts) prints, uncoloured. */
+export const LIST_TARGETS_HEADER = 'Asset Registries'
+
+/** The header three pages invented for it, and which the CLI has never emitted. */
+const LIST_TARGETS_INVENTED_HEADER = 'Available asset registries:'
+
+type ListTargetsRegistry = { behavior?: string; targets?: { path: string }[] }
+
+/** The three lines `listTargets` prints per registry, in its exact indentation. */
+function listTargetsEntry(name: string, reg: ListTargetsRegistry): string {
+  const target = reg.targets?.[0]?.path ?? '(none)'
+  return `  ${name}\n    target:   ${target}\n    behavior: ${reg.behavior ?? 'unknown'}`
+}
+
+/**
+ * Check: every page printing `--list-targets` output prints what the renderer emits — the
+ * handler's header, and one `name` / `target:` / `behavior:` entry per SHIPPED registry.
+ *
+ * The batch-engine check above reads `asset_registries` too, but only for two registries and
+ * only against `batch-engine.mdx`; these three transcripts were covered by nothing. They drifted
+ * into a columnar table under a header the CLI never printed, gave `knowledge` the target `.pair`
+ * instead of `.pair/knowledge`, and omitted 4 of the 7 registries — for as long as it took someone
+ * to read them side by side with a terminal. Deriving both directions from `config.json` means
+ * adding, renaming or re-targeting a registry fails here instead of at an adopter.
+ */
+export function checkListTargetsSamples(
+  registries: Record<string, ListTargetsRegistry>,
+  pages: { rel: string; content: string }[],
+): string[] {
+  const errors: string[] = []
+  for (const { rel, content } of pages) {
+    if (!content.includes(LIST_TARGETS_HEADER)) {
+      errors.push(`${rel}: --list-targets sample is missing the "${LIST_TARGETS_HEADER}" header`)
+    }
+    if (content.includes(LIST_TARGETS_INVENTED_HEADER)) {
+      errors.push(
+        `${rel}: --list-targets sample prints "${LIST_TARGETS_INVENTED_HEADER}", a header the CLI never emits`,
+      )
+    }
+    for (const [name, reg] of Object.entries(registries)) {
+      if (!content.includes(listTargetsEntry(name, reg))) {
+        errors.push(
+          `${rel}: --list-targets sample does not print the "${name}" registry as the CLI does ` +
+            `(expected "  ${name}" / "    target:   ${reg.targets?.[0]?.path ?? '(none)'}" / "    behavior: ${reg.behavior ?? 'unknown'}")`,
+        )
+      }
+    }
+  }
+  return errors
+}
+
+/** Read the registries and the sample pages, then compare. LOUD if a page is gone. */
+export function listTargetsSampleErrors(paths: { CLI_CONFIG: string; DOCS_DIR: string }): string[] {
+  const { asset_registries } = JSON.parse(readFileSync(paths.CLI_CONFIG, 'utf-8')) as {
+    asset_registries: Record<string, ListTargetsRegistry>
+  }
+  const files = LIST_TARGETS_PAGES.map(rel => ({ rel, file: join(paths.DOCS_DIR, rel) }))
+  const missing = files.filter(f => !existsSync(f.file))
+  if (missing.length > 0) {
+    return missing.map(
+      f => `--list-targets sample page not found: ${f.rel} — the sample check cannot run`,
+    )
+  }
+  return checkListTargetsSamples(
+    asset_registries,
+    files.map(f => ({ rel: f.rel, content: readFileSync(f.file, 'utf-8') })),
+  )
+}
+
+/**
+ * Checks 2b + 2d — everything derived from `apps/pair-cli/config.json`: the batch-engine
+ * asset paths, and the three docs pages that print `pair install --list-targets` output.
+ */
+function cliConfigDerivedErrors(
+  paths: Parameters<typeof batchEngineErrors>[0] & Parameters<typeof listTargetsSampleErrors>[0],
+): string[] {
+  return [...batchEngineErrors(paths), ...listTargetsSampleErrors(paths)]
+}
+
 export function runAllChecks(root: string): RunResult {
   const paths = checkPaths(root)
   const { SKILLS_DIR, DOCS_DIR, HOW_TO_DIR } = paths
@@ -746,8 +837,7 @@ export function runAllChecks(root: string): RunResult {
 
   // Check 2: catalog sync (both directions)
   const catalog = readFileSync(paths.CATALOG_FILE, 'utf-8')
-  errors.push(...batchEngineErrors(paths))
-
+  errors.push(...cliConfigDerivedErrors(paths))
   errors.push(...checkCatalogSync(allSkills, catalog))
 
   // Check 2c: catalog row CONTENT (Command + Description) single-sourced from the dataset

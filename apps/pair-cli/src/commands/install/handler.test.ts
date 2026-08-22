@@ -726,10 +726,10 @@ describe('install — llms.txt generation', () => {
     const registryConfig = {
       asset_registries: {
         adoption: {
-          source: '.pair/tech/adopted',
+          source: '.pair/adoption/tech',
           behavior: 'mirror',
           description: 'Tech adoption files',
-          targets: [{ path: '.pair/tech/adopted', mode: 'canonical' }],
+          targets: [{ path: '.pair/adoption/tech', mode: 'canonical' }],
         },
       },
     }
@@ -741,7 +741,7 @@ describe('install — llms.txt generation', () => {
           name: '@pair/knowledge-hub',
         }),
         [`${moduleDir}/config.json`]: JSON.stringify(registryConfig),
-        [`${datasetSrc}/.pair/tech/adopted/architecture.md`]: '# Architecture\n\nArch content.',
+        [`${datasetSrc}/.pair/adoption/tech/architecture.md`]: '# Architecture\n\nArch content.',
       },
       moduleDir,
       moduleDir,

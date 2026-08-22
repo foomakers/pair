@@ -23,6 +23,7 @@ import {
   checkBatchEngineAgents,
   checkBatchEngineWorkflows,
   batchEngineErrors,
+  checkListTargetsSamples,
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -522,5 +523,74 @@ describe('batchEngineErrors on a missing page', () => {
     expect(errors).toEqual([
       'Batch engine page not found: /nowhere/batch-engine.mdx — the batch-engine checks cannot run',
     ])
+  })
+})
+
+describe('checkListTargetsSamples', () => {
+  // The shipped shape, trimmed to two registries.
+  const registries = {
+    github: { behavior: 'mirror', targets: [{ path: '.github' }] },
+    knowledge: { behavior: 'mirror', targets: [{ path: '.pair/knowledge' }] },
+  }
+
+  // What `listTargets` really prints (handler.ts), uncoloured.
+  const real = [
+    '  Asset Registries',
+    '',
+    '  github',
+    '    target:   .github',
+    '    behavior: mirror',
+    '    GitHub workflows and configuration files',
+    '',
+    '  knowledge',
+    '    target:   .pair/knowledge',
+    '    behavior: mirror',
+    '    Knowledge base and documentation',
+  ].join('\n')
+
+  // What the three pages carried before #216 — a columnar table under an invented
+  // header, with `.pair` where the registry installs `.pair/knowledge`.
+  const invented = [
+    'Available asset registries:',
+    '  github     .github         GitHub workflows and configuration files',
+    '  knowledge  .pair            Knowledge base and documentation',
+  ].join('\n')
+
+  it('passes a sample that reproduces the renderer output', () => {
+    expect(checkListTargetsSamples(registries, [{ rel: 'a.mdx', content: real }])).toEqual([])
+  })
+
+  it('flags the invented columnar transcript on every count', () => {
+    const errors = checkListTargetsSamples(registries, [{ rel: 'a.mdx', content: invented }])
+    expect(errors).toHaveLength(4) // missing header + invented header + 2 registries
+    expect(errors.some(e => e.includes('Available asset registries:'))).toBe(true)
+    expect(errors.some(e => e.includes('"knowledge" registry'))).toBe(true)
+  })
+
+  it('flags a registry the sample omits', () => {
+    const withExtra = {
+      ...registries,
+      adoption: { behavior: 'add', targets: [{ path: '.pair/adoption' }] },
+    }
+    const errors = checkListTargetsSamples(withExtra, [{ rel: 'a.mdx', content: real }])
+    expect(errors).toEqual([
+      'a.mdx: --list-targets sample does not print the "adoption" registry as the CLI does ' +
+        '(expected "  adoption" / "    target:   .pair/adoption" / "    behavior: add")',
+    ])
+  })
+
+  it('flags a RE-TARGETED registry the sample still shows at the old path', () => {
+    const moved = {
+      ...registries,
+      knowledge: { behavior: 'mirror', targets: [{ path: '.pair/kb' }] },
+    }
+    const errors = checkListTargetsSamples(moved, [{ rel: 'a.mdx', content: real }])
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('    target:   .pair/kb')
+  })
+
+  it('flags a behavior change the sample does not follow', () => {
+    const rebehaved = { ...registries, github: { behavior: 'add', targets: [{ path: '.github' }] } }
+    expect(checkListTargetsSamples(rebehaved, [{ rel: 'a.mdx', content: real }])).toHaveLength(1)
   })
 })

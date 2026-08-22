@@ -15,6 +15,7 @@ This framework covers:
 - Development workflow automation (branch, PR, deployment)
 - Project management automation (sprint planning, progress reporting)
 - Notification and communication automation
+- Unattended-development policy: which cards may run without a human (`tech/automation.md` — [automation-policy.md](automation-policy.md))
 
 ## Out of Scope
 
@@ -26,6 +27,8 @@ This framework does not cover:
 - Security automation and compliance checks (covered in technical standards)
 
 ## Directory Contents
+
+**[automation-policy.md](automation-policy.md)** - `tech/automation.md` schema: the `## Eligibility` declaration that selects which cards may run unattended
 
 **[github-automation.md](github-automation.md)** - GitHub Actions and workflow automation strategies
 

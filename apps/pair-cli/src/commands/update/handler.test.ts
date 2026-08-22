@@ -809,16 +809,16 @@ describe('update — llms.txt generation', () => {
         [`${cwd}/config.json`]: JSON.stringify({
           asset_registries: {
             adoption: {
-              source: '.pair/tech/adopted',
+              source: '.pair/adoption/tech',
               behavior: 'mirror',
               description: 'Tech adoption files',
-              targets: [{ path: '.pair/tech/adopted', mode: 'canonical' }],
+              targets: [{ path: '.pair/adoption/tech', mode: 'canonical' }],
             },
           },
         }),
-        [`${datasetSrc}/.pair/tech/adopted/tech-stack.md`]: '# Tech Stack\n\nStack content.',
+        [`${datasetSrc}/.pair/adoption/tech/tech-stack.md`]: '# Tech Stack\n\nStack content.',
         // Pre-existing file (update scenario)
-        [`${cwd}/.pair/tech/adopted/tech-stack.md`]: '# Old Stack',
+        [`${cwd}/.pair/adoption/tech/tech-stack.md`]: '# Old Stack',
       },
       cwd,
       cwd,
