@@ -21,34 +21,42 @@ export function parseGitRef(source: string): GitRef {
 }
 
 /**
- * Inject PAIR_GIT_TOKEN into HTTPS URLs for private repo auth.
- * SSH URLs are not modified (they use SSH keys).
+ * Auth for an HTTPS(S) git clone, added to the CHILD PROCESS ENVIRONMENT rather than argv
+ * or the URL's userinfo (US-396/US-291 review round 2 escalation of #448).
  *
- * KNOWN LIMITATION (stated, not silently carried): the token ends up in the `git clone`
- * argv, so it is readable by any local user through /proc/<pid>/cmdline on Linux for the
- * duration of the clone. Moving it out of argv (GIT_ASKPASS / credential helper /
- * `-c http.extraHeader`) changes how install and update authenticate against every private
- * source, so it is tracked as its own card (#448) rather than smuggled into a version-check
- * story.
+ * The prior scheme built `https://<token>@host/…` and passed that URL as a `git clone`
+ * argument: readable by any local user through `/proc/<pid>/cmdline` on Linux for the
+ * whole duration of the clone, and `kb-info`'s READ-ONLY version check newly reaches this
+ * same path. `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` (git >= 2.31)
+ * set a one-shot, child-process-scoped `http.extraheader` carrying the equivalent Basic
+ * auth header WITHOUT ever putting the token on the command line or in the URL — SSH URLs
+ * are untouched, exactly as before (they use SSH keys).
+ *
+ * `base64("${token}:")` (empty password) is what git's own HTTP backend produces
+ * internally from a bare `<token>@host` userinfo, so this is not a new auth SCHEME —
+ * exactly the credential the prior URL-embedded token asserted, moved off the URL.
  */
-export function injectToken(repoUrl: string): string {
+function gitAuthEnv(repoUrl: string): Record<string, string> {
   const token = process.env['PAIR_GIT_TOKEN']
-  if (!token) return repoUrl
-  const match = repoUrl.match(/^(https?:\/\/)(.+)$/i)
-  if (!match) return repoUrl
-  return `${match[1]}${token}@${match[2]}`
+  if (!token || !/^https?:\/\//i.test(repoUrl)) return {}
+  const basic = Buffer.from(`${token}:`).toString('base64')
+  return {
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'http.extraheader',
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+  }
 }
 
 /**
  * Remove any credential from a git message before it is shown to a user or written to a
  * CI log. Two shapes are stripped: the literal `PAIR_GIT_TOKEN` value wherever it lands
- * (argv echoed by execFileSync, stderr, a bare `token X rejected`), and the
- * `scheme://<userinfo>@` segment `injectToken` builds. Inverse of `injectToken`, kept in the
- * same module so the only place that knows how a credential enters a URL is the only place
- * that removes it.
+ * (stderr, a bare `token X rejected`), and a `scheme://<userinfo>@` segment — the token no
+ * longer travels in a URL this module builds, but a caller may still name a source URL
+ * that carries its OWN embedded credential (`--git https://user:pass@host/...`), and that
+ * is exactly as much a credential as one this module injected.
  *
  * ORDER IS LOAD-BEARING — literal value first, userinfo regex second. A token may legally
- * contain `@` (a password, a `user:pass` pair). Injected, it yields TWO `@` in one URL
+ * contain `@` (a password, a `user:pass` pair). Embedded in a URL, it yields TWO `@`
  * (`https://p@ssw0rd-secret@host/org/kb.git`); the userinfo regex stops at the FIRST one and
  * would leave `ssw0rd-secret` — the token's tail — in the surfaced message, after which a
  * literal pass can no longer find the token as one contiguous string. Stripping the literal
@@ -58,9 +66,9 @@ export function injectToken(repoUrl: string): string {
 export function redactGitCredentials(message: string): string {
   const token = process.env['PAIR_GIT_TOKEN']
   const withoutToken = token ? message.split(token).join(REDACTED) : message
-  // `git@` is NOT a credential: `injectToken` only rewrites http(s) URLs, so an SSH URL can
-  // never carry an injected token — `ssh://git@host/org/kb.git` is the one shape guaranteed
-  // credential-free, and redacting it would only hide the repo from a debug message.
+  // `git@` is NOT a credential: it is the fixed SSH login user, never a PAIR_GIT_TOKEN
+  // carrier — `ssh://git@host/org/kb.git` is the one shape guaranteed credential-free, and
+  // redacting it would only hide the repo from a debug message.
   return withoutToken.replace(
     /([a-z][a-z0-9+.-]*:\/\/)([^/\s@]+)@/gi,
     (whole: string, scheme: string, userinfo: string) =>
@@ -100,17 +108,16 @@ const CLONE_TIMEOUT_MS = 5 * 60_000
  */
 export function cloneGitRepo(source: string, destDir: string): void {
   const { repoUrl, ref } = parseGitRef(source)
-  const authedUrl = injectToken(repoUrl)
 
   const args = ['clone', '--depth', '1']
   if (ref) args.push('--branch', ref)
-  args.push(authedUrl, destDir)
+  args.push(repoUrl, destDir)
 
   try {
     execFileSync('git', args, {
       stdio: 'pipe',
       timeout: CLONE_TIMEOUT_MS,
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', ...gitAuthEnv(repoUrl) },
     })
   } catch (err) {
     // Clean up partial clone on failure
@@ -137,8 +144,9 @@ export function cloneGitRepo(source: string, destDir: string): void {
           'Clone the repository yourself and install from the local path, or point at a smaller ref.',
       )
     }
-    // git echoes the AUTHENTICATED url back in its stderr, so redact before the message
-    // exists as an Error — every caller (version check, install, update) inherits it.
+    // The url no longer carries a credential, but redact anyway before the message exists
+    // as an Error — every caller (version check, install, update) inherits it, and a
+    // caller-supplied source URL may still embed its own credential.
     const msg = redactGitCredentials(err instanceof Error ? err.message : String(err))
     throw new Error(
       `Git clone failed: ${msg}\n\nFor private repos, set PAIR_GIT_TOKEN or configure SSH keys.`,

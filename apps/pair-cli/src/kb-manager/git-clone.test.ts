@@ -4,13 +4,7 @@ import { rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
-import {
-  parseGitRef,
-  injectToken,
-  gitCacheKey,
-  redactGitCredentials,
-  cloneGitRepo,
-} from './git-clone'
+import { parseGitRef, gitCacheKey, redactGitCredentials, cloneGitRepo } from './git-clone'
 
 vi.mock('child_process', () => ({ execFileSync: vi.fn() }))
 // `rmSync` MUST be mocked: cloneGitRepo deletes destDir on every failure path, with
@@ -76,33 +70,64 @@ describe('gitCacheKey', () => {
   })
 })
 
-describe('injectToken', () => {
+/**
+ * Auth now travels via the CHILD PROCESS ENVIRONMENT (`GIT_CONFIG_KEY_0`/`_VALUE_0` setting
+ * `http.extraheader`), never argv or the URL's userinfo (US-291 review round 2 escalation
+ * of #448 — the prior `https://<token>@host` scheme put the token in `git clone`'s argv,
+ * readable via `/proc/<pid>/cmdline` for the clone's duration).
+ */
+describe('cloneGitRepo — auth', () => {
+  beforeEach(() => {
+    execFileSyncMock.mockReset()
+    rmSyncMock.mockReset()
+    delete process.env['PAIR_GIT_TOKEN']
+  })
   afterEach(() => {
     delete process.env['PAIR_GIT_TOKEN']
   })
 
-  it('returns URL unchanged when no token set', () => {
-    delete process.env['PAIR_GIT_TOKEN']
-    expect(injectToken('https://github.com/org/repo.git')).toBe('https://github.com/org/repo.git')
+  function envOf(): NodeJS.ProcessEnv {
+    return (execFileSyncMock.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv }).env ?? {}
+  }
+
+  it('leaves the URL bare in argv when no token is set', () => {
+    cloneGitRepo('https://github.com/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
+
+    expect(execFileSyncMock.mock.calls[0]?.[1]).toContain('https://github.com/org/repo.git')
+    expect(envOf()['GIT_CONFIG_COUNT']).toBeUndefined()
   })
 
-  it('injects token into HTTPS URL', () => {
+  it('carries an HTTPS token via env-backed git config, never in argv', () => {
     process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
-    expect(injectToken('https://github.com/org/repo.git')).toBe(
-      'https://ghp_abc123@github.com/org/repo.git',
+    cloneGitRepo('https://github.com/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
+
+    const args = execFileSyncMock.mock.calls[0]?.[1] as string[]
+    expect(args.join(' ')).not.toContain('ghp_abc123')
+    expect(args).toContain('https://github.com/org/repo.git')
+
+    const env = envOf()
+    expect(env['GIT_CONFIG_COUNT']).toBe('1')
+    expect(env['GIT_CONFIG_KEY_0']).toBe('http.extraheader')
+    expect(env['GIT_CONFIG_VALUE_0']).toBe(
+      `AUTHORIZATION: basic ${Buffer.from('ghp_abc123:').toString('base64')}`,
     )
   })
 
-  it('does not modify SSH URLs', () => {
-    process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
-    expect(injectToken('git@github.com:org/repo.git')).toBe('git@github.com:org/repo.git')
-  })
-
-  it('injects token into http URL', () => {
+  it('carries an http (non-TLS) token the same way', () => {
     process.env['PAIR_GIT_TOKEN'] = 'mytoken'
-    expect(injectToken('http://gitlab.com/org/repo.git')).toBe(
-      'http://mytoken@gitlab.com/org/repo.git',
+    cloneGitRepo('http://gitlab.com/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
+
+    expect(envOf()['GIT_CONFIG_VALUE_0']).toBe(
+      `AUTHORIZATION: basic ${Buffer.from('mytoken:').toString('base64')}`,
     )
+  })
+
+  it('does not touch SSH URLs — they use SSH keys, not the header', () => {
+    process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
+    cloneGitRepo('git@github.com:org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
+
+    expect(execFileSyncMock.mock.calls[0]?.[1]).toContain('git@github.com:org/repo.git')
+    expect(envOf()['GIT_CONFIG_COUNT']).toBeUndefined()
   })
 })
 
@@ -285,7 +310,11 @@ describe('cloneGitRepo', () => {
     expect(rmSyncMock).toHaveBeenCalledWith(destDir, { recursive: true, force: true })
   })
 
-  it('redacts the injected token echoed back in git stderr', () => {
+  it('redacts a token that leaks into git stderr by any other route, defense in depth', () => {
+    // The token no longer travels in the URL this module builds (it goes via
+    // GIT_CONFIG_VALUE_0 instead — see the `cloneGitRepo — auth` suite), so real git no
+    // longer echoes a token-bearing URL back. Redaction stays wired into the catch block
+    // regardless, in case a credential surfaces through some other path.
     process.env['PAIR_GIT_TOKEN'] = 'ghp_supersecret'
     execFileSyncMock.mockImplementation(() => {
       throw gitFailure("fatal: could not read from 'https://ghp_supersecret@github.com/org/kb.git'")
@@ -301,10 +330,10 @@ describe('cloneGitRepo', () => {
     expect(message).toContain('https://***@github.com/org/kb.git')
   })
 
-  it('redacts an @-bearing token out of the argv git echoes back', () => {
-    // execFileSync copies the whole command line into its message, argv token included, so
-    // the surfaced reason carries the injected URL twice: once from argv, once from stderr.
-    // With an `@` in the token the userinfo regex alone leaves the tail readable in a CI log.
+  it('redacts an @-bearing token out of a leaked message, defense in depth', () => {
+    // Same rationale as above: this URL shape can no longer come from OUR argv (the token
+    // never lands there any more), but a leaked credential is still redacted whatever its
+    // source, and an `@` inside the token is the case the userinfo regex alone cannot fix.
     process.env['PAIR_GIT_TOKEN'] = 'p@ssw0rd-secret'
     execFileSyncMock.mockImplementation(() => {
       throw Object.assign(
