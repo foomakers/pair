@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 
 // Conformance guard for story #280: story generation is ADOPTION-INFORMED — the
@@ -555,7 +555,7 @@ const SEEDED = [...FIXTURE.matchAll(/^(adoption\/\S+\.md)(.*)$/gm)].map(m => ({
 }))
 
 describe('review round 6 — the worked example must obey the rules it illustrates', () => {
-  it('illustrates no REAL live record of this repo as non-live (Major)', () => {
+  it('illustrates every REAL record of this repo at its real liveness, both directions (Major)', () => {
     // The fixture seeded `adr-005-skills-infrastructure.md  Status: Superseded by ADR-020`
     // and concluded "`ADR-005` contributed nothing: it is superseded". That file is real
     // and its real head is `**Status:** Accepted — **amended by [ADR-020](...)**` — which
@@ -567,23 +567,67 @@ describe('review round 6 — the worked example must obey the rules it illustrat
     // breath, drops it out of the authority set, and authors the story against ADR-005's
     // flatten contract with no `(per ADR-005)` and no `Revisits` — the single outcome
     // line 53 forbids, byte-for-byte the round-3 Major lines 24/38 were written to close.
+    //
+    // Round-8 finding (Minor): the first version of this guard was ONE-DIRECTIONAL —
+    // it computed `realIsLive` and `continue`d when the record was not live, so the
+    // mirror image went uncaught. Concrete loss: a later story supersedes the real
+    // adr-005-skills-infrastructure.md (head becomes `Superseded by ADR-0NN`); the loop
+    // skips it, while the shipped Fixture still seeds that literal filename at
+    // `Status: Accepted — amended by [ADR-020]` and narrates it as live and citable. An
+    // executor pattern-matching the filename then treats a DEAD decision as an authority
+    // and emits `(per ADR-005)` for it — equally invisible, equally wrong. Both
+    // directions are asserted now. The liveness probe is the record's head Status FIELD
+    // (`headStatus`), not a 1200-char prose window: the old window matched the word
+    // "Accepted" anywhere in the Context, so a `Proposed` ADR that merely discusses an
+    // accepted decision read as live.
     expect(SEEDED.length).toBeGreaterThan(0)
     for (const { path, tail } of SEEDED) {
       const real = join(REPO_ROOT, '.pair', path)
       if (!existsSync(real)) continue
-      const head = readFileSync(real, 'utf-8').slice(0, 1200)
-      const realIsLive = /\b(Accepted|Active)\b/.test(head) && !/\bSuperseded by\b/.test(head)
-      if (!realIsLive) continue
-      expect(tail, `${path} is live in this repo but the fixture shows it as`).not.toMatch(
-        /Superseded|Deprecated|Proposed/i,
-      )
+      if (path.includes('context-map')) continue // no Status field; covered by its own guard
+      const status = headStatus(readFileSync(real, 'utf-8'))
+      expect(status, `${path} exists but exposes no head Status field`).toBeDefined()
       const id = path.match(/adr-(\d+)/)?.[1]
-      if (!id) continue
-      expect(
-        FIXTURE,
-        `ADR-${id} is live in this repo; the fixture must not narrate it as inert`,
-      ).not.toMatch(new RegExp(`ADR-${id}[^\n]*(contributed nothing|is superseded|not cited)`))
+      if (isLiveStatus(status)) {
+        expect(
+          tail,
+          `${path} is live in this repo (${status}) but the fixture shows it as`,
+        ).not.toMatch(/Superseded|Deprecated|Proposed/i)
+        if (!id) continue
+        expect(
+          FIXTURE,
+          `ADR-${id} is live in this repo; the fixture must not narrate it as inert`,
+        ).not.toMatch(new RegExp(`ADR-${id}[^\n]*(contributed nothing|is superseded|not cited)`))
+      } else {
+        expect(
+          tail,
+          `${path} is NOT live in this repo (${status}) but the fixture seeds it as live`,
+        ).not.toMatch(/\b(Accepted|Active)\b/)
+        if (!id) continue
+        expect(
+          FIXTURE,
+          `ADR-${id} is not live in this repo; the fixture must not cite it as an authority`,
+        ).not.toMatch(new RegExp(`\\(per ADR-${id}\\b`))
+      }
     }
+  })
+
+  it('resolves liveness from the head Status FIELD, never from a prose window (round 8, Minor)', () => {
+    // Non-vacuity for the tightened probe above, in both head spellings and against the
+    // prose false-positive the 1200-char window produced.
+    expect(
+      headStatus(readFileSync(join(ADR_DIR, 'adr-005-skills-infrastructure.md'), 'utf-8')),
+    ).toMatch(/^Accepted/)
+    expect(
+      headStatus(readFileSync(join(ADR_DIR, 'adr-009-assess-output-only.md'), 'utf-8')),
+    ).toMatch(/^Accepted/)
+    expect(
+      headStatus('# ADR-x\n\n## Status\n\nProposed\n\n## Context\n\nADR-1 was Accepted.'),
+    ).toBe('Proposed')
+    expect(isLiveStatus('Proposed')).toBe(false)
+    expect(isLiveStatus('Superseded by ADR-020')).toBe(false)
+    expect(isLiveStatus('Accepted — amended by [ADR-020](x.md)')).toBe(true)
+    expect(isLiveStatus('Active (amended 2026-08-13 — ...)')).toBe(true)
   })
 
   it('narrates no record its own seeded listing does not contain (Minor)', () => {
@@ -632,5 +676,213 @@ describe('review round 6 — the worked example must obey the rules it illustrat
     expect(sources).toMatch(/\*\*the item's\*\* subdomain/)
     expect(sources).toMatch(/a \*record's\* subdomain is never resolved here/)
     expect(sources).toMatch(/Bounded read/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Round-8 review findings (#280) + the round-7 escalation flush. One guard per
+// finding, naming it.
+// ---------------------------------------------------------------------------
+
+const ADR_DIR = join(REPO_ROOT, '.pair/adoption/tech/adr')
+const DECISION_LOG_DIR = join(REPO_ROOT, '.pair/adoption/decision-log')
+const CONTEXT_MAP = join(REPO_ROOT, '.pair/adoption/product/context-map.md')
+
+/**
+ * The record's own head `Status` VALUE, read the way the convention's stage-1 sweep
+ * says it sits: on the matched line in the inline form (`**Status:** Accepted`), and
+ * on the next NON-BLANK line below in the heading form (`## Status` + blank + value).
+ * Deliberately not a prose window — a `Proposed` record whose Context paragraph uses
+ * the word "Accepted" must not read as live.
+ */
+function headStatus(body: string): string | undefined {
+  const lines = body.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const inline = lines[i].match(/^\*\*Status:\*\*\s*(.+)$/)
+    if (inline) return inline[1].trim()
+    if (/^##\s+Status\s*$/.test(lines[i])) {
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim() !== '') return lines[j].trim()
+      }
+    }
+  }
+  return undefined
+}
+
+/** Live per the convention's *Precedence*: `Accepted`/`Active` in any amended form. */
+function isLiveStatus(status: string | undefined): boolean {
+  if (status === undefined) return false
+  return /^(Accepted|Active)\b/.test(status) && !/superseded by/i.test(status)
+}
+
+describe('review round 8 — the convention is evaluable, and its numbers do not rot', () => {
+  it('scopes the authority clause to DECISIONS — the map still constrains wording and is cited (Minor)', () => {
+    // "Only ADR, ADL and DDR entries are authorities — what may constrain a candidate,
+    // BE CITED, or be reopened" read against the rest of the file: Precedence makes the
+    // map constrain generated wording, Cite lists `(per context-map: <term>)` as one of
+    // the four forms, and the Fixture uses it. Concrete loss: generating a story whose
+    // only adoption input is a registered glossary term, an executor obeying the clause
+    // literally normalizes the synonym to the registered term and emits NO citation —
+    // the human reads a silently reworded story with no trace of why, which is the AC2
+    // outcome for the one source AC1 names explicitly ("ignore an established
+    // context-map term").
+    const authorities = CONVENTION.match(/\*\*Authorities vs context\.\*\*[\s\S]*?\n\n/)?.[0]
+    expect(authorities).toBeDefined()
+    // The map is named, excluded from the authority set, AND kept as a constraint + citation.
+    expect(authorities).toMatch(/context map is not an authority/i)
+    expect(authorities).toMatch(/\(per context-map: <term>\)/)
+    expect(authorities).toMatch(/wording/i)
+    // ...and the two sections it defers to still carry those rules.
+    const precedence = CONVENTION.match(/## Precedence[\s\S]*?(?=\n## )/)?.[0]
+    expect(precedence).toMatch(/generated wording adopts the registered term/)
+    expect(CONVENTION).toMatch(/`\(per context-map: <term>\)`/)
+  })
+
+  it('says WHERE the value sits in each head spelling, so the sweep is runnable (Minor)', () => {
+    // Stage 1 is ONE directory-wide sweep over the metadata lines, and each field is
+    // read "in the templates' heading form (`## Status`, ...)". In that form the matched
+    // line carries only the field NAME — the value is two lines below, past a blank.
+    // Verified on this repo's own tree: 47 of 48 decision-log entries use the heading
+    // form, and `grep -A1 '## Status' .pair/adoption/decision-log/*.md` returns the
+    // blank separator, never the value. Concrete loss: an executor greps the field names
+    // across the directory, gets N heading hits and ZERO values, so every record's
+    // Status/Category is "absent" — and the absent-field rule then requires each one to
+    // be opened at stage 2. The bounded read collapses into a whole-corpus body read on
+    // EVERY plan-stories / refine-story / brainstorm run: exactly the cost stage 1
+    // exists to prevent, and the assumption the card's `cost:yellow` rests on.
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    expect(bounded).toMatch(/next non-blank line/i)
+    expect(bounded).toMatch(/-A2|head -n/)
+    // ...and the inline form's value is stated to be on the matched line, so the two
+    // spellings are not left to the same (wrong) extraction.
+    expect(bounded).toMatch(/on the matched line/i)
+  })
+
+  it('reproduces the failure the value-position clause prevents, on the real tree', () => {
+    // Non-vacuity for the guard above: the naive one-line sweep really does yield no
+    // value for the heading form on this repo's own decision-log.
+    const headingForm = readdirSync(DECISION_LOG_DIR)
+      .filter(f => f.endsWith('.md'))
+      .map(f => readFileSync(join(DECISION_LOG_DIR, f), 'utf-8'))
+      .filter(body => /^##\s+Status\s*$/m.test(body))
+    expect(headingForm.length).toBeGreaterThan(0)
+    for (const body of headingForm) {
+      const lines = body.split('\n')
+      const i = lines.findIndex(l => /^##\s+Status\s*$/.test(l))
+      // grep -A1 lands on the blank separator: the value is NOT one line below...
+      expect(lines[i + 1].trim()).toBe('')
+      // ...it is on the next non-blank line, which is what the clause now says.
+      expect(headStatus(body)).toBeDefined()
+    }
+  })
+
+  it('ships no self-referential record COUNT — those rot on the next recorded decision (Minor)', () => {
+    // The file stated "pair's own tree is 20 ADRs + 48 decision-log entries", "9 of
+    // pair's own 20 ADRs carry the inline form" and "would spend 68 reads". All three
+    // were true only at that HEAD: the next /record-decision run that writes an ADR or
+    // an ADL makes them wrong, and nothing asserted them. Concrete loss: this very PR
+    // adds a decision-log entry, so the NEXT story to record one ships a guideline —
+    // installed into every adopter project, where "pair's own tree" is a foreign
+    // project's statistic — stating a count that is off by one, in a file whose whole
+    // purpose is to be executed literally by an LLM.
+    const counted = [...CONVENTION.matchAll(/\b\d+\s+(ADRs|decision-log entries|records|reads)\b/g)]
+    expect(
+      counted.map(m => m[0]),
+      'a corpus count in the shipped convention drifts on the next recorded decision',
+    ).toEqual([])
+    expect(CONVENTION).not.toMatch(/\b\d+ of (pair's own )?\d+\b/)
+  })
+
+  it('guards the one structural claim it still makes — two live `Accepted` files numbered 018', () => {
+    // The duplicate-id counter-example is load-bearing (it is WHY ids never order
+    // anything), so it is asserted against the real tree instead of softened away:
+    // a renumbering that removes the pair must fail here, not ship silently.
+    const eighteens = readdirSync(ADR_DIR).filter(f => /^adr-018-/.test(f))
+    expect(eighteens.length, 'the convention claims TWO adr-018 files').toBe(2)
+    for (const f of eighteens) {
+      expect(isLiveStatus(headStatus(readFileSync(join(ADR_DIR, f), 'utf-8'))), f).toBe(true)
+    }
+    expect(CONVENTION).toMatch(/two live `Accepted` files numbered 018/)
+  })
+})
+
+describe('review round 7 (escalation flush) — kinds, amended-Active, fixture citations', () => {
+  it('covers the `# DDR:` heads actually found in `decision-log/` (Major)', () => {
+    // The stage-1 kind discriminator named only two decision-log kinds (`# Decision:` =
+    // ADL, `# Analysis Log:` = analysis). This repo's own decision-log holds live
+    // `Accepted` DDRs whose H1 is `# DDR: ...` and which carry NO `## Category` at all,
+    // so both discriminators miss: the absent-field rule sends each to a stage-2 body
+    // open and then to a Degradation warning, and its authority is left undecided —
+    // a live domain decision that neither constrains nor is cited, reported to the
+    // developer as a malformed file.
+    const realDdrs = readdirSync(DECISION_LOG_DIR)
+      .filter(f => f.endsWith('.md'))
+      .map(f => ({ f, body: readFileSync(join(DECISION_LOG_DIR, f), 'utf-8') }))
+      .filter(({ body }) => /^# DDR:/m.test(body))
+    expect(
+      realDdrs.length,
+      'no `# DDR:` entry in decision-log/ — finding is stale',
+    ).toBeGreaterThan(0)
+    for (const { f, body } of realDdrs) {
+      expect(isLiveStatus(headStatus(body)), `${f} is a live DDR`).toBe(true)
+      expect(/^##\s+Category\s*$/m.test(body) || /^\*\*Category:\*\*/m.test(body), f).toBe(false)
+    }
+    const bounded = CONVENTION.match(/## Bounded read[\s\S]*?(?=\n## )/)?.[0]
+    expect(bounded).toBeDefined()
+    expect(bounded).toMatch(/# DDR:/)
+  })
+
+  it('reads `Active` in its amended form as live, like `Accepted` (Minor)', () => {
+    // The amended-form equivalence was spelled for `Accepted` only. This repo's ADL
+    // `2026-07-11-agent-execution-layer.md` — the record the Fixture flags a `Revisits`
+    // on — reads `Active (amended 2026-08-13 — ...)`: under the Accepted-only wording
+    // its Status resolves to no listed value, so it is opened at stage 2 and surfaced as
+    // unresolved instead of being read as the live authority it is.
+    const amendedActive = readdirSync(DECISION_LOG_DIR)
+      .filter(f => f.endsWith('.md'))
+      .map(f => headStatus(readFileSync(join(DECISION_LOG_DIR, f), 'utf-8')))
+      .filter(s => s !== undefined && /^Active\s*\(amended/.test(s))
+    expect(amendedActive.length, 'no amended-Active ADL — finding is stale').toBeGreaterThan(0)
+    const precedence = CONVENTION.match(/## Precedence[\s\S]*?(?=\n## )/)?.[0]
+    expect(precedence).toMatch(/`Active \(amended/)
+  })
+
+  it('seeds only context-map terms that are really registered in this repo (Minor)', () => {
+    // The fixture seeded `term: "capability skill"` and the worked candidate cited
+    // `(per context-map: capability skill)`. That term exists nowhere in this repo's
+    // context-map.md or any `.context.md` sibling, so the one citation form the round-6
+    // guard skips was the one dangling example — teaching a citation shape pointed at a
+    // term the map does not carry.
+    const map = readFileSync(CONTEXT_MAP, 'utf-8')
+    const seededTerms = [...FIXTURE.matchAll(/context-map\.md\s+term:\s+"([^"]+)"/g)].map(m => m[1])
+    expect(seededTerms.length, 'the fixture seeds no context-map term').toBeGreaterThan(0)
+    for (const term of seededTerms) {
+      expect(
+        new RegExp(`^\\|\\s*${term}\\s*\\|`, 'im').test(map),
+        `"${term}" is seeded as registered but is in no Term/Entity row of context-map.md`,
+      ).toBe(true)
+      // ...and the worked example must cite the same term it seeded.
+      expect(FIXTURE).toMatch(new RegExp(`\\(per context-map: ${term}\\)`, 'i'))
+    }
+  })
+
+  it('cites a record only for what that record actually decides (Minor)', () => {
+    // The reshape "-> extend the generation flow (per ADR-009)" attributed to ADR-009 a
+    // call it does not make: ADR-009 decides that assess-* skills are OUTPUT-ONLY and
+    // that /record-decision is the sole adoption writer — not whether a capability may
+    // exist or should extend an existing flow. An executor copying the pattern lands the
+    // citation on the wrong record in a real run, which is worse than none: the human
+    // opens ADR-009 and finds nothing about the shape of the item it justifies.
+    const adr009 = readFileSync(join(ADR_DIR, 'adr-009-assess-output-only.md'), 'utf-8')
+    expect(adr009).toMatch(/output-only/i)
+    expect(adr009).toMatch(/sole adoption writer|sole .*writer/i)
+    const cites = FIXTURE.split('\n').filter(l => /\(per ADR-009/.test(l))
+    expect(cites.length).toBeGreaterThan(0)
+    for (const line of cites) {
+      expect(line, 'a (per ADR-009) citation must rest on what ADR-009 decides').toMatch(
+        /output-only|read-only|sole adoption writer|the recorder persists/i,
+      )
+    }
   })
 })
