@@ -28,3 +28,19 @@
 
 Fully backward compatible: with no patterns declared, every missing internal link is an
 error exactly as before.
+
+Also in this release:
+
+- A markdown link's destination is now parsed per CommonMark: a titled link
+  (`` [x](./b.md "Title") ``) or a `<…>`-wrapped destination no longer has the title or the
+  angle brackets captured as part of the target. Previously `kb-validate` reported such a
+  link as broken even when its real target existed — an existing KB may see fewer errors
+  after upgrading.
+- Every CLI command's console output now escapes C0/C1 control characters (`\xNN`), keeping
+  `\t`/`\n` as real formatting. Closes the gap where a value read from a config file or a
+  third-party KB could move the cursor, clear the screen, or forge a line of output.
+- `kb-validate`'s report gains a `Configuration:` section for run-level diagnostics (a
+  malformed pattern, a bad config shape); these are now counted in the report's `Warnings:`
+  total instead of only being logged.
+- `--ignore-config` now prints a notice explaining that no config is read and link
+  validation does not run, instead of running silently.
