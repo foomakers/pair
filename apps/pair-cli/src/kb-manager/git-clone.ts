@@ -48,8 +48,11 @@ export function parseGitRef(source: string): GitRef {
  * What `http.extraheader` actually changes: it is sent PRE-EMPTIVELY, on every request,
  * with no 401 challenge required — unlike curl's userinfo handling, which git's HTTP
  * backend uses and which only answers a challenge from the SAME host. That is a real
- * behaviour difference (see the Question in `git-clone.test.ts` about redirect targets),
- * just not "this now authenticates when it didn't before".
+ * behaviour difference, not "this now authenticates when it didn't before" — and it is a
+ * known residual, not fixed here: `http.extraheader` is not host-scoped, so a redirecting
+ * remote gets the header sent to every host it redirects to (see the KNOWN RESIDUAL note
+ * on the `cloneGitRepo — auth` describe block in `git-clone.test.ts`, empirically confirmed
+ * through a real redirect).
  *
  * `http://` is excluded because `http.extraheader` has no transport guard: unlike the
  * prior scheme's challenge/response (which happens over whatever transport the URL names,

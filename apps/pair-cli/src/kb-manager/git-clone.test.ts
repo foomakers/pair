@@ -75,6 +75,14 @@ describe('gitCacheKey', () => {
  * `http.extraheader`), never argv or the URL's userinfo (US-291 review round 2 escalation
  * of #448 — the prior `https://<token>@host` scheme put the token in `git clone`'s argv,
  * readable via `/proc/<pid>/cmdline` for the clone's duration).
+ *
+ * KNOWN RESIDUAL, not fixed here (review round 4/5, empirically confirmed with a real HTTP
+ * trace through a redirecting server): `http.extraheader` is NOT host-scoped, unlike the
+ * URL-userinfo scheme it replaced (which curl answers only to the SAME host that issued the
+ * `401` challenge). If the git remote redirects to a different host or port, every request
+ * AFTER the redirect carries `AUTHORIZATION: basic <token>` to a host the caller never
+ * named. Cheap mitigation, not applied: a host-scoped config key
+ * (`http.<https://host[:port]>.extraheader`) instead of the bare `http.extraheader`.
  */
 describe('cloneGitRepo — auth', () => {
   beforeEach(() => {
