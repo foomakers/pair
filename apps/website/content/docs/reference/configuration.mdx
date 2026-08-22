@@ -45,11 +45,15 @@ Exactly these registry fields are honoured:
 | Field | What a source KB may state | Checked as |
 | ----- | -------------------------- | ---------- |
 | `source` | a **KB-relative path that stays inside the KB** | absolute, `..`-escaping and Windows-drive values are dropped — and so is a path that only *resolves* outside the KB, through a symlink |
-| `include` · `exclude` | which of its own files ship | array of strings |
+| `exclude` | which of its own files are narrowed out | array of strings |
 | `flatten` | whether its own directories collapse | boolean |
 | `flattenDepth` | how far they collapse | positive integer |
 | `description` | free text | non-empty string |
 | `prefix` | a **single path segment** | one containing `/`, `\` or `..` is dropped |
+
+`include` is **not** honoured, even though it looks like a content field: for a `mirror`
+registry it controls which target folders are cleaned up when absent from the source —
+a WRITE decision, not a content one — so a declared `include` is dropped like `targets`.
 
 Everything else in a source `pair.config.json` is ignored, not merged — `targets`,
 `target_path`, `behavior`, `working_path` and any top-level key. **A KB can never decide

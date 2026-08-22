@@ -50,7 +50,7 @@ Honoured, per registry (`SOURCE_DECLARABLE_FIELDS` in `apps/pair-cli/src/config/
 | Field | Bound |
 | ----- | ----- |
 | `source` | a **KB-relative path that stays inside the KB PHYSICALLY** — absolute, `..`-escaping (before or after normalisation) and Windows-drive/UNC values are dropped by name; what survives must also have a `realpath` under the KB root |
-| `include` · `exclude` | `string[]` |
+| `exclude` | `string[]` |
 | `flatten` | `boolean` |
 | `flattenDepth` | positive integer (`isValidFlattenDepth`, the same predicate `flattenPath` asserts on) |
 | `description` | non-empty string |
@@ -79,10 +79,26 @@ Ignored — dropped before the merge, never overridden later:
 
 - `targets`, `target_path`, `behavior`, and every other registry field;
 - every top-level key, including `working_path` and `target`;
+- `include` (US-396 review round 2 escalation, below);
 - a `prefix` containing a path separator or `..` (it is a path SEGMENT, so a traversing
   prefix is `targets` by another name);
 - a `source` that is absolute or leaves the KB root;
-- a registry entry that is not a JSON object.
+- a registry entry that is not a JSON object;
+- a registry NAME (`asset_registries` key) carrying a control character — dropped before
+  it can reach `unknownRegistries` and the "skipped" line an operator reads at the
+  terminal (same forged-output risk as `prefix`/`source`/`description`, just on a field
+  with no allowlist guard of its own because it is never merged into the config).
+
+**`include` was on this allowlist and is not any more.** For a `mirror` registry,
+`include` does not describe the source's own content — `buildCopyOptions`
+(`registry/operations.ts:220`) uses it to scope MIRROR-CLEANUP OWNERSHIP, i.e. which
+target folders get deleted when absent from the source. That is a WRITE decision, the
+exact thing this ADL says layer 2 may never make. A source declaring `{"include":[]}`
+widened cleanup ownership to the registry's entire target instead of narrowing it —
+measured on this branch: it deleted a consumer's `.github/ISSUE_TEMPLATE` and
+`.github/workflows` on `pair update` against an unmodified `github` registry. `exclude`
+stays on the allowlist: it only ever narrows what a mirror deletes, never widens it, so it
+cannot reach this failure mode.
 
 Consequently **a source KB can never decide where the install writes, nor where it
 reads.** Where content lands is set by the CLI defaults, the consuming project, and
@@ -144,6 +160,16 @@ successful install re-installed the same skills under the CLI's default prefix a
 copies in place (skills is `overwrite`, so nothing cleans up the first) — the duplicate
 `prefix` exists to prevent, in a state install alone could never produce. Update surfaces the
 malformed-declaration warning and the declared-but-unknown skips exactly as install does.
+
+**Known limitation, deliberately not solved here: a LATER prefix change still leaves the
+old directory installed.** `overwrite` registries have no cleanup pass at all — only
+`mirror` ones do (`handleMirrorCleanup`) — so if a project installs under `prefix: "old"`
+and a subsequent `update --source` reads a declaration with `prefix: "new"`, both
+`old-example-skill` and `new-example-skill` end up installed side by side; nothing removes
+the first. Fixing this needs a safe general answer for cleaning up an `overwrite` target
+between runs (which this story does not otherwise touch) and risks deleting content the
+allowlist rules above deliberately keep out of scope. Documented as a manual-cleanup step
+in `external-kb.mdx` instead of solved here.
 
 Three further rules on layer 2, unchanged in intent but now exhaustive:
 

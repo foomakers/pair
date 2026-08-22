@@ -84,6 +84,15 @@ A consuming project that declares the same registry in its own `pair.config.json
 wins — **the source declares, the consumer overrides**. The full resolution order is in
 the [configuration reference](/docs/reference/configuration#resolution-order).
 
+**Known limitation — changing `prefix` on an `overwrite` registry leaves the old
+directory installed.** `skills` (and any other `behavior: "overwrite"` registry) is not
+cleaned up like a `mirror` one: `pair update` installs under the new prefix but does not
+remove the directory the old prefix left behind, so a consuming project that already
+installed under one prefix and then updates to a KB declaring a different `prefix` ends
+up with both — e.g. `pair-example-skill` and `acme-kb-example-skill` side by side. Delete
+the stale `<old-prefix>-<skill-name>` directories under `.claude/skills/` (and any other
+`overwrite` target) by hand after a prefix change.
+
 ## Add content
 
 1. Write guidelines and how-tos under `.pair/knowledge/`.

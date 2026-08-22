@@ -396,6 +396,29 @@ describe('config loader - the source declaration is validated, not trusted', () 
     expect(knowledge[field]).toBe(JSON.parse(REAL_CONFIG).asset_registries.knowledge[field])
   })
 
+  /**
+   * Same forged-output risk as the field values above, on the REGISTRY NAME itself
+   * (`asset_registries` key): an unknown name reaches `unknownRegistries`, which the
+   * install summary prints verbatim via `registrySkipped` (US-396 review round 2). Unlike
+   * `prefix`/`source`/`description` it has no allowlist guard of its own — it is never
+   * merged into the config — so it is dropped at the point `declaredNames` is built.
+   */
+  it('drops a declared registry name carrying a control character before it can be reported', () => {
+    const { config, sourceDeclaration } = loadConfigWithOverrides(
+      fsWith({
+        '/kb/pair.config.json': JSON.stringify({
+          asset_registries: { 'future-registry\u001b[2K\r  \u001b[32mFORGED': {} },
+        }),
+      }),
+      { projectRoot: '/project', sourceRoot: '/kb' },
+    )
+
+    expect(sourceDeclaration!.unknownRegistries).toEqual([])
+    expect(Object.keys(config.asset_registries)).toEqual(
+      Object.keys(JSON.parse(REAL_CONFIG).asset_registries),
+    )
+  })
+
   it('names the whole resolution chain, weakest first — not just the last writer', () => {
     const fs = fsWith({
       '/kb/pair.config.json': JSON.stringify({
@@ -425,7 +448,6 @@ describe('config loader - the source declaration is validated, not trusted', () 
           skills: {
             prefix: 'acme-kb',
             source: '.acme-skills',
-            include: ['**/SKILL.md'],
             exclude: ['internal/**'],
             flatten: true,
             flattenDepth: 3,
@@ -438,11 +460,30 @@ describe('config loader - the source declaration is validated, not trusted', () 
     const skills = config.asset_registries['skills']!
     expect(skills.prefix).toBe('acme-kb')
     expect(skills.source).toBe('.acme-skills')
-    expect(skills.include).toEqual(['**/SKILL.md'])
     expect(skills.exclude).toEqual(['internal/**'])
     expect(skills.flatten).toBe(true)
     expect(skills.flattenDepth).toBe(3)
     expect(skills.description).toBe('Acme skills')
+  })
+
+  /**
+   * US-396 review round 2 (escalated Critical) — `include` looks like a content field but
+   * for a `mirror` registry it scopes MIRROR-CLEANUP OWNERSHIP (`registry/operations.ts`),
+   * a write decision. A source declaring `{"include":[]}` widened cleanup to the whole
+   * target instead of narrowing it, and deleted files the source never shipped. `include`
+   * is therefore dropped like `targets`, never merged, regardless of shape.
+   */
+  it('never honours include — it decides mirror-cleanup ownership, a write decision', () => {
+    const { config } = load({
+      '/kb/pair.config.json': JSON.stringify({
+        asset_registries: {
+          github: { include: [] },
+        },
+      }),
+    })
+
+    const github = config.asset_registries['github']!
+    expect(github.include).toEqual(JSON.parse(REAL_CONFIG).asset_registries.github.include)
   })
 
   it('ignores top-level keys declared by the source, such as working_path', () => {
@@ -556,7 +597,11 @@ describe('config loader - project layer when the module dir is not the project r
  * Before this: `pair install --source ./kb` against a KB shipping
  * `{"asset_registries":{"knowledge":{"include":"*.md"}}}` (string, not array) threw
  * `Registry 'knowledge' include must be an array of strings` out of `setupInstallContext`,
- * printed it naming the CONSUMER's registry, exited 1 and installed nothing.
+ * printed it naming the CONSUMER's registry, exited 1 and installed nothing. `include` is
+ * no longer declarable at all (round 2 escalation — it decides mirror-cleanup ownership,
+ * a write decision), so its malformed-shape case below moved to
+ * `never honours include — it decides mirror-cleanup ownership, a write decision` above;
+ * `exclude` keeps the type-check coverage this table exists for.
  */
 describe('config loader - a source declaration never aborts the consumer install', () => {
   function fsWith(files: Record<string, string>) {
@@ -577,8 +622,6 @@ describe('config loader - a source declaration never aborts the consumer install
   const base = JSON.parse(REAL_CONFIG).asset_registries
 
   it.each([
-    ['include as a string', { include: '*.md' }, 'include'],
-    ['include as an array of non-strings', { include: [1, 2] }, 'include'],
     ['exclude as an object', { exclude: { a: 1 } }, 'exclude'],
     ['flatten as a string', { flatten: 'true' }, 'flatten'],
     ['flattenDepth as a string', { flattenDepth: '2' }, 'flattenDepth'],

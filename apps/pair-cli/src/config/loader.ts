@@ -228,13 +228,23 @@ function summarizeDeclaration(
  * `resolveTarget` would join a source-declared path onto the project root and a KB could
  * write anywhere on the machine.
  *
+ * `include` is deliberately NOT on this list, even though it reads like content
+ * description. For a `mirror` registry, `buildCopyOptions` (`registry/operations.ts:220`)
+ * uses `include` to scope MIRROR-CLEANUP OWNERSHIP: which target folders get deleted when
+ * absent from the source. That is a WRITE decision, not a content one — a source
+ * declaring `{"include":[]}` widened cleanup ownership to the registry's entire target
+ * (verified: it deleted a consumer's `.github/ISSUE_TEMPLATE` and `.github/workflows` on
+ * `pair update`), and a source declaring a narrower `include` than the base registry
+ * still moves which of the CONSUMER's own files are liable to deletion (US-396 review
+ * round 2, escalated from round 3's Critical). `exclude` stays: it only ever NARROWS what
+ * a mirror deletes, never widens it, so it cannot reach this failure mode.
+ *
  * Two of the honoured fields are still paths and are therefore CONTAINED, not merely
  * allowed: `prefix` must be a single path segment, and `source` must stay inside the KB
  * (see `FIELD_GUARDS`). Read side and write side are both bounded by the KB root.
  */
 const SOURCE_DECLARABLE_FIELDS = [
   'source',
-  'include',
   'exclude',
   'flatten',
   'flattenDepth',
@@ -341,7 +351,6 @@ function isContainedSource(value: unknown, ctx: GuardContext): boolean {
  */
 const FIELD_GUARDS: Record<(typeof SOURCE_DECLARABLE_FIELDS)[number], FieldGuard> = {
   source: isContainedSource,
-  include: isStringArray,
   exclude: isStringArray,
   flatten: value => typeof value === 'boolean',
   flattenDepth: value => isValidFlattenDepth(value),
@@ -400,7 +409,13 @@ function readSourceDeclaration(
   const registries = declared['asset_registries'] ?? {}
   if (!isPlainObject(registries)) return ignore('asset_registries is not an object')
 
-  const declaredNames = Object.keys(registries)
+  // `declaredNames` reaches the terminal verbatim — `unknownRegistries` names print via
+  // `registrySkipped` in the install summary. A registry KEY carrying a control character
+  // is the same forged-output risk `hasControlCharacters` exists for on `prefix` /
+  // `source` / `description` (US-396 review round 6), just on a field with no allowlist
+  // guard of its own because it is never merged into the config — it is dropped here,
+  // before any reporting path sees it, rather than escaped for display.
+  const declaredNames = Object.keys(registries).filter(name => !hasControlCharacters(name))
   const known = declaredNames.filter(name => knownRegistries.includes(name))
   // Partial by design: a declaration states the few fields it wants, and `mergeConfigs`
   // lays them over the base entry field by field.
