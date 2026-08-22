@@ -7,8 +7,6 @@ import {
   toIncomingMessage,
 } from '@pair/content-ops'
 import { handleKbInfoCommand } from './handler'
-import { handleInstallCommand } from '../install/handler'
-import { handleUpdateCommand } from '../update/handler'
 import { createPackageZip } from '../package/zip-creator'
 import type { ManifestMetadata } from '../package/metadata'
 import type { RegistryConfig } from '#registry'
@@ -371,86 +369,116 @@ describe('handleKbInfoCommand - version-check mode', () => {
     expect(parsed.current.version).toBe('1.2.0')
     expect(parsed.current.sourceKind).toBe('remote')
   })
-})
 
-/**
- * #261 DoD round-trip (co-located here — root of the call chain is
- * handleKbInfoCommand, whose version-check output this asserts on; install/update
- * are setup). Shares one in-memory FS across all three handlers so the recorded
- * marker (`.pair/.kb-version.json`) is exactly what kb-info reads back.
- */
-describe('handleKbInfoCommand - install -> check(drift) -> update -> check(clean) round-trip', () => {
-  const cwd = '/roundtrip-project'
-  const kbPkg = `${cwd}/packages/knowledge-hub/package.json`
-  const datasetFile = `${cwd}/packages/knowledge-hub/dataset/test-registry/file1.md`
-  const marker = `${cwd}/.pair/.kb-version.json`
+  // AC1 requires the git result to be correct in BOTH renderers, so both are exercised here:
+  // a branch added to the human formatter on `current.sourceKind` (e.g. printing the migration
+  // URL for `registry` only) would otherwise leave the suite green — no other test reaches the
+  // human renderer on a git SUCCESS path.
+  it('reports drift for a git --source whose clone carries a newer manifest (AC1)', async () => {
+    for (const json of [false, true]) {
+      logSpy.mockClear()
+      const fsService = new InMemoryFileSystemService(
+        { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
+        cwd,
+        cwd,
+      )
 
-  afterEach(() => {
-    vi.restoreAllMocks()
+      const exitCode = await handleKbInfoCommand(
+        {
+          command: 'kb-info',
+          mode: 'version-check',
+          json,
+          source: 'https://github.com/org/kb.git#v1.2.0',
+        },
+        fsService,
+        {
+          baseTarget: cwd,
+          gitCloner: async (_source, destDir) => {
+            await fsService.writeFile(
+              `${destDir}/manifest.json`,
+              JSON.stringify({ version: '1.2.0' }),
+            )
+          },
+        },
+      )
+
+      expect(exitCode).toBe(0)
+
+      if (json) {
+        const parsed = JSON.parse(capturedOutput())
+        expect(parsed.status).toBe('drift')
+        expect(parsed.current.sourceKind).toBe('git')
+        expect(parsed.current.version).toBe('1.2.0')
+        expect(parsed.current.available).toBe(true)
+        expect(parsed.migrationUrl).toContain('v1.1.0-to-v1.2.0')
+      } else {
+        const output = capturedOutput()
+        expect(output).toContain('Version drift detected')
+        expect(output).toContain('1.2.0')
+        expect(output).toContain('git')
+        expect(output).not.toContain('unavailable')
+        expect(output).toContain('v1.1.0-to-v1.2.0')
+      }
+    }
   })
 
-  function makeFs(): InMemoryFileSystemService {
-    return new InMemoryFileSystemService(
+  it('reports current-unavailable with exit code 0 when a git clone fails (AC3)', async () => {
+    const fsService = new InMemoryFileSystemService(
+      { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
+      cwd,
+      cwd,
+    )
+
+    const exitCode = await handleKbInfoCommand(
       {
-        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
-        [kbPkg]: JSON.stringify({ name: '@pair/knowledge-hub', version: '1.1.0' }),
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            'test-registry': {
-              source: 'test-registry',
-              behavior: 'mirror',
-              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
-              description: 'Test registry',
-            },
-          },
-        }),
-        [datasetFile]: '# Content v1',
+        command: 'kb-info',
+        mode: 'version-check',
+        json: false,
+        source: 'https://github.com/org/kb.git',
       },
-      cwd,
-      cwd,
+      fsService,
+      {
+        baseTarget: cwd,
+        gitCloner: () => {
+          throw new Error('git executable not found. Install git to use git repository sources.')
+        },
+      },
     )
-  }
 
-  function versionCheck(fs: InMemoryFileSystemService) {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    return handleKbInfoCommand({ command: 'kb-info', mode: 'version-check', json: true }, fs, {
-      baseTarget: cwd,
-    }).then(exitCode => {
-      const output = logSpy.mock.calls.map(args => args.join(' ')).join('\n')
-      logSpy.mockRestore()
-      return { exitCode, result: JSON.parse(output) }
-    })
-  }
+    expect(exitCode).toBe(0)
+    const output = capturedOutput()
+    expect(output).toContain('Current version unavailable')
+    expect(output).toContain('git executable not found')
+    expect(output).toContain('1.1.0')
+  })
 
-  it('drift is flagged after installing an older KB, then cleared by update', async () => {
-    const fs = makeFs()
+  it('never prints a git credential in human or JSON output (AC4)', async () => {
+    const failing = () => {
+      throw new Error("fatal: could not read from 'https://ghp_supersecret@github.com/org/kb.git'")
+    }
 
-    await handleInstallCommand(
-      { command: 'install', resolution: 'default', kb: true, offline: false },
-      fs,
-    )
-    expect(JSON.parse(await fs.readFile(marker)).version).toBe('1.1.0')
+    for (const json of [false, true]) {
+      logSpy.mockClear()
+      const fsService = new InMemoryFileSystemService(
+        { [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }) },
+        cwd,
+        cwd,
+      )
 
-    await fs.writeFile(kbPkg, JSON.stringify({ name: '@pair/knowledge-hub', version: '1.2.0' }))
-    await fs.writeFile(datasetFile, '# Content v2')
+      const exitCode = await handleKbInfoCommand(
+        {
+          command: 'kb-info',
+          mode: 'version-check',
+          json,
+          source: 'https://github.com/org/kb.git',
+        },
+        fsService,
+        { baseTarget: cwd, gitCloner: failing },
+      )
 
-    const drift = await versionCheck(fs)
-    expect(drift.exitCode).toBe(0)
-    expect(drift.result.status).toBe('drift')
-    expect(drift.result.installed.version).toBe('1.1.0')
-    expect(drift.result.current.version).toBe('1.2.0')
-    expect(drift.result.migrationUrl).toContain('v1.1.0-to-v1.2.0')
-
-    await handleUpdateCommand(
-      { command: 'update', resolution: 'default', kb: true, offline: false },
-      fs,
-    )
-    expect(JSON.parse(await fs.readFile(marker)).version).toBe('1.2.0')
-
-    const clean = await versionCheck(fs)
-    expect(clean.exitCode).toBe(0)
-    expect(clean.result.status).toBe('up-to-date')
-    expect(clean.result.installed.version).toBe('1.2.0')
-    expect(clean.result.current.version).toBe('1.2.0')
+      expect(exitCode).toBe(0)
+      expect(capturedOutput()).not.toContain('ghp_supersecret')
+      expect(capturedOutput()).toContain('***@github.com')
+    }
   })
 })

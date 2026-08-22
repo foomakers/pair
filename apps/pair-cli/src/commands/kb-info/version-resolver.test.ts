@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import {
   InMemoryFileSystemService,
   MockHttpClientService,
@@ -12,6 +14,7 @@ import {
   readVersionFromDirectory,
   isStableVersion,
 } from './version-resolver'
+import { getCacheRoot } from '#kb-manager'
 
 const cwd = '/project'
 
@@ -199,14 +202,259 @@ describe('resolveCurrentVersion - remote source', () => {
 })
 
 describe('resolveCurrentVersion - git source', () => {
-  it('degrades gracefully without crashing', async () => {
+  const gitSource = 'https://github.com/org/kb.git#v2.0.0'
+
+  interface CloneCall {
+    source: string
+    destDir: string
+  }
+
+  /** Records what the clone was asked to do, and seeds the destination with the given files. */
+  function cloneStub(files: Record<string, string>) {
+    const calls: CloneCall[] = []
+    // `async` + `await`, not a floating `void`: `GitCloner` is `void | Promise<void>` and
+    // resolveGitVersion awaits it, so nothing forces the stub to seed the destination
+    // synchronously. Relying on InMemoryFileSystemService.writeFile mutating before its first
+    // await would make every git success-path test fail the day that helper defers.
+    const cloner =
+      (fsService: InMemoryFileSystemService) => async (source: string, destDir: string) => {
+        calls.push({ source, destDir })
+        for (const [name, content] of Object.entries(files)) {
+          await fsService.writeFile(`${destDir}/${name}`, content)
+        }
+      }
+    return { calls, cloner }
+  }
+
+  function failingCloner(message: string) {
+    return () => {
+      throw new Error(message)
+    }
+  }
+
+  it('resolves the version from the cloned manifest.json (AC1)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { calls, cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: cloner(fsService),
+    })
+
+    // Asserted AFTER the call: an expect() inside the injected cloner would be swallowed by
+    // resolveGitVersion's catch and resurface as a confusing `available: false`.
+    expect(calls.map(call => call.source)).toEqual([gitSource])
+    expect(result).toMatchObject({
+      sourceKind: 'git',
+      version: '2.0.0',
+      available: true,
+      stable: true,
+    })
+  })
+
+  it('does NOT read the repository root package.json — the install side cannot mirror it', async () => {
+    // Git KB whose root carries only package.json {version:'3.0.0'} and no manifest.json.
+    // Reporting 3.0.0 as "current" dead-ends the user: `pair install --url <same git url>`
+    // records from the cache slot (manifest.json absent, `<slot>/../package.json` never
+    // exists), writes NO marker, and every later kb-info prints "installed version unknown"
+    // against a current 3.0.0 — forever, with no hint that a manifest.json is the cure.
+    // Manifest-only keeps both sides agreeing, and the reason names the cure.
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { cloner } = cloneStub({ 'package.json': JSON.stringify({ version: '3.0.0' }) })
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: cloner(fsService),
+    })
+
+    expect(result).toMatchObject({ sourceKind: 'git', version: null, available: false })
+    expect(result.error).toContain('manifest.json')
+    expect(result.error).not.toContain('3.0.0')
+  })
+
+  it('never reports a package.json planted OUTSIDE the clone (temp-root regression)', async () => {
+    // The clone lands under the OS temp root, which on Linux is the shared /tmp: a
+    // package.json sitting beside it — or in the clone's own parent — belongs to nobody
+    // and must never be read as the KB's current version.
+    const fsService = new InMemoryFileSystemService(
+      { [join(tmpdir(), 'package.json')]: JSON.stringify({ version: '99.99.99-PLANTED' }) },
+      cwd,
+      cwd,
+    )
+    const cloner = async (_source: string, destDir: string) => {
+      await fsService.writeFile(`${destDir}/README.md`, '# kb, no version anywhere')
+      await fsService.writeFile(
+        join(destDir, '..', 'package.json'),
+        JSON.stringify({ version: '88.88.88-PLANTED' }),
+      )
+    }
+
+    const result = await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: cloner })
+
+    expect(result).toMatchObject({ sourceKind: 'git', version: null, available: false })
+    expect(result.error).not.toContain('PLANTED')
+  })
+
+  it('reports a pre-release git version as non-stable (AC1)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.1.0-rc.1' }) })
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: cloner(fsService),
+    })
+
+    expect(result).toMatchObject({ version: '2.1.0-rc.1', available: true, stable: false })
+  })
+
+  it('clones into a throwaway temp directory and removes it afterwards', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { calls, cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+
+    await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: cloner(fsService) })
+
+    expect(calls).toHaveLength(1)
+    const tempDir = calls[0]?.destDir as string
+    expect(tempDir.startsWith(tmpdir())).toBe(true)
+    expect(fsService.existsSync(`${tempDir}/manifest.json`)).toBe(false)
+  })
+
+  it('gives the clone a private (0700) root of its own under the temp directory', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { calls, cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+    const modes: Array<number | undefined> = []
+    const recordingCloner = (source: string, destDir: string) => {
+      // Read the mode WHILE the clone runs: after the check the root is gone.
+      modes.push(fsService.getMode(join(destDir, '..')))
+      return cloner(fsService)(source, destDir)
+    }
+
+    await resolveCurrentVersion(fsService, { source: gitSource, gitCloner: recordingCloner })
+
+    const tempDir = calls[0]?.destDir as string
+    // The clone is a CHILD of the private root, never the temp root itself.
+    expect(join(tempDir, '..')).not.toBe(tmpdir())
+    expect(modes).toEqual([0o700])
+  })
+
+  it('never touches the KB cache slot owned by the git source (AC2)', async () => {
+    // The exact slot key is kb-manager's business; what AC2 requires is that a read
+    // neither reads from nor writes to anything under the cache root.
+    const cacheRoot = getCacheRoot()
+    const slotManifest = join(cacheRoot, 'external', 'git-slot-of-this-source', 'manifest.json')
+    const cachedContent = JSON.stringify({ version: '0.0.1-stale' })
+    const fsService = new InMemoryFileSystemService({ [slotManifest]: cachedContent }, cwd, cwd)
+    const { calls, cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: cloner(fsService),
+    })
+
+    // The reported version comes from the fresh clone, not from the (stale) slot...
+    expect(result.version).toBe('2.0.0')
+    // ...the clone landed outside the cache entirely...
+    expect((calls[0]?.destDir as string).startsWith(cacheRoot)).toBe(false)
+    // ...and the slot is byte-identical, neither rewritten nor deleted.
+    expect(fsService.existsSync(slotManifest)).toBe(true)
+    expect(fsService.readFileSync(slotManifest)).toBe(cachedContent)
+  })
+
+  it('marks unavailable when the clone carries no readable version (AC3)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { cloner } = cloneStub({ 'README.md': '# kb' })
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: cloner(fsService),
+    })
+
+    expect(result).toMatchObject({ sourceKind: 'git', version: null, available: false })
+    expect(result.error).toBeTruthy()
+  })
+
+  it('degrades to current-unavailable when the clone fails, without throwing (AC3)', async () => {
     const fsService = new InMemoryFileSystemService({}, cwd, cwd)
 
-    const result = await resolveCurrentVersion(fsService, { source: 'git@github.com:org/kb.git' })
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: failingCloner('Git clone failed: could not read Username'),
+    })
 
-    expect(result.sourceKind).toBe('git')
+    expect(result).toMatchObject({ sourceKind: 'git', version: null, available: false })
+    expect(result.error).toContain('Git clone failed')
+  })
+
+  it('surfaces the real reason for a missing ref instead of a missing-git claim (AC3)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: failingCloner(
+        'Git clone failed: fatal: Remote branch v9.9.9 not found in upstream origin',
+      ),
+    })
+
     expect(result.available).toBe(false)
-    expect(result.version).toBeNull()
+    expect(result.error).toContain('not found in upstream origin')
+    expect(result.error).not.toContain('git executable not found')
+  })
+
+  it('surfaces the missing-git-binary reason instead of throwing (AC3)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: failingCloner(
+        'git executable not found. Install git to use git repository sources.',
+      ),
+    })
+
+    expect(result.available).toBe(false)
+    expect(result.error).toContain('git executable not found')
+  })
+
+  it('redacts a token-bearing clone error before reporting it (AC4)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: failingCloner(
+        "fatal: could not read from 'https://ghp_supersecret@github.com/org/kb.git'",
+      ),
+    })
+
+    expect(result.error).not.toContain('ghp_supersecret')
+    expect(result.error).toContain('https://***@github.com/org/kb.git')
+  })
+
+  it('redacts credentials embedded in the source URL itself (AC4)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const credentialSource = 'https://alice:s3cret@github.com/org/kb.git'
+    const cloner = async (_source: string, destDir: string) => {
+      await fsService.writeFile(`${destDir}/README.md`, '# no version here')
+    }
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: credentialSource,
+      gitCloner: cloner,
+    })
+
+    expect(result.available).toBe(false)
+    expect(result.error).not.toContain('s3cret')
+  })
+
+  it('still reports the version when temp-directory cleanup fails (best-effort)', async () => {
+    const fsService = new InMemoryFileSystemService({}, cwd, cwd)
+    const { cloner } = cloneStub({ 'manifest.json': JSON.stringify({ version: '2.0.0' }) })
+    vi.spyOn(fsService, 'rm').mockRejectedValue(new Error('EBUSY'))
+
+    const result = await resolveCurrentVersion(fsService, {
+      source: gitSource,
+      gitCloner: cloner(fsService),
+    })
+
+    expect(result).toMatchObject({ version: '2.0.0', available: true })
   })
 })
 
