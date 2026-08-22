@@ -50,11 +50,22 @@ export function parseGitRef(source: string): GitRef {
  * handling, which git's HTTP backend uses and which only answers a challenge from the SAME
  * host. **`<origin>` is the scheme+host(+port) git config subsection form** (round 5/6
  * escalation): an EARLIER version of this function used the bare, unscoped `http.
- * extraheader`, which git attaches to every request regardless of host — confirmed by a
- * real redirect trace to leak the header to a host the caller never named. Scoping the
- * config key to the request's own origin closes that: git only applies an `http.<url>.*`
- * key to a request whose URL the key's origin is a prefix of, so a cross-host (or
- * cross-port) redirect target simply does not match and never sees the header.
+ * extraheader`, which git attaches to every request regardless of host.
+ *
+ * **Scoping bounds the INITIAL request only — it is NOT what protects a redirect, and the
+ * round-6 docstring claimed otherwise; corrected round 7 after a real HTTP trace
+ * falsified it.** `git_init` resolves `http.<url>.*` ONCE, against the remote's own URL,
+ * and the resulting header list is attached to the curl handle for the whole request —
+ * including every redirect hop; it is not re-resolved per hop, scoped or not. Measured
+ * with a real cross-origin redirect (git 2.55.0 / curl 8.7.1): a BARE, unscoped
+ * `http.extraheader` carrying `Authorization` did NOT reach the redirect target either —
+ * identical to the scoped key. What actually stops it is curl's own cross-origin
+ * `Authorization`-stripping on redirect (the CVE-2018-1000007 fix, curl >= 7.58): a
+ * DIFFERENT header name (`X-...`, as some hosts use for a PAT) is NOT stripped and DOES
+ * reach the redirect target, with or without config-key scoping. Scoping still has real
+ * value — it bounds which origin the header is sent to at all on the FIRST request, and
+ * protects a process that inherits `GIT_CONFIG_*` into a further child — but it is not a
+ * redirect defense, and this docstring will not claim it is one again.
  *
  * `http://` is excluded because `http.extraheader` has no transport guard: unlike the
  * prior scheme's challenge/response (which happens over whatever transport the URL names,

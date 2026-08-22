@@ -76,14 +76,15 @@ describe('gitCacheKey', () => {
  * escalation of #448 — the prior `https://<token>@host` scheme put the token in `git
  * clone`'s argv, readable via `/proc/<pid>/cmdline` for the clone's duration).
  *
- * FIXED, round 6 (was a known residual in round 4/5, empirically confirmed with a real
- * HTTP trace through a redirecting server): an earlier version of this function used the
- * bare, unscoped `http.extraheader`, which is NOT host-scoped — unlike the URL-userinfo
- * scheme it replaced (which curl answers only to the SAME host that issued the `401`
- * challenge) — so a redirecting remote got the header sent to every host it redirected to.
- * The config key is now scoped to the request's own origin (`http.<https://host[:port]>.
- * extraheader`), which git only attaches to a request whose URL that origin prefixes — a
- * cross-host or cross-port redirect target does not match and never sees the header.
+ * The config key is scoped to the request's own origin (round 6), bounding which origin
+ * the header is sent to on the FIRST request. **This does NOT defend a redirect** (round 7
+ * correction of a round-6 claim, falsified by a real cross-origin-redirect trace): git
+ * resolves `http.<url>.*` ONCE at init, against the remote's own URL, and the resulting
+ * header list travels with the request across every redirect hop unchanged, scoped or not
+ * — a bare, unscoped key behaves identically to a scoped one on a redirect. What actually
+ * keeps `AUTHORIZATION` off a redirect target is curl's own cross-origin stripping of that
+ * specific header (curl >= 7.58); a differently-named header (as some hosts use for a PAT)
+ * is NOT stripped and reaches the redirect target regardless of scoping.
  */
 describe('cloneGitRepo — auth', () => {
   beforeEach(() => {
