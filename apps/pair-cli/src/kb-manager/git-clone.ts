@@ -134,17 +134,6 @@ export type GitCloner = (source: string, destDir: string) => void | Promise<void
 const CLONE_TIMEOUT_MS = 5 * 60_000
 
 /**
- * Shallow-clone a git repository into destDir.
- *
- * destDir must NOT already exist, or must be EMPTY: `git clone` creates its destination and
- * refuses only a NON-empty one (that is the install path's second-run failure — a populated
- * cache slot — not a freshly created empty directory).
- *
- * Never interactive: `GIT_TERMINAL_PROMPT=0` turns a missing credential into an error instead
- * of a `Username for 'https://…':` prompt git would open on /dev/tty, so a private repo
- * without credentials degrades to a reported reason instead of hanging.
- */
-/**
  * Turns a failed `execFileSync('git', ...)` into the user-visible reason, keyed on the
  * REAL failure rather than git's stderr text (split out of `cloneGitRepo` to stay under
  * this repo's max-lines-per-function — no behaviour change).
@@ -193,6 +182,17 @@ function throwCloneError(err: unknown, repoUrl: string): never {
   )
 }
 
+/**
+ * Shallow-clone a git repository into destDir.
+ *
+ * destDir must NOT already exist, or must be EMPTY: `git clone` creates its destination and
+ * refuses only a NON-empty one (that is the install path's second-run failure — a populated
+ * cache slot — not a freshly created empty directory).
+ *
+ * Never interactive: `GIT_TERMINAL_PROMPT=0` turns a missing credential into an error instead
+ * of a `Username for 'https://…':` prompt git would open on /dev/tty, so a private repo
+ * without credentials degrades to a reported reason instead of hanging.
+ */
 export function cloneGitRepo(source: string, destDir: string): void {
   const { repoUrl, ref } = parseGitRef(source)
 
