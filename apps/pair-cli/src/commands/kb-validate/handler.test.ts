@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { handleKbValidateCommand } from './handler'
+import { logger } from '@pair/content-ops'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 
 const minimalConfig = JSON.stringify({ asset_registries: {} })
@@ -215,5 +216,167 @@ describe('handleKbValidateCommand - realistic multi-registry layouts', () => {
         fs,
       ),
     ).resolves.toBeUndefined()
+  })
+})
+
+/**
+ * US-188 — optional link patterns end to end through the handler: config file,
+ * CLI flag, their union, and the --strict override.
+ */
+describe('handleKbValidateCommand - optional link patterns (US-188)', () => {
+  const cwd = '/kb-optional-links'
+
+  function seedKb(configExtras: Record<string, unknown> = {}): InMemoryFileSystemService {
+    const config = {
+      asset_registries: {
+        knowledge: {
+          source: '.pair/knowledge',
+          behavior: 'mirror',
+          description: 'KB content',
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        },
+      },
+      ...configExtras,
+    }
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(config),
+        // Link into the codebase that sits beside the KB — absent in a KB-only checkout
+        [`${cwd}/.pair/knowledge/index.md`]: '# KB\n\nSee [code](../../apps/website/page.tsx).',
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  it('fails on the out-of-tree link when nothing declares it optional (AC-6)', async () => {
+    await expect(handleKbValidateCommand({ command: 'kb-validate' }, seedKb())).rejects.toThrow(
+      'Validation failed',
+    )
+  })
+
+  it('passes when config declares the pattern (AC-1)', async () => {
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } })
+
+    await expect(handleKbValidateCommand({ command: 'kb-validate' }, fs)).resolves.toBeUndefined()
+  })
+
+  it('passes when only the CLI declares the pattern (AC-2)', async () => {
+    await expect(
+      handleKbValidateCommand(
+        { command: 'kb-validate', optionalLinkPatterns: ['../../apps/**'] },
+        seedKb(),
+      ),
+    ).resolves.toBeUndefined()
+  })
+
+  it('merges CLI patterns with config patterns rather than replacing them (AC-2)', async () => {
+    // config pattern matches, CLI pattern does not → union must still cover the link
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } })
+
+    await expect(
+      handleKbValidateCommand(
+        { command: 'kb-validate', optionalLinkPatterns: ['packages/**'] },
+        fs,
+      ),
+    ).resolves.toBeUndefined()
+  })
+
+  it('still fails on a missing link that matches no pattern (AC-3)', async () => {
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['packages/**'] } })
+
+    await expect(handleKbValidateCommand({ command: 'kb-validate' }, fs)).rejects.toThrow(
+      'Validation failed',
+    )
+  })
+
+  it('--strict overrides the configured patterns (AC-4)', async () => {
+    const fs = seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } })
+
+    await expect(
+      handleKbValidateCommand({ command: 'kb-validate', strict: true }, fs),
+    ).rejects.toThrow('Validation failed')
+  })
+
+  // --ignore-config consults NO config, so there are no registries, no files collected
+  // and link validation never runs — optional patterns (config or CLI) are moot. The
+  // exit code alone would be green even with the whole feature deleted, so this pins
+  // the observable truth instead: no `Link Validation:` section is emitted at all.
+  it('--ignore-config validates no files, so optional patterns have no effect', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+
+    try {
+      await expect(
+        handleKbValidateCommand(
+          { command: 'kb-validate', ignoreConfig: true, optionalLinkPatterns: ['apps/**'] },
+          seedKb({ link_validation: { optional_link_patterns: ['apps/**'] } }),
+        ),
+      ).resolves.toBeUndefined()
+
+      const output = log.mock.calls.map(call => String(call[0])).join('\n')
+      expect(output).not.toContain('Link Validation:')
+      expect(output).toContain('✓ Validation passed')
+      // ...and the run says so, on both channels, instead of passing silently.
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('nothing validated'))
+      expect(output).toContain('Configuration:')
+      expect(output).toContain('nothing validated')
+    } finally {
+      log.mockRestore()
+      warn.mockRestore()
+    }
+  })
+
+  // A section of the wrong shape must not read as "no patterns declared": without a
+  // diagnostic the run reports every out-of-tree link as broken and the config typo
+  // is invisible.
+  it.each([
+    {
+      case: 'a string instead of an array (the comma-separated-flag typo)',
+      extras: { link_validation: { optional_link_patterns: 'apps/**' } },
+      expected: /optional_link_patterns' must be an array of strings, got a string/,
+    },
+    {
+      case: 'a camelCase key',
+      extras: { link_validation: { optionalLinkPatterns: ['apps/**'] } },
+      expected: /declares no 'optional_link_patterns' \(found: optionalLinkPatterns\)/,
+    },
+    {
+      case: 'a section that is not an object',
+      extras: { link_validation: 'apps/**' },
+      expected: /'link_validation' must be an object, got a string/,
+    },
+    {
+      case: 'non-string entries in the array',
+      extras: { link_validation: { optional_link_patterns: ['apps/**', 42] } },
+      expected: /has 1 entry that is not a non-empty string/,
+    },
+  ])('warns when the config declares $case', async ({ extras, expected }) => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+
+    await handleKbValidateCommand({ command: 'kb-validate' }, seedKb(extras)).catch(() => undefined)
+
+    expect(warn.mock.calls.flat().join('\n')).toMatch(expected)
+    warn.mockRestore()
+  })
+
+  it('carries config and pattern diagnostics into the printed report, not only the log', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const fs = seedKb({ link_validation: { optionalLinkPatterns: ['apps/**'] } })
+
+    await handleKbValidateCommand(
+      { command: 'kb-validate', optionalLinkPatterns: ['[unterminated'] },
+      fs,
+    ).catch(() => undefined)
+
+    const output = log.mock.calls.flat().join('\n')
+    expect(output).toContain('Configuration:')
+    expect(output).toMatch(/declares no 'optional_link_patterns'/)
+    expect(output).toContain("Invalid optional link pattern '[unterminated', ignoring")
+    expect(output).toContain('Warnings: 2')
+
+    log.mockRestore()
+    warn.mockRestore()
   })
 })

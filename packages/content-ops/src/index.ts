@@ -110,7 +110,13 @@ export {
   createSemaphore,
 } from './ops/link-batch-processor'
 
-export { logger, setLogLevel, getLogLevel, LogLevel } from './observability'
+export {
+  logger,
+  setLogLevel,
+  getLogLevel,
+  LogLevel,
+  sanitizeControlCharacters,
+} from './observability'
 export { detectRepoRoot, convertToRelative, convertToAbsolute } from './path-resolution'
 export { StatsCollector, formatSummary, formatJSON } from './reporting'
 export type { LinkStats, FormatOptions } from './reporting'

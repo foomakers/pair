@@ -154,6 +154,17 @@ describe('createValidationReport', () => {
     expect(report.exitCode).toBe(ValidationExitCode.Success)
   })
 
+  it('counts run-level warnings (config / pattern diagnostics) in the summary (US-188)', () => {
+    const report = createValidationReport({
+      runWarnings: ["Config 'link_validation' must be an object, got a string, ignoring it"],
+    })
+
+    expect(report.runWarnings).toHaveLength(1)
+    expect(report.summary.totalWarnings).toBe(1)
+    expect(report.summary.totalErrors).toBe(0)
+    expect(report.exitCode).toBe(ValidationExitCode.Success)
+  })
+
   it('should handle empty results', () => {
     const report = createValidationReport({})
 
@@ -306,6 +317,25 @@ describe('formatReport', () => {
     expect(formatted).toContain('Warnings: 3')
   })
 
+  it('prints run-level warnings in their own section and in the footer total (US-188)', () => {
+    const report = createValidationReport({
+      runWarnings: ["Invalid optional link pattern '[unterminated', ignoring"],
+    })
+
+    const formatted = formatReport(report)
+
+    expect(formatted).toContain('Configuration:')
+    expect(formatted).toContain("Invalid optional link pattern '[unterminated', ignoring")
+    expect(formatted).toContain('Warnings: 1')
+    expect(formatted).toContain('✓ Validation passed')
+  })
+
+  it('omits the Configuration section when the run reported no diagnostics', () => {
+    const formatted = formatReport(createValidationReport({}))
+
+    expect(formatted).not.toContain('Configuration:')
+  })
+
   it('should skip sections with no issues', () => {
     const links: LinkValidationResult[] = [
       {
@@ -321,5 +351,62 @@ describe('formatReport', () => {
 
     // Should not show files with no errors or warnings
     expect(formatted).not.toContain('/kb/README.md')
+  })
+})
+
+describe('formatReport - untrusted content is rendered inert', () => {
+  // The report body reproduces strings supplied by the KB under validation: a
+  // config key echoed in a run warning, a registry name, a file name. Verbatim,
+  // `\u001B[2J` clears the operator's screen and `\u001B]0;…\u0007` rewrites the terminal
+  // title — from `pair kb-validate --path ./downloaded-kb`, the validate-a-KB-you-
+  // did-not-author case (US-188).
+  const escaped = '\\x1B[2J'
+
+  it('escapes control characters in a run-level warning', () => {
+    const report = createValidationReport({
+      runWarnings: [
+        `Config 'link_validation' declares no 'optional_link_patterns' (found: \u001B[2Jx)`,
+      ],
+    })
+    const formatted = formatReport(report)
+
+    expect(formatted).not.toContain('\u001B[2J')
+    expect(formatted).toContain(escaped)
+  })
+
+  it('escapes control characters in an error, a warning, a registry name and a file name', () => {
+    const structure: StructureValidationResult = {
+      valid: false,
+      registries: [
+        {
+          registry: 'sk\u001B[2Jills',
+          valid: false,
+          errors: ['Broken internal link: ./\u001B[2Jx.md'],
+          warnings: ['optional link (pattern-matched), target missing: \u001B[2Jy'],
+        },
+      ],
+    }
+    const links: LinkValidationResult[] = [
+      {
+        file: '/kb/RE\u001B[2JADME.md',
+        valid: false,
+        errors: ['Broken internal link: ./missing.md'],
+        warnings: [],
+      },
+    ]
+
+    const formatted = formatReport(createValidationReport({ structure, links }))
+
+    expect(formatted).not.toContain('\u001B[2J')
+    expect(formatted).toContain(`sk${escaped}ills`)
+    expect(formatted).toContain(`./${escaped}x.md`)
+    expect(formatted).toContain(`target missing: ${escaped}y`)
+    expect(formatted).toContain(`/kb/RE${escaped}ADME.md`)
+  })
+
+  it('keeps the formatter own colouring intact (only the interpolated values are escaped)', () => {
+    const report = createValidationReport({ runWarnings: ['plain text'] })
+
+    expect(formatReport(report)).toContain('WARNING: plain text')
   })
 })

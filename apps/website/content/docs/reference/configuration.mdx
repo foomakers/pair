@@ -115,7 +115,7 @@ same KB installed from a directory or a git clone declares.
     "source": ".source-dir",
     "behavior": "mirror",
     "description": "Human-readable description",
-    "include": ["**/*.md"],
+    "include": ["/agents"],
     "flatten": false,
     "prefix": "",
     "targets": [
@@ -132,7 +132,7 @@ same KB installed from a directory or a git clone declares.
 | `source` | `string` | Yes | Source directory within the KB dataset |
 | `behavior` | `string` | Yes | Sync behavior: `mirror`, `add`, `overwrite`, `skip` |
 | `description` | `string` | Yes | Human-readable description shown by `--list-targets` |
-| `include` | `string[]` | No | Glob patterns for files to include (default: all) |
+| `include` | `string[]` | No | Source-relative folder entries to mirror, matched by **path segment**, not globs (default: the whole source) |
 | `exclude` | `string[]` | No | Source-relative entries never installed — the whole subtree is skipped |
 | `flatten` | `boolean` | No | Flatten directory hierarchy into dash-separated names |
 | `flattenDepth` | `number` | No | Bound flattening to the registry's entry depth — the first N source segments are joined, anything deeper is preserved as a real sub-path. Requires `flatten: true`; must be a positive integer. Omitted = every separator is flattened |
@@ -260,6 +260,43 @@ Override the default path with a top-level `working_path` field, a sibling of `a
 ```
 
 When set, the override path — not `.pair/working` — is the reserved path that no registry `target` may overlap, checked by `pair validate-config`.
+
+## Link Validation
+
+A top-level `link_validation` field, a sibling of `asset_registries`, tunes how
+`pair kb-validate` treats relative markdown links whose target is **missing**:
+
+```json
+{
+  "link_validation": {
+    "optional_link_patterns": ["apps/**", "packages/**"]
+  }
+}
+```
+
+`optional_link_patterns` marks matched-but-missing targets as warnings instead of
+errors, so a KB can be validated in isolation without disabling whole registries.
+Patterns merge (union, trimmed and deduplicated) with `--optional-link-patterns`, and `--strict` overrides
+them back to errors. A pattern is matched against the target resolved relative to the
+KB root, and — only where the link as written is a genuine spelling of that same target (its
+`../` climb lands on the KB root) or the target leaves the KB tree — against the link as
+written; only the documented glob syntax is supported, anything else (brace
+expansion, extglob, leading `!`) is matched literally and therefore never matches.
+
+Write patterns in the **resolved** form, as above: it is the same string whatever the depth of
+the file the link is written in. A target that is a true sibling of the KB root resolves one
+level up (`../apps/**`), and `**/apps/**` covers both anchorings. The written form
+(`../../apps/**`) matches only links whose `../` climb lands exactly on the KB root, so it stops
+matching the same target as soon as it is linked from a deeper file.
+
+The section is read from the config of the **KB being validated** — `<--path>/pair.config.json`,
+falling back to `<--path>/config.json` when there is no `pair.config.json`, the same config the
+registries are resolved from — so validating `pair kb-validate --path ./my-kb` uses
+`./my-kb/pair.config.json` (or `./my-kb/config.json`), not the config of the directory you run the
+command in.
+
+Full semantics and glob syntax:
+[kb-validate — Optional link patterns](/docs/reference/cli/commands#optional-link-patterns).
 
 ## Validation
 

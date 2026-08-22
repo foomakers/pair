@@ -33,6 +33,15 @@ export interface RegistryConfig {
 }
 
 /**
+ * The `link_validation` section of `pair.config.json` / `config.json`, consumed by
+ * `kb-validate` (US-188). Declared here, beside `Config`: `#registry` is imported BY
+ * the commands, never the reverse.
+ */
+export interface LinkValidationConfig {
+  optional_link_patterns?: string[]
+}
+
+/**
  * The root CLI configuration structure.
  */
 export interface Config {
@@ -44,6 +53,14 @@ export interface Config {
    * project-relative — see `reserved-paths.ts` / `validateWorkingPath`.
    */
   working_path?: string
+  /**
+   * Tuning for `pair kb-validate`'s markdown link checking (US-188):
+   * `optional_link_patterns` downgrades a MISSING target matching a glob to a
+   * warning, so a KB can be validated in isolation. Read from the config of the
+   * KB being validated (`<--path>/pair.config.json`, falling back to
+   * `config.json`), merged with `--optional-link-patterns`.
+   */
+  link_validation?: LinkValidationConfig
   [key: string]: unknown
 }
 
