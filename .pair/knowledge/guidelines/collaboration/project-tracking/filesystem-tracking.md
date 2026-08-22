@@ -13,18 +13,17 @@ This guide covers implementing project progress tracking using local markdown fi
 ```text
 project-root/
 ├── .pair/
+│   ├── adoption/
+│   │   └── tech/
+│   │       └── way-of-working.md
 │   ├── product/
-│   │   ├── adopted/
-│   │   │   ├── sprint-status.md
-│   │   │   ├── current-milestone.md
-│   │   │   └── velocity-metrics.md
+│   │   ├── status/
+│   │   │   └── current-status.md
 │   │   └── backlog/
 │   │       ├── 01-initiatives/
 │   │       ├── 02-epics/
 │   │       └── 03-user-stories/
 │   ├── tech/
-│   │   ├── adopted/
-│   │   │   └── way-of-working.md
 │   │   └── knowledge-base/
 │   └── how-to/
 │       └── sprint-tracking/

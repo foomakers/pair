@@ -13,6 +13,9 @@ This guide covers implementing issue tracking using local markdown files, git wo
 ```text
 project-root/
 ├── .pair/
+│   ├── adoption/
+│   │   └── tech/
+│   │       └── tech-stack.md
 │   ├── product/
 │   │   └── backlog/
 │   │       ├── 01-initiatives/
@@ -32,8 +35,6 @@ project-root/
 │   │           └── completed/
 │   │               └── 01-01-000-initial-setup.md
 │   └── tech/
-│       ├── adopted/
-│       │   └── tech-stack.md
 │       └── knowledge-base/
 │           └── technical-decisions.md
 ```

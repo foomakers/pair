@@ -662,4 +662,21 @@ describe('ONE adoption layout — no `adopted/` sub-layer in docs or the KB', ()
   it.each(pages)('%s carries no `.pair/**/adopted` path', (_, content) => {
     expect(content).not.toMatch(ADOPTED_SUBLAYER)
   })
+
+  // ADOPTED_SUBLAYER needs `.pair/` and `adopted` on the SAME line (no `s`/`m` flag,
+  // and `.` does not cross a newline), so it cannot see an ASCII directory tree: `.pair/`
+  // sits at the root line, `adopted/` several lines and one turn of `│`/`├──` later — the
+  // exact shape both filesystem-tracking.md and filesystem-issues.md carried (US-216
+  // review round 2) and the shape a fenced ```text tree is drawn in. This second guard
+  // looks for a bare `adopted` (or `adopted/`) NODE — a tree line with nothing but box-
+  // drawing characters and whitespace before it — inside any fenced block that also
+  // mentions `.pair/`, independent of which line either one is on.
+  it.each(pages)('%s carries no bare `adopted` node in a fenced tree block', (_, content) => {
+    const blocks = content.match(/```[a-z]*\n[\s\S]*?```/g) ?? []
+    for (const block of blocks) {
+      if (!block.includes('.pair/')) continue
+      const bareAdoptedNode = block.split('\n').some(line => /^[\s│├└─]*adopted\/?\s*$/.test(line))
+      expect(bareAdoptedNode).toBe(false)
+    }
+  })
 })
