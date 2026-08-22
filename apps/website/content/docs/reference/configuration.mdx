@@ -44,12 +44,12 @@ Exactly these registry fields are honoured:
 
 | Field | What a source KB may state | Checked as |
 | ----- | -------------------------- | ---------- |
-| `source` | a **KB-relative path that stays inside the KB** | absolute, `..`-escaping and Windows-drive values are dropped — and so is a path that only *resolves* outside the KB, through a symlink |
+| `source` | a **KB-relative path that stays inside the KB** | absolute, `..`-escaping, Windows-drive and control-character values are dropped — and so is a path that only *resolves* outside the KB, through a symlink |
 | `exclude` | which of its own files are narrowed out | array of strings |
 | `flatten` | whether its own directories collapse | boolean |
 | `flattenDepth` | how far they collapse | positive integer |
-| `description` | free text | non-empty string |
-| `prefix` | a **single path segment** | one containing `/`, `\` or `..` is dropped |
+| `description` | free text | non-empty string, no control character |
+| `prefix` | a **single path segment** | one containing `/`, `\`, `..`, or a control character is dropped |
 
 `include` is **not** honoured, even though it looks like a content field: for a `mirror`
 registry it controls which target folders are cleaned up when absent from the source —

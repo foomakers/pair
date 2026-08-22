@@ -372,17 +372,6 @@ function honouredFields(entry: unknown, ctx: GuardContext): Record<string, unkno
 }
 
 /**
- * Reads a source KB's own `pair.config.json`.
- *
- * A malformed source config never aborts the install and is never half-applied: the
- * consumer's resolution stands and the caller reports the warning. "Malformed" covers
- * anything that is not a JSON object with an object `asset_registries` — a valid-JSON
- * `null`, string or array declares nothing usable and must not report itself as applied.
- * Registries the source declares that this CLI has no definition for are held back
- * (reported as skipped by the install summary) rather than installed on the strength of
- * the source's word alone.
- */
-/**
  * `declaredNames` reaches the terminal verbatim — `unknownRegistries` names print via
  * `registrySkipped` in the install summary. A registry KEY carrying a control character
  * is the same forged-output risk `hasControlCharacters` exists for on `prefix` /
@@ -394,6 +383,17 @@ function declaredRegistryNames(registries: Record<string, unknown>): string[] {
   return Object.keys(registries).filter(name => !hasControlCharacters(name))
 }
 
+/**
+ * Reads a source KB's own `pair.config.json`.
+ *
+ * A malformed source config never aborts the install and is never half-applied: the
+ * consumer's resolution stands and the caller reports the warning. "Malformed" covers
+ * anything that is not a JSON object with an object `asset_registries` — a valid-JSON
+ * `null`, string or array declares nothing usable and must not report itself as applied.
+ * Registries the source declares that this CLI has no definition for are held back
+ * (reported as skipped by the install summary) rather than installed on the strength of
+ * the source's word alone.
+ */
 function readSourceDeclaration(
   fsService: FileSystemService,
   sourceRoot: string,

@@ -49,12 +49,12 @@ Honoured, per registry (`SOURCE_DECLARABLE_FIELDS` in `apps/pair-cli/src/config/
 
 | Field | Bound |
 | ----- | ----- |
-| `source` | a **KB-relative path that stays inside the KB PHYSICALLY** — absolute, `..`-escaping (before or after normalisation) and Windows-drive/UNC values are dropped by name; what survives must also have a `realpath` under the KB root |
+| `source` | a **KB-relative path that stays inside the KB PHYSICALLY** — absolute, `..`-escaping (before or after normalisation), Windows-drive/UNC values, and any C0/C1 control character are dropped by name; what survives must also have a `realpath` under the KB root |
 | `exclude` | `string[]` |
 | `flatten` | `boolean` |
 | `flattenDepth` | positive integer (`isValidFlattenDepth`, the same predicate `flattenPath` asserts on) |
-| `description` | non-empty string |
-| `prefix` | a **single path segment** — no `/`, `\` or `..` |
+| `description` | non-empty string, no C0/C1 control character |
+| `prefix` | a **single path segment** — no `/`, `\`, `..`, or C0/C1 control character |
 
 `FIELD_GUARDS` is TOTAL over the allowlist — a new declarable field does not compile until
 its guard is stated. The two path-shaped fields are CONTAINED; the rest are TYPE-checked,
