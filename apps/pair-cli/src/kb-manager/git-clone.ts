@@ -144,6 +144,55 @@ const CLONE_TIMEOUT_MS = 5 * 60_000
  * of a `Username for 'https://…':` prompt git would open on /dev/tty, so a private repo
  * without credentials degrades to a reported reason instead of hanging.
  */
+/**
+ * Turns a failed `execFileSync('git', ...)` into the user-visible reason, keyed on the
+ * REAL failure rather than git's stderr text (split out of `cloneGitRepo` to stay under
+ * this repo's max-lines-per-function — no behaviour change).
+ */
+function throwCloneError(err: unknown, repoUrl: string): never {
+  // ONLY a failed spawn means the binary is missing. Keying on git's stderr instead would
+  // rewrite `fatal: Remote branch <ref> not found in upstream origin` (bad #ref) and
+  // `remote: Repository not found.` (private repo, no credentials) into "install git" —
+  // and this message is now the user-visible reason of a read-only version check.
+  const code = (err as NodeJS.ErrnoException).code
+  if (code === 'ENOENT') {
+    throw new Error('git executable not found. Install git to use git repository sources.')
+  }
+  // spawnSync reports its own timeout kill as ETIMEDOUT with the opaque message
+  // `spawnSync git ETIMEDOUT`. Left to the generic branch it reaches the user as an
+  // authentication suggestion for what is a duration problem, and never names the bound
+  // that was hit — so the one actionable fact (a 5-minute limit exists) is stated here.
+  if (code === 'ETIMEDOUT') {
+    throw new Error(
+      `Git clone exceeded the ${CLONE_TIMEOUT_MS / 60_000}-minute limit and was aborted.\n\n` +
+        'Clone the repository yourself and install from the local path, or point at a smaller ref.',
+    )
+  }
+  // The url no longer carries a credential, but redact anyway before the message exists
+  // as an Error — every caller (version check, install, update) inherits it, and a
+  // caller-supplied source URL may still embed its own credential.
+  const msg = redactGitCredentials(err instanceof Error ? err.message : String(err))
+  // A redirect refused by `gitAuthEnv`'s http.followRedirects=false surfaces as git's
+  // generic "returned error: 3xx" — indistinguishable, to the branch below, from any
+  // other failure, so it fell through to "set PAIR_GIT_TOKEN", the ONE thing already
+  // done and the ONE thing that caused this failure (US-291 review round 9). Only fires
+  // when the auth header was actually attached (`gitAuthEnv` returns fields only for a
+  // token'd https:// source) — an unauthenticated clone follows redirects normally and
+  // hits this generic "3xx" text for an unrelated reason far less often.
+  if (Object.keys(gitAuthEnv(repoUrl)).length > 0 && /returned error: 3\d\d\b/.test(msg)) {
+    throw new Error(
+      'Git clone failed: the source redirected to a different location, and pair refuses ' +
+        'to follow a redirect while PAIR_GIT_TOKEN is attached, so the token cannot reach ' +
+        'a host you did not name.\n\n' +
+        "Point --source at the repository's current URL, or clone it yourself and install " +
+        'from the local path.',
+    )
+  }
+  throw new Error(
+    `Git clone failed: ${msg}\n\nFor private repos, set PAIR_GIT_TOKEN or configure SSH keys.`,
+  )
+}
+
 export function cloneGitRepo(source: string, destDir: string): void {
   const { repoUrl, ref } = parseGitRef(source)
 
@@ -164,46 +213,6 @@ export function cloneGitRepo(source: string, destDir: string): void {
     } catch {
       // best-effort
     }
-    // ONLY a failed spawn means the binary is missing. Keying on git's stderr instead would
-    // rewrite `fatal: Remote branch <ref> not found in upstream origin` (bad #ref) and
-    // `remote: Repository not found.` (private repo, no credentials) into "install git" —
-    // and this message is now the user-visible reason of a read-only version check.
-    const code = (err as NodeJS.ErrnoException).code
-    if (code === 'ENOENT') {
-      throw new Error('git executable not found. Install git to use git repository sources.')
-    }
-    // spawnSync reports its own timeout kill as ETIMEDOUT with the opaque message
-    // `spawnSync git ETIMEDOUT`. Left to the generic branch it reaches the user as an
-    // authentication suggestion for what is a duration problem, and never names the bound
-    // that was hit — so the one actionable fact (a 5-minute limit exists) is stated here.
-    if (code === 'ETIMEDOUT') {
-      throw new Error(
-        `Git clone exceeded the ${CLONE_TIMEOUT_MS / 60_000}-minute limit and was aborted.\n\n` +
-          'Clone the repository yourself and install from the local path, or point at a smaller ref.',
-      )
-    }
-    // The url no longer carries a credential, but redact anyway before the message exists
-    // as an Error — every caller (version check, install, update) inherits it, and a
-    // caller-supplied source URL may still embed its own credential.
-    const msg = redactGitCredentials(err instanceof Error ? err.message : String(err))
-    // A redirect refused by `gitAuthEnv`'s http.followRedirects=false surfaces as git's
-    // generic "returned error: 3xx" — indistinguishable, to the branch below, from any
-    // other failure, so it fell through to "set PAIR_GIT_TOKEN", the ONE thing already
-    // done and the ONE thing that caused this failure (US-291 review round 9). Only fires
-    // when the auth header was actually attached (`gitAuthEnv` returns fields only for a
-    // token'd https:// source) — an unauthenticated clone follows redirects normally and
-    // hits this generic "3xx" text for an unrelated reason far less often.
-    if (Object.keys(gitAuthEnv(repoUrl)).length > 0 && /returned error: 3\d\d\b/.test(msg)) {
-      throw new Error(
-        'Git clone failed: the source redirected to a different location, and pair refuses ' +
-          'to follow a redirect while PAIR_GIT_TOKEN is attached, so the token cannot reach ' +
-          'a host you did not name.\n\n' +
-          "Point --source at the repository's current URL, or clone it yourself and install " +
-          'from the local path.',
-      )
-    }
-    throw new Error(
-      `Git clone failed: ${msg}\n\nFor private repos, set PAIR_GIT_TOKEN or configure SSH keys.`,
-    )
+    throwCloneError(err, repoUrl)
   }
 }
