@@ -186,6 +186,22 @@ export function cloneGitRepo(source: string, destDir: string): void {
     // as an Error — every caller (version check, install, update) inherits it, and a
     // caller-supplied source URL may still embed its own credential.
     const msg = redactGitCredentials(err instanceof Error ? err.message : String(err))
+    // A redirect refused by `gitAuthEnv`'s http.followRedirects=false surfaces as git's
+    // generic "returned error: 3xx" — indistinguishable, to the branch below, from any
+    // other failure, so it fell through to "set PAIR_GIT_TOKEN", the ONE thing already
+    // done and the ONE thing that caused this failure (US-291 review round 9). Only fires
+    // when the auth header was actually attached (`gitAuthEnv` returns fields only for a
+    // token'd https:// source) — an unauthenticated clone follows redirects normally and
+    // hits this generic "3xx" text for an unrelated reason far less often.
+    if (Object.keys(gitAuthEnv(repoUrl)).length > 0 && /returned error: 3\d\d\b/.test(msg)) {
+      throw new Error(
+        'Git clone failed: the source redirected to a different location, and pair refuses ' +
+          'to follow a redirect while PAIR_GIT_TOKEN is attached, so the token cannot reach ' +
+          'a host you did not name.\n\n' +
+          "Point --source at the repository's current URL, or clone it yourself and install " +
+          'from the local path.',
+      )
+    }
     throw new Error(
       `Git clone failed: ${msg}\n\nFor private repos, set PAIR_GIT_TOKEN or configure SSH keys.`,
     )

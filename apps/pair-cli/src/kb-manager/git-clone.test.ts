@@ -314,6 +314,44 @@ describe('cloneGitRepo', () => {
     expect(message).not.toContain('git executable not found')
   })
 
+  it('names the redirect-refusal policy, NOT "set PAIR_GIT_TOKEN" (already set, and why it failed)', () => {
+    process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
+    execFileSyncMock.mockImplementation(() => {
+      throw gitFailure(
+        "fatal: unable to access 'https://github.com/acme/kb.git/': The requested URL returned error: 302",
+      )
+    })
+
+    let message = ''
+    try {
+      cloneGitRepo('https://github.com/acme/kb.git', destDir)
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+    expect(message).toContain('refuses')
+    expect(message).toContain('redirect')
+    expect(message).not.toContain('set PAIR_GIT_TOKEN')
+  })
+
+  it('leaves the generic redirect wording alone when no token was attached', () => {
+    // No PAIR_GIT_TOKEN set: gitAuthEnv attaches nothing, so a 3xx is an ordinary failure —
+    // the redirect-refusal branch must not fire on a clone it did not cause.
+    execFileSyncMock.mockImplementation(() => {
+      throw gitFailure(
+        "fatal: unable to access 'https://github.com/acme/kb.git/': The requested URL returned error: 301",
+      )
+    })
+
+    let message = ''
+    try {
+      cloneGitRepo('https://github.com/acme/kb.git', destDir)
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+    expect(message).toContain('set PAIR_GIT_TOKEN')
+    expect(message).not.toContain('refuses')
+  })
+
   it('deletes ONLY the partial clone destination when the clone fails', () => {
     execFileSyncMock.mockImplementation(() => {
       throw gitFailure('fatal: the remote end hung up unexpectedly')
