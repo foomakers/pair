@@ -71,20 +71,23 @@ describe('gitCacheKey', () => {
 })
 
 /**
- * Auth now travels via the CHILD PROCESS ENVIRONMENT (`GIT_CONFIG_KEY_0`/`_VALUE_0` setting
- * `http.<origin>.extraheader`), never argv or the URL's userinfo (US-291 review round 2
- * escalation of #448 — the prior `https://<token>@host` scheme put the token in `git
- * clone`'s argv, readable via `/proc/<pid>/cmdline` for the clone's duration).
+ * Auth now travels via the CHILD PROCESS ENVIRONMENT (`GIT_CONFIG_KEY_n`/`_VALUE_n` setting
+ * `http.<origin>.extraheader` + `http.followRedirects=false`), never argv or the URL's
+ * userinfo (US-291 review round 2 escalation of #448 — the prior `https://<token>@host`
+ * scheme put the token in `git clone`'s argv, readable via `/proc/<pid>/cmdline` for the
+ * clone's duration).
  *
- * The config key is scoped to the request's own origin (round 6), bounding which origin
- * the header is sent to on the FIRST request. **This does NOT defend a redirect** (round 7
- * correction of a round-6 claim, falsified by a real cross-origin-redirect trace): git
- * resolves `http.<url>.*` ONCE at init, against the remote's own URL, and the resulting
- * header list travels with the request across every redirect hop unchanged, scoped or not
- * — a bare, unscoped key behaves identically to a scoped one on a redirect. What actually
- * keeps `AUTHORIZATION` off a redirect target is curl's own cross-origin stripping of that
- * specific header (curl >= 7.58); a differently-named header (as some hosts use for a PAT)
- * is NOT stripped and reaches the redirect target regardless of scoping.
+ * **A same-clone HTTP redirect reaches a host the caller never named — origin-scoping the
+ * config key alone does NOT stop it** (rounds 5-8; two prior claims here that it was
+ * already handled were both measured false). git resolves `http.<url>.*` ONCE at init,
+ * against the remote's own URL. curl strips a custom `Authorization` header only on the
+ * ONE follow-hop of a redirect — but git then adopts the redirect target as the clone's
+ * new base URL, and every request AFTER that is a FRESH request to the new origin, not a
+ * redirect curl would touch. Measured against a real `git http-backend` with a redirect
+ * mid-clone: the token reached the redirect target's `git-upload-pack` request whether the
+ * config key was scoped or bare. `http.followRedirects=false` is what actually closes it:
+ * the clone fails outright on any redirect (`fatal: … returned error: 302`) instead of
+ * silently continuing against an origin the caller never named.
  */
 describe('cloneGitRepo — auth', () => {
   beforeEach(() => {
@@ -116,11 +119,23 @@ describe('cloneGitRepo — auth', () => {
     expect(args).toContain('https://github.com/org/repo.git')
 
     const env = envOf()
-    expect(env['GIT_CONFIG_COUNT']).toBe('1')
+    expect(env['GIT_CONFIG_COUNT']).toBe('2')
     expect(env['GIT_CONFIG_KEY_0']).toBe('http.https://github.com.extraheader')
     expect(env['GIT_CONFIG_VALUE_0']).toBe(
       `AUTHORIZATION: basic ${Buffer.from('ghp_abc123:').toString('base64')}`,
     )
+    expect(env['GIT_CONFIG_KEY_1']).toBe('http.followRedirects')
+    expect(env['GIT_CONFIG_VALUE_1']).toBe('false')
+  })
+
+  it('refuses to follow a redirect once a token is attached — the actual leak closer', () => {
+    process.env['PAIR_GIT_TOKEN'] = 'ghp_abc123'
+    cloneGitRepo('https://github.com/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
+
+    // Scoping alone does not stop a same-clone redirect from reaching a different origin
+    // (see the describe block docstring) — followRedirects=false is what does.
+    expect(envOf()['GIT_CONFIG_KEY_1']).toBe('http.followRedirects')
+    expect(envOf()['GIT_CONFIG_VALUE_1']).toBe('false')
   })
 
   it('scopes the config key to the request origin, including a non-default port', () => {

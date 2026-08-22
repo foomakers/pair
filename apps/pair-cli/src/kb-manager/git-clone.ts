@@ -27,45 +27,35 @@ export function parseGitRef(source: string): GitRef {
  * The prior scheme built `https://<token>@host/…` and passed that URL as a `git clone`
  * argument: readable by any local user through `/proc/<pid>/cmdline` on Linux for the
  * whole duration of the clone, and `kb-info`'s READ-ONLY version check newly reaches this
- * same path. `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` (git >= 2.31 —
- * an OLDER git silently ignores all three, so the clone runs unauthenticated and the
- * resulting failure recommends `PAIR_GIT_TOKEN`, which is already set) set a one-shot,
- * child-process-scoped `http.<origin>.extraheader` carrying a Basic auth header WITHOUT
- * ever putting the token on the command line or in the URL.
+ * same path. The prior scheme DID authenticate — git answers a `401` challenge with Basic
+ * auth built from the URL's userinfo — so the argv exposure, not broken auth, is the whole
+ * reason for this change.
  *
- * **The prior scheme DID authenticate, and DID transmit the credential — the argv
- * exposure is the whole reason for this change, not a side effect of it being broken.**
- * Verified against a real HTTP trace (round 3 review claimed otherwise; re-verified round
- * 4, corrected here): git first sends the clone request with NO credential, the server
- * challenges with `401` + `WWW-Authenticate: Basic`, and only THEN does git resend the
- * request with `Authorization: Basic <base64 of the URL's userinfo>` — which a valid token
- * authenticates successfully. `GIT_TERMINAL_PROMPT=0` only stops git from opening an
- * INTERACTIVE prompt if that challenge/response still fails (e.g. an invalid token); it
- * does not stop the credential from being sent on a request that has a userinfo to answer
- * the challenge with. So `http://` exposed the token on the wire in cleartext on that
- * second request, same as any other Basic auth — never "moot".
+ * `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` (git >= 2.31 — an OLDER
+ * git silently ignores all of these and the clone runs unauthenticated, whose resulting
+ * failure recommends `PAIR_GIT_TOKEN`, already set) set a one-shot, child-process-scoped
+ * `http.<origin>.extraheader` carrying a Basic auth header WITHOUT ever putting the token
+ * on the command line or in the URL. `<origin>` is the scheme+host(+port) git config
+ * subsection form, bounding which origin the header is sent to on the request that
+ * ORIGINATES there.
  *
- * What `http.<origin>.extraheader` actually changes: it is sent PRE-EMPTIVELY, on every
- * request to that origin, with no 401 challenge required — unlike curl's userinfo
- * handling, which git's HTTP backend uses and which only answers a challenge from the SAME
- * host. **`<origin>` is the scheme+host(+port) git config subsection form** (round 5/6
- * escalation): an EARLIER version of this function used the bare, unscoped `http.
- * extraheader`, which git attaches to every request regardless of host.
+ * **A same-clone HTTP redirect reaches a host the caller never named, and origin-scoping
+ * alone does not stop it** (rounds 5-8: two prior "this is fine" claims here were both
+ * measured false and reverted — see the `cloneGitRepo — auth` describe block in
+ * `git-clone.test.ts` for the trace). git resolves `http.<url>.*` ONCE, against the
+ * remote's own URL; curl strips a custom `Authorization` header only on the ONE follow-hop
+ * of a redirect, but git then adopts the redirect target as the clone's new base URL, and
+ * every request AFTER that is a FRESH request to the new origin — not a redirect curl
+ * would touch. Measured against a real `git http-backend` with a redirect mid-clone: the
+ * token reaches the redirect target's `git-upload-pack` request regardless of scoping.
  *
- * **Scoping bounds the INITIAL request only — it is NOT what protects a redirect, and the
- * round-6 docstring claimed otherwise; corrected round 7 after a real HTTP trace
- * falsified it.** `git_init` resolves `http.<url>.*` ONCE, against the remote's own URL,
- * and the resulting header list is attached to the curl handle for the whole request —
- * including every redirect hop; it is not re-resolved per hop, scoped or not. Measured
- * with a real cross-origin redirect (git 2.55.0 / curl 8.7.1): a BARE, unscoped
- * `http.extraheader` carrying `Authorization` did NOT reach the redirect target either —
- * identical to the scoped key. What actually stops it is curl's own cross-origin
- * `Authorization`-stripping on redirect (the CVE-2018-1000007 fix, curl >= 7.58): a
- * DIFFERENT header name (`X-...`, as some hosts use for a PAT) is NOT stripped and DOES
- * reach the redirect target, with or without config-key scoping. Scoping still has real
- * value — it bounds which origin the header is sent to at all on the FIRST request, and
- * protects a process that inherits `GIT_CONFIG_*` into a further child — but it is not a
- * redirect defense, and this docstring will not claim it is one again.
+ * **`http.followRedirects=false` closes it**: refusing to follow at all fails the clone
+ * outright on a redirect instead of silently continuing against an unverified origin —
+ * measured: `fatal: … The requested URL returned error: 302`, one request, the token never
+ * leaves the origin it was scoped to. Trade-off, accepted: a git host that legitimately
+ * redirects (moved org, forced HTTPS) now fails a token-authenticated clone instead of
+ * following it — consistent with this story's own trust-boundary stance of failing closed
+ * on unverified content rather than trusting it silently.
  *
  * `http://` is excluded because `http.extraheader` has no transport guard: unlike the
  * prior scheme's challenge/response (which happens over whatever transport the URL names,
@@ -85,9 +75,13 @@ function gitAuthEnv(repoUrl: string): Record<string, string> {
   }
   const basic = Buffer.from(`${token}:`).toString('base64')
   return {
-    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_COUNT: '2',
     GIT_CONFIG_KEY_0: `http.${origin}.extraheader`,
     GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+    // Refuses ANY redirect once an auth header is attached — see the docstring above for
+    // why origin-scoping alone does not stop a redirect from reaching the token.
+    GIT_CONFIG_KEY_1: 'http.followRedirects',
+    GIT_CONFIG_VALUE_1: 'false',
   }
 }
 
