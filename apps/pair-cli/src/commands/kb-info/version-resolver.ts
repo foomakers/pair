@@ -260,8 +260,10 @@ async function resolveGitVersion(
     }
     return { version, available: true }
   } catch (err) {
-    // Offline, auth failure, missing `git`, unknown #ref — all degrade, none throw. git
-    // echoes the token-injected URL in its stderr, so the reason is redacted (AC4).
+    // Offline, auth failure, missing `git`, unknown #ref — all degrade, none throw. The
+    // token no longer travels in the URL this module builds (see `gitAuthEnv` in
+    // `git-clone.ts`), but the source is redacted anyway (AC4): a caller-supplied source
+    // URL may still embed its own credential, or an injected `gitCloner` could leak one.
     return { version: null, available: false, error: redactGitCredentials(errorMessage(err)) }
   } finally {
     // Best-effort: a temp directory that outlives the check is litter, never a failure,

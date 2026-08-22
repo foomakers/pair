@@ -125,7 +125,11 @@ function isMonorepo(): boolean {
 When the source is a Git URL:
 
 1. **Parse ref** — split `url#ref` into repo URL and optional branch/tag
-2. **Inject token** — if `PAIR_GIT_TOKEN` is set and URL is HTTPS, rewrite URL with token
+2. **Set auth env** — if `PAIR_GIT_TOKEN` is set and the URL is `https://` (not `http://`),
+   set a child-process-scoped `http.extraheader` (Basic auth) via `GIT_CONFIG_COUNT` /
+   `GIT_CONFIG_KEY_0` / `GIT_CONFIG_VALUE_0` — requires git ≥ 2.31; an older git silently
+   ignores these and the clone proceeds unauthenticated. Never rewrites the URL and never
+   appears on the `git clone` argv.
 3. **Shallow clone** — `git clone --depth 1 [--branch ref] <url> <slot>` into the git
    source's own cache slot (`~/.pair/kb/external/git-{hash}/`), replaced on each install
 4. **Cleanup** — remove the clone's `.git` directory, leaving the dataset
@@ -133,7 +137,8 @@ When the source is a Git URL:
 Auth strategy:
 
 - **Default**: git inherits system auth (SSH keys, credential manager, `gh auth`)
-- **Override**: `PAIR_GIT_TOKEN` env var injects token into HTTPS URLs
+- **Override**: `PAIR_GIT_TOKEN` env var sets an env-scoped `http.extraheader` for `https://`
+  sources — never `http://`, and never in the URL or the clone's argv
 
 ## Resolution Implementation
 
@@ -308,7 +313,7 @@ With no CLI version resolvable, prune spares every official slot rather than gue
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | `PAIR_KB_CACHE_DIR`   | Override the KB cache root. Must be ABSOLUTE and free of `..` segments — rejected otherwise, because slots are deleted recursively | `~/.pair/kb`          |
 | `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL                                                                                                | GitHub latest release |
-| `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos                                                                         | Not set               |
+| `PAIR_GIT_TOKEN`      | Sets an env-scoped `http.extraheader` (git >= 2.31) for `https://` git clones of private repos — never `http://`, never in the URL | Not set               |
 | `PAIR_DIAG`           | Enable diagnostic logging                                                                                                          | `0` (disabled)        |
 
 ---

@@ -21,24 +21,37 @@ export function parseGitRef(source: string): GitRef {
 }
 
 /**
- * Auth for an HTTPS(S) git clone, added to the CHILD PROCESS ENVIRONMENT rather than argv
+ * Auth for an HTTPS git clone, added to the CHILD PROCESS ENVIRONMENT rather than argv
  * or the URL's userinfo (US-396/US-291 review round 2 escalation of #448).
  *
  * The prior scheme built `https://<token>@host/…` and passed that URL as a `git clone`
  * argument: readable by any local user through `/proc/<pid>/cmdline` on Linux for the
  * whole duration of the clone, and `kb-info`'s READ-ONLY version check newly reaches this
- * same path. `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` (git >= 2.31)
- * set a one-shot, child-process-scoped `http.extraheader` carrying the equivalent Basic
- * auth header WITHOUT ever putting the token on the command line or in the URL — SSH URLs
- * are untouched, exactly as before (they use SSH keys).
+ * same path. `GIT_CONFIG_COUNT` / `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` (git >= 2.31 —
+ * an OLDER git silently ignores all three, so the clone runs unauthenticated and the
+ * resulting failure recommends `PAIR_GIT_TOKEN`, which is already set) set a one-shot,
+ * child-process-scoped `http.extraheader` carrying a Basic auth header WITHOUT ever
+ * putting the token on the command line or in the URL.
  *
- * `base64("${token}:")` (empty password) is what git's own HTTP backend produces
- * internally from a bare `<token>@host` userinfo, so this is not a new auth SCHEME —
- * exactly the credential the prior URL-embedded token asserted, moved off the URL.
+ * **This is a behaviour change, not a no-op relocation.** `GIT_TERMINAL_PROMPT=0` (set by
+ * `cloneGitRepo` below) makes git refuse to send ANY credential for a bare userinfo it
+ * cannot fully resolve — measured on this branch: the prior `https://<token>@host` URL
+ * produced `fatal: could not read Password …: terminal prompts disabled`, and the
+ * credential was **never actually transmitted**. `http.extraheader` bypasses that prompt
+ * entirely — verified against a real (invalid) token: the server responds `Invalid
+ * username or token`, i.e. the header IS evaluated. So this is not "the same credential,
+ * moved off the URL" — it is the first version of this function that reliably
+ * authenticates an HTTPS clone at all; the plain-URL predecessor was, for practical
+ * purposes, already broken by its own prompt-disabling flag.
+ *
+ * `http://` is explicitly excluded: with the prior scheme a bare-userinfo token never
+ * reached the wire either (same prompt-disabling effect), so cleartext exposure was moot;
+ * `http.extraheader` has no such guard, and would send the token in the clear on every
+ * request to a plaintext remote if it were allowed to.
  */
 function gitAuthEnv(repoUrl: string): Record<string, string> {
   const token = process.env['PAIR_GIT_TOKEN']
-  if (!token || !/^https?:\/\//i.test(repoUrl)) return {}
+  if (!token || !/^https:\/\//i.test(repoUrl)) return {}
   const basic = Buffer.from(`${token}:`).toString('base64')
   return {
     GIT_CONFIG_COUNT: '1',

@@ -113,13 +113,14 @@ describe('cloneGitRepo — auth', () => {
     )
   })
 
-  it('carries an http (non-TLS) token the same way', () => {
+  it('never attaches the header to a plain http:// URL — cleartext transport', () => {
+    // Unlike the prior URL-embedded scheme (which never actually sent the credential over
+    // plain http either, GIT_TERMINAL_PROMPT=0 always refused it), http.extraheader has no
+    // such guard: sending it here would put the token on the wire in the clear.
     process.env['PAIR_GIT_TOKEN'] = 'mytoken'
     cloneGitRepo('http://gitlab.com/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
 
-    expect(envOf()['GIT_CONFIG_VALUE_0']).toBe(
-      `AUTHORIZATION: basic ${Buffer.from('mytoken:').toString('base64')}`,
-    )
+    expect(envOf()['GIT_CONFIG_COUNT']).toBeUndefined()
   })
 
   it('does not touch SSH URLs — they use SSH keys, not the header', () => {
