@@ -114,9 +114,10 @@ describe('cloneGitRepo — auth', () => {
   })
 
   it('never attaches the header to a plain http:// URL — cleartext transport', () => {
-    // Unlike the prior URL-embedded scheme (which never actually sent the credential over
-    // plain http either, GIT_TERMINAL_PROMPT=0 always refused it), http.extraheader has no
-    // such guard: sending it here would put the token on the wire in the clear.
+    // The prior URL-embedded scheme also exposed the token in cleartext over plain http
+    // (git's challenge/response Basic auth answers over whatever transport the URL names);
+    // this header has no transport guard at all and would send unconditionally, so it must
+    // not be attached here regardless of what the predecessor did.
     process.env['PAIR_GIT_TOKEN'] = 'mytoken'
     cloneGitRepo('http://gitlab.com/org/repo.git', join(tmpdir(), `pgc-${randomUUID()}`))
 

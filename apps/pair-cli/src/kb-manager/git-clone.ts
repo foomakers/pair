@@ -33,21 +33,28 @@ export function parseGitRef(source: string): GitRef {
  * child-process-scoped `http.extraheader` carrying a Basic auth header WITHOUT ever
  * putting the token on the command line or in the URL.
  *
- * **This is a behaviour change, not a no-op relocation.** `GIT_TERMINAL_PROMPT=0` (set by
- * `cloneGitRepo` below) makes git refuse to send ANY credential for a bare userinfo it
- * cannot fully resolve — measured on this branch: the prior `https://<token>@host` URL
- * produced `fatal: could not read Password …: terminal prompts disabled`, and the
- * credential was **never actually transmitted**. `http.extraheader` bypasses that prompt
- * entirely — verified against a real (invalid) token: the server responds `Invalid
- * username or token`, i.e. the header IS evaluated. So this is not "the same credential,
- * moved off the URL" — it is the first version of this function that reliably
- * authenticates an HTTPS clone at all; the plain-URL predecessor was, for practical
- * purposes, already broken by its own prompt-disabling flag.
+ * **The prior scheme DID authenticate, and DID transmit the credential — the argv
+ * exposure is the whole reason for this change, not a side effect of it being broken.**
+ * Verified against a real HTTP trace (round 3 review claimed otherwise; re-verified round
+ * 4, corrected here): git first sends the clone request with NO credential, the server
+ * challenges with `401` + `WWW-Authenticate: Basic`, and only THEN does git resend the
+ * request with `Authorization: Basic <base64 of the URL's userinfo>` — which a valid token
+ * authenticates successfully. `GIT_TERMINAL_PROMPT=0` only stops git from opening an
+ * INTERACTIVE prompt if that challenge/response still fails (e.g. an invalid token); it
+ * does not stop the credential from being sent on a request that has a userinfo to answer
+ * the challenge with. So `http://` exposed the token on the wire in cleartext on that
+ * second request, same as any other Basic auth — never "moot".
  *
- * `http://` is explicitly excluded: with the prior scheme a bare-userinfo token never
- * reached the wire either (same prompt-disabling effect), so cleartext exposure was moot;
- * `http.extraheader` has no such guard, and would send the token in the clear on every
- * request to a plaintext remote if it were allowed to.
+ * What `http.extraheader` actually changes: it is sent PRE-EMPTIVELY, on every request,
+ * with no 401 challenge required — unlike curl's userinfo handling, which git's HTTP
+ * backend uses and which only answers a challenge from the SAME host. That is a real
+ * behaviour difference (see the Question in `git-clone.test.ts` about redirect targets),
+ * just not "this now authenticates when it didn't before".
+ *
+ * `http://` is excluded because `http.extraheader` has no transport guard: unlike the
+ * prior scheme's challenge/response (which happens over whatever transport the URL names,
+ * so cleartext there was already a problem, just not a NEW one), this header would go out
+ * on every plaintext request without git treating that as anything unusual.
  */
 function gitAuthEnv(repoUrl: string): Record<string, string> {
   const token = process.env['PAIR_GIT_TOKEN']
