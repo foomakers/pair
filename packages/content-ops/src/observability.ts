@@ -55,6 +55,36 @@ function shouldLog(messageLevel: LogLevel) {
   return levelOrder[messageLevel] >= levelOrder[currentLogLevel]
 }
 
+/**
+ * Escapes C0 and C1 control characters (keeping `\n` and `\t`, which are real
+ * formatting) as a visible `\xNN`.
+ *
+ * WHY at this boundary: diagnostics routinely quote strings this process did not
+ * author — a key from a config file being validated, a registry name, a package
+ * manifest field. `pair kb-validate --path ./downloaded-kb` on a KB you did not
+ * write would otherwise let that KB's `config.json` move the cursor, clear the
+ * screen, or rewrite the terminal title/clipboard through an OSC sequence, just
+ * by naming a key. Escaping ONCE here means no call site has to remember.
+ *
+ * ESCAPED, not dropped: the operator still sees that something was there, and
+ * what it was, which a silent drop would hide.
+ */
+export function sanitizeControlCharacters(text: string): string {
+  // A character-by-character scan, not a control-character regex literal: this repo's
+  // code-hygiene gate flags every linter-suppression comment with no exception
+  // mechanism, and a loop needs none. Same ranges as the regex it replaces (C0
+  // 0x00-0x08 and 0x0B-0x1F, C1 0x7F-0x9F), keeping \t (0x09) and \n (0x0A)
+  // untouched as real formatting.
+  let result = ''
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0
+    const isControl =
+      code <= 0x08 || (code >= 0x0b && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)
+    result += isControl ? `\\x${code.toString(16).toUpperCase().padStart(2, '0')}` : char
+  }
+  return result
+}
+
 // Unified Logger - Funzioni standalone invece di classe
 let loggerEnabled = true
 
@@ -70,28 +100,28 @@ export const logger = {
     if (!loggerEnabled) return
     if (!shouldLog('INFO')) return
     const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
-    console.log(payload ? `ℹ️ ${message} ${payload}` : `ℹ️ ${message}`)
+    console.log(sanitizeControlCharacters(payload ? `ℹ️ ${message} ${payload}` : `ℹ️ ${message}`))
   },
 
   warn: (message: string, data?: unknown) => {
     if (!loggerEnabled) return
     if (!shouldLog('WARN')) return
     const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
-    console.warn(payload ? `⚠️ ${message} ${payload}` : `⚠️ ${message}`)
+    console.warn(sanitizeControlCharacters(payload ? `⚠️ ${message} ${payload}` : `⚠️ ${message}`))
   },
 
   error: (message: string, data?: unknown) => {
     if (!loggerEnabled) return
     if (!shouldLog('ERROR')) return
     const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
-    console.error(payload ? `❌ ${message} ${payload}` : `❌ ${message}`)
+    console.error(sanitizeControlCharacters(payload ? `❌ ${message} ${payload}` : `❌ ${message}`))
   },
 
   debug: (message: string, data?: unknown) => {
     if (!loggerEnabled) return
     if (!shouldLog('DEBUG')) return
     const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
-    console.debug(payload ? `🔍 ${message} ${payload}` : `🔍 ${message}`)
+    console.debug(sanitizeControlCharacters(payload ? `🔍 ${message} ${payload}` : `🔍 ${message}`))
   },
 
   // Security-specific logging (semplificato)

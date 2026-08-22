@@ -99,11 +99,17 @@
 - [Decision: verify-quality's tree/PR-state resolution ships as an executable, smoke-tested asset — not as shell inlined in a skill](.pair/adoption/decision-log/2026-08-13-tree-resolution-ships-as-an-executable-asset.md)
 - [Decision: `tech/risk-matrix.md` gets a Criticality Table + a change-risk override — the KB defaults were producing zero `risk:green` in a month+ of real history](.pair/adoption/decision-log/2026-08-14-risk-matrix-overrides-close-the-zero-green-gap.md)
 - [Decision: tier resolution downgrades a would-be-yellow to green when the only yellows are default-artifact dimensions, never when they're observed-in-diff dimensions](.pair/adoption/decision-log/2026-08-14-tier-resolution-downgrades-artifact-yellows-not-observed-ones.md)
+- [Decision: Adoption-informed generation is a KB convention the generating skills point at — not a fourth capability, and not a step written three times](.pair/adoption/decision-log/2026-08-19-adoption-informed-generation-is-a-convention-not-a-capability.md)
+- [Decision: install reports three outcomes — absent is not failed — and the exit code follows the failures](.pair/adoption/decision-log/2026-08-19-install-outcomes-absent-is-not-failed.md)
+- [Decision: kb-validate's optional-link globs are matched by an internal matcher, not a new runtime dependency](.pair/adoption/decision-log/2026-08-19-optional-link-globs-use-an-internal-matcher.md)
+- [Decision: a changeset is added when a release is scheduled, not on every user-facing PR](.pair/adoption/decision-log/2026-08-20-a-changeset-is-added-when-a-release-is-scheduled.md)
 - [Decision: a user-facing `pair-cli` fix carries its changeset, even while releases are batched](.pair/adoption/decision-log/2026-08-20-a-user-facing-cli-fix-carries-its-changeset.md)
 - [Decision: CP5's docs URL list is asserted against the filesystem, not hand-maintained](.pair/adoption/decision-log/2026-08-20-cp5-page-list-is-asserted-against-the-filesystem.md)
 - [Decision: automation eligibility is ONE literal label — no boolean grammar until `pair-next --filter` widens first](.pair/adoption/decision-log/2026-08-20-eligibility-is-one-literal-label-until-the-filter-widens.md)
 - [Decision: the `tech/automation.md` schema lives in a `collaboration/automation/` guideline, not in `quality-model.md`](.pair/adoption/decision-log/2026-08-20-eligibility-schema-lives-in-collaboration-automation.md)
+- [Decision: A git-backed KB publishes its current version through `manifest.json` only](.pair/adoption/decision-log/2026-08-20-git-kb-current-version-is-manifest-only.md)
 - [Decision: No public dev-server preview from cloud coding sessions](.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md)
+- [Decision: a source KB's configuration declaration is validated, not trusted — it may namespace its content, never choose where the install writes](.pair/adoption/decision-log/2026-08-20-source-kb-declaration-is-validated-not-trusted.md)
 - [Decision: Review severity is capped by trigger plausibility, and Minor blocks merge](.pair/adoption/decision-log/2026-08-21-review-severity-classification-and-convergence.md)
 
 ## How-To Guides

@@ -154,7 +154,7 @@ The pair CLI (`@pair/pair-cli`) provides:
 | `pair install` | Install knowledge base documentation |
 | `pair update` | Update knowledge base to latest version |
 | `pair update-link` | Normalize markdown links (relative/absolute) |
-| `pair kb validate` | Validate KB structure, links, and metadata |
+| `pair kb-validate` | Validate KB structure, links, and metadata |
 | `pair package` | Package .pair/ into distributable ZIP (`--interactive`, `--org`) |
 | `pair kb-info` | Display metadata from a KB package ZIP |
 | `pair kb-verify` | Verify KB package integrity (checksum, structure, manifest) |

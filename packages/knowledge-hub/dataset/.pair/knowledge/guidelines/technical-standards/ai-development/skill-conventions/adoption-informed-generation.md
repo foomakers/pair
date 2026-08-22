@@ -36,7 +36,7 @@ So the number of full bodies read scales with the item's scope, **never the enti
 
 ## Precedence — supersession first, then recency
 
-- **Live** = an authority currently in force: `Accepted` for an ADR or a DDR and `Active` for an ADL. **Either status in any amended form** is live and its amended contract is the one that applies — the template's `Accepted (amended YYYY-MM-DD — ...)`, the `Accepted — amended by [ADR-NNN](...)` spelling used in the wild, and an ADL's `Active (amended YYYY-MM-DD — ...)` are all the same status as the bare word. Only live records constrain, are cited, or can be reopened.
+- **Live** = an authority currently in force: `Accepted` for an ADR or a DDR and `Active` for an ADL. **Either status in any amended form** is live and its amended contract is the one that applies — the template's `Accepted (amended YYYY-MM-DD — ...)`, the `Accepted — amended by [ADR-NNN] (...)` spelling used in the wild, and an ADL's `Active (amended YYYY-MM-DD — ...)` are all the same status as the bare word. Only live records constrain, are cited, or can be reopened.
 - **A `Status` that did not resolve is not** thereby non-live. It is opened at stage 2 (above) and, if still unresolved, reported — never silently demoted to non-live, which would strip a record of its authority with no warning and no citation.
 - **`Proposed` is not yet an authority.** A draft under review never drops or reshapes a candidate, is never cited, and never triggers a `Revisits` flag — nobody has decided anything yet, and a proposal that silently became a constraint is the same defect as an analysis applied as a decision.
 - **`Deprecated` and `Superseded` are no longer authorities.** A record whose `Status` is `Superseded` (or that carries a "Superseded by" pointer) is **never the authority**; the superseding record is read in its place, and the superseded one is not cited. A `Deprecated` record has no successor to read in its place — it simply stops constraining, and the question it used to answer is open again.
@@ -72,7 +72,7 @@ Seeded adoption (subject: a story about story generation):
 
 ```text
 adoption/tech/adr/adr-009-assess-output-only.md                       Status: Accepted (amended 2026-07-28 — D14 exception)
-adoption/tech/adr/adr-005-skills-infrastructure.md                    Status: Accepted — amended by [ADR-020](...)
+adoption/tech/adr/adr-005-skills-infrastructure.md                    Status: Accepted — amended by [ADR-020] (...)
 adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md  Status: Accepted — amends ADR-005 (flatten semantics)
 adoption/decision-log/2026-07-11-agent-execution-layer.md             Status: Active
 adoption/product/context-map.md                                       term: "Adoption file" (registered; the item says "config file")
@@ -87,7 +87,7 @@ Generated candidate list, adoption-informed:
 └── "Move execution off the agent layer"                   -> CREATE — Revisits decision-log/2026-07-11-agent-execution-layer: the story's premise is that the layer moved
 ```
 
-`ADR-005` is **live in its amended form**, so it still constrains and it *is* cited: `Accepted — amended by [ADR-020](...)` and `ADR-009`'s `Accepted (amended 2026-07-28 — ...)` are the same status (*Precedence*), and the amending record — seeded above, because a record that is read must be in the tree — supplies the contract that applies. Only a `Superseded` record would be left uncited with its successor read in its place; an amendment is not a supersession. The `Revisits` flag on the ADL is licensed by its seeded `Status: Active`: a flag may only target a live authority, so a record seeded without a resolvable status could not carry one.
+`ADR-005` is **live in its amended form**, so it still constrains and it *is* cited: `Accepted — amended by [ADR-020] (...)` and `ADR-009`'s `Accepted (amended 2026-07-28 — ...)` are the same status (*Precedence*), and the amending record — seeded above, because a record that is read must be in the tree — supplies the contract that applies. Only a `Superseded` record would be left uncited with its successor read in its place; an amendment is not a supersession. The `Revisits` flag on the ADL is licensed by its seeded `Status: Active`: a flag may only target a live authority, so a record seeded without a resolvable status could not carry one.
 
 Empty-adoption fixture (same subject, no `adr/`, no `decision-log/`, no map): the same four candidates are generated with **no** citations, **no** DROPPED-by-decision entry and **no** revisit flag — the pre-adoption-informed output, produced without a warning beyond the one-line "no adoption history to read" note.
 

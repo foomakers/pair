@@ -17,7 +17,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [kb-info](#kb-info) — Display package metadata, or check installed vs current KB version
 - [kb-cache](#kb-cache) — Inspect and reclaim the shared KB cache
 - [kb-verify](#kb-verify) — Verify KB package integrity
-- [kb validate](#kb-validate) — Validate KB structure
+- [kb-validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
 
 ## Rules that apply to every command
@@ -446,14 +446,14 @@ pair kb-verify kb-package.zip --log-level debug
 
 ---
 
-## kb validate
+## kb-validate
 
 Validate KB structure, links, and metadata using layout-aware validation.
 
 ### Usage
 
 ```bash
-pair kb validate [options]
+pair kb-validate [options]
 ```
 
 This command takes **no positional argument** — the KB directory is passed as
@@ -462,33 +462,143 @@ This command takes **no positional argument** — the KB directory is passed as
 
 ### Options
 
-| Option                     | Description                                               |
-| -------------------------- | --------------------------------------------------------- |
-| `--path <path>`            | KB directory to validate (default: current directory)     |
-| `--layout <mode>`          | Layout mode: `source` or `target` (default: `target`)     |
-| `--strict`                 | Enable external link checking via HTTP HEAD (slow)        |
-| `--ignore-config`          | Skip config-based registry structure validation           |
-| `--skip-registries <list>` | Comma-separated registry names to exclude from validation |
-| `--log-level <level>`      | Set logging level (trace, debug, info, warn, error)       |
+| Option                            | Description                                                                            |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| `--path <path>`                   | KB directory to validate (default: current directory)                                  |
+| `--layout <mode>`                 | Layout mode: `source` or `target` (default: `target`)                                  |
+| `--strict`                        | Zero tolerance: optional link patterns are discarded, every missing target is an error |
+| `--ignore-config`                 | Consult no config: no registries resolve, so nothing is collected or checked           |
+| `--skip-registries <list>`        | Comma-separated registry names to exclude from validation                              |
+| `--optional-link-patterns <list>` | Comma-separated globs whose **missing** link targets are warnings, not errors          |
+| `--log-level <level>`             | Set logging level (trace, debug, info, warn, error)                                    |
 
 ### Examples
 
 ```bash
 # Validate current directory
-pair kb validate
+pair kb-validate
 
 # Validate another directory
-pair kb validate --path ./my-kb
+pair kb-validate --path ./my-kb
 
 # Validate source layout
-pair kb validate --layout source
+pair kb-validate --layout source
 
-# Validate with external link checking
-pair kb validate --strict
+# Validate with zero tolerance (optional link patterns discarded)
+pair kb-validate --strict
 
 # Validate excluding specific registries
-pair kb validate --skip-registries adoption,github
+pair kb-validate --skip-registries adoption,github
+
+# Tolerate links into a codebase that is not checked out beside the KB
+pair kb-validate --optional-link-patterns "apps/**,packages/**"
 ```
+
+### Optional link patterns
+
+A KB validated on its own still contains relative links into the codebase it
+normally sits next to. Declaring those targets **optional** keeps every other link
+checked, instead of switching whole registries off:
+
+```json
+{
+  "link_validation": {
+    "optional_link_patterns": ["apps/**", "packages/**"]
+  }
+}
+```
+
+Patterns are written in the **resolved** form — the target's path relative to the KB
+root — because that form does not change with the depth of the file the link is written
+in. Above: links landing on `<kb-root>/apps/…`, however deep the source file is. A target
+that is a true **sibling** of the KB root resolves one level up, so its rule starts with
+`../` (`../apps/**`), and `**/apps/**` covers both anchorings at once.
+
+Rules:
+
+- A pattern only affects a **missing** target. A target that exists is simply valid.
+- A missing target matching a pattern is a **warning** (`optional link (pattern-matched)`)
+  and does not fail the run; a missing target matching nothing stays an **error**.
+- Config patterns and `--optional-link-patterns` are **merged** (union), never replaced. Entries
+  are trimmed on both sides before the union, so declaring the same pattern twice (even with
+  different surrounding whitespace) yields one matcher.
+- Each pattern is matched against the target **resolved relative to the KB root**
+  (`apps/x.ts`) and — only when the link **as written** is a genuine spelling of that same
+  target, i.e. its leading `../` climb lands exactly on the KB root (`../../apps/x.ts` from
+  `.pair/knowledge/`), or the resolved target leaves the KB tree — against the written form
+  too. A match in either form makes the link optional, and overlapping patterns still produce
+  a single warning. Every other link is matched on its **resolved form only**: one that stays
+  inside the KB (`apps/x.md`, `./apps/x.md`), and one whose `../` climb lands back inside the
+  KB (`../../apps/y.md` from `.pair/knowledge/a/b/`, resolving to
+  `.pair/knowledge/apps/y.md`). So a rule like `apps/**` or `../../apps/**` cannot silence a
+  broken link that merely **looks** like it — typically a file moved deeper, whose `../` depth
+  is now wrong and whose target will never exist.
+- **Prefer the resolved form; the written form is depth-bound.** `../../apps/**` matches only
+  links whose `../` climb lands exactly on the KB root, so the same rule stops matching as soon
+  as the same target is linked from a deeper file. Measured with two files linking to the SAME
+  out-of-KB target: `[x](../../../apps/x.ts)` from `.pair/knowledge/a.md` and
+  `[x](../../../../apps/x.ts)` from `.pair/knowledge/deep/b.md` are **both errors** under
+  `../../apps/**`, and **both warnings** under `../apps/**` (their common resolved form) or
+  `**/apps/**`. Nothing is silenced by the mismatch — the error stays — but the rule does not
+  do what it looks like it does.
+- Glob syntax: `**` (a whole segment: **zero or more** path segments, so `a/**/b` matches
+  `a/b` and `**/apps/**` matches `apps/x.ts`), `*` (any characters except `/`, which is also
+  what a `**` that is not a whole segment means), `?` (one character, never `/`), `[abc]` /
+  `[a-z]` / `[!abc]`. Patterns are anchored — `apps/**` does not match `vendor/apps/x.ts`.
+  Anchoring is on the KB root, so the decorations that would only restate it are stripped from
+  the pattern and from the path alike: a leading `/` or `./`, a trailing `/`, repeated `/`.
+  `/apps/**` (how an absolute internal link is written) and `./apps/**` are the same rule as
+  `apps/**`, and `apps/` the same as `apps` — note that is the directory itself, NOT everything
+  under it: write `apps/**` for that. A malformed pattern (unterminated class, out-of-order
+  range like `[z-a]`) is reported and skipped, never fatal — including under `--strict`, where the matchers are discarded but the
+  typo is still warned about. A **blank** entry is not a malformed pattern: on the flag it is
+  dropped silently (`"apps/**,,"` is one pattern), in config it is dropped with its own
+  "not a non-empty string" warning.
+- **Everything outside that list is literal, not an error.** Brace expansion (`{apps,packages}/**`),
+  extglob (`+(a|b)`) and leading-`!` negation (`!apps/**`) are compiled character by character, so
+  they simply never match — and they are **not** reported as malformed patterns, so nothing warns.
+  Write one pattern per alternative instead (`["apps/**", "packages/**"]`).
+- A pattern containing a **comma** cannot be passed on `--optional-link-patterns` (the flag value is
+  split on `,`, so `"[a,b]/*"` becomes two patterns, one of them malformed). Declare such a pattern
+  in `link_validation.optional_link_patterns` instead.
+- Three places this matcher is **more permissive than `minimatch`**, so do not assume parity:
+  a trailing `/**` also matches the **directory itself** (`apps/**` matches `apps`, `**/b/**`
+  matches `a/b`), `**` **traverses `..` segments** (`**` matches `../../apps/x.ts`), and the
+  normalization above collapses spellings minimatch keeps distinct (`/apps/**` matches
+  `apps/x.ts`). All three make a pattern broader than a minimatch habit suggests — and a
+  too-broad pattern is not malformed, so nothing warns about it. Prefer the narrowest pattern that covers the links you
+  mean to tolerate.
+- A `link_validation` section of the wrong **shape** — not an object, `optional_link_patterns`
+  not an array (`"apps/**"` instead of `["apps/**"]`), a camelCase key, or non-string entries —
+  is reported as a warning and ignored, never fatal. Without that warning the run would look
+  like "all these links are broken" rather than "the config key is misspelled". An empty section
+  (`"link_validation": {}`) declares nothing and is silent.
+- Config-shape and malformed-pattern diagnostics are printed under **`Configuration:`** in the
+  report and counted in its `Warnings:` total, alongside the per-file ones. They are **also
+  logged on stderr**, so each one deliberately appears twice: on stderr, where it is visible
+  without scrolling back through a long report (and survives piping the report to a file), and
+  in the report itself for the counted summary.
+- `--strict` **overrides** optional patterns: in strict mode every missing target is an error.
+  That is all it does today — the CLI makes **no network requests**, so external (`http`/`https`)
+  links are never fetched, with or without `--strict`. A green `--strict` run in CI means "every
+  internal target exists", never "external links are reachable".
+- Links carrying a **non-http URI scheme** — `mailto:`, `tel:`, `ftp:`, `vscode:`, any
+  `scheme:` of two characters or more — address something that is not a file: they are skipped
+  entirely, never resolved as a path and never reported broken, with or without `--strict`
+  (they are not fetched either, as nothing is). A Windows drive letter (`C:/x`) is a single
+  character and therefore not a scheme: it stays an internal path.
+- `--ignore-config` consults no config at all, so no registries resolve, **no files are
+  collected and nothing is validated** — structure, links and metadata are all skipped, and
+  optional patterns (config or CLI) have no effect, since there is nothing to match against.
+  The run says so rather than passing silently: a `Configuration:` notice
+  (`--ignore-config: … nothing validated …`) is printed on stderr and in the report, counted in
+  the `Warnings:` total. Use it to skip validation entirely, not as a way to run with CLI-only
+  patterns.
+- Config patterns are read from the config of the **KB being validated**
+  (`<--path>/pair.config.json`, falling back to `<--path>/config.json` when the former is
+  absent), not from the invoking project — the same config `--path` already
+  resolves registries from. Validating `--path ./my-kb` therefore ignores a `link_validation`
+  section left in the repo-root config.
 
 ---
 

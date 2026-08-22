@@ -88,11 +88,18 @@ Simulates a real KB release and update flow in an **Offline** environment:
 
 Verifies the `pair kb-validate` command:
 
-- **Source Layout**: Validates real KB dataset with `--layout source`.
+- **Source Layout**: Fully validates the real KB dataset with `--layout source` — structure,
+  links and metadata, no `--ignore-config` escape hatch (dogfoods the shipped KB).
 - **Target Layout**: Installs KB then validates with `--layout target` (default).
 - **Skip Registries**: Validates with `--skip-registries` to exclude specific registries.
-- **Ignore Config**: Validates with `--ignore-config` to skip structure checks.
+- **Ignore Config**: `--ignore-config` consults no config, so no registry resolves and nothing
+  is collected — asserted by the absence of a `Link Validation:` section plus the explicit
+  "nothing validated" notice, since the exit code alone would be green either way.
 - **Failure Detection**: Verifies validation fails on a workspace with missing registry paths.
+- **Optional Link Patterns**: a missing out-of-tree link is an error by default, a warning via
+  `--optional-link-patterns` or the `link_validation` config, and an error again under `--strict`;
+  the KB-root-anchored spelling `/apps/**` is the same rule as `apps/**`. Also pins that a
+  non-http URI scheme (`mailto:`, `tel:`) is not a filesystem path and never reported broken.
 
 ### 7. Configuration Validation (`scenarios/validate-config.sh`)
 
