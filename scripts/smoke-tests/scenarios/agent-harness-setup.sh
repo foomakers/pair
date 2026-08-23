@@ -187,10 +187,16 @@ if [ "$AFTER_COUNT" -gt "$BEFORE_COUNT" ]; then
   log_fail "pi + read-only token: a write landed anyway — the negative case did not hold"
   exit 1
 fi
-if ! echo "$OUTPUT" | grep -qE "$WRITE_REJECTION_PATTERN"; then
-  log_fail "pi + read-only token: no comment landed, but the output shows no evidence of a permission rejection either — cannot distinguish this from a rate limit, a crash, or a broken count check. Output was: $OUTPUT"
+REJECTION_LINE=$(echo "$OUTPUT" | grep -E "$WRITE_REJECTION_PATTERN" | head -1)
+if [ -z "$REJECTION_LINE" ]; then
+  # Full transcript only on the failure path, and only to a log file — never inlined
+  # into the terminal/CI summary, which may otherwise be captured by tooling that
+  # was not expecting a full model transcript (tool calls, intermediate reasoning).
+  FAIL_LOG="$TMP_DIR/test3-no-rejection-evidence.log"
+  echo "$OUTPUT" > "$FAIL_LOG"
+  log_fail "pi + read-only token: no comment landed, but the output shows no evidence of a permission rejection either — cannot distinguish this from a rate limit, a crash, or a broken count check. Full output saved to $FAIL_LOG"
   exit 1
 fi
-log_succ "pi + read-only token: no write landed, and the output shows a real permission rejection, as required ($OUTPUT)"
+log_succ "pi + read-only token: no write landed, and the output shows a real permission rejection, as required (\"$REJECTION_LINE\")"
 
 echo "=== $TEST_NAME Passed ==="
