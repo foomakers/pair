@@ -62,11 +62,66 @@ SOURCE_PATH="${KB_SOURCE_PATH:-$(realpath "$(dirname "$0")/../../../packages/kno
 # One shared prompt for both harnesses: run the smallest real write in the catalog.
 SMOKE_PROMPT="Run /pair-capability-write-issue \$mode=comment on ${AGENT_HARNESS_SMOKE_REPO}#${AGENT_HARNESS_SMOKE_ISSUE} with a comment body of exactly: 'agent-harness smoke $(date +%s) via HARNESS_PLACEHOLDER'. Report only the comment URL or the exact error, nothing else."
 
+# --- pi project trust: provision it the way /pair-capability-setup-harness does, not
+# with a blanket --approve. AC9 says "a harness configured by the skill" — --approve
+# bypasses the exact headless+trust gate pi.md documents as load-bearing (a headless
+# run ignores project skills unless a per-directory trust.json decision, or the global
+# defaultProjectTrust, says otherwise). This scenario exercises the PREFERRED,
+# per-directory remedy: a scoped entry in ~/.pi/agent/trust.json for this smoke
+# workspace ONLY, restored to its prior content on exit (success or failure) so the
+# developer's real global pi config is never left holding a stray trusted path.
+PI_TRUST_FILE="$HOME/.pi/agent/trust.json"
+PI_TRUST_BACKUP=""
+PI_TRUST_PROVISIONED=0
+
+restore_pi_trust() {
+  if [ "$PI_TRUST_PROVISIONED" = "1" ]; then
+    if [ -n "$PI_TRUST_BACKUP" ] && [ -f "$PI_TRUST_BACKUP" ]; then
+      mv "$PI_TRUST_BACKUP" "$PI_TRUST_FILE"
+    else
+      rm -f "$PI_TRUST_FILE"
+    fi
+  fi
+}
+trap restore_pi_trust EXIT
+
+provision_pi_trust() {
+  local project_dir
+  project_dir="$(cd "$1" && pwd -P)" # canonical, symlinks resolved — matches pi's own normalizeCwd
+  mkdir -p "$(dirname "$PI_TRUST_FILE")"
+  if [ -f "$PI_TRUST_FILE" ]; then
+    PI_TRUST_BACKUP="${PI_TRUST_FILE}.smoke-backup.$$"
+    cp "$PI_TRUST_FILE" "$PI_TRUST_BACKUP"
+  fi
+  PI_TRUST_PROVISIONED=1
+  # trust.json is a flat { "<canonical-absolute-path>": true|false } map (pi's own
+  # trust-manager.js) — merge our one entry in rather than clobbering the file.
+  node -e '
+    const fs = require("fs");
+    const file = process.argv[1];
+    const dir = process.argv[2];
+    let data = {};
+    if (fs.existsSync(file)) {
+      try { data = JSON.parse(fs.readFileSync(file, "utf-8")); } catch { data = {}; }
+    }
+    data[dir] = true;
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  ' "$PI_TRUST_FILE" "$project_dir"
+}
+
 # Model choice, verified live 2026-08-23: `big-pickle` (opencode Zen's flagship free
 # model) requires thinking and hit the free-tier rate limit on the second call in the
 # same session; `hy3-free` has neither issue and is what this scenario actually ran
 # green with, on both harnesses. `--thinking low` is required for pi: without it,
 # the provider rejects any Zen model that "always engages in thinking" (error 400).
+#
+# Tool surface: deliberately the FULL built-in set (no --no-tools/--tools restriction).
+# pi's skills.md documents that the model uses the `read` tool to load a skill's full
+# SKILL.md body before following it — restricting to `bash` only (an earlier draft of
+# this script did) would let the model guess a `gh` invocation from general knowledge
+# instead of actually reading and following /pair-capability-write-issue, which is
+# not what this smoke exists to prove. `bash` is still what the skill itself uses to
+# call `gh` once loaded.
 run_pi_smoke() {
   local project="$1" token="$2" label="$3"
   local prompt="${SMOKE_PROMPT/HARNESS_PLACEHOLDER/pi}"
@@ -75,7 +130,6 @@ run_pi_smoke() {
     GH_TOKEN="$token" OPENCODE_API_KEY="$OPENCODE_API_KEY" \
       pi --print \
       --provider opencode --model 'hy3-free' --thinking low \
-      --approve \
       "$prompt" 2>&1
   )
   echo "$label"
@@ -96,6 +150,7 @@ run_opencode_smoke() {
 log_info "Test 1: pi + write-capable token — real write must land"
 PI_PROJECT=$(setup_workspace "agent-harness-smoke-pi")
 (cd "$PI_PROJECT" && run_pair install --source "$SOURCE_PATH" --offline .)
+provision_pi_trust "$PI_PROJECT"
 BEFORE_COUNT=$(gh api "repos/${AGENT_HARNESS_SMOKE_REPO}/issues/${AGENT_HARNESS_SMOKE_ISSUE}/comments" --jq 'length' 2>/dev/null || echo 0)
 run_pi_smoke "$PI_PROJECT" "$GH_TOKEN_WRITE" "pi-write-capable"
 AFTER_COUNT=$(gh api "repos/${AGENT_HARNESS_SMOKE_REPO}/issues/${AGENT_HARNESS_SMOKE_ISSUE}/comments" --jq 'length' 2>/dev/null || echo 0)
@@ -119,7 +174,11 @@ fi
 log_succ "opencode + write-capable token: real write landed ($BEFORE_COUNT -> $AFTER_COUNT comments)"
 
 # --- Test 3: the negative case IS the point (AC9) — read-only credentials must fail
-# at the write step, not silently no-op and not fail earlier (e.g. at auth) ---
+# AT THE WRITE STEP specifically, not silently no-op (a rate limit, a model crash, or
+# a broken comment-count check would ALSO show "no increase" — that is not evidence
+# of the right failure). Require BOTH: no comment count increase, AND positive
+# evidence in the output that GitHub itself rejected the write for lack of permission.
+WRITE_REJECTION_PATTERN='Resource not accessible|HTTP 403|403 Forbidden|not accessible by (personal access token|integration)'
 log_info "Test 3: pi + read-only token — must fail AT THE WRITE STEP"
 BEFORE_COUNT=$(gh api "repos/${AGENT_HARNESS_SMOKE_REPO}/issues/${AGENT_HARNESS_SMOKE_ISSUE}/comments" --jq 'length' 2>/dev/null || echo 0)
 OUTPUT=$(run_pi_smoke "$PI_PROJECT" "$GH_TOKEN_READONLY" "pi-read-only")
@@ -128,6 +187,10 @@ if [ "$AFTER_COUNT" -gt "$BEFORE_COUNT" ]; then
   log_fail "pi + read-only token: a write landed anyway — the negative case did not hold"
   exit 1
 fi
-log_succ "pi + read-only token: no write landed, as required ($OUTPUT)"
+if ! echo "$OUTPUT" | grep -qE "$WRITE_REJECTION_PATTERN"; then
+  log_fail "pi + read-only token: no comment landed, but the output shows no evidence of a permission rejection either — cannot distinguish this from a rate limit, a crash, or a broken count check. Output was: $OUTPUT"
+  exit 1
+fi
+log_succ "pi + read-only token: no write landed, and the output shows a real permission rejection, as required ($OUTPUT)"
 
 echo "=== $TEST_NAME Passed ==="

@@ -146,7 +146,9 @@ pnpm smoke-tests   # runs the full local suite (run-all.sh has no per-scenario s
                     # of them (or pi/opencode themselves) are missing
 ```
 
-Runs on the free Zen model tier by default (`big-pickle`) — carries the data-exposure warning
+Runs on the free Zen model tier by default (`hy3-free` — `big-pickle` was tried first and
+dropped: it requires `--thinking low` on pi and hit the free-tier rate limit after one
+prior call in the same session) — carries the data-exposure warning
 documented in the opencode guide; acceptable for pair's own dogfood, state it explicitly if an
 adopter reuses this scenario against their own repository.
 

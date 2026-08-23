@@ -667,7 +667,7 @@ describe('brainstorm — catalog registration (#230)', () => {
       expect(guide).toMatch(/Total: 42/)
     })
 
-    it(`${label} way-of-working states the 41-skill catalog`, () => {
+    it(`${label} way-of-working states the 42-skill catalog`, () => {
       expect(wow).toContain('42 skills')
     })
 
