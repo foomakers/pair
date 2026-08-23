@@ -2,7 +2,7 @@
 
 How much of the delivery flow a project lets run **unattended** is a project decision, so it lives in an adoption file: the optional `.pair/adoption/tech/automation.md`. This guideline defines that file's schema.
 
-Today it specifies exactly one section — **`## Eligibility`**, which selects **which cards** an unattended run may pick up at all. Everything else the automation loop needs (which gates must be green to auto-advance, the stop predicate and step defaults, `max_parallelism`, the audit location — ADR-017 §6) is **out of scope here** and arrives with the loop that consumes it (#250). Sections are owned one at a time so two stories never claim the same lines of the same file.
+It specifies six sections, landed across two stories and owned one at a time so two stories never claim the same lines of the same file: `## Eligibility` (#216) selects **which cards** an unattended run may pick up at all; `## Harness`/`## Model Policy` (#450) declare supported agent harnesses and per-tier model class; and `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` (#250) are the remaining ADR-017 §6 knobs — which tier may auto-merge, when a run stops, the parallel-batch ceiling, and where the audit trail is written.
 
 **Eligibility selects `which cards`, never which gates.** The per-tier gate/approval policy already exists in [`quality-model.md`](../../quality-assurance/quality-model.md) §4 and is not restated here — auto-advance *enacts* that policy, it does not redefine it. Two sources of truth for the same rule is the failure mode this split exists to prevent.
 
@@ -133,7 +133,7 @@ A consumer **MUST HALT**, naming the file and the offending value, when the sect
 ```markdown
 ## Stop Predicate
 
-root:has-tag:risk:red ⇒ Done
+tag:risk:red ⇒ Done
 max-iterations: 20
 ```
 

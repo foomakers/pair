@@ -257,7 +257,7 @@ describe('buildValidRoutes', () => {
 })
 
 describe('runAllChecks (in-process, real docs tree)', () => {
-  it('reports zero drift and 42 skills against the actual repo', () => {
+  it('reports zero drift and 43 skills against the actual repo', () => {
     const { errors, skillCount } = runAllChecks(REPO_ROOT)
     expect(errors, errors.join('\n')).toHaveLength(0)
     expect(skillCount).toBe(43)

@@ -90,7 +90,7 @@ If the file doesn't exist, AI assistants skip the domain check entirely — this
 
 ### automation.md
 
-Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**. Today it holds a single section — `## Eligibility` — naming which cards an automated run may pick up at all:
+Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in five independent sections `pair-loop` reads. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in.
 
 ```text
 ## Eligibility
@@ -98,7 +98,40 @@ Optional. `tech/automation.md` declares how much of the delivery flow may run **
 risk:green
 ```
 
-The value is **a single literal label** on a bare line (recommended `risk:green`; the fence above is display only — never write the declaration as a list item, inside a code fence, or as two labels on one line), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
+**`## Eligibility`** — which cards an automated run may pick up at all. The value is **a single literal label** on a bare line (recommended `risk:green`; the fence above is display only — never write the declaration as a list item, inside a code fence, or as two labels on one line), matched by plain string equality against each card's labels — there is no AND/OR/NOT grammar — so `risk:yellow` and `risk:red` work is never developed unattended, and a card carrying no risk label matches nothing. If the file or the section is absent, the eligibility set is **empty**: nothing is eligible and automation stays off. That's the expected state for most projects, not an error. See [Quality Model — Tag Projection & Eligibility](/docs/reference/quality-model#tag-projection--eligibility).
+
+```text
+## Auto-Advance
+
+(none)
+```
+
+**`## Auto-Advance`** — which tier, once its PR is review-approved, `pair-loop` may push and merge to the default branch with no human. A comma-separated list, or the literal `(none)`. Only the one tier the quality model already lets a machine self-merge (typically `risk:green`) may ever appear here — `risk:yellow`/`risk:red` is a malformed value. **Absent, or `(none)`, is the shipped default: auto-merge is off** until a project explicitly writes the tier here.
+
+```text
+## Stop Predicate
+
+tag:risk:red ⇒ Done
+max-iterations: 20
+```
+
+**`## Stop Predicate`** — when an unattended run stops. `<selector> ⇒ <condition>` (selector: `root` / `tag:<label>` / `type:<issue-type>`; condition: a canonical macrostate and/or `has-tag:<label>`) plus a `max-iterations: <n>` backstop that always applies. Absent ⇒ `max-iterations: 1`, no predicate — a run advances exactly one iteration and stops.
+
+```text
+## Max Parallelism
+
+3
+```
+
+**`## Max Parallelism`** — the ceiling `pair-loop` passes to the batch engine as `min(dependency-allowed, max_parallelism)`; an optional per-tier override may follow the global integer. Absent ⇒ `1` (fully sequential).
+
+```text
+## Audit Location
+
+automation/loop-audit.md
+```
+
+**`## Audit Location`** — the project-relative path (under `working_path`) an unattended run appends its per-iteration record to. Absent ⇒ `automation/loop-audit.md`. See [automation-policy.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md) for the full schema, every fail-safe default, and every HALT trigger.
 
 ### risk-matrix.md
 
