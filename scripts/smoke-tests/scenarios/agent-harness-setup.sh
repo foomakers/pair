@@ -62,14 +62,19 @@ SOURCE_PATH="${KB_SOURCE_PATH:-$(realpath "$(dirname "$0")/../../../packages/kno
 # One shared prompt for both harnesses: run the smallest real write in the catalog.
 SMOKE_PROMPT="Run /pair-capability-write-issue \$mode=comment on ${AGENT_HARNESS_SMOKE_REPO}#${AGENT_HARNESS_SMOKE_ISSUE} with a comment body of exactly: 'agent-harness smoke $(date +%s) via HARNESS_PLACEHOLDER'. Report only the comment URL or the exact error, nothing else."
 
+# Model choice, verified live 2026-08-23: `big-pickle` (opencode Zen's flagship free
+# model) requires thinking and hit the free-tier rate limit on the second call in the
+# same session; `hy3-free` has neither issue and is what this scenario actually ran
+# green with, on both harnesses. `--thinking low` is required for pi: without it,
+# the provider rejects any Zen model that "always engages in thinking" (error 400).
 run_pi_smoke() {
   local project="$1" token="$2" label="$3"
   local prompt="${SMOKE_PROMPT/HARNESS_PLACEHOLDER/pi}"
   (
     cd "$project" || exit 1
     GH_TOKEN="$token" OPENCODE_API_KEY="$OPENCODE_API_KEY" \
-      pi --print --no-tools --tools bash \
-      --provider opencode --model 'big-pickle' \
+      pi --print \
+      --provider opencode --model 'hy3-free' --thinking low \
       --approve \
       "$prompt" 2>&1
   )
@@ -82,7 +87,7 @@ run_opencode_smoke() {
   (
     cd "$project" || exit 1
     GH_TOKEN="$token" OPENCODE_API_KEY="$OPENCODE_API_KEY" \
-      opencode run --model 'opencode/big-pickle' "$prompt" 2>&1
+      opencode run --model 'opencode/hy3-free' "$prompt" 2>&1
   )
   echo "$label"
 }
