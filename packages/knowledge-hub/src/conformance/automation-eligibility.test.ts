@@ -728,3 +728,139 @@ describe('automation-policy.md — Harness and Model Policy section (story #450)
     expect(content).toContain('agent-harness/README.md')
   })
 })
+
+// Story #250 T1 — the four remaining knobs ADR-017 §6 names: the auto-advance
+// switch, the stop predicate + max-iterations backstop, the max_parallelism
+// ceiling, and the audit location. Same file, same fail-closed discipline as
+// `## Eligibility` above: each knob names its own default (Assumption 6: the
+// shipped default keeps unattended merge OFF) and its own HALT triggers.
+describe('automation-policy.md — Auto-Advance section (story #250 T1)', () => {
+  it.each(policySources)('%s: names the switch and its scope — risk:* tiers only', (_, content) => {
+    expect(content).toContain('## Auto-Advance')
+    expect(content.toLowerCase()).toMatch(/never a gate list/)
+    expect(content).toContain('quality-model.md')
+  })
+
+  it.each(policySources)('%s: fail-closed default is `(none)` — auto-advance off', (_, content) => {
+    const section = content.slice(
+      content.indexOf('## Auto-Advance — which tiers'),
+      content.indexOf('## Stop Predicate — when an unattended run stops'),
+    )
+    expect(section).toMatch(/\(none\)/)
+    expect(section.toLowerCase()).toMatch(/shipped default/)
+    expect(section.toLowerCase()).toMatch(/fail-closed/)
+  })
+
+  it.each(policySources)(
+    '%s: yellow/red can never be named here — HALT triggers listed',
+    (_, content) => {
+      const section = content.slice(
+        content.indexOf('## Auto-Advance — which tiers'),
+        content.indexOf('## Stop Predicate — when an unattended run stops'),
+      )
+      expect(section).toMatch(/MUST HALT/)
+      expect(section).toContain('risk:yellow')
+      expect(section).toContain('risk:red')
+    },
+  )
+})
+
+describe('automation-policy.md — Stop Predicate section (story #250 T1)', () => {
+  it.each(policySources)(
+    '%s: grammar is `<selector> ⇒ <condition>` plus max-iterations',
+    (_, content) => {
+      const section = content.slice(
+        content.indexOf('## Stop Predicate — when an unattended run stops'),
+        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
+      )
+      expect(section).toMatch(/<selector>/)
+      expect(section).toMatch(/<condition>/)
+      expect(section).toContain('max-iterations')
+      expect(section.toLowerCase()).toMatch(/canonical macrostate/)
+    },
+  )
+
+  it.each(policySources)('%s: fail-safe default is one iteration, no predicate', (_, content) => {
+    const section = content.slice(
+      content.indexOf('## Stop Predicate — when an unattended run stops'),
+      content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
+    )
+    expect(section).toMatch(/max-iterations: 1/)
+  })
+
+  it.each(policySources)(
+    '%s: rejects issue-body content and HALTs on malformed grammar',
+    (_, content) => {
+      const section = content.slice(
+        content.indexOf('## Stop Predicate — when an unattended run stops'),
+        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
+      )
+      expect(section).toMatch(/MUST HALT/)
+      expect(section.toLowerCase()).toMatch(/issue-body content/)
+      expect(section).toContain('D18')
+    },
+  )
+})
+
+describe('automation-policy.md — Max Parallelism section (story #250 T1)', () => {
+  it.each(policySources)(
+    '%s: global integer ceiling with optional per-tier override',
+    (_, content) => {
+      const section = content.slice(
+        content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
+        content.indexOf('## Audit Location — where the unattended trail is written'),
+      )
+      expect(section.toLowerCase()).toMatch(/single positive integer/)
+      expect(section.toLowerCase()).toMatch(/per-tier override/)
+      expect(section.toLowerCase()).toMatch(/ceiling, never a target/)
+    },
+  )
+
+  it.each(policySources)('%s: fail-safe default is 1 (fully sequential)', (_, content) => {
+    const section = content.slice(
+      content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
+      content.indexOf('## Audit Location — where the unattended trail is written'),
+    )
+    expect(section).toMatch(/Absent file or absent section ⇒ `1`/)
+  })
+
+  it.each(policySources)('%s: malformed cap HALTs before any card is touched', (_, content) => {
+    const section = content.slice(
+      content.indexOf('## Max Parallelism — the parallel-batch ceiling'),
+      content.indexOf('## Audit Location — where the unattended trail is written'),
+    )
+    expect(section).toMatch(/MUST HALT/)
+    expect(section.toLowerCase()).toMatch(/before any card is touched/)
+  })
+})
+
+describe('automation-policy.md — Audit Location section (story #250 T1)', () => {
+  it.each(policySources)(
+    '%s: a project-relative path resolved under working_path',
+    (_, content) => {
+      const auditIdx = content.indexOf('## Audit Location — where the unattended trail is written')
+      const section = content.slice(
+        auditIdx,
+        content.indexOf('## Harness and Model Policy', auditIdx),
+      )
+      expect(section).toContain('working_path')
+      expect(section).toContain('pair.config.json')
+      expect(section.toLowerCase()).toMatch(/never an absolute path/)
+      expect(section.toLowerCase()).toMatch(/appended\*\*, never overwritten/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: default destination + fail-loud on an unwritable path',
+    (_, content) => {
+      const auditIdx = content.indexOf('## Audit Location — where the unattended trail is written')
+      const section = content.slice(
+        auditIdx,
+        content.indexOf('## Harness and Model Policy', auditIdx),
+      )
+      expect(section).toContain('automation/loop-audit.md')
+      expect(section).toMatch(/MUST HALT the run/)
+      expect(section.toLowerCase()).toMatch(/not an acceptable degraded mode/)
+    },
+  )
+})
