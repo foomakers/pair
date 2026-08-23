@@ -324,7 +324,7 @@ gh api \
 
 Repeat the `comments[][...]` group (same index across the four fields) for each additional line comment in the same call — the endpoint accepts the full array in one request, matching the MCP path's single-submit shape rather than the pending-review's step-by-step one. `pull_number`, `path`, `line` and `side` (`LEFT`/`RIGHT`) follow the same semantics as the MCP `add_comment_to_pending_review` call above.
 
-This closes the gap: a CLI-first harness (pi, or any harness without the GitHub MCP server configured) can produce a genuinely multi-comment, inline-line review through `gh api` alone. Verified against a real PR on this repository at the point this remedy was written — story [#450](https://github.com/foomakers/pair/issues/450)'s own pull request; see that PR's review comments for the live proof rather than a sketch.
+This closes the gap: a CLI-first harness (pi, or any harness without the GitHub MCP server configured) can produce a genuinely multi-comment, inline-line review through `gh api` alone. **Verified against a real PR**: [PR #457](https://github.com/foomakers/pair/pull/457) (story #450's own pull request), [review #5001891333](https://github.com/foomakers/pair/pull/457#pullrequestreview-5001891333) — the exact command above, run unmodified, produced a real inline comment attached to a real diff line. GitHub's REST response echoes `position`/`original_position` rather than `line` for this endpoint (a response-shape quirk, not a failure) — the comment still renders at the intended line.
 
 ### Merge Strategy
 

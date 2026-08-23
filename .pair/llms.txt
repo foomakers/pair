@@ -94,7 +94,6 @@
 - [Decision: Implementation never files a new card; a debt found while implementing extends the story that surfaced it](.pair/adoption/decision-log/2026-08-12-implementation-never-files-a-card-it-extends-the-story.md)
 - [Decision: the manual CLI artifact ships without type declarations, and says so](.pair/adoption/decision-log/2026-08-12-manual-cli-artifact-types-are-optional.md)
 - [Decision: The story-local (ACn) marker ban covers the KB corpora, with a curated allowlist for the three legitimate shapes](.pair/adoption/decision-log/2026-08-12-story-local-marker-ban-covers-kb-with-curated-allowlist.md)
-- [Decision: Delivery state past Refined is read from the PR and its analysis, not from a board column](.pair/adoption/decision-log/2026-08-13-delivery-state-is-read-from-the-pr-not-the-board.md)
 - [Decision: `pair update` deletes what a mirror no longer ships — bounded by the copy, and never silently](.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md)
 - [Decision: The agent execution layer ships in the dataset, because a workflow without its agents cannot run](.pair/adoption/decision-log/2026-08-13-the-agent-execution-layer-ships.md)
 - [Decision: verify-quality's tree/PR-state resolution ships as an executable, smoke-tested asset — not as shell inlined in a skill](.pair/adoption/decision-log/2026-08-13-tree-resolution-ships-as-an-executable-asset.md)

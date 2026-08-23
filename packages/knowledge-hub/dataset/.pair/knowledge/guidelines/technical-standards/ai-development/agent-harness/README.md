@@ -68,4 +68,4 @@ Where a guide recommends a free/no-cost model tier (e.g. opencode Zen's free mod
 
 ---
 
-**Skill**: Use `/setup-harness` to resolve, verify the fitness of, and configure a harness for this project. See [way-of-working / harness + model-class schema](../../../collaboration/automation/automation-policy.md) for the adoption-side declaration.
+**Skill**: Use `/setup-harness` to resolve, verify the fitness of, and configure a harness for this project. See [automation policy / harness + model-class schema](../../../collaboration/automation/automation-policy.md) for the adoption-side declaration.

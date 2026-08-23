@@ -115,11 +115,13 @@ A second, independent section of the same file — disjoint from `## Eligibility
 ## Harness
 
 pi, opencode, claude-code
+Requires: mcp
 ```
 
-- **A comma-separated list of harness names**, matching the guide filenames in the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) (`pi`, `opencode`, `claude-code`, or a future one added there). Order carries no meaning.
+- **First line: a comma-separated list of harness names**, matching the guide filenames in the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) (`pi`, `opencode`, `claude-code`, or a future one added there). Order carries no meaning.
 - **Declares what the project supports, never what to use.** Business Rule: the choice of which supported harness runs a given session belongs to the developer or their local configuration (`$harness`, or the interactive prompt when it is omitted) — this list is never read as a default or a preference order.
-- **A harness not in this list ⇒ `/setup-harness` stops before writing any configuration**, naming the incompatibility precisely (e.g. "this project supports pi, opencode — claude-code is not declared"). The same applies when a declared harness cannot satisfy an access path the project separately requires (e.g. a project effectively requiring MCP access, and `pi` — which has none by design — is the one requested).
+- **Second line, optional: `Requires: <access-path>`** — a declared access-path requirement, comma-separated if more than one (today, the only value the framework defines is `mcp`). **This line is what makes an access-path incompatibility checkable at all** — a consumer never infers a requirement from a project's tooling or way-of-working; absent this line, no access-path requirement exists to fail against, harness-fitness checking on access paths is a no-op, and only the harness list (line 1) is checked.
+- **A harness not in the list ⇒ `/setup-harness` stops before writing any configuration**, naming the incompatibility precisely (e.g. "this project supports pi, opencode — claude-code is not declared"). **A declared `Requires:` value the resolved harness cannot satisfy ⇒ same stop** (e.g. `Requires: mcp` and `pi` — which has none by design — is the one requested).
 
 ### `## Model Policy` — classes anchored to `risk:*` tiers, never concrete model names
 

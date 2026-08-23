@@ -29,6 +29,9 @@ const FIXED_INDEX = [
   '5. Access Paths',
   '6. Model Provider Configuration',
   '7. Headless Execution',
+  // Deliberately a prefix match, not the full heading: each guide's §8 wording is
+  // harness-specific ("What pi Does NOT Support" / "What opencode Does NOT Support"),
+  // so only the shared "8. What " stem is asserted here.
   '8. What ',
   '9. Verified-Against Version',
 ]

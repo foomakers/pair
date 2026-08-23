@@ -687,11 +687,19 @@ describe('ONE adoption layout — no `adopted/` sub-layer in docs or the KB', ()
 // schema #250/ADR-017 §6 will land — asserted here rather than in a new file
 // because it is the same target artifact (`automation-policy.md`).
 describe('automation-policy.md — Harness and Model Policy section (story #450)', () => {
-  it.each(policySources)('%s: declares the zero-configuration path first', (_, content) => {
-    const section = content.slice(content.indexOf('## Harness and Model Policy'))
-    expect(section).toContain('Zero-configuration path')
-    expect(section).toMatch(/every harness in the framework is presumed supported/)
-  })
+  it.each(policySources)(
+    '%s: declares the zero-configuration path before `## Harness`',
+    (_, content) => {
+      const sectionStart = content.indexOf('## Harness and Model Policy')
+      const zeroConfigIdx = content.indexOf('Zero-configuration path', sectionStart)
+      const harnessHeadingIdx = content.indexOf('### `## Harness`', sectionStart)
+      expect(zeroConfigIdx).toBeGreaterThan(sectionStart)
+      expect(harnessHeadingIdx).toBeGreaterThan(zeroConfigIdx)
+      expect(content.slice(zeroConfigIdx, harnessHeadingIdx)).toMatch(
+        /every harness in the framework is presumed supported/,
+      )
+    },
+  )
 
   it.each(policySources)(
     '%s: `## Harness` is a comma-separated list, never a pinned harness',

@@ -218,7 +218,7 @@ This map is judgment rather than syntax, which is why it is worth stating. Confi
 | to know this project's standards, process or decisions | `.pair/llms.txt` → the file it points to | never answer from memory when the project has its own record |
 | to know what to work on next | `/pair-next` | invoke it — it reads adoption files and PM state; never reimplement it here |
 | anything a catalogue skill owns (refine, plan, implement, review, gates) | that skill, by bare name | see step 6, including the adoption precondition |
-| configure this project for pi, opencode, or another harness | `/setup-harness` | resolves the harness explicitly, verifies fitness, provisions — see step 6 |
+| configure this project for pi, opencode, or another harness | `/pair-capability-setup-harness` | resolves the harness explicitly, verifies fitness, provisions — see step 6 |
 
 If a request matches nothing here, go back to `--help` and to `llms.txt` and reason from what is actually there. If it matches nothing in either, say so plainly instead of inventing a flag or a rule.
 
