@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Unattended delivery loop: per iteration, selects eligible cards via pair-next, runs a dependency + mutex analysis, composes pair-implement-batch for a mutex-safe parallel batch (or drives one card sequentially), enacts the automation policy (auto-advance) and evaluates the stop predicate. NEVER iterates multiple cards in one context — every card is driven by implement-batch\'s own fresh-subagent fan-out.',
   whenToUse:
-    'Realization path for the `pair-loop` skill in Claude Code (ADR-017 §4) — the skill delegates here when a fan-out runner is available; elsewhere it takes the degraded one-card path itself and this file is never invoked. REQUIRED args shape: {"root": "<issue-id>" | undefined, "policyText": "<raw tech/automation.md contents>", "predicateOverride": "<selector> ⇒ <condition>" | undefined, "startIteration": <positive integer> | undefined, "overrides": {"exclude": [ids], "sequential": [ids]} | undefined}. `policyText` is the skill\'s own Read of the adoption file, handed in so this workflow never re-implements filesystem access outside agent()/Read. `predicateOverride`/`startIteration` are the Argument tier of the Argument > Adoption > KB-default cascade for the `--predicate`/`--iteration` skill arguments. Every value is validated by TYPE and CONTENT at parse time, before any card is touched, because `root` and the predicate reach agent prompts that run `gh` — the same discipline the sibling pair-implement-batch/pair-analyze-pr-batch workflows enforce. Zero merit logic here (D18): every branch below reads tags/state/policy values verbatim, it classifies nothing.',
+    'Realization path for the `pair-loop` skill in Claude Code (ADR-017 §4) — the skill delegates here when a fan-out runner is available; elsewhere it takes the degraded one-card path itself and this file is never invoked. REQUIRED args shape: {"root": "<issue-id>" | undefined, "policyText": "<raw tech/automation.md contents>", "predicateOverride": "<selector> ⇒ <condition>" | undefined, "startIteration": <positive integer> | undefined, "overrides": {"exclude": [ids], "sequential": [ids]} | undefined, "tagProjectionFamily": ["risk:green","risk:yellow","risk:red"] | undefined}. `policyText` is the skill\'s own Read of the adoption file, handed in so this workflow never re-implements filesystem access outside agent()/Read. `tagProjectionFamily` is the skill\'s own resolution of `tech/risk-matrix.md`\'s `## Tag Projection` — every label the project actually emits — used only to validate `## Max Parallelism` per-tier override keys (a real, emitted tier that is simply never eligible is still a legal override target); `## Auto-Advance` needs no such list, since the only tier it may ever legally name is the policy\'s own `## Eligibility` value. `predicateOverride`/`startIteration` are the Argument tier of the Argument > Adoption > KB-default cascade for the `--predicate`/`--iteration` skill arguments. Every value is validated by TYPE and CONTENT at parse time, before any card is touched, because `root` and the predicate reach agent prompts that run `gh` — the same discipline the sibling pair-implement-batch/pair-analyze-pr-batch workflows enforce. Zero merit logic here (D18): every branch below reads tags/state/policy values verbatim, it classifies nothing.',
   phases: [
     { title: 'Policy' },
     { title: 'Select' },
@@ -67,6 +67,15 @@ const HALT = msg => {
 // TYPE+CONTENT check the sibling workflows apply to theirs.
 const isSafeId = v => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
 const isLabelShape = v => /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i.test(v)
+// Review round 3 Major-1: a value that reaches a prompt is delimited/labelled
+// (the guideline's own MUST) but delimiting is not validation — this is the
+// content check the guideline also requires: never a command fragment. It
+// does NOT restrict shape (a legitimate label may carry spaces, "good first
+// issue"), only the characters that turn a value into a command when an
+// agent puts it on a line: backtick, `$(`, control characters/newlines, and
+// an unbounded length.
+const isSafePromptText = v =>
+  typeof v === 'string' && v.length > 0 && v.length <= 200 && !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
 
 // ── `## Eligibility` — the seven HALT triggers (automation-policy.md) ──────
 export function extractEligibility(policyText) {
@@ -104,12 +113,26 @@ export function extractEligibility(policyText) {
   const colonTokens = value.split(/\s+/).filter(t => t.includes(':'))
   if (colonTokens.length > 1)
     HALT(`\`## Eligibility\` declares \`${value}\` — more than one colon-carrying token on one line.`)
+  // Review round 3 Major-1: the seven triggers above are automation-policy.md's
+  // OWN closed set (never widen it) — this is the guideline's separate content
+  // MUST ("never a command fragment"), layered on top, not a widening of it.
+  if (!isSafePromptText(value))
+    HALT(`\`## Eligibility\` declares \`${value}\` — contains a character that could turn it into a command fragment once inlined.`)
 
   return { kind: 'value', value }
 }
 
 // ── `## Auto-Advance` ───────────────────────────────────────────────────────
-export function extractAutoAdvance(policyText) {
+// Review round 3 Major-3 (round-2 Minor-1 escalated): validating against
+// yellow/red by ENGLISH SUBSTRING match assumed the default tag family's
+// naming and could not detect a renamed family's own red-equivalent tier —
+// `/yellow|red/i` is a heuristic, not a check. The actual invariant needs no
+// heuristic at all: a card must first be SELECTED (Eligibility) before it can
+// ever reach a review-approved outcome to advance — eligibility only ever
+// names ONE tier — so the only tier that could ever legitimately appear in
+// `## Auto-Advance` is that SAME tier. Anything else is unreachable by
+// construction, not merely disallowed by policy.
+export function extractAutoAdvance(policyText, eligibilityValue) {
   const body = sectionBody(policyText, 'Auto-Advance')
   if (body === null || body.trim() === '') return { tiers: [] } // absent ⇒ off
   const trimmed = body.trim()
@@ -119,14 +142,12 @@ export function extractAutoAdvance(policyText) {
   if (tiers.length === 0) HALT(`\`## Auto-Advance\` is present but names no tier and is not \`(none)\`.`)
   const seen = new Set()
   for (const t of tiers) {
-    // Trigger: free prose or a shape that could never be a label at all (review
-    // m1) — "merge everything" must HALT, never parse to a tier that silently
-    // matches nothing.
-    if (!isLabelShape(t)) HALT(`\`## Auto-Advance\` names \`${t}\` — not a well-formed \`family:tier\` label.`)
+    if (!isLabelShape(t) || !isSafePromptText(t))
+      HALT(`\`## Auto-Advance\` names \`${t}\` — not a well-formed \`family:tier\` label.`)
     if (seen.has(t)) HALT(`\`## Auto-Advance\` names \`${t}\` more than once.`)
     seen.add(t)
-    if (/yellow|red/i.test(t))
-      HALT(`\`## Auto-Advance\` names \`${t}\` — only the tier the quality model lets a machine self-merge may appear here.`)
+    if (eligibilityValue !== undefined && t !== eligibilityValue)
+      HALT(`\`## Auto-Advance\` names \`${t}\` — the only tier this project could ever auto-advance is its own \`## Eligibility\` value (\`${eligibilityValue}\`); a card outside eligibility is never selected in the first place.`)
   }
   return { tiers }
 }
@@ -142,10 +163,10 @@ const CONDITION_STATES = ['Draft', 'Ready', 'In Progress', 'Done']
 function validateSelector(selectorRaw) {
   if (selectorRaw === 'root') return
   const tagMatch = /^tag:(.+)$/.exec(selectorRaw)
-  if (tagMatch && tagMatch[1].length > 0) return
+  if (tagMatch && tagMatch[1].length > 0 && isSafePromptText(tagMatch[1])) return
   const typeMatch = /^type:(.+)$/.exec(selectorRaw)
-  if (typeMatch && typeMatch[1].length > 0) return
-  HALT(`\`## Stop Predicate\` — selector \`${selectorRaw}\` is not \`root\`, \`tag:<label>\` or \`type:<issue-type>\`.`)
+  if (typeMatch && typeMatch[1].length > 0 && isSafePromptText(typeMatch[1])) return
+  HALT(`\`## Stop Predicate\` — selector \`${selectorRaw}\` is not \`root\`, \`tag:<label>\` or \`type:<issue-type>\` (or its payload could become a command fragment once inlined).`)
 }
 
 export function parseStopPredicate(policyText) {
@@ -194,7 +215,7 @@ export function evaluateStopPredicate(predicate, boardSnapshot) {
 }
 
 // ── `## Max Parallelism` ────────────────────────────────────────────────────
-export function parseMaxParallelism(policyText, knownTiers) {
+export function parseMaxParallelism(policyText, tagProjectionFamily) {
   const body = sectionBody(policyText, 'Max Parallelism')
   if (body === null || body.trim() === '') return { global: 1, perTier: {} } // fail-safe default: sequential
   const lines = body.split('\n').map(l => l.trim()).filter(Boolean)
@@ -207,15 +228,20 @@ export function parseMaxParallelism(policyText, knownTiers) {
     const m = /^(.+?):\s*(-?\d+)\s*$/.exec(line)
     if (!m) HALT(`\`## Max Parallelism\` — override line \`${line}\` is not \`<tier>: <positive integer>\`.`)
     const [, tier, nRaw] = m
-    // Review m2/round-2: a per-tier override naming an unknown tier is
-    // malformed. The shape check alone (review m1's fix) still let a
-    // well-formed but non-existent tier (`risk:blue: 5`) through silently —
-    // validated against the REAL known tiers when the caller supplies them
-    // (parsePolicyOrHalt does, once Eligibility/Auto-Advance are parsed);
-    // callers that don't (direct unit tests) keep the shape-only check.
+    // Review m2/round-2/round-3: a per-tier override naming an unknown tier is
+    // malformed. The shape check alone still let a well-formed but
+    // non-existent tier (`risk:blue: 5`) through silently. Round-2 validated
+    // against `{eligibility.value} ∪ autoAdvance.tiers` instead of the
+    // project's actual Tag Projection family — a real, EMITTED tier that is
+    // simply never eligible (e.g. this repo's own `risk:red`, a legitimate
+    // narrowing target even though it can never enter a batch) then
+    // false-HALTed. Validate against the caller-supplied Tag Projection
+    // family when available; degrade to shape-only when it is not (the
+    // family lives in `tech/risk-matrix.md`, which this workflow never reads
+    // itself — the calling skill resolves it, same pattern as `policyText`).
     if (!isLabelShape(tier)) HALT(`\`## Max Parallelism\` — override key \`${tier}\` is not a well-formed \`family:tier\` label.`)
-    if (knownTiers && !knownTiers.has(tier))
-      HALT(`\`## Max Parallelism\` — override key \`${tier}\` names a tier this project never emits.`)
+    if (tagProjectionFamily && !tagProjectionFamily.has(tier))
+      HALT(`\`## Max Parallelism\` — override key \`${tier}\` names a tier this project's Tag Projection does not emit.`)
     const n = Number(nRaw)
     if (!Number.isInteger(n) || n <= 0)
       HALT(`\`## Max Parallelism\` — override for \`${tier}\` must be a positive integer, got \`${nRaw}\`.`)
@@ -244,6 +270,13 @@ export function resolveAuditLocation(policyText) {
   const escapes = rel.split('/').some(seg => seg === '..')
   if (escapes)
     HALT(`\`## Audit Location\` declares \`${rel}\` — a path segment escapes the working area; must stay project-relative.`)
+  // Review round 3 Major-1: a multi-line body (or one carrying a backtick/
+  // `$(`) still passed and was inlined into two prompts — constrain to the
+  // single-line, safe-charset path the section body is documented to be.
+  if (body !== null && body.split('\n').length > 1)
+    HALT(`\`## Audit Location\` declares more than one line — takes exactly one path.`)
+  if (!isSafePromptText(rel))
+    HALT(`\`## Audit Location\` declares \`${rel}\` — contains a character that could turn it into a command fragment once inlined.`)
   return rel
 }
 
@@ -354,7 +387,10 @@ export function reconcileCapAudit(mutexAudit, finalBatchIds) {
 // ── Continue-token (degraded / portable path) ───────────────────────────────
 export function renderContinueToken({ root, predicateText, iteration }) {
   const rootPart = root ? ` --root ${root}` : ''
-  const predPart = predicateText ? ` --predicate "${predicateText}"` : ''
+  // A predicate containing a double quote would otherwise break the token
+  // when a human pastes it back into a shell (review round 3, informational
+  // finding) — escape it rather than assume the predicate never carries one.
+  const predPart = predicateText ? ` --predicate "${predicateText.replace(/"/g, '\\"')}"` : ''
   return `pair-loop${rootPart}${predPart} --iteration ${iteration + 1}`
 }
 
@@ -391,16 +427,18 @@ export function validateArgs(args) {
 // (`pair-implement-batch`), never iterated in this orchestrator's context.
 // ═══════════════════════════════════════════════════════════════════════════
 
-function parsePolicyOrHalt(policyText) {
+function parsePolicyOrHalt(policyText, tagProjectionFamily) {
   if (typeof policyText !== 'string' || policyText.trim() === '')
     HALT('tech/automation.md is absent or empty — eligibility set is empty, automation is off. Nothing to run.')
   const eligibility = extractEligibility(policyText)
   if (eligibility.kind === 'absent')
     HALT('tech/automation.md has no `## Eligibility` section — eligibility set is empty by design. Not an error: automation is simply off.')
-  const autoAdvance = extractAutoAdvance(policyText)
+  const autoAdvance = extractAutoAdvance(policyText, eligibility.value)
   const stop = parseStopPredicate(policyText)
-  const knownTiers = new Set([eligibility.value, ...autoAdvance.tiers])
-  const maxParallelism = parseMaxParallelism(policyText, knownTiers)
+  const maxParallelism = parseMaxParallelism(
+    policyText,
+    tagProjectionFamily ? new Set(tagProjectionFamily) : undefined,
+  )
   const auditLocation = resolveAuditLocation(policyText)
   return { eligibility, autoAdvance, stop, maxParallelism, auditLocation }
 }
@@ -416,7 +454,7 @@ function applyPredicateOverride(stop, predicateOverride) {
 
 validateArgs(args)
 phase('Policy')
-const policy = parsePolicyOrHalt(args?.policyText)
+const policy = parsePolicyOrHalt(args?.policyText, args?.tagProjectionFamily)
 policy.stop = applyPredicateOverride(policy.stop, args?.predicateOverride)
 log(`Eligibility filter: ${policy.eligibility.value}`)
 
@@ -531,10 +569,15 @@ while (true) {
       // review that raised the tier mid-run must block auto-advance even with
       // an approved PR. Re-read it immediately before the merge decision.
       const freshTier = await agent(
-        `Card #${outcome.id}: what is its CURRENT \`risk:*\` label right now (re-read from the board, do not reuse any earlier read)? Return 'untagged' if none.`,
+        `Card ${JSON.stringify(outcome.id)}: what is its CURRENT \`risk:*\` label right now (re-read from the board, do not reuse any earlier read)? Return 'untagged' if none.`,
         { phase: 'Advance', schema: { type: 'object', properties: { tier: { type: 'string' } } } },
       )
-      const currentTier = freshTier?.tier === 'untagged' || !freshTier?.tier ? 'risk:red' : freshTier.tier
+      // Review round 3 Major-1: an agent-RETURNED value is still untrusted —
+      // it round-trips into the next two prompts below. Validate its shape
+      // exactly like a policy-declared tier, not merely the fail-safe
+      // untagged->red substitution.
+      const currentTierRaw = freshTier?.tier === 'untagged' || !freshTier?.tier ? 'risk:red' : freshTier.tier
+      const currentTier = isLabelShape(currentTierRaw) ? currentTierRaw : 'risk:red' // malformed agent output fails safe, never HALTs the run on a red-tier read
       const tierAllowed = policy.autoAdvance.tiers.includes(currentTier)
       if (currentTier !== card.tier) {
         // Review round 2 Major-1: a card review-approved but NOT auto-advanced
@@ -548,20 +591,35 @@ while (true) {
       }
       if (tierAllowed) {
         const advance = await agent(
-          `Card #${outcome.id} (${currentTier}) is review-approved on PR #${outcome.prNumber}. Verify the 🟢 gate set (lint + type + build) yourself via /pair-capability-verify-quality — never trust branch protection. On green, push and merge unattended to the default branch. On red, do NOT merge; report why.`,
+          `Card ${JSON.stringify(outcome.id)} (${currentTier}) is review-approved on PR ${JSON.stringify(outcome.prNumber)}. Verify the 🟢 gate set (lint + type + build) yourself via /pair-capability-verify-quality — never trust branch protection. On green, push and merge unattended to the default branch. On red, do NOT merge; report why.`,
           { phase: 'Advance', schema: { type: 'object', properties: { merged: { type: 'boolean' }, reason: { type: 'string' } } } },
         )
         runLog.push({ iteration, id: outcome.id, autoAdvance: !!advance?.merged, reason: advance?.reason })
-        if (advance?.merged) haltedCardIds.add(outcome.id) // already merged — never re-selected
+        if (advance?.merged) {
+          haltedCardIds.add(outcome.id) // already merged — never re-selected
+        } else {
+          // Review round 3 Major-2: a gate-red merge REFUSAL was not parked —
+          // this is the opt-in Auto-Advance path itself, not an edge case; a
+          // stuck red-gate card was re-driven through the full pipeline every
+          // remaining iteration up to max-iterations.
+          haltedCardIds.add(outcome.id)
+          runLog.push({ iteration, id: outcome.id, autoAdvance: false, parked: true, reason: `halted — 🟢 gate re-verification came back red at merge time, never retried silently: ${advance?.reason ?? 'no reason given'}` })
+        }
       } else {
         haltedCardIds.add(outcome.id) // parked awaiting human — never re-driven from scratch
         runLog.push({ iteration, id: outcome.id, autoAdvance: false, parked: true, reason: `awaiting human — tier ${currentTier} not in Auto-Advance` })
         // AC8: "records the awaited human action ON THE ISSUE" — the audit
         // log alone (review round 2 Major-4) is not the issue. Post it there.
-        await agent(
-          `Card #${outcome.id}: its PR #${outcome.prNumber} is review-approved but tier ${currentTier} is not in this project's \`## Auto-Advance\` policy. Post a comment on issue #${outcome.id} recording that it awaits human merge/action, naming the PR.`,
-          { phase: 'Advance' },
+        // Round-3 Minor: verified, not fire-and-forget — a failed post is
+        // recorded in the audit rather than silently swallowed (unlike the
+        // audit write itself, this is best-effort side information, not a
+        // safety property, so it does not HALT the run).
+        const posted = await agent(
+          `Card ${JSON.stringify(outcome.id)}: its PR ${JSON.stringify(outcome.prNumber)} is review-approved but tier ${currentTier} is not in this project's \`## Auto-Advance\` policy. Post a comment on issue ${JSON.stringify(outcome.id)} recording that it awaits human merge/action, naming the PR.`,
+          { phase: 'Advance', schema: { type: 'object', properties: { posted: { type: 'boolean' } } } },
         )
+        if (posted?.posted !== true)
+          runLog.push({ iteration, id: outcome.id, note: 'awaited-human comment could not be confirmed posted on the issue' })
       }
     }
   }

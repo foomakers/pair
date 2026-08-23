@@ -90,6 +90,17 @@ test('extractEligibility: two colon-carrying tokens juxtaposed HALTs', () => {
   assert.throws(() => extractEligibility('## Eligibility\n\nrisk:green risk:yellow\n'), /colon-carrying token/)
 })
 
+test('extractEligibility: a value carrying a backtick or $( HALTs — content, not just shape (review round 3 Major-1)', () => {
+  const { extractEligibility } = getHelpers()
+  assert.throws(() => extractEligibility('## Eligibility\n\nrisk:green`whoami`\n'), /command fragment/)
+  assert.throws(() => extractEligibility('## Eligibility\n\nrisk:green$(whoami)\n'), /command fragment/)
+})
+
+test('extractEligibility: a legitimate spaced label with none of those characters still passes (guideline\'s own allowance preserved)', () => {
+  const { extractEligibility } = getHelpers()
+  assert.deepEqual(extractEligibility('## Eligibility\n\ngood first issue\n'), { kind: 'value', value: 'good first issue' })
+})
+
 // ── Auto-Advance ─────────────────────────────────────────────────────────────
 test('extractAutoAdvance: absent section -> off', () => {
   const { extractAutoAdvance } = getHelpers()
@@ -103,17 +114,26 @@ test('extractAutoAdvance: literal (none) -> off', () => {
 
 test('extractAutoAdvance: risk:green enables auto-advance for that tier', () => {
   const { extractAutoAdvance } = getHelpers()
-  assert.deepEqual(extractAutoAdvance('## Auto-Advance\n\nrisk:green\n'), { tiers: ['risk:green'] })
+  assert.deepEqual(extractAutoAdvance('## Auto-Advance\n\nrisk:green\n', 'risk:green'), { tiers: ['risk:green'] })
 })
 
-test('extractAutoAdvance: naming risk:yellow or risk:red HALTs', () => {
+test('extractAutoAdvance: naming a tier other than the Eligibility value HALTs, with no English-substring heuristic (review round 3 Major-3)', () => {
   const { extractAutoAdvance } = getHelpers()
-  assert.throws(() => extractAutoAdvance('## Auto-Advance\n\nrisk:yellow\n'), /HALT/)
+  // risk:yellow is rejected NOT because it matches /yellow|red/ but because it
+  // is not the project's Eligibility tier — the same check catches a RENAMED
+  // family's own red-equivalent, which no substring heuristic could.
+  assert.throws(() => extractAutoAdvance('## Auto-Advance\n\nrisk:yellow\n', 'risk:green'), /the only tier this project could ever auto-advance/)
+  assert.throws(() => extractAutoAdvance('## Auto-Advance\n\npriority:critical\n', 'priority:low'), /the only tier this project could ever auto-advance/)
 })
 
 test('extractAutoAdvance: free prose that is not a label shape HALTs (review m1)', () => {
   const { extractAutoAdvance } = getHelpers()
   assert.throws(() => extractAutoAdvance('## Auto-Advance\n\nmerge everything\n'), /not a well-formed/)
+})
+
+test('extractAutoAdvance: without an eligibilityValue param, only shape/prompt-safety is checked (backward-compatible direct call)', () => {
+  const { extractAutoAdvance } = getHelpers()
+  assert.deepEqual(extractAutoAdvance('## Auto-Advance\n\nrisk:yellow\n'), { tiers: ['risk:yellow'] })
 })
 
 // ── Stop Predicate ───────────────────────────────────────────────────────────
@@ -142,6 +162,14 @@ test('parseStopPredicate: a composite selector like root:has-tag:x HALTs (review
   const { parseStopPredicate } = getHelpers()
   assert.throws(
     () => parseStopPredicate('## Stop Predicate\n\nroot:has-tag:risk:red ⇒ Done\n'),
+    /is not `root`, `tag:<label>` or `type:<issue-type>`/,
+  )
+})
+
+test('parseStopPredicate: a tag:/type: payload carrying a backtick or $( HALTs — content, not just prefix shape (review round 3 Major-1)', () => {
+  const { parseStopPredicate } = getHelpers()
+  assert.throws(
+    () => parseStopPredicate('## Stop Predicate\n\ntag:risk:green`whoami` ⇒ Done\n'),
     /is not `root`, `tag:<label>` or `type:<issue-type>`/,
   )
 })
@@ -208,14 +236,23 @@ test('parseMaxParallelism: a per-tier override naming a non-label key HALTs (rev
   )
 })
 
-test('parseMaxParallelism: a well-formed but unknown tier HALTs when knownTiers is supplied (review round 2)', () => {
+test('parseMaxParallelism: a well-formed but unknown tier HALTs when a Tag Projection family is supplied (review round 2/3)', () => {
   const { parseMaxParallelism } = getHelpers()
-  const knownTiers = new Set(['risk:green'])
+  const tagProjectionFamily = new Set(['risk:green', 'risk:yellow', 'risk:red'])
   assert.throws(
-    () => parseMaxParallelism('## Max Parallelism\n\n3\nrisk:blue: 5\n', knownTiers),
-    /never emits/,
+    () => parseMaxParallelism('## Max Parallelism\n\n3\nrisk:blue: 5\n', tagProjectionFamily),
+    /does not emit/,
   )
-  assert.doesNotThrow(() => parseMaxParallelism('## Max Parallelism\n\n3\nrisk:green: 5\n', knownTiers))
+  assert.doesNotThrow(() => parseMaxParallelism('## Max Parallelism\n\n3\nrisk:green: 5\n', tagProjectionFamily))
+})
+
+test('parseMaxParallelism: an EMITTED but never-eligible tier is a legal override target (review round 3 Minor)', () => {
+  const { parseMaxParallelism } = getHelpers()
+  // risk:red is emitted by this repo's Tag Projection but never eligible —
+  // round 2's fix (family = eligibility ∪ auto-advance tiers) false-HALTed
+  // this exact, legitimate narrowing override.
+  const tagProjectionFamily = new Set(['risk:green', 'risk:yellow', 'risk:red'])
+  assert.doesNotThrow(() => parseMaxParallelism('## Max Parallelism\n\n3\nrisk:red: 1\n', tagProjectionFamily))
 })
 
 test('resolveMaxParallelism: min(D,P) cap arithmetic including 0 and 1', () => {
@@ -249,6 +286,22 @@ test('resolveAuditLocation: a path escaping via .. HALTs (review m3)', () => {
   assert.throws(
     () => resolveAuditLocation('## Audit Location\n\n../../etc/x.md\n'),
     /escapes the working area/,
+  )
+})
+
+test('resolveAuditLocation: a multi-line body HALTs — the section takes exactly one path (review round 3 Major-1)', () => {
+  const { resolveAuditLocation } = getHelpers()
+  assert.throws(
+    () => resolveAuditLocation('## Audit Location\n\nautomation/a.md\nautomation/b.md\n'),
+    /more than one line/,
+  )
+})
+
+test('resolveAuditLocation: a path carrying a backtick or $( HALTs — content, not just traversal (review round 3 Major-1)', () => {
+  const { resolveAuditLocation } = getHelpers()
+  assert.throws(
+    () => resolveAuditLocation('## Audit Location\n\nautomation/`whoami`.md\n'),
+    /command fragment/,
   )
 })
 
@@ -560,6 +613,51 @@ test('orchestration: a --predicate override (Argument tier) is actually EVALUATE
   })
   assert.ok(predicateEvalPrompt, 'the override predicate must actually be evaluated against board state')
   assert.equal(result.iterations, 1) // stopped after iteration 0, never reached 50
+  // Round-3 Minor: this alone would pass identically if maxIterations had
+  // silently degraded to the fail-safe 1 instead of retaining the adoption
+  // file's 50 — assert the resolved value directly. `applyPredicateOverride`
+  // itself lives in the orchestration half (post-marker) and re-parses via
+  // the same `parseStopPredicate`, so this is the equivalent public check.
+  const { parseStopPredicate } = getHelpers()
+  const overridden = parseStopPredicate(`## Stop Predicate\n\nroot ⇒ Done\nmax-iterations: 50\n`)
+  assert.equal(overridden.maxIterations, 50)
+})
+
+test('orchestration: a gate-red merge refusal is parked, never re-driven through the full pipeline again (review round 3 Major-2)', async () => {
+  let batchCalls = 0
+  const { result } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance') return { merged: false, reason: 'lint failed' } // gate came back red
+      return {}
+    },
+    workflowDispatch: () => {
+      batchCalls++
+      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }
+    },
+  })
+  assert.equal(batchCalls, 1) // never re-driven on iteration 1/2 despite max-iterations: 3
+  assert.ok(result.log.some(l => l.id === '1' && l.parked === true && l.reason?.includes('gate re-verification came back red')))
+})
+
+test('orchestration: an unconfirmed AC8 issue comment is recorded in the audit, never silently swallowed (review round 3 Minor)', async () => {
+  const { result } = await runWorkflow({
+    args: {
+      policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('Post a comment')) return { posted: false }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }),
+  })
+  assert.ok(result.log.some(l => l.id === '1' && l.note?.includes('could not be confirmed posted')))
 })
 
 test('orchestration: a review-approved card not covered by Auto-Advance is parked, never re-driven from scratch (review round 2 Major-1)', async () => {
