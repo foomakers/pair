@@ -260,7 +260,7 @@ describe('runAllChecks (in-process, real docs tree)', () => {
   it('reports zero drift and 42 skills against the actual repo', () => {
     const { errors, skillCount } = runAllChecks(REPO_ROOT)
     expect(errors, errors.join('\n')).toHaveLength(0)
-    expect(skillCount).toBe(42)
+    expect(skillCount).toBe(43)
   })
 })
 
@@ -356,7 +356,7 @@ describe('generateCatalogRows + committed catalog parity (Check 2c integration)'
   const CATALOG = join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx')
   it('derives a command + non-empty description for every dataset skill', () => {
     const rows = generateCatalogRows(SKILLS_DIR)
-    expect(rows.size).toBe(42)
+    expect(rows.size).toBe(43)
     expect(rows.get('next')?.command).toBe('/pair-next')
     for (const [, row] of rows) expect(row.description.length).toBeGreaterThan(0)
   })

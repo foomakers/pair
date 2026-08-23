@@ -50,6 +50,7 @@
       "exclude": [
         "pair-implement-batch.test.mjs",
         "pair-refine-batch.test.mjs",
+        "pair-loop.test.mjs",
         "pair-contracts/ensure-contract.test.mjs"
       ],
       "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],

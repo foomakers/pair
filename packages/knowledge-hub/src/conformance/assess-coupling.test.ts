@@ -161,18 +161,18 @@ describe('assess-coupling catalog registration (#263)', () => {
     ['dataset', NEXT_DATASET, GUIDE_DATASET],
     ['mirror', NEXT_MIRROR, GUIDE_MIRROR],
   ] as const) {
-    it(`${label} next catalog lists assess-coupling and states 31 capability / 42 total`, () => {
+    it(`${label} next catalog lists assess-coupling and states 31 capability / 43 total`, () => {
       expect(next).toMatch(/assess-coupling/)
       expect(next).toContain('31 capability')
-      expect(next).toContain('42 skills')
+      expect(next).toContain('43 skills')
     })
 
-    it(`${label} skills-guide lists assess-coupling and states 31 capability / 42 total`, () => {
+    it(`${label} skills-guide lists assess-coupling and states 31 capability / 43 total`, () => {
       expect(guide).toMatch(/assess-coupling/)
       expect(guide).toContain('31 capability')
       // Round-3 nit: the title promised the total too, but only the capability
-      // count was asserted (the guide states it as "Total: 42").
-      expect(guide).toMatch(/Total: 42/)
+      // count was asserted (the guide states it as "Total: 43").
+      expect(guide).toMatch(/Total: 43/)
     })
   }
 })
