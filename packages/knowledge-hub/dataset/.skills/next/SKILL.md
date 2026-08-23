@@ -7,7 +7,7 @@ author: Foomakers
 
 # /next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 41-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 42-skill catalog across all lifecycle phases.
 
 ## Arguments (optional)
 
@@ -37,9 +37,9 @@ Keep only candidate issues that carry the given label. `--filter` takes a **sing
 
 The scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/next` never reuses a selection computed in a previous step.
 
-## Skill Catalog (41 skills)
+## Skill Catalog (42 skills)
 
-The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 10 process + 30 capability + `/next` itself = 41. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 10 process + 31 capability + `/next` itself = 42. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (10)
 
@@ -56,7 +56,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (30)
+### Capability Skills (31)
 
 | Skill                    | Category        | Description                                                                  |
 | ------------------------ | --------------- | ---------------------------------------------------------------------------- |
@@ -69,6 +69,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/publish-pr`            | Delivery        | Publish a story branch as a PR: gate, PR from template, tags, board state    |
 | `/write-issue`           | PM Tool         | Create/update issues in adopted PM tool                                      |
 | `/setup-pm`              | PM Tool         | Configure project management tool                                            |
+| `/setup-harness`         | Configuration   | Configure an agent harness (pi, opencode, Claude Code) — resolve, verify fitness, provision |
 | `/verify-quality`        | Quality         | Check quality gates against codebase                                         |
 | `/verify-done`           | Quality         | Check Definition of Done criteria                                            |
 | `/verify-adoption`       | Quality         | Check code against adoption files per scope                                  |
@@ -223,4 +224,4 @@ See [graceful degradation](../../.pair/knowledge/guidelines/technical-standards/
 - This skill is read-only: it inspects state but never modifies files, PM tool data, or code-host data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: nearly all of the 41 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition. `/publish-pr` will be reachable via `/implement` once wired (not yet composed), so `/next` cannot surface it today. `/brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade.
+- **Full catalog coverage**: nearly all of the 42 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition. `/publish-pr` will be reachable via `/implement` once wired (not yet composed), so `/next` cannot surface it today. `/brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade.

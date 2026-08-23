@@ -450,18 +450,18 @@ describe('assess-cost catalog registration (#226)', () => {
     ['dataset', NEXT_DATASET, SKILLS_GUIDE_DATASET],
     ['mirror', NEXT_MIRROR, SKILLS_GUIDE_MIRROR],
   ] as const) {
-    it(`${label} next catalog lists assess-cost and states 30 capability / 41 total`, () => {
+    it(`${label} next catalog lists assess-cost and states 31 capability / 42 total`, () => {
       expect(next).toMatch(/assess-cost/)
-      expect(next).toContain('30 capability')
-      expect(next).toContain('41 skills')
+      expect(next).toContain('31 capability')
+      expect(next).toContain('42 skills')
     })
 
-    it(`${label} skills-guide lists assess-cost and states 30 capability / 41 total`, () => {
+    it(`${label} skills-guide lists assess-cost and states 31 capability / 42 total`, () => {
       expect(guide).toMatch(/assess-cost/)
-      expect(guide).toContain('30 capability')
+      expect(guide).toContain('31 capability')
       // Round-3 nit: the title promised the total too, but only the capability
-      // count was asserted (the guide states it as "Total: 41").
-      expect(guide).toMatch(/Total: 41/)
+      // count was asserted (the guide states it as "Total: 42").
+      expect(guide).toMatch(/Total: 42/)
     })
   }
 })

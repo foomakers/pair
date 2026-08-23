@@ -15,9 +15,9 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 30 | Atomic units — perform a single focused operation |
+| **Capability** | 31 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 41 (10 process + 30 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 42 (10 process + 31 capability + 1 navigator).
 
 ## Full Catalog
 
@@ -40,7 +40,7 @@ Process skills compose capability skills. Capability skills are independently in
 >
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (30)
+### Capability Skills (31)
 
 #### Domain Modeling Skills (2)
 
@@ -92,7 +92,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 | `/verify-done` | Definition of Done checking |
 | `/verify-adoption` | Adoption compliance checking |
 
-#### Operational Skills (6)
+#### Operational Skills (7)
 
 | Skill | Scope |
 |-------|-------|
@@ -101,6 +101,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 | `/estimate` | Story estimation |
 | `/setup-gates` | CI/CD quality gate configuration |
 | `/setup-pm` | PM tool configuration |
+| `/setup-harness` | Agent harness configuration (pi, opencode, Claude Code) — resolve, verify fitness, provision, idempotent |
 | `/manage-flags` | Feature flag lifecycle management |
 
 #### Testing Skills (2)
@@ -156,6 +157,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 │   ├── estimate/
 │   ├── setup-gates/
 │   ├── setup-pm/
+│   ├── setup-harness/
 │   ├── analyze-debt/          # report-only
 │   ├── analyze-code-quality/  # report-only
 │   ├── checkpoint/

@@ -11,6 +11,7 @@ Establish enterprise-grade standards for AI development that maximize developmen
 ### Standards and Guidelines
 
 - **[AI Tools](ai-tools.md)** - AI development tool selection, configuration, and best practices
+- **[Agent Harness Framework](agent-harness/README.md)** - per-harness configuration guides (pi, opencode, Claude Code) — the harness that runs pair's process
 - **[Documentation Standards](documentation-standards.md)** - AI-specific documentation requirements and patterns
 - **[MCP Integration](mcp-integration.md)** - Model Context Protocol implementation and integration standards
 - **[Skill Conventions](skill-conventions/README.md)** - Single-source shared conventions for the `SKILL.md` corpus (resolution cascade, idempotency, graceful degradation, template resolution, PM-tool + code-host resolution, and more)
