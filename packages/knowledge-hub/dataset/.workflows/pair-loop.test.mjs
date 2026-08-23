@@ -208,6 +208,16 @@ test('parseMaxParallelism: a per-tier override naming a non-label key HALTs (rev
   )
 })
 
+test('parseMaxParallelism: a well-formed but unknown tier HALTs when knownTiers is supplied (review round 2)', () => {
+  const { parseMaxParallelism } = getHelpers()
+  const knownTiers = new Set(['risk:green'])
+  assert.throws(
+    () => parseMaxParallelism('## Max Parallelism\n\n3\nrisk:blue: 5\n', knownTiers),
+    /never emits/,
+  )
+  assert.doesNotThrow(() => parseMaxParallelism('## Max Parallelism\n\n3\nrisk:green: 5\n', knownTiers))
+})
+
 test('resolveMaxParallelism: min(D,P) cap arithmetic including 0 and 1', () => {
   const { resolveMaxParallelism, composeBatch } = getHelpers()
   const policy = { global: 3, perTier: {} }
@@ -527,23 +537,56 @@ test('orchestration: audit write not confirmed HALTs the run (review M5)', async
   )
 })
 
-test('orchestration: a --predicate override (Argument tier) replaces the adoption stop predicate (review M6)', async () => {
+test('orchestration: a --predicate override (Argument tier) is actually EVALUATED, not merely accepted (review M6 / round 2 m-test)', async () => {
+  let predicateEvalPrompt = null
   const { result } = await runWorkflow({
     args: {
+      // Adoption declares max-iterations: 50 and NO predicate — if the
+      // override were ignored, this run would go 50 iterations. It must
+      // instead stop on iteration 1 once the override's condition holds.
       policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 50\n',
       predicateOverride: 'root ⇒ Done',
     },
-    dispatch: (_prompt, opts) => {
-      if (opts.phase === 'Select') return { candidates: [] }
-      return { cards: [{ id: '1', tags: [], macrostate: 'Done' }] }
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select' && prompt.includes('pair-next'))
+        return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Select') {
+        predicateEvalPrompt = prompt
+        return { cards: [{ id: '1', tags: [], macrostate: 'Done' }] } // satisfies `root ⇒ Done`
+      }
+      return {}
     },
-    workflowDispatch: () => ({ batch: [] }),
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'failed-implement' }] }),
   })
-  // Nothing eligible on iteration 0 breaks before the predicate is ever
-  // evaluated, so this only proves the override is ACCEPTED (parsed without
-  // throwing) rather than exercising evaluation — see the pure-helper tests
-  // above for evaluateStopPredicate's own coverage.
-  assert.equal(result.iterations, 0)
+  assert.ok(predicateEvalPrompt, 'the override predicate must actually be evaluated against board state')
+  assert.equal(result.iterations, 1) // stopped after iteration 0, never reached 50
+})
+
+test('orchestration: a review-approved card not covered by Auto-Advance is parked, never re-driven from scratch (review round 2 Major-1)', async () => {
+  let batchCalls = 0
+  let issueCommentPosted = false
+  const { result } = await runWorkflow({
+    args: {
+      // This repo's own shipped default: Auto-Advance absent -> (none).
+      policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+      if (opts.phase === 'Advance' && prompt.includes('CURRENT')) return { tier: 'risk:green' }
+      if (opts.phase === 'Advance' && prompt.includes('Post a comment')) {
+        issueCommentPosted = true
+        return {}
+      }
+      return {}
+    },
+    workflowDispatch: () => {
+      batchCalls++
+      return { batch: [{ id: '1', status: 'ready-for-merge', prNumber: 7 }] }
+    },
+  })
+  assert.equal(batchCalls, 1) // never re-driven on iteration 1/2 despite max-iterations: 3
+  assert.equal(issueCommentPosted, true) // AC8: the awaited human action is recorded ON THE ISSUE
+  assert.ok(result.log.some(l => l.id === '1' && l.parked === true))
 })
 
 test('orchestration: a killed-and-resumed run excludes cards the prior audit already halted (review M8)', async () => {

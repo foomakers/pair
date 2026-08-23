@@ -114,6 +114,7 @@
 - [Decision: Review severity is capped by trigger plausibility, and Minor blocks merge](.pair/adoption/decision-log/2026-08-21-review-severity-classification-and-convergence.md)
 - [Decision: bootstrap composes setup-harness, optionally](.pair/adoption/decision-log/2026-08-23-bootstrap-composes-setup-harness-optionally.md)
 - [Decision: `pair-loop`'s shipped Auto-Advance default is `(none)` — fail-closed, not `risk:green`](.pair/adoption/decision-log/2026-08-23-pair-loop-auto-advance-fail-closed-default.md)
+- [Decision: `pair-loop`'s fan-out path resumes from its own audit file, not from `/pair-capability-checkpoint`](.pair/adoption/decision-log/2026-08-23-pair-loop-resumes-from-its-own-audit-file-not-a-checkpoint.md)
 
 ## How-To Guides
 
