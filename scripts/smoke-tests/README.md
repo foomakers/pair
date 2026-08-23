@@ -109,6 +109,47 @@ Verifies the `pair validate-config` command:
 - **Schema Error**: Missing fields.
 - **Enum Error**: Invalid values for `behavior`.
 
+### 8. Agent Harness Functional Smoke (`scenarios/agent-harness-setup.sh`) — story #450, T-10
+
+Manual only — never in CI (see `lib/ci-tests.sh` `CI_EXCLUDED`). Runs a real pair skill
+(`/pair-capability-write-issue $mode=comment`) end to end **inside pi and inside opencode**,
+verifying a real write lands on a real GitHub issue, then re-runs with read-only credentials
+and asserts the write is what fails — that negative case is the entire point (a read-only
+check passing proves nothing; `publish-pr` failing in real use is the risk this smoke exists
+to catch before it does).
+
+**Prerequisites**: `pi` and `opencode` installed and on `PATH` (see the
+[agent-harness framework](../../.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/README.md)
+for what each needs). No credential value is ever written to disk or logged by the script —
+only their _presence_ is checked before running, and their absence is reported as "skipped
+(environment not provisioned)", not a failure.
+
+**Environment** (export before running):
+
+| Variable | Purpose |
+| --- | --- |
+| `AGENT_HARNESS_SMOKE_REPO` | `owner/repo` the write-capable token can comment on — a disposable target, never a real story's issue |
+| `AGENT_HARNESS_SMOKE_ISSUE` | issue/PR number on that repo |
+| `OPENCODE_API_KEY` | opencode Zen API key — headless model access for **both** pi and opencode (pi treats it as a first-class provider variable) |
+| `GH_TOKEN_WRITE` | a token with comment-write scope on the target repo |
+| `GH_TOKEN_READONLY` | a genuinely read-only token — never `GH_TOKEN_WRITE` reused, a scope flipped in code is not the same guarantee as a scope the host actually enforces |
+
+```bash
+export AGENT_HARNESS_SMOKE_REPO="your-org/your-throwaway-repo"
+export AGENT_HARNESS_SMOKE_ISSUE=1
+export OPENCODE_API_KEY="..."
+export GH_TOKEN_WRITE="..."
+export GH_TOKEN_READONLY="..."
+pnpm smoke-tests   # runs the full local suite (run-all.sh has no per-scenario selector);
+                    # every other scenario is unaffected by these env vars, and this one
+                    # self-skips with a clear "environment not provisioned" notice if any
+                    # of them (or pi/opencode themselves) are missing
+```
+
+Runs on the free Zen model tier by default (`big-pickle`) — carries the data-exposure warning
+documented in the opencode guide; acceptable for pair's own dogfood, state it explicitly if an
+adopter reuses this scenario against their own repository.
+
 ## How to Run
 
 The `run-all.sh` script requires at least the path to the executable to be tested.
