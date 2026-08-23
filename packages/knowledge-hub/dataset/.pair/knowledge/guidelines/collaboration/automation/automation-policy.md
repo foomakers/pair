@@ -111,9 +111,9 @@ A third, independent section of the same file (ADR-017 §6). Disjoint from `## E
 (none)
 ```
 
-- **The value is a comma-separated list of `risk:*` tiers** (or the project's renamed tag family, per `tech/risk-matrix.md`'s Tag Projection), e.g. `risk:green`, or the literal `(none)`.
+- **The value is the project's own `## Eligibility` tier, verbatim, or the literal `(none)`** — never a family/tier the caller invents independently of that declaration. (The schema still accepts a comma-separated list syntactically, but every listed tier must be that same one value, so in practice this is a single tier or `(none)`.)
 - **It is a *switch*, never a gate list.** The gate set a tier must pass before advancing unattended is [`quality-model.md`](../../quality-assurance/quality-model.md) §4's existing per-tier table (D10) — this declaration does not restate it, add to it, or override it. `pair-loop` **enacts** that table; it is never a second source of truth for what "green" means.
-- **`risk:yellow` and `risk:red` can never appear here.** Both already require a human per the quality model (review / explicit approval); this switch only ever governs the tier the model already lets a machine self-merge (`risk:green`). A value naming `yellow` or `red` is malformed (HALT, below) — not a stricter policy this file could grant.
+- **No tier other than `## Eligibility`'s own value can ever appear here — by construction, not by a family-naming heuristic.** A card outside the eligibility filter is never selected at all, so it can never reach a review-approved outcome to advance in the first place: naming any other tier here — `risk:yellow`, `risk:red`, or a renamed family's own higher-risk equivalent — is unreachable, and a consumer HALTs on it rather than silently ignoring dead configuration. This deliberately replaced an earlier, narrower rule that only forbade the literal substrings `yellow`/`red` — a heuristic a project with a **renamed** tag family (`tech/risk-matrix.md`'s Tag Projection) could slip past, declaring its own red-equivalent tier here with no HALT anywhere. Checking against the project's own Eligibility value needs no family-naming knowledge at all, and closes that gap by construction.
 - **An untagged card is never advanced**, regardless of this declaration — the same fail-safe `## Eligibility` already applies (untagged ⇒ treated as `risk:red`).
 
 ### Fail-safe default — **`(none)`**, fail-closed
@@ -124,7 +124,7 @@ A third, independent section of the same file (ADR-017 §6). Disjoint from `## E
 
 A consumer **MUST HALT**, naming the file and the offending value, when the section body is present and:
 
-1. it names a tier other than the one tier the quality model permits unattended (`risk:yellow`, `risk:red`, or a tier name the project's Tag Projection does not emit);
+1. it names a tier other than `## Eligibility`'s own declared value (this includes `risk:yellow`, `risk:red`, a renamed family's own higher-risk equivalent, and a tier name the project's Tag Projection does not emit — all four are simply "not that one value");
 2. it names the same tier more than once, or carries a boolean operator (`AND`/`OR`/`NOT`) — the switch is a set membership, not an expression;
 3. it is not `(none)` and not a comma-separated list of valid tier labels (e.g. free prose).
 
