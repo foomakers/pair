@@ -153,12 +153,15 @@ documented in the opencode guide; acceptable for pair's own dogfood, state it ex
 adopter reuses this scenario against their own repository.
 
 **No sandbox, real write access, no confirmation prompts.** Neither pi nor opencode run
-inside a container here — both operate with the permissions of the invoking user, per
-their own guides' § 8 (What the harness does NOT support). Both harness invocations run
-non-interactively (`pi --print`, `opencode run`) with a real write-capable GitHub token
-in their environment and no per-step approval — the smoke's entire point is a real,
-unattended write, so treat `AGENT_HARNESS_SMOKE_REPO` as fully disposable and never point
-it at a repository whose history matters.
+inside a container here — both operate with the permissions of the invoking user. pi's
+own guide states this explicitly (its § 8, "What pi Does NOT Support" — no built-in
+sandbox); opencode's guide does not make an equivalent statement in its § 8, so treat
+this as this scenario's own operating assumption for opencode, not something its guide
+documents. Both harness invocations run non-interactively (`pi --print`, `opencode run`)
+with a real write-capable GitHub token in their environment and no per-step approval —
+the smoke's entire point is a real, unattended write, so treat
+`AGENT_HARNESS_SMOKE_REPO` as fully disposable and never point it at a repository whose
+history matters.
 
 ## How to Run
 
