@@ -680,3 +680,51 @@ describe('ONE adoption layout — no `adopted/` sub-layer in docs or the KB', ()
     }
   })
 })
+
+// Story #450 — a SECOND, independent section of the same `tech/automation.md`
+// file: `## Harness` (supported harnesses) and `## Model Policy` (model class
+// per risk tier). Disjoint from `## Eligibility` above and from the rest-of-file
+// schema #250/ADR-017 §6 will land — asserted here rather than in a new file
+// because it is the same target artifact (`automation-policy.md`).
+describe('automation-policy.md — Harness and Model Policy section (story #450)', () => {
+  it.each(policySources)(
+    '%s: declares the zero-configuration path before `## Harness`',
+    (_, content) => {
+      const sectionStart = content.indexOf('## Harness and Model Policy')
+      const zeroConfigIdx = content.indexOf('Zero-configuration path', sectionStart)
+      const harnessHeadingIdx = content.indexOf('### `## Harness`', sectionStart)
+      expect(zeroConfigIdx).toBeGreaterThan(sectionStart)
+      expect(harnessHeadingIdx).toBeGreaterThan(zeroConfigIdx)
+      expect(content.slice(zeroConfigIdx, harnessHeadingIdx)).toMatch(
+        /every harness in the framework is presumed supported/,
+      )
+    },
+  )
+
+  it.each(policySources)(
+    '%s: `## Harness` is a comma-separated list, never a pinned harness',
+    (_, content) => {
+      const section = content.slice(
+        content.indexOf('### `## Harness`'),
+        content.indexOf('### `## Model Policy`'),
+      )
+      expect(section).toContain('never what to use')
+      expect(section).toContain('pi, opencode, claude-code')
+    },
+  )
+
+  it.each(policySources)(
+    '%s: `## Model Policy` declares classes, never concrete model names',
+    (_, content) => {
+      const section = content.slice(content.indexOf('### `## Model Policy`'))
+      expect(section).toContain('cheap')
+      expect(section).toContain('balanced')
+      expect(section).toContain('frontier')
+      expect(section).toContain('never concrete model names')
+    },
+  )
+
+  it.each(policySources)('%s: cross-links the agent-harness framework', (_, content) => {
+    expect(content).toContain('agent-harness/README.md')
+  })
+})

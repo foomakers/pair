@@ -101,7 +101,44 @@ An **untagged** card — one carrying no `risk:*` label at all — never matches
 | Stop predicate, step defaults, `max_parallelism`, audit location | ADR-017 §6 — the remaining sections of `tech/automation.md`, owned by the automation loop story (#250) |
 | Which label a card carries | `classify`, via the Tag Projection declaration in `tech/risk-matrix.md` |
 
+## Harness and Model Policy
+
+A second, independent section of the same file — disjoint from `## Eligibility` above (which cards run unattended) and from the rest-of-file schema ADR-017 §6/#250 will land (stop predicate, step defaults, `max_parallelism`, audit location). This section answers two different questions: **which agent harnesses this project supports**, and **which model class each risk tier gets**. `/setup-harness` reads exactly these two declarations; the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) documents what each harness value means.
+
+### Zero-configuration path — stated first, on purpose
+
+`tech/automation.md` is optional (D21); this section inherits that. **Absent file, or present file with no `## Harness` / `## Model Policy` heading ⇒ every harness in the framework is presumed supported, and no model-class policy applies** — `/setup-harness` proceeds without a fitness check against a declared list (there is nothing declared to fail against) and provisions whichever harness `$harness` names or the developer picks. This is a valid, common, and expected state — most projects run one harness (frequently Claude Code, already in use) and never need this section. Presence of the section is what turns fitness-checking on, not the other way around.
+
+### `## Harness` — supported harnesses, never a pinned one
+
+```markdown
+## Harness
+
+pi, opencode, claude-code
+Requires: mcp
+```
+
+- **First line: a comma-separated list of harness names**, matching the guide filenames in the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) (`pi`, `opencode`, `claude-code`, or a future one added there). Order carries no meaning.
+- **Declares what the project supports, never what to use.** Business Rule: the choice of which supported harness runs a given session belongs to the developer or their local configuration (`$harness`, or the interactive prompt when it is omitted) — this list is never read as a default or a preference order.
+- **Second line, optional: `Requires: <access-path>`** — a declared access-path requirement, comma-separated if more than one (today, the only value the framework defines is `mcp`). **This line is what makes an access-path incompatibility checkable at all** — a consumer never infers a requirement from a project's tooling or way-of-working; absent this line, no access-path requirement exists to fail against, harness-fitness checking on access paths is a no-op, and only the harness list (line 1) is checked.
+- **A harness not in the list ⇒ `/setup-harness` stops before writing any configuration**, naming the incompatibility precisely (e.g. "this project supports pi, opencode — claude-code is not declared"). **A declared `Requires:` value the resolved harness cannot satisfy ⇒ same stop** (e.g. `Requires: mcp` and `pi` — which has none by design — is the one requested).
+
+### `## Model Policy` — classes anchored to `risk:*` tiers, never concrete model names
+
+```markdown
+## Model Policy
+
+risk:green: cheap
+risk:yellow: balanced
+risk:red: frontier
+```
+
+- **One line per tier, each mapping a `risk:*` (or the project's renamed tag family, per the Tag Projection declaration in `tech/risk-matrix.md`) to one of exactly three classes**: `cheap`, `balanced`, `frontier`.
+- **Classes, never concrete model names.** Model names and pricing are volatile — they live in each harness's guide (e.g. which free/cheap model a harness's provider offers today), never in adoption. A project that pins `claude-opus-5` here would need an adoption edit every time a vendor renames or retires a model; a class does not.
+- **Untagged work, or a tier the policy omits, resolves to no declared class** — the consumer (the automation loop, #250) falls back to its own default rather than this file inventing one.
+
 ## Related
 
 - [Quality Model](../../quality-assurance/quality-model.md) — the classification matrix, tier resolution, per-tier requirements (§4), tag projection (§5) and the `tech/risk-matrix.md` adoption delta (§6)
+- [Agent Harness Framework](../../technical-standards/ai-development/agent-harness/README.md) — what each declared harness name means, and the per-harness guides `/setup-harness` applies
 - [Collaboration Automation Framework](README.md) — the surrounding automation guidelines

@@ -303,6 +303,29 @@ mcp__github__pull_request_review_write:
   body: "Overall review summary"
 ```
 
+#### CLI Coverage Gap — Multi-Comment / Inline-Line-Comment Reviews
+
+**The MCP-First path above has no CLI-only equivalent today.** `gh pr review` (the CLI fallback used elsewhere in this section) only ever produces a single summary-body review — it accepts no per-line, per-file comment. On a CLI-first harness (see the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md)), `/pair-process-review` therefore cannot produce inline comments through `gh pr review` the way the MCP path does.
+
+**Remedy — the GitHub REST reviews endpoint accepts inline comments directly**, and `gh api` can drive it without MCP:
+
+```bash
+gh api \
+  --method POST \
+  -H "Accept: application/vnd.github+json" \
+  /repos/{owner}/{repo}/pulls/{pull_number}/reviews \
+  -f event='REQUEST_CHANGES' \
+  -f body='Overall review summary' \
+  -F 'comments[][path]=src/file.ts' \
+  -F 'comments[][line]=42' \
+  -F 'comments[][side]=RIGHT' \
+  -F 'comments[][body]=Comment on this line'
+```
+
+Repeat the `comments[][...]` group (same index across the four fields) for each additional line comment in the same call — the endpoint accepts the full array in one request, matching the MCP path's single-submit shape rather than the pending-review's step-by-step one. `pull_number`, `path`, `line` and `side` (`LEFT`/`RIGHT`) follow the same semantics as the MCP `add_comment_to_pending_review` call above.
+
+This closes the gap: a CLI-first harness (pi, or any harness without the GitHub MCP server configured) can produce a genuinely multi-comment, inline-line review through `gh api` alone. **Verified against a real PR**: [PR #457](https://github.com/foomakers/pair/pull/457) (story #450's own pull request), [review #5001891333](https://github.com/foomakers/pair/pull/457#pullrequestreview-5001891333) — the exact command above, run unmodified, produced a real inline comment attached to a real diff line. GitHub's REST response echoes `position`/`original_position` rather than `line` for this endpoint (a response-shape quirk, not a failure) — the comment still renders at the intended line.
+
 ### Merge Strategy
 
 GitHub supports three merge methods. The adopted strategy is configured in [way-of-working.md](../../../../adoption/tech/way-of-working.md) under the Merge Strategy section.

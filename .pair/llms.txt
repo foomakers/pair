@@ -90,7 +90,7 @@
 - [Decision: a KB cache slot is keyed by SOURCE identity, never by CLI version alone](.pair/adoption/decision-log/2026-08-11-kb-cache-slots-keyed-by-source-identity.md)
 - [Decision: no write is assumed — every write a skill makes is re-read back](.pair/adoption/decision-log/2026-08-11-no-write-is-assumed.md)
 - [Decision: The smoke suite's CI-safe list runs pre-merge, and "cannot run" is its own outcome](.pair/adoption/decision-log/2026-08-11-smoke-suite-runs-in-ci-pre-merge.md)
-- [Decision: /review forwards a PR IDENTIFIER to verify-quality, never the resolved tier — and a supplied `$pr` never falls through](.pair/adoption/decision-log/2026-08-11-verify-quality-pr-argument-names-the-pr-not-the-tier.md)
+- [Decision: /pair-process-review forwards a PR IDENTIFIER to verify-quality, never the resolved tier — and a supplied `$pr` never falls through](.pair/adoption/decision-log/2026-08-11-verify-quality-pr-argument-names-the-pr-not-the-tier.md)
 - [Decision: Implementation never files a new card; a debt found while implementing extends the story that surfaced it](.pair/adoption/decision-log/2026-08-12-implementation-never-files-a-card-it-extends-the-story.md)
 - [Decision: the manual CLI artifact ships without type declarations, and says so](.pair/adoption/decision-log/2026-08-12-manual-cli-artifact-types-are-optional.md)
 - [Decision: The story-local (ACn) marker ban covers the KB corpora, with a curated allowlist for the three legitimate shapes](.pair/adoption/decision-log/2026-08-12-story-local-marker-ban-covers-kb-with-curated-allowlist.md)
@@ -111,6 +111,7 @@
 - [Decision: No public dev-server preview from cloud coding sessions](.pair/adoption/decision-log/2026-08-20-no-public-dev-server-preview-from-cloud-sessions.md)
 - [Decision: a source KB's configuration declaration is validated, not trusted — it may namespace its content, never choose where the install writes](.pair/adoption/decision-log/2026-08-20-source-kb-declaration-is-validated-not-trusted.md)
 - [Decision: Review severity is capped by trigger plausibility, and Minor blocks merge](.pair/adoption/decision-log/2026-08-21-review-severity-classification-and-convergence.md)
+- [Decision: bootstrap composes setup-harness, optionally](.pair/adoption/decision-log/2026-08-23-bootstrap-composes-setup-harness-optionally.md)
 
 ## How-To Guides
 
@@ -438,6 +439,10 @@
 - [Vulnerability Prevention Framework](.pair/knowledge/guidelines/quality-assurance/security/vulnerability-prevention.md)
 - [Web Application Security Framework](.pair/knowledge/guidelines/quality-assurance/security/web-app-security.md)
 - [📚 Technical Guidelines Knowledge Base](.pair/knowledge/guidelines/README.md)
+- [Claude Code](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/claude-code.md)
+- [opencode](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/opencode.md)
+- [pi](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md)
+- [Agent Harness Framework](.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/README.md)
 - [AI Development Tools](.pair/knowledge/guidelines/technical-standards/ai-development/ai-tools.md)
 - [AI Development Documentation Standards](.pair/knowledge/guidelines/technical-standards/ai-development/documentation-standards.md)
 - [Model Context Protocol (MCP) Integration](.pair/knowledge/guidelines/technical-standards/ai-development/mcp-integration.md)

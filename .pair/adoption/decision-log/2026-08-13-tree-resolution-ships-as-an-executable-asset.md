@@ -14,7 +14,7 @@ Convention Adoption
 
 ## Context
 
-Story #382 gave `/verify-quality` a `$pr` argument and, with it, a Step 1.5 that resolves two independent things before any gate runs: WHICH PR the `risk:*` tags come from, and WHICH CODE the suites actually ran against (the report's `Tree:` row, whose resolved value `/review` Step 2.1 keys its authoritative-vs-advisory rule on).
+Story #382 gave `/pair-capability-verify-quality` a `$pr` argument and, with it, a Step 1.5 that resolves two independent things before any gate runs: WHICH PR the `risk:*` tags come from, and WHICH CODE the suites actually ran against (the report's `Tree:` row, whose resolved value `/pair-process-review` Step 2.1 keys its authoritative-vs-advisory rule on).
 
 That resolution grew, over nine review rounds, into ~90 lines of shell written inline in `dataset/.skills/capability/verify-quality/SKILL.md`: the identifier normalization (bare number / `#420` / three URL shapes), the single code-host read, the head-COMMIT compare with its `match` / `ahead` / `mismatch` arms, the no-remote skip, the two `unknown` spellings, and the six rendering arms. Every property of it was verified as **text** — `verify-quality.test.ts` grepped the fenced block for a spelling, an ordering, a banned emptiness test. Nothing ever executed it. The round-9 finding (a corpus guard that walked `.md` only and therefore never saw a shipped `.sh`) is the same class of miss: an artifact claimed a property that only a run could have falsified.
 
@@ -39,7 +39,7 @@ The two sibling helpers in the same flow — `tier-resolve.sh` (the tier→suite
 
 ## Consequences
 
-- `/verify-quality` Step 1.5 point 1 is now three lines of composition plus a stated contract; the resolution it runs is the same text the smoke test executes.
+- `/pair-capability-verify-quality` Step 1.5 point 1 is now three lines of composition plus a stated contract; the resolution it runs is the same text the smoke test executes.
 - Adding or changing an arm means changing one file and one scenario — the previous shape required editing the skill, the mirror, and the greps that stood in for a test.
 - A new code host is wired by overriding `pr_view_json`; the routing-table instruction now names a function instead of describing a rewrite.
 - The KB gains a third shipped shell asset; the "one executable projection" rule (already stated for `tier-resolve.sh` and `pr-state.sh`) now covers every deterministic piece of the local gate run.

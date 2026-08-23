@@ -1,9 +1,9 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 41 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 42 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 41 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 42 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
 > **Last updated:** 2026-07-28. Source: `packages/knowledge-hub/dataset/.skills/`
 
@@ -94,6 +94,7 @@ All `analyze-*` skills are **output-only report producers**: they analyze and re
 | ----- | ------- | ----------- |
 | **setup-pm** | `/pair-capability-setup-pm` | Configures the project management tool — creates/wires it up, applies its implementation guide, updates way-of-working, records the decision — whether the tool was already chosen or picked here. |
 | **setup-gates** | `/pair-capability-setup-gates` | Configures CI/CD quality gates — pipeline config, shared lint/format packages, husky hooks, the required deterministic secret-scanning job (gitleaks by default, R6.5/D24), and the required pair-review + pair-explicit-approval branch-protection checks that make the review unskippable — for the adopted tech stack. |
+| **setup-harness** | `/pair-capability-setup-harness` | Configures an agent harness (pi, opencode, Claude Code) to execute pair's process: resolves the harness explicitly (never inferred), verifies its fitness against the project's declared harness/access-path requirements before writing anything, provisions access path / skill paths / context / model provider per the harness's guide, and confirms rather than rewrites on re-run. |
 | **manage-flags** | `/pair-capability-manage-flags` | Manages a feature flag's lifecycle — creation, activation, deactivation, cleanup — per the feature-flags guidelines. |
 
 ### Quality Assurance Capabilities

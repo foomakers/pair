@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /specify-prd, /setup-pm, /record-decision, assess-* (optional)."
+description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /specify-prd, /setup-pm, /record-decision, assess-* (optional), /setup-harness (optional, agent harness configuration)."
 version: 0.7.0
 author: Foomakers
 ---
@@ -15,6 +15,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 | ----------------------- | ---------- | ----------------------------------------------------------------------------- |
 | `/specify-prd`          | Process    | Yes — invoked if PRD is missing or template                                   |
 | `/setup-pm`             | Capability | Yes — invoked in finalization phase for PM tool configuration                 |
+| `/setup-harness`        | Capability | Optional — agent harness configuration, offered (skippable) in finalization phase. Graceful degradation if absent. |
 | `/record-decision`      | Capability | Yes — invoked for each bootstrap decision (categorization, tech choices, etc) |
 | `/assess-architecture`  | Capability | Optional — architecture pattern assessment. Graceful degradation if absent.   |
 | `/assess-stack`         | Capability | Optional — tech stack assessment (core sections). Graceful degradation if absent. |
@@ -344,6 +345,22 @@ Runs **before either step's presence check**, and gates the whole phase on both 
 
 **Quick mode**: the PM tool has no safe KB default — it is **still asked** here unless project state already names one. If it can neither be resolved nor asked (no TTY) → **HALT**, naming the input to pass explicitly ([quick-mode-defaults.md](quick-mode-defaults.md)).
 
+### Step 4.2b: Agent Harness Configuration (Optional)
+
+1. **Check**: Is `/setup-harness` installed?
+2. **Skip**: If not installed, warn: "`/setup-harness` not installed — skipping agent harness configuration. The project runs on whichever harness is already in use." Move to Step 4.3.
+3. **Act**: Offer, as a **skippable** step — unlike Step 4.2's PM tool configuration, this one has a safe default (stay on the harness already in use):
+
+   > **Configure an agent harness for this project?** Most projects need nothing here — the harness you are already using works with no declaration. Configure one now only if this project should declare which harnesses it *supports* (`tech/automation.md`), or if you want to set up a second harness (e.g. pi or opencode) for cost or automation reasons.
+   >
+   > (yes, configure one / no, skip — safe to run `/setup-harness` later)
+
+4. **Act** (developer accepts): Compose `/setup-harness`, letting it ask `$harness` since bootstrap does not pre-select one.
+5. **Act** (developer declines, or no TTY in quick mode): Skip with no adoption change — `tech/automation.md`'s absence is the zero-configuration path, not an incomplete bootstrap.
+6. **Verify**: Either a harness was configured (and any adoption change is included in Step 4.3's summary) or the step was explicitly skipped — never silently omitted without being offered.
+
+**Quick mode**: unlike the PM tool, this step is skipped by default in quick mode rather than asked — it has a safe KB default (no declaration) that Step 4.2's PM tool does not.
+
 ### Step 4.3: Final Summary
 
 1. **Act**: Present bootstrap completion summary to the developer for final approval:
@@ -372,6 +389,7 @@ BOOTSTRAP COMPLETE:
 ├── Domain Model:    [subdomains: N | contexts: N | skipped — not installed]
 ├── Classification:  [criticality: N rows | declined | already authored], [overrides: N | declined | already authored] — or whole-phase [skipped — quick mode | skipped — file malformed | skipped — quality model not installed]
 ├── PM Tool:         [configured via /setup-pm | already configured]
+├── Harness:         [configured via /setup-harness: <name> | skipped — not installed | declined | n/a — no TTY, quick mode]
 ├── Decisions:       [N decisions recorded (ADR: X, ADL: Y)]
 └── Status:          [Complete | Partial — details]
 ```
@@ -407,6 +425,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **assess-\* skills not installed**: Skip assessment phase, reference guideline files directly, ask developer for manual decisions **in guided mode only** — in quick mode the manual path asks nothing either, taking the same per-project-type defaults and reporting them (Step 2.2). Log: "assess-\* skills not installed — using manual assessment."
 - **/specify-prd not installed**: HALT at Phase 0 if PRD is missing (a required dependency, not optional). Suggest creating PRD manually using how-to-01.
 - **/setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /setup-pm not installed."
+- **/setup-harness not installed**: Skip the harness offer in Phase 4 (Step 4.2b) with a warning. The project runs on whichever harness is already in use — never blocks bootstrap completion.
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
 - **/record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."

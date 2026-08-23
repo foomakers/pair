@@ -75,4 +75,5 @@ CI_EXCLUDED=(
   "auto-download-install.sh: OFFLINE_SAFE=false — 'pair install' with no --source auto-downloads the release asset matching the CLI version; unreleased on a PR branch"
   "auto-download-update.sh: OFFLINE_SAFE=false — same download path on 'pair update'; exercised post-release by release.yml (smoke-test-npm-artifact.sh) against the real artifact"
   "default-resolution.sh: OFFLINE_SAFE=false — clears the KB cache to force a fresh download from GitHub releases (same dependency, install + update); the fallback it asserts stays a manual guarantee, see the note above"
+  "agent-harness-setup.sh: OFFLINE_SAFE=false — needs pi and opencode installed on the machine, real Zen/GitHub credentials (write-capable and read-only), and performs a real write against a real GitHub issue; OAuth subscription is a local-interactive path, never a CI path (story #450, AC7). Run manually: 'pnpm smoke-tests' with AGENT_HARNESS_SMOKE_REPO/AGENT_HARNESS_SMOKE_ISSUE/OPENCODE_API_KEY/GH_TOKEN_WRITE/GH_TOKEN_READONLY set."
 )
