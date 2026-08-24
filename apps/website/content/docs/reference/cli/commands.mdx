@@ -722,6 +722,87 @@ pair validate-config --config ./my-config.json
 
 ---
 
+## run
+
+Run a pair skill **headlessly** on a chosen engine, re-invoking it until it stops — the portable
+unattended loop (`ADR-021` tier 2: the external driver).
+
+`pair run` is an **execution adapter**, not a process engine. It decides *how* to invoke (engine,
+skill, perimeter, autonomy) and never *what* to work on: eligibility, the stop predicate, the
+parallelism ceiling and the audit location are read from
+[`.pair/adoption/tech/automation.md`](/docs/reference/quality-model) with the names `pair-loop`
+already defines, and that file is never written. **It never merges, in any mode.**
+
+### Usage
+
+```bash
+pair run [options]
+```
+
+### Options
+
+| Option                          | Description                                                                                          |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `--engine <id>`                 | Engine to drive: `pi`, `opencode` or `claude`. Precedence: flag > `pair.config.json` > schema default |
+| `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back — a missing skill is an error                     |
+| `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
+| `--root <id>`                   | Scope root, passed through as `pair-next --root`                                                      |
+| `--filter <tag>`                | Label filter, passed through as `pair-next --filter`                                                  |
+| `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
+| `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
+| `--autonomous`                  | Explicit opt-in: run without confirmations                                                           |
+| `--approve-project-trust`       | Explicit authorization to run where the engine does not trust the project                            |
+| `--iteration-timeout <seconds>` | Per-iteration wall-clock bound (hang guard, default `1800`)                                           |
+| `--dry-run`                     | Resolve engine, skill, perimeter and policy, print them, spawn nothing                               |
+
+### A work perimeter is mandatory
+
+Without a scope the run **refuses to start** — it never falls back to "the whole backlog". A
+perimeter is a scope (`--root`, `--filter`, or the policy's `## Eligibility` label), a working
+directory, and a hard iteration cap. A `--prompt` run carries no scope parameters, so it declares
+its boundary with an explicit `--cwd`.
+
+### Autonomy and project trust are two separate opt-ins
+
+Both default **off**, and neither can be granted from `pair.config.json`:
+
+- **`--autonomous`** — proceed without confirmations, inside the perimeter above. An engine with no
+  confirmation mechanism at all (`pi` has no permission prompts) **refuses to run** without this
+  flag rather than pretending confirmations are active.
+- **`--approve-project-trust`** — run where the engine's trust store has no decision for this
+  project. `pair run` never writes that store: provision trust with the engine's own command or
+  with `/pair-capability-setup-harness`.
+
+### How an iteration's outcome is decided
+
+From an **explicit terminal event** in the engine's JSONL stream — never from the exit code (pi
+documents none). No recognisable terminal event means the iteration **failed** and the loop stops:
+fail-closed. Every iteration is a fresh process and therefore a fresh session, so conditions are
+re-evaluated each time and a card that becomes eligible mid-run is picked up on the next iteration.
+
+The loop stops when the skill reports itself finished (it printed no continue-token), an iteration
+fails, or the perimeter's cap is reached. Within one `pair run` process parallelism is **1**: the
+command states the policy's `## Max Parallelism` ceiling and leaves batching to `pair-loop` —
+concurrency comes from running several driver processes.
+
+### Examples
+
+```bash
+# Drive the #212 subtree with confirmations active, at most 5 iterations
+pair run --root 212 --max-iterations 5
+
+# Unattended, on pi, scoped to green cards, autonomy explicit
+pair run --engine pi --filter risk:green --autonomous --max-iterations 3
+
+# See exactly what would run — resolution only, nothing spawned
+pair run --root 212 --dry-run
+
+# A one-shot prompt on the default engine, bounded by its directory
+pair run --prompt "/pair-next --root 212" --cwd . --max-iterations 1
+```
+
+---
+
 ## Global Options
 
 Options available for all commands:

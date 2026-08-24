@@ -298,6 +298,41 @@ command in.
 Full semantics and glob syntax:
 [kb-validate — Optional link patterns](/docs/reference/cli/commands#optional-link-patterns).
 
+## Execution Engine (`engine`)
+
+A top-level `engine` field, a sibling of `asset_registries`, names the agent process
+[`pair run`](/docs/reference/cli/commands#run) drives:
+
+```json
+{
+  "engine": { "id": "pi" },
+  "asset_registries": { "...": "..." }
+}
+```
+
+`id` is the only field the block accepts — `pi`, `opencode` or `claude`. Anything else (an
+unknown id, a non-object block, an extra field) is a **validation error**, never a silent
+fall-back to the default: a typo that quietly ran a different engine would be indistinguishable
+from a working configuration.
+
+The block is **optional and delta-only**. Precedence, strongest first:
+
+| Level | Wins over | Notes |
+| ----- | --------- | ----- |
+| `--engine <id>` | everything | Per-invocation choice |
+| `engine.id` in `pair.config.json` | the schema default | Committed project preference |
+| Schema default (`claude`) | — | A repository with **no** `pair.config.json` runs from this |
+
+`pair run` prints the resolved engine, the exact command line and the level it came from before
+it executes anything.
+
+<Callout type="warn">
+  Autonomy and project-trust approval are deliberately **not** configurable here. They are
+  per-invocation flags only (`--autonomous`, `--approve-project-trust`) — a committed file must
+  never be able to grant an unattended run permission to skip confirmations or to execute code
+  from a repository the engine does not trust.
+</Callout>
+
 ## Validation
 
 Validate your config with:

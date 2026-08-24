@@ -1,0 +1,110 @@
+---
+title: pi
+description: Run pair on pi — skill discovery with no wiring, project trust in headless mode, and pi as a pair run engine.
+---
+
+pi (`@earendil-works/pi-coding-agent`) is a **harness**: an environment configured to execute
+pair's process. It is also an **engine** [`pair run`](/docs/reference/cli/commands#run) can drive,
+which is what makes unattended delivery portable beyond Claude Code.
+
+<Callout>
+  This page is the user-facing setup guide. The facts it describes are maintained once, in the
+  [agent-harness framework](https://github.com/foomakers/pair/blob/main/.pair/knowledge/guidelines/technical-standards/ai-development/agent-harness/pi.md)
+  inside the Knowledge Base your agents read — that guide is the source of truth, this page is not
+  a second copy of it. Run `/pair-capability-setup-harness` to have pair configure pi for you
+  rather than doing it by hand.
+</Callout>
+
+## Prerequisites
+
+- pi installed and authenticated (`pi --help` works)
+- A pair-enabled project (`pair install` completed, `.pair/` exists)
+
+## Skill Discovery — Nothing to Wire
+
+pi discovers `.agents/skills/*/SKILL.md`, walking up from the current directory to the git
+repository root, plus `.pi/skills/` for the project and `~/.pi/agent/skills/` globally. `pair
+install` already distributes skills to `.agents/skills/`, so pair's skills are visible with **no
+configuration**.
+
+To load another harness's skill directory verbatim, declare it in the project's `.pi/settings.json`:
+
+```json
+{ "skills": ["../.claude/skills"] }
+```
+
+## Project Context
+
+pi loads **one** context file per directory, in this precedence:
+`AGENTS.override.md > AGENTS.md > AGENTS.MD > CLAUDE.md > CLAUDE.MD`. A repository carrying both
+`AGENTS.md` and `CLAUDE.md` never loads both from the same directory — `AGENTS.md` wins. Nothing to
+deduplicate, and no reduced-context variant needed.
+
+A personal `~/.pi/agent/AGENTS.md` is layered into every session on every project. Know it is there
+before debugging a session that behaves unexpectedly.
+
+## Headless Execution and Project Trust
+
+`pi -p "<prompt>"` runs one shot non-interactively; `pi --mode json` emits a JSONL event stream
+(what `pair run` reads).
+
+<Callout type="warn">
+  **A headless pi run silently ignores project-local resources of an untrusted project** — including
+  the project `.agents/skills` it would otherwise discover. Non-interactive modes never show the
+  trust prompt, so trust must exist *before* the run. Prefer a per-directory decision in
+  `~/.pi/agent/trust.json` (pi's own `/trust`, or `/pair-capability-setup-harness` provisioning it
+  for this project only). Setting `defaultProjectTrust: "always"` globally trusts **every** project
+  pi ever opens on that machine — a much larger blast radius, and only appropriate on a dedicated
+  automation box.
+</Callout>
+
+`pair run` never writes that trust store. If pi has no trust decision for the project, the run
+**fails loudly** and tells you how to provision it; `--approve-project-trust` lets you proceed
+anyway, knowing project-local resources may be ignored.
+
+## Driving pi with `pair run`
+
+```bash
+# One iteration, resolution printed, nothing spawned
+pair run --engine pi --root 212 --dry-run
+
+# Unattended within a narrow perimeter
+pair run --engine pi --filter risk:green --autonomous --max-iterations 3
+```
+
+pi has **no permission prompts** by design, so it cannot run with confirmations active. `pair run`
+therefore requires `--autonomous` explicitly for pi rather than pretending confirmations exist —
+autonomy is a decision you take, not one the driver takes for you.
+
+To make pi the project's default engine, declare it in `pair.config.json`:
+
+```json
+{ "engine": { "id": "pi" } }
+```
+
+## What pi Does Not Support
+
+- **MCP** — by design (pi's own docs). A project whose `tech/automation.md` declares
+  `Requires: mcp` is **not fit** for pi, and `/pair-capability-setup-harness` stops before writing
+  any configuration rather than half-configuring it.
+- Sub-agents, permission popups, plan mode, background bash — intentionally absent from the base
+  agent. This is why pi is driven per-iteration by an external process (ADR-021 tier 2) rather than
+  by an in-harness fan-out primitive.
+- A built-in sandbox: pi runs with your permissions. Isolation for unattended work (container, VM)
+  is the operator's responsibility.
+
+## Verify It Works
+
+```bash
+pi -p "/pair-next"
+```
+
+**Expected**: pi reads `AGENTS.md`, finds the skills, and reports the next action. If it ignores the
+project's skills, check project trust first — that is the usual cause.
+
+## Related
+
+- [`pair run` reference](/docs/reference/cli/commands#run) — the driver, its perimeter and its flags
+- [opencode](/docs/integrations/opencode) — the MCP-native harness in the same framework
+- [Adding a harness](/docs/integrations/adding-a-harness) — how to bring a new engine into pair
+- [Configuration reference](/docs/reference/configuration#execution-engine-engine) — the optional `engine` key
