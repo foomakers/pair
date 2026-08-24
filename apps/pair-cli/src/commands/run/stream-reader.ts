@@ -33,8 +33,66 @@ const NO_TERMINAL_EVENT: IterationResult = {
   detail: 'no terminal event in the engine stream (fail-closed: the exit code is never consulted)',
 }
 
-/** `pair-loop`'s own degraded-path marker, borrowed verbatim — the driver invents no protocol. */
-const CONTINUE_TOKEN_MARKER = /CONTINUE-TOKEN:\s*([^"\\\n\r]+)/
+/**
+ * `pair-loop`'s own one-card-path marker, borrowed verbatim — the driver invents no protocol.
+ *
+ * ANCHORED to the start of its own line, and required to be a CONCRETE invocation (round 1,
+ * finding 5). Two shapes must not be read as a token, and an unanchored substring match read both:
+ *
+ * - the **documented template**, `CONTINUE-TOKEN: pair-loop [--root <id>] … --iteration <n+1>`,
+ *   which appears verbatim in the skill's own `SKILL.md` — any agent that reads, quotes or
+ *   summarises that file echoes it into the stream. A spurious token there means the driver
+ *   re-invokes a finished run until the perimeter cap;
+ * - a **prose mention** mid-sentence ("it would print a CONTINUE-TOKEN: … line").
+ *
+ * Hence: line-anchored, the value must start with the skill name it re-invokes (`pair-`), and it
+ * must carry no placeholder syntax (`<…>`, `[…]`) — a real token names real values.
+ */
+const CONTINUE_TOKEN_MARKER = /^\s*CONTINUE-TOKEN:[ \t]*(pair-[^\s"\\]+[^"\\\n\r]*)$/m
+
+/** A template, not a token: the documented form keeps its `<placeholders>` and `[optionals]`. */
+function isConcreteToken(candidate: string): boolean {
+  return !/[<>[\]]/.test(candidate)
+}
+
+/** How deep into an event's structure the token is looked for — engines nest text a few levels. */
+const MAX_EVENT_DEPTH = 6
+
+/**
+ * The continue-token carried by ONE decoded event, if any.
+ *
+ * Walks the event's string values (bounded depth, so a pathological payload cannot spin) and
+ * applies the anchored marker to each. Returns the LAST match in the event: `pair-loop` prints the
+ * token as the final line of its report, and a summary that quotes an earlier one must not win.
+ */
+function findContinueToken(payload: unknown, depth = 0): string | undefined {
+  if (depth > MAX_EVENT_DEPTH) return undefined
+  if (typeof payload === 'string') return tokenInText(payload)
+  if (Array.isArray(payload)) return firstTokenIn(payload, depth)
+  if (typeof payload === 'object' && payload !== null) {
+    return firstTokenIn(Object.values(payload), depth)
+  }
+  return undefined
+}
+
+/** The LAST concrete token in one string: the real one is printed after any summary quoting it. */
+function tokenInText(text: string): string | undefined {
+  const matches = [...text.matchAll(new RegExp(CONTINUE_TOKEN_MARKER, 'gm'))].reverse()
+  for (const match of matches) {
+    const candidate = match[1]?.trim()
+    if (candidate && isConcreteToken(candidate)) return candidate
+  }
+  return undefined
+}
+
+/** Same last-wins order across a nested collection's members. */
+function firstTokenIn(values: readonly unknown[], depth: number): string | undefined {
+  for (const value of [...values].reverse()) {
+    const found = findContinueToken(value, depth + 1)
+    if (found) return found
+  }
+  return undefined
+}
 
 function fieldAt(payload: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((current, segment) => {
@@ -76,9 +134,6 @@ export async function readIterationOutcome(
     const trimmed = line.trim()
     if (trimmed.length === 0) continue
 
-    const token = CONTINUE_TOKEN_MARKER.exec(trimmed)
-    if (token?.[1]) continueToken = token[1].trim()
-
     let payload: unknown
     try {
       payload = JSON.parse(trimmed)
@@ -86,6 +141,10 @@ export async function readIterationOutcome(
       // Untrusted input: an unparseable line is skipped, never evaluated.
       continue
     }
+
+    // Searched in the DECODED event, not in the raw JSONL line: the newlines the anchor needs are
+    // `\n` escapes on the wire, so a raw-line match could not be anchored at all (finding 5).
+    continueToken = findContinueToken(payload) ?? continueToken
 
     const rule = engine.terminalEvents.find(candidate => matches(payload, candidate.match))
     if (rule) {

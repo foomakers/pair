@@ -89,6 +89,23 @@ describe('readIterationOutcome — continue-token', () => {
     expect(result.continueToken).toBe('pair-loop --root 212 --iteration 5')
   })
 
+  it('ignores the DOCUMENTED template echoed in a transcript (round 1, finding 5)', async () => {
+    // pair-loop's own SKILL.md contains the literal line
+    // `CONTINUE-TOKEN: pair-loop [--root <id>] [--predicate "<text>"] --iteration <n+1>`.
+    // An agent that reads or quotes that file echoes it into the stream; an unanchored match then
+    // invented a token and the loop kept re-invoking to the cap.
+    const result = await readFixture('claude-echoed-skill-doc.jsonl', 'claude')
+
+    expect(result.outcome).toBe('success')
+    expect(result.continueToken).toBeUndefined()
+  })
+
+  it('ignores a mention that is not at the start of its own line', async () => {
+    const result = await readFixture('claude-inline-mention.jsonl', 'claude')
+
+    expect(result.continueToken).toBeUndefined()
+  })
+
   it('reports no token when the skill printed none (it reported itself finished)', async () => {
     const result = await readFixture('opencode-success.jsonl', 'opencode')
 

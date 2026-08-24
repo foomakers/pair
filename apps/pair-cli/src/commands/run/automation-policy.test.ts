@@ -3,6 +3,7 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import {
   readAutomationPolicy,
   describeParallelism,
+  describeMergePosture,
   POLICY_PATH,
   DEFAULT_AUDIT_LOCATION,
 } from './automation-policy'
@@ -61,6 +62,7 @@ describe('readAutomationPolicy — present file', () => {
 
     expect(policy).toMatchObject({
       eligibility: 'risk:green',
+      autoAdvance: '(none)',
       stopPredicate: 'tag:risk:red ⇒ Done',
       maxIterations: 20,
       maxParallelism: 3,
@@ -166,5 +168,40 @@ describe('describeParallelism (AC9)', () => {
 
   it('says nothing surprising when the policy is already sequential', () => {
     expect(describeParallelism(policyFrom().read())).toBe('Parallelism: 1 (policy: 1)')
+  })
+})
+
+describe('describeMergePosture (round 1, finding 3)', () => {
+  it('says nothing merges unattended when auto-advance is off', () => {
+    const posture = describeMergePosture(policyFrom(THIS_PROJECTS_POLICY).read())
+
+    expect(posture).toContain('never merges')
+    expect(posture).toContain('(none)')
+    // The old line claimed "the gate stays human" unconditionally, which is false as soon as a
+    // tier is declared below. It must not promise that here either.
+    expect(posture).not.toContain('the gate stays human')
+  })
+
+  it('states plainly that the SKILL may merge the declared tier itself', () => {
+    const posture = describeMergePosture(
+      policyFrom('## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n').read(),
+    )
+
+    expect(posture).toContain('never merges')
+    expect(posture).toContain('risk:green')
+    expect(posture).toMatch(/skill may push and merge/i)
+  })
+
+  it('falls back to off when the policy file is absent', () => {
+    const policy = policyFrom().read()
+
+    expect(policy.autoAdvance).toBe('(none)')
+    expect(describeMergePosture(policy)).toContain('(none)')
+  })
+
+  it('halts on an auto-advance tier the eligibility declaration does not name', () => {
+    expect(() =>
+      policyFrom('## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:red\n').read(),
+    ).toThrow(/`## Auto-Advance` declares `risk:red`/)
   })
 })

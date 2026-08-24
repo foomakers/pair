@@ -17,11 +17,12 @@ import { createPerimeter, describePerimeter, type Perimeter } from './perimeter'
 import { resolveAutonomy, type AutonomyDecision } from './autonomy'
 import { createProjectTrustProbe } from './trust-probe'
 import {
+  describeMergePosture,
   describeParallelism,
   readAutomationPolicy,
   type AutomationPolicy,
 } from './automation-policy'
-import { buildPromptText } from './invocation'
+import { buildPromptText, skillAcceptsFilter } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
 import type { IterationResult } from './stream-reader'
@@ -84,6 +85,9 @@ function resolveRun(config: RunCommandConfig, fs: FileSystemService, cwd: string
     requestedCap: config.maxIterations,
     policyCap: policy.maxIterations,
     invocationKind: invocation.kind,
+    // Whether `--filter` can be HONOURED depends on the skill the cascade resolved, so the check
+    // has to happen after skill resolution and before any spawn (round 1, finding 1).
+    skillAcceptsFilter: skillAcceptsFilter(invocation),
   })
   const autonomy = resolveAutonomy({
     engine: engine.engine,
@@ -104,7 +108,9 @@ function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void 
   for (const note of resolved.autonomy.notes) console.log(`  ${note}`)
   console.log(`  Policy: ${resolved.policy.source} · audit ${resolved.policy.auditLocation}`)
   console.log(`  ${describeParallelism(resolved.policy)}`)
-  console.log('  Merge: never performed by the driver — the gate stays human (AC10)')
+  // Truthful per POLICY, not a blanket claim: with a tier under `## Auto-Advance` the invoked
+  // skill may merge it itself, and saying "the gate stays human" there would be false.
+  console.log(`  ${describeMergePosture(resolved.policy)}`)
   for (const warning of policyWarnings) console.log(chalk.yellow(`  ! ${warning}`))
 }
 
@@ -162,7 +168,11 @@ function driveIteration(
 ): Promise<IterationResult> {
   const promptText = buildPromptText(resolved.engine.engine, resolved.invocation, {
     ...(resolved.perimeter.root !== undefined && { root: resolved.perimeter.root }),
-    ...(resolved.perimeter.filter !== undefined && { filter: resolved.perimeter.filter }),
+    // Passed ONLY when the invocation actually carries it. `buildSkillArgs` would drop it anyway,
+    // but relying on that is how a flag ends up looking effective while changing nothing: the
+    // decision belongs where the perimeter recorded it (round 1, finding 1).
+    ...(resolved.perimeter.filterDelivery === 'argument' &&
+      resolved.perimeter.filter !== undefined && { filter: resolved.perimeter.filter }),
     ...(resolved.policy.stopPredicate !== undefined && {
       predicate: resolved.policy.stopPredicate,
     }),

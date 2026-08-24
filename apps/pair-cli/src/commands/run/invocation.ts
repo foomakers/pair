@@ -41,14 +41,50 @@ function parametersFor(skill: string): SkillParameterMap {
   return SKILL_PARAMETERS[skill] ?? UNKNOWN_SKILL_PARAMETERS
 }
 
+/**
+ * Whether this invocation can carry `--filter` at all.
+ *
+ * `pair-loop` declares none — it reads `## Eligibility` from `tech/automation.md` itself — and a
+ * verbatim `--prompt` carries no parameters whatsoever. The caller uses this to REFUSE a
+ * `--filter` it could not honour, instead of accepting it, dropping it in `buildSkillArgs`, and
+ * printing it as the run's perimeter anyway (review round 1, finding 1: the printed label and the
+ * cards actually driven could disagree).
+ */
+export function skillAcceptsFilter(invocation: ResolvedInvocation): boolean {
+  if (invocation.kind === 'prompt') return false
+  return parametersFor(invocation.name).filter !== undefined
+}
+
+/**
+ * Renders one borrowed VALUE for a prompt line.
+ *
+ * The prompt is a single argv element, so there is no shell to quote for — but the line is read by
+ * the agent as a command with arguments, and a multi-word value with no delimiters loses its
+ * boundary: `--predicate tag:risk:red ⇒ Done --iteration 1` reads as a one-token predicate followed
+ * by junk. `pair-loop`'s own SKILL.md renders it `--predicate "<text>"`, and its workflow validates
+ * the predicate by CONTENT before any agent starts, so the malformed spelling is either rejected
+ * outright or applied as a DIFFERENT stop condition to an unattended run (round 1, finding 2).
+ *
+ * Single-token values stay bare — quoting `212` or `risk:green` would only add noise — and an
+ * embedded quote is escaped rather than allowed to close the value early.
+ */
+function renderValue(value: string): string {
+  if (!/[\s"]/.test(value)) return value
+  return `"${value.replace(/(["\\])/g, '\\$1')}"`
+}
+
 /** The skill's own arguments, in a stable order, dropping anything it does not declare. */
 export function buildSkillArgs(skill: string, args: SkillArguments): string[] {
   const parameters = parametersFor(skill)
   const parts: string[] = []
-  if (args.root !== undefined && parameters.root) parts.push(parameters.root, args.root)
-  if (args.filter !== undefined && parameters.filter) parts.push(parameters.filter, args.filter)
+  if (args.root !== undefined && parameters.root) {
+    parts.push(parameters.root, renderValue(args.root))
+  }
+  if (args.filter !== undefined && parameters.filter) {
+    parts.push(parameters.filter, renderValue(args.filter))
+  }
   if (args.predicate !== undefined && parameters.predicate) {
-    parts.push(parameters.predicate, args.predicate)
+    parts.push(parameters.predicate, renderValue(args.predicate))
   }
   if (args.iteration !== undefined && parameters.iteration) {
     parts.push(parameters.iteration, String(args.iteration))

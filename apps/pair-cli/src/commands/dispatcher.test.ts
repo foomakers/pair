@@ -227,6 +227,41 @@ describe('dispatchCommand() - real handlers integration', () => {
     await expect(dispatchCommand(config, fs)).rejects.toThrow()
   })
 
+  /**
+   * US-451: `run` is the only dispatch whose exit code carries a LOOP outcome, so the branch that
+   * forwards it is what keeps a failed unattended iteration from reading as success to CI or cron.
+   * Round-1 review finding 4: the branch shipped untested.
+   */
+  describe('dispatches run command, forwarding the loop outcome as the exit code', () => {
+    const runConfig = {
+      command: 'run' as const,
+      invocation: { kind: 'skill' as const },
+      scope: {},
+      autonomous: false,
+      approveProjectTrust: false,
+      iterationTimeoutSeconds: 60,
+      dryRun: true,
+    }
+
+    beforeEach(async () => {
+      process.exitCode = undefined
+      // The cascade needs a skill to resolve; this shared fs has no skills registry, so seed the
+      // conventional location the probe falls back to.
+      await fs.writeFile(`${cwd}/.claude/skills/pair-loop/SKILL.md`, '')
+    })
+
+    test('leaves the exit code untouched on a successful (dry) run', async () => {
+      await dispatchCommand({ ...runConfig, scope: { root: '212' } }, fs)
+
+      expect(finalExitCode(process.exitCode)).toBe(0)
+    })
+
+    test('propagates a refusal as a thrown error, never as a silent zero', async () => {
+      // No perimeter: the handler refuses before spawning anything.
+      await expect(dispatchCommand(runConfig, fs)).rejects.toThrow(/No work perimeter declared/)
+    })
+  })
+
   test('dispatches kb-validate command', async () => {
     const config = {
       command: 'kb-validate' as const,

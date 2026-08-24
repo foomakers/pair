@@ -14,6 +14,11 @@
  * command layer (`#registry` and `#config` are imported BY commands, never the reverse), and
  * the engine map is command-layer data. Passing the ids in keeps this guard engine-agnostic —
  * the same reason the automation-policy label is never hardcoded in a skill (D18).
+ *
+ * Recorded, with the alternatives, in ADL
+ * `.pair/adoption/decision-log/2026-08-24-config-schema-guards-take-their-vocabulary-injected.md`
+ * — including why this guard is NOT one of `loader.ts`'s `FIELD_GUARDS` (those are the allowlist
+ * for what a remote source KB may declare, a different trust boundary).
  */
 
 /** What the block may declare. One field; anything else is a config mistake, not an extension. */

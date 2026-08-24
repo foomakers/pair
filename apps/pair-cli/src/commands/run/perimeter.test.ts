@@ -6,6 +6,9 @@ const base: PerimeterInput = {
   cwdDeclared: false,
   policyCap: 20,
   invocationKind: 'skill',
+  // pair-next's posture: the invocation can carry `--filter`. The pair-loop case (it cannot) is
+  // exercised explicitly below — that asymmetry is what round 1 finding 1 is about.
+  skillAcceptsFilter: true,
 }
 
 describe('createPerimeter', () => {
@@ -23,6 +26,43 @@ describe('createPerimeter', () => {
 
     expect(perimeter.filter).toBe('risk:green')
     expect(perimeter.filterSource).toBe('--filter')
+    expect(perimeter.filterDelivery).toBe('argument')
+  })
+
+  it('REFUSES --filter when the invocation cannot carry it (round 1, finding 1)', () => {
+    // pair-loop declares no `--filter` — it reads `## Eligibility` itself. Accepting the flag,
+    // dropping it, and then PRINTING it as the perimeter is the silent-lie this refusal removes.
+    expect(() =>
+      createPerimeter({ ...base, filter: 'risk:green', skillAcceptsFilter: false }),
+    ).toThrow(/--filter cannot be honoured/)
+    expect(() =>
+      createPerimeter({ ...base, filter: 'risk:green', skillAcceptsFilter: false }),
+    ).toThrow(/--skill pair-next/)
+  })
+
+  it('refuses --filter on a --prompt run, which carries no parameters at all', () => {
+    expect(() =>
+      createPerimeter({
+        ...base,
+        invocationKind: 'prompt',
+        cwdDeclared: true,
+        filter: 'risk:green',
+        skillAcceptsFilter: false,
+      }),
+    ).toThrow(/--filter cannot be honoured/)
+  })
+
+  it('reports a policy-read eligibility label as read by the skill, not as a passed filter', () => {
+    const perimeter = createPerimeter({
+      ...base,
+      root: '212',
+      eligibility: 'risk:green',
+      skillAcceptsFilter: false,
+    })
+
+    expect(perimeter.filter).toBe('risk:green')
+    expect(perimeter.filterSource).toBe('tech/automation.md')
+    expect(perimeter.filterDelivery).toBe('read-by-skill')
   })
 
   it("borrows the policy's eligibility label when no --filter is passed", () => {
@@ -37,6 +77,20 @@ describe('createPerimeter', () => {
 
     expect(perimeter.filter).toBe('risk:green')
     expect(perimeter.filterSource).toBe('--filter')
+    expect(perimeter.filterDelivery).toBe('argument')
+  })
+
+  it('never lets --filter shadow a policy label the skill will actually apply', () => {
+    // The exact scenario finding 1 named: `--filter risk:green` printed while pair-loop drives
+    // `risk:yellow` cards from the policy. It is now a refusal, not a misleading line.
+    expect(() =>
+      createPerimeter({
+        ...base,
+        filter: 'risk:green',
+        eligibility: 'risk:yellow',
+        skillAcceptsFilter: false,
+      }),
+    ).toThrow(/--filter cannot be honoured/)
   })
 
   it('requires an explicit --cwd for a --prompt run, which carries no scope parameters', () => {
@@ -85,7 +139,21 @@ describe('describePerimeter', () => {
     })
 
     expect(describePerimeter(perimeter)).toBe(
-      'Perimeter: root 212, filter risk:green (from tech/automation.md) · cwd /project · max 2 iteration(s) (from --max-iterations)',
+      'Perimeter: root 212, filter risk:green (from tech/automation.md, passed to the skill) · cwd /project · max 2 iteration(s) (from --max-iterations)',
+    )
+  })
+
+  it('says who applies the label when the skill reads it itself (round 1, finding 1)', () => {
+    const perimeter = createPerimeter({
+      ...base,
+      root: '212',
+      eligibility: 'risk:green',
+      requestedCap: 2,
+      skillAcceptsFilter: false,
+    })
+
+    expect(describePerimeter(perimeter)).toContain(
+      'eligibility risk:green (from tech/automation.md, applied by the skill itself)',
     )
   })
 

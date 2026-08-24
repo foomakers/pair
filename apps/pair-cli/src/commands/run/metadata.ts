@@ -4,7 +4,8 @@ export const runCommandMetadata = {
   usage: 'pair run [options]',
   examples: [
     'pair run --root 212 --max-iterations 5            # drive the #212 subtree, confirmations active',
-    'pair run --engine pi --filter risk:green --autonomous --max-iterations 3',
+    'pair run --engine pi --root 212 --autonomous --max-iterations 3   # eligibility comes from the policy',
+    'pair run --skill pair-next --filter risk:green --max-iterations 1 # --filter needs a skill that declares it',
     'pair run --skill pair-next --root 212 --dry-run   # resolve and print, spawn nothing',
     'pair run --prompt "/pair-next --root 212" --max-iterations 1',
   ],
@@ -18,7 +19,8 @@ export const runCommandMetadata = {
     { flags: '--root <id>', description: 'Scope root passed to the skill (pair-next --root)' },
     {
       flags: '--filter <tag>',
-      description: 'Label filter passed to the skill (pair-next --filter)',
+      description:
+        'Label filter, for a skill that declares one (pair-next). REFUSED for pair-loop, which reads `## Eligibility` from tech/automation.md itself',
     },
     { flags: '--cwd <dir>', description: 'Working directory every iteration runs in' },
     {

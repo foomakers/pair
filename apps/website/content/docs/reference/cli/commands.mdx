@@ -748,7 +748,7 @@ pair run [options]
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back — a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
 | `--root <id>`                   | Scope root, passed through as `pair-next --root`                                                      |
-| `--filter <tag>`                | Label filter, passed through as `pair-next --filter`                                                  |
+| `--filter <tag>`                | Label filter, for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
 | `--autonomous`                  | Explicit opt-in: run without confirmations                                                           |
@@ -762,6 +762,16 @@ Without a scope the run **refuses to start** — it never falls back to "the who
 perimeter is a scope (`--root`, `--filter`, or the policy's `## Eligibility` label), a working
 directory, and a hard iteration cap. A `--prompt` run carries no scope parameters, so it declares
 its boundary with an explicit `--cwd`.
+
+**`--filter` only applies to a skill that declares it.** `pair-next` takes `--filter`; `pair-loop`
+does **not** — it reads `## Eligibility` from `.pair/adoption/tech/automation.md` itself. So
+`--filter` with the default cascade (which resolves `pair-loop` when installed) is **refused**, with
+a message naming the three ways forward: drop it and let the policy decide, pass
+`--skill pair-next --filter <tag>` to scope the selector directly, or change the policy file. The
+alternative — accepting the flag and quietly not applying it — would print a perimeter naming a
+label the run does not use, and the printed perimeter is exactly what makes an unattended run
+auditable. The perimeter line therefore says which one it is: `filter <tag> (…, passed to the
+skill)` or `eligibility <tag> (…, applied by the skill itself)`.
 
 ### Autonomy and project trust are two separate opt-ins
 
@@ -782,9 +792,19 @@ fail-closed. Every iteration is a fresh process and therefore a fresh session, s
 re-evaluated each time and a card that becomes eligible mid-run is picked up on the next iteration.
 
 The loop stops when the skill reports itself finished (it printed no continue-token), an iteration
-fails, or the perimeter's cap is reached. Within one `pair run` process parallelism is **1**: the
+fails, or the perimeter's cap is reached. The continue-token is recognised only as a **line of its
+own** naming a concrete re-invocation — the documented template (`CONTINUE-TOKEN: pair-loop [--root
+<id>] …`) echoed by an agent that read the skill file is not a token, and does not extend the run. Within one `pair run` process parallelism is **1**: the
 command states the policy's `## Max Parallelism` ceiling and leaves batching to `pair-loop` —
 concurrency comes from running several driver processes.
+
+### Merge
+
+`pair run` never merges, on any path. What it reports is the **policy's** posture: with
+`## Auto-Advance` at its `(none)` default nothing is pushed or merged unattended, and with a tier
+declared there the invoked skill may push and merge that tier itself once its PR is review-approved
+and its gates are green. The command prints whichever of the two holds, rather than promising the
+gate is always human.
 
 ### Examples
 
@@ -793,10 +813,13 @@ concurrency comes from running several driver processes.
 pair run --root 212 --max-iterations 5
 
 # Unattended, on pi, scoped to green cards, autonomy explicit
-pair run --engine pi --filter risk:green --autonomous --max-iterations 3
+pair run --engine pi --root 212 --autonomous --max-iterations 3
 
 # See exactly what would run — resolution only, nothing spawned
 pair run --root 212 --dry-run
+
+# Scope the selector itself: --filter needs a skill that declares one
+pair run --skill pair-next --filter risk:green --max-iterations 1
 
 # A one-shot prompt on the default engine, bounded by its directory
 pair run --prompt "/pair-next --root 212" --cwd . --max-iterations 1

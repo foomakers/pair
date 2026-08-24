@@ -23,9 +23,21 @@ export const DEFAULT_AUDIT_LOCATION = 'automation/loop-audit.md'
 export const FAIL_SAFE_MAX_ITERATIONS = 1
 export const FAIL_SAFE_MAX_PARALLELISM = 1
 
+/** `## Auto-Advance`'s fail-closed default: nothing pushes or merges unattended. */
+export const AUTO_ADVANCE_OFF = '(none)'
+
 export interface AutomationPolicy {
   /** `## Eligibility`'s single label, verbatim. Absent ⇒ automation is off. */
   readonly eligibility?: string
+  /**
+   * `## Auto-Advance`'s switch, verbatim — the project's own eligibility tier, or `(none)`.
+   *
+   * Read but never ACTED on: the driver merges nothing on any path. It is read so the run can say
+   * truthfully whether the merge gate is human for THIS policy, instead of claiming it always is
+   * (review round 1, finding 3) — when a tier is declared, `pair-loop` itself may push and merge
+   * it, exactly as ADR-021 §5 and quality-model §4 describe.
+   */
+  readonly autoAdvance: string
   /** `## Stop Predicate`'s `<selector> ⇒ <condition>` line, verbatim (passed on, never evaluated here). */
   readonly stopPredicate?: string
   readonly maxIterations: number
@@ -44,6 +56,7 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
   const path = join(projectRoot, POLICY_PATH)
   if (!fs.existsSync(path)) {
     return {
+      autoAdvance: AUTO_ADVANCE_OFF,
       maxIterations: FAIL_SAFE_MAX_ITERATIONS,
       maxParallelism: FAIL_SAFE_MAX_PARALLELISM,
       auditLocation: DEFAULT_AUDIT_LOCATION,
@@ -62,6 +75,7 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
 
   return {
     ...(eligibility !== undefined && { eligibility }),
+    autoAdvance: readAutoAdvance(markdown, eligibility),
     ...(stop.predicate !== undefined && { stopPredicate: stop.predicate }),
     maxIterations: stop.maxIterations,
     maxParallelism: readMaxParallelism(markdown),
@@ -168,6 +182,65 @@ function readEligibility(markdown: string, warnings: string[]): string | undefin
     halt(`\`## Eligibility\` declares \`${value}\`, which juxtaposes several labels on one line`)
   }
   return value
+}
+
+/* ------------------------------------------------------------- auto-advance */
+
+/**
+ * `## Auto-Advance` — a switch, never a gate list.
+ *
+ * Fail-closed: absent file or absent section ⇒ `(none)`, nothing merges unattended. The only
+ * legal non-`(none)` value is the project's OWN `## Eligibility` tier: a card outside the
+ * eligibility filter is never selected, so naming any other tier here is unreachable
+ * configuration and HALTs rather than being silently ignored.
+ */
+function readAutoAdvance(markdown: string, eligibility: string | undefined): string {
+  const lines = sectionLines(markdown, 'Auto-Advance')
+  if (lines === undefined || lines.length === 0) return AUTO_ADVANCE_OFF
+
+  const value = lines[0]!
+  if (lines.length > 1) {
+    halt(
+      `\`## Auto-Advance\` carries ${lines.length} non-empty lines, but takes exactly one switch`,
+    )
+  }
+  if (value === AUTO_ADVANCE_OFF) return value
+  if (/\b(AND|OR|NOT)\b/.test(value)) {
+    halt(`\`## Auto-Advance\` declares \`${value}\`, but the switch is a tier, not an expression`)
+  }
+  const tiers = value.split(',').map(tier => tier.trim())
+  const foreign = tiers.filter(tier => tier !== eligibility)
+  if (foreign.length > 0 || new Set(tiers).size !== tiers.length) {
+    halt(
+      `\`## Auto-Advance\` declares \`${value}\`, which is not this project's \`## Eligibility\` ` +
+        `tier (${eligibility ?? 'none declared'}) — a tier outside eligibility is never selected, ` +
+        `so it could never advance`,
+    )
+  }
+  return value
+}
+
+/**
+ * What the run can honestly say about merging (review round 1, finding 3).
+ *
+ * The DRIVER never merges — that is unconditional and structural (no merge command is
+ * constructible on any path). Whether a MERGE happens at all during the run is a different
+ * question, and its answer is the policy's: with a tier declared under `## Auto-Advance`, the
+ * invoked skill may push and merge that tier itself. The old line claimed "the gate stays human"
+ * in both cases, which was false in the second.
+ */
+export function describeMergePosture(policy: AutomationPolicy): string {
+  if (policy.autoAdvance === AUTO_ADVANCE_OFF) {
+    return (
+      `Merge: the driver never merges, and \`## Auto-Advance\` is ${AUTO_ADVANCE_OFF} — ` +
+      `nothing is pushed or merged unattended; every gate stays human (AC10)`
+    )
+  }
+  return (
+    `Merge: the driver never merges (AC10), but \`## Auto-Advance\` declares ` +
+    `${policy.autoAdvance} — the invoked skill may push and merge that tier itself once its PR ` +
+    `is review-approved and its gates are green (ADR-021 §5, quality-model §4)`
+  )
 }
 
 /* ------------------------------------------------------------ stop predicate */
