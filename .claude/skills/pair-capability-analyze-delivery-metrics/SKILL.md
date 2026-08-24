@@ -86,3 +86,114 @@ A missing or malformed adoption file is treated as absent: warn, fall back to th
 3. **Act**: **Low sample** — fewer than the guideline's threshold (`N < 5`) in a family ⇒ report the **raw values and the count**, state `low sample (N < 5)`, and compute **no trend** for it. A trend drawn from three items is noise presented as a signal, so the warning travels with the figure wherever it appears, not in a footnote.
 4. **Act**: **Zero items** in a family ⇒ `no data for the period` for that family, with the reason (empty population vs. absent source). The panel is still produced.
 5. **Verify**: Each family holds either a figure with its trend, or an explicit `low sample` / `no data` / `not available` state with a reason — and every threshold, clock and aggregation used is the guideline's. No family is left blank, and no trend exists beside a low-sample figure.
+
+### Step 7: Render and Write the Panel
+
+The panel's path, period key, in-place idempotency, headline-first shape, empty-period, not-writable and coverage behavior all follow the one [report-panel convention](../../../.pair/knowledge/guidelines/collaboration/working-area.md) — shared with the cost panel, one reports-area pattern for the whole KB. That guideline is **authoritative**; the mechanics below are the beats this step acts on, and on any conflict the guideline wins.
+
+1. **Act**: Render **headline-first** (D22): the three headline figures with their trends at the top, readable in about one screen, then the per-defect, per-PR and per-signal breakdowns in collapsed `<details>` sections. The headline also carries the population, the exclusions (closed-unmerged, excluded authors), the unmapped count, the still-open count, and a link to the [delivery-metrics guideline](../../../.pair/knowledge/guidelines/quality-assurance/delivery-metrics.md) for the definitions — the panel points at them instead of restating them.
+2. **Act**: Record the **input provenance** in the headline: the resolved PM tool and code host, the guideline's revision, the adoption file's revision. A resolved-input revision keeps `same inputs ⇒ same content` intact; a wall-clock `generated at` line would break it and is never added.
+3. **Act**: Write to the Step 1 path, creating the directory when absent. The **period key** identifies the file: a re-run for the same period **updates that panel in place** — one file per period, never a second file, never appended. This is the direct write of an operational artifact (D14), the same exception the cost panel and the security audit use; no adoption content is ever written here.
+4. **Act**: **Coverage never regresses.** Before overwriting, read the panel already at that path and compare, for the same period and the same input revision, **how many items each panel actually processed** (the headline's processed count on both sides — not which one looks complete: an open period's denominator grows, so a panel that was complete when written can cover fewer items than a later partial one). If the panel on disk processed **more**, keep it: either merge in the rows this run adds where they are separable **and recompute the headline over the union** (every figure recounted, every merged-in id struck from the unprocessed list, so no table contradicts the line above it), or leave the file untouched. Report the shortfall in the run output, not in the file.
+5. **Act**: **Empty period** — still render and write the panel, headlined `no data for the period` **with the reason** the inputs are absent (no defects closed and no PRs merged in the window; or a window whose only PRs were closed unmerged, which the headline states as `Excluded: N closed unmerged` rather than contradicting itself). A partly-empty window keeps the families that do have data and marks the others per Step 6.4.
+6. **Act**: **Partial coverage** — write the panel with `Coverage: N of M items processed`, the reason, and the unprocessed ids **all in that one headline line**, which is the only place they appear: an unprocessed item gets no row and counts in no figure. A partial panel keyed to the full period is legitimate exactly while it says so.
+7. **Act**: **Reports area not writable** (read-only checkout, permissions): present the panel **inline** in the output with a save hint; the run succeeds.
+8. **Verify**: Exactly one panel exists for the period at the resolved path (created, updated in place, or deliberately kept by the no-regression rule), or the inline degradation was reported instead; the headline carries the provenance line, the definitions link, and — whenever fewer than all items were processed — the `Coverage` line with its unprocessed ids. The panel on disk is never less complete than it was before the run.
+
+### Step 8: Emit the Run Output
+
+1. **Act**: Render the run block per Output Format below — the period, the three families, the panel's disposition, the data state.
+2. **Verify**: The output names exactly one panel path and one disposition, states every degradation that fired, and asserts no verdict: this skill reports, it blocks nothing and it writes nothing else.
+
+## Output Format
+
+```text
+DELIVERY METRICS (report-only — writes exactly one file: the period panel):
+├── Period:   [<period-key>] — [start .. end, UTC]
+├── Bugs:     [<median> (p75 <p75>) over N defects — <trend> | low sample (N < 5) — raw values | no data — <reason>]
+├── PRs:      [<median> (p75 <p75>) over N merged — <trend> | low sample (N < 5) — raw values | no data — <reason>] (N closed unmerged, N excluded authors)
+├── Adoption: [process N% · classification N% · review N% | not available — <which signal, why>]
+├── Mapping:  [N defects, N generic, N unmapped — counted as generic]
+├── Panel:    [.pair/working/reports/metrics/<period-key>-delivery-metrics.md — created | updated in place | kept (existing panel covers more of the period — no coverage regression) | inline (reports area not writable)]
+└── Data:     [ok | partial — Coverage N of M | no data for the period — <reason>]
+```
+
+The panel itself (headline-first, D22):
+
+```markdown
+# Delivery Metrics — <period-key>
+
+**Bug resolution**: <median> (p75 <p75>) <trend> · **PR lead time**: <median> (p75 <p75>) <trend> · **Adoption**: process N% · classification N% · review N%
+**Population**: N defects closed, N PRs merged (<start> .. <end>, UTC) · **Excluded**: N closed unmerged, N excluded authors · **Unmapped**: N counted as generic · **Open at period end**: N defects
+**Coverage**: N of M items processed — <reason> — unprocessed: #ID, #ID (omit the whole line when N = M; the unprocessed ids live here and nowhere else — such an item gets no row below and counts in no figure above)
+**Inputs**: PM tool <name> + code host <name> · definitions `delivery-metrics.md` @ <revision> · adoption `tech/way-of-working.md` @ <revision> (resolved inputs, not a run timestamp)
+
+_Definitions, clocks and aggregation rules: `.pair/knowledge/guidelines/quality-assurance/delivery-metrics.md` (linked relative to the panel). Figures are medians with p75 beside them, never means; a family under 5 items reads `low sample` and carries no trend._
+
+<details>
+<summary>Bug resolution — per defect</summary>
+
+| Issue | Created | Closed | Resolution | Reopened | Mapped by |
+| ----- | ------- | ------ | ---------- | -------- | --------- |
+| #ID | <ts> | <ts> | <hours> | N | [adoption `bug-label` | tool default | unmapped → generic] |
+
+</details>
+
+<details>
+<summary>PR lead time — per PR</summary>
+
+| PR | Opened | Merged | Lead time | Draft share | Author |
+| -- | ------ | ------ | --------- | ----------- | ------ |
+| #ID | <ts> | <ts> | <hours> | [N% | not exposed] | [human | excluded (bot)] |
+
+</details>
+
+<details>
+<summary>Adoption — per signal</summary>
+
+| Signal | Ratio | Numerator / denominator | Source |
+| ------ | ----- | ----------------------- | ------ |
+| process coverage / classification coverage / review coverage | [N% | not available] | N / N | <tool + field> |
+
+</details>
+```
+
+An **empty window** renders the same panel with the headline `no data for the period` plus the reason and no breakdown tables. A window whose items could not all be processed still writes its panel, carrying the `Coverage` line — there is no window size that produces no panel — except where a **more complete** panel for the same period already exists, which is kept instead (Step 7.4).
+
+## Composition Interface
+
+**Standalone**: this skill composes nothing and is composed by nothing. It consumes what other capabilities already produced (tracker items, PR bodies, review checks) and hands back the panel path.
+
+- **Trigger, by design: on demand only** — a human runs it for a retro or a periodic delivery review, and the `next` catalog row is its discovery surface. **Cadence stays the caller's concern** (D18): an automation loop may drive it every period, and nothing here schedules anything.
+- **Not a review input.** It is a retro artifact over a window of _merged_ work, not a judgment on one change — `review` never composes it, and no merge decision reads it. A single PR's own risk/cost assessment is `classify`'s and `assess-cost`'s.
+- **Non-interactive**: every step continues on the information it has (announcing counts rather than asking), so an unattended run never stalls waiting for an answer. The one stop is Step 3's HALT, and Step 1's request for an intended window when `$period` cannot be parsed.
+
+## Edge Cases
+
+- **Sparse period** (few defects/PRs): the figure is reported with `low sample (N < 5)` and **no trend** — the panel never draws a trend line through three points (Step 6.3).
+- **Empty period**: the panel is written, headlined `no data for the period` with the reason — never a silent skip and never a failed run (Step 7.5).
+- **PM tool or code host unreachable**: **HALT** with the tool and reason, **nothing written** — no panel, no partial file (Step 3.2).
+- **Tracker with no PR surface** (filesystem backlog, no code host): PR-side families read `not available`; the run continues and the panel says which surface was missing (Step 3.3).
+- **Unlabeled bug issues**: the adoption-declared mapping applies, else the tool's native defect marker, else the issue is counted as **generic** with the count stated in the panel (Step 5).
+- **Reopened issue**: one row, resolution measured to the last close inside the window, reopen count carried on the row (Step 5.3).
+- **PR closed without merging**: excluded from lead time and counted as `closed unmerged` in the headline — it never shipped, so it has no lead time (Step 4.1).
+- **Large window**: no item cap and no refusal — items are processed one at a time and discarded once their row is retained (Step 4.2).
+- **Partial re-run over a more complete panel**: the in-place update is skipped, the existing panel kept, and the shortfall reported in the run output (Step 7.4).
+- **Adoption signal source absent** (no PR template, tag projection off, review check unregistered): that ratio reads `not available`, never `0%` (Step 6.1).
+- **Reports area not writable**: the panel is presented inline with a save hint; the run succeeds (Step 7.7).
+
+## Graceful Degradation
+
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (adoption file missing → run against KB defaults) for the standard scenarios. Additional cases:
+
+- **delivery-metrics guideline absent** (KB partially installed): **HALT** (Step 0) — the clocks, aggregation and thresholds _are_ the rule set, so a "resolution time" computed without them is a number nobody can compare. Report which file to install.
+- **working-area guideline absent**: apply the panel mechanics as summarized in Step 7 (period-keyed filename, in-place update, headline-first, coverage rules) and note the reduced reference — never HALT.
+- **No `## Delivery Metrics` adoption section**: run on the per-tool defaults for the bug mapping and the author exclusions, and say so in the panel's provenance line.
+- **PM tool unreachable**: HALT with nothing written (Step 3.2) — a panel over the items that happened to be reachable would misreport every median.
+
+## Notes
+
+- **Report-only, one file** — the period panel under `.pair/working/reports/metrics/` (D14 operational artifact). No adoption content, no backlog items, no verdict, no merge authority; the sources are read read-only, including the tracker.
+- **The definitions live in the guideline** (D17/D21). Adding a metric family or a tracker is a guideline/adoption change; this skill's steps stay the same (R2.12).
+- **Idempotent by period key** — see the [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): a re-run for the same period updates that one panel in place, and the same inputs produce the same content.
+- **D22** (headline in ~1 screen + collapsed details) is the rendering shape both the run output and the panel honor.
