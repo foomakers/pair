@@ -1,3 +1,4 @@
+import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
@@ -118,7 +119,10 @@ export async function handleRunCommand(
   fs: FileSystemService,
   deps: RunHandlerDependencies = {},
 ): Promise<number> {
-  const cwd = config.cwd ?? fs.currentWorkingDirectory()
+  // ABSOLUTE, always: the perimeter's directory is printed as the run's containment boundary and
+  // probed against the engine's trust store, and `--cwd .` is neither legible as a boundary nor
+  // comparable against an absolute trust-store key.
+  const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
   const resolved = resolveRun(config, fs, cwd)
 
   report(resolved, resolved.policy.warnings)

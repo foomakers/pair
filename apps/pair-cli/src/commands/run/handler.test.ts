@@ -145,6 +145,17 @@ describe('handleRunCommand — resolution reporting', () => {
     expect(printed).toContain('Merge: never performed by the driver')
   })
 
+  it('normalises the perimeter directory to an absolute path (a boundary must be legible)', async () => {
+    const output = captureLog()
+
+    await handleRunCommand(
+      parseRunCommand({ root: '212', cwd: '/project/./sub/..', dryRun: true }),
+      projectFs(),
+    )
+
+    expect(output()).toContain('cwd /project ')
+  })
+
   it('warns that automation is off when no policy file declares eligibility', async () => {
     const output = captureLog()
 
