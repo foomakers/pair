@@ -184,9 +184,24 @@ Ask: _"Proceed with review?"_ — **only in an interactive run**. A **dispatched
 ### Step 2.6: Architecture (Coupling) Assessment
 
 1. **Check**: Is `/pair-capability-assess-coupling` installed?
-2. **Skip**: If not installed → the **Architecture (Coupling)** section reads **not assessed** explicitly; move to Phase 3.
+2. **Skip**: If not installed → the **Architecture (Coupling)** section reads **not assessed** explicitly; move to Step 2.7.
 3. **Act**: Compose `/pair-capability-assess-coupling` with `$scope: diff`. It returns a 1-line balance verdict on the integrations the diff touches (integration strength, socio-technical distance, volatility) + collapsed findings (D22).
 4. **Verify**: Verdict + findings recorded — feed the **Architecture (Coupling)** section of the review body (Step 5.1) and the **Coupling balance** dimension of the Step 1.5 matrix (`/pair-capability-classify` folds it in **raise-only**, same in-place body re-render + tag re-apply rule as Step 2.4). Does not itself HALT.
+
+### Step 2.7: Bug-Fix Red Test (bug fixes only)
+
+A bug is reproduced by a failing test **before** it is fixed (`AGENTS.md` § Bug Resolution Workflow). That is already policy; this step is where it is **verified** rather than assumed — on bug fixes only. A feature PR carries no test-first obligation, and the exemption is part of the rule, not a gap in it.
+
+1. **Check**: Is the Step 1.3 review type `bug` — or does the PR (or its story) reference a bug or a defect? An **ambiguous** classification defaults to **applying** the check, and the decision is recorded in the section.
+2. **Skip**: If the PR is not a bug fix, the **Bug fix — Red test before fix** section reads **not applicable — not a bug fix** — written out, never dropped; move to Phase 3.
+3. **Act**: Read the diff for the test that reproduces the bug and record the **evidence**, not a yes/no — an unevidenced tick is the rubber stamp this item exists to prevent:
+   - **Which test** — `file::test name` — and what it asserts about the reported behavior.
+   - **Failing-before / passing-after** — the test lands in this PR at or before the fix commit and exercises the fixed path (a test that would pass on the unfixed code is not a reproduction).
+   - **Mixed PR** (bug fix + feature): apply the check to the bug-fix portion only; the feature portion is exempt.
+   - **Genuinely untestable fix** (a doc typo, a pure-formatting change classified as a fix): record the one-line rationale why an automated test is not the proof — verdict **not applicable — rationale recorded**. The escape hatch is an explicit reviewer statement, never a silent pass.
+
+   This is **reviewer judgment** aided by the prompt: no automated commit-order analysis runs here, and reproduction is never inferred from a commit message or a test-file name alone.
+4. **Verify**: Verdict + evidence recorded — feed the **Bug fix — Red test before fix** section of the review body (Step 5.1, 1 line + `<details>`). A bug-fix PR with **no reproducing test** and no recorded rationale is a **Major** finding (the fix has not proven it addresses the bug), carried into the Step 5.2 decision under the same severity rules as any other Major. Does not itself HALT.
 
 ## Phase 3: Adoption Compliance
 
@@ -244,6 +259,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
      - **Security — input validation, output handling, authentication, authorization, introduced vulnerabilities** (five verdicts from `/pair-capability-assess-security`, Step 2.4)
      - **Cost** — `cost:*` class + signals (from `/pair-capability-assess-cost`, Step 2.5)
      - **Architecture (Coupling)** — balance verdict (from `/pair-capability-assess-coupling`, Step 2.6; "not assessed" when the skill is absent)
+     - **Bug fix — Red test before fix** — the reproducing-test verdict + evidence on a bug-fix PR (Step 2.7); **not applicable — not a bug fix** on a feature PR, written out rather than dropped
    - **Details** (collapsed): findings by severity + positive feedback (Phase 2); functionality / AC coverage; testing & quality gates (from /pair-capability-verify-quality); adoption compliance with degradation level (Phase 3); tech debt (from /pair-capability-analyze-debt); documentation (from /pair-capability-verify-done).
 
 ### Step 5.2: Make Review Decision
@@ -253,7 +269,7 @@ Based on compiled findings:
 | Decision              | Condition                                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | **APPROVED**          | No open Critical, Major, or Minor issues. All AC met. Quality gates pass (a red gate caps the decision — Step 2.1). |
-| **CHANGES-REQUESTED** | Critical issues found, missing ADRs, any **introduced** red security finding from `/pair-capability-assess-security`, failing tests, AC not met. A **red** `cost:*` class does not itself block — it surfaces a **blocking human sign-off** requirement in the Verdict (the human, not the skill, gates on cost). |
+| **CHANGES-REQUESTED** | Critical issues found, missing ADRs, any **introduced** red security finding from `/pair-capability-assess-security`, failing tests, AC not met. A bug-fix PR with **no reproducing test** and no recorded rationale (Step 2.7) is a Major finding and blocks on the same bar as any other Major. A **red** `cost:*` class does not itself block — it surfaces a **blocking human sign-off** requirement in the Verdict (the human, not the skill, gates on cost). |
 
 ### Step 5.3: Submit Review
 
@@ -313,6 +329,7 @@ REVIEW COMPLETE:
 ├── Security:   [green | yellow | red — N findings, N introduced | not assessed]
 ├── Cost:       [green | yellow | orange | red | not assessed]
 ├── Coupling:   [green | yellow | red | not assessed — skill absent]
+├── Red test:   [green — <test> | red — no reproducing test | not applicable — not a bug fix | not applicable — rationale recorded]
 ├── Quality:    [PASS | FAIL — N gates]
 ├── DoD:        [N/N criteria met]
 ├── Adoption:   [Level N — summary]

@@ -88,6 +88,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 2. **Task completion** — confirm all tasks delivered as claimed
 3. **Business value** — implementation delivers expected value
 4. **Testing coverage** — adequate per [testing strategy](../guidelines/testing/test-strategy/README.md)
+5. **Bug-fix red test** — on a **bug fix**, verify the test that reproduces the bug exists and lands with or before the fix: name it (`file::test name`) and how the diff shows failing-before / passing-after. A **feature** PR is exempt (no test-first obligation); a genuinely untestable fix (doc typo, pure formatting) needs an explicit recorded rationale instead. Reviewer judgment aided by the checklist prompt — no automated commit-order analysis. See the **Bug fix — Red test before fix** section of the [code review template](../guidelines/collaboration/templates/code-review-template.md)
 
 ### Phase 3: Review Report & Decision
 
