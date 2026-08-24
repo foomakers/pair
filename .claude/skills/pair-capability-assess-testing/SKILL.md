@@ -1,7 +1,7 @@
 ---
 name: pair-capability-assess-testing
 description: "Evaluates and recommends the testing strategy — framework, pyramid distribution, coverage targets, TDD approach — when the choice is open. Doesn't write tests itself. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Evaluate and recommend the testing strategy: framework, pyramid distribution, co
 | Argument  | Required | Description                                                                          |
 | --------- | -------- | ------------------------------------------------------------------------------------ |
 | `$choice` | No       | Override: skip assessment, use this testing framework directly (e.g. `vitest`, `jest`) |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -30,9 +31,9 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify). Paths A and B carry their `$approval` qualification **there** — this skill only names the prompt wording its Path A uses, and qualifies the round Path C adds below.
 
-- **Path A delta**: override argument is `$choice`. Confirmation prompt: "Testing framework override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if tech-stack.md already has a testing section with a different framework. On confirm, proceed to Step 2.
+- **Path A delta**: override argument is `$choice`. Confirmation prompt (`$approval: interactive`): "Testing framework override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if tech-stack.md already has a testing section with a different framework. On confirm, proceed to Step 2.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — populated **Testing** section. Decision-record check scans [adoption/decision-log/](../../../.pair/adoption/decision-log) or [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for `*testing*` files; if missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
 - **Path C delta**: proceed to Step 2 (full assessment mode).
 
@@ -70,7 +71,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - **Pyramid**: Unit [N%] > Integration [N%] > E2E [N%]
    > - **Coverage target**: [N%] minimum
 
-4. **Verify**: Developer approves the strategy.
+4. **Verify** (`$approval: interactive`): Developer approves the strategy. Under `auto` the strategy above is accepted as-is and reported in the Output Format, never asked.
 
 ### Step 4: Render Adoption Proposal
 
@@ -118,7 +119,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 ## Edge Cases
 
-- **Argument conflicts with adoption**: Warn developer, ask for confirmation. If confirmed, the proposal supersedes the previous decision — the caller records the new decision.
+- **Argument conflicts with adoption**: Warn developer, ask for confirmation (`$approval: interactive`). If confirmed, the proposal supersedes the previous decision — the caller records the new decision. Under `auto` the caller's explicit `$choice` is accepted (it outranks adoption by the cascade's precedence) and the conflict is reported, not asked.
 - **tech-stack.md exists but no testing section**: Render content that adds the testing section; the caller's write preserves all other content.
 - **Framework incompatible with adopted language**: HALT — warn developer of incompatibility, suggest compatible alternatives.
 - **Decision record already exists for same scope+decision**: Report "already recorded" — no proposal to persist (no duplicates).

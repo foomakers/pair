@@ -1,7 +1,7 @@
 ---
 name: pair-capability-assess-pm
 description: "Evaluates and recommends which project management tool fits this project (Jira, Linear, GitHub Projects, etc.) when the choice is still open — proposes a choice, doesn't configure anything. /pair-capability-setup-pm configures the tool once picked; otherwise the caller persists the proposal via /pair-capability-record-decision."
-version: 0.5.1
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Evaluate and recommend the project management tool. Follows the resolution casca
 | Argument  | Required | Description                                                                  |
 | --------- | -------- | ---------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this PM tool directly (e.g. `github`, `filesystem`) |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -34,7 +35,7 @@ The rendered adoption content is destined for this section — the caller (or `/
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify). Paths A and B carry their `$approval` qualification **there** — it is never restated per skill; only the rounds Path C adds below are qualified here.
 
 - **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
 - **Path B delta**: adoption check is a PM tool configuration in [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md). If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
@@ -72,7 +73,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
 
    > No implementation guide available for **[tool]**. Setup will be manual.
 
-4. **Verify**: Developer approves.
+4. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
 
 ### Step 4: Delegate Setup or Render Proposal
 

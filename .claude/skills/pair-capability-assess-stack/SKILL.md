@@ -1,7 +1,7 @@
 ---
 name: pair-capability-assess-stack
 description: "Evaluates and recommends the tech stack — languages, frameworks, database, libraries, versions — when the choice is open: full evaluation at bootstrap, a single new dependency during implementation ('should we add Redis', 'is this new dependency consistent with our stack'), or composed by /pair-process-review when it finds an unlisted dependency in code. Doesn't audit code already written (that's /pair-capability-verify-adoption). Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -15,6 +15,7 @@ Evaluate and recommend the technology stack: languages, frameworks, runtime, dat
 | --------- | -------- | ---------------------------------------------------------------------------------------- |
 | `$choice` | No       | Technology to assess (e.g. `zod@3.22`, `node@20`, `react@18.2`). Format: `name@version`. |
 | `$mode`   | No       | Lifecycle mode: `bootstrap`, `implementation`, `review`. Auto-detected if omitted.       |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -58,9 +59,9 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify). Paths A and B carry their `$approval` qualification **there** — this skill only names its own Path A validation, and qualifies the per-mode rounds Path C adds below.
 
-- **Path A delta** (implementation or bootstrap with `$choice`): parse `$choice` as `name@version`; in implementation mode, validate against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for version incompatibility, duplicate entry, or category conflict — warn and offer resolve-or-reject if found. In bootstrap mode with a choice, just confirm. Proceed to Step 3.
+- **Path A delta** (implementation or bootstrap with `$choice`): parse `$choice` as `name@version`; in implementation mode, validate against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for version incompatibility, duplicate entry, or category conflict — warn and offer resolve-or-reject if found (`$approval: interactive`; under `auto` the incompatibility is **reported unresolved** to the caller, which owns the resolve-or-reject call — this skill writes nothing, so there is nothing to stop). In bootstrap mode with a choice, just confirm. Proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) with populated core sections. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
 - **Path C delta** (bootstrap mode): proceed to Step 2 (full assessment).
 
@@ -107,7 +108,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > | Language | [name] | [vX.Y] | [reason] |
    > | ... | ... | ... | ... |
 
-1. **Verify**: Developer approves the full stack.
+1. **Verify** (`$approval: interactive`): Developer approves the full stack. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
 
 #### Implementation Mode (add single entry)
 
@@ -118,7 +119,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - Compatible: [yes/no — details]
    > - Rationale: [developer provides or auto-inferred]
 
-2. **Verify**: Developer approves.
+2. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the addition above is accepted as-is and reported in the Output Format, never asked.
 
 #### Review Mode (unlisted dependency detected)
 
@@ -134,7 +135,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
 
 2. **Act**: If approved → treat as implementation mode addition (render entry proposal).
 3. **Act**: If rejected → report back to caller (e.g. /pair-process-review marks as CHANGES-REQUESTED).
-4. **Verify**: Developer decision captured.
+4. **Verify** (`$approval: interactive`): Developer decision captured. Under `auto` the approve-or-reject call is **not** made here: it is a judgement with no safe default, so the finding is emitted **unresolved** to the caller (which is `/pair-process-review` itself in this mode) and its policy owns it — output-only means there is no write to stop.
 
 ### Step 4: Render Adoption Proposal
 
@@ -213,7 +214,7 @@ When invoked **independently**: mode auto-detected. The skill returns the propos
 
 ## Edge Cases
 
-- **Argument conflicts with adoption**: Warn developer with details, ask for confirmation.
+- **Argument conflicts with adoption**: Warn developer with details, ask for confirmation (`$approval: interactive`). Under `auto` the caller's explicit `$choice` is accepted (it outranks adoption by the cascade's precedence) and the conflict is reported, not asked.
 - **Version conflict**: Library requires runtime version different from adopted → warn, propose resolution (upgrade runtime or reject library).
 - **Duplicate entry**: Same library already in stack → check if version differs. If same, skip. If different, treat as version update.
 - **Multiple skills rendering same file**: Section ownership prevents conflicts. Each skill renders only its sections; the caller's write preserves the rest.

@@ -1,7 +1,7 @@
 ---
 name: assess-infrastructure
 description: "Evaluates and recommends infrastructure strategy — cloud provider, CI/CD pipeline, deployment pattern, IaC, environments — when the choice is open. Output-only: emits a proposal + target for /record-decision to persist."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Evaluate and recommend infrastructure strategy: cloud provider, CI/CD pipeline, 
 | Argument  | Required | Description                                                                |
 | --------- | -------- | -------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this infrastructure choice directly (e.g. `github-actions`, `aws`) |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -30,7 +31,7 @@ The rendered adoption content is destined for this file — the caller writes it
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify). Paths A and B carry their `$approval` qualification **there** — it is never restated per skill; only the rounds Path C adds below are qualified here.
 
 - **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md), populated. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/record-decision`).
@@ -66,7 +67,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - Cloud: [provider or "none"] — [rationale]
    > - IaC: [tool or "not needed"] — [rationale]
 
-3. **Verify**: Developer approves.
+3. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
 
 ### Step 4: Render Adoption Proposal
 

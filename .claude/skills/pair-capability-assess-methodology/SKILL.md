@@ -1,7 +1,7 @@
 ---
 name: pair-capability-assess-methodology
 description: "Evaluates and recommends the development methodology (Scrum, Kanban, Lean, SAFe, hybrid) — iterations, ceremonies, flow — when the choice is open. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Evaluate and recommend the development methodology: Scrum, Kanban, Lean, Waterfa
 | Argument  | Required | Description                                                                     |
 | --------- | -------- | ------------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this methodology directly (e.g. `kanban`, `scrum`) |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -30,7 +31,7 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify). Paths A and B carry their `$approval` qualification **there** — it is never restated per skill; only the rounds Path C adds below are qualified here.
 
 - **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) containing a methodology reference (e.g. "Kanban", "Scrum"). If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
@@ -70,7 +71,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
 
 4. **Act**: If two methodologies score within 10%, present both with trade-off analysis.
 
-5. **Verify**: Developer approves.
+5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
 
 ### Step 4: Render Adoption Proposal
 
