@@ -2,11 +2,11 @@
 
 ## Date
 
-2026-07-30
+2026-07-30 (amended 2026-08-24)
 
 ## Status
 
-Active
+Active (amended 2026-08-24 — WHERE the ratchet lives and HOW it is invoked changed with [ADR-022](../tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md); every decision below about WHAT it does — PR-not-push, the credential model, loop termination, monotonicity — is unchanged)
 
 ## Category
 
@@ -64,7 +64,7 @@ Both must be decided against the **post-#234 regime**, not against today's unpro
 ## Consequences
 
 - `coverage-gate.sh` is untouched in behaviour: it still never persists. Only its PERSISTENCE comment is updated to point at the new, decided model instead of "tracked separately".
-- The ratchet logic lives in `packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts` (unit-tested, white-box) per [2026-07-13-gate-tooling-code-in-tested-modules.md](./2026-07-13-gate-tooling-code-in-tested-modules.md); the CI step and the package's `coverage:ratchet` script are thin entrypoints, and the CLI is verified end-to-end by the `coverage-gate.sh` smoke scenario (dry-run), never by a unit test. The git/gh command sequence is data (a plan the module returns), so its non-negotiable properties — one push, to the ratchet ref only, leaseable, no `git add -A`, no branch switch, always restored — are asserted by tests rather than reviewed by eye in YAML.
+- The ratchet logic lives in a unit-tested, white-box module per [2026-07-13-gate-tooling-code-in-tested-modules.md](./2026-07-13-gate-tooling-code-in-tested-modules.md); the CI step is a thin entrypoint, and the CLI is verified end-to-end by the `coverage-gate.sh` smoke scenario (dry-run), never by a unit test. **Amended 2026-08-24** ([ADR-022](../tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md)): that module was `packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts`, runnable only as `pnpm --filter @pair/knowledge-hub coverage:ratchet` — i.e. only inside this repository. It is now `apps/pair-cli/src/commands/coverage-ratchet/ratchet.ts` behind the shipped `pair-cli coverage-ratchet` command, which pair's own CI step and an adopter's generated step both invoke. The module/entrypoint split this bullet asserts is unchanged; what changed is that the entrypoint is now reachable by anyone who installed the CLI. The git/gh command sequence is data (a plan the module returns), so its non-negotiable properties — one push, to the ratchet ref only, leaseable, no `git add -A`, no branch switch, always restored — are asserted by tests rather than reviewed by eye in YAML.
 - Adopters who enable the flag must provision `COVERAGE_RATCHET_TOKEN`; without it the step warns on every base-branch push. Documented on the adoption line and in the KB guideline, not only in the workflow YAML.
 - A merged ratchet PR produces a base-branch push whose subject carries the marker, so the next run skips — and even without the marker the fixpoint yields no raise. Both are demonstrated in the smoke scenario.
 - One extra open PR may exist at a time (`chore/coverage-baseline-ratchet` is create-or-update, never a second PR per raise).
