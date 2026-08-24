@@ -60,41 +60,57 @@ const MISSING_PROMPT_SCOPE_MESSAGE =
  * so its declared boundary is an explicit `--cwd`, which is what the iterations are confined to.
  */
 export function createPerimeter(input: PerimeterInput): Perimeter {
-  const filterSource = input.filter
-    ? ('--filter' as const)
-    : input.eligibility
-      ? ('tech/automation.md' as const)
-      : undefined
-  const filter = input.filter ?? input.eligibility
+  const filter = resolveFilter(input)
+  assertScopeDeclared(input, filter.value)
 
-  if (input.invocationKind === 'skill' && input.root === undefined && filter === undefined) {
-    throw new Error(MISSING_SCOPE_MESSAGE)
-  }
-  if (input.invocationKind === 'prompt' && !input.cwdDeclared) {
-    throw new Error(MISSING_PROMPT_SCOPE_MESSAGE)
-  }
+  const cap = resolveCap(input)
 
+  return {
+    ...(input.root !== undefined && { root: input.root }),
+    ...(filter.value !== undefined && { filter: filter.value }),
+    ...(filter.source && { filterSource: filter.source }),
+    cwd: input.cwd,
+    maxIterations: cap.maxIterations,
+    capSource: cap.source,
+  }
+}
+
+/** `--filter` first, then the policy's eligibility label — borrowed verbatim, never rewritten. */
+function resolveFilter(input: PerimeterInput): {
+  value?: string
+  source?: Perimeter['filterSource']
+} {
+  if (input.filter !== undefined) return { value: input.filter, source: '--filter' }
+  if (input.eligibility !== undefined) {
+    return { value: input.eligibility, source: 'tech/automation.md' }
+  }
+  return {}
+}
+
+function assertScopeDeclared(input: PerimeterInput, filter: string | undefined): void {
+  if (input.invocationKind === 'prompt') {
+    if (!input.cwdDeclared) throw new Error(MISSING_PROMPT_SCOPE_MESSAGE)
+    return
+  }
+  if (input.root === undefined && filter === undefined) throw new Error(MISSING_SCOPE_MESSAGE)
+}
+
+/**
+ * A flag may only NARROW the policy's cap; configuration can never widen what a flag asked
+ * for either. `min` is both halves of that rule in one expression.
+ */
+function resolveCap(input: PerimeterInput): {
+  maxIterations: number
+  source: Perimeter['capSource']
+} {
   if (!Number.isInteger(input.policyCap) || input.policyCap <= 0) {
     throw new Error(
       `Invalid iteration cap from the automation policy: ${String(input.policyCap)} (must be a positive integer)`,
     )
   }
-
-  // A flag may only NARROW the policy's cap; configuration can never widen what a flag asked
-  // for either. `min` is both halves of that rule in one expression.
-  const [maxIterations, capSource]: [number, Perimeter['capSource']] =
-    input.requestedCap !== undefined && input.requestedCap < input.policyCap
-      ? [input.requestedCap, '--max-iterations']
-      : [input.policyCap, 'tech/automation.md']
-
-  return {
-    ...(input.root !== undefined && { root: input.root }),
-    ...(filter !== undefined && { filter }),
-    ...(filterSource && { filterSource }),
-    cwd: input.cwd,
-    maxIterations,
-    capSource,
-  }
+  return input.requestedCap !== undefined && input.requestedCap < input.policyCap
+    ? { maxIterations: input.requestedCap, source: '--max-iterations' }
+    : { maxIterations: input.policyCap, source: 'tech/automation.md' }
 }
 
 /** The perimeter line printed before execution — what the run may touch, and nothing else. */
