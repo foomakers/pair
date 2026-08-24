@@ -105,4 +105,4 @@ function applyTrustPosture(input: AutonomyInput, notes: string[]): void {
  * input gets EOF and terminates instead of waiting forever, and the iteration is bounded by a
  * wall-clock timeout on top. Mechanical, not policy — see `DEFAULT_ITERATION_TIMEOUT_SECONDS`.
  */
-export const HEADLESS_STDIN: 'ignore' = 'ignore'
+export const HEADLESS_STDIN = 'ignore' as const
