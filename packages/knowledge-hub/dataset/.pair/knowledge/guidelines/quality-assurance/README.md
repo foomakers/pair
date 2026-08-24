@@ -26,6 +26,7 @@ This comprehensive quality assurance framework ensures systematic quality manage
 
 - **quality-model.md** - Single source of default quality rules: 3-layer principle, 3 pillars (Cost/Security/Delivery), classification dimensions and tier resolution, per-tier review/gate requirements, tag projection, `tech/risk-matrix.md` adoption delta schema, nested taxonomy
 - **cost-assessment.md** - Cost pillar guideline: the cost-signal catalog, general + provider-specific heuristics (AWS first, other providers via adoption links), and cost gotchas; applied by `assess-cost` (quality-model §3.3)
+- **delivery-metrics.md** - Delivery pillar metrics guideline: the R9.5 metric set (bug resolution time, PR lead time, adoption), aggregation and low-sample rules, the adoption-declared bug mapping and the per-tool query mapping; applied by `analyze-delivery-metrics` (quality-model §7)
 - **automated-verification.md** - Comprehensive automated verification system for tool-based validation and quality gate enforcement
 - **manual-verification.md** - Manual verification processes and human-driven quality assessment methodologies
 - **manual-testing.md** - Guidelines for designing, organizing, and executing manual test suites for post-release validation
