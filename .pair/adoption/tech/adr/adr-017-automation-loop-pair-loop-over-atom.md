@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — **§4's Realization rule is amended by [ADR-021](adr-021-fan-out-three-realizations.md)** (fan-out as one capability with three realizations: in-harness > external driver > degraded), which also **retires** this ADR's "No portable unattended loop" limitation. §§1, 2, 3 and 6 below stand unchanged.
 
 ## Date
 
@@ -46,6 +46,8 @@ See Decision.
 
 4. **A thin `pair-loop` skill ships in the dataset** as the discoverable entry + contract + degradation guard. Its **Realization** rule: if a fan-out runner exists (Claude Code `Workflow`), delegate the unattended loop to the workflow; otherwise (any other tool) run **exactly one** eligible card to its gate this invocation, write the audit/checkpoint, then stop and report a continue-token for the caller (human/CI/cron) to re-invoke. Never iterate multiple cards in-context portably.
 
+   > **Amended by [ADR-021](adr-021-fan-out-three-realizations.md)**: the rule is now THREE realizations in preference order — (1) in-harness (this paragraph's workflow path, plus Codex subagents per #441), (2) **external driver** (`pair run`, #451: a fresh process per iteration that re-invokes on the continue-token — the portable baseline, and available to a harness that has subagents but prefers processes), (3) this paragraph's degraded path, for a caller with neither. The continue-token contract itself is unchanged; what changed is that tier 2 automates the "caller (human/CI/cron)" named here.
+
 5. **Workflows ship in the dataset, installed for everyone — no tool-gating mechanism now.** Workflows are Claude-Code-specific but are distributed in the dataset and installed unconditionally; non-Claude-Code users get a **documentation note** on how to configure/run them (or use the skill's degraded path). No install-time tool-gating is built now — a future tool-selection/config mechanism may add it. Keeps the change simple and additive; does not break portability (other tools just don't run the workflow).
 
 6. **Automation policy lives in a dedicated adoption file `tech/automation.md`** (not way-of-working): the **eligibility filter** over classification tags (which tiers auto-advance unattended, e.g. `risk:green`), the **gates required** for auto-advance (referencing the quality-model per-tier policy), the **stop-predicate/step** defaults, a user-set **`max_parallelism`** cap (global or per-tier — the loop runs `min(dependency-allowed, max_parallelism)`), and the **audit** location. Auto-advance **enacts the tier policy that already exists** (quality model D10): `risk:green` + green checks ⇒ push+merge unattended; higher tiers halt for the human. No second source of truth.
@@ -64,9 +66,10 @@ See Decision.
 
 - The dataset now carries Claude-Code-specific artifacts (workflows + the agent-execution-layer they spawn), installed for all tools; non-Claude-Code users receive content they can't run unattended until they follow a docs-configured path or use the degraded skill. Accepted for simplicity; tool-gating is a deferred follow-up.
 - Generalizing implement-batch (#219) depends on shipping the agent-execution-layer (implementer/reviewer agents) as product — a larger surface than the original story.
-- No portable unattended loop: portable tools get one-card-per-invocation, re-triggered externally.
+- ~~No portable unattended loop: portable tools get one-card-per-invocation, re-triggered externally.~~ **RETIRED by [ADR-021](adr-021-fan-out-three-realizations.md)** (#451): the external re-trigger is automated by `pair run`, so the portable unattended loop exists. What remains true is only the bullet above — the dataset carries workflow artifacts other harnesses cannot run.
 
 ## Related
 
+- **Amended by [ADR-021](adr-021-fan-out-three-realizations.md)** — fan-out as one capability with three realizations (§4), and the retirement of the portable-loop limitation.
 - Supersedes the framing of **#250** (loop flags on pair-next) and **#219** (standalone supervisor); both reformulated under this ADR.
 - ADL `2026-07-11-agent-execution-layer` (the workflow/agent substrate). Quality model D10 (per-tier policy). Epic #212 (supervised automation), #204 (pair-next), #254 (checkpoints).
