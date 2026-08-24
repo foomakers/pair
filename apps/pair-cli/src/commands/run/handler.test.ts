@@ -12,7 +12,19 @@ const cwd = '/project'
 function projectFs(files: Record<string, string> = {}) {
   return new InMemoryFileSystemService(
     {
-      [`${cwd}/config.json`]: JSON.stringify({ asset_registries: {} }),
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          skills: {
+            source: '.skills',
+            behavior: 'overwrite',
+            description: 'skills',
+            prefix: 'pair',
+            targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+          },
+        },
+      }),
+      // The cascade's preferred skill is installed, so these tests exercise engine resolution.
+      [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
       ...files,
     },
     cwd,
