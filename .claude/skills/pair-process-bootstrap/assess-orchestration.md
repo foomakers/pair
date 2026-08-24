@@ -32,3 +32,5 @@ After each assessment (or after collecting the batch), compose `/pair-capability
 **Parallel safety**: Because assess-\* skills only produce proposals (no writes), they can run in parallel freely. The actual writes happen serially through `/pair-capability-record-decision` (the sole writer), which preserves sections it does not own. The recommended sequence orders the proposals by adoption-file dependency.
 
 **Partial installation**: If only some assess-\* skills are installed, compose those and skip the rest with a warning. Each assess-\* skill is independent — partial installation is supported.
+
+**In quick mode every invocation above also carries `$approval: auto`** — the family's non-interactive signal ([approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md)), stated once in SKILL.md Step 2.2 and repeated here because this file is what an executor reads while sequencing the calls. Guided passes nothing, and every round runs as written.

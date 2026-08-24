@@ -224,49 +224,61 @@ describe('quick mode is declared where the questions are (AC1)', () => {
   // 3-4), and each assess-* skill declares its own prompt for it. Naming Path A
   // without suppressing that round would put up to EIGHT confirmations
   // (assess-orchestration.md sequences eight skills) inside a depth that claims
-  // to ask nothing — so the suppression has to be stated, not implied.
-  it('suppresses Path A’s confirmation round in quick mode, as a disclosed deviation', () => {
+  // to ask nothing.
+  //
+  // #410 changed WHERE that is fixed. It used to be a caller-side deviation
+  // disclosed here, per composed family — a shape that structurally cannot see
+  // the next composed skill that asks, which is why the same defect landed twice
+  // in two review rounds of #408 (round 2: assess-*, round 3: map-*). Bootstrap
+  // now passes ONE signal, `$approval: auto`, and every composed skill honours it
+  // (ADR-021, skill-conventions/approval-rounds.md; the per-skill obligation is
+  // guarded by src/conformance/approval-signal.test.ts and the skills:conformance
+  // gate). So these assertions pin the SIGNAL being passed, and pin that the
+  // retired disclosures do not creep back as a second mechanism.
+  it('passes the non-interactive signal to the composed assess-* family in quick mode', () => {
     const step = sections.get('2.2') ?? ''
-    expect(step).toMatch(/confirmation round[^.]*not run|not run[^.]*confirmation round/i)
-    expect(step.toLowerCase()).toMatch(/deviation/)
-
-    // and the deviation is disclosed where the other one (the explicit-`guided`
-    // no-op) already is, not buried in the step note
-    const defaults = datasetDefaults()
-    expect(defaults).toMatch(/##\s*Disclosed deviations/)
-    expect(defaults).toMatch(/Path A[\s\S]{0,400}confirmation round[\s\S]{0,400}not run/i)
-    expect(defaults.toLowerCase()).toMatch(/loud no-op/)
+    expect(step).toMatch(/\$approval: auto/)
+    expect(step).toContain('approval-rounds.md')
+    // The old shape: a round declared "not run" by the caller. One signal replaced
+    // it; two mechanisms for one thing is how they drift apart.
+    expect(step).not.toMatch(/confirmation round[^.]*not run|not run[^.]*confirmation round/i)
   })
 
-  // Review round 3 on PR #408: the SAME defect class as the assertion above,
-  // recurring in a surface that assertion structurally cannot see. Phase 3.5
-  // composes /map-subdomains and /map-contexts, and BOTH end in an unconditional
-  // "Approve or adjust?" — so "quick mode asks nothing" was false again, two
-  // questions further on. Pinning the composed-family suppression per surface is
-  // a stopgap; the real fix is a non-interactive signal on the families (#410).
-  it('suppresses the composed map-* approval rounds in quick mode, as a disclosed deviation', () => {
+  it('passes the same one signal to the composed map-* family (Phase 3.5)', () => {
     const step = sections.get('3.5.2') ?? sections.get('3.5') ?? datasetSkill()
-    expect(step).toMatch(
-      /map-\\?\*[\s\S]{0,600}approval round|approval round[\s\S]{0,600}map-\\?\*/i,
-    )
-    expect(step.toLowerCase()).toMatch(/deviation/)
-
-    const defaults = datasetDefaults()
-    // Three deviations now, not two — the count is stated in prose, so a fourth
-    // surface cannot be added without updating the disclosure.
-    expect(defaults).toMatch(/Three, all deliberate/i)
-    expect(defaults).toMatch(/map-\\?\*[\s\S]{0,600}approval round is not run/i)
+    expect(step).toMatch(/\$approval: auto/)
+    expect(step).toMatch(/map-\\?\*/)
   })
 
-  // The one gate quick mode deliberately KEEPS. Asserted so a future "make quick
-  // mode ask nothing at all" change cannot silently swallow it: accepting an
-  // unbalanced + volatile relationship without a judgement would write a domain
-  // model recording a coupling risk nobody approved.
+  it('retires deviations 2 and 3, and says why the disclosure shrank', () => {
+    const defaults = datasetDefaults()
+    // One deviation left — the explicit-`guided` no-op — and the count is stated
+    // in prose, so a new deviation cannot be slipped in silently.
+    expect(defaults).toMatch(/##\s*Disclosed deviations/)
+    expect(defaults).toMatch(/One, deliberate/i)
+    expect(defaults).not.toMatch(/Three, all deliberate/i)
+    expect(defaults.toLowerCase()).toMatch(/loud no-op/)
+    // The retirement is recorded, not silent: a reader of the old note must find
+    // out where the mechanism went.
+    expect(defaults).toMatch(/Two deviations were retired/i)
+    expect(defaults).toMatch(/\$approval: auto/)
+    expect(defaults).not.toMatch(/approval round is not run/i)
+  })
+
+  // The one gate quick mode deliberately KEEPS (#278), now surviving BY THE
+  // MECHANISM rather than by an exception bootstrap has to remember: a judgement
+  // gate is never resolved by `auto`. Asserted here too, because "quick mode asks
+  // nothing at all" is exactly the change that would swallow it — accepting an
+  // unbalanced + volatile relationship without a judgement writes a domain model
+  // recording a coupling risk nobody approved.
   it('keeps the unbalanced+volatile HALT even in quick mode, and says so', () => {
     const defaults = datasetDefaults()
     expect(defaults).toMatch(/unbalanced \+ volatile/i)
     expect(defaults.toLowerCase()).not.toMatch(/phase 3\.5[^|\n]*never blocking\s*\|/)
-    expect(defaults).toMatch(/quick mode (does not suppress it|keeps that gate)/i)
+    expect(defaults).toMatch(/judgement gate `auto` does not resolve/i)
+    expect(sections.get('3.5.2') ?? sections.get('3.5') ?? datasetSkill()).toMatch(
+      /judgement gate, which `auto` never resolves/i,
+    )
   })
 
   it('qualifies the approval-round HALT conditions as guided-only', () => {
