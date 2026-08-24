@@ -37,6 +37,7 @@
 - [ADR-018: Code Host as an Optional Way-of-Working Override, Linked by Text Convention](.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md)
 - [ADR-018: PR State Flow — Required Code-Host Checks as the Merge Authority (Labels Are a View)](.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md)
 - [ADR-020: Bounded flatten depth — a registry's entry granularity, opt-in per registry](.pair/adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md)
+- [ADR-022: The coverage-baseline ratchet is EXPOSED through the published CLI, not ported to a shipped shell asset](.pair/adoption/tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Development Collaboration Context](.pair/adoption/tech/boundedcontext/development-collaboration.md)
