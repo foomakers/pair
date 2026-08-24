@@ -1,0 +1,5 @@
+{"sessionId":"s1","version":"0.84.3","cwd":"/project"}
+{"type":"message_start","message":{"role":"assistant"}}
+{"type":"message_end","message":{"role":"assistant","stopReason":"endTurn","content":[{"type":"text","text":"CONTINUE-TOKEN: pair-loop --root 212 --iteration 5"}]}}
+{"type":"agent_end","messages":[],"willRetry":false}
+{"type":"agent_settled"}

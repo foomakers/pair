@@ -1,0 +1,4 @@
+{"type":"step_start","timestamp":1,"sessionID":"ses_2","part":{"type":"step-start"}}
+{"type":"step_finish","timestamp":2,"sessionID":"ses_2","part":{"reason":"tool-calls","type":"step-finish"}}
+{"type":"step_start","timestamp":3,"sessionID":"ses_2","part":{"type":"step-start"}}
+{"type":"step_finish","timestamp":4,"sessionID":"ses_2","part":{"reason":"stop","type":"step-finish"}}
