@@ -1,7 +1,7 @@
 ---
 name: pair-capability-map-subdomains
 description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-initiatives, /pair-process-plan-epics, /pair-process-brainstorm; full-scope re-mapping only via /pair-process-bootstrap."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Classify business capabilities into Domain-Driven Design subdomains — core, su
 | Argument | Required | Description                                                                                                                              |
 | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `$scope` | Yes      | Items/areas touched by the caller (e.g. capability names, PRD sections, an initiative). `all` — full re-mapping, allowed only when composed by `/pair-process-bootstrap`. |
+| `$approval` | No    | Approval-round mode: `interactive` (default — the Step 3 round runs as written) or `auto` (ask nothing: the proposed placement is accepted as-is, a **conflict** keeps the existing entry, and both are reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -88,7 +89,9 @@ _Skip if in system-areas fallback — the Classification/Volatility already assi
    > Proposed: Classification: [X'], Volatility: [Y']
    > Approve delta, keep existing, or override?
 
-6. **Act**: Present the scoped catalog delta to the developer:
+   Under `$approval: auto` this question is not asked and the **existing entry is kept** — the conservative branch it already offers. The unapplied delta is reported (Output Format) so nothing is lost; overwriting a recorded classification nobody was asked about is the one outcome `auto` must not produce.
+
+6. **Act**: Present the scoped catalog delta to the developer (`$approval: interactive`; under `auto` it is reported in the Output Format instead of asked):
 
    > Proposed subdomain placement (scope: [$scope]):
    > **[Classification]**: [Name] — Volatility: [Level] ([default | override: reason])
@@ -96,7 +99,7 @@ _Skip if in system-areas fallback — the Classification/Volatility already assi
    > Relationships: [key dependencies within scope]
    > Approve or adjust?
 
-7. **Verify**: Developer approves the delta.
+7. **Verify** (`$approval: interactive`): Developer approves the delta. Under `auto` the delta is accepted as-is (already reported in item 6) and Step 4 writes it — except a conflict from item 5, which stays unapplied.
 
 ### Step 4: Subdomain Specification
 
@@ -127,6 +130,7 @@ SUBDOMAIN PLACEMENT COMPLETE:
 ├── Created:    [X new files]
 ├── Updated:    [Y existing files]
 ├── Volatility: [defaults applied: A, overridden: B]
+├── Approval:   [interactive — approved | auto — accepted as-is, C conflict(s) kept unapplied]
 ├── Location:   adoption/product/subdomain/
 └── Next:       /map-contexts (scoped to the same items)
 ```
@@ -134,7 +138,7 @@ SUBDOMAIN PLACEMENT COMPLETE:
 ## Edge Cases and Error Handling
 
 - **Scope resolves to nothing** — report "no domain impact", caller proceeds without HALT.
-- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved).
+- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved). Under `$approval: auto` the write does not happen either: the existing entry is kept and the delta is reported unapplied (Step 3 item 5).
 - **Pre-existing files without `Volatility`** — treated as valid; field is added only when that entry falls inside a future `$scope`.
 - **No `subdomain/` or `boundedcontext/` artifacts at all** — system-areas fallback (Step 2b); no error, no DDD prerequisite.
 - **`$scope: all` requested by a caller other than `/pair-process-bootstrap`** — warn and downgrade to the caller's actual touched items; full re-mapping stays bootstrap-only.

@@ -1,7 +1,7 @@
 ---
 name: pair-capability-map-contexts
 description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-brainstorm; full-scope re-mapping only via /pair-process-bootstrap."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Map subdomains to bounded context boundaries and assess each relationship betwee
 | Argument | Required | Description                                                                                                                                 |
 | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$scope` | Yes      | Contexts/services touched by the caller (e.g. a context name, a service, the contexts implicated by a task). `all` — full re-mapping, allowed only when composed by `/pair-process-bootstrap`. |
+| `$approval` | No    | Approval-round mode: `interactive` (default — the Step 4 round runs as written) or `auto` (ask nothing: the proposed delta is accepted as-is, a **conflict** keeps the existing entry, both reported). **`auto` does not lift the Step 3 gate** — an unbalanced + volatile relationship with neither mitigation nor acceptance still HALTs. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -90,13 +91,15 @@ For each relationship between an in-scope context and another context it touches
 7. **Act**: If unbalanced + volatile → **gate at approval**: proceed only once one of the following is recorded:
    - A mitigation (e.g. introduce an ACL, renegotiate the pattern toward `contract`), or
    - An explicit developer acceptance of the risk (recorded in the context file).
+
+   **This gate is not an approval round and `$approval: auto` does not lift it** — it is the judgement kind ([approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md)): with neither a mitigation nor an acceptance on the table there is no proposal to auto-accept, and Step 5 would write a domain model recording a coupling risk nobody judged. So it **HALTs under every value of `$approval`**, and it is the one place a non-interactive run of this skill can still stop for a human.
 8. **Verify**: Every in-scope relationship has strength, distance, volatility, outcome, and (if gated) a mitigation/acceptance recorded.
 
 ### Step 4: Context Catalog Delta Proposal
 
 1. **Check**: Does an in-scope context already exist in the registry with a different Type/relationship set (catalog conflict)?
-2. **Act**: If a conflict exists → propose the delta only (not a full re-map).
-3. **Act**: Present the scoped catalog delta to the developer:
+2. **Act**: If a conflict exists → propose the delta only (not a full re-map). Under `$approval: auto` a conflicting delta is **not applied**: the existing entry is kept and the delta is reported unapplied, since overwriting a recorded placement nobody was asked about is the one outcome `auto` must not produce.
+3. **Act**: Present the scoped catalog delta to the developer (`$approval: interactive`; under `auto` it is reported in the Output Format instead of asked):
 
    > Proposed bounded context placement (scope: [$scope]):
    > **[Type]**: [Name] — subdomains: [list]
@@ -107,7 +110,7 @@ For each relationship between an in-scope context and another context it touches
    >
    > Approve or adjust?
 
-4. **Verify**: Developer approves the delta, including any gated relationships' resolution.
+4. **Verify** (`$approval: interactive`): Developer approves the delta, including any gated relationships' resolution. Under `auto` the delta is accepted as-is (already reported in item 3) — but a **gated** relationship is never auto-resolved: Step 3 item 7 has already HALTed unless a mitigation or an acceptance was recorded.
 
 ### Step 5: Context Specification
 
@@ -138,6 +141,7 @@ CONTEXT PLACEMENT COMPLETE:
 ├── Created:      [X new files]
 ├── Updated:      [Y existing files]
 ├── Relationships: [balanced: A, unbalanced: B, gated: C]
+├── Approval:     [interactive — approved | auto — accepted as-is, D conflict(s) kept unapplied]
 ├── Location:     adoption/tech/boundedcontext/
 └── Next:         /plan-epics (scoped) or back to the calling process skill
 ```
@@ -145,10 +149,10 @@ CONTEXT PLACEMENT COMPLETE:
 ## Edge Cases and Error Handling
 
 - **Scope resolves to nothing** — report "no domain impact", caller proceeds without HALT.
-- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved).
+- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved). Under `$approval: auto` the write does not happen either: the existing entry is kept and the delta is reported unapplied (Step 4 item 2).
 - **Pre-existing relationships without the 3-dimension assessment** — treated as valid; assessed only when that relationship falls inside a future `$scope`.
 - **No `subdomain/` or `boundedcontext/` artifacts at all** — system-areas fallback (Step 2b); no error, no DDD prerequisite.
-- **Unbalanced + volatile relationship, no mitigation/acceptance offered** — HALT at Step 4 approval; this is the one case where the capability blocks.
+- **Unbalanced + volatile relationship, no mitigation/acceptance offered** — HALT at Step 4 approval; this is the one case where the capability blocks, **under every value of `$approval`** (Step 3 item 7): a judgement gate is not suppressible by a non-interactive signal.
 - **`$scope: all` requested by a caller other than `/pair-process-bootstrap`** — warn and downgrade to the caller's actual touched items; full re-mapping stays bootstrap-only.
 
 ## Graceful Degradation
