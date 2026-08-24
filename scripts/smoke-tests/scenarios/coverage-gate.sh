@@ -178,12 +178,16 @@ else
   log_fail "guideline missing opt-in / persistence documentation"; FAILED=1
 fi
 
-# --- Example audit: persistence=A (human-committed, advisory, commit-back #372)
-# and the exclude-is-adopter-applied clarification (the two remaining Minors). ---
+# --- Example audit: persistence=A (human-committed, advisory, plus the nested
+# commit-back opt-in and the credential the ADOPTER provisions) and the
+# exclude-is-adopter-applied clarification. The commit-back grep names the
+# CAPABILITY, not the story that shipped it: a bare issue number has no referent
+# for the adopter reading this file, and it goes stale the moment the story does. ---
 if grep -Eqi 'human-committed|bootstrap-only' "$EXAMPLE" \
-  && grep -q '#372' "$EXAMPLE" \
+  && grep -q 'COVERAGE_RATCHET_TOKEN' "$EXAMPLE" \
+  && grep -q 'coverage-ratchet' "$EXAMPLE" \
   && grep -qi 'applied by the adopter' "$EXAMPLE"; then
-  log_succ "example documents persistence=A (#372) + exclude adopter-applied"
+  log_succ "example documents persistence=A + the commit-back command/credential + exclude adopter-applied"
 else
   log_fail "example missing persistence / exclude clarification"; FAILED=1
 fi
