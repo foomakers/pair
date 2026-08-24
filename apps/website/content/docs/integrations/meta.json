@@ -1,6 +1,7 @@
 {
   "title": "Integrations",
   "pages": [
+    "adding-a-harness",
     "claude-code",
     "codex",
     "cursor",
@@ -8,7 +9,6 @@
     "opencode",
     "pi",
     "web-cloud-environments",
-    "windsurf",
-    "adding-a-harness"
+    "windsurf"
   ]
 }
