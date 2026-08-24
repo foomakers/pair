@@ -22,6 +22,8 @@ Neither mode is universally "the default." Each adopter **declares its own defau
 - **Selector direction**: an explicit signal selects the *non-default* mode. A guided selector (a `--interactive` flag) opts into guided; a quick selector (an override argument) opts into quick. Absence of any signal → the adopter's declared default.
 - **Non-interactive safety**: guided needs a TTY. A detected non-interactive environment (no TTY, CI) can never run guided — the command must fail with a clear message or fall back to quick, and must never hang waiting for input it cannot receive.
 
+**A quick depth that composes other skills passes the depth down.** Quick is not only "this command asks nothing" — a composed skill's own approval round hangs the run just as effectively. The depth is forwarded as **one** signal, `$approval: auto` ([approval rounds](approval-rounds.md)), and every composed skill honours it. A caller never discloses, per composed skill, a suppression of a round it happens to know about: that shape cannot see the next composed skill that asks, and each one it misses is a hang in a depth whose whole point is asking nothing.
+
 The shipped adopters do **not** agree on a default, which is precisely why "guided is always the default" is false:
 
 - `pair package` declares **quick** as its default — a CLI/scripting-first command runs one-shot from resolved defaults, and guided is opt-in via `--interactive`.

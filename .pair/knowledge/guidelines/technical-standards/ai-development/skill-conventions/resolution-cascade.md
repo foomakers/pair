@@ -2,12 +2,16 @@
 
 The generic priority order a skill uses to decide **how much work it still needs to do**, before running its full algorithm: an explicit argument wins over existing adoption, which wins over a fresh assessment. Three paths, always evaluated in order, each following **check → skip → act → verify**.
 
+Paths A and B each end in an approval round. Both are qualified **here**, once, for every skill that follows this cascade — a skill inheriting them restates nothing and only qualifies its own local rounds. See [approval rounds](approval-rounds.md) for the `$approval` signal, its default (`interactive` — an omitted argument changes nothing) and the reporting obligation that survives `auto`.
+
 ## Path A — Argument Override
 
 1. **Check**: Is the skill's override argument (typically `$choice`) provided?
 2. **Skip**: If not provided, go to Path B.
-3. **Act**: Confirm the override with the developer — surface any conflict with existing adoption before accepting it.
-4. **Verify**: Developer confirms. Proceed to the skill's main algorithm (skip guideline-reading/assessment).
+3. **Act** (`$approval: interactive`): Confirm the override with the developer — surface any conflict with existing adoption before accepting it.
+4. **Verify** (`$approval: interactive`): Developer confirms. Proceed to the skill's main algorithm (skip guideline-reading/assessment).
+
+Under `$approval: auto` steps 3-4 are not asked: the override is **accepted as passed** — it is the caller's own explicit instruction, which outranks adoption by this cascade's precedence — and any conflict with existing adoption is **reported** in the skill's output instead of raised as a question.
 
 ## Path B — Existing State Check
 
@@ -18,8 +22,10 @@ Two variants, depending on the skill's nature:
 
 1. **Check**: Does the relevant existing state (adoption section, or recent report) exist and hold?
 2. **Skip**: If not, go to Path C.
-3. **Act**: Present the existing state; ask whether to keep it or redo.
+3. **Act** (`$approval: interactive`): Present the existing state; ask whether to keep it or redo.
 4. **Verify**: If kept → exit skill. If redo requested (or state is stale/missing) → proceed to Path C.
+
+Under `$approval: auto` step 3 is not asked: the existing state is **kept** and reported — the conservative branch of the same question, since redoing would overwrite a recorded decision nobody was asked about. A state the check found **stale or missing** was never Path B's to keep, and proceeds to Path C as usual.
 
 ## Path C — Full Assessment/Analysis
 
@@ -32,3 +38,5 @@ Only these vary per skill and belong in the skill's own `### Step 1: Resolution 
 - Which adoption file/section (or which "existing output" signal) Path B checks against.
 - The exact confirmation/HALT prompt wording for that domain.
 - Which step number Path C proceeds to (depends on the skill's own algorithm layout).
+
+What does **not** vary, and must not be restated per skill: the `$approval` qualification of Paths A and B above. A skill declares the `$approval` argument (so a caller can pass it) and qualifies the rounds Path C's own algorithm adds — never these two.
