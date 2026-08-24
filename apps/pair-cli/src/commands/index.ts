@@ -12,8 +12,10 @@ import type { KbVerifyCommandConfig } from './kb-verify/parser'
 import type { KbInfoCommandConfig } from './kb-info/parser'
 import type { ScaffoldKbCommandConfig } from './scaffold-kb/parser'
 import type { KbCacheCommandConfig } from './kb-cache/parser'
+import type { RunCommandConfig } from './run/parser'
 
 export type {
+  RunCommandConfig,
   InstallCommandConfig,
   UpdateCommandConfig,
   UpdateLinkCommandConfig,
@@ -57,8 +59,13 @@ import { scaffoldKbMetadata } from './scaffold-kb/metadata'
 import { parseKbCacheCommand } from './kb-cache/parser'
 import { handleKbCacheCommand } from './kb-cache/handler'
 import { kbCacheCommandMetadata } from './kb-cache/metadata'
+import { parseRunCommand } from './run/parser'
+import { handleRunCommand } from './run/handler'
+import { runCommandMetadata } from './run/metadata'
 
 export {
+  handleRunCommand,
+  parseRunCommand,
   handleInstallCommand,
   handleUpdateCommand,
   handleUpdateLinkCommand,
@@ -93,6 +100,7 @@ export type CommandConfig =
   | ValidateConfigCommandConfig
   | ScaffoldKbCommandConfig
   | KbCacheCommandConfig
+  | RunCommandConfig
 
 /**
  * Command registry mapping command names to their parse/handle/metadata functions.
@@ -147,6 +155,11 @@ export const commandRegistry = {
     parse: parseScaffoldKbCommand,
     handle: handleScaffoldKbCommand,
     metadata: scaffoldKbMetadata,
+  },
+  run: {
+    parse: parseRunCommand,
+    handle: handleRunCommand,
+    metadata: runCommandMetadata,
   },
 } as const
 
