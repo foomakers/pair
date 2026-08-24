@@ -15,6 +15,10 @@ import {
   checkEntrypointDepth,
   ENTRY_DEPTH,
   runChecks,
+  APPROVAL_SIGNAL_FAMILIES,
+  isApprovalSignalFamily,
+  findApprovalRounds,
+  checkApprovalSignal,
 } from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
@@ -381,5 +385,167 @@ describe('runChecks — a too-deep SKILL.md fails the gate (#411 round 4)', () =
     // second file before this check.
     expect(skillCount).toBe(1)
     expect(errors.some(e => e.includes('references') && e.includes('SKILL.md'))).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Approval-round signal ($approval) — ADR-021.
+//
+// Every assertion below is INJECTION-tested: a conformant input is asserted
+// green, then the mutation a reader would call the defect (an unqualified round,
+// a missing argument row, a missing convention pointer) is asserted RED. A guard
+// proven only on conformant input cannot tell "conformant" from "blind".
+// ---------------------------------------------------------------------------
+
+describe('isApprovalSignalFamily — obliged families, by prefix and not by list', () => {
+  it('recognises a member of each declared family', () => {
+    expect(isApprovalSignalFamily('capability/assess-architecture/SKILL.md')).toBe(true)
+    expect(isApprovalSignalFamily('capability/map-contexts/SKILL.md')).toBe(true)
+  })
+
+  it('recognises a family member that does not exist yet (the point of a prefix)', () => {
+    expect(isApprovalSignalFamily('capability/assess-something-new/SKILL.md')).toBe(true)
+    expect(isApprovalSignalFamily('capability/map-something-new/SKILL.md')).toBe(true)
+  })
+
+  it('leaves every other skill alone', () => {
+    expect(isApprovalSignalFamily('process/bootstrap/SKILL.md')).toBe(false)
+    expect(isApprovalSignalFamily('capability/analyze-debt/SKILL.md')).toBe(false)
+    expect(isApprovalSignalFamily('next/SKILL.md')).toBe(false)
+  })
+
+  it('declares prefixes, so nothing here encodes how many skills a family has', () => {
+    expect(APPROVAL_SIGNAL_FAMILIES.every(p => p.endsWith('-'))).toBe(true)
+  })
+})
+
+describe('findApprovalRounds — what counts as a round, and what does not', () => {
+  for (const round of [
+    'Developer approves the delta.',
+    'Developer confirms.',
+    'Confirm it is still current with the developer.',
+    'Warn developer, ask for confirmation.',
+    'Confirmation prompt: "Override X. Confirm?"',
+    'Existing catalog conflicts — requires human approval before writing.',
+  ]) {
+    it(`detects "${round}" and reads its step's qualification`, () => {
+      expect(findApprovalRounds(`1. **Verify**: ${round}`)).toEqual([
+        { line: 1, text: `1. **Verify**: ${round}`, qualified: false },
+      ])
+      const qualified = `1. **Verify** (\`$approval: interactive\`): ${round}`
+      expect(findApprovalRounds(qualified)[0]?.qualified).toBe(true)
+    })
+  }
+
+  it('detects a prompt line inside a step, qualified by that step (not by the prompt)', () => {
+    const step = [
+      '3. **Act**: Present the delta (`$approval: interactive`):',
+      '',
+      '   > Proposed placement: X',
+      '   > Approve or adjust?',
+      '',
+    ].join('\n')
+    const rounds = findApprovalRounds(step)
+    expect(rounds).toHaveLength(1)
+    expect(rounds[0]).toMatchObject({ line: 4, qualified: true })
+  })
+
+  it('does not read a sibling step’s qualification as its own', () => {
+    const doc = [
+      '3. **Act**: Present the delta (`$approval: interactive`).',
+      '4. **Verify**: Developer approves the delta.',
+    ].join('\n')
+    expect(findApprovalRounds(doc)).toEqual([
+      { line: 2, text: '4. **Verify**: Developer approves the delta.', qualified: false },
+    ])
+  })
+
+  it('ignores a fenced Output Format sample — a printed line is not a step that asks', () => {
+    const doc = ['```text', 'Status: Developer approves', '```'].join('\n')
+    expect(findApprovalRounds(doc)).toEqual([])
+  })
+
+  it('does not flag a sentence that merely mentions an approval', () => {
+    for (const line of [
+      '- **Persistence**: on approval, `/review` persists via `/record-decision`.',
+      '7. **Act**: If unbalanced + volatile → **gate at approval**: proceed only once recorded.',
+      '- HALT at Step 4 approval; this is the one case where the capability blocks.',
+    ]) {
+      expect(findApprovalRounds(line)).toEqual([])
+    }
+  })
+})
+
+describe('checkApprovalSignal — the two obligations, injected one at a time', () => {
+  const REL = 'capability/assess-example/SKILL.md'
+  const ROW = '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |'
+  const ROUND = '4. **Verify** (`$approval: interactive`): Developer approves the choice.'
+
+  it('is silent on a conformant family member', () => {
+    expect(checkApprovalSignal(REL, `${ROW}\n\n${ROUND}\n`)).toEqual([])
+  })
+
+  it('is silent on a family member with NO approval round (defect-driven, not name-driven)', () => {
+    expect(checkApprovalSignal(REL, 'Output-only. Nothing here asks anything.\n')).toEqual([])
+  })
+
+  it('ignores a skill outside the obliged families, round or no round', () => {
+    expect(
+      checkApprovalSignal('process/bootstrap/SKILL.md', '4. **Verify**: Developer approves.\n'),
+    ).toEqual([])
+  })
+
+  it('flags an unqualified round, naming its line and its text', () => {
+    const errors = checkApprovalSignal(REL, `${ROW}\n\n4. **Verify**: Developer approves.\n`)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain(`${REL}:3`)
+    expect(errors[0]).toContain('Developer approves')
+    expect(errors[0]).toContain('approval-rounds.md')
+  })
+
+  it('flags a qualified round whose skill exposes no `$approval` argument row', () => {
+    const errors = checkApprovalSignal(REL, `${ROUND}\n\n[approval rounds](approval-rounds.md)\n`)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('no `$approval` argument row')
+  })
+
+  it('flags a skill that qualifies its rounds but never points at the convention', () => {
+    const errors = checkApprovalSignal(REL, `| \`$approval\` | No | Mode. |\n\n${ROUND}\n`)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('never points at')
+  })
+
+  it('reports EVERY unqualified round, so a partial fix cannot look clean', () => {
+    const errors = checkApprovalSignal(
+      REL,
+      [
+        ROW,
+        '',
+        ROUND,
+        '',
+        '5. **Verify**: Developer confirms.',
+        '',
+        '6. **Act**: Present the delta:',
+        '',
+        '   > Approve or adjust?',
+      ].join('\n'),
+    )
+    expect(errors).toHaveLength(2)
+  })
+})
+
+describe('runChecks — the approval-round signal is enforced by the gate itself', () => {
+  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-approval-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('an unqualified round in a family member drives CLI exit 1', () => {
+    mkdirSync(join(root, 'capability/assess-thing'), { recursive: true })
+    writeFileSync(
+      join(root, 'capability/assess-thing', 'SKILL.md'),
+      '---\nname: assess-thing\ndescription: "Assesses."\n---\n' +
+        '4. **Verify**: Developer approves the choice.\n',
+    )
+    const { errors } = runChecks(root)
+    expect(errors.some(e => e.includes('assess-thing') && e.includes('$approval'))).toBe(true)
   })
 })

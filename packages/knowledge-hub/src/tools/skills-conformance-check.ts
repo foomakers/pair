@@ -37,6 +37,13 @@
  *      from story #233: a skill-count sweep that misses these prose files leaves
  *      factually-wrong onboarding docs the docs-staleness gate can't catch (it
  *      scans apps/website only).
+ *   7. Approval-round signal — every skill of an obliged family (`assess-*`,
+ *      `map-*`) that declares an approval round exposes the `$approval` argument
+ *      and makes each round conditional on it, so a caller that cannot ask states
+ *      its depth ONCE instead of enumerating, per composed skill, a round it
+ *      happens to know about (`skill-conventions/approval-rounds.md`, ADR-021).
+ *      Data-driven per skill present — a new family member is covered the day it
+ *      lands, with no edit here and no count anywhere.
  *
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
@@ -321,6 +328,136 @@ export function checkCategoryLabelCounts(
   return errors
 }
 
+// --- Approval-round signal ($approval) ---
+
+/**
+ * The composable families the approval-rounds convention obliges
+ * (`skill-conventions/approval-rounds.md`): a skill whose directory name starts
+ * with one of these prefixes must honour `$approval` for every approval round it
+ * declares, so a caller that cannot ask states its depth ONCE instead of
+ * enumerating, per composed skill, a round it happens to know about.
+ *
+ * A LIST OF PREFIXES, deliberately — not a list of skills and not a count. A new
+ * `assess-…`/`map-…` member is covered the day it lands, with no edit here; a
+ * third family adopting the convention is one entry.
+ */
+export const APPROVAL_SIGNAL_FAMILIES = ['assess-', 'map-']
+
+/**
+ * Phrasings that mean "this step stops and asks a human to accept something".
+ *
+ * A HEURISTIC OVER PROSE, and the one soft spot of this check (recorded as such
+ * in ADR-021's trade-offs): a round phrased outside this set is invisible here.
+ * Kept deliberately narrow instead of matching a bare /approval/, which would
+ * flag every sentence merely MENTIONING one — `/assess-stack`'s "on approval,
+ * /review persists…" describes the caller's act, and `/map-contexts`' "gate at
+ * approval" is the judgement gate the signal must NOT suppress.
+ */
+export const APPROVAL_ROUND_PATTERNS: RegExp[] = [
+  /\bdevelopers?\s+(?:approves?|confirms?)\b/i,
+  /\bconfirm[a-z]*\b[^.\n]{0,60}?\bwith the developer\b/i,
+  /\bask\w*\s+(?:the developer\s+)?for confirmation\b/i,
+  /\bconfirmation prompt\b/i,
+  /^\s*>?\s*Approve\b[^\n]*\?/,
+  /\brequires?\s+human approval\b/i,
+]
+
+/** The token a qualified round names, per the convention's authoring shape. */
+const APPROVAL_TOKEN = /\$approval/
+
+/**
+ * A list item, a heading, or a nested bullet — where one step's text begins.
+ * Blockquote prompt lines (`> Approve or adjust?`) and wrapped prose are
+ * CONTINUATIONS, so a round's qualification may sit anywhere in its own step
+ * rather than being forced onto the prompt line itself.
+ */
+const BLOCK_START = /^\s{0,4}(?:\d+\.|[-*+]|#{1,6})\s/
+
+export interface ApprovalRound {
+  /** 1-based line number in the file the content came from. */
+  line: number
+  text: string
+  /** True iff the step this line belongs to names `$approval`. */
+  qualified: boolean
+}
+
+/** True iff this dataset-relative `SKILL.md` path belongs to an obliged family. */
+export function isApprovalSignalFamily(rel: string): boolean {
+  const dir = basename(dirname(rel.split('/').join(sep)))
+  return APPROVAL_SIGNAL_FAMILIES.some(prefix => dir.startsWith(prefix))
+}
+
+/**
+ * Every approval round in `content`, each tagged with whether the step it sits in
+ * names `$approval`. Fenced code blocks are skipped — an Output Format sample is
+ * not a step that asks.
+ */
+export function findApprovalRounds(content: string): ApprovalRound[] {
+  const lines = content.split('\n')
+
+  // Per line: the index its step starts at (so a prompt line inherits its item's
+  // qualification), and whether it sits inside a fence.
+  const blockStart: number[] = []
+  const inFence: boolean[] = []
+  let current = 0
+  let fence = false
+  lines.forEach((line, i) => {
+    if (/^\s*```/.test(line)) fence = !fence
+    inFence[i] = fence
+    if (!fence && BLOCK_START.test(line)) current = i
+    blockStart[i] = current
+  })
+
+  const rounds: ApprovalRound[] = []
+  lines.forEach((line, i) => {
+    if (inFence[i]) return
+    if (!APPROVAL_ROUND_PATTERNS.some(p => p.test(line))) return
+    const start = blockStart[i] as number
+    let end = start + 1
+    while (end < lines.length && (blockStart[end] as number) === start) end++
+    const block = lines.slice(start, end).join('\n')
+    rounds.push({ line: i + 1, text: line.trim(), qualified: APPROVAL_TOKEN.test(block) })
+  })
+  return rounds
+}
+
+/**
+ * The obliged family's two mechanical obligations, checked per skill PRESENT:
+ * an `$approval` argument row, and every approval round qualified with the signal.
+ *
+ * Defect-driven, not name-driven: a family member with no approval round owes
+ * nothing (`/assess-cost` and `/assess-coupling` have none), so the corpus never
+ * carries an argument no step honours. The day either grows a round, both
+ * obligations apply to it with no edit here.
+ */
+export function checkApprovalSignal(rel: string, content: string): string[] {
+  if (!isApprovalSignalFamily(rel)) return []
+  const rounds = findApprovalRounds(content)
+  if (rounds.length === 0) return []
+
+  const errors: string[] = []
+  if (!/\|\s*`\$approval`/.test(content)) {
+    errors.push(
+      `${rel}: declares ${rounds.length} approval round(s) but no \`$approval\` argument row — ` +
+        `a caller cannot pass the signal it is obliged to honour ` +
+        `(skill-conventions/approval-rounds.md)`,
+    )
+  }
+  if (!content.includes('approval-rounds.md')) {
+    errors.push(
+      `${rel}: declares an approval round but never points at ` +
+        `skill-conventions/approval-rounds.md — the convention is the single statement of the signal`,
+    )
+  }
+  for (const round of rounds.filter(r => !r.qualified)) {
+    errors.push(
+      `${rel}:${round.line}: approval round "${round.text}" is not conditional on ` +
+        `\`$approval\` — name the signal in the step (skill-conventions/approval-rounds.md)`,
+    )
+  }
+  return errors
+}
+
 // --- Entrypoint depth ---
 
 /**
@@ -427,6 +564,8 @@ export function runChecks(skillsDir: string): RunResult {
       errors.push(`${rel}: ${e}`)
     }
     for (const e of checkLinks(file, fm.body)) errors.push(`${rel}: ${e}`)
+    // Already prefixed with the file — this check reports line numbers too.
+    errors.push(...checkApprovalSignal(rel.split(sep).join('/'), content))
   }
 
   errors.push(...checkEntrypointDepth(skillsDir, collectSkillMarkdownFiles(skillsDir)))
@@ -458,7 +597,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal)`,
     )
     process.exit(0)
   } else {

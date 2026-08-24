@@ -1,0 +1,177 @@
+/**
+ * Conformance guard for story #410 / ADR-021 — the non-interactive signal is an
+ * argument on the COMPOSED SKILL, not a note on the caller.
+ *
+ * Two families (`assess-*`, `map-*`) used to end in an unconditional
+ * developer-approval round with no signal of their own, so a caller that must not
+ * ask had to declare, per composed skill, that it suppressed a round it happened
+ * to know about. That shape cannot see the NEXT composed skill that asks: the same
+ * defect was found twice in two consecutive review rounds of one PR, on two
+ * different surfaces. `$approval` moves the obligation to where the round is.
+ *
+ * WHY HERE AND NOT ONLY IN THE GATE: the `skills:conformance` gate
+ * (`tools/skills-conformance-check.ts`, check 7) enforces the two mechanical
+ * per-skill obligations over the DATASET. This file adds what the gate does not
+ * see — the INSTALLED mirror, the convention text that is the single statement of
+ * the signal, and the two invariants no per-skill grep can express: that the
+ * detector actually sees this corpus (a guard that finds zero rounds is green and
+ * blind), and that the one judgement gate survives `auto`.
+ *
+ * DATA-DRIVEN, NO COUNT: every per-skill case is derived from the dataset at
+ * collection time, keyed by the family PREFIXES the guard declares. A new
+ * `assess-…`/`map-…` member is covered the day it lands, with no edit here — which
+ * is AC5's whole point (the defect must not recur in an eleventh surface).
+ */
+import { describe, it, expect } from 'vitest'
+import { existsSync, readFileSync, readdirSync } from 'fs'
+import { join } from 'path'
+import {
+  APPROVAL_SIGNAL_FAMILIES,
+  checkApprovalSignal,
+  findApprovalRounds,
+} from '../tools/skills-conformance-check'
+
+const DATASET_SKILLS = join(__dirname, '../../dataset/.skills')
+const INSTALLED_SKILLS = join(__dirname, '../../../../.claude/skills')
+const KB_REL =
+  'guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md'
+const CASCADE_REL =
+  'guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md'
+
+/** The two copies of one KB statement: dataset source and installed mirror. */
+const kbCopies = (rel: string): Array<readonly [string, string]> => [
+  ['dataset', join(__dirname, '../../dataset/.pair/knowledge', rel)],
+  ['installed KB', join(__dirname, '../../../../.pair/knowledge', rel)],
+]
+
+const read = (p: string): string => readFileSync(p, 'utf-8')
+
+/**
+ * Every dataset skill of an obliged family, as `[category/name, absolute path]`.
+ * Read off the directory tree, so the case list IS the corpus.
+ */
+function familySkills(): Array<readonly [string, string]> {
+  const out: Array<readonly [string, string]> = []
+  for (const category of readdirSync(DATASET_SKILLS)) {
+    const catDir = join(DATASET_SKILLS, category)
+    let entries: string[]
+    try {
+      entries = readdirSync(catDir)
+    } catch {
+      continue // a file at the registry root, not a category dir
+    }
+    for (const name of entries) {
+      if (!APPROVAL_SIGNAL_FAMILIES.some(prefix => name.startsWith(prefix))) continue
+      const file = join(catDir, name, 'SKILL.md')
+      if (existsSync(file)) out.push([`${category}/${name}`, file])
+    }
+  }
+  return out.sort(([a], [b]) => a.localeCompare(b))
+}
+
+const FAMILY_SKILLS = familySkills()
+
+/** `capability/assess-ai` → `pair-capability-assess-ai` (the installed dir). */
+const installedDir = (rel: string): string => `pair-${rel.split('/').join('-')}`
+
+describe('the obliged families honour $approval, per skill present (#410)', () => {
+  it('the corpus actually HAS family members to check (a guard over nothing is not green)', () => {
+    expect(FAMILY_SKILLS.length).toBeGreaterThan(0)
+    for (const prefix of APPROVAL_SIGNAL_FAMILIES) {
+      expect(
+        FAMILY_SKILLS.some(([rel]) => rel.split('/')[1]?.startsWith(prefix)),
+        `no skill found for declared family "${prefix}*"`,
+      ).toBe(true)
+    }
+  })
+
+  it('the detector SEES this corpus — some family member really does declare a round', () => {
+    // Without this, a pattern set that stopped matching the corpus would leave
+    // every per-skill case below trivially green while the convention went
+    // unenforced. Deliberately "some", not "N": which members ask is theirs to
+    // change, that at least one does is what makes the guard meaningful.
+    const withRounds = FAMILY_SKILLS.filter(([, file]) => findApprovalRounds(read(file)).length > 0)
+    expect(withRounds.length).toBeGreaterThan(0)
+  })
+
+  for (const [rel, file] of FAMILY_SKILLS) {
+    it(`${rel} — every approval round is conditional on $approval (dataset)`, () => {
+      expect(checkApprovalSignal(`${rel}/SKILL.md`, read(file))).toEqual([])
+    })
+
+    it(`${rel} — if it declares the argument, the detector sees the round it declares it for`, () => {
+      // Per-skill anti-blindness pin. `checkApprovalSignal` is silent both for a
+      // skill with no round AND for one whose round the pattern set stopped
+      // recognising — indistinguishable from the outside. A skill only carries the
+      // `$approval` row BECAUSE it asks something, so the row is the corpus's own
+      // statement that a round exists: if the detector finds none, it went blind.
+      const content = read(file)
+      if (!/\|\s*`\$approval`/.test(content)) return
+      expect(findApprovalRounds(content).length).toBeGreaterThan(0)
+    })
+
+    it(`${rel} — the INSTALLED mirror honours it too (atomic across both corpora)`, () => {
+      // Partial adoption is worse than none: a caller passing one signal reads it
+      // as total, so an unconverted copy hangs a run that looks correct.
+      const mirror = join(INSTALLED_SKILLS, installedDir(rel), 'SKILL.md')
+      expect(existsSync(mirror), `${mirror} missing`).toBe(true)
+      expect(checkApprovalSignal(`${rel}/SKILL.md`, read(mirror))).toEqual([])
+    })
+  }
+})
+
+describe('the convention is the single statement of the signal (#410)', () => {
+  for (const [label, path] of kbCopies(KB_REL)) {
+    it(`${label} copy states the default, the resolutions and the authoring obligation`, () => {
+      const doc = read(path)
+      // The default is what makes the change guided-neutral (AC2).
+      expect(doc).toMatch(/`interactive`[\s\S]{0,200}default/i)
+      expect(doc).toMatch(/omitted[\s\S]{0,120}`?\$approval`?[\s\S]{0,120}resolves here/i)
+      // The three round kinds, each with its resolution under `auto`.
+      expect(doc).toMatch(/Accept it as-is/i)
+      expect(doc).toMatch(/Keep what is already recorded/i)
+      expect(doc).toMatch(/HALTs/)
+      // `auto` suppresses asking, never judging — and never reporting.
+      expect(doc).toMatch(/suppresses \*?asking\*?, never \*?judging\*?/i)
+      expect(doc).toMatch(/"do not ask", not "do not report"/i)
+      // AC5: the obligation binds a family member that does not exist yet.
+      expect(doc).toMatch(/must honour `\$approval`/)
+      expect(doc).toMatch(/new family member/i)
+    })
+  }
+
+  for (const [label, path] of kbCopies(CASCADE_REL)) {
+    it(`${label} cascade qualifies the two rounds it owns, so no skill restates them`, () => {
+      const cascade = read(path)
+      // Path A's confirmation and Path B's keep-or-redo are the rounds every
+      // cascade-following skill inherits — qualified once, here.
+      expect(cascade).toMatch(/\*\*Act\*\* \(`\$approval: interactive`\)/)
+      expect(cascade).toMatch(/Under `\$approval: auto`[\s\S]{0,400}accepted as passed/)
+      expect(cascade).toMatch(/Under `\$approval: auto`[\s\S]{0,400}\*\*kept\*\*/)
+      expect(cascade).toMatch(/never these two|never restated per skill/i)
+      expect(cascade).toContain('approval-rounds.md')
+    })
+  }
+})
+
+describe('the judgement gate survives the signal (#410, AC4)', () => {
+  // #278 kept this gate deliberately in bootstrap's quick depth: writing a domain
+  // model that records a coupling risk nobody judged is worse than asking one
+  // question. A generic non-interactive signal must not swallow it — and it must
+  // survive BY THE MECHANISM (a round with no proposal to accept), not by an
+  // exception a future caller has to remember.
+  const copies = (): Array<readonly [string, string]> => [
+    ['dataset', join(DATASET_SKILLS, 'capability/map-contexts/SKILL.md')],
+    ['installed', join(INSTALLED_SKILLS, 'pair-capability-map-contexts/SKILL.md')],
+  ]
+
+  for (const [label, path] of copies()) {
+    it(`${label} map-contexts HALTs on unbalanced + volatile under every $approval value`, () => {
+      const skill = read(path)
+      expect(skill).toMatch(/unbalanced \+ volatile/i)
+      expect(skill).toMatch(/HALTs? under every value of `\$approval`/)
+      // and the argument row says so where a caller reads it
+      expect(skill).toMatch(/`\$approval`[\s\S]{0,600}does not lift the Step 3 gate/)
+    })
+  }
+})
