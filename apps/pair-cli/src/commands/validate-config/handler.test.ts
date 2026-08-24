@@ -105,6 +105,48 @@ describe('handleValidateConfigCommand - reserved path overlap (D14)', () => {
     await expect(handleValidateConfigCommand(config, fs)).rejects.toThrow(/project-relative/)
   })
 
+  test('reports an unknown engine id in the optional engine block (US-451)', async () => {
+    const fs = new InMemoryFileSystemService(baseConfigFiles, cwd, cwd)
+    await fs.writeFile(
+      `${cwd}/custom-config.json`,
+      JSON.stringify({ engine: { id: 'opencde' }, asset_registries: {} }),
+    )
+
+    const config: ValidateConfigCommandConfig = {
+      command: 'validate-config',
+      config: `${cwd}/custom-config.json`,
+    }
+
+    await expect(handleValidateConfigCommand(config, fs)).rejects.toThrow(
+      /engine\.id: unknown engine 'opencde'/,
+    )
+  })
+
+  test('accepts a valid engine block and names it in the summary', async () => {
+    const fs = new InMemoryFileSystemService(baseConfigFiles, cwd, cwd)
+    await fs.writeFile(
+      `${cwd}/custom-config.json`,
+      JSON.stringify({
+        engine: { id: 'pi' },
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            description: 'Knowledge base',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          },
+        },
+      }),
+    )
+
+    const config: ValidateConfigCommandConfig = {
+      command: 'validate-config',
+      config: `${cwd}/custom-config.json`,
+    }
+
+    await expect(handleValidateConfigCommand(config, fs)).resolves.not.toThrow()
+  })
+
   test('passes when the working override sits outside every registry', async () => {
     const fs = new InMemoryFileSystemService(baseConfigFiles, cwd, cwd)
     const customConfig = {

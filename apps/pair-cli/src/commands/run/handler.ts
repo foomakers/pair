@@ -1,8 +1,25 @@
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
+import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
 import type { RunCommandConfig } from './parser'
 import { assertEngineAvailable, describeEngineResolution, resolveEngine } from './resolve-engine'
 import { createExecutableProbe } from './path-probe'
+import { ENGINE_IDS, isEngineId } from './engines'
+
+/**
+ * The engine the project's own `pair.config.json` declares, if any.
+ *
+ * A malformed block THROWS rather than degrading to the default: an operator whose typo was
+ * silently ignored would have no way to tell a working configuration from a broken one.
+ */
+function declaredEngine(fs: FileSystemService, projectRoot: string) {
+  const loaded = loadConfigWithOverrides(fs, { projectRoot })
+  const outcome = readEngineDeclaration(loaded.config, ENGINE_IDS)
+  if (outcome.errors.length > 0) {
+    throw new Error(`pair.config.json is invalid:\n  - ${outcome.errors.join('\n  - ')}`)
+  }
+  return isEngineId(outcome.engine) ? outcome.engine : undefined
+}
 
 /**
  * Handles `pair run` — the execution adapter (US-451).
@@ -20,7 +37,11 @@ export async function handleRunCommand(
   config: RunCommandConfig,
   fs: FileSystemService,
 ): Promise<number> {
-  const engine = resolveEngine({ flag: config.engine })
+  const projectRoot = config.cwd ?? fs.currentWorkingDirectory()
+  const engine = resolveEngine({
+    flag: config.engine,
+    declared: declaredEngine(fs, projectRoot),
+  })
 
   console.log(chalk.bold('pair run'))
   console.log(`  ${describeEngineResolution(engine)}`)
