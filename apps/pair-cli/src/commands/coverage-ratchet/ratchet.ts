@@ -30,9 +30,17 @@
  *     lowered.
  *
  * Per the gate-tooling ADL (2026-07-13) the logic lives HERE, white-box unit
- * tested, and the CI step + `coverage:ratchet` scripts are thin entrypoints; the
- * CLI wiring is verified end-to-end by the `coverage-gate.sh` smoke scenario
- * (`--dry-run`), never by a unit test.
+ * tested, and the CI step is a thin entrypoint; the CLI wiring is verified
+ * end-to-end by the `coverage-gate.sh` smoke scenario (`--dry-run`), never by a
+ * unit test.
+ *
+ * WHY IT LIVES IN THE CLI (story #409, ADR-022): the module started in
+ * `packages/knowledge-hub/src/tools/`, reachable only through a pnpm filter
+ * inside this monorepo — so an adopter who set `Coverage baseline commit-back:
+ * enabled` got a silent no-op. It is now the implementation behind the shipped
+ * `pair-cli coverage-ratchet` command, which is what an adopter's generated
+ * pipeline step invokes and what pair's own CI step invokes: ONE implementation,
+ * two thin entrypoints, no ported copy to drift.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -705,11 +713,17 @@ export function renderRatchetPlan({ skip, plan }: RenderInput): string {
 }
 
 // ---------------------------------------------------------------------------
-// Thin CLI entrypoint (verified by the coverage-gate smoke scenario, not by a
-// unit test — gate-tooling ADL 2026-07-13)
+// Run options + the IO layer (verified by the coverage-gate smoke scenario, not
+// by a unit test — gate-tooling ADL 2026-07-13)
 // ---------------------------------------------------------------------------
 
-interface CliOptions {
+/**
+ * Everything the run needs that is NOT read from the environment. Produced by
+ * `parseCoverageRatchetCommand` (the command's parser applies every default and
+ * rejects a malformed value) and consumed by `runRatchet` — so the decisions
+ * above stay pure and this module owns no argv handling of its own.
+ */
+export interface RatchetRunOptions {
   configPath: string
   wowPath: string
   measured: MeasuredCoverage
@@ -719,65 +733,17 @@ interface CliOptions {
   dryRun: boolean
 }
 
-/** One flag's effect. `value` is undefined for the flags that take no argument. */
-type FlagHandler = (opts: CliOptions, value: string | undefined) => void
+/** Defaults the command's parser applies; exported so the two cannot drift. */
+export const RATCHET_DEFAULTS = {
+  configPath: DEFAULT_CONFIG_PATH,
+  wowPath: DEFAULT_WOW_PATH,
+  remote: 'origin',
+  baseBranch: 'main',
+  marginPp: DEFAULT_MARGIN_PP,
+} as const
 
-/** `takesValue` says whether the next argv entry belongs to this flag. */
-const CLI_FLAGS: Record<string, { takesValue: boolean; apply: FlagHandler }> = {
-  '--config': { takesValue: true, apply: (o, v) => void (o.configPath = v as string) },
-  '--way-of-working': { takesValue: true, apply: (o, v) => void (o.wowPath = v as string) },
-  '--measured': {
-    takesValue: true,
-    apply: (o, v) => {
-      const [type, pct] = (v as string).split('=')
-      if (!type) throw new Error('--measured expects <type>=<pct>')
-      o.measured[type] = pct
-    },
-  },
-  '--base-branch': { takesValue: true, apply: (o, v) => void (o.baseBranch = v as string) },
-  '--remote': { takesValue: true, apply: (o, v) => void (o.remote = v as string) },
-  '--margin': {
-    takesValue: true,
-    apply: (o, v) => {
-      // Unvalidated, `--margin abc` would be NaN, every `proposed > current`
-      // comparison false, and the ratchet would silently never raise. A bad value
-      // is a workflow-authoring bug like any other: fail loudly (`parseOrExit`).
-      const n = Number(v)
-      if (!Number.isFinite(n) || n < 0) {
-        throw new Error(`--margin expects a non-negative number, got '${v as string}'`)
-      }
-      o.marginPp = n
-    },
-  },
-  '--dry-run': { takesValue: false, apply: o => void (o.dryRun = true) },
-  // POSIX separator — `pnpm run <script> -- <args>` forwards it verbatim.
-  '--': { takesValue: false, apply: () => undefined },
-}
-
-function parseCliArgs(argv: string[], env: NodeJS.ProcessEnv): CliOptions {
-  const opts: CliOptions = {
-    configPath: DEFAULT_CONFIG_PATH,
-    wowPath: DEFAULT_WOW_PATH,
-    measured: {},
-    baseBranch: env['PAIR_RATCHET_BASE_BRANCH'] || 'main',
-    remote: 'origin',
-    marginPp: DEFAULT_MARGIN_PP,
-    dryRun: false,
-  }
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i] as string
-    const flag = CLI_FLAGS[arg]
-    if (flag === undefined) throw new Error(`unknown argument '${arg}'`)
-    let value: string | undefined
-    if (flag.takesValue) {
-      value = argv[i + 1]
-      if (value === undefined) throw new Error(`${arg} requires a value`)
-      i += 1
-    }
-    flag.apply(opts, value)
-  }
-  return opts
-}
+/** Env var naming the base branch when the invocation does not (CI convenience). */
+export const BASE_BRANCH_ENV = 'PAIR_RATCHET_BASE_BRANCH'
 
 /** The process env carrying the write credential (see `gitAuthConfig` for the shape). */
 function gitAuthEnv(token: string): NodeJS.ProcessEnv {
@@ -925,18 +891,8 @@ function restoreWorkspace(restore: RatchetCommand[]): void {
   }
 }
 
-/** Bad CLI args are a workflow-authoring bug, NOT a write refusal: fail loudly. */
-function parseOrExit(): CliOptions {
-  try {
-    return parseCliArgs(process.argv.slice(2), process.env)
-  } catch (e) {
-    console.log(`::error::coverage-ratchet: ${(e as Error).message}`)
-    process.exit(1)
-  }
-}
-
 /** The run context comes entirely from the environment the CI step exposes. */
-function resolveSkip(opts: CliOptions): SkipDecision {
+function resolveSkip(opts: RatchetRunOptions): SkipDecision {
   const wow = readFileSync(opts.wowPath, 'utf-8')
   return shouldSkipCommitBack({
     commitBackFlag: readCommitBackFlag(wow),
@@ -952,7 +908,11 @@ function resolveSkip(opts: CliOptions): SkipDecision {
  * The write path: credential, config write, command plan, restore. Every exit is
  * either a success line or a warning — never a non-zero exit (AC6).
  */
-function commitBack(opts: CliOptions, gitPlan: RatchetGitPlan, raises: RatchetProposal[]): void {
+function commitBack(
+  opts: RatchetRunOptions,
+  gitPlan: RatchetGitPlan,
+  raises: RatchetProposal[],
+): void {
   const token = process.env[TOKEN_ENV] || ''
   if (!token) {
     warn(classifyWriteRefusal('', { hasToken: false }).message)
@@ -976,7 +936,7 @@ function commitBack(opts: CliOptions, gitPlan: RatchetGitPlan, raises: RatchetPr
   }
 }
 
-function run(opts: CliOptions): void {
+function run(opts: RatchetRunOptions): void {
   anchorToRepoRoot()
 
   const skip = resolveSkip(opts)
@@ -1005,19 +965,20 @@ function run(opts: CliOptions): void {
 }
 
 /**
- * Argument parsing fails LOUDLY (a workflow-authoring bug the author must see);
- * everything after it degrades to a warning and exit 0.
+ * Run the commit-back. Argument parsing has already failed LOUDLY if it was going
+ * to (the command's parser throws and the CLI exits non-zero — a malformed
+ * invocation is a workflow-authoring bug its author must see); everything from
+ * here on degrades to a warning and a SUCCESSFUL return.
  *
  * That asymmetry is the business rule "the gate's verdict and the persistence are
- * independent" (AC6) taken literally. An unreadable `--config`/`--way-of-working`
- * (an adopter who relocated the adoption folder), a failing `git rev-parse`, a
- * `writeFileSync` EACCES — none of them may turn a PASSING coverage gate into a
- * red build. The shell guardrail this step sits next to already tolerates a
- * missing config by design; the commit-back must not be less fail-safe than the
- * gate it augments.
+ * independent" (#372/AC6) taken literally. An unreadable `--config`/
+ * `--way-of-working` (an adopter who relocated the adoption folder), a failing
+ * `git rev-parse`, a `writeFileSync` EACCES — none of them may turn a PASSING
+ * coverage gate into a red build. The shell guardrail this step sits next to
+ * already tolerates a missing config by design; the commit-back must not be less
+ * fail-safe than the gate it augments.
  */
-function main(): void {
-  const opts = parseOrExit()
+export function runRatchet(opts: RatchetRunOptions): void {
   try {
     run(opts)
   } catch (e) {
@@ -1025,8 +986,4 @@ function main(): void {
       `commit-back could not run: ${(e as Error).message} — the coverage gate's verdict is unaffected`,
     )
   }
-}
-
-if (require.main === module) {
-  main()
 }

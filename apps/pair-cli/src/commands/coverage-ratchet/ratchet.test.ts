@@ -18,7 +18,21 @@ import {
   ratchetBranchConfigCommand,
   gitAuthConfig,
   renderRatchetPlan,
-} from './coverage-baseline-ratchet'
+} from './ratchet'
+import type { RatchetProposal } from './ratchet'
+
+/**
+ * The single proposal of a single-type plan.
+ *
+ * A destructured `const [p] = plan` is `RatchetProposal | undefined` under this
+ * package's `noUncheckedIndexedAccess`, and asserting on a possibly-undefined
+ * value is how a plan that came back EMPTY passes a test about its contents.
+ */
+function only(plan: RatchetProposal[]): RatchetProposal {
+  const [first] = plan
+  if (first === undefined) throw new Error(`expected exactly one proposal, got ${plan.length}`)
+  return first
+}
 
 // A config fixture shaped like the real adoption file: the parseable `key=value`
 // block lives inside a fenced code block, wrapped in markdown that MUST survive
@@ -306,31 +320,31 @@ describe('planRatchet — monotonic, per-type', () => {
   })
 
   it('AC3: holds when coverage is exactly at the baseline', () => {
-    const [p] = planRatchet(CONFIG, { shared: 84 })
+    const p = only(planRatchet(CONFIG, { shared: 84 }))
     expect(p.action).toBe('hold')
     expect(p.reason).toContain('not above')
   })
 
   it('AC3: holds when the proposal equals the committed baseline (fixpoint, no churn)', () => {
-    const [p] = planRatchet(CONFIG, { shared: 85.04 })
+    const p = only(planRatchet(CONFIG, { shared: 85.04 }))
     expect(p.proposed).toBe(84)
     expect(p.action).toBe('hold')
   })
 
   it('AC3 + business rule: NEVER lowers — a drop is a hold, not a write', () => {
-    const [p] = planRatchet(CONFIG, { shared: 40 })
+    const p = only(planRatchet(CONFIG, { shared: 40 }))
     expect(p.action).toBe('hold')
     expect(p.proposed).toBeLessThan(p.current as number)
   })
 
   it('edge case: a type measured but absent from the config is reported, not written', () => {
-    const [p] = planRatchet(CONFIG, { backend: 99 })
+    const p = only(planRatchet(CONFIG, { backend: 99 }))
     expect(p.action).toBe('no-baseline-configured')
     expect(p.current).toBeNull()
   })
 
   it('edge case: a malformed committed baseline is reported, not overwritten', () => {
-    const [p] = planRatchet('baseline.shared=oops\n', { shared: 99 })
+    const p = only(planRatchet('baseline.shared=oops\n', { shared: 99 }))
     expect(p.action).toBe('no-baseline-configured')
   })
 
@@ -350,7 +364,7 @@ describe('planRatchet — monotonic, per-type', () => {
   })
 
   it('accepts a custom margin', () => {
-    const [p] = planRatchet(CONFIG, { shared: 90.5 }, 0)
+    const p = only(planRatchet(CONFIG, { shared: 90.5 }, 0))
     expect(p.proposed).toBe(90)
   })
 })
@@ -368,8 +382,11 @@ describe('applyRaises — in-place value edit, surrounding markdown untouched', 
       .map((line, i) => (line === after[i] ? null : i))
       .filter((i): i is number => i !== null)
     expect(differing.length).toBe(1)
-    expect(before[differing[0]]).toBe('baseline.shared=84')
-    expect(after[differing[0]]).toBe('baseline.shared=89')
+    // Defaulted, not asserted non-null: an empty `differing` would index -1 and
+    // fail on the value rather than crash on the lookup.
+    const [changed = -1] = differing
+    expect(before[changed]).toBe('baseline.shared=84')
+    expect(after[changed]).toBe('baseline.shared=89')
   })
 
   it('leaves the file byte-identical when there is nothing to raise', () => {
@@ -440,8 +457,11 @@ describe('applyRaises — in-place value edit, surrounding markdown untouched', 
 
   it('falls back to the on-disk value when there is no ratchet branch yet', () => {
     const raises = planRatchet(CONFIG, { shared: 90.5 }).filter(p => p.action === 'raise')
-    for (const pendingText of [null, undefined, '']) {
-      expect(applyRaises(CONFIG, raises, { pendingText }).changedLines).toBe(1)
+    // `undefined` is expressed as the ABSENT property, not as the property set to
+    // undefined: with `exactOptionalPropertyTypes` those are different inputs, and
+    // "no ratchet branch yet" is the absent one.
+    for (const options of [{ pendingText: null }, {}, { pendingText: '' }]) {
+      expect(applyRaises(CONFIG, raises, options).changedLines).toBe(1)
     }
   })
 

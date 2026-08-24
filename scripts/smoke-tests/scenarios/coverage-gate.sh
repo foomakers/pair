@@ -199,9 +199,16 @@ fi
 # Commit-back ratchet (story #372) — CLI demonstration
 #
 # The ratchet's decisions live in the unit-tested module
-# packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts; what is proven
-# HERE is the CLI wiring and, above all, that the CI LOOP TERMINATES (AC4) —
-# run as a real sequence, not asserted in prose.
+# apps/pair-cli/src/commands/coverage-ratchet/ratchet.ts; what is proven HERE is
+# the CLI wiring and, above all, that the CI LOOP TERMINATES (AC4) — run as a
+# real sequence, not asserted in prose.
+#
+# THE COMMAND EXERCISED IS THE ADOPTER'S (story #409): `pair coverage-ratchet`,
+# run through the same binary every other scenario uses, so what an adopter's
+# generated pipeline step invokes is what this suite executes. Before #409 the
+# only way to run the ratchet was a `pnpm --filter` inside this monorepo — the
+# reachability gap that made `Coverage baseline commit-back: enabled` a silent
+# no-op for everyone else.
 #
 # Every invocation is either `--dry-run` or a path that refuses before writing,
 # so this scenario can create no git/gh side effect. Fixtures are temp files.
@@ -230,18 +237,25 @@ write_ratchet_wow() { # write_ratchet_wow <enabled|disabled>
   printf -- '- **Coverage guardrail**: `enabled`\n- **Coverage baseline commit-back**: `%s`\n' "$1" >"$R_WOW"
 }
 
+# How the ratchet is invoked: the packaged CLI the runner already resolved
+# (`TEST_BINARY`, i.e. the artifact an adopter installs), falling back to the
+# repo's built dist when a scenario is run standalone.
+RATCHET_CLI="${TEST_BINARY:-node $REPO_ROOT/apps/pair-cli/dist/cli.js}"
+
 # ratchet <event> <ref> <head-commit-message> <measured-shared> [extra-args...]
 # Echoes the CLI's combined output; always run WITHOUT a token in the env.
 ratchet() {
   local event="$1" ref="$2" msg="$3" pct="$4"; shift 4
   (
     cd "$REPO_ROOT" || exit 1
-    env -u COVERAGE_RATCHET_TOKEN \
+    # `INIT_CWD` leaks the `pnpm smoke-tests` invoker's directory into the CLI;
+    # the ratchet anchors itself to the repo root and needs neither.
+    env -u COVERAGE_RATCHET_TOKEN -u INIT_CWD \
       GITHUB_EVENT_NAME="$event" \
       GITHUB_REF_NAME="$ref" \
       PAIR_RATCHET_HEAD_COMMIT_MESSAGE="$msg" \
-      pnpm --filter @pair/knowledge-hub coverage:ratchet \
-      --config "$R_CFG" \
+      $RATCHET_CLI coverage-ratchet \
+      --coverage-config "$R_CFG" \
       --way-of-working "$R_WOW" \
       --base-branch main \
       --measured "shared=$pct" \
@@ -270,10 +284,26 @@ cfg_untouched() {
   fi
 }
 
-if ! command -v pnpm >/dev/null 2>&1; then
-  log_fail "pnpm not available — cannot demonstrate the #372 ratchet CLI"; FAILED=1
+if ! ${RATCHET_CLI} --version >/dev/null 2>&1; then
+  log_fail "pair CLI not runnable ($RATCHET_CLI) — cannot demonstrate the ratchet command"; FAILED=1
 else
   write_ratchet_cfg 84
+
+  # --- #409: the command an adopter's generated step names is REACHABLE from the
+  # shipped CLI. Before this, the ratchet could only be run through a pnpm filter
+  # inside pair's own monorepo, so the flag was documented and the capability was
+  # not there — an opt-in that did nothing and said nothing. ---
+  OUT="$(${RATCHET_CLI} --help 2>&1)"
+  expect_out "the ratchet command is discoverable in the shipped CLI" "coverage-ratchet" "$OUT"
+
+  # --- #409: a malformed invocation fails LOUDLY (non-zero), which is the exact
+  # counterpart of the run itself never failing: an authoring mistake must not
+  # look like "nothing to raise". ---
+  if (cd "$REPO_ROOT" && env -u INIT_CWD ${RATCHET_CLI} coverage-ratchet --way-of-working "$R_WOW" >/dev/null 2>&1); then
+    log_fail "an invocation with nothing measured exited 0 — a no-op that looks like success"; FAILED=1
+  else
+    log_succ "an invocation with nothing measured exits non-zero (authoring bug, not a silent no-op)"
+  fi
 
   # --- AC1: default off. The flag is `disabled` => nothing is written and the
   # step only says why (the framework default is the same, absent flag). ---
@@ -306,7 +336,7 @@ else
   #
   # The mapping is TRANSIENT (`git -c <key>=<refspec>`), not persisted with
   # `config --add`: the module leaves the job's checkout config untouched, and its
-  # unit tests assert exactly that (coverage-baseline-ratchet.test.ts). The two
+  # unit tests assert exactly that (coverage-ratchet/ratchet.test.ts). The two
   # assertions below were written against the `config --add` spelling and were
   # never executed — this scenario was committed mode 644 (#400), so the change of
   # spelling in #405 could not be caught here. Realigned to the decided behaviour,
@@ -353,8 +383,10 @@ else
   expect_out "AC3 drop -> hold, never lowered" "shared — hold" "$OUT"
   cfg_untouched "AC3 config untouched by a drop"
 
-  # --- Edge case: a type measured but absent from the config is reported, never written. ---
-  OUT="$(ratchet push main 'feat: new package' 90.5 --measured backend=77 --dry-run)"
+  # --- Edge case: a type measured but absent from the config is reported, never written.
+  # The second `--measured` supersedes the helper's own (last flag wins), so the
+  # list passed here is the whole measured set for this invocation. ---
+  OUT="$(ratchet push main 'feat: new package' 90.5 --measured shared=90.5,backend=77 --dry-run)"
   expect_out "unknown type -> reported, not written" "backend — no-baseline-configured" "$OUT"
 
   # --- AC6: a refused write (no credential) degrades to a WARNING, exits 0 and

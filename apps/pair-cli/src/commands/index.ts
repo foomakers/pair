@@ -12,8 +12,10 @@ import type { KbVerifyCommandConfig } from './kb-verify/parser'
 import type { KbInfoCommandConfig } from './kb-info/parser'
 import type { ScaffoldKbCommandConfig } from './scaffold-kb/parser'
 import type { KbCacheCommandConfig } from './kb-cache/parser'
+import type { CoverageRatchetCommandConfig } from './coverage-ratchet/parser'
 
 export type {
+  CoverageRatchetCommandConfig,
   InstallCommandConfig,
   UpdateCommandConfig,
   UpdateLinkCommandConfig,
@@ -57,8 +59,13 @@ import { scaffoldKbMetadata } from './scaffold-kb/metadata'
 import { parseKbCacheCommand } from './kb-cache/parser'
 import { handleKbCacheCommand } from './kb-cache/handler'
 import { kbCacheCommandMetadata } from './kb-cache/metadata'
+import { parseCoverageRatchetCommand } from './coverage-ratchet/parser'
+import { handleCoverageRatchetCommand } from './coverage-ratchet/handler'
+import { coverageRatchetMetadata } from './coverage-ratchet/metadata'
 
 export {
+  handleCoverageRatchetCommand,
+  parseCoverageRatchetCommand,
   handleInstallCommand,
   handleUpdateCommand,
   handleUpdateLinkCommand,
@@ -93,11 +100,17 @@ export type CommandConfig =
   | ValidateConfigCommandConfig
   | ScaffoldKbCommandConfig
   | KbCacheCommandConfig
+  | CoverageRatchetCommandConfig
 
 /**
  * Command registry mapping command names to their parse/handle/metadata functions.
  */
 export const commandRegistry = {
+  'coverage-ratchet': {
+    parse: parseCoverageRatchetCommand,
+    handle: handleCoverageRatchetCommand,
+    metadata: coverageRatchetMetadata,
+  },
   'kb-cache': {
     parse: parseKbCacheCommand,
     handle: handleKbCacheCommand,

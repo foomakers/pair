@@ -69,6 +69,11 @@ export async function dispatchCommand(
       })
     case 'validate-config':
       return commandRegistry['validate-config'].handle(config, fs)
+    case 'coverage-ratchet':
+      // No exit-code plumbing, deliberately: a refused commit-back is a warning
+      // and the run still succeeds, so a persistence failure can never redden
+      // the coverage gate that ran before it (#372/AC6).
+      return commandRegistry['coverage-ratchet'].handle(config)
     default:
       return dispatchKbCommand(config, fs, opts)
   }

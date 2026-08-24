@@ -19,6 +19,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [kb-verify](#kb-verify) — Verify KB package integrity
 - [kb-validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
+- [coverage-ratchet](#coverage-ratchet) — Propose a raised coverage baseline as a bot PR (opt-in)
 
 ## Rules that apply to every command
 
@@ -719,6 +720,87 @@ pair validate-config
 # Validate custom config file
 pair validate-config --config ./my-config.json
 ```
+
+---
+
+## coverage-ratchet
+
+Propose a **raised** coverage baseline as a bot pull request. This is the CI half of the
+[coverage guardrail](/docs/reference/specs/cli-contracts#coverage-ratchet-command): the guardrail decides
+pass/fail and never writes; this command is the separable side effect that may fail alone.
+
+It is **opt-in and nested**, and both flags default to off — it writes only when your
+`way-of-working.md` declares **both**:
+
+```markdown
+- **Coverage guardrail**: `enabled`
+- **Coverage baseline commit-back**: `enabled`
+```
+
+### Usage
+
+```bash
+pair coverage-ratchet --measured <type=pct,...> [options]
+```
+
+### Options
+
+| Option                    | Description                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `--measured <list>`       | **Required.** Coverage the run produced, comma-separated `type=pct`                       |
+| `--coverage-config <file>` | Coverage config to raise (default: `.pair/adoption/tech/coverage-baseline.md`)            |
+| `--way-of-working <file>` | File the opt-in flags are read from (default: `.pair/adoption/tech/way-of-working.md`)    |
+| `--base-branch <name>`    | Only a push to this branch may write back (default: `$PAIR_RATCHET_BASE_BRANCH` or `main`) |
+| `--remote <name>`         | Git remote the ratchet branch is pushed to (default: `origin`)                            |
+| `--margin <pp>`           | Percentage points below the measured value (default: `1`)                                 |
+| `--dry-run`               | Print the git/gh plan instead of running it                                               |
+
+### What it does, and what it refuses to do
+
+- **Only a push to the base branch writes back.** A pull-request run never does — it would mutate
+  the PR head commit that required checks are pinned to.
+- **The raise lands as a bot pull request** from `chore/coverage-baseline-ratchet`, never as a push
+  to the base branch, so it satisfies branch protection instead of needing an exemption from it.
+- **Monotonic**: a `baseline.<type>` value is only ever raised, edited in place; the surrounding
+  markdown is untouched. Lowering one stays a deliberate human commit, and the **first** baseline
+  stays human too.
+- **Terminating**: a run whose head commit carries `[coverage-baseline-ratchet]` is skipped, and
+  the value written is `floor(measured) - <margin>`, so unchanged coverage proposes what is already
+  committed.
+
+### Credential (yours, not pair's)
+
+The write needs `COVERAGE_RATCHET_TOKEN` in the step's environment: a **repo-scoped** fine-grained
+PAT or GitHub App installation token with exactly `contents: write` + `pull requests: write`, and
+**no** branch-protection bypass. Without it the run prints a warning naming the missing credential
+and **exits 0** — the coverage gate's verdict is never affected by a failed write. The default CI
+token is not usable: a pull request it opens triggers no workflow run, so it can never satisfy
+required checks.
+
+### GitHub-specific parts
+
+The decision logic is provider-agnostic, but this command reads `GITHUB_EVENT_NAME` /
+`GITHUB_REF_NAME` and opens the pull request with `gh`. On another host, the flags and behaviour
+carry over but the pull-request call does not.
+
+### Examples
+
+```bash
+# Propose from one measured type (writes only on a base-branch push, with both flags on)
+pair coverage-ratchet --measured 'backend=87.4'
+
+# Several types at once
+pair coverage-ratchet --measured 'backend=87.4,frontend=62'
+
+# See exactly which git/gh commands would run, and write nothing
+pair coverage-ratchet --measured 'backend=87.4' --dry-run
+```
+
+<Callout type="info">
+  A malformed invocation (no `--measured`, a negative `--margin`) exits **non-zero** — it is an
+  authoring bug in your pipeline. Everything after a well-formed invocation degrades to a warning
+  and exit 0, so persistence and the gate's verdict stay independent.
+</Callout>
 
 ---
 
