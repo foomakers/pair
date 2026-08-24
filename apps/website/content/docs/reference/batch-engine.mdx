@@ -12,12 +12,13 @@ description: The workflow that drives a batch of cards to review-approved PRs �
 
 They install **unconditionally**, on every project, whatever tool you use.
 
-Two workflows ship:
+Three workflows ship:
 
 | Workflow               | What it drives                                                                                                                          |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `pair-implement-batch` | a batch of cards, each to a review-approved PR — implement, open the PR, then an independent review ↔ fix loop until it converges         |
 | `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. By its dispatched prompts it writes to the PM tool only and touches no file in the repo — that is process, not permission: see the note below the agent table |
+| `pair-loop`            | the unattended delivery loop — selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, enacts the automation policy (auto-advance) and evaluates the stop predicate. Realization for the `/pair-loop` skill in Claude Code (ADR-017 §4); elsewhere the skill takes a degraded one-card + continue-token path and this workflow never runs |
 
 `pair-refine-batch` deliberately carries neither of the two knobs `pair-implement-batch` has.
 It has **no parallelism cap** because each card costs one API round trip and holds no worktree,

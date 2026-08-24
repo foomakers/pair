@@ -2,7 +2,7 @@
 
 How much of the delivery flow a project lets run **unattended** is a project decision, so it lives in an adoption file: the optional `.pair/adoption/tech/automation.md`. This guideline defines that file's schema.
 
-Today it specifies exactly one section — **`## Eligibility`**, which selects **which cards** an unattended run may pick up at all. Everything else the automation loop needs (which gates must be green to auto-advance, the stop predicate and step defaults, `max_parallelism`, the audit location — ADR-017 §6) is **out of scope here** and arrives with the loop that consumes it (#250). Sections are owned one at a time so two stories never claim the same lines of the same file.
+It specifies six sections, landed across two stories and owned one at a time so two stories never claim the same lines of the same file: `## Eligibility` (#216) selects **which cards** an unattended run may pick up at all; `## Harness`/`## Model Policy` (#450) declare supported agent harnesses and per-tier model class; and `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` (#250) are the remaining ADR-017 §6 knobs — which tier may auto-merge, when a run stops, the parallel-batch ceiling, and where the audit trail is written.
 
 **Eligibility selects `which cards`, never which gates.** The per-tier gate/approval policy already exists in [`quality-model.md`](../../quality-assurance/quality-model.md) §4 and is not restated here — auto-advance *enacts* that policy, it does not redefine it. Two sources of truth for the same rule is the failure mode this split exists to prevent.
 
@@ -98,12 +98,109 @@ An **untagged** card — one carrying no `risk:*` label at all — never matches
 | --- | --- |
 | Which gates must be green before a card auto-advances? | [`quality-model.md`](../../quality-assurance/quality-model.md) §4 — per-tier requirements (D10). Not restated here |
 | Is the card Ready / in the right state? | The consumer's own selection rules (`pair-next`). Eligibility is a **label** predicate only; state and readiness gating stay where they already live |
-| Stop predicate, step defaults, `max_parallelism`, audit location | ADR-017 §6 — the remaining sections of `tech/automation.md`, owned by the automation loop story (#250) |
+| Auto-advance switch, stop predicate, step defaults, `max_parallelism`, audit location | ADR-017 §6 — the four sections below (`## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location`), landed by the automation loop story (#250) |
 | Which label a card carries | `classify`, via the Tag Projection declaration in `tech/risk-matrix.md` |
+
+## Auto-Advance — which tiers may push/merge unattended
+
+A third, independent section of the same file (ADR-017 §6). Disjoint from `## Eligibility` (which cards a run may even pick up) and from `## Harness and Model Policy` below. This section answers: once a card's PR is review-approved, which risk tiers may `pair-loop` itself push and merge to the default branch without a human?
+
+```markdown
+## Auto-Advance
+
+(none)
+```
+
+- **The value is the project's own `## Eligibility` tier, verbatim, or the literal `(none)`** — never a family/tier the caller invents independently of that declaration. (The schema still accepts a comma-separated list syntactically, but every listed tier must be that same one value, so in practice this is a single tier or `(none)`.)
+- **It is a *switch*, never a gate list.** The gate set a tier must pass before advancing unattended is [`quality-model.md`](../../quality-assurance/quality-model.md) §4's existing per-tier table (D10) — this declaration does not restate it, add to it, or override it. `pair-loop` **enacts** that table; it is never a second source of truth for what "green" means.
+- **No tier other than `## Eligibility`'s own value can ever appear here — by construction, not by a family-naming heuristic.** A card outside the eligibility filter is never selected at all, so it can never reach a review-approved outcome to advance in the first place: naming any other tier here — `risk:yellow`, `risk:red`, or a renamed family's own higher-risk equivalent — is unreachable, and a consumer HALTs on it rather than silently ignoring dead configuration. This deliberately replaced an earlier, narrower rule that only forbade the literal substrings `yellow`/`red` — a heuristic a project with a **renamed** tag family (`tech/risk-matrix.md`'s Tag Projection) could slip past, declaring its own red-equivalent tier here with no HALT anywhere. Checking against the project's own Eligibility value needs no family-naming knowledge at all, and closes that gap by construction.
+- **An untagged card is never advanced**, regardless of this declaration — the same fail-safe `## Eligibility` already applies (untagged ⇒ treated as `risk:red`).
+
+### Fail-safe default — **`(none)`**, fail-closed
+
+**Absent file, absent section, or a section body containing exactly the literal `(none)` ⇒ auto-advance is off.** `pair-loop` runs cards to a review-approved PR and stops there for every tier; nothing pushes or merges unattended. This is the **shipped default** — a maintainer opts in explicitly by writing `risk:green` here, never the reverse. A project that never adds this section keeps full manual control over every merge, which is exactly the fail-closed posture ADR-017 §6 and quality-model §4's "a review that blocks a fresh install produces a repository nobody can merge into" reasoning both call for, mirrored: **a loop that merges on a fresh install is the same failure in the other direction.**
+
+### Not exactly a valid switch ⇒ HALT
+
+A consumer **MUST HALT**, naming the file and the offending value, when the section body is present and:
+
+1. it names a tier other than `## Eligibility`'s own declared value (this includes `risk:yellow`, `risk:red`, a renamed family's own higher-risk equivalent, and a tier name the project's Tag Projection does not emit — all four are simply "not that one value");
+2. it names the same tier more than once, or carries a boolean operator (`AND`/`OR`/`NOT`) — the switch is a set membership, not an expression;
+3. it is not `(none)` and not a comma-separated list of valid tier labels (e.g. free prose).
+
+## Stop Predicate — when an unattended run stops
+
+```markdown
+## Stop Predicate
+
+tag:risk:red ⇒ Done
+max-iterations: 20
+```
+
+- **Grammar**: `<selector> ⇒ <condition>`, where `selector` is one of `root` (the whole scope), `tag:<label>` (every card carrying that label) or `type:<issue-type>`, and `condition` is a canonical macrostate (`Draft`, `Ready`, `In Progress`, `Done`) and/or `has-tag:<label>`, optionally combined (`Done` alone, `has-tag:risk:red` alone, or `Done and has-tag:risk:red`).
+- **`max-iterations: <positive integer>`** is a second, independent line — a hard backstop that always applies alongside the predicate, never a replacement for it.
+- **The condition is evaluated against PM-tool state through the state mapping** (never issue-body content — assessments are not predicates, D18) — see [canonical states](../../collaboration/project-management-tool/canonical-states.md).
+- **Whichever bound is reached first stops the run.**
+
+### Fail-safe default
+
+**Absent file or absent section ⇒ `max-iterations: 1`, no predicate.** An unattended run with no declared stop condition and no declared cap runs exactly one iteration and reports — it never runs unbounded. A maintainer opts into a longer or predicate-driven run explicitly.
+
+### Malformed ⇒ HALT before any card runs
+
+A consumer **MUST HALT**, printing the expected grammar, when: the selector or condition keyword is not one of the ones above; the condition names issue-body content instead of a macrostate/tag; `max-iterations` is zero, negative, or non-integer; or the section carries no line matching either grammar at all. An **unsatisfiable predicate** (a selector that matches nothing on the current board) is not malformed — it is reported at the first evaluation and the run exits cleanly; `max-iterations` still applies regardless.
+
+## Max Parallelism — the parallel-batch ceiling
+
+```markdown
+## Max Parallelism
+
+3
+```
+
+or, with a per-tier override:
+
+```markdown
+## Max Parallelism
+
+3
+risk:green: 5
+```
+
+- **First line: a single positive integer** — the global ceiling `pair-loop` passes to `implement-batch` as `min(dependency-allowed, max_parallelism)`.
+- **Optional following lines: `<tier>: <positive integer>`** — a per-tier override, consulted only for a batch composed entirely of that tier; a mixed-tier batch uses the global value. A tier named here that the project's Tag Projection does not emit is malformed.
+- **Parallelism is always a ceiling, never a target.** `min(D, P)` with `D` eligible-and-unblocked cards always wins when `D < P`; the loop never pads a batch to reach the cap.
+
+### Fail-safe default
+
+**Absent file or absent section ⇒ `1`** (fully sequential). A maintainer opts into parallel batches explicitly.
+
+### Malformed cap ⇒ HALT on the policy read, before any card is touched
+
+`0`, negative, non-integer, or a per-tier override naming an unknown tier — each **MUST HALT**, naming the offending value. `pair-loop` never substitutes `1` for a malformed value; a malformed policy is a policy that has not been read.
+
+## Audit Location — where the unattended trail is written
+
+```markdown
+## Audit Location
+
+automation/loop-audit.md
+```
+
+- **A single project-relative path**, resolved under `working_path` from `pair.config.json` (default `.pair/working/`) — never an absolute path (rejected at config validation, same rule `working_path` itself already carries).
+- Every iteration is **appended**, never overwritten, so a killed-and-resumed run's history stays intact across the resume.
+
+### Fail-safe default
+
+**Absent file or absent section ⇒ `automation/loop-audit.md`** under `working_path` — an unattended run always has a default audit destination; the section only ever *relocates* it.
+
+### Unwritable destination ⇒ fail loudly
+
+If the resolved path cannot be created or written, `pair-loop` **MUST HALT the run** rather than proceed unaudited: an unattended run with no audit trail is not an acceptable degraded mode (ADR-017 §6).
 
 ## Harness and Model Policy
 
-A second, independent section of the same file — disjoint from `## Eligibility` above (which cards run unattended) and from the rest-of-file schema ADR-017 §6/#250 will land (stop predicate, step defaults, `max_parallelism`, audit location). This section answers two different questions: **which agent harnesses this project supports**, and **which model class each risk tier gets**. `/pair-capability-setup-harness` reads exactly these two declarations; the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) documents what each harness value means.
+A second, independent section of the same file — disjoint from `## Eligibility` above (which cards run unattended) and from `## Auto-Advance` / `## Stop Predicate` / `## Max Parallelism` / `## Audit Location` (the rest-of-file schema ADR-017 §6/#250 lands). This section answers two different questions: **which agent harnesses this project supports**, and **which model class each risk tier gets**. `/pair-capability-setup-harness` reads exactly these two declarations; the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) documents what each harness value means.
 
 ### Zero-configuration path — stated first, on purpose
 

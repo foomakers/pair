@@ -82,4 +82,4 @@ The process is designed to:
 2. **🤖🤝👨‍💻 Code Review** (`/review`) → Structured review with adoption compliance, merge flow, and parent cascade
 3. **🤖⚡ Status Update** → Automatic story/epic/initiative tracking update (handled by `/implement` and `/review`)
 
-> **Skill-enabled workflow**: Run `/next` at session start to determine the most relevant skill. See [skills-guide.md](skills-guide.md) for the full catalog of 42 skills.
+> **Skill-enabled workflow**: Run `/next` at session start to determine the most relevant skill. See [skills-guide.md](skills-guide.md) for the full catalog of 43 skills.

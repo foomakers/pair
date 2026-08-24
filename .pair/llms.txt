@@ -38,6 +38,7 @@
 - [ADR-018: PR State Flow — Required Code-Host Checks as the Merge Authority (Labels Are a View)](.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md)
 - [ADR-020: Bounded flatten depth — a registry's entry granularity, opt-in per registry](.pair/adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
+- [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Development Collaboration Context](.pair/adoption/tech/boundedcontext/development-collaboration.md)
 - [Integration & Process Standardization Context](.pair/adoption/tech/boundedcontext/integration-process-standardization.md)
 - [Knowledge & Standards Context](.pair/adoption/tech/boundedcontext/knowledge-standards.md)
@@ -112,6 +113,8 @@
 - [Decision: a source KB's configuration declaration is validated, not trusted — it may namespace its content, never choose where the install writes](.pair/adoption/decision-log/2026-08-20-source-kb-declaration-is-validated-not-trusted.md)
 - [Decision: Review severity is capped by trigger plausibility, and Minor blocks merge](.pair/adoption/decision-log/2026-08-21-review-severity-classification-and-convergence.md)
 - [Decision: bootstrap composes setup-harness, optionally](.pair/adoption/decision-log/2026-08-23-bootstrap-composes-setup-harness-optionally.md)
+- [Decision: `pair-loop`'s shipped Auto-Advance default is `(none)` — fail-closed, not `risk:green`](.pair/adoption/decision-log/2026-08-23-pair-loop-auto-advance-fail-closed-default.md)
+- [Decision: `pair-loop`'s fan-out path resumes from its own audit file, not from `/pair-capability-checkpoint`](.pair/adoption/decision-log/2026-08-23-pair-loop-resumes-from-its-own-audit-file-not-a-checkpoint.md)
 
 ## How-To Guides
 

@@ -79,7 +79,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 
 - **`way-of-working.md`**: Main process documentation – the starting point to understand the full workflow
 - **`getting-started.md`**: This guide – essential information to get started with the framework
-- **`skills-guide.md`**: Full catalog of 42 Agent Skills (10 process + 31 capability + 1 navigator) with composition patterns, adoption file mapping, and usage instructions
+- **`skills-guide.md`**: Full catalog of 43 Agent Skills (10 process + 31 capability + 2 navigator) with composition patterns, adoption file mapping, and usage instructions
 - **`how-to/`**: Step-by-step guides for each development phase and LLM collaboration
   - Process guides (01-11): Operational documentation for each phase
 - **`assets/`**: Templates, checklists, and document examples (e.g., PRD, bootstrap checklist)

@@ -17,7 +17,7 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 31 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 42 (10 process + 31 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 43 (10 process + 31 capability + 2 navigator).
 
 ## Full Catalog
 
