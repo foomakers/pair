@@ -33,8 +33,7 @@ import {
 
 const DATASET_SKILLS = join(__dirname, '../../dataset/.skills')
 const INSTALLED_SKILLS = join(__dirname, '../../../../.claude/skills')
-const KB_REL =
-  'guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md'
+const KB_REL = 'guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md'
 const CASCADE_REL =
   'guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md'
 
