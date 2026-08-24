@@ -15,9 +15,9 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 31 | Atomic units — perform a single focused operation |
+| **Capability** | 32 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 43 (10 process + 31 capability + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 44 (10 process + 32 capability + 2 navigator).
 
 ## Full Catalog
 
@@ -40,7 +40,7 @@ Process skills compose capability skills. Capability skills are independently in
 >
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (31)
+### Capability Skills (32)
 
 #### Domain Modeling Skills (2)
 
@@ -75,7 +75,7 @@ Applies the [quality model](guidelines/quality-assurance/quality-model.md) (owns
 |-------|-------|
 | `/classify` | Risk/cost matrix from the quality model (KB default + `tech/risk-matrix.md` delta) — story context in refinement, diff in review (confirm-or-raise, never lower); adoption-gated chromatic tag projection. Composed by `/refine-story` and `/review` |
 
-#### Analysis Skills (2)
+#### Analysis Skills (3)
 
 Analyze + **report only** — never block, propose no adoption decision (verb: `analyze-*`, distinct from `assess-*`).
 
@@ -83,6 +83,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 |-------|-------|
 | `/analyze-debt` | Technical debt detection + prioritization (report-only) |
 | `/analyze-code-quality` | Code quality metrics — complexity, size, coverage, maintainability (report-only) |
+| `/analyze-delivery-metrics` | Delivery/AI metrics for a period — bug resolution time, PR lead time, process adoption — computed from the adopted PM tool/code host against the [delivery-metrics guideline](guidelines/quality-assurance/delivery-metrics.md) and written as one period-keyed panel under `.pair/working/reports/metrics/` per the [report-panel convention](guidelines/collaboration/working-area.md). Report-only, but (like `/assess-security`'s audit) it writes its own panel — the D14 operational-artifact exception; never blocks, never touches adoption |
 
 #### Verification Skills (3)
 
@@ -160,6 +161,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 │   ├── setup-harness/
 │   ├── analyze-debt/          # report-only
 │   ├── analyze-code-quality/  # report-only
+│   ├── analyze-delivery-metrics/ # report-only, writes one period panel
 │   ├── checkpoint/
 │   ├── publish-pr/
 │   ├── manage-flags/
