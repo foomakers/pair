@@ -52,6 +52,64 @@ function halt(detail: string): never {
   throw new Error(`${POLICY_PATH} — ${detail}. Fix the adoption file, then re-run.`)
 }
 
+/**
+ * The upper bound on any value that reaches an agent prompt. Tier 1's own constant.
+ */
+const MAX_PROMPT_VALUE_LENGTH = 200
+
+/**
+ * Ported VERBATIM from tier 1 (`.claude/workflows/pair-loop.js` — `isSafePromptText`), which got it
+ * from #250's round-3 review naming this exact threat (round 4, Major).
+ *
+ * Every value this reader returns ends up inside an agent prompt that runs `gh` in an unattended,
+ * confirmation-free session. The schema's own MUST is two-part: the value is placed in a delimited
+ * data slot **and** it is never a command fragment — "delimiting is not validation". The driver
+ * borrows the policy's values, so it borrows this check too; anything less means the same
+ * `tech/automation.md` HALTs on tier 1 and executes on tier 2, which is the divergence ADR-021
+ * exists to forbid.
+ *
+ * It does NOT restrict SHAPE — a legitimate label may carry spaces (`good first issue`) — only the
+ * characters that turn a value into a command once an agent puts it on a line: a backtick, `$(`,
+ * control characters or newlines, and an unbounded length.
+ */
+function isSafePromptText(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_PROMPT_VALUE_LENGTH &&
+    !value.includes('`') &&
+    !value.includes('$(') &&
+    !hasControlCharacters(value)
+  )
+}
+
+/**
+ * Newlines and C0/C1 control characters, checked with a LOOP rather than a control-character regex
+ * literal — the same shape, and the same reason, as `config/loader.ts`: this repo's code-hygiene
+ * gate flags linter-suppression comments with no exception mechanism, and a loop needs none.
+ */
+function hasControlCharacters(value: string): boolean {
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true
+  }
+  return false
+}
+
+/** Tier 1's `isLabelShape` — a well-formed `family:tier` label, for `## Auto-Advance`. */
+function isLabelShape(value: string): boolean {
+  return /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i.test(value)
+}
+
+/** The one message every unsafe value gets, wherever it was declared. */
+function assertSafePromptText(section: string, value: string): void {
+  if (isSafePromptText(value)) return
+  halt(
+    `\`## ${section}\` declares \`${value.slice(0, 80)}${value.length > 80 ? '…' : ''}\`, which ` +
+      `contains a character that could turn it into a command fragment once inlined in an agent ` +
+      `prompt (backtick, \`$(\`, a control character, or over ${MAX_PROMPT_VALUE_LENGTH} characters)`,
+  )
+}
+
 export function readAutomationPolicy(fs: FileSystemService, projectRoot: string): AutomationPolicy {
   const path = join(projectRoot, POLICY_PATH)
   if (!fs.existsSync(path)) {
@@ -181,10 +239,25 @@ function readEligibility(markdown: string, warnings: string[]): string | undefin
   if (value.split(/\s+/).filter(token => token.includes(':')).length > 1) {
     halt(`\`## Eligibility\` declares \`${value}\`, which juxtaposes several labels on one line`)
   }
+  // The guideline's SEPARATE content MUST, layered on top of the seven triggers rather than
+  // widening them: this value reaches an agent prompt, so it may never be a command fragment.
+  assertSafePromptText('Eligibility', value)
   return value
 }
 
 /* ------------------------------------------------------------- auto-advance */
+
+/** Tier 1's own two checks on each declared tier: a well-formed label, and safe to inline. */
+function assertTierShapes(tiers: readonly string[]): void {
+  for (const tier of tiers) {
+    if (!isLabelShape(tier)) {
+      halt(
+        `\`## Auto-Advance\` names \`${tier}\`, which is not a well-formed \`family:tier\` label`,
+      )
+    }
+    assertSafePromptText('Auto-Advance', tier)
+  }
+}
 
 /**
  * `## Auto-Advance` — a switch, never a gate list.
@@ -209,6 +282,7 @@ function readAutoAdvance(markdown: string, eligibility: string | undefined): str
     halt(`\`## Auto-Advance\` declares \`${value}\`, but the switch is a tier, not an expression`)
   }
   const tiers = value.split(',').map(tier => tier.trim())
+  assertTierShapes(tiers)
   const foreign = tiers.filter(tier => tier !== eligibility)
   if (foreign.length > 0 || new Set(tiers).size !== tiers.length) {
     halt(
@@ -292,6 +366,7 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
         `\`## Stop Predicate\` line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\``,
       )
     }
+    assertSelector(match[1]!.trim(), line)
     assertCondition(match[2]!.trim(), line)
     predicate = line
   }
@@ -302,10 +377,33 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
   }
 }
 
-/** A condition is a canonical macrostate and/or a `has-tag:` — never issue-body content (D18). */
+/**
+ * The selector's PAYLOAD is the part an operator writes freely (`tag:<label>`, `type:<issue-type>`),
+ * so it is the part that reaches the prompt and therefore the part tier 1 content-checks
+ * (`validateSelector`). `root` carries no payload. A payload that is empty, or that could become a
+ * command fragment, HALTs here — before it can be rendered into an unattended agent's prompt
+ * (round 4, Major).
+ */
+function assertSelector(selector: string, line: string): void {
+  if (selector === 'root') return
+  const payload = /^(?:tag|type):(.*)$/.exec(selector)?.[1] ?? ''
+  if (payload.length === 0) {
+    halt(
+      `\`## Stop Predicate\` line \`${line}\` has an empty selector payload — \`tag:\`/\`type:\` needs a label`,
+    )
+  }
+  assertSafePromptText('Stop Predicate', payload)
+}
+
+/**
+ * A condition is a canonical macrostate and/or a `has-tag:` — never issue-body content (D18).
+ *
+ * `has-tag:` requires a NON-EMPTY, space-free payload, exactly as tier 1's `/^has-tag:\S+$/` does:
+ * `startsWith('has-tag:')` alone accepted a bare `has-tag:` and `has-tag:a b` (round 4, minor 1).
+ */
 function assertCondition(condition: string, line: string): void {
   const parts = condition.split(/\s+and\s+/i).map(part => part.trim())
-  const valid = parts.every(part => CONDITIONS.includes(part) || part.startsWith('has-tag:'))
+  const valid = parts.every(part => CONDITIONS.includes(part) || /^has-tag:\S+$/.test(part))
   if (!valid) {
     halt(
       `\`## Stop Predicate\` line \`${line}\` names \`${condition}\`, which is not a canonical macrostate (${CONDITIONS.join(', ')}) or \`has-tag:<label>\``,
@@ -332,13 +430,27 @@ function readAuditLocation(markdown: string): string {
       `\`## Audit Location\` declares the absolute path \`${value}\`; it must be project-relative`,
     )
   }
+  // The path is reported in the run's output and travels with the invocation, so it gets the same
+  // content check as every other borrowed value (round 4, Major).
+  assertSafePromptText('Audit Location', value)
   return value
 }
 
+/**
+ * A positive integer in the ONE form tier 1 accepts: decimal digits, nothing else.
+ *
+ * `Number()` is far too permissive for a policy value — it read `1e3` as 1000, `0x10` as 16 and
+ * `2.0` as 2, each of which tier 1's `/(-?\d+)/` HALTs on, so the same file meant different things
+ * to the two realizations (round 4, minor 1). Shape first, then the positivity check.
+ */
 function positiveInteger(raw: string, what: string): number {
-  const value = Number(raw.trim())
+  const text = raw.trim()
+  if (!/^-?\d+$/.test(text)) {
+    halt(`${what} declares \`${text}\`, which is not a positive integer (decimal digits only)`)
+  }
+  const value = Number(text)
   if (!Number.isInteger(value) || value <= 0) {
-    halt(`${what} declares \`${raw.trim()}\`, which is not a positive integer`)
+    halt(`${what} declares \`${text}\`, which is not a positive integer`)
   }
   return value
 }

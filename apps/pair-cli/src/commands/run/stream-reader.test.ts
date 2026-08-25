@@ -258,6 +258,19 @@ describe('round-trip: what the driver renders is what the driver can read back',
     expect(result.continueToken).toBe(token)
   })
 
+  /**
+   * Round 4, minor 2: a legitimate policy value may carry `<…>` (tier 1 accepts `tag:a<b>`), and it
+   * arrives inside a QUOTED argument. The placeholder check must look at the token's flag structure,
+   * not at the contents of a quoted value — otherwise a valid run stops after one card reporting
+   * success, the signature of rounds 2 and 3.
+   */
+  it('recognises a token whose QUOTED value carries `<...>`', async () => {
+    const { token, result } = await roundTrip({ predicate: 'tag:a<b> ⇒ Done' })
+
+    expect(token).toContain('<b>')
+    expect(result.continueToken).toBe(token)
+  })
+
   it('still refuses the documented TEMPLATE, which is what placeholder syntax means', async () => {
     const stream = (async function* () {
       yield `${JSON.stringify({

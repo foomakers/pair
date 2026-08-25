@@ -218,3 +218,114 @@ describe('describeMergePosture (round 1, finding 3)', () => {
     ).toThrow(/`## Auto-Advance` declares `risk:red`/)
   })
 })
+
+/**
+ * The content check the schema owner requires and tier 1 enforces (round 4, Major).
+ *
+ * Every one of these values reaches an AGENT PROMPT that runs `gh` in an unattended run.
+ * `.claude/workflows/pair-loop.js` (tier 1) rejects all of them through `isSafePromptText`, added by
+ * #250's own round-3 review naming exactly this threat. The driver borrows the policy's VALUES, so
+ * it must borrow the check that decides which values are admissible — otherwise the same adoption
+ * file is safe on tier 1 and executable on tier 2, the divergence ADR-021 excludes.
+ */
+describe('readAutomationPolicy — a policy value is never a command fragment (round 4, Major)', () => {
+  const eligibility = (value: string) => `## Eligibility\n\n${value}\n`
+  const predicate = (value: string) => `## Stop Predicate\n\n${value}\n`
+
+  it.each([
+    ['a command substitution', 'risk:$(whoami)'],
+    ['a backtick', 'risk:`id`'],
+    ['a backtick mid-value', 'risk:gr`een'],
+  ])('HALTs on `## Eligibility` carrying %s', (_case, value) => {
+    expect(() => policyFrom(eligibility(value)).read()).toThrow(/command fragment/)
+  })
+
+  it.each([
+    ['a backticked selector payload', 'tag:`gh pr merge 459 --admin` ⇒ Done'],
+    ['a command substitution in the selector', 'tag:$(whoami) ⇒ Done'],
+  ])('HALTs on `## Stop Predicate` carrying %s', (_case, value) => {
+    expect(() => policyFrom(predicate(value)).read()).toThrow(/command fragment|selector/)
+  })
+
+  it('HALTs on the 4000-character selector payload', () => {
+    expect(() => policyFrom(predicate(`tag:${'a'.repeat(4000)} ⇒ Done`)).read()).toThrow(
+      /command fragment|selector/,
+    )
+  })
+
+  it('HALTs on an over-long eligibility value', () => {
+    expect(() => policyFrom(eligibility('a'.repeat(4000))).read()).toThrow()
+  })
+
+  it('HALTs on `## Auto-Advance` naming an unsafe tier', () => {
+    expect(() =>
+      policyFrom('## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:$(id)\n').read(),
+    ).toThrow()
+  })
+
+  it('HALTs on an audit location that could become a command fragment', () => {
+    expect(() => policyFrom('## Audit Location\n\naudit`whoami`.md\n').read()).toThrow()
+  })
+
+  it('still accepts every legitimate value, spaces included', () => {
+    const policy = policyFrom(
+      '## Eligibility\n\ngood first issue\n\n## Stop Predicate\n\ntype:user story ⇒ Done and has-tag:risk:red\nmax-iterations: 20\n',
+    ).read()
+
+    expect(policy.eligibility).toBe('good first issue')
+    expect(policy.stopPredicate).toBe('type:user story ⇒ Done and has-tag:risk:red')
+  })
+})
+
+/** Round 4, minor 1: parity measured on the CLASS — the same strictness tier 1 applies. */
+describe('readAutomationPolicy — numeric and condition forms match tier 1 exactly', () => {
+  it.each([
+    ['scientific notation', '1e3'],
+    ['hexadecimal', '0x10'],
+    ['a trailing-zero float', '2.0'],
+    ['a leading plus', '+3'],
+    ['digits with a suffix', '3abc'],
+  ])('HALTs on max-iterations in %s form', (_case, value) => {
+    expect(() => policyFrom(`## Stop Predicate\n\nmax-iterations: ${value}\n`).read()).toThrow(
+      /not a positive integer/,
+    )
+  })
+
+  it('accepts a plain decimal integer', () => {
+    expect(policyFrom('## Stop Predicate\n\nmax-iterations: 20\n').read().maxIterations).toBe(20)
+  })
+
+  it.each([
+    ['an empty has-tag payload', 'root ⇒ has-tag:'],
+    ['a has-tag payload carrying a space', 'root ⇒ has-tag:a b'],
+  ])('HALTs on a condition with %s', (_case, value) => {
+    expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(
+      /not a canonical macrostate/,
+    )
+  })
+
+  it('accepts a well-formed has-tag condition', () => {
+    expect(policyFrom('## Stop Predicate\n\nroot ⇒ has-tag:risk:red\n').read().stopPredicate).toBe(
+      'root ⇒ has-tag:risk:red',
+    )
+  })
+
+  it('HALTs on `## Max Parallelism` in a non-decimal form', () => {
+    expect(() => policyFrom('## Max Parallelism\n\n1e3\n').read()).toThrow(/not a positive integer/)
+  })
+
+  /**
+   * Round 4, minor 2 — resolved the other way round, deliberately.
+   *
+   * `tag:a<b>` passes tier 1's content check (`isSafePromptText` allows angle brackets), so HALTing
+   * on it here would be the driver inventing STRICTER schema than its owner — the same class of
+   * divergence as round 3's, mirrored. Parity means accepting it; the fix therefore belongs to the
+   * token reader, which must not discard a token because a QUOTED value contains `<…>`
+   * (see `stream-reader.test.ts` — the placeholder check is quote-aware).
+   */
+  it('accepts a selector payload carrying `<...>`, exactly as tier 1 does', () => {
+    expect(policyFrom('## Stop Predicate\n\ntag:a<b> ⇒ Done\n').read().stopPredicate).toBe(
+      'tag:a<b> ⇒ Done',
+    )
+  })
+})

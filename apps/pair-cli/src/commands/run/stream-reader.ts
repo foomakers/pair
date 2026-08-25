@@ -75,7 +75,13 @@ const CONTINUE_TOKEN_MARKER = /^[ \t]*CONTINUE-TOKEN:[ \t]*(pair-\S+[^\n\r]*?)[ 
  * reader's: guessing at "looks unfinished" is what cost two rounds.
  */
 function isConcreteToken(candidate: string): boolean {
-  return !/<[^>]*>/.test(candidate) && !candidate.includes('[--')
+  // QUOTE-AWARE (round 4, minor 2): a quoted argument is a VALUE, and a value may legitimately
+  // contain angle brackets — `tag:a<b>` passes the policy's own content check, and tier 1 accepts
+  // it. Placeholders live in the token's flag STRUCTURE, so the check runs on the token with its
+  // quoted values removed; judging the value too discarded a real token and stopped the loop after
+  // one card, the signature of the rounds-2 and -3 Majors.
+  const structure = candidate.replace(/"(?:[^"\\]|\\.)*"/g, '""')
+  return !/<[^>]*>/.test(structure) && !structure.includes('[--')
 }
 
 /** How deep into an event's structure the token is looked for — engines nest text a few levels. */
