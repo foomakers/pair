@@ -409,15 +409,12 @@ export function isApprovalSignalFamily(rel: string): boolean {
 }
 
 /**
- * Every approval round in `content`, each tagged with whether the step it sits in
- * names `$approval`. Fenced code blocks are skipped — an Output Format sample is
- * not a step that asks.
+ * Per line: the index of the step (list item / heading) it belongs to, and whether
+ * it sits inside a fence. One pass, shared by every reader below, so "which step is
+ * this line part of" is answered the same way for the qualification check and for
+ * the guided-drift check.
  */
-export function findApprovalRounds(content: string): ApprovalRound[] {
-  const lines = content.split('\n')
-
-  // Per line: the index its step starts at (so a prompt line inherits its item's
-  // qualification), and whether it sits inside a fence.
+function scanBlocks(lines: string[]): { blockStart: number[]; inFence: boolean[] } {
   const blockStart: number[] = []
   const inFence: boolean[] = []
   let current = 0
@@ -428,18 +425,100 @@ export function findApprovalRounds(content: string): ApprovalRound[] {
     if (!fence && BLOCK_START.test(line)) current = i
     blockStart[i] = current
   })
+  return { blockStart, inFence }
+}
+
+/** The full text of the step containing `lineIndex` — item line plus continuations. */
+function blockAt(lines: string[], blockStart: number[], lineIndex: number): string {
+  const start = blockStart[lineIndex] as number
+  let end = start + 1
+  while (end < lines.length && (blockStart[end] as number) === start) end++
+  return lines.slice(start, end).join('\n')
+}
+
+/**
+ * Every approval round in `content`, each tagged with whether the step it sits in
+ * names `$approval`. Fenced code blocks are skipped — an Output Format sample is
+ * not a step that asks.
+ */
+export function findApprovalRounds(content: string): ApprovalRound[] {
+  const lines = content.split('\n')
+  const { blockStart, inFence } = scanBlocks(lines)
 
   const rounds: ApprovalRound[] = []
   lines.forEach((line, i) => {
     if (inFence[i]) return
     if (!APPROVAL_ROUND_PATTERNS.some(p => p.test(line))) return
-    const start = blockStart[i] as number
-    let end = start + 1
-    while (end < lines.length && (blockStart[end] as number) === start) end++
-    const block = lines.slice(start, end).join('\n')
-    rounds.push({ line: i + 1, text: line.trim(), qualified: APPROVAL_TOKEN.test(block) })
+    rounds.push({
+      line: i + 1,
+      text: line.trim(),
+      qualified: APPROVAL_TOKEN.test(blockAt(lines, blockStart, i)),
+    })
   })
   return rounds
+}
+
+/**
+ * Vocabulary that describes what `auto` does, and therefore belongs INSIDE a
+ * round's `Under auto` clause — never in the part a guided run reads.
+ *
+ * Kept to phrases that are directives about the non-interactive resolution, not to
+ * every word the clause happens to use: the test of a candidate here is "would a
+ * guided reader change what they do after reading it?".
+ */
+export const AUTO_ONLY_DIRECTIVES: RegExp[] = [
+  /\bname the leader\b/i,
+  /\bresolved deterministically\b/i,
+  /\baccepted as-is\b/i,
+  /\bkept and reported\b/i,
+  /\bnever asked\b/i,
+]
+
+/** Where a round's non-interactive branch begins. */
+const AUTO_CLAUSE = /under\s+`?\$?approval:?\s*auto`?|`\$approval:\s*auto`|under\s+`auto`/i
+
+export interface GuidedDrift {
+  /** 1-based line of the approval round whose guided half drifted. */
+  line: number
+  /** The guided-half text that carries the directive. */
+  text: string
+  /** The offending phrase. */
+  directive: string
+}
+
+/**
+ * Rounds whose GUIDED half carries `auto`-only text — the AC2 regression class.
+ *
+ * Qualifying a round is supposed to be behaviour-preserving for a caller that
+ * passes nothing: `interactive` is what an omitted `$approval` resolves to, so the
+ * qualified step must still say exactly what the step said before. That property
+ * is easy to lose by putting the new sentence on the wrong side of the clause, and
+ * it happened: a near-tie round gained "name the leader" ahead of its `Under auto`
+ * clause, which changed the question the guided interview asks — a proposal to
+ * approve instead of two options to choose between.
+ *
+ * Read per ROUND BLOCK, not per line, so a clause continued on the next line (the
+ * `map-*` shape: prompt blockquote, then the `auto` paragraph) is correctly seen as
+ * part of the same step. A block with no `Under auto` clause at all is checked
+ * whole — auto-only text with nothing scoping it is the same defect, unscoped.
+ */
+export function findGuidedDrift(content: string): GuidedDrift[] {
+  const lines = content.split('\n')
+  const { blockStart } = scanBlocks(lines)
+  const drifts: GuidedDrift[] = []
+  for (const round of findApprovalRounds(content)) {
+    const block = blockAt(lines, blockStart, round.line - 1)
+    const clauseAt = block.search(AUTO_CLAUSE)
+    const guidedHalf = clauseAt === -1 ? block : block.slice(0, clauseAt)
+    for (const directive of AUTO_ONLY_DIRECTIVES) {
+      const hit = guidedHalf.match(directive)
+      if (hit) {
+        drifts.push({ line: round.line, text: guidedHalf.trim(), directive: hit[0] })
+        break
+      }
+    }
+  }
+  return drifts
 }
 
 /**
@@ -485,6 +564,13 @@ export function checkApprovalSignal(
     errors.push(
       `${rel}:${round.line}: approval round "${round.text}" is not conditional on ` +
         `\`$approval\` — name the signal in the step (skill-conventions/approval-rounds.md)`,
+    )
+  }
+  for (const drift of findGuidedDrift(content)) {
+    errors.push(
+      `${rel}:${drift.line}: "${drift.directive}" sits in the GUIDED half of an approval ` +
+        `round — move it inside the \`Under \`auto\`\` clause. Qualifying a round must not ` +
+        `change what a caller that passes nothing reads`,
     )
   }
   return errors

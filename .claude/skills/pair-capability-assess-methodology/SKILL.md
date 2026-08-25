@@ -69,9 +69,9 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - Key ceremonies: [list main ceremonies/practices]
    > - Trade-offs: [acknowledged limitations]
 
-4. **Act**: If two methodologies score within 10%, present both with trade-off analysis (`$approval: interactive`) — and **name the leader** in item 3's shape, so the near-tie is a presentation with a recommendation rather than an open question. Under `auto` the near-tie is **resolved deterministically, never asked**: the higher-scoring methodology stands, an exact tie goes to the one the decision tree (item 2) reaches first, and the **runner-up plus the margin are reported** as a choice a human has not made.
+4. **Act**: If two methodologies score within 10%, present both with trade-off analysis. Under `$approval: auto` the near-tie is **resolved without asking**: the higher-scoring methodology stands; on an **exact tie**, the one **project state** already shows (an existing board, ceremony cadence or `way-of-working.md` section — the cascade's own precedence); and if project state shows neither, **no proposal is emitted** and the tie is reported **unresolved** to the caller. The runner-up and the margin are reported either way, as a choice a human has not made.
 
-5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above — the single one named in item 3, or item 4's leader when the scores are close — is accepted as-is and reported in the Output Format, never asked.
+5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
 
 ### Step 4: Render Adoption Proposal
 

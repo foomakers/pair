@@ -18,6 +18,7 @@ import {
   APPROVAL_SIGNAL_FAMILIES,
   isApprovalSignalFamily,
   findApprovalRounds,
+  findGuidedDrift,
   checkApprovalSignal,
 } from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
@@ -561,6 +562,72 @@ describe('checkApprovalSignal — the two obligations, injected one at a time', 
       ].join('\n'),
     )
     expect(errors).toHaveLength(2)
+  })
+})
+
+// Review round 2, Major: qualifying a round must not change what the GUIDED path
+// says. The round-1 fix to `assess-methodology` put "name the leader" BEFORE the
+// `Under auto` clause, so it applied to the interactive path too: a guided
+// bootstrap with Scrum 82 / Kanban 76 used to present two neutral options and ask
+// which one, and would now name Scrum and ask for approval of it. Different
+// question — and AC2 of this story is "guided must not shift by one word".
+//
+// The guard is the general rule, not the instance: `auto`-only vocabulary may not
+// appear in the part of a round that precedes its `Under auto` clause.
+describe('findGuidedDrift — auto-only text must not leak into the guided half', () => {
+  const LEADER = 'name the leader'
+
+  it('flags an auto-only directive placed BEFORE the `Under auto` clause', () => {
+    const drift = findGuidedDrift(
+      '4. **Act**: If two score within 10%, present both with trade-off analysis ' +
+        `(\`$approval: interactive\`) — and **${LEADER}**. Under \`auto\` the near-tie is ` +
+        'resolved deterministically.\n',
+    )
+    expect(drift).toHaveLength(1)
+    expect(drift[0]?.line).toBe(1)
+    expect(drift[0]?.directive).toContain(LEADER)
+  })
+
+  it('accepts the same directive once it sits inside the `Under auto` clause', () => {
+    expect(
+      findGuidedDrift(
+        '4. **Act**: If two score within 10%, present both with trade-off analysis ' +
+          `(\`$approval: interactive\`). Under \`auto\`: **${LEADER}** — the higher-scoring one stands.\n`,
+      ),
+    ).toEqual([])
+  })
+
+  it('reads the whole step, so a directive in the clause’s own continuation line is fine', () => {
+    const step = [
+      '3. **Act**: Present the delta (`$approval: interactive`):',
+      '',
+      '   > Approve or adjust?',
+      '',
+      '   Under `$approval: auto` the proposal is accepted as-is and reported.',
+    ].join('\n')
+    expect(findGuidedDrift(step)).toEqual([])
+  })
+
+  it('flags a round that carries auto-only text with no `Under auto` clause at all', () => {
+    // Nothing scopes it, so it reads as unconditional — the same defect, worse.
+    const drift = findGuidedDrift(
+      '5. **Verify** (`$approval: interactive`): Developer approves — the recommendation is ' +
+        'accepted as-is.\n',
+    )
+    expect(drift).toHaveLength(1)
+  })
+
+  it('leaves a round with no auto-only vocabulary alone', () => {
+    expect(
+      findGuidedDrift(
+        '5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the ' +
+          'recommendation above is accepted as-is and reported, never asked.\n',
+      ),
+    ).toEqual([])
+  })
+
+  it('only looks at approval rounds, not at prose that happens to use the words', () => {
+    expect(findGuidedDrift('- The proposal is accepted as-is by the caller.\n')).toEqual([])
   })
 })
 

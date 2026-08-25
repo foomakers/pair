@@ -53,7 +53,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    - Score each candidate pattern on: Implementation Complexity, Team Skill Required, Maintenance Overhead, Scalability, Best For.
    - Weight criteria based on project type (from PRD or developer input).
 
-2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis (`$approval: interactive`) — note that this presentation **names a recommendation**, so under `auto` item 4 has something to accept: the named pattern stands, and the runner-up plus the margin are reported as a choice a human has not made:
+2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis. Under `$approval: auto` item 4 still has something to accept, because this presentation already **names a recommendation** below: the named pattern stands, and the runner-up plus the margin are reported as a choice a human has not made:
 
    > **Top candidates:**
    > 1. **[Pattern A]** — Score: X. Strengths: ... Weaknesses: ...

@@ -47,7 +47,15 @@ Every round suppressed under `auto` still owes its content to the caller: the ac
 
 A round inherited from a shared convention — the [resolution cascade](resolution-cascade.md)'s Path A confirmation and Path B keep-or-redo — is qualified **there**, once, for every skill that follows it. A skill restates only its own local rounds.
 
-**A choice is an approval round.** "Which of these two?" blocks an autonomous run exactly as "confirm this?" does, so a tie-break or a top-2 presentation is a round like any other and carries the signal. It is row 1, not row 3, on one condition: the presentation **names a leader**. A skill that can rank its candidates can state what the human would be accepting — `auto` takes the leader, breaks an exact tie by the guideline's own ordering, and reports the runner-up **and the margin** as a choice nobody made. Presenting two options without naming one is what turns a close call into a gate; name the leader and it is a proposal.
+**A choice is an approval round.** "Which of these two?" blocks an autonomous run exactly as "confirm this?" does, so a tie-break or a top-2 presentation is a round like any other and carries the signal. Which row it lands in depends on one question: **can the skill name a leader without asking?**
+
+- **It can** — from its own scoring, or from what project state already shows: row 1. `auto` takes that leader and reports the runner-up **and the margin** as a choice nobody made.
+- **It cannot** — the scores are exactly equal and project state is silent: row 3. Nothing is there to accept, so no proposal is emitted and the tie is reported unresolved.
+
+Two traps, both met in practice:
+
+- **A list is not a ranking.** "Whichever the guideline lists first" looks deterministic and is not: two enumerations of the same candidates routinely disagree (a skill's candidate set is written for coverage, a guideline's comparison table for reading), so the same tie resolves differently depending on which file was open. Resolve from scores or from project state — never from document order.
+- **The leader belongs to the `auto` branch, not to the guided presentation.** A round that presented two neutral options and asked which one must keep presenting two neutral options and asking; naming a winner there changes the question a guided caller is asked, which is precisely what the default forbids. If a round *already* names a recommendation, say so — do not add one.
 
 ## Edge cases
 

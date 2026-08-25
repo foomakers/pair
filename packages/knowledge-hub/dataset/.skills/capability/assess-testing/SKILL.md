@@ -51,7 +51,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
 
 ### Step 3: Evaluate Options
 
-1. **Act**: Based on adopted language/framework, identify compatible testing frameworks:
+1. **Act**: Based on adopted language/framework, identify compatible testing frameworks — a candidate set, **not an order of preference** (the evaluation in item 2 ranks them; the [testing guideline](../../../.pair/knowledge/guidelines/testing/README.md)'s comparison table lists the same frameworks in a different order for the same reason):
    - For TypeScript/JavaScript: Vitest, Jest, Mocha, Playwright, Cypress
    - For other stacks: framework-appropriate options
 
@@ -123,7 +123,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 - **tech-stack.md exists but no testing section**: Render content that adds the testing section; the caller's write preserves all other content.
 - **Framework incompatible with adopted language**: HALT — warn developer of incompatibility, suggest compatible alternatives.
 - **Decision record already exists for same scope+decision**: Report "already recorded" — no proposal to persist (no duplicates).
-- **Multiple valid frameworks score equally**: Present top 2 with trade-off analysis, ask developer to choose (`$approval: interactive`). Under `auto` the tie is **resolved deterministically, never asked**: take the highest-scoring candidate, and on an exact tie the one the guideline lists first — then **report the tie and the runner-up** as a choice a human has not made, so it can be revisited. A tie is a close call, not a judgement gate: the skill can state what it would propose (Step 3's ranking), which is what `auto` accepts.
+- **Multiple valid frameworks score equally**: Present top 2 with trade-off analysis, ask developer to choose (`$approval: interactive`). Under `auto` the tie is **resolved without asking**: the framework **project state** already shows wins (a runner in `package.json`, a config file, an existing test setup — the cascade's own precedence); if project state shows neither, **no proposal is emitted** and the tie is reported **unresolved** to the caller. **No list decides it**: Step 3 produces a recommendation, not a ranking, and the two enumerations a reader might mistake for one disagree — Step 3 item 1 names Vitest before Jest, the [testing guideline](../../../.pair/knowledge/guidelines/testing/README.md)'s comparison table names Jest before Vitest — so "first listed" would resolve the same tie two ways. The tie and the runner-up are reported either way, as a choice a human has not made.
 
 ## Graceful Degradation
 

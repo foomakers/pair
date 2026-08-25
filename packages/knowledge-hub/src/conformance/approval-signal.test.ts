@@ -29,6 +29,7 @@ import {
   APPROVAL_SIGNAL_FAMILIES,
   checkApprovalSignal,
   findApprovalRounds,
+  findGuidedDrift,
 } from '../tools/skills-conformance-check'
 
 const DATASET_SKILLS = join(__dirname, '../../dataset/.skills')
@@ -152,6 +153,57 @@ describe('tie-break / choice rounds are rounds too (review round 1, Major 1)', (
       }
     })
   }
+})
+
+describe('qualifying a round did not move the guided path (AC2, review round 2)', () => {
+  // The round-1 remediation broke AC2 in `assess-methodology`: "name the leader"
+  // landed BEFORE the `Under auto` clause, so the guided interview started naming a
+  // winner in a near-tie where it used to present two neutral options. AC2 is
+  // "guided must not shift by one word", so the invariant is checked over the whole
+  // family, in both corpora, not just on the line that broke.
+  for (const [rel, file] of FAMILY_SKILLS) {
+    it(`${rel} — no auto-only text in the guided half of any round (dataset)`, () => {
+      expect(findGuidedDrift(read(file))).toEqual([])
+    })
+
+    it(`${rel} — same in the installed mirror`, () => {
+      expect(findGuidedDrift(read(join(INSTALLED_SKILLS, installedDir(rel), 'SKILL.md')))).toEqual(
+        [],
+      )
+    })
+  }
+})
+
+describe('a tie-break resolves from a real source, not an invented order (round 2)', () => {
+  // Round 2, Minor: the round-1 wording said "the one the guideline lists first",
+  // but nothing in the corpus is a ranking — `assess-testing` Step 3 enumerates
+  // "Vitest, Jest, …" while `guidelines/testing/README.md`'s comparison table lists
+  // Jest first, so the same exact tie resolved two ways depending on which file was
+  // read. A tie-break has to name a source that actually decides.
+  const ORDERING_CLAIM = /\b(?:lists?|reaches)\s+first\b/i
+
+  for (const [rel, file] of FAMILY_SKILLS) {
+    it(`${rel} — claims no first-in-a-list tie-break`, () => {
+      const offenders = read(file)
+        .split('\n')
+        .filter(line => ORDERING_CLAIM.test(line))
+      expect(offenders, `list-order tie-break in ${rel}: ${offenders.join(' | ')}`).toEqual([])
+    })
+  }
+
+  it('every tie-break clause names project state and the unresolved fallback', () => {
+    const withTie = FAMILY_SKILLS.filter(([, file]) => /\bexact tie\b/i.test(read(file)))
+    expect(withTie.length).toBeGreaterThan(0)
+    for (const [rel, file] of withTie) {
+      const content = read(file)
+      expect(content, `${rel} must resolve an exact tie from project state`).toMatch(
+        /exact tie[\s\S]{0,240}project state/i,
+      )
+      expect(content, `${rel} must say what happens when project state is silent`).toMatch(
+        /(no proposal|unresolved)/i,
+      )
+    }
+  })
 })
 
 describe('the convention is the single statement of the signal (#410)', () => {
