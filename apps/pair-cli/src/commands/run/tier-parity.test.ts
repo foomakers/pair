@@ -29,8 +29,10 @@ const ORCH_MARKER = '// ORCHESTRATION — the unattended fan-out path'
 
 interface Tier1Helpers {
   extractEligibility: (policyText: string) => { kind: string; value?: string }
+  extractAutoAdvance: (policyText: string, eligibilityValue?: string) => unknown
   parseStopPredicate: (policyText: string) => unknown
   parseMaxParallelism: (policyText: string) => unknown
+  resolveAuditLocation: (policyText: string) => string
 }
 
 /**
@@ -42,10 +44,20 @@ function tier1(): Tier1Helpers {
   // `export ` stripped exactly as tier 1's own harness strips it, so the declarations evaluated
   // here are the ones the workflow really runs.
   const source = readFileSync(WORKFLOW, 'utf-8').replace(/^export /gm, '')
+  // ASSERTED, not assumed (round 5, reviewer question): this test couples to tier 1's marker
+  // comment, and a rename would otherwise silently slice the whole file — `indexOf` returning -1
+  // yields an empty helpers half, every parity case would fail obscurely, and the natural reading
+  // of that failure is "tier 2 diverged" rather than "the marker moved".
+  if (!source.includes(ORCH_MARKER)) {
+    throw new Error(
+      `tier 1 (${WORKFLOW}) no longer contains the marker \`${ORCH_MARKER}\`; update this test's ` +
+        `extraction to match the workflow's current structure`,
+    )
+  }
   const helpers = source.slice(0, source.indexOf(ORCH_MARKER))
   const factory = new Function(
     `${helpers}
-    return { extractEligibility, extractAutoAdvance, parseStopPredicate, parseMaxParallelism }`,
+    return { extractEligibility, extractAutoAdvance, parseStopPredicate, parseMaxParallelism, resolveAuditLocation }`,
   )
   return factory() as Tier1Helpers
 }
@@ -64,11 +76,32 @@ function tier2Rejects(policyText: string): boolean {
   }
 }
 
-function tier1Rejects(policyText: string, section: 'Eligibility' | 'Stop Predicate'): boolean {
+type Section =
+  | 'Eligibility'
+  | 'Stop Predicate'
+  | 'Auto-Advance'
+  | 'Max Parallelism'
+  | 'Audit Location'
+
+/**
+ * Tier 1's verdict on one section. Every section the driver reads has an entry — the declared-but
+ * unused helpers of round 4 were a sign the corpus stopped short of the sections that then produced
+ * round 5's findings (reviewer question), so the map is now total over what tier 2 reads.
+ */
+function tier1Rejects(policyText: string, section: Section): boolean {
   const helpers = tier1()
+  const run: Record<Section, () => unknown> = {
+    Eligibility: () => helpers.extractEligibility(policyText),
+    'Stop Predicate': () => helpers.parseStopPredicate(policyText),
+    'Auto-Advance': () => {
+      const eligibility = helpers.extractEligibility(policyText)
+      return helpers.extractAutoAdvance(policyText, eligibility.value)
+    },
+    'Max Parallelism': () => helpers.parseMaxParallelism(policyText),
+    'Audit Location': () => helpers.resolveAuditLocation(policyText),
+  }
   try {
-    if (section === 'Eligibility') helpers.extractEligibility(policyText)
-    else helpers.parseStopPredicate(policyText)
+    run[section]()
     return false
   } catch {
     return true
@@ -126,6 +159,55 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     const policyText = `## Stop Predicate\n\n${value}\n`
 
     expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Stop Predicate'))
+  })
+
+  const AUTO_ADVANCE_CORPUS: Array<[label: string, value: string]> = [
+    ['the fail-closed default', '(none)'],
+    ['the project’s own eligibility tier', 'risk:green'],
+    ['a tier outside eligibility', 'risk:red'],
+    ['a non-label value', 'yes please'],
+    ['a boolean expression', 'risk:green OR risk:yellow'],
+    ['a command substitution', 'risk:$(id)'],
+  ]
+
+  const PARALLELISM_CORPUS: Array<[label: string, value: string]> = [
+    ['a decimal ceiling', '3'],
+    ['scientific notation', '1e3'],
+    ['hexadecimal', '0x10'],
+    ['a trailing-zero float', '2.0'],
+    ['zero', '0'],
+    ['prose', 'plenty'],
+    ['a well-formed per-tier override', '3\nrisk:green: 5'],
+    ['a malformed override line', '3\nrisk:green 5'],
+    ['an override naming a non-label', '3\nnot a tier: 5'],
+    ['an override with a non-integer', '3\nrisk:green: many'],
+  ]
+
+  const AUDIT_CORPUS: Array<[label: string, value: string]> = [
+    ['a normal relative path', 'automation/loop-audit.md'],
+    ['an absolute path', '/var/tmp/audit.md'],
+    ['a traversing path', '../../../etc/x.md'],
+    ['a backticked path', 'audit`whoami`.md'],
+    ['a two-line body', 'audit/one.md\naudit/two.md'],
+  ]
+
+  it.each(AUTO_ADVANCE_CORPUS)('agrees on `## Auto-Advance` with %s', (_label, value) => {
+    // Eligibility is declared alongside it, because tier 1 validates the switch against it.
+    const policyText = `## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\n${value}\n`
+
+    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Auto-Advance'))
+  })
+
+  it.each(PARALLELISM_CORPUS)('agrees on `## Max Parallelism` with %s', (_label, value) => {
+    const policyText = `## Max Parallelism\n\n${value}\n`
+
+    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Max Parallelism'))
+  })
+
+  it.each(AUDIT_CORPUS)('agrees on `## Audit Location` with %s', (_label, value) => {
+    const policyText = `## Audit Location\n\n${value}\n`
+
+    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Audit Location'))
   })
 
   it('agrees that this repo’s real adoption file is valid', () => {

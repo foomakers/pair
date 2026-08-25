@@ -267,6 +267,47 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
     expect(() => policyFrom('## Audit Location\n\naudit`whoami`.md\n').read()).toThrow()
   })
 
+  /**
+   * Round 5, Major: the WHOLE predicate line reaches the prompt (`predicate = line`), so the
+   * content check belongs on the line, not on one field of it. `has-tag:$(whoami)` satisfies
+   * `/^has-tag:\S+$/` — shape is not safety.
+   *
+   * This is a TIER-2-ONLY exposure and the parity test cannot catch it by construction: tier 1
+   * accepts the same strings but never inlines them, it evaluates the predicate in JS. So the guard
+   * has to be here, applied directly.
+   */
+  it.each([
+    ['a command substitution in has-tag', 'root ⇒ has-tag:$(whoami)'],
+    ['a backtick in has-tag', 'root ⇒ has-tag:`id`'],
+    ['a command substitution after the arrow', 'tag:risk:red ⇒ has-tag:$(id)'],
+  ])('HALTs on a predicate line carrying %s', (_case, value) => {
+    expect(() => policyFrom(`## Stop Predicate\n\n${value}\n`).read()).toThrow(/command fragment/)
+  })
+
+  it('HALTs on a 4000-character has-tag payload (the line is bounded, not just the selector)', () => {
+    expect(() =>
+      policyFrom(`## Stop Predicate\n\nroot ⇒ has-tag:${'a'.repeat(4000)}\n`).read(),
+    ).toThrow(/command fragment/)
+  })
+
+  it('HALTs on a traversing audit location, as tier 1 does', () => {
+    expect(() => policyFrom('## Audit Location\n\n../../../etc/x.md\n').read()).toThrow(
+      /escapes the working area/,
+    )
+  })
+
+  it('HALTs on a multi-line audit location body, as tier 1 does', () => {
+    expect(() => policyFrom('## Audit Location\n\naudit/one.md\naudit/two.md\n').read()).toThrow(
+      /exactly one path/,
+    )
+  })
+
+  it('still accepts a normal relative audit path', () => {
+    expect(policyFrom('## Audit Location\n\nautomation/loop-audit.md\n').read().auditLocation).toBe(
+      'automation/loop-audit.md',
+    )
+  })
+
   it('still accepts every legitimate value, spaces included', () => {
     const policy = policyFrom(
       '## Eligibility\n\ngood first issue\n\n## Stop Predicate\n\ntype:user story ⇒ Done and has-tag:risk:red\nmax-iterations: 20\n',
@@ -310,8 +351,46 @@ describe('readAutomationPolicy — numeric and condition forms match tier 1 exac
     )
   })
 
-  it('HALTs on `## Max Parallelism` in a non-decimal form', () => {
-    expect(() => policyFrom('## Max Parallelism\n\n1e3\n').read()).toThrow(/not a positive integer/)
+  /**
+   * Round 5, minor 2 — INVERTED from round 4, which was wrong in the other direction.
+   *
+   * Tier 1 parses this field with `Number()` (`parseMaxParallelism`), so `1e3` is 1000 and `0x10` is
+   * 16 there. Round 4 tightened it here to decimal-only, making the driver STRICTER than its schema
+   * owner — the same divergence as round 3's, mirrored. `max-iterations` stays strict because tier 1
+   * IS strict there (`/^max-iterations:\s*(-?\d+)\s*$/`): the two fields differ on purpose.
+   */
+  it.each([
+    ['scientific notation', '1e3', 1000],
+    ['hexadecimal', '0x10', 16],
+    ['a trailing-zero float', '2.0', 2],
+  ])(
+    'accepts `## Max Parallelism` in %s form, exactly as tier 1 does',
+    (_case, value, expected) => {
+      expect(policyFrom(`## Max Parallelism\n\n${value}\n`).read().maxParallelism).toBe(expected)
+    },
+  )
+
+  it('HALTs on a `## Max Parallelism` global that is not a positive integer at all', () => {
+    expect(() => policyFrom('## Max Parallelism\n\nplenty\n').read()).toThrow(/positive integer/)
+  })
+
+  it.each([
+    ['a malformed override line', 'risk:green 5'],
+    ['an override naming a non-label', 'not a tier: 5'],
+    ['an override with a non-integer', 'risk:green: many'],
+    ['an override at zero', 'risk:green: 0'],
+  ])('HALTs on %s instead of ignoring it silently', (_case, override) => {
+    expect(() => policyFrom(`## Max Parallelism\n\n3\n${override}\n`).read()).toThrow(
+      /`## Max Parallelism`/,
+    )
+  })
+
+  it('accepts a well-formed per-tier override, keeping the global ceiling', () => {
+    const policy = policyFrom('## Max Parallelism\n\n3\nrisk:green: 5\n').read()
+
+    // The driver caps itself at 1 per process either way (AC9) — it reads the global, and the
+    // override only has to be VALIDATED, exactly as tier 1 validates it.
+    expect(policy.maxParallelism).toBe(3)
   })
 
   /**

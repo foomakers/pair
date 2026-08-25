@@ -368,6 +368,13 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
     }
     assertSelector(match[1]!.trim(), line)
     assertCondition(match[2]!.trim(), line)
+    // The WHOLE LINE is what `readStopPredicate` returns and what reaches the prompt, so the whole
+    // line is what gets content-checked (round 5, Major). Checking the selector payload alone left
+    // `root ⇒ has-tag:$(whoami)` through: `/^has-tag:\S+$/` is a SHAPE rule, and `\S+` happily
+    // admits a backtick, `$(` or 4000 characters. This exposure is TIER-2-ONLY — tier 1 accepts the
+    // same strings but evaluates the predicate in JS and never inlines it — so no parity comparison
+    // can catch it; the guard has to be applied here, directly.
+    assertSafePromptText('Stop Predicate', line)
     predicate = line
   }
 
@@ -413,21 +420,59 @@ function assertCondition(condition: string, line: string): void {
 
 /* --------------------------------------------------------- parallelism/audit */
 
+/**
+ * `## Max Parallelism` — the global ceiling, validated EXACTLY as tier 1 validates it.
+ *
+ * Tier 1 (`parseMaxParallelism`) converts the first line with `Number()`, so `1e3` is 1000 and
+ * `0x10` is 16 there. Round 4 made this field decimal-only here, which left the driver STRICTER
+ * than its schema owner — round 3's divergence mirrored (round 5, minor 2). `max-iterations` keeps
+ * the strict form because tier 1 IS strict there; the two fields differ deliberately.
+ *
+ * Per-tier overrides are VALIDATED even though the driver never applies one (it caps itself at 1
+ * per process, AC9): tier 1 HALTs on a malformed override, so silently ignoring it here would make
+ * the same file mean two different things again.
+ */
 function readMaxParallelism(markdown: string): number {
   const lines = sectionLines(markdown, 'Max Parallelism')
   if (lines === undefined || lines.length === 0) return FAIL_SAFE_MAX_PARALLELISM
-  // Per-tier overrides (`risk:green: 5`) are the loop's business, not the driver's: a single
-  // driver process is capped at 1 either way (AC9), so only the global ceiling is read.
-  return positiveInteger(lines[0]!, '`## Max Parallelism`')
+  const global = numericPositiveInteger(lines[0]!, '`## Max Parallelism` first line')
+  for (const line of lines.slice(1)) assertParallelismOverride(line)
+  return global
+}
+
+/** `<tier>: <positive integer>` — tier 1's own three checks, in its own order. */
+function assertParallelismOverride(line: string): void {
+  const match = /^(.+?):\s*(-?\d+)\s*$/.exec(line)
+  if (!match) {
+    halt(`\`## Max Parallelism\` override line \`${line}\` is not \`<tier>: <positive integer>\``)
+  }
+  const tier = match[1]!.trim()
+  if (!isLabelShape(tier)) {
+    halt(
+      `\`## Max Parallelism\` override key \`${tier}\` is not a well-formed \`family:tier\` label`,
+    )
+  }
+  numericPositiveInteger(match[2]!, `\`## Max Parallelism\` override for \`${tier}\``)
 }
 
 function readAuditLocation(markdown: string): string {
   const lines = sectionLines(markdown, 'Audit Location')
   if (lines === undefined || lines.length === 0) return DEFAULT_AUDIT_LOCATION
+  // Tier 1's own four checks, in its own order (round 5, minor 1): exactly one line, no absolute
+  // path, no segment that escapes the working area, and safe to inline.
+  if (lines.length > 1) {
+    halt(`\`## Audit Location\` declares ${lines.length} lines, but takes exactly one path`)
+  }
   const value = lines[0]!
   if (value.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(value)) {
     halt(
       `\`## Audit Location\` declares the absolute path \`${value}\`; it must be project-relative`,
+    )
+  }
+  if (value.split('/').some(segment => segment === '..')) {
+    halt(
+      `\`## Audit Location\` declares \`${value}\`, where a path segment escapes the working area; ` +
+        `it must stay project-relative`,
     )
   }
   // The path is reported in the run's output and travels with the invocation, so it gets the same
@@ -437,11 +482,29 @@ function readAuditLocation(markdown: string): string {
 }
 
 /**
- * A positive integer in the ONE form tier 1 accepts: decimal digits, nothing else.
+ * A positive integer as tier 1 reads `## Max Parallelism`: `Number()`, then integer + positive.
  *
- * `Number()` is far too permissive for a policy value — it read `1e3` as 1000, `0x10` as 16 and
- * `2.0` as 2, each of which tier 1's `/(-?\d+)/` HALTs on, so the same file meant different things
- * to the two realizations (round 4, minor 1). Shape first, then the positivity check.
+ * Deliberately LENIENT — `1e3` is 1000 and `0x10` is 16 here, because that is what tier 1 does with
+ * this field. Kept as its own helper next to the strict one so the asymmetry is visible: the two
+ * fields are validated differently BY THE SCHEMA OWNER, and matching that is the whole point
+ * (round 5, minor 2). Neither helper may be "unified" with the other without changing what a policy
+ * file means on one of the two tiers.
+ */
+function numericPositiveInteger(raw: string, what: string): number {
+  const text = raw.trim()
+  const value = Number(text)
+  if (!Number.isInteger(value) || value <= 0) {
+    halt(`${what} declares \`${text}\`, which is not a positive integer`)
+  }
+  return value
+}
+
+/**
+ * A positive integer in the strict form tier 1 requires for `max-iterations`: decimal digits only.
+ *
+ * `Number()` alone was far too permissive for THIS field — it read `1e3` as 1000, `0x10` as 16 and
+ * `2.0` as 2, each of which tier 1's `/^max-iterations:\s*(-?\d+)\s*$/` rejects outright, so the
+ * same file meant different things to the two realizations (round 4, minor 1).
  */
 function positiveInteger(raw: string, what: string): number {
   const text = raw.trim()
