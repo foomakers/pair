@@ -197,24 +197,46 @@ describe('a tie-break resolves from a real source, not an invented order (round 
   // `toBeGreaterThan(0)` witness was already satisfied by that one skill. The
   // filter is now the concept, not one skill's phrasing, and each match is its own
   // named case so the report shows WHICH skills were actually checked.
-  const TIE_BREAK_CLAUSE = /\btie\b/i
-  const withTie = FAMILY_SKILLS.filter(([, file]) => TIE_BREAK_CLAUSE.test(read(file)))
+  // Round 7: the filter is the DECLARED MARKER, not a word in the prose. A skill
+  // resolves a tie iff one of its rounds declares `auto=project-state-then-unresolved`
+  // — which is the contract, so the filter cannot drift out from under the pin the
+  // way `/exact tie/` and then `/\btie\b/` both did.
+  const declaresTieBreak = (content: string): boolean =>
+    findApprovalRounds(content).some(r => r.marker?.auto === 'project-state-then-unresolved')
 
-  it('the filter catches every skill that resolves a tie, not just one phrasing', () => {
-    // Named explicitly because the round-2 rewrite touched exactly these three: a
-    // filter that silently stopped matching one of them would make its case vanish
-    // rather than fail, which is how the previous version of this pin went blind.
+  const withTie = FAMILY_SKILLS.filter(([, file]) => declaresTieBreak(read(file)))
+
+  it('the filter catches every skill that declares a tie-break resolution', () => {
     const matched = withTie.map(([rel]) => rel)
     for (const skill of [
       'capability/assess-methodology',
       'capability/assess-observability',
       'capability/assess-testing',
     ]) {
-      expect(matched, `${skill} has a tie-break clause and must be pinned`).toContain(skill)
+      expect(matched, `${skill} declares a tie-break and must be pinned`).toContain(skill)
     }
   })
 
   for (const [rel, file] of withTie) {
+    it(`${rel} — the declaring round survives the gate's own contract check`, () => {
+      // The gate (`checkApprovalSignal` → `checkDeclaredResolution`) is what verifies
+      // that a round declaring `project-state-then-unresolved` actually says so, and
+      // says nothing about document order. Asserted here over the real corpus so a
+      // regression fails in the conformance suite too, not only in the CLI gate.
+      expect(checkApprovalSignal(`${rel}/SKILL.md`, read(file))).toEqual([])
+      const declaring = findApprovalRounds(read(file)).filter(
+        r => r.marker?.auto === 'project-state-then-unresolved',
+      )
+      expect(declaring.length).toBeGreaterThan(0)
+      for (const round of declaring) {
+        expect(round.text, `${rel}:${round.line}`).toMatch(/project state/i)
+        expect(round.text, `${rel}:${round.line}`).toMatch(/no proposal|unresolved/i)
+        expect(round.text, `${rel}:${round.line}`).not.toMatch(
+          /\b(?:listed first|first listed|lists? first|reaches first)\b/i,
+        )
+      }
+    })
+
     it(`${rel} — ONE line resolves the tie: project state, then the unresolved fallback`, () => {
       // Round 6, Minor 3: the fallback half used to be asserted over the WHOLE
       // FILE, where `/(no proposal|unresolved)/` is permanently satisfied by the

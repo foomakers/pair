@@ -108,7 +108,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > | Language | [name] | [vX.Y] | [reason] |
    > | ... | ... | ... | ... |
 
-1. **Verify** (`$approval: interactive`): Developer approves the full stack. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
+1. **Verify** (`$approval: interactive`): Developer approves the full stack. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 #### Implementation Mode (add single entry)
 
@@ -119,7 +119,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - Compatible: [yes/no — details]
    > - Rationale: [developer provides or auto-inferred]
 
-2. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the addition above is accepted as-is and reported in the Output Format, never asked.
+2. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the addition above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 #### Review Mode (unlisted dependency detected)
 
@@ -135,7 +135,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
 
 2. **Act**: If approved → treat as implementation mode addition (render entry proposal).
 3. **Act**: If rejected → report back to caller (e.g. /review marks as CHANGES-REQUESTED).
-4. **Verify** (`$approval: interactive`): Developer decision captured. Under `auto` the approve-or-reject call is **not** made here: it is a judgement with no safe default, so the finding is emitted **unresolved** to the caller (which is `/review` itself in this mode) and its policy owns it — output-only means there is no write to stop.
+4. **Verify** (`$approval: interactive`): Developer decision captured. Under `auto` the approve-or-reject call is **not** made here: it is a judgement with no safe default, so the finding is emitted **unresolved** to the caller (which is `/review` itself in this mode) and its policy owns it — output-only means there is no write to stop. <!-- approval-round: kind=gate; auto=hand-back -->
 
 ### Step 4: Render Adoption Proposal
 
@@ -215,7 +215,7 @@ When invoked **independently**: mode auto-detected. The skill returns the propos
 
 ## Edge Cases
 
-- **Argument conflicts with adoption**: Warn developer with details, ask for confirmation (`$approval: interactive`). Under `auto` the caller's explicit `$choice` is accepted (it outranks adoption by the cascade's precedence) and the conflict is reported, not asked.
+- **Argument conflicts with adoption**: Warn developer with details, ask for confirmation (`$approval: interactive`). Under `auto` the caller's explicit `$choice` is accepted (it outranks adoption by the cascade's precedence) and the conflict is reported, not asked. <!-- approval-round: kind=confirm; auto=accept -->
 - **Version conflict**: Library requires runtime version different from adopted → warn, propose resolution (upgrade runtime or reject library).
 - **Duplicate entry**: Same library already in stack → check if version differs. If same, skip. If different, treat as version update.
 - **Multiple skills rendering same file**: Section ownership prevents conflicts. Each skill renders only its sections; the caller's write preserves the rest.

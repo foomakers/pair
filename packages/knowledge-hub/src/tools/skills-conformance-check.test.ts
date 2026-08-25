@@ -20,6 +20,9 @@ import {
   findApprovalRounds,
   findGuidedDrift,
   checkApprovalSignal,
+  parseRoundMarker,
+  ROUND_KINDS,
+  AUTO_RESOLUTIONS,
 } from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
@@ -429,26 +432,39 @@ describe('findApprovalRounds — what counts as a round, and what does not', () 
     'Confirmation prompt: "Override X. Confirm?"',
     'Existing catalog conflicts — requires human approval before writing.',
   ]) {
-    it(`detects "${round}" and reads its step's qualification`, () => {
+    it(`detects "${round}", and only ITS OWN marker qualifies it`, () => {
       expect(findApprovalRounds(`1. **Verify**: ${round}`)).toEqual([
         { line: 1, text: `1. **Verify**: ${round}`, qualified: false },
       ])
-      const qualified = `1. **Verify** (\`$approval: interactive\`): ${round}`
-      expect(findApprovalRounds(qualified)[0]?.qualified).toBe(true)
+      // Round 7: the `$approval` token no longer qualifies anything — it is prose a
+      // neighbouring step could supply. The marker on this line is the contract.
+      expect(
+        findApprovalRounds(`1. **Verify** (\`$approval: interactive\`): ${round}`)[0]?.qualified,
+      ).toBe(false)
+      const marked = `1. **Verify**: ${round} <!-- approval-round: kind=confirm; auto=accept -->`
+      expect(findApprovalRounds(marked)[0]?.qualified).toBe(true)
     })
   }
 
-  it('detects a prompt line inside a step, qualified by that step (not by the prompt)', () => {
-    const step = [
+  it('a prompt line is its own round and needs its own marker', () => {
+    // Round 7 inverted this case deliberately. It used to assert that a prompt line
+    // inherits its step's qualification — which IS the Major: inheritance is what
+    // let an unmarked round ride in on a marked sibling. A blockquote prompt asks,
+    // so it declares.
+    const inherited = [
       '3. **Act**: Present the delta (`$approval: interactive`):',
       '',
       '   > Proposed placement: X',
       '   > Approve or adjust?',
       '',
     ].join('\n')
-    const rounds = findApprovalRounds(step)
-    expect(rounds).toHaveLength(1)
-    expect(rounds[0]).toMatchObject({ line: 4, qualified: true })
+    expect(findApprovalRounds(inherited)[0]).toMatchObject({ line: 4, qualified: false })
+
+    const declared = inherited.replace(
+      '   > Approve or adjust?',
+      '   > Approve or adjust? <!-- approval-round: kind=confirm; auto=accept -->',
+    )
+    expect(findApprovalRounds(declared)[0]).toMatchObject({ line: 4, qualified: true })
   })
 
   it('does not read a sibling step’s qualification as its own', () => {
@@ -478,7 +494,10 @@ describe('findApprovalRounds — what counts as a round, and what does not', () 
       expect(findApprovalRounds(`- ${round}`)).toEqual([
         { line: 1, text: `- ${round}`, qualified: false },
       ])
-      expect(findApprovalRounds(`- ${round} (\`$approval: interactive\`)`)[0]?.qualified).toBe(true)
+      expect(
+        findApprovalRounds(`- ${round} <!-- approval-round: kind=choice; auto=accept -->`)[0]
+          ?.qualified,
+      ).toBe(true)
     })
   }
 
@@ -510,7 +529,8 @@ describe('findApprovalRounds — what counts as a round, and what does not', () 
 describe('checkApprovalSignal — the two obligations, injected one at a time', () => {
   const REL = 'capability/assess-example/SKILL.md'
   const ROW = '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |'
-  const ROUND = '4. **Verify** (`$approval: interactive`): Developer approves the choice.'
+  const ROUND =
+    '4. **Verify**: Developer approves the choice. <!-- approval-round: kind=confirm; auto=accept -->'
 
   it('is silent on a conformant family member', () => {
     expect(checkApprovalSignal(REL, `${ROW}\n\n${ROUND}\n`)).toEqual([])
@@ -574,6 +594,132 @@ describe('checkApprovalSignal — the two obligations, injected one at a time', 
 //
 // The guard is the general rule, not the instance: `auto`-only vocabulary may not
 // appear in the part of a round that precedes its `Under auto` clause.
+// Round 7, Major + structural. Six rounds of guards, all built from the same
+// tool: keyword presence inside a text window derived from MARKDOWN LAYOUT. Every
+// round narrowed the window one notch (file → line, ±400 chars → sentence, literal
+// phrase → concept regex) and the defect class survived each time, because the
+// boundaries those windows are computed from — end of sentence, list-item start,
+// heading name — are layout, not contract. When the text changes shape the guard
+// does not fail; it WIDENS, and something unrelated satisfies it.
+//
+// The declared marker replaces the window. Attachment is LINE IDENTITY (the marker
+// sits on the round's own line), `auto=` is a CLOSED ENUM, and an unparseable or
+// absent marker is a violation. A tie resolved by document order stops being
+// "unmatched by a regex" and becomes unrepresentable: no enum value spells it.
+describe('parseRoundMarker — the declared contract, per round line', () => {
+  it('parses a well-formed marker off the round’s own line', () => {
+    expect(
+      parseRoundMarker(
+        '5. **Verify**: Developer approves. <!-- approval-round: kind=confirm; auto=accept -->',
+      ),
+    ).toEqual({ kind: 'confirm', auto: 'accept' })
+  })
+
+  it('accepts every declared kind and auto value, and nothing else', () => {
+    for (const kind of ROUND_KINDS) {
+      expect(parseRoundMarker(`x <!-- approval-round: kind=${kind}; auto=accept -->`)?.kind).toBe(
+        kind,
+      )
+    }
+    for (const auto of AUTO_RESOLUTIONS) {
+      expect(parseRoundMarker(`x <!-- approval-round: kind=confirm; auto=${auto} -->`)?.auto).toBe(
+        auto,
+      )
+    }
+  })
+
+  it('rejects a value outside the enum instead of passing it through', () => {
+    // The whole point: "resolved by list order" cannot be declared, so it cannot
+    // be documented as if it were a resolution.
+    expect(parseRoundMarker('x <!-- approval-round: kind=choice; auto=first-listed -->')).toEqual({
+      kind: 'choice',
+      auto: undefined,
+      malformed: 'auto=first-listed',
+    })
+    expect(parseRoundMarker('x <!-- approval-round: kind=vibes; auto=accept -->')).toEqual({
+      kind: undefined,
+      auto: 'accept',
+      malformed: 'kind=vibes',
+    })
+  })
+
+  it('returns undefined when the line carries no marker at all', () => {
+    expect(parseRoundMarker('5. **Verify**: Developer approves.')).toBeUndefined()
+  })
+
+  it('does not read a marker from a neighbouring line', () => {
+    // Line identity, not a window: this is the property every previous version of
+    // the guard lacked.
+    const doc = [
+      '4. **Act**: Present the delta. <!-- approval-round: kind=confirm; auto=accept -->',
+      '5. **Verify**: Developer approves.',
+    ]
+    expect(parseRoundMarker(doc[1] as string)).toBeUndefined()
+  })
+})
+
+describe('checkApprovalSignal — an unmarked round is a violation (round 7 Major)', () => {
+  const REL = 'capability/assess-example/SKILL.md'
+  const ROW = '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |'
+  const MARKED =
+    '4. **Verify**: Developer approves. <!-- approval-round: kind=confirm; auto=accept -->'
+
+  it('is silent when every round line carries a valid marker', () => {
+    expect(checkApprovalSignal(REL, `${ROW}\n\n${MARKED}\n`)).toEqual([])
+  })
+
+  it('flags a second round in the SAME STEP that has no marker of its own', () => {
+    // The Major, verbatim: qualification used to be read off the step block, so one
+    // qualified round immunised every other round in it. A continuation line adding
+    // a fresh choice round rode in free.
+    const errors = checkApprovalSignal(
+      REL,
+      `${ROW}\n\n${MARKED}\n   When two assistants score equally, present both with trade-off ` +
+        `analysis, name the leader, and ask the developer to choose.\n`,
+    )
+    // Two findings, both correct: the continuation line declares nothing, and it
+    // also carries auto-only vocabulary ("name the leader") with no clause scoping
+    // it. Asserted by content rather than by count — a mutation that trips two
+    // independent guards is a stronger result, not a failed expectation.
+    expect(errors.some(e => e.includes('no approval-round marker'))).toBe(true)
+    expect(errors.some(e => e.includes('GUIDED half'))).toBe(true)
+  })
+
+  it('flags a marker whose auto value is outside the enum', () => {
+    const errors = checkApprovalSignal(
+      REL,
+      `${ROW}\n\n4. **Verify**: Developer approves. <!-- approval-round: kind=choice; auto=first-listed -->\n`,
+    )
+    expect(errors.some(e => e.includes('auto=first-listed'))).toBe(true)
+  })
+
+  it('flags a marker missing a field rather than treating it as absent', () => {
+    const errors = checkApprovalSignal(
+      REL,
+      `${ROW}\n\n4. **Verify**: Developer approves. <!-- approval-round: kind=confirm -->\n`,
+    )
+    expect(errors.some(e => e.includes('auto='))).toBe(true)
+  })
+
+  it('requires a project-state tie-break to say so on the line it declares it', () => {
+    // `auto=project-state-then-unresolved` is a CONTRACT: the prose on that line
+    // must actually describe it. Anchored to the marker, not to a window.
+    const line =
+      '- Ties: take whichever is listed first. <!-- approval-round: kind=choice; auto=project-state-then-unresolved -->'
+    const errors = checkApprovalSignal(REL, `${ROW}\n\n${line}\n`)
+    expect(errors.some(e => e.includes('project state'))).toBe(true)
+  })
+
+  it('rejects a document-order tie-break even when the prose sounds resolved', () => {
+    // The round-6 Minor-1 mutation, now unrepresentable rather than unmatched.
+    const line =
+      '- Ties: the one listed first wins from project state; no proposal is ever withheld. ' +
+      '<!-- approval-round: kind=choice; auto=project-state-then-unresolved -->'
+    const errors = checkApprovalSignal(REL, `${ROW}\n\n${line}\n`)
+    expect(errors.some(e => /document order|listed first/i.test(e))).toBe(true)
+  })
+})
+
 describe('findGuidedDrift — auto-only text must not leak into the guided half', () => {
   const LEADER = 'name the leader'
 
@@ -652,7 +798,7 @@ describe('checkApprovalSignal — a sub-doc is checked against its owning SKILL.
     expect(
       checkApprovalSignal(
         'capability/assess-example/references/deep.md',
-        '3. **Verify** (`$approval: interactive`): Developer approves the delta.\n',
+        '3. **Verify**: Developer approves the delta. <!-- approval-round: kind=confirm; auto=accept -->\n',
         OWNER,
       ),
     ).toEqual([])
@@ -700,7 +846,9 @@ describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', ()
       '3. **Act**: Present the delta:\n\n   > Approve or adjust?\n',
     )
     const { errors } = runChecks(root)
-    expect(errors.some(e => e.includes('references/deep.md') && e.includes('$approval'))).toBe(true)
+    expect(
+      errors.some(e => e.includes('references/deep.md') && e.includes('approval-round marker')),
+    ).toBe(true)
   })
 
   it('leaves a sub-doc of a NON-family skill alone', () => {

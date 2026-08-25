@@ -67,7 +67,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - Cloud: [provider or "none"] — [rationale]
    > - IaC: [tool or "not needed"] — [rationale]
 
-3. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
+3. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 4: Render Adoption Proposal
 

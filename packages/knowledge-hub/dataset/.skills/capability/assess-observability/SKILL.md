@@ -70,7 +70,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - Tracing: [approach or "not needed"] — [rationale]
    > - Alerting: [strategy] — [rationale]
 
-4. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
+4. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 4: Render Adoption Proposal
 
@@ -119,7 +119,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 - **Project doesn't need observability** (e.g. CLI tool, library): Render a minimal section noting "observability not applicable — [reason]" for the caller to persist.
 - **infrastructure.md exists but no observability section**: Render content that adds the section; the caller's write preserves all other content.
-- **Multiple valid platforms score equally**: Present top 2 with trade-off analysis (`$approval: interactive`). Under `auto` the tie is **resolved without asking**: the platform **project state** already shows wins (a telemetry/error-tracking dependency in the manifest, an existing agent or dashboard config — the cascade's own precedence); if project state shows neither, **no proposal is emitted** and the tie is reported **unresolved** to the caller, since no enumeration in the corpus is a ranking. The tie and the runner-up are reported either way, as a choice a human has not made.
+- **Multiple valid platforms score equally**: Present top 2 with trade-off analysis (`$approval: interactive`). Under `auto` the tie is **resolved without asking**: the platform **project state** already shows wins (a telemetry/error-tracking dependency in the manifest, an existing agent or dashboard config — the cascade's own precedence); if project state shows neither, **no proposal is emitted** and the tie is reported **unresolved** to the caller, since no enumeration in the corpus is a ranking. The tie and the runner-up are reported either way, as a choice a human has not made. <!-- approval-round: kind=choice; auto=project-state-then-unresolved -->
 
 ## Graceful Degradation
 

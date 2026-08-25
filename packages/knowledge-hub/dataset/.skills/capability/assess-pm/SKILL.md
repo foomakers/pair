@@ -73,7 +73,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
 
    > No implementation guide available for **[tool]**. Setup will be manual.
 
-4. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
+4. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 4: Delegate Setup or Render Proposal
 

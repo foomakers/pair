@@ -39,11 +39,14 @@
  *      scans apps/website only).
  *   7. Approval-round signal — every skill of an obliged family (`assess-*`,
  *      `map-*`) that declares an approval round exposes the `$approval` argument
- *      and makes each round conditional on it, so a caller that cannot ask states
- *      its depth ONCE instead of enumerating, per composed skill, a round it
- *      happens to know about (`skill-conventions/approval-rounds.md`, ADR-021).
- *      Data-driven per skill present — a new family member is covered the day it
- *      lands, with no edit here and no count anywhere.
+ *      and declares, ON EACH ASKING LINE, an `<!-- approval-round: kind=…; auto=… -->`
+ *      marker whose values come from closed enums and whose prose says the same
+ *      thing (`skill-conventions/approval-rounds.md`, ADR-021). A declared marker,
+ *      not keywords in a layout-derived window: six review rounds of narrowing that
+ *      window left the same defect class alive each time, because a window widens
+ *      when the prose changes shape instead of failing. Data-driven per skill
+ *      present — a new family member is covered the day it lands, with no edit here
+ *      and no count anywhere.
  *
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
@@ -375,23 +378,93 @@ export const APPROVAL_ROUND_PATTERNS: RegExp[] = [
   /\bdevelopers?\s+(?:chooses?|decides?|picks?|selects?)\b/i,
 ]
 
-/** The token a qualified round names, per the convention's authoring shape. */
-const APPROVAL_TOKEN = /\$approval/
+// The `$approval` token used to BE the qualification, read out of the step block.
+// It is prose now, not a contract: the marker below qualifies a round, per line.
 
 /**
- * A list item, a heading, or a nested bullet — where one step's text begins.
- * Blockquote prompt lines (`> Approve or adjust?`) and wrapped prose are
- * CONTINUATIONS, so a round's qualification may sit anywhere in its own step
- * rather than being forced onto the prompt line itself.
+ * THE DECLARED MARKER — the contract that replaced six rounds of text windows.
+ *
+ * Every approval round carries, ON ITS OWN LINE, a marker naming what kind of
+ * round it is and how `auto` resolves it:
+ *
+ *     <!-- approval-round: kind=choice; auto=project-state-then-unresolved -->
+ *
+ * Why a marker rather than a seventh, narrower window: every previous guard read
+ * keywords out of a span computed from markdown LAYOUT — the file, the step block,
+ * a character window, a sentence. Layout is not contract, so when the prose changed
+ * shape the guard did not fail, it widened, and an unrelated line satisfied it. The
+ * same defect class survived rounds 5, 6 and 7. Here attachment is LINE IDENTITY
+ * and `auto` is a CLOSED ENUM, which changes the failure mode: a tie resolved by
+ * document order is not "a phrasing the regex missed", it is a resolution that
+ * cannot be spelled. See `skill-conventions/approval-rounds.md` § Declared marker.
  */
-const BLOCK_START = /^\s{0,4}(?:\d+\.|[-*+]|#{1,6})\s/
+export const ROUND_KINDS = ['confirm', 'keep-or-redo', 'choice', 'gate'] as const
+export const AUTO_RESOLUTIONS = [
+  'accept',
+  'keep',
+  'project-state-then-unresolved',
+  'hand-back',
+  'halt',
+] as const
+
+export type RoundKind = (typeof ROUND_KINDS)[number]
+export type AutoResolution = (typeof AUTO_RESOLUTIONS)[number]
+
+export interface RoundMarker {
+  kind: RoundKind | undefined
+  auto: AutoResolution | undefined
+  /** The offending `field=value` when one is present but outside its enum. */
+  malformed?: string
+}
+
+const MARKER = /<!--\s*approval-round:\s*([^>]*?)\s*-->/
+
+/**
+ * The marker declared on `line`, or `undefined` when the line carries none.
+ *
+ * A field present but outside its enum yields `malformed` — never a silent
+ * pass-through and never an empty result. Fail closed: a guard whose parser
+ * degrades to "nothing to check" is not a guard (the family invariant this module
+ * already applies to `alternatives()` in the shape tests).
+ */
+export function parseRoundMarker(line: string): RoundMarker | undefined {
+  const body = MARKER.exec(line)?.[1]
+  if (body === undefined) return undefined
+
+  const field = (name: string): string | undefined =>
+    new RegExp(`\\b${name}=([a-z-]+)`).exec(body)?.[1]
+
+  const rawKind = field('kind')
+  const rawAuto = field('auto')
+  const kind = ROUND_KINDS.find(k => k === rawKind)
+  const auto = AUTO_RESOLUTIONS.find(a => a === rawAuto)
+
+  const malformed =
+    rawKind !== undefined && kind === undefined
+      ? `kind=${rawKind}`
+      : rawAuto !== undefined && auto === undefined
+        ? `auto=${rawAuto}`
+        : undefined
+
+  return malformed ? { kind, auto, malformed } : { kind, auto }
+}
+
+/** A claim that a tie is settled by where something appears in a document. */
+const DOCUMENT_ORDER_CLAIM = /\b(?:listed first|first listed|lists? first|reaches first)\b/i
 
 export interface ApprovalRound {
   /** 1-based line number in the file the content came from. */
   line: number
   text: string
-  /** True iff the step this line belongs to names `$approval`. */
+  /**
+   * True iff THIS LINE declares a complete marker. Round 7's Major was that this
+   * used to be read off the step block, so one qualified round granted immunity to
+   * every other round in the same block — a continuation line adding a fresh choice
+   * round inherited a green. Per line, no inheritance.
+   */
   qualified: boolean
+  /** The marker declared on this line, when there is one. */
+  marker?: RoundMarker
 }
 
 /**
@@ -409,31 +482,22 @@ export function isApprovalSignalFamily(rel: string): boolean {
 }
 
 /**
- * Per line: the index of the step (list item / heading) it belongs to, and whether
- * it sits inside a fence. One pass, shared by every reader below, so "which step is
- * this line part of" is answered the same way for the qualification check and for
- * the guided-drift check.
+ * Which lines sit inside a fenced block — the ONLY layout fact these checks still
+ * consult, and only to exclude a printed sample from being read as a step that asks.
+ *
+ * The step-block span (`blockStart`/`blockAt`) that used to live here is gone with
+ * the windows that needed it: every check is now per line, keyed on the declared
+ * marker. That deletion is the point, not a side effect — a span this module no
+ * longer computes is a span a future guard cannot silently widen.
  */
-function scanBlocks(lines: string[]): { blockStart: number[]; inFence: boolean[] } {
-  const blockStart: number[] = []
+function scanFences(lines: string[]): boolean[] {
   const inFence: boolean[] = []
-  let current = 0
   let fence = false
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) fence = !fence
     inFence[i] = fence
-    if (!fence && BLOCK_START.test(line)) current = i
-    blockStart[i] = current
   })
-  return { blockStart, inFence }
-}
-
-/** The full text of the step containing `lineIndex` — item line plus continuations. */
-function blockAt(lines: string[], blockStart: number[], lineIndex: number): string {
-  const start = blockStart[lineIndex] as number
-  let end = start + 1
-  while (end < lines.length && (blockStart[end] as number) === start) end++
-  return lines.slice(start, end).join('\n')
+  return inFence
 }
 
 /**
@@ -443,16 +507,23 @@ function blockAt(lines: string[], blockStart: number[], lineIndex: number): stri
  */
 export function findApprovalRounds(content: string): ApprovalRound[] {
   const lines = content.split('\n')
-  const { blockStart, inFence } = scanBlocks(lines)
+  const inFence = scanFences(lines)
 
   const rounds: ApprovalRound[] = []
   lines.forEach((line, i) => {
     if (inFence[i]) return
-    if (!APPROVAL_ROUND_PATTERNS.some(p => p.test(line))) return
+    // A line is a round if it ASKS (phrase detector, the safety net for an unmarked
+    // ask) or if it DECLARES one (marker, the contract). The second half matters:
+    // it lets a round the phrase set does not recognise still be governed, so the
+    // heuristic's blind spots no longer decide what is checked.
+    const marker = parseRoundMarker(line)
+    if (!APPROVAL_ROUND_PATTERNS.some(p => p.test(line)) && marker === undefined) return
     rounds.push({
       line: i + 1,
       text: line.trim(),
-      qualified: APPROVAL_TOKEN.test(blockAt(lines, blockStart, i)),
+      // Per LINE, never inherited from the step: see ApprovaRound.qualified.
+      qualified: marker?.kind !== undefined && marker.auto !== undefined,
+      ...(marker ? { marker } : {}),
     })
   })
   return rounds
@@ -503,13 +574,17 @@ export interface GuidedDrift {
  * whole — auto-only text with nothing scoping it is the same defect, unscoped.
  */
 export function findGuidedDrift(content: string): GuidedDrift[] {
-  const lines = content.split('\n')
-  const { blockStart } = scanBlocks(lines)
   const drifts: GuidedDrift[] = []
   for (const round of findApprovalRounds(content)) {
-    const block = blockAt(lines, blockStart, round.line - 1)
-    const clauseAt = block.search(AUTO_CLAUSE)
-    const guidedHalf = clauseAt === -1 ? block : block.slice(0, clauseAt)
+    // PER LINE, and fail-closed. Round 7: reading the STEP BLOCK and cutting at its
+    // FIRST `auto` clause left everything after that clause unexamined — a second
+    // round added as a continuation line was invisible to this check as well as to
+    // the marker one. A round's guided half is the part of ITS OWN line before ITS
+    // OWN `auto` clause; a line with auto-only vocabulary and no clause on it has
+    // nothing scoping that vocabulary, which is the same defect unscoped.
+    const line = round.text
+    const clauseAt = line.search(AUTO_CLAUSE)
+    const guidedHalf = clauseAt === -1 ? line : line.slice(0, clauseAt)
     for (const directive of AUTO_ONLY_DIRECTIVES) {
       const hit = guidedHalf.match(directive)
       if (hit) {
@@ -519,6 +594,85 @@ export function findGuidedDrift(content: string): GuidedDrift[] {
     }
   }
   return drifts
+}
+
+/**
+ * The prose on a round's own line must describe the resolution its marker declares.
+ *
+ * This is the half a marker alone cannot give: an enum stops a bad resolution being
+ * *declarable*, and this stops a declared one being *contradicted* by the sentence
+ * next to it. Anchored to the marker — the contract — never to a window around it,
+ * which is what made every earlier version of these checks satisfiable by a
+ * neighbour.
+ */
+const RESOLUTION_PROSE: Record<AutoResolution, (line: string) => string[]> = {
+  accept: () => [],
+  keep: line => (/keep|kept/i.test(line) ? [] : ['the line never says the recorded value is kept']),
+  'project-state-then-unresolved': line => {
+    const missing: string[] = []
+    if (!/project state/i.test(line)) {
+      missing.push('the line never names project state as what settles the tie')
+    }
+    if (!/no proposal|unresolved/i.test(line)) {
+      missing.push(
+        'the line never says what happens when project state is silent (no proposal / ' +
+          'reported unresolved)',
+      )
+    }
+    const order = DOCUMENT_ORDER_CLAIM.exec(line)
+    if (order) {
+      missing.push(
+        `"${order[0]}" resolves a tie by DOCUMENT ORDER, which is not a resolution this ` +
+          `convention has — two enumerations of the same candidates routinely disagree, so the ` +
+          `same tie would settle two ways`,
+      )
+    }
+    return missing
+  },
+  'hand-back': line =>
+    /caller/i.test(line) ? [] : ['the line never names the caller the question goes back to'],
+  halt: line => (/HALT/.test(line) ? [] : ['the line does not say the run HALTs']),
+}
+
+function checkDeclaredResolution(
+  rel: string,
+  round: ApprovalRound,
+  auto: AutoResolution,
+): string[] {
+  return RESOLUTION_PROSE[auto](round.text).map(
+    problem => `${rel}:${round.line}: declares \`auto=${auto}\` but ${problem}`,
+  )
+}
+
+/**
+ * One round's marker obligations: present, well-formed, complete, and matched by the
+ * prose on its own line. Fail closed at each step — an absent, malformed or partial
+ * marker is a violation, never an unknown that resolves to "fine".
+ */
+function checkRoundMarker(rel: string, round: ApprovalRound): string[] {
+  const at = `${rel}:${round.line}`
+  const marker = round.marker
+  if (marker === undefined) {
+    return [
+      `${at}: "${round.text.slice(0, 90)}" asks for approval and carries no approval-round ` +
+        `marker — add \`<!-- approval-round: kind=…; auto=… -->\` to THIS line ` +
+        `(skill-conventions/approval-rounds.md § Declared marker). A marker on a neighbouring ` +
+        `line does not cover it.`,
+    ]
+  }
+  if (marker.malformed !== undefined) {
+    return [
+      `${at}: \`${marker.malformed}\` is not one of the declared values — ` +
+        `kind ∈ {${ROUND_KINDS.join(', ')}}, auto ∈ {${AUTO_RESOLUTIONS.join(', ')}}`,
+    ]
+  }
+  if (marker.kind === undefined || marker.auto === undefined) {
+    return [
+      `${at}: the approval-round marker is incomplete — both \`kind=\` and \`auto=\` are ` +
+        `required, got kind=${marker.kind ?? '(none)'} auto=${marker.auto ?? '(none)'}`,
+    ]
+  }
+  return checkDeclaredResolution(rel, round, marker.auto)
 }
 
 /**
@@ -560,12 +714,7 @@ export function checkApprovalSignal(
         `skill-conventions/approval-rounds.md — the convention is the single statement of the signal`,
     )
   }
-  for (const round of rounds.filter(r => !r.qualified)) {
-    errors.push(
-      `${rel}:${round.line}: approval round "${round.text}" is not conditional on ` +
-        `\`$approval\` — name the signal in the step (skill-conventions/approval-rounds.md)`,
-    )
-  }
+  for (const round of rounds) errors.push(...checkRoundMarker(rel, round))
   for (const drift of findGuidedDrift(content)) {
     errors.push(
       `${rel}:${drift.line}: "${drift.directive}" sits in the GUIDED half of an approval ` +

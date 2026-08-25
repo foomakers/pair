@@ -244,8 +244,28 @@ describe('quick mode is declared where the questions are (AC1)', () => {
     expect(step).not.toMatch(/confirmation round[^.]*not run|not run[^.]*confirmation round/i)
   })
 
+  /**
+   * Round 7, Minor 2: this lookup used to be
+   * `sections.get('3.5.2') ?? sections.get('3.5') ?? datasetSkill()` — a chain that
+   * DEGRADES to grepping the whole file when the section is not pinned. Renaming the
+   * heading and reverting the note to the retired caller-side shape kept the suite
+   * green: the file-wide fallback found `$approval: auto` in Step 2.2 instead. A
+   * lookup that cannot find its section must fail, not widen (the fail-closed rule in
+   * `approval-rounds.md` § Authoring obligation).
+   */
+  const domainModelingSection = (): string => {
+    const section = sections.get('3.5.2') ?? sections.get('3.5')
+    if (section === undefined) {
+      throw new Error(
+        `bootstrap SKILL.md has no Step 3.5.2 / Phase 3.5 section — the pin cannot ` +
+          `fall back to the whole file: ${[...sections.keys()].join(', ')}`,
+      )
+    }
+    return section
+  }
+
   it('passes the same one signal to the composed map-* family (Phase 3.5)', () => {
-    const step = sections.get('3.5.2') ?? sections.get('3.5') ?? datasetSkill()
+    const step = domainModelingSection()
     expect(step).toMatch(/\$approval: auto/)
     expect(step).toMatch(/map-\\?\*/)
   })
@@ -276,9 +296,7 @@ describe('quick mode is declared where the questions are (AC1)', () => {
     expect(defaults).toMatch(/unbalanced \+ volatile/i)
     expect(defaults.toLowerCase()).not.toMatch(/phase 3\.5[^|\n]*never blocking\s*\|/)
     expect(defaults).toMatch(/judgement gate `auto` does not resolve/i)
-    expect(sections.get('3.5.2') ?? sections.get('3.5') ?? datasetSkill()).toMatch(
-      /judgement gate, which `auto` never resolves/i,
-    )
+    expect(domainModelingSection()).toMatch(/judgement gate, which `auto` never resolves/i)
   })
 
   it('qualifies the approval-round HALT conditions as guided-only', () => {

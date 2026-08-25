@@ -92,7 +92,7 @@ For each relationship between an in-scope context and another context it touches
    - A mitigation (e.g. introduce an ACL, renegotiate the pattern toward `contract`), or
    - An explicit developer acceptance of the risk (recorded in the context file).
 
-   **This gate is not an approval round and `$approval: auto` does not lift it** — it is the judgement kind ([approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md)): with neither a mitigation nor an acceptance on the table there is no proposal to auto-accept, and Step 5 would write a domain model recording a coupling risk nobody judged. So it **HALTs under every value of `$approval`**, and it is the one place a non-interactive run of this skill can still stop for a human.
+   **This gate is not an approval round and `$approval: auto` does not lift it** — it is the judgement kind ([approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md)): with neither a mitigation nor an acceptance on the table there is no proposal to auto-accept, and Step 5 would write a domain model recording a coupling risk nobody judged. So it **HALTs under every value of `$approval`**, and it is the one place a non-interactive run of this skill can still stop for a human. <!-- approval-round: kind=gate; auto=halt -->
 8. **Verify**: Every in-scope relationship has strength, distance, volatility, outcome, and (if gated) a mitigation/acceptance recorded.
 
 ### Step 4: Context Catalog Delta Proposal
@@ -108,9 +108,9 @@ For each relationship between an in-scope context and another context it touches
    > - [Context A] ↔ [Context B]: strength=[intrusive/functional/model/contract], distance=[low/medium/high], volatility=[from subdomains], outcome=[balanced/unbalanced]
    >   [if gated] ⚠ unbalanced + volatile — mitigation: [...] or accepted: [...]
    >
-   > Approve or adjust?
+   > Approve or adjust? <!-- approval-round: kind=confirm; auto=accept -->
 
-4. **Verify** (`$approval: interactive`): Developer approves the delta, including any gated relationships' resolution. Under `auto` the delta is accepted as-is (already reported in item 3) — but a **gated** relationship is never auto-resolved: Step 3 item 7 has already HALTed unless a mitigation or an acceptance was recorded.
+4. **Verify** (`$approval: interactive`): Developer approves the delta, including any gated relationships' resolution. Under `auto` the delta is accepted as-is (already reported in item 3) — but a **gated** relationship is never auto-resolved: Step 3 item 7 has already HALTed unless a mitigation or an acceptance was recorded. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 5: Context Specification
 
@@ -149,7 +149,7 @@ CONTEXT PLACEMENT COMPLETE:
 ## Edge Cases and Error Handling
 
 - **Scope resolves to nothing** — report "no domain impact", caller proceeds without HALT.
-- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved). Under `$approval: auto` the write does not happen either: the existing entry is kept and the delta is reported unapplied (Step 4 item 2).
+- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved). Under `$approval: auto` the write does not happen either: the existing entry is kept and the delta is reported unapplied (Step 4 item 2). <!-- approval-round: kind=keep-or-redo; auto=keep -->
 - **Pre-existing relationships without the 3-dimension assessment** — treated as valid; assessed only when that relationship falls inside a future `$scope`.
 - **No `subdomain/` or `boundedcontext/` artifacts at all** — system-areas fallback (Step 2b); no error, no DDD prerequisite.
 - **Unbalanced + volatile relationship, no mitigation/acceptance offered** — HALT at **Step 3 item 7**, where the gate is raised (before Step 4's delta round, which never sees the relationship). This is the one case where the capability blocks, **under every value of `$approval`**: a judgement gate is not suppressible by a non-interactive signal.

@@ -75,7 +75,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - AI maturity target: Level [N]
    > - Additional tools: [list with versions]
 
-5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked.
+5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 4: Render Adoption Proposal
 

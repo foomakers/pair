@@ -33,17 +33,46 @@ An **explicit argument the caller itself passed** (the resolution cascade's Path
 
 Every round suppressed under `auto` still owes its content to the caller: the accepted proposal, the kept-existing delta, the reported conflict. They go in the skill's Output Format, which `auto` never shortens. A caller that passes `auto` while being perfectly able to display output — a supervisor loop with a log, an operator watching a batch — must still be able to read what was decided on its behalf.
 
+## Declared marker
+
+Every approval round carries a **marker on its own line**, naming what kind of round it is and how `auto` resolves it:
+
+```text
+4. **Verify**: Developer approves the delta. Under `auto` it is accepted as-is and reported. <!-- approval-round: kind=confirm; auto=accept -->
+```
+
+Both fields are required, and both are **closed sets**:
+
+| `kind=` | The round |
+| --- | --- |
+| `confirm` | asks for a nod on something the skill produced |
+| `keep-or-redo` | chooses between a recorded value and a new one |
+| `choice` | asks which of several candidates to take |
+| `gate` | has no proposal to accept (see row 3 above) |
+
+| `auto=` | How `auto` resolves it |
+| --- | --- |
+| `accept` | take the proposal as-is, report it |
+| `keep` | keep the recorded value, report the delta unapplied |
+| `project-state-then-unresolved` | settle from project state; if project state is silent, emit no proposal and report the tie unresolved |
+| `hand-back` | return the question to the caller, unresolved (output-only skills) |
+| `halt` | stop and wait for a human — the judgement gate |
+
+**Why a marker and not prose to interpret.** A checker that reads keywords out of a span computed from markdown layout — the file, the step, a sentence, a character window — cannot be made reliable by narrowing the span. Layout is not contract: when the prose changes shape the check does not fail, it **widens**, and an unrelated line satisfies it. A declared marker moves attachment to line identity and the resolution to an enum, which changes what a bad round *is*: resolving a tie by document order stops being a phrasing a pattern missed and becomes a resolution nobody can spell.
+
+**The enum is the point.** If a round's real behaviour has no value here, that is a finding about the behaviour, not a gap in the list — either it maps to one of the five, or it should not be shipped that way.
+
 ## Authoring obligation
 
-**Any skill that declares an approval round must honour `$approval`** — a new family member included, from its first version. Two mechanical obligations, both enforced by the skills conformance gate over the corpus (per skill present, never against a count):
+**Any skill that declares an approval round must honour `$approval`** — a new family member included, from its first version. Three mechanical obligations, all enforced by the skills conformance gate over the corpus (per skill present, never against a count):
 
 1. The Arguments table carries an `$approval` row.
-2. Every step that asks for approval **names the signal in that step**, so the condition is visible where the round is, not in a preamble a reader may skip:
+2. Every line that asks for approval carries its **own** marker (above). A marker on a neighbouring line does not cover it, and a marker whose fields fall outside the enums is a violation rather than an unknown.
+3. The prose on that line describes the resolution the marker declares — an `auto=project-state-then-unresolved` round says what settles the tie *and* what happens when nothing does; an `auto=halt` round says it HALTs; an `auto=hand-back` round names the caller. The marker states the contract, the sentence states it to the executor, and neither is allowed to contradict the other.
 
-   ```text
-   4. **Verify** (`$approval: interactive`): Developer approves the delta.
-      Under `$approval: auto` the delta is accepted as-is and reported.
-   ```
+Prose still names the signal where it helps a reader (`(\`$approval: interactive\`)`,`Under \`auto\` …`); what changed is that prose is no longer what the gate keys on.
+
+**Fail closed, everywhere.** No check may degrade to a wider scope or an empty input when parsing fails: an unreadable marker, an unparseable line, a section lookup that finds nothing — each is a violation, never a silent pass. A guard that answers "nothing to check" when it cannot parse its input is indistinguishable from a guard that passes.
 
 A round inherited from a shared convention — the [resolution cascade](resolution-cascade.md)'s Path A confirmation and Path B keep-or-redo — is qualified **there**, once, for every skill that follows it. A skill restates only its own local rounds.
 

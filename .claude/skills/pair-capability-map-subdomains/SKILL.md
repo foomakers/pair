@@ -87,7 +87,7 @@ _Skip if in system-areas fallback — the Classification/Volatility already assi
 
    > Existing: `[Name]` — Classification: [X], Volatility: [Y]
    > Proposed: Classification: [X'], Volatility: [Y']
-   > Approve delta, keep existing, or override?
+   > Approve delta, keep existing, or override? <!-- approval-round: kind=keep-or-redo; auto=keep -->
 
    Under `$approval: auto` this question is not asked and the **existing entry is kept** — the conservative branch it already offers. The unapplied delta is reported (Output Format) so nothing is lost; overwriting a recorded classification nobody was asked about is the one outcome `auto` must not produce.
 
@@ -97,9 +97,9 @@ _Skip if in system-areas fallback — the Classification/Volatility already assi
    > **[Classification]**: [Name] — Volatility: [Level] ([default | override: reason])
    >
    > Relationships: [key dependencies within scope]
-   > Approve or adjust?
+   > Approve or adjust? <!-- approval-round: kind=confirm; auto=accept -->
 
-7. **Verify** (`$approval: interactive`): Developer approves the delta. Under `auto` the delta is accepted as-is (already reported in item 6) and Step 4 writes it — except a conflict from item 5, which stays unapplied.
+7. **Verify** (`$approval: interactive`): Developer approves the delta. Under `auto` the delta is accepted as-is (already reported in item 6) and Step 4 writes it — except a conflict from item 5, which stays unapplied. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 4: Subdomain Specification
 
@@ -138,7 +138,7 @@ SUBDOMAIN PLACEMENT COMPLETE:
 ## Edge Cases and Error Handling
 
 - **Scope resolves to nothing** — report "no domain impact", caller proceeds without HALT.
-- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved). Under `$approval: auto` the write does not happen either: the existing entry is kept and the delta is reported unapplied (Step 3 item 5).
+- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved). Under `$approval: auto` the write does not happen either: the existing entry is kept and the delta is reported unapplied (Step 3 item 5). <!-- approval-round: kind=keep-or-redo; auto=keep -->
 - **Pre-existing files without `Volatility`** — treated as valid; field is added only when that entry falls inside a future `$scope`.
 - **No `subdomain/` or `boundedcontext/` artifacts at all** — system-areas fallback (Step 2b); no error, no DDD prerequisite.
 - **`$scope: all` requested by a caller other than `/pair-process-bootstrap`** — warn and downgrade to the caller's actual touched items; full re-mapping stays bootstrap-only.
