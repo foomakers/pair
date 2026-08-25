@@ -106,27 +106,112 @@ describe('a per-skill delta on the shape is documented as one', () => {
   // rather than becoming a non-proposal), which makes it a delta to state — the
   // alternative, silently diverging from the shape you point at, is what this file
   // exists to prevent.
-  const deltaParagraph = (): string =>
-    decisionSection()
-      .split('\n')
-      .find(l => l.startsWith('Per-skill delta:')) as string
+  /** The `|`-separated alternatives inside an `Approval:` line's brackets. */
+  const alternatives = (line: string): string[] =>
+    (/\[(.*)\]\s*$/.exec(line)?.[1] ?? '')
+      .split('|')
+      .map(a => a.trim())
+      .filter(Boolean)
 
-  it('documents every Approval-line wording that differs from the canonical one', () => {
-    const canonical = (
-      sectionBetween(decisionSection(), '```text', '```')
-        .split('\n')
-        .find(l => /Approval:/.test(l)) as string
-    ).trim()
+  const approvalLineOf = (skill: string): string | undefined =>
+    read(skillFile(skill))
+      .split('\n')
+      .find(l => /^[│├└─\s]*Approval:/.test(l))
+
+  const canonicalApprovalLine = (): string =>
+    sectionBetween(decisionSection(), '```text', '```')
+      .split('\n')
+      .find(l => /Approval:/.test(l)) as string
+
+  it('documents each divergent Approval value, in prose that names ITS OWN skill', () => {
+    // Round 5, Minor 1: the previous version asserted `paragraph.toContain(skill)`
+    // plus a bare `/Approval/`. Both were already true for `assess-stack` and
+    // `assess-pm` for UNRELATED reasons (their `Mode` and `Delegated` deltas), so
+    // the pin was permanently satisfied for exactly the two of eight skills most
+    // likely to diverge — proven by mutation: rewriting `assess-pm`'s Approval line
+    // to nonsense kept the suite green, while the same mutation on `assess-testing`
+    // (not named in the paragraph) went red.
+    //
+    // The assertion is now bound to the DIVERGENT VALUE ITSELF, which no other
+    // skill's delta can supply, and to that value appearing near its own skill's
+    // name. A skill name in the paragraph is no longer evidence of anything.
+    const canonicalAlts = alternatives(canonicalApprovalLine())
+    const section = decisionSection()
+    let checked = 0
 
     for (const skill of DECLARED) {
-      const line = read(skillFile(skill))
-        .split('\n')
-        .find(l => /^[│├└─\s]*Approval:/.test(l))
+      const line = approvalLineOf(skill)
       expect(line, `${skill} has no Approval line`).toBeDefined()
-      if ((line as string).trim() === canonical) continue
-      // Divergent ⇒ the doc's delta paragraph must name the skill AND the row.
-      expect(deltaParagraph(), `${skill}'s Approval-line delta is undocumented`).toContain(skill)
-      expect(deltaParagraph()).toMatch(/Approval/)
+      for (const value of alternatives(line as string).filter(a => !canonicalAlts.includes(a))) {
+        checked++
+        const at = section.indexOf(value)
+        expect(
+          at,
+          `${skill}: the Approval value "${value}" diverges from the canonical shape and is ` +
+            `not documented verbatim in § Decision Shape`,
+        ).toBeGreaterThan(-1)
+        // Proximity, so the documentation is attached to the skill it describes
+        // rather than sitting anywhere in the paragraph.
+        const window = section.slice(Math.max(0, at - 400), at + 400)
+        expect(
+          window,
+          `${skill}: "${value}" is documented, but not in prose that names ${skill}`,
+        ).toContain(skill)
+      }
+    }
+
+    // Non-vacuity: today exactly one skill diverges. If that stops being true the
+    // loop above silently checks nothing, so the count is asserted to be positive
+    // (not to be one — a second legitimate delta must not require a test edit).
+    expect(
+      checked,
+      'no divergent Approval value found — is the extraction working?',
+    ).toBeGreaterThan(0)
+  })
+
+  it('every skill count claimed in prose equals the declared list length', () => {
+    // Round 5, Minor 2: round 4 replaced a WRONG count ("nine") with an
+    // UNVERIFIED one ("eight"). `checkProseCounts` only sweeps KB_PROSE_FILES,
+    // which does not include this file, so the concrete regression path was: a
+    // ninth decision skill lands → the set-equality test fails → someone appends
+    // the name to the list → the suite goes green with "eight skills" still
+    // written there, falsely claiming to be the authority. That is this story's own
+    // business rule ("no hardcoded count — the families grow") broken inside the
+    // artifact the story exists to enforce.
+    const WORDS: Record<string, number> = {
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+      eight: 8,
+      nine: 9,
+      ten: 10,
+      eleven: 11,
+      twelve: 12,
+    }
+    const section = decisionSection()
+    // A COUNT CLAIM is a number that qualifies "skills" directly — "8 **decision**
+    // skills", "eight skills" — with at most one word (bold markers included)
+    // between. A loose "within 40 characters" window also swallowed prose like
+    // "the one that is not a decision: a call the skill …", which counts nothing.
+    const claims = [
+      ...section.matchAll(
+        /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b(?:\s+\*{0,2}[a-z-]+\*{0,2})?\s+skills?\b/gi,
+      ),
+    ]
+    expect(claims.length, 'no count claim found — the regex must track the prose').toBeGreaterThan(
+      0,
+    )
+    for (const claim of claims) {
+      const raw = claim[1] as string
+      const stated = WORDS[raw.toLowerCase()] ?? Number(raw)
+      expect(
+        stated,
+        `prose says "${raw} skills" but the declared list has ${DECLARED.length}`,
+      ).toBe(DECLARED.length)
     }
   })
 })
