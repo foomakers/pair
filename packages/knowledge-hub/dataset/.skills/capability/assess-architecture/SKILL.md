@@ -14,7 +14,7 @@ Evaluate and recommend the system architecture pattern. Follows the resolution c
 | Argument  | Required | Description                                                                 |
 | --------- | -------- | --------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this architecture directly (e.g. `hexagonal`) |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -53,13 +53,15 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    - Score each candidate pattern on: Implementation Complexity, Team Skill Required, Maintenance Overhead, Scalability, Best For.
    - Weight criteria based on project type (from PRD or developer input).
 
-2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis. Under `$approval: auto` item 4 still has something to accept, because this presentation already **names a recommendation** below: the named pattern stands, and the runner-up plus the margin are reported as a choice a human has not made:
+2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis:
 
    > **Top candidates:**
    > 1. **[Pattern A]** — Score: X. Strengths: ... Weaknesses: ...
    > 2. **[Pattern B]** — Score: Y. Strengths: ... Weaknesses: ...
    >
    > Recommendation: **[Pattern A]** because [reason].
+
+   Under `$approval: auto` item 4 still has something to accept, because this presentation already **names a recommendation**: the named pattern stands, and the runner-up plus the margin are reported as a choice a human has not made.
 
 3. **Act**: If one pattern clearly wins, present recommendation:
 
@@ -98,7 +100,8 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Proposal:  [content rendered for adoption/tech/architecture.md]
 ├── Target:    adoption/tech/architecture.md (full file)
 ├── Persist:   [caller composes /record-decision(content, target) → ADR]
-└── Status:    [Proposal ready | Confirmed existing]
+├── Approval:  [interactive — approved | auto — accepted as-is | auto — existing kept, delta not applied | auto — UNRESOLVED, no proposal]
+└── Status:    [Proposal ready | Confirmed existing | Unresolved — no proposal]
 ```
 
 ## Composition Interface

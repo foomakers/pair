@@ -14,7 +14,7 @@ Evaluate and recommend the project management tool. Follows the resolution casca
 | Argument  | Required | Description                                                                  |
 | --------- | -------- | ---------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this PM tool directly (e.g. `github`, `filesystem`) |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -108,7 +108,8 @@ ASSESSMENT COMPLETE (output-only for adoption — no files written by this skill
 ├── Proposal:  [content rendered for way-of-working.md PM section | delegated to /setup-pm]
 ├── Target:    adoption/tech/way-of-working.md (PM tool section)
 ├── Persist:   [caller composes /record-decision(content, target) → ADL | delegated to /setup-pm]
-└── Status:    [Proposal ready | Confirmed existing | Delegated]
+├── Approval:  [interactive — approved | auto — accepted as-is | auto — existing kept, delta not applied | auto — UNRESOLVED, no proposal]
+└── Status:    [Proposal ready | Confirmed existing | Delegated | Unresolved — no proposal]
 ```
 
 ## Composition Interface

@@ -17,7 +17,7 @@ Assess security posture in two modes — `review` (per-PR, composed by `/pair-pr
 | `$choice` | No       | Audit mode only. A named control set to adopt directly (e.g. `owasp-top10`), skipping full evaluation — resolution cascade Path A.             |
 | `$scope`  | No       | Audit mode only. Area/package to scope the assessment (default: whole codebase).                                                              |
 | `$output` | No       | Audit mode only. Directory the report is written to. Default: `.pair/working/reports/security/` (D14 — report path override).                  |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). Audit mode only — review mode has no approval round. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). Audit mode only — review mode has no approval round. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Rule Set (both modes read this; only audit mode's re-derivation is cascade-gated)
 
@@ -126,7 +126,8 @@ SECURITY AUDIT COMPLETE:
 ├── Proposal:  [content rendered for tech/security.md | N/A — Path B, already current]
 ├── Target:    adoption/tech/security.md
 ├── Persist:   [caller composes /record-decision(content, target) → ADL | N/A]
-└── Status:    [Report written | Confirmed existing | Proposal ready]
+├── Approval:  [interactive — approved | auto — accepted as passed | auto — existing rules kept | auto — UNRESOLVED, no proposal]
+└── Status:    [Report written | Confirmed existing | Proposal ready | Unresolved — no proposal]
 ```
 
 ## Composition Interface

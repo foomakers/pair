@@ -14,7 +14,7 @@ Evaluate and recommend AI development tools: AI assistants, MCP integrations, AI
 | Argument  | Required | Description                                                                            |
 | --------- | -------- | -------------------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this AI tool directly (e.g. `claude-code`, `cursor`) |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -107,7 +107,8 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Proposal:  [content rendered for tech-stack.md AI section]
 ├── Target:    adoption/tech/tech-stack.md (AI section)
 ├── Persist:   [caller composes /record-decision(content, target) → ADL]
-└── Status:    [Proposal ready | Confirmed existing]
+├── Approval:  [interactive — approved | auto — accepted as-is | auto — existing kept, delta not applied | auto — UNRESOLVED, no proposal]
+└── Status:    [Proposal ready | Confirmed existing | Unresolved — no proposal]
 ```
 
 ## Composition Interface

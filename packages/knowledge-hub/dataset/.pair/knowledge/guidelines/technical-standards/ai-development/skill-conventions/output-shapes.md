@@ -14,8 +14,11 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Proposal:  [content rendered for <target file/section>]
 ├── Target:    <adoption file path> (<owned section>)
 ├── Persist:   [caller composes /record-decision(content, target) → ADR|ADL]
-└── Status:    [Proposal ready | Confirmed existing]
+├── Approval:  [interactive — approved | auto — accepted as-is | auto — existing kept, delta not applied | auto — UNRESOLVED, no proposal]
+└── Status:    [Proposal ready | Confirmed existing | Unresolved — no proposal]
 ```
+
+The `Approval` line is how a non-interactive caller reads **which** of `auto`'s outcomes it got ([approval rounds](approval-rounds.md)) — including the one that is not a decision: a call the skill cannot make alone yields no proposal, and a caller that cannot see that in the return value has to infer it from an absent field. `Status: Unresolved` is its counterpart, so the outcome is legible in both lines.
 
 Per-skill delta: the `Domain` label, the `Decision`/`Proposal`/`Target` line contents, and the ADR-vs-ADL choice in `Persist`. `assess-stack` additionally carries a `Mode` line (Bootstrap | Implementation | Review) and a wider `Status` set (adds Approved | Rejected) because it spans the whole project lifecycle, not just bootstrap. `assess-pm` additionally carries a `Delegated` status because it may hand persistence to `/setup-pm`. Both are legitimate deltas, not shape violations.
 

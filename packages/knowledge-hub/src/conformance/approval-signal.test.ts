@@ -191,19 +191,86 @@ describe('a tie-break resolves from a real source, not an invented order (round 
     })
   }
 
-  it('every tie-break clause names project state and the unresolved fallback', () => {
-    const withTie = FAMILY_SKILLS.filter(([, file]) => /\bexact tie\b/i.test(read(file)))
-    expect(withTie.length).toBeGreaterThan(0)
-    for (const [rel, file] of withTie) {
+  // Round 3, Minor 2: this pin filtered on the literal "exact tie", which only
+  // `assess-methodology` uses — so the two clauses rewritten alongside it
+  // (`assess-testing`, `assess-observability`) were outside the filter, and the
+  // `toBeGreaterThan(0)` witness was already satisfied by that one skill. The
+  // filter is now the concept, not one skill's phrasing, and each match is its own
+  // named case so the report shows WHICH skills were actually checked.
+  const TIE_BREAK_CLAUSE = /\btie\b/i
+  const withTie = FAMILY_SKILLS.filter(([, file]) => TIE_BREAK_CLAUSE.test(read(file)))
+
+  it('the filter catches every skill that resolves a tie, not just one phrasing', () => {
+    // Named explicitly because the round-2 rewrite touched exactly these three: a
+    // filter that silently stopped matching one of them would make its case vanish
+    // rather than fail, which is how the previous version of this pin went blind.
+    const matched = withTie.map(([rel]) => rel)
+    for (const skill of [
+      'capability/assess-methodology',
+      'capability/assess-observability',
+      'capability/assess-testing',
+    ]) {
+      expect(matched, `${skill} has a tie-break clause and must be pinned`).toContain(skill)
+    }
+  })
+
+  for (const [rel, file] of withTie) {
+    it(`${rel} — its tie-break names project state AND the unresolved fallback`, () => {
       const content = read(file)
-      expect(content, `${rel} must resolve an exact tie from project state`).toMatch(
-        /exact tie[\s\S]{0,240}project state/i,
+      expect(content, `${rel} must resolve a tie from project state`).toMatch(
+        /tie[\s\S]{0,320}project state/i,
       )
       expect(content, `${rel} must say what happens when project state is silent`).toMatch(
         /(no proposal|unresolved)/i,
       )
-    }
+    })
+  }
+})
+
+describe('the "unresolved" outcome is expressible at the interface (round 3, Minor 1)', () => {
+  // A caller running `auto` can hit three outcomes, and the third one is not a
+  // decision: an exact tie project state does not settle yields NO proposal. Both
+  // surfaces a caller reads — the Argument row (what the mode promises) and the
+  // Output Format (what comes back) — have to be able to say so, or the caller is
+  // left inferring it from a missing field. The `map-*` pair already carried an
+  // `Approval:` line; the nine `assess-*` did not.
+  const declaring = FAMILY_SKILLS.filter(([, file]) => /\|\s*`\$approval`/.test(read(file)))
+
+  it('every skill that declares the argument is covered here', () => {
+    expect(declaring.length).toBeGreaterThan(0)
   })
+
+  it('the row-vs-body assertion below is not vacuous — some body HAS the unresolved branch', () => {
+    // The per-skill check is conditional (two family members legitimately have no
+    // unresolved outcome), so without this witness a wording change that stopped
+    // matching would silently disable it everywhere instead of failing.
+    const withUnresolved = declaring.filter(([, file]) =>
+      /no proposal is emitted|reported \*\*unresolved\*\*/i.test(read(file)),
+    )
+    expect(withUnresolved.length).toBeGreaterThan(0)
+  })
+
+  for (const [rel, file] of declaring) {
+    it(`${rel} — the Argument row omits no outcome the algorithm has`, () => {
+      const content = read(file)
+      const row = content.split('\n').find(l => /\|\s*`\$approval`/.test(l)) as string
+      // The round-2 wording claimed a tie is always "resolved deterministically",
+      // which the unresolved branch contradicts. Nobody may promise that again.
+      expect(row).not.toMatch(/resolved deterministically/i)
+      // Row-vs-body consistency, which is the invariant Minor 1 is really about: a
+      // caller reads the row, so an outcome the STEPS can produce and the row does
+      // not mention is an outcome the caller has no declared way to handle.
+      // Asserted conditionally on purpose — `/map-subdomains` genuinely has two
+      // branches, and `/map-contexts`' third one is the HALT its row already names.
+      const bodyHasUnresolved = /no proposal is emitted|reported \*\*unresolved\*\*/i.test(content)
+      if (bodyHasUnresolved) expect(row).toMatch(/unresolved|no proposal/i)
+    })
+
+    it(`${rel} — the Output Format carries an Approval line a caller can read`, () => {
+      const content = read(file)
+      expect(content).toMatch(/^[│├└─\s]*Approval:/m)
+    })
+  }
 })
 
 describe('the convention is the single statement of the signal (#410)', () => {

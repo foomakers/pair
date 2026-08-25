@@ -15,7 +15,7 @@ Evaluate and recommend the technology stack: languages, frameworks, runtime, dat
 | --------- | -------- | ---------------------------------------------------------------------------------------- |
 | `$choice` | No       | Technology to assess (e.g. `zod@3.22`, `node@20`, `react@18.2`). Format: `name@version`. |
 | `$mode`   | No       | Lifecycle mode: `bootstrap`, `implementation`, `review`. Auto-detected if omitted.       |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -186,7 +186,8 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Proposal:  [content rendered for tech-stack.md — full | affected entry]
 ├── Target:    adoption/tech/tech-stack.md (core sections)
 ├── Persist:   [caller composes /record-decision(content, target) → ADL]
-└── Status:    [Proposal ready | Confirmed existing | Approved | Rejected]
+├── Approval:  [interactive — approved | auto — accepted as-is | auto — existing kept, delta not applied | auto — UNRESOLVED, handed back to the caller]
+└── Status:    [Proposal ready | Confirmed existing | Approved | Rejected | Unresolved — no proposal]
 ```
 
 ## Composition Interface
