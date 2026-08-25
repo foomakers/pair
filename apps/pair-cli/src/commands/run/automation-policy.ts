@@ -1,5 +1,6 @@
 import { join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
+import { isLabelShape, isSafePromptText, promptSafetyFailure } from './prompt-safety'
 
 /**
  * The automation-policy reader (US-451 T-8) — READ-ONLY, and it BORROWS every parameter.
@@ -53,61 +54,21 @@ function halt(detail: string): never {
 }
 
 /**
- * The upper bound on any value that reaches an agent prompt. Tier 1's own constant.
- */
-const MAX_PROMPT_VALUE_LENGTH = 200
-
-/**
- * Ported VERBATIM from tier 1 (`.claude/workflows/pair-loop.js` — `isSafePromptText`), which got it
- * from #250's round-3 review naming this exact threat (round 4, Major).
+ * The one message every unsafe value gets, wherever it was declared — the shared rule set lives in
+ * `prompt-safety.ts` so the CLI flags and the policy fields cannot drift apart (round 6, Major).
  *
- * Every value this reader returns ends up inside an agent prompt that runs `gh` in an unattended,
- * confirmation-free session. The schema's own MUST is two-part: the value is placed in a delimited
- * data slot **and** it is never a command fragment — "delimiting is not validation". The driver
- * borrows the policy's values, so it borrows this check too; anything less means the same
- * `tech/automation.md` HALTs on tier 1 and executes on tier 2, which is the divergence ADR-021
- * exists to forbid.
- *
- * It does NOT restrict SHAPE — a legitimate label may carry spaces (`good first issue`) — only the
- * characters that turn a value into a command once an agent puts it on a line: a backtick, `$(`,
- * control characters or newlines, and an unbounded length.
+ * **Documented, deliberate divergence from tier 1 on the `## Stop Predicate` line** (round 6,
+ * minor 1): tier 1 spends the 200-character budget PER VALUE (it applies the
+ * check to the selector payload and evaluates the rest in JS), while the driver applies it to the
+ * WHOLE LINE, because the whole line is what it inlines into the prompt. So
+ * `tag:<150 chars> ⇒ has-tag:<100 chars>` is accepted by tier 1 and refused here. The direction is
+ * always safe (tier 2 stricter, never looser), it is unavoidable given what tier 2 does with the
+ * value, and it is registered as an expected divergence in `tier-parity.test.ts` rather than left
+ * for a sixth review to rediscover.
  */
-function isSafePromptText(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length <= MAX_PROMPT_VALUE_LENGTH &&
-    !value.includes('`') &&
-    !value.includes('$(') &&
-    !hasControlCharacters(value)
-  )
-}
-
-/**
- * Newlines and C0/C1 control characters, checked with a LOOP rather than a control-character regex
- * literal — the same shape, and the same reason, as `config/loader.ts`: this repo's code-hygiene
- * gate flags linter-suppression comments with no exception mechanism, and a loop needs none.
- */
-function hasControlCharacters(value: string): boolean {
-  for (const char of value) {
-    const code = char.codePointAt(0) ?? 0
-    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true
-  }
-  return false
-}
-
-/** Tier 1's `isLabelShape` — a well-formed `family:tier` label, for `## Auto-Advance`. */
-function isLabelShape(value: string): boolean {
-  return /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i.test(value)
-}
-
-/** The one message every unsafe value gets, wherever it was declared. */
 function assertSafePromptText(section: string, value: string): void {
   if (isSafePromptText(value)) return
-  halt(
-    `\`## ${section}\` declares \`${value.slice(0, 80)}${value.length > 80 ? '…' : ''}\`, which ` +
-      `contains a character that could turn it into a command fragment once inlined in an agent ` +
-      `prompt (backtick, \`$(\`, a control character, or over ${MAX_PROMPT_VALUE_LENGTH} characters)`,
-  )
+  halt(promptSafetyFailure(`\`## ${section}\``, value))
 }
 
 export function readAutomationPolicy(fs: FileSystemService, projectRoot: string): AutomationPolicy {
@@ -431,6 +392,15 @@ function assertCondition(condition: string, line: string): void {
  * Per-tier overrides are VALIDATED even though the driver never applies one (it caps itself at 1
  * per process, AC9): tier 1 HALTs on a malformed override, so silently ignoring it here would make
  * the same file mean two different things again.
+ *
+ * **Scope of that validation, stated deliberately** (round 6, minor 3): SHAPE only — line form,
+ * `family:tier` label, positive integer. Tier 1 additionally rejects an override key the project's
+ * Tag Projection does not emit, using the family the calling skill resolves from
+ * `tech/risk-matrix.md`. The driver does not read that file: it BORROWS policy rather than deriving
+ * it (D18), and it never applies an override anyway. So `risk:blue: 5` is refused by tier 1 and
+ * accepted here — the looser direction, acceptable only because the value is unused on tier 2, and
+ * registered as an expected divergence in `tier-parity.test.ts` with that reasoning. Resolving the
+ * family in the driver is the recorded follow-up if it ever starts applying overrides.
  */
 function readMaxParallelism(markdown: string): number {
   const lines = sectionLines(markdown, 'Max Parallelism')
@@ -464,6 +434,10 @@ function readAuditLocation(markdown: string): string {
     halt(`\`## Audit Location\` declares ${lines.length} lines, but takes exactly one path`)
   }
   const value = lines[0]!
+  // The drive-letter half is NOT an extra tier-2 rule any more: tier 1 gained the same line in this
+  // story (round 6, minor 2), so `C:/tmp/audit.md` is refused by both realizations and the corpus
+  // asserts they agree. Closing the divergence at the source beat documenting it — the rule was
+  // simply one platform short on tier 1, with the same intent already written there.
   if (value.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(value)) {
     halt(
       `\`## Audit Location\` declares the absolute path \`${value}\`; it must be project-relative`,

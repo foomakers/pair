@@ -264,6 +264,12 @@ export function resolveAuditLocation(policyText) {
   const rel = body === null || body.trim() === '' ? 'automation/loop-audit.md' : body.trim()
   if (rel.startsWith('/'))
     HALT(`\`## Audit Location\` declares an absolute path \`${rel}\` — must be project-relative.`)
+  // US-451 review round 6 m2: a POSIX absolute path was rejected but a Windows drive-letter one
+  // (`C:/tmp/x.md`, `C:\tmp\x.md`) was not — same rule, same intent, one platform short. Closed
+  // here rather than only in the external driver (#451), so one adoption file keeps one meaning
+  // across both realizations of the loop (ADR-021).
+  if (/^[a-zA-Z]:[/\\]/.test(rel))
+    HALT(`\`## Audit Location\` declares an absolute path \`${rel}\` — must be project-relative.`)
   // Review m3: a leading `/` was rejected but `../../x.md` was not — the SAME
   // "project-relative only" rule `working_path` itself is validated against.
   // Reject any segment that escapes the working area, not just an absolute path.

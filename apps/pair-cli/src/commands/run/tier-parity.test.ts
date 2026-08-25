@@ -31,7 +31,7 @@ interface Tier1Helpers {
   extractEligibility: (policyText: string) => { kind: string; value?: string }
   extractAutoAdvance: (policyText: string, eligibilityValue?: string) => unknown
   parseStopPredicate: (policyText: string) => unknown
-  parseMaxParallelism: (policyText: string) => unknown
+  parseMaxParallelism: (policyText: string, tagProjectionFamily?: Set<string>) => unknown
   resolveAuditLocation: (policyText: string) => string
 }
 
@@ -97,7 +97,10 @@ function tier1Rejects(policyText: string, section: Section): boolean {
       const eligibility = helpers.extractEligibility(policyText)
       return helpers.extractAutoAdvance(policyText, eligibility.value)
     },
-    'Max Parallelism': () => helpers.parseMaxParallelism(policyText),
+    // PRODUCTION branch (round 6, minor 3): the skill always passes the Tag Projection family, and
+    // tier 1's override check only bites when it has one. Testing the degraded branch hid a real
+    // divergence (`risk:blue: 5`), so the corpus now exercises what actually runs.
+    'Max Parallelism': () => helpers.parseMaxParallelism(policyText, TAG_PROJECTION_FAMILY),
     'Audit Location': () => helpers.resolveAuditLocation(policyText),
   }
   try {
@@ -108,8 +111,27 @@ function tier1Rejects(policyText: string, section: Section): boolean {
   }
 }
 
+/** What this project's Tag Projection emits — what the calling skill hands tier 1 in production. */
+const TAG_PROJECTION_FAMILY = new Set(['risk:green', 'risk:yellow', 'risk:red'])
+
+/**
+ * A corpus entry may declare an EXPECTED DIVERGENCE instead of parity (round 6, minor 1).
+ *
+ * `expect(t2).toBe(t1)` can only say "these must agree"; some differences are structural and
+ * deliberate, and leaving them unexpressed means the corpus quietly stops describing reality. An
+ * entry carrying `divergence` asserts the two tiers DIFFER, in the stated direction, for the stated
+ * reason — so a divergence that silently disappears also fails, telling us the reason went stale.
+ */
+interface Divergence {
+  readonly tier1: 'accept' | 'reject'
+  readonly tier2: 'accept' | 'reject'
+  readonly why: string
+}
+
+type Case = [label: string, value: string, divergence?: Divergence]
+
 /** The corpus: every value a previous review round found, plus the legitimate ones around them. */
-const ELIGIBILITY_CORPUS: Array<[label: string, value: string]> = [
+const ELIGIBILITY_CORPUS: Case[] = [
   ['a plain tier label', 'risk:green'],
   ['a label carrying spaces', 'good first issue'],
   ['a command substitution', 'risk:$(whoami)'],
@@ -121,7 +143,7 @@ const ELIGIBILITY_CORPUS: Array<[label: string, value: string]> = [
   ['a 4000-character payload', 'a'.repeat(4000)],
 ]
 
-const PREDICATE_CORPUS: Array<[label: string, value: string]> = [
+const PREDICATE_CORPUS: Case[] = [
   ['this project’s own predicate', 'tag:risk:red ⇒ Done'],
   ['a root selector', 'root ⇒ Done'],
   ['a combined condition', 'root ⇒ Done and has-tag:risk:red'],
@@ -139,7 +161,56 @@ const PREDICATE_CORPUS: Array<[label: string, value: string]> = [
   ['max-iterations in hexadecimal', 'max-iterations: 0x10'],
   ['max-iterations as a float', 'max-iterations: 2.0'],
   ['max-iterations at zero', 'max-iterations: 0'],
+  ...(
+    [
+      ['a command substitution in has-tag', 'root ⇒ has-tag:$(whoami)'],
+      ['a backtick in has-tag', 'root ⇒ has-tag:`id`'],
+    ] as const
+  ).map(
+    ([label, value]): Case => [
+      label,
+      value,
+      {
+        tier1: 'accept',
+        tier2: 'reject',
+        why:
+          'DELIBERATE, and the round-5 Major: tier 1 accepts these because it EVALUATES the ' +
+          'predicate in JS and never inlines it, so the characters are inert there. The driver ' +
+          'renders the whole line into an agent prompt that runs `gh`, so for tier 2 they are a ' +
+          'command fragment and must HALT. This is the class of exposure parity cannot detect by ' +
+          'construction — recorded here so the asymmetry is visible rather than looking like drift.',
+      },
+    ],
+  ),
+  [
+    'a line over 200 characters whose every VALUE is under it',
+    `tag:${'a'.repeat(150)} ⇒ has-tag:${'b'.repeat(100)}`,
+    {
+      tier1: 'accept',
+      tier2: 'reject',
+      why:
+        'DELIBERATE: tier 1 spends the 200-character budget PER VALUE (it content-checks the ' +
+        'selector payload and evaluates the rest in JS); the driver spends it on the WHOLE LINE, ' +
+        'because the whole line is what it inlines into an agent prompt. Unavoidable given what ' +
+        'tier 2 does with the value, and always in the safe direction (stricter, never looser).',
+    },
+  ],
 ]
+
+/** Asserts parity, or the declared divergence — both are verified, neither is assumed. */
+function assertAgreement(policyText: string, section: Section, divergence?: Divergence): void {
+  const tier2 = tier2Rejects(policyText) ? 'reject' : 'accept'
+  const tier1Verdict = tier1Rejects(policyText, section) ? 'reject' : 'accept'
+
+  if (divergence === undefined) {
+    expect(tier2, `tier 2 must agree with tier 1 on this value`).toBe(tier1Verdict)
+    return
+  }
+  expect({ tier1: tier1Verdict, tier2 }, divergence.why).toEqual({
+    tier1: divergence.tier1,
+    tier2: divergence.tier2,
+  })
+}
 
 describe('tier 1 and tier 2 read the same policy file the same way', () => {
   it('evaluates tier 1 from its own source, so its rules are never copied here', () => {
@@ -149,19 +220,18 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     })
   })
 
-  it.each(ELIGIBILITY_CORPUS)('agrees on `## Eligibility` with %s', (_label, value) => {
-    const policyText = `## Eligibility\n\n${value}\n`
-
-    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Eligibility'))
+  it.each(ELIGIBILITY_CORPUS)('agrees on `## Eligibility` with %s', (_label, value, divergence) => {
+    assertAgreement(`## Eligibility\n\n${value}\n`, 'Eligibility', divergence)
   })
 
-  it.each(PREDICATE_CORPUS)('agrees on `## Stop Predicate` with %s', (_label, value) => {
-    const policyText = `## Stop Predicate\n\n${value}\n`
+  it.each(PREDICATE_CORPUS)(
+    'agrees on `## Stop Predicate` with %s',
+    (_label, value, divergence) => {
+      assertAgreement(`## Stop Predicate\n\n${value}\n`, 'Stop Predicate', divergence)
+    },
+  )
 
-    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Stop Predicate'))
-  })
-
-  const AUTO_ADVANCE_CORPUS: Array<[label: string, value: string]> = [
+  const AUTO_ADVANCE_CORPUS: Case[] = [
     ['the fail-closed default', '(none)'],
     ['the project’s own eligibility tier', 'risk:green'],
     ['a tier outside eligibility', 'risk:red'],
@@ -170,7 +240,7 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     ['a command substitution', 'risk:$(id)'],
   ]
 
-  const PARALLELISM_CORPUS: Array<[label: string, value: string]> = [
+  const PARALLELISM_CORPUS: Case[] = [
     ['a decimal ceiling', '3'],
     ['scientific notation', '1e3'],
     ['hexadecimal', '0x10'],
@@ -181,33 +251,52 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     ['a malformed override line', '3\nrisk:green 5'],
     ['an override naming a non-label', '3\nnot a tier: 5'],
     ['an override with a non-integer', '3\nrisk:green: many'],
+    [
+      'an override naming a tier the Tag Projection does not emit',
+      '3\nrisk:blue: 5',
+      {
+        tier1: 'reject',
+        tier2: 'accept',
+        why:
+          'DELIBERATE: tier 1 checks an override key against the Tag Projection family the calling ' +
+          'skill resolves from `tech/risk-matrix.md`. The driver never READS that file (it borrows ' +
+          'policy, it does not derive it — D18) and never APPLIES an override at all, since one ' +
+          'process drives one card (AC9), so it validates shape only. The value is unused on tier ' +
+          '2, which is why the looser direction is acceptable here; resolving the family in the ' +
+          'driver is the recorded follow-up.',
+      },
+    ],
   ]
 
-  const AUDIT_CORPUS: Array<[label: string, value: string]> = [
+  const AUDIT_CORPUS: Case[] = [
     ['a normal relative path', 'automation/loop-audit.md'],
     ['an absolute path', '/var/tmp/audit.md'],
     ['a traversing path', '../../../etc/x.md'],
     ['a backticked path', 'audit`whoami`.md'],
     ['a two-line body', 'audit/one.md\naudit/two.md'],
+    ['a windows drive-letter path', 'C:/tmp/audit.md'],
+    ['a windows backslash path', 'C:\\tmp\\audit.md'],
   ]
 
-  it.each(AUTO_ADVANCE_CORPUS)('agrees on `## Auto-Advance` with %s', (_label, value) => {
-    // Eligibility is declared alongside it, because tier 1 validates the switch against it.
-    const policyText = `## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\n${value}\n`
+  it.each(AUTO_ADVANCE_CORPUS)(
+    'agrees on `## Auto-Advance` with %s',
+    (_label, value, divergence) => {
+      // Eligibility is declared alongside it, because tier 1 validates the switch against it.
+      const policyText = `## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\n${value}\n`
 
-    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Auto-Advance'))
-  })
+      assertAgreement(policyText, 'Auto-Advance', divergence)
+    },
+  )
 
-  it.each(PARALLELISM_CORPUS)('agrees on `## Max Parallelism` with %s', (_label, value) => {
-    const policyText = `## Max Parallelism\n\n${value}\n`
+  it.each(PARALLELISM_CORPUS)(
+    'agrees on `## Max Parallelism` with %s',
+    (_label, value, divergence) => {
+      assertAgreement(`## Max Parallelism\n\n${value}\n`, 'Max Parallelism', divergence)
+    },
+  )
 
-    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Max Parallelism'))
-  })
-
-  it.each(AUDIT_CORPUS)('agrees on `## Audit Location` with %s', (_label, value) => {
-    const policyText = `## Audit Location\n\n${value}\n`
-
-    expect(tier2Rejects(policyText)).toBe(tier1Rejects(policyText, 'Audit Location'))
+  it.each(AUDIT_CORPUS)('agrees on `## Audit Location` with %s', (_label, value, divergence) => {
+    assertAgreement(`## Audit Location\n\n${value}\n`, 'Audit Location', divergence)
   })
 
   it('agrees that this repo’s real adoption file is valid', () => {

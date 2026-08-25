@@ -1,4 +1,5 @@
 import { ENGINE_IDS, isEngineId, type EngineId } from './engines'
+import { idSafetyFailure, isSafeId, isSafePromptText, promptSafetyFailure } from './prompt-safety'
 
 /**
  * The perimeter's scope components, expressed with `pair-next`'s OWN frozen parameter names
@@ -75,6 +76,30 @@ function optionalText(value: string | undefined, flag: string): string | undefin
   return trimmed
 }
 
+/**
+ * An identifier the driver splices into a prompt (`--root`).
+ *
+ * Content-checked at PARSE time (round 6, Major): `--root` and `--filter` reach `buildPromptText`
+ * exactly as the policy-read values do, and were the only two of the five arriving unchecked. Tier 1
+ * HALTs on `args.root` failing `isSafeId` for the same reason, and its own `whenToUse` calls these
+ * "untrusted adoption/argument data" — the expected caller here is CI/cron, where the value is
+ * routinely interpolated from somewhere else.
+ */
+function identifierText(value: string | undefined, flag: string): string | undefined {
+  const trimmed = optionalText(value, flag)
+  if (trimmed === undefined) return undefined
+  if (!isSafeId(trimmed)) throw new Error(idSafetyFailure(flag, trimmed))
+  return trimmed
+}
+
+/** Free text the driver splices into a prompt (`--filter`): characters bounded, shape untouched. */
+function promptSafeText(value: string | undefined, flag: string): string | undefined {
+  const trimmed = optionalText(value, flag)
+  if (trimmed === undefined) return undefined
+  if (!isSafePromptText(trimmed)) throw new Error(promptSafetyFailure(flag, trimmed))
+  return trimmed
+}
+
 /** `--skill` and `--prompt` are one choice, not two independent flags. */
 function resolveInvocation(options: ParseRunOptions): RunInvocationRequest {
   const skill = optionalText(options.skill, '--skill')
@@ -96,8 +121,8 @@ function resolveEngineFlag(engine: string | undefined): EngineId | undefined {
 }
 
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
-  const root = optionalText(options.root, '--root')
-  const filter = optionalText(options.filter, '--filter')
+  const root = identifierText(options.root, '--root')
+  const filter = promptSafeText(options.filter, '--filter')
   return { ...(root && { root }), ...(filter && { filter }) }
 }
 
