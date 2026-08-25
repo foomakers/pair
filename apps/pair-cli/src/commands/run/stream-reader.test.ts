@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { readIterationOutcome, toLines } from './stream-reader'
+import { buildSkillArgs } from './invocation'
 import { ENGINES, type EngineId } from './engines'
 
 /** Feeds a recorded stream through the reader the way a child process would: in chunks. */
@@ -89,6 +90,19 @@ describe('readIterationOutcome — continue-token', () => {
     expect(result.continueToken).toBe('pair-loop --root 212 --iteration 5')
   })
 
+  it('carries a token whose borrowed value is QUOTED (round 2, Major)', async () => {
+    // The shape this PR's own amended contract declares (`--predicate "<text>"`) and the shape
+    // round 1's quoting fix makes the driver render. Round 1's anchoring excluded `"` from the
+    // capture, so this token did not match at all: the loop read "no token" and an unattended run
+    // drove exactly ONE card, reporting success (AC4 lost, silently).
+    const result = await readFixture('claude-quoted-predicate-token.jsonl', 'claude')
+
+    expect(result.outcome).toBe('success')
+    expect(result.continueToken).toBe(
+      'pair-loop --root 212 --predicate "tag:risk:red ⇒ Done" --iteration 2',
+    )
+  })
+
   it('ignores the DOCUMENTED template echoed in a transcript (round 1, finding 5)', async () => {
     // pair-loop's own SKILL.md contains the literal line
     // `CONTINUE-TOKEN: pair-loop [--root <id>] [--predicate "<text>"] --iteration <n+1>`.
@@ -104,6 +118,27 @@ describe('readIterationOutcome — continue-token', () => {
     const result = await readFixture('claude-inline-mention.jsonl', 'claude')
 
     expect(result.continueToken).toBeUndefined()
+  })
+
+  it('takes the MOST RECENT token when a report quotes an earlier one (deliberate)', async () => {
+    // A recap of the previous iteration, then this iteration's real token. Re-invoking the stale
+    // one would replay a card the run already handled, so last-wins is the intended order.
+    const stream = (async function* () {
+      yield `${JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Previously:\nCONTINUE-TOKEN: pair-loop --iteration 2' },
+            { type: 'text', text: 'Now:\nCONTINUE-TOKEN: pair-loop --iteration 3' },
+          ],
+        },
+      })}\n`
+      yield `${JSON.stringify({ type: 'result', subtype: 'success' })}\n`
+    })()
+
+    const result = await readIterationOutcome(toLines(stream), ENGINES.claude)
+
+    expect(result.continueToken).toBe('pair-loop --iteration 3')
   })
 
   it('reports no token when the skill printed none (it reported itself finished)', async () => {
@@ -146,5 +181,36 @@ describe('toLines', () => {
     for await (const line of toLines(chunks)) lines.push(line)
 
     expect(lines).toEqual(['{"a":1}'])
+  })
+})
+
+/**
+ * The two halves of the continue-token contract, pinned TOGETHER.
+ *
+ * Round 1 fixed the writing side (quote multi-word borrowed values) and, in the same commit,
+ * tightened the reading side in a way that could no longer read what the writing side emits. Each
+ * half had passing tests; nothing tested the seam. This does.
+ */
+describe('round-trip: what the driver renders is what the driver can read back', () => {
+  it.each([
+    ['a bare token', {}],
+    ['a quoted predicate', { predicate: 'tag:risk:red ⇒ Done' }],
+    ['a spaced label', { predicate: 'type:user story ⇒ Done' }],
+  ])('recognises the token it would print for %s', async (_case, extra) => {
+    const args = buildSkillArgs('pair-loop', { root: '212', iteration: 2, ...extra })
+    const token = ['pair-loop', ...args].join(' ')
+    const stream = (async function* () {
+      yield `${JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: `LOOP RUN: done\n\nCONTINUE-TOKEN: ${token}` }],
+        },
+      })}\n`
+      yield `${JSON.stringify({ type: 'result', subtype: 'success' })}\n`
+    })()
+
+    const result = await readIterationOutcome(toLines(stream), ENGINES.claude)
+
+    expect(result.continueToken).toBe(token)
   })
 })

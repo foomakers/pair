@@ -47,8 +47,16 @@ const NO_TERMINAL_EVENT: IterationResult = {
  *
  * Hence: line-anchored, the value must start with the skill name it re-invokes (`pair-`), and it
  * must carry no placeholder syntax (`<…>`, `[…]`) — a real token names real values.
+ *
+ * The value class deliberately admits `"` and `\`. An earlier version excluded both — a leftover
+ * from when the match ran against the RAW JSONL line, where a quote really did mean "the JSON
+ * string ended here". Since the match moved to the DECODED event that reasoning no longer holds,
+ * and excluding them broke the very shape this story's own contract declares
+ * (`--predicate "<text>"`): a token carrying a quoted multi-word predicate did not match at all,
+ * so the loop read "no token", stopped after ONE card, and reported success — AC4 lost in silence
+ * (round 2, Major). Only a real line break ends the value.
  */
-const CONTINUE_TOKEN_MARKER = /^\s*CONTINUE-TOKEN:[ \t]*(pair-[^\s"\\]+[^"\\\n\r]*)$/m
+const CONTINUE_TOKEN_MARKER = /^[ \t]*CONTINUE-TOKEN:[ \t]*(pair-\S+[^\n\r]*?)[ \t]*$/m
 
 /** A template, not a token: the documented form keeps its `<placeholders>` and `[optionals]`. */
 function isConcreteToken(candidate: string): boolean {
@@ -75,7 +83,15 @@ function findContinueToken(payload: unknown, depth = 0): string | undefined {
   return undefined
 }
 
-/** The LAST concrete token in one string: the real one is printed after any summary quoting it. */
+/**
+ * The LAST concrete token in one string — INTENTIONAL, not an artefact of iteration order.
+ *
+ * `pair-loop` prints the token as the final line of its report, so within one event the last match
+ * is the operative one: a run that quotes an earlier token (a summary, a retried attempt, a
+ * recap of the previous iteration) must not have that stale value re-invoked. `firstTokenIn`
+ * reverses collections for the same reason — later members of an event's `content` array are later
+ * output. Both are "most recent wins", stated here so a future reader does not "simplify" it.
+ */
 function tokenInText(text: string): string | undefined {
   const matches = [...text.matchAll(new RegExp(CONTINUE_TOKEN_MARKER, 'gm'))].reverse()
   for (const match of matches) {
@@ -85,7 +101,7 @@ function tokenInText(text: string): string | undefined {
   return undefined
 }
 
-/** Same last-wins order across a nested collection's members. */
+/** Same most-recent-wins order across a nested collection's members — see `tokenInText`. */
 function firstTokenIn(values: readonly unknown[], depth: number): string | undefined {
   for (const value of [...values].reverse()) {
     const found = findContinueToken(value, depth + 1)

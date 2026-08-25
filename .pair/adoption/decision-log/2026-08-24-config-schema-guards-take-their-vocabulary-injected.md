@@ -59,6 +59,17 @@ boundaries.
    block, unknown field). An operator whose typo was ignored could not tell a working configuration
    from a broken one.
 
+## Alternatives Considered
+
+- **Guard inside `loader.ts` importing the engine map** — rejected: inverts `#config` ← commands.
+- **Duplicate the id list in `#config`** — rejected: two sources of truth for the same vocabulary.
+- **Move the engine map down into `#config`** — rejected: the map is not only names; it carries
+  spawn argv, autonomy/trust postures and terminal-event rules, which is command-layer knowledge and
+  is itself destined for the KB later (ADR-021 Trade-offs).
+- **Validate nothing and let the driver fail at spawn time** — rejected: `pair validate-config`
+  exists precisely so a config error is found before a run, and an unattended run is the worst place
+  to discover one.
+
 ## Consequences
 
 - The stated task wording ("guard in `loader.ts`") is **not** what shipped; this ADL is the record
@@ -72,16 +83,16 @@ boundaries.
 - Cost: one indirection (the caller must pass the list). Accepted — it is what keeps the dependency
   arrow pointing one way.
 
-## Alternatives Considered
+## Adoption Impact
 
-- **Guard inside `loader.ts` importing the engine map** — rejected: inverts `#config` ← commands.
-- **Duplicate the id list in `#config`** — rejected: two sources of truth for the same vocabulary.
-- **Move the engine map down into `#config`** — rejected: the map is not only names; it carries
-  spawn argv, autonomy/trust postures and terminal-event rules, which is command-layer knowledge and
-  is itself destined for the KB later (ADR-021 Trade-offs).
-- **Validate nothing and let the driver fail at spawn time** — rejected: `pair validate-config`
-  exists precisely so a config error is found before a run, and an unattended run is the worst place
-  to discover one.
+- `.pair/adoption/tech/architecture.md` — **update required, tracked as a follow-up, not done here**:
+  the file describes the monorepo's package boundaries but never `apps/pair-cli`'s internal module
+  layering (`#config` / `#registry` imported BY `src/commands/*`, never the reverse), which is the
+  rule this decision applies. Adding a short subsection there is the natural home for it; this ADL
+  is the interim record and the reason the deviation from US-451's stated task wording is deliberate.
+- `.pair/adoption/tech/tech-stack.md` — no change: no dependency is added or removed.
+- `.pair/adoption/tech/way-of-working.md` — no change: no process changes; the existing
+  "gate/tooling code lives in tested modules" convention already covers where the guard's tests go.
 
 ## Related
 
