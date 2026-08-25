@@ -236,39 +236,60 @@ describe('the "unresolved" outcome is expressible at the interface (round 3, Min
   // `Approval:` line; the nine `assess-*` did not.
   const declaring = FAMILY_SKILLS.filter(([, file]) => /\|\s*`\$approval`/.test(read(file)))
 
+  /** The `Approval:` line of an Output Format block, if the skill has one. */
+  const approvalLine = (content: string): string | undefined =>
+    content.split('\n').find(l => /^[│├└─\s]*Approval:/.test(l))
+
+  /**
+   * The skill's own declaration that `auto` can end without a decision. Round 3's
+   * version of this pin keyed on a LITERAL BODY PHRASE ("no proposal is emitted"),
+   * which matched three skills and missed `assess-architecture` — whose Graceful
+   * Degradation says "emits **no proposal**" in different words. Reverting that
+   * skill's Argument row to the old two-branch wording therefore left the suite
+   * green: a gate above a regression, the same defect class round 3 had just
+   * closed on two other skills. The `Approval:` line is the right key because it is
+   * the skill's own INTERFACE statement of the outcome set — structural, not a
+   * phrasing, and exactly what a caller reads.
+   */
+  const declaresUnresolved = (content: string): boolean =>
+    /unresolved/i.test(approvalLine(content) ?? '')
+
+  const withUnresolved = declaring.filter(([, file]) => declaresUnresolved(read(file)))
+
   it('every skill that declares the argument is covered here', () => {
     expect(declaring.length).toBeGreaterThan(0)
   })
 
-  it('the row-vs-body assertion below is not vacuous — some body HAS the unresolved branch', () => {
-    // The per-skill check is conditional (two family members legitimately have no
-    // unresolved outcome), so without this witness a wording change that stopped
-    // matching would silently disable it everywhere instead of failing.
-    const withUnresolved = declaring.filter(([, file]) =>
-      /no proposal is emitted|reported \*\*unresolved\*\*/i.test(read(file)),
-    )
+  it('the conditional assertion below is not vacuous, and covers every assess-* member', () => {
+    // The check is conditional because the two `map-*` members legitimately have no
+    // unresolved outcome (`map-subdomains` has two branches; `map-contexts`' third
+    // is the HALT its row already names). Every OTHER declaring member must be in
+    // it — stated as "all except the map-* pair" rather than as a number, so a new
+    // family member joins the pin by construction.
     expect(withUnresolved.length).toBeGreaterThan(0)
+    const excluded = declaring
+      .filter(([, file]) => !declaresUnresolved(read(file)))
+      .map(([rel]) => rel)
+    expect(excluded.sort()).toEqual(['capability/map-contexts', 'capability/map-subdomains'])
   })
 
   for (const [rel, file] of declaring) {
-    it(`${rel} — the Argument row omits no outcome the algorithm has`, () => {
+    it(`${rel} — the Output Format carries an Approval line a caller can read`, () => {
+      expect(approvalLine(read(file))).toBeDefined()
+    })
+  }
+
+  for (const [rel, file] of withUnresolved) {
+    it(`${rel} — its Argument row states the unresolved outcome its interface declares`, () => {
       const content = read(file)
       const row = content.split('\n').find(l => /\|\s*`\$approval`/.test(l)) as string
       // The round-2 wording claimed a tie is always "resolved deterministically",
       // which the unresolved branch contradicts. Nobody may promise that again.
       expect(row).not.toMatch(/resolved deterministically/i)
-      // Row-vs-body consistency, which is the invariant Minor 1 is really about: a
-      // caller reads the row, so an outcome the STEPS can produce and the row does
-      // not mention is an outcome the caller has no declared way to handle.
-      // Asserted conditionally on purpose — `/map-subdomains` genuinely has two
-      // branches, and `/map-contexts`' third one is the HALT its row already names.
-      const bodyHasUnresolved = /no proposal is emitted|reported \*\*unresolved\*\*/i.test(content)
-      if (bodyHasUnresolved) expect(row).toMatch(/unresolved|no proposal/i)
-    })
-
-    it(`${rel} — the Output Format carries an Approval line a caller can read`, () => {
-      const content = read(file)
-      expect(content).toMatch(/^[│├└─\s]*Approval:/m)
+      // Row-vs-Output-Format consistency: the row is what a caller reads BEFORE
+      // invoking, so an outcome the return value can carry and the row does not
+      // mention is an outcome the caller has no declared way to handle.
+      expect(row).toMatch(/unresolved|no proposal/i)
     })
   }
 })
