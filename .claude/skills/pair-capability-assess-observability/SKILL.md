@@ -14,7 +14,7 @@ Evaluate and recommend the observability strategy: monitoring platform, logging 
 | Argument  | Required | Description                                                                          |
 | --------- | -------- | ------------------------------------------------------------------------------------ |
 | `$choice` | No       | Override: skip assessment, use this observability platform directly (e.g. `grafana`, `datadog`) |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -118,7 +118,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 - **Project doesn't need observability** (e.g. CLI tool, library): Render a minimal section noting "observability not applicable — [reason]" for the caller to persist.
 - **infrastructure.md exists but no observability section**: Render content that adds the section; the caller's write preserves all other content.
-- **Multiple valid platforms score equally**: Present top 2 with trade-off analysis.
+- **Multiple valid platforms score equally**: Present top 2 with trade-off analysis (`$approval: interactive`). Under `auto` the tie is **resolved deterministically, never asked**: take the highest-scoring candidate, and on an exact tie the one the guideline lists first — then **report the tie and the runner-up** as a choice a human has not made. A tie is a close call, not a judgement gate: the skill can state what it would propose, which is what `auto` accepts.
 
 ## Graceful Degradation
 

@@ -14,7 +14,7 @@ Evaluate and recommend the project management tool. Follows the resolution casca
 | Argument  | Required | Description                                                                  |
 | --------- | -------- | ---------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this PM tool directly (e.g. `github`, `filesystem`) |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 

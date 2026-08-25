@@ -17,7 +17,7 @@ Assess security posture in two modes — `review` (per-PR, composed by `/pair-pr
 | `$choice` | No       | Audit mode only. A named control set to adopt directly (e.g. `owasp-top10`), skipping full evaluation — resolution cascade Path A.             |
 | `$scope`  | No       | Audit mode only. Area/package to scope the assessment (default: whole codebase).                                                              |
 | `$output` | No       | Audit mode only. Directory the report is written to. Default: `.pair/working/reports/security/` (D14 — report path override).                  |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). Audit mode only — review mode has no approval round. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). Audit mode only — review mode has no approval round. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Rule Set (both modes read this; only audit mode's re-derivation is cascade-gated)
 

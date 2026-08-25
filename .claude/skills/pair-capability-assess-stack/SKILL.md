@@ -15,7 +15,7 @@ Evaluate and recommend the technology stack: languages, frameworks, runtime, dat
 | --------- | -------- | ---------------------------------------------------------------------------------------- |
 | `$choice` | No       | Technology to assess (e.g. `zod@3.22`, `node@20`, `react@18.2`). Format: `name@version`. |
 | `$mode`   | No       | Lifecycle mode: `bootstrap`, `implementation`, `review`. Auto-detected if omitted.       |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 

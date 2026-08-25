@@ -14,7 +14,7 @@ Evaluate and recommend the system architecture pattern. Follows the resolution c
 | Argument  | Required | Description                                                                 |
 | --------- | -------- | --------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this architecture directly (e.g. `hexagonal`) |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -53,7 +53,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    - Score each candidate pattern on: Implementation Complexity, Team Skill Required, Maintenance Overhead, Scalability, Best For.
    - Weight criteria based on project type (from PRD or developer input).
 
-2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis:
+2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis (`$approval: interactive`) — note that this presentation **names a recommendation**, so under `auto` item 4 has something to accept: the named pattern stands, and the runner-up plus the margin are reported as a choice a human has not made:
 
    > **Top candidates:**
    > 1. **[Pattern A]** — Score: X. Strengths: ... Weaknesses: ...
@@ -121,7 +121,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal decision framework: ask developer to choose between Modular Monolith, Hexagonal, and Microservices based on team size/scale) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal decision framework: ask developer to choose between Modular Monolith, Hexagonal, and Microservices based on team size/scale — `$approval: interactive`; under `auto` this question cannot be asked and there is no ranking to accept, so the skill emits **no proposal** and reports the missing guidelines to the caller, which is output-only's form of the judgement gate) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
 
 ## Notes
 

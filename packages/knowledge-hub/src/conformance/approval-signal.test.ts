@@ -119,6 +119,41 @@ describe('the obliged families honour $approval, per skill present (#410)', () =
   }
 })
 
+describe('tie-break / choice rounds are rounds too (review round 1, Major 1)', () => {
+  // The first pass qualified the CONFIRMATION rounds and left three tie-break
+  // rounds ("present top 2 with trade-off analysis", "ask developer to choose")
+  // unqualified — and the detector did not see them, so the gate stayed green over
+  // a hang: under autonomy the run stops on a tie nobody can answer. This is the
+  // corpus-level witness that the detector now sees them AND that they are
+  // qualified; the injection half (removing the qualification ⇒ red) lives in
+  // skills-conformance-check.test.ts.
+  const TIE_BREAK = /\b(?:score (?:equally|within)|ask developer to choose)\b/i
+
+  const withTieBreak = FAMILY_SKILLS.filter(([, file]) => TIE_BREAK.test(read(file)))
+
+  it('the corpus still has tie-break rounds to check', () => {
+    expect(withTieBreak.length).toBeGreaterThan(0)
+  })
+
+  for (const [rel, file] of withTieBreak) {
+    it(`${rel} — its tie-break lines are detected and carry the signal`, () => {
+      const content = read(file)
+      const tieLines = content
+        .split('\n')
+        .map((line, i) => ({ line: i + 1, text: line }))
+        .filter(l => TIE_BREAK.test(l.text))
+      expect(tieLines.length).toBeGreaterThan(0)
+
+      const detected = findApprovalRounds(content)
+      for (const tie of tieLines) {
+        const round = detected.find(r => r.line === tie.line)
+        expect(round, `line ${tie.line} is a tie-break the detector does not see`).toBeDefined()
+        expect(round?.qualified, `line ${tie.line} is not conditional on $approval`).toBe(true)
+      }
+    })
+  }
+})
+
 describe('the convention is the single statement of the signal (#410)', () => {
   for (const [label, path] of kbCopies(KB_REL)) {
     it(`${label} copy states the default, the resolutions and the authoring obligation`, () => {

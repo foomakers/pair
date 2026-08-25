@@ -344,7 +344,10 @@ export function checkCategoryLabelCounts(
 export const APPROVAL_SIGNAL_FAMILIES = ['assess-', 'map-']
 
 /**
- * Phrasings that mean "this step stops and asks a human to accept something".
+ * Phrasings that mean "this step stops and asks a human to accept or pick
+ * something" — an APPROVAL round and a CHOICE round alike. Both block an
+ * autonomous run identically, and a tie the skill presents without resolving is
+ * the same hang as a confirmation it waits on.
  *
  * A HEURISTIC OVER PROSE, and the one soft spot of this check (recorded as such
  * in ADR-021's trade-offs): a round phrased outside this set is invisible here.
@@ -352,6 +355,13 @@ export const APPROVAL_SIGNAL_FAMILIES = ['assess-', 'map-']
  * flag every sentence merely MENTIONING one — `/assess-stack`'s "on approval,
  * /review persists…" describes the caller's act, and `/map-contexts`' "gate at
  * approval" is the judgement gate the signal must NOT suppress.
+ *
+ * The choice half (last three) closes a real hole rather than a hypothetical: the
+ * first pass shipped three skills whose tie-break round said "present top 2 with
+ * trade-off analysis" / "ask developer to choose", and the gate stayed green over
+ * all three. Matched on the VERB, never the noun — "Returns the developer
+ * decision" reports a decision, it does not ask for one, and a guard that flags
+ * prose nobody can qualify only teaches authors to route around it.
  */
 export const APPROVAL_ROUND_PATTERNS: RegExp[] = [
   /\bdevelopers?\s+(?:approves?|confirms?)\b/i,
@@ -360,6 +370,9 @@ export const APPROVAL_ROUND_PATTERNS: RegExp[] = [
   /\bconfirmation prompt\b/i,
   /^\s*>?\s*Approve\b[^\n]*\?/,
   /\brequires?\s+human approval\b/i,
+  /\bask\w*\s+(?:the\s+)?developers?\s+to\s+(?:choose|pick|decide|select)\b/i,
+  /\bpresent\w*\b[^.\n]{0,60}\b(?:top\s*\d+|both)\b[^.\n]{0,80}\btrade-?off/i,
+  /\bdevelopers?\s+(?:chooses?|decides?|picks?|selects?)\b/i,
 ]
 
 /** The token a qualified round names, per the convention's authoring shape. */
@@ -381,10 +394,18 @@ export interface ApprovalRound {
   qualified: boolean
 }
 
-/** True iff this dataset-relative `SKILL.md` path belongs to an obliged family. */
+/**
+ * True iff this dataset-relative markdown path belongs to an obliged family.
+ *
+ * Keyed on the segment at the registry's ENTRY depth — the skill's own directory
+ * name — not on the immediate parent, so a **sub-doc** resolves to its skill
+ * (`capability/assess-x/references/deep.md` → `assess-x`) instead of to
+ * `references`, which would silently exempt every disclosed detail file.
+ */
 export function isApprovalSignalFamily(rel: string): boolean {
-  const dir = basename(dirname(rel.split('/').join(sep)))
-  return APPROVAL_SIGNAL_FAMILIES.some(prefix => dir.startsWith(prefix))
+  const parts = rel.split(sep).join('/').split('/')
+  const skillDirName = parts.length >= 2 ? (parts[1] as string) : (parts[0] as string)
+  return APPROVAL_SIGNAL_FAMILIES.some(prefix => skillDirName.startsWith(prefix))
 }
 
 /**
@@ -429,21 +450,32 @@ export function findApprovalRounds(content: string): ApprovalRound[] {
  * nothing (`/assess-cost` and `/assess-coupling` have none), so the corpus never
  * carries an argument no step honours. The day either grows a round, both
  * obligations apply to it with no edit here.
+ *
+ * `ownerContent` is where the ARGUMENT-level obligations are checked, and it
+ * differs from `content` for a **sub-doc**: a disclosed detail file
+ * (`references/*.md`, `quick-mode-defaults.md`-style siblings) can declare a round
+ * but has no Arguments table of its own — the owning `SKILL.md` carries it. Rounds
+ * are checked in the file they live in, the argument row in the file that declares
+ * arguments. Defaults to `content`, so a `SKILL.md` is its own owner.
  */
-export function checkApprovalSignal(rel: string, content: string): string[] {
+export function checkApprovalSignal(
+  rel: string,
+  content: string,
+  ownerContent: string = content,
+): string[] {
   if (!isApprovalSignalFamily(rel)) return []
   const rounds = findApprovalRounds(content)
   if (rounds.length === 0) return []
 
   const errors: string[] = []
-  if (!/\|\s*`\$approval`/.test(content)) {
+  if (!/\|\s*`\$approval`/.test(ownerContent)) {
     errors.push(
       `${rel}: declares ${rounds.length} approval round(s) but no \`$approval\` argument row — ` +
         `a caller cannot pass the signal it is obliged to honour ` +
         `(skill-conventions/approval-rounds.md)`,
     )
   }
-  if (!content.includes('approval-rounds.md')) {
+  if (!ownerContent.includes('approval-rounds.md')) {
     errors.push(
       `${rel}: declares an approval round but never points at ` +
         `skill-conventions/approval-rounds.md — the convention is the single statement of the signal`,
@@ -453,6 +485,36 @@ export function checkApprovalSignal(rel: string, content: string): string[] {
     errors.push(
       `${rel}:${round.line}: approval round "${round.text}" is not conditional on ` +
         `\`$approval\` — name the signal in the step (skill-conventions/approval-rounds.md)`,
+    )
+  }
+  return errors
+}
+
+/**
+ * The same check over a family skill's **sub-docs** — every markdown the skill's
+ * directory contributes besides its `SKILL.md`.
+ *
+ * Needed because progressive disclosure is a shipped layout in this corpus
+ * (`bootstrap/quick-mode-defaults.md`, `review/merge-and-cascade.md`, a skill's
+ * `references/`): a family member could otherwise move its round into a sub-doc
+ * and pass the gate, which is precisely the "the family grows and the guarantee
+ * quietly stops holding" failure the convention exists to prevent.
+ *
+ * Takes the RECURSIVE walk, like `checkEntrypointDepth`, and resolves each
+ * sub-doc's OWNING `SKILL.md` so the argument-row obligation is checked where
+ * arguments are declared — a sub-doc has no Arguments table of its own.
+ */
+export function checkApprovalSignalInSubDocs(skillsDir: string, markdownFiles: string[]): string[] {
+  const errors: string[] = []
+  for (const file of markdownFiles) {
+    if (basename(file) === 'SKILL.md') continue
+    const rel = relative(skillsDir, file).split(sep).join('/')
+    if (!isApprovalSignalFamily(rel)) continue
+    const parts = rel.split('/')
+    const owner = join(skillsDir, parts[0] as string, parts[1] as string, 'SKILL.md')
+    if (!existsSync(owner)) continue // an orphan sub-doc: the depth check owns that
+    errors.push(
+      ...checkApprovalSignal(rel, readFileSync(file, 'utf-8'), readFileSync(owner, 'utf-8')),
     )
   }
   return errors
@@ -569,6 +631,7 @@ export function runChecks(skillsDir: string): RunResult {
   }
 
   errors.push(...checkEntrypointDepth(skillsDir, collectSkillMarkdownFiles(skillsDir)))
+  errors.push(...checkApprovalSignalInSubDocs(skillsDir, collectSkillMarkdownFiles(skillsDir)))
 
   const nextFile = files.find(f => basename(dirname(f)) === 'next')
   if (nextFile) {

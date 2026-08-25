@@ -14,7 +14,7 @@ Evaluate and recommend the testing strategy: framework, pyramid distribution, co
 | Argument  | Required | Description                                                                          |
 | --------- | -------- | ------------------------------------------------------------------------------------ |
 | `$choice` | No       | Override: skip assessment, use this testing framework directly (e.g. `vitest`, `jest`) |
-| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing; accept as-is and report). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing: a proposal is accepted as-is, an existing recorded value is kept, a tie resolved deterministically — every outcome reported). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -123,7 +123,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 - **tech-stack.md exists but no testing section**: Render content that adds the testing section; the caller's write preserves all other content.
 - **Framework incompatible with adopted language**: HALT — warn developer of incompatibility, suggest compatible alternatives.
 - **Decision record already exists for same scope+decision**: Report "already recorded" — no proposal to persist (no duplicates).
-- **Multiple valid frameworks score equally**: Present top 2 with trade-off analysis, ask developer to choose.
+- **Multiple valid frameworks score equally**: Present top 2 with trade-off analysis, ask developer to choose (`$approval: interactive`). Under `auto` the tie is **resolved deterministically, never asked**: take the highest-scoring candidate, and on an exact tie the one the guideline lists first — then **report the tie and the runner-up** as a choice a human has not made, so it can be revisited. A tie is a close call, not a judgement gate: the skill can state what it would propose (Step 3's ranking), which is what `auto` accepts.
 
 ## Graceful Degradation
 

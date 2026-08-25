@@ -460,6 +460,36 @@ describe('findApprovalRounds — what counts as a round, and what does not', () 
     ])
   })
 
+  // Review round 1, Major 1: three skills carried a CHOICE round the pattern set
+  // did not recognise ("ask developer to choose", "present top 2 with trade-off
+  // analysis"), so `skills:conformance` stayed green while an autonomous run would
+  // block on a tie nobody could answer. A choice IS an approval round — the human
+  // is being asked to pick — so the detector has to see these shapes too.
+  for (const round of [
+    'Multiple valid frameworks score equally: Present top 2 with trade-off analysis, ask developer to choose.',
+    'If two methodologies score within 10%, present both with trade-off analysis.',
+    'Multiple valid platforms score equally: Present top 2 with trade-off analysis.',
+    'If two or more patterns score within 10% of each other, present top 2 with trade-off analysis:',
+    'guideline missing → ask developer to choose between Modular Monolith and Hexagonal',
+    'Developer chooses one of the two candidates.',
+  ]) {
+    it(`detects the CHOICE round "${round.slice(0, 44)}…"`, () => {
+      expect(findApprovalRounds(`- ${round}`)).toEqual([
+        { line: 1, text: `- ${round}`, qualified: false },
+      ])
+      expect(findApprovalRounds(`- ${round} (\`$approval: interactive\`)`)[0]?.qualified).toBe(true)
+    })
+  }
+
+  it('does not mistake a report of a decision for a round that asks for one', () => {
+    // `/assess-stack`'s Composition Interface DESCRIBES its return value. Matching
+    // the noun ("developer decision") instead of the verb would flag it — and a
+    // guard that flags prose nobody can qualify teaches authors to work around it.
+    expect(
+      findApprovalRounds('- **Output**: Returns the developer decision (approve/reject).'),
+    ).toEqual([])
+  })
+
   it('ignores a fenced Output Format sample — a printed line is not a step that asks', () => {
     const doc = ['```text', 'Status: Developer approves', '```'].join('\n')
     expect(findApprovalRounds(doc)).toEqual([])
@@ -534,6 +564,43 @@ describe('checkApprovalSignal — the two obligations, injected one at a time', 
   })
 })
 
+describe('checkApprovalSignal — a sub-doc is checked against its owning SKILL.md', () => {
+  // Review round 1, Minor 5: the check ran on `SKILL.md` only, so a family member
+  // whose round lived in a disclosed sub-doc (`references/*.md`, the progressive-
+  // disclosure layout the corpus already uses) escaped it — weakening AC5 exactly
+  // where a growing family would put new content.
+  const OWNER = '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |'
+
+  it('flags an unqualified round in a sub-doc, even though the sub-doc has no Arguments table', () => {
+    const errors = checkApprovalSignal(
+      'capability/assess-example/references/deep.md',
+      '3. **Verify**: Developer approves the delta.\n',
+      OWNER,
+    )
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('references/deep.md:1')
+  })
+
+  it('does not demand an argument row from the sub-doc itself — the owner carries it', () => {
+    expect(
+      checkApprovalSignal(
+        'capability/assess-example/references/deep.md',
+        '3. **Verify** (`$approval: interactive`): Developer approves the delta.\n',
+        OWNER,
+      ),
+    ).toEqual([])
+  })
+
+  it('flags the OWNER when a sub-doc round exists and the owner exposes no argument', () => {
+    const errors = checkApprovalSignal(
+      'capability/assess-example/references/deep.md',
+      '3. **Verify** (`$approval: interactive`): Developer approves the delta.\n',
+      'no arguments table here\n',
+    )
+    expect(errors.some(e => e.includes('no `$approval` argument row'))).toBe(true)
+  })
+})
+
 describe('runChecks — the approval-round signal is enforced by the gate itself', () => {
   const root = mkdtempSync(join(tmpdir(), 'skills-conformance-approval-'))
   afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -547,5 +614,39 @@ describe('runChecks — the approval-round signal is enforced by the gate itself
     )
     const { errors } = runChecks(root)
     expect(errors.some(e => e.includes('assess-thing') && e.includes('$approval'))).toBe(true)
+  })
+})
+
+describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-approval-subdoc-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('reads a round in references/*.md and reports it against the sub-doc path', () => {
+    mkdirSync(join(root, 'capability/map-thing/references'), { recursive: true })
+    writeFileSync(
+      join(root, 'capability/map-thing', 'SKILL.md'),
+      '---\nname: map-thing\ndescription: "Maps."\n---\n' +
+        '| `$approval` | No | Mode. See [approval rounds](approval-rounds.md). |\n',
+    )
+    writeFileSync(
+      join(root, 'capability/map-thing/references', 'deep.md'),
+      '3. **Act**: Present the delta:\n\n   > Approve or adjust?\n',
+    )
+    const { errors } = runChecks(root)
+    expect(errors.some(e => e.includes('references/deep.md') && e.includes('$approval'))).toBe(true)
+  })
+
+  it('leaves a sub-doc of a NON-family skill alone', () => {
+    mkdirSync(join(root, 'process/other/references'), { recursive: true })
+    writeFileSync(
+      join(root, 'process/other', 'SKILL.md'),
+      '---\nname: other\ndescription: "Other."\n---\nbody\n',
+    )
+    writeFileSync(
+      join(root, 'process/other/references', 'deep.md'),
+      '3. **Verify**: Developer approves.\n',
+    )
+    const { errors } = runChecks(root)
+    expect(errors.some(e => e.includes('process/other') && e.includes('$approval'))).toBe(false)
   })
 })

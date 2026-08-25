@@ -47,9 +47,12 @@ Every round suppressed under `auto` still owes its content to the caller: the ac
 
 A round inherited from a shared convention — the [resolution cascade](resolution-cascade.md)'s Path A confirmation and Path B keep-or-redo — is qualified **there**, once, for every skill that follows it. A skill restates only its own local rounds.
 
+**A choice is an approval round.** "Which of these two?" blocks an autonomous run exactly as "confirm this?" does, so a tie-break or a top-2 presentation is a round like any other and carries the signal. It is row 1, not row 3, on one condition: the presentation **names a leader**. A skill that can rank its candidates can state what the human would be accepting — `auto` takes the leader, breaks an exact tie by the guideline's own ordering, and reports the runner-up **and the margin** as a choice nobody made. Presenting two options without naming one is what turns a close call into a gate; name the leader and it is a proposal.
+
 ## Edge cases
 
 - **A round that writes before it asks.** It cannot be made conditional as written: under `auto` the write happens and the question that would have prevented it never runs. Move the write after the round (the shape every skill in this corpus already has: propose → approve → write) rather than qualifying the question.
 - **The caller is interactive but passes `auto`.** Legitimate, and not a contradiction: the caller has decided the rounds are noise for this run, not that it has no channel. The reporting obligation above is exactly what keeps that honest.
 - **A gate that could be resolved by a default, if a default existed.** Then it is row 2, not row 3: name the conservative branch, take it, report the delta. Reserve the HALT for the case where every branch records a judgement nobody made.
+- **An input question is not an approval round** — "which database do you use?" asks for a fact the skill does not have, rather than for consent to something it produced. `$approval` does not govern it. But `auto` cannot ask it either: a skill that reaches one under `auto` resolves it from its documented fallback where it has one, and otherwise emits **no proposal** and reports what it could not resolve. Silence is not an answer to a question about the world.
 - **A partially-adopting family.** Worse than no signal at all — a caller passing one signal reasonably reads it as total, so an unconverted sibling hangs a run that looks correct. A family adopts the signal atomically; the conformance gate is what makes "atomically" checkable rather than remembered.

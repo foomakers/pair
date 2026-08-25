@@ -152,7 +152,7 @@ CONTEXT PLACEMENT COMPLETE:
 - **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved). Under `$approval: auto` the write does not happen either: the existing entry is kept and the delta is reported unapplied (Step 4 item 2).
 - **Pre-existing relationships without the 3-dimension assessment** — treated as valid; assessed only when that relationship falls inside a future `$scope`.
 - **No `subdomain/` or `boundedcontext/` artifacts at all** — system-areas fallback (Step 2b); no error, no DDD prerequisite.
-- **Unbalanced + volatile relationship, no mitigation/acceptance offered** — HALT at Step 4 approval; this is the one case where the capability blocks, **under every value of `$approval`** (Step 3 item 7): a judgement gate is not suppressible by a non-interactive signal.
+- **Unbalanced + volatile relationship, no mitigation/acceptance offered** — HALT at **Step 3 item 7**, where the gate is raised (before Step 4's delta round, which never sees the relationship). This is the one case where the capability blocks, **under every value of `$approval`**: a judgement gate is not suppressible by a non-interactive signal.
 - **`$scope: all` requested by a caller other than `/bootstrap`** — warn and downgrade to the caller's actual touched items; full re-mapping stays bootstrap-only.
 
 ## Graceful Degradation
