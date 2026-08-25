@@ -25,8 +25,14 @@ export const coverageRatchetMetadata = {
       flags: '--base-branch <name>',
       description: 'Only a push to this branch may write back [default: main]',
     },
-    { flags: '--remote <name>', description: 'Git remote to push the ratchet branch to' },
-    { flags: '--margin <pp>', description: 'Percentage points below the measured value' },
+    {
+      flags: '--remote <name>',
+      description: 'Git remote to push the ratchet branch to [default: origin]',
+    },
+    {
+      flags: '--margin <pp>',
+      description: 'Percentage points below the measured value [default: 1]',
+    },
     { flags: '--dry-run', description: 'Print the git/gh plan instead of running it' },
   ],
   notes: [

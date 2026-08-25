@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseCoverageRatchetCommand } from './parser'
+import { coverageRatchetMetadata } from './metadata'
 import { RATCHET_DEFAULTS, BASE_BRANCH_ENV } from './ratchet'
 
 const measured = { measured: 'backend=87.4' }
@@ -101,6 +102,29 @@ describe('parseCoverageRatchetCommand — the measured list', () => {
     expect(() => parseCoverageRatchetCommand({ measured: '  ' }, [], {})).toThrow(
       /--measured is required/,
     )
+  })
+})
+
+describe('the help text states every default the parser applies', () => {
+  // `--help` is where a pipeline author reads what happens when they omit a flag.
+  // Two of these were documented in the website reference and NOT in `--help`,
+  // which is the drift a reader cannot detect from inside the terminal.
+  const description = (flag: string): string =>
+    coverageRatchetMetadata.options.find(option => option.flags.startsWith(flag))?.description ?? ''
+
+  it.each([
+    ['--coverage-config', RATCHET_DEFAULTS.configPath],
+    ['--way-of-working', RATCHET_DEFAULTS.wowPath],
+    ['--base-branch', RATCHET_DEFAULTS.baseBranch],
+    ['--remote', RATCHET_DEFAULTS.remote],
+    ['--margin', String(RATCHET_DEFAULTS.marginPp)],
+  ])('%s names its default (%s)', (flag, value) => {
+    expect(description(flag)).toContain(`[default: ${value}`)
+  })
+
+  it('asks for --measured without offering a default (there is none)', () => {
+    expect(description('--measured')).toContain('required')
+    expect(description('--measured')).not.toContain('[default:')
   })
 })
 

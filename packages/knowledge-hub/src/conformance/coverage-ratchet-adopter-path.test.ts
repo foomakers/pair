@@ -23,6 +23,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { parse } from 'yaml'
 
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
 const DATASET = join(__dirname, '..', '..', 'dataset')
@@ -48,6 +49,46 @@ const METADATA = read(join(REPO_ROOT, 'apps/pair-cli/src/commands/coverage-ratch
 
 const COMMAND = 'coverage-ratchet'
 const TOKEN = 'COVERAGE_RATCHET_TOKEN'
+
+/**
+ * Every fenced ```yaml block of a guideline, PARSED.
+ *
+ * String assertions are what let the first version of this guard pass while the
+ * emitted step could never run: the step's text was right and the workflow it
+ * sat in was triggered by `pull_request` only, so the ratchet's own
+ * `not-base-push` skip refused every single run. A claim about WHEN a step runs
+ * can only be checked against the document's `on:` — i.e. against a parse. This
+ * is the generated-YAML rule of ADL 2026-07-29 applied to a workflow the corpus
+ * tells an adopter to copy.
+ *
+ * Placeholders (`<base-branch>`, `<cli-version>`) are legal YAML scalars, so the
+ * document parses as-is and no substitution is needed to read its trigger.
+ */
+function yamlBlocks(text: string): { source: string; doc: unknown }[] {
+  return [...text.matchAll(/```yaml\n([\s\S]*?)```/g)].map(match => {
+    const source = match[1] ?? ''
+    return { source, doc: parse(source) }
+  })
+}
+
+interface Workflow {
+  on?: Record<string, { branches?: string[] } | null>
+}
+
+/**
+ * The one workflow that carries the commit-back step.
+ *
+ * Exactly one: two blocks invoking the command would mean the guideline shows it
+ * in a second place, and only one of them would be the one under assertion here —
+ * the shape that let a `pull_request`-only step pass unnoticed.
+ */
+function ratchetWorkflow(text: string): { source: string; doc: Workflow } | undefined {
+  const carrying = yamlBlocks(text).filter(block => block.source.includes(COMMAND))
+  expect(carrying.length, 'exactly one YAML block may invoke the commit-back command').toBeLessThan(
+    2,
+  )
+  return carrying[0] as { source: string; doc: Workflow } | undefined
+}
 
 // The exact sentences #405 shipped and this story removes. Matched on the CLAIM,
 // not on a whole paragraph, so a reworded revival still fails.
@@ -95,12 +136,52 @@ describe('what replaced it — the emitted step', () => {
     )
   })
 
-  it.each(GUIDELINES)('%s binds the credential to a base-branch push only', path => {
+  it.each(GUIDELINES)(
+    '%s puts the step in a workflow that actually RUNS on a base-branch push',
+    path => {
+      // The bug this exists for: the step's text can be perfect while the workflow
+      // around it is triggered by `pull_request` only — and then the ratchet's own
+      // `not-base-push` skip refuses every run, forever, silently. An adopter who
+      // answered "yes" to the nested question would get exactly the opt-in-that-
+      // does-nothing this story exists to remove. Only the parsed `on:` can tell.
+      const workflow = ratchetWorkflow(read(path))
+      expect(workflow, `${label(path)} has no YAML block containing the ratchet step`).toBeDefined()
+      const on = workflow?.doc.on ?? {}
+      expect(
+        Object.keys(on),
+        `${label(path)}: the ratchet workflow must be push-triggered — the commit-back only ever writes on a push to the base branch`,
+      ).toContain('push')
+      expect(
+        Object.keys(on),
+        `${label(path)}: a pull-request run must never reach the commit-back — it would mutate the PR head commit required checks are pinned to`,
+      ).not.toContain('pull_request')
+      expect(on['push']?.branches ?? []).toContain('<base-branch>')
+    },
+  )
+
+  it.each(GUIDELINES)('%s binds the credential to that workflow, not to a gate job', path => {
     // Least privilege in the EVENT dimension: a pull-request run — whose diff can
-    // influence what the job executes — must never have the token at all.
-    expect(read(path)).toMatch(
-      /COVERAGE_RATCHET_TOKEN: \$\{\{ \(github\.event_name == 'push' && github\.ref_name == 'main'\)/,
-    )
+    // influence what the job executes — must never have the token at all. In a
+    // workflow whose ONLY trigger is a base-branch push, the trigger is that guard,
+    // so the secret is referenced plainly and the guard is structural.
+    const workflow = ratchetWorkflow(read(path))
+    expect(workflow?.source).toContain('secrets.COVERAGE_RATCHET_TOKEN')
+  })
+
+  it.each(GUIDELINES)('%s keeps the PRE-MERGE gate free of any commit-back', path => {
+    // The gate decides pass/fail and never persists. A commit-back inside it would
+    // also never run (see above) — this keeps the two facts from drifting apart.
+    const preMerge = yamlBlocks(read(path)).filter(block => block.source.includes('pull_request:'))
+    expect(
+      preMerge.length,
+      'the pre-merge gate template is gone — repoint this test',
+    ).toBeGreaterThan(0)
+    for (const block of preMerge) {
+      expect(block.source, `${label(path)}: pre-merge gate must not attempt a write`).not.toContain(
+        COMMAND,
+      )
+      expect(block.source).not.toContain(TOKEN)
+    }
   })
 
   it.each(GUIDELINES)('%s says which parts are GitHub-Actions-specific', path => {
@@ -161,6 +242,24 @@ describe('setup-gates: the nested question, gated on the parent flag', () => {
     expect(text).toContain('Coverage baseline commit-back: enabled')
     expect(text).toMatch(/\*\*nested under\*\* the `Coverage guardrail` bullet/)
     expect(text).toMatch(/declaring bullet/)
+  })
+
+  it.each(SETUP_GATES)('%s emits a push-triggered workflow, not a step in the gate', path => {
+    // The other half of the guard above: a skill that told the executor to put the
+    // step in the pre-merge pipeline would produce an unrunnable step no matter how
+    // correct the guideline's own template is.
+    const text = read(path)
+    expect(text).toMatch(/SEPARATE, push-triggered workflow, never a step in the gate/)
+    expect(text).toMatch(/Do not put the commit-back in the pre-merge pipeline/)
+    expect(text).toMatch(/SKIPPED \(not-base-push\)/)
+  })
+
+  it.each(SETUP_GATES)('%s substitutes the base branch instead of hardcoding one', path => {
+    // A pipeline generated for a project whose base branch is `develop` must not
+    // carry `main`, and must not ship the placeholder either.
+    const text = read(path)
+    expect(text).toMatch(/never hardcode `main`/)
+    expect(text).toMatch(/no `<placeholder>` survived the substitution/)
   })
 
   it.each(SETUP_GATES)('%s emits nothing when the flag is off', path => {

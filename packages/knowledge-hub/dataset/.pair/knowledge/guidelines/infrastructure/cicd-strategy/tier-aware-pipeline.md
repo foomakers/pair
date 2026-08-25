@@ -160,35 +160,10 @@ jobs:
           # single-type repo, or run one coverage_gate call per package report in a monorepo.
           # The tier is passed only to choose the fail-safe when no report was measured.
           coverage_gate "${{ needs.resolve-tier.outputs.tier }}" "${TYPE:-default}" "$COV" "$CFG" || exit 1
-          # Hand the measured value to the (optional) commit-back step below.
-          # GUARDED: anything reaching $GITHUB_ENV is an environment-injection
-          # sink, so a non-numeric value is dropped with a warning — the ratchet
-          # then sees no measurement and proposes nothing, which is the
-          # conservative outcome. Omit this line when commit-back is off.
-          case "$COV" in
-            '' | *[!0-9.]*) echo "::warning::non-numeric coverage, not exported" ;;
-            *) echo "PAIR_COV=$COV" >>"$GITHUB_ENV" ;;
-          esac
-      # coverage commit-back: a FURTHER opt-in NESTED under the guardrail — this
-      # step exists only when the project ALSO sets `Coverage baseline
-      # commit-back: enabled` (default: absent ⇒ no step at all). It runs after
-      # the guardrail above and always exits 0, so a refused write can never
-      # change the verdict the step before it just produced.
-      - name: Coverage baseline commit-back (opt-in)
-        env:
-          # Attacker-controlled text: read via env, never interpolated into the run script.
-          PAIR_RATCHET_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-          PAIR_RATCHET_BASE_BRANCH: main
-          # Least privilege in the EVENT dimension too: bound to the only event
-          # allowed to write, so a pull-request run — whose diff can influence
-          # what this job executes — never has the credential in its environment.
-          COVERAGE_RATCHET_TOKEN: ${{ (github.event_name == 'push' && github.ref_name == 'main') && secrets.COVERAGE_RATCHET_TOKEN || '' }}
-        # PIN the CLI version (never `@latest` in a pipeline): a release you have
-        # not read must not change what your CI runs.
-        run: |
-          npx --yes @foomakers/pair-cli@<cli-version> coverage-ratchet \
-            --coverage-config .pair/adoption/tech/coverage-baseline.md \
-            --measured "${TYPE:-default}=${PAIR_COV:-}"
+          # No write of any kind here, in any configuration: THIS pipeline is
+          # `pull_request`-triggered, and the commit-back only ever writes on a
+          # push to the base branch. It is a separate workflow — see
+          # "Coverage baseline commit-back" below.
 
   # Deterministic secret scanning — REQUIRED, unconditional at EVERY tier.
   # No `if:` — a secret is a secret regardless of the change's risk tier.
@@ -217,11 +192,67 @@ The `coverage` job (above) sources the shipped, provider-agnostic [`coverage-gat
 
 - **Blocks a regression, not an absolute wall.** A PR whose coverage drops **below the committed baseline** fails the gate, at every tier (R7.3). A PR that **maintains or improves** coverage passes — the guardrail never demands a fixed X% be hit on every PR. Below the gradual *target* but still at/above the baseline only **warns**.
 - **Baseline + per-type targets live in adoption**, in `tech/coverage-baseline.md` (created when the guardrail is enabled; configurable, with KB-sensible defaults) — see [coverage-config-example.md](../../../assets/coverage-config-example.md). The gate reads whatever coverage number the adopted test tooling produced; **no specific coverage tool is mandated** (istanbul `coverage-summary.json`, LCOV, Cobertura, … — the pipeline extracts the % and passes it in). Per-type targets (`backend`/`frontend`/`shared`/…) let the gate apply the threshold matching the touched code's type.
-- **Baseline is human-committed; bootstrapping is advisory**. The guardrail is live only once a human commits a `baseline.<type>=NN` line to the config. With no committed baseline for a type — or a missing/corrupt one — the gate runs in **bootstrap-only mode**: it prints the current coverage as a suggested `baseline.<type>=NN` to **stderr** and **passes** without blocking. It does **not** persist the baseline itself: a CI checkout is ephemeral, so a written baseline would be discarded and coverage could drift down run after run with the guard never firing. A human copies the suggested line into the committed config to make the guardrail live. **Automated commit-back is a separate, nested opt-in** (`Coverage baseline commit-back: enabled` in the same way-of-working file; default `disabled`, so the gate stays advisory-only unless a project asks for it). When it is enabled, the raise is proposed **only by a push to the base branch** — never by a pull-request run, which is uniform for fork and same-repo PRs and never mutates a PR's head commit — and it lands as a **bot pull request** from a dedicated `chore/coverage-baseline-ratchet` branch rather than a push to the base branch, so it satisfies the branch protection a review-gated base branch requires instead of needing an exemption from it. It requires a **repo-scoped write credential** (`COVERAGE_RATCHET_TOKEN`: `contents: write` + `pull requests: write`, no protection bypass; the default CI token is unusable because a pull request it opens triggers no workflow run and so can never satisfy required checks). The ratchet is **monotonic** (a `baseline.<type>` value is only ever raised, edited in place) and **terminating** (a run whose head commit carries the `[coverage-baseline-ratchet]` marker is skipped, and the value written is `floor(measured) - 1pp`, so an unchanged coverage proposes what is already committed). A refused write — missing credential, protected branch, insufficient scope — degrades to a **warning naming the reason** and leaves the gate's verdict untouched: persistence and verdict are independent. **How it runs in your pipeline**: the commit-back step (in the template above) invokes the shipped `pair-cli coverage-ratchet` command, pinned to a CLI version; `/pair-capability-setup-gates` asks about this nested flag only once the guardrail is on, and emits the step only when you answer yes. **What is GitHub-Actions-specific**, stated rather than implied: the step reads `GITHUB_EVENT_NAME`/`GITHUB_REF_NAME` and opens the pull request with `gh`. The flags, the monotonic rule and the credential model carry over to another host; that pull-request call does not.
+- **Baseline is human-committed; bootstrapping is advisory**. The guardrail is live only once a human commits a `baseline.<type>=NN` line to the config. With no committed baseline for a type — or a missing/corrupt one — the gate runs in **bootstrap-only mode**: it prints the current coverage as a suggested `baseline.<type>=NN` to **stderr** and **passes** without blocking. It does **not** persist the baseline itself: a CI checkout is ephemeral, so a written baseline would be discarded and coverage could drift down run after run with the guard never firing. A human copies the suggested line into the committed config to make the guardrail live. **Automated commit-back is a separate, nested opt-in** (`Coverage baseline commit-back: enabled` in the same way-of-working file; default `disabled`, so the gate stays advisory-only unless a project asks for it). When it is enabled, the raise is proposed **only by a push to the base branch** — never by a pull-request run, which is uniform for fork and same-repo PRs and never mutates a PR's head commit — and it lands as a **bot pull request** from a dedicated `chore/coverage-baseline-ratchet` branch rather than a push to the base branch, so it satisfies the branch protection a review-gated base branch requires instead of needing an exemption from it. It requires a **repo-scoped write credential** (`COVERAGE_RATCHET_TOKEN`: `contents: write` + `pull requests: write`, no protection bypass; the default CI token is unusable because a pull request it opens triggers no workflow run and so can never satisfy required checks). The ratchet is **monotonic** (a `baseline.<type>` value is only ever raised, edited in place) and **terminating** (a run whose head commit carries the `[coverage-baseline-ratchet]` marker is skipped, and the value written is `floor(measured) - 1pp`, so an unchanged coverage proposes what is already committed). A refused write — missing credential, protected branch, insufficient scope — degrades to a **warning naming the reason** and leaves the gate's verdict untouched: persistence and verdict are independent. **How it runs in your pipeline**: not as a step of the gate above — as its **own push-triggered workflow**, because only a base-branch push may write (see [Coverage baseline commit-back](#coverage-baseline-commit-back-nested-opt-in-its-own-post-merge-workflow-never-a-gate-job) below). It invokes the shipped `pair-cli coverage-ratchet` command, pinned to a CLI version; `/pair-capability-setup-gates` asks about this nested flag only once the guardrail is on, and emits the workflow only when you answer yes. **What is GitHub-Actions-specific**, stated rather than implied: the step reads `GITHUB_EVENT_NAME`/`GITHUB_REF_NAME` and opens the pull request with `gh`. The flags, the monotonic rule and the credential model carry over to another host; that pull-request call does not.
 - **Fail-safe on no report**: if no coverage was measured (tooling emitted nothing, or the suite did not run), the gate **blocks at 🔴 red** and **warns at lower tiers** — never a silent pass, matching this pipeline's fail-safe stance.
 - **Genuinely untestable surface** (generated files, config) is recorded via the `exclude` key in the config, but that key is **applied by the adopter to their own coverage tool's config** — the gate does **not** read it and this pipeline snippet does **not** pass it. It is documentation of the exclusion intent, not a gate-enforced override.
 
 When enabled, the `coverage` job is scheduled from 🟡 (where the unit suite that produces the report runs), and 🟢 PRs skip it along with the unit suite; in a full-suite (tiering-off) pipeline with the guardrail enabled, the same job runs on every PR. With the flag absent (the default) there is no coverage job in either pipeline.
+
+## Coverage baseline commit-back (nested opt-in): its own post-merge workflow, never a gate job
+
+`/setup-gates` emits this workflow **only** when the project sets `Coverage baseline commit-back: enabled` **on top of** `Coverage guardrail: enabled` (both default `disabled` ⇒ no workflow at all).
+
+**Why a separate workflow, and not a step in the `coverage` job.** The commit-back writes only on a **push to the base branch** — never from a pull-request run, which would mutate the head commit the required checks are pinned to. The pre-merge gate above is triggered by `pull_request` and nothing else, so a commit-back step placed inside it could never write: it would print `SKIPPED (not-base-push)` on every run and the token expression would evaluate empty — an opt-in that is on and does nothing, which is worse than one that is off. Adding `push:` to the gate instead is not an option either: that pipeline resolves its tier from the PR's `risk:*` label, and a push carries no PR, so every merge would fail-safe to 🔴 and re-run the full suite — while this guideline's post-merge rule is explicitly "no gate re-run". So the raise gets the only shape that both runs and gates nothing:
+
+```yaml
+name: Coverage Baseline Ratchet
+on:
+  push:
+    branches: [<base-branch>]
+
+# This workflow gates NOTHING: the merge already happened. It exists to PROPOSE a
+# raised baseline as a bot pull request, and it is allowed to fail alone — never a
+# required check, never referenced by branch protection.
+jobs:
+  ratchet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install --frozen-lockfile
+      # It measures its OWN coverage: the gate's run happened on the pull request,
+      # against a different tree, and its numbers are not available here.
+      - run: pnpm test:coverage
+      - id: measure
+        run: |
+          # Same extraction the gate job uses; adapt to the adopted tool's report.
+          COV="$(jq '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null)"
+          # GUARDED: anything reaching $GITHUB_ENV is an environment-injection sink,
+          # so a non-numeric value is dropped with a warning — the ratchet then sees
+          # no measurement and proposes nothing, the conservative outcome.
+          case "$COV" in
+            '' | *[!0-9.]*) echo "::warning::non-numeric coverage, not exported" ;;
+            *) echo "PAIR_COV=$COV" >>"$GITHUB_ENV" ;;
+          esac
+      - name: Coverage baseline commit-back (opt-in)
+        env:
+          # Attacker-controlled text: read via env, never interpolated into the run script.
+          PAIR_RATCHET_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          PAIR_RATCHET_BASE_BRANCH: <base-branch>
+          # Least privilege in the EVENT dimension is STRUCTURAL here: this workflow
+          # runs on a base-branch push and on nothing else, so a pull-request run
+          # cannot reach the credential at all. The module's own `not-base-push`
+          # skip stays as the braces to this belt.
+          COVERAGE_RATCHET_TOKEN: ${{ secrets.COVERAGE_RATCHET_TOKEN }}
+        # PIN the CLI version (never `@latest` in a pipeline): a release you have
+        # not read must not change what your CI runs.
+        run: |
+          npx --yes @foomakers/pair-cli@<cli-version> coverage-ratchet \
+            --coverage-config .pair/adoption/tech/coverage-baseline.md \
+            --base-branch <base-branch> \
+            --measured "${TYPE:-default}=${PAIR_COV:-}"
+```
+
+Replace `<base-branch>` with the project's own base branch (the same value `way-of-working.md` → `## Git Workflow` declares) and `<cli-version>` with a pinned CLI version. The step always exits 0 — a refused write is a warning naming the reason, and there is no verdict here for it to affect.
 
 ## Required-check wiring (what makes red block merge)
 
@@ -236,6 +267,8 @@ Scheduling the jobs is not enough; the code host must **require** them:
 ## Post-merge staging pipeline: build + deploy only
 
 On merge to `main` the staging pipeline **does not re-run the gate** — the gate already passed pre-merge. It performs **build + deploy only**:
+
+(The one other thing a merge may trigger is the coverage commit-back workflow above, when that nested opt-in is on. It is not a gate re-run and gates nothing: it measures coverage on the new base-branch tree and proposes a raised baseline as a bot pull request.)
 
 ```yaml
 name: Staging

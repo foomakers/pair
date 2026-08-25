@@ -32,7 +32,8 @@
     "vite-tsconfig-paths": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "typescript": "catalog:",
-    "ts-node": "catalog:"
+    "ts-node": "catalog:",
+    "yaml": "catalog:"
   },
   "prettier": "@pair/prettier-config"
 }

@@ -758,7 +758,9 @@ pair coverage-ratchet --measured <type=pct,...> [options]
 ### What it does, and what it refuses to do
 
 - **Only a push to the base branch writes back.** A pull-request run never does — it would mutate
-  the PR head commit that required checks are pinned to.
+  the PR head commit that required checks are pinned to. Run it from a workflow triggered by `push`
+  on your base branch, **not** from your pull-request gate: inside a `pull_request`-only pipeline it
+  can never write, and it will report `SKIPPED (not-base-push)` on every run.
 - **The raise lands as a bot pull request** from `chore/coverage-baseline-ratchet`, never as a push
   to the base branch, so it satisfies branch protection instead of needing an exemption from it.
 - **Monotonic**: a `baseline.<type>` value is only ever raised, edited in place; the surrounding

@@ -174,6 +174,17 @@ jobs:
       # in this job instead of through `npx`. One implementation, two thin
       # invocations — pair cannot dogfood a step that drifts from the generated
       # one, because there is no second implementation to drift.
+      #
+      # WHY IT IS A STEP HERE, while the guideline emits a SEPARATE
+      # push-triggered workflow for adopters: the requirement is that the
+      # commit-back run on a push to the base branch with a coverage measurement
+      # in hand. This workflow is triggered by `push: main` as well as
+      # `pull_request` (see `on:` at the top) and the job measures coverage a few
+      # steps up, so both hold here in one job. The generated adopter pipeline is
+      # `pull_request`-ONLY — a step there could never write (it would print
+      # `SKIPPED (not-base-push)` forever), which is why it gets its own workflow.
+      # Same guarantee, two pipeline shapes; the invariant is the trigger, not
+      # the file it lives in.
       # Placed AFTER the guardrail and always exiting 0: a refused write degrades
       # to a ::warning:: and can never change the gate's verdict (AC6).
       - name: Coverage baseline commit-back (ratchet — opt-in #372)
