@@ -87,6 +87,13 @@ describe('delivery-metrics.md — the R9.5 metric set (#222 T1)', () => {
       expect(lower).toContain('open at period end')
     })
 
+    // Review of #461, Minor 7: the unit switched to days above 48h with no rule keeping
+    // two compared periods in the SAME unit (47h vs 2.1d read side by side).
+    it(`${label} normalizes the unit across compared periods`, () => {
+      expect(lower).toMatch(/same unit/)
+      expect(lower).toMatch(/hours is the canonical unit|canonical unit is hours/)
+    })
+
     it(`${label} requires median + p75 and forbids the mean`, () => {
       expect(lower).toContain('median')
       expect(lower).toContain('p75')
@@ -103,6 +110,41 @@ describe('delivery-metrics.md — the R9.5 metric set (#222 T1)', () => {
     it(`${label} defines the trend as the previous window of equal length`, () => {
       expect(lower).toMatch(/previous window of equal length/)
       expect(lower).toMatch(/no trend — first period|no trend - first period/)
+    })
+
+    // Review of #461, Major 2: "previous window of equal length" is ambiguous for a
+    // CALENDAR key — months are not equal-length, so "same duration" and "the previous
+    // month" are different windows and two readers produce two different deltas. The
+    // guideline must resolve the baseline per key form, not leave it to the executor.
+    it(`${label} resolves the trend baseline per period-key form, calendar keys included`, () => {
+      const agg = normalize(section(content, '## Aggregation rules', '## Bug detection'))
+      expect(agg).toMatch(/preceding calendar month|previous calendar month/)
+      expect(agg).toMatch(/preceding iso week|previous iso week/)
+      // Only the explicit-range form falls back to a day-count duration.
+      expect(agg).toMatch(/explicit range/)
+      expect(agg).toMatch(/not.{0,40}day-equivalent|never.{0,40}day-equivalent/)
+    })
+
+    // Review of #461, Major 3: "items delivered" was an undefined denominator while the
+    // two sibling ratios both said "÷ merged PRs" — different candidate populations.
+    it(`${label} defines every adoption ratio's denominator explicitly`, () => {
+      const ad = normalize(section(content, '### Adoption', '## Aggregation rules'))
+      expect(ad).not.toContain('items delivered')
+      // Three ratios, one stated population each.
+      expect(ad.match(/÷ merged prs/g)?.length).toBeGreaterThanOrEqual(2)
+      expect(ad).toMatch(/items closed inside the window|closed items in the window/)
+    })
+
+    // Review of #461, Major 4: reading the review status from the MERGE head is wrong
+    // wherever the project squash-merges — the status lives on the PR's own head, and
+    // the merge commit carries none, so the ratio would read 0% while the source is
+    // present (so the `not available` clause never fires either).
+    it(`${label} reads the review status from the PR head, never the merge commit`, () => {
+      const map = normalize(section(content, '## Per-tool query mapping', '## Gotchas'))
+      expect(map).toMatch(/pr(’|')?s? own head|head commit of the pull request|pr head/)
+      expect(map).not.toMatch(/on the merge head/)
+      const gotchas = normalize(section(content, '## Gotchas', '## Notes'))
+      expect(gotchas).toMatch(/squash/)
     })
 
     it(`${label} orders bug detection adoption → tool default → unmapped-as-generic`, () => {

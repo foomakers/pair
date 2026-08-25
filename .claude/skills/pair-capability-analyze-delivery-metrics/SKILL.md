@@ -41,7 +41,7 @@ A missing or malformed adoption file is treated as absent: warn, fall back to th
 ### Step 1: Resolve the Period and the Panel Path
 
 1. **Act**: Resolve `$period` to a **period key** in one of the convention's normalized forms — `YYYY-MM` (default: the current calendar month), `YYYY-Wnn`, `YYYY-MM-DD_YYYY-MM-DD` — applying the convention's **normalization rule** (a range spanning exactly a calendar month or ISO week collapses to the shorter form), then derive the window's start/end in **UTC**.
-2. **Act**: Derive the **previous window of equal length** (immediately preceding, same duration) — the trend comparison's population.
+2. **Act**: Derive the **previous window of equal length** — the trend comparison's population — resolving it **per key form** exactly as the guideline defines (a `YYYY-MM` key compares against the whole preceding calendar month, `YYYY-Wnn` against the preceding ISO week, and only an explicit range is measured by day count). The rule lives there; this step applies it.
 3. **Act**: Resolve the panel path: `$output` (default `.pair/working/reports/metrics/`, honoring `working_path`) + `<period-key>-delivery-metrics.md`.
 4. **Verify**: Exactly one period key, one window, one previous window and one panel path. An unparseable `$period` → ask for the intended window; never guess a period silently.
 

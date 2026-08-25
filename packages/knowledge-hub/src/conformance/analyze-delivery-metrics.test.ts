@@ -105,6 +105,15 @@ describe('analyze-delivery-metrics — skill contract (#222)', () => {
       expect(lower).toMatch(/rather than read from an older panel|same definitions/)
     })
 
+    // Review of #461, Major 2 (skill side): the baseline is resolved PER KEY FORM in the
+    // guideline. The skill must defer to that rule, not restate a bare "same duration"
+    // that contradicts it for a calendar key.
+    it(`${label} defers the trend baseline to the guideline's per-key-form rule`, () => {
+      const step1 = normalize(section(content, '### Step 1', '### Step 2'))
+      expect(step1).toMatch(/per key form|per the guideline/)
+      expect(step1).not.toMatch(/same duration/)
+    })
+
     it(`${label} defaults the output to the metrics reports area and honours the override (AC4)`, () => {
       expect(content).toContain('.pair/working/reports/metrics/')
       expect(content).toContain('working_path')
@@ -267,6 +276,14 @@ describe('analyze-delivery-metrics — catalog registration (#222)', () => {
       expect(next).toMatch(/analyze-delivery-metrics/)
       expect(next).toContain('32 capability')
       expect(next).toContain('44 skills')
+    })
+
+    // Review of #461, Minor 6: next's "Full catalog coverage" note enumerates the skills
+    // the cascade cannot surface. This one is on-demand only with no cascade row, so it
+    // belongs in that list — otherwise the note reads as if every absence were a bug.
+    it(`${label} next's full-catalog-coverage note names it as not cascade-suggested`, () => {
+      const note = next.split('\n').find(l => l.includes('Full catalog coverage')) ?? ''
+      expect(note).toContain('analyze-delivery-metrics')
     })
 
     it(`${label} skills-guide lists it under Analysis (3) and states 44 total`, () => {
