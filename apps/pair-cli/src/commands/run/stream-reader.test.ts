@@ -3,6 +3,8 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { readIterationOutcome, toLines } from './stream-reader'
 import { buildSkillArgs } from './invocation'
+import { readAutomationPolicy, POLICY_PATH } from './automation-policy'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 import { ENGINES, type EngineId } from './engines'
 
 /** Feeds a recorded stream through the reader the way a child process would: in chunks. */
@@ -192,11 +194,24 @@ describe('toLines', () => {
  * half had passing tests; nothing tested the seam. This does.
  */
 describe('round-trip: what the driver renders is what the driver can read back', () => {
-  it.each([
-    ['a bare token', {}],
-    ['a quoted predicate', { predicate: 'tag:risk:red ⇒ Done' }],
-    ['a spaced label', { predicate: 'type:user story ⇒ Done' }],
-  ])('recognises the token it would print for %s', async (_case, extra) => {
+  /**
+   * The cases are DERIVED, not hand-picked (round 3, minor): the predicate comes out of the policy
+   * reader itself, so the round-trip is anchored to the vocabulary the driver actually accepts
+   * rather than to three strings a previous author happened to choose — which is how a value
+   * carrying an excluded character slipped past this very guard once already.
+   */
+  function predicateFromPolicy(declaration: string): string {
+    const fs = new InMemoryFileSystemService(
+      { [`/project/${POLICY_PATH}`]: `## Stop Predicate\n\n${declaration}\nmax-iterations: 20\n` },
+      '/project',
+      '/project',
+    )
+    const predicate = readAutomationPolicy(fs, '/project').stopPredicate
+    if (predicate === undefined) throw new Error(`policy reader rejected: ${declaration}`)
+    return predicate
+  }
+
+  async function roundTrip(extra: { predicate?: string }) {
     const args = buildSkillArgs('pair-loop', { root: '212', iteration: 2, ...extra })
     const token = ['pair-loop', ...args].join(' ')
     const stream = (async function* () {
@@ -209,8 +224,58 @@ describe('round-trip: what the driver renders is what the driver can read back',
       yield `${JSON.stringify({ type: 'result', subtype: 'success' })}\n`
     })()
 
-    const result = await readIterationOutcome(toLines(stream), ENGINES.claude)
+    return { token, result: await readIterationOutcome(toLines(stream), ENGINES.claude) }
+  }
+
+  it('recognises the token it would print for a bare re-invocation', async () => {
+    const { token, result } = await roundTrip({})
 
     expect(result.continueToken).toBe(token)
+  })
+
+  it.each([
+    ["this repo's own predicate", 'tag:risk:red ⇒ Done'],
+    ['a root selector', 'root ⇒ Done'],
+    ['a combined condition', 'tag:risk:red ⇒ Done and has-tag:risk:red'],
+    ['a type selector with a spaced issue type', 'type:user story ⇒ Done'],
+  ])('recognises the token carrying %s, taken from the policy reader', async (_case, declared) => {
+    const { token, result } = await roundTrip({ predicate: predicateFromPolicy(declared) })
+
+    expect(token).toContain('"')
+    expect(result.continueToken).toBe(token)
+  })
+
+  /**
+   * The class of value that broke this guard twice: a legitimate predicate carrying a character
+   * `isConcreteToken` used to reject wholesale. `=>` is HALTed by the policy reader (round 3), so
+   * it cannot arrive from adoption — but it can still reach the driver through `--prompt` or a
+   * future skill argument, and the reader must never silently truncate a run over it.
+   */
+  it('recognises a token whose predicate carries `=>`, not just the documented arrow', async () => {
+    const { token, result } = await roundTrip({ predicate: 'tag:risk:red => Done' })
+
+    expect(token).toContain('=>')
+    expect(result.continueToken).toBe(token)
+  })
+
+  it('still refuses the documented TEMPLATE, which is what placeholder syntax means', async () => {
+    const stream = (async function* () {
+      yield `${JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'text',
+              text: 'CONTINUE-TOKEN: pair-loop [--root <id>] [--predicate "<text>"] --iteration <n+1>',
+            },
+          ],
+        },
+      })}\n`
+      yield `${JSON.stringify({ type: 'result', subtype: 'success' })}\n`
+    })()
+
+    const result = await readIterationOutcome(toLines(stream), ENGINES.claude)
+
+    expect(result.continueToken).toBeUndefined()
   })
 })

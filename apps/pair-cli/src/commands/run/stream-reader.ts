@@ -58,9 +58,24 @@ const NO_TERMINAL_EVENT: IterationResult = {
  */
 const CONTINUE_TOKEN_MARKER = /^[ \t]*CONTINUE-TOKEN:[ \t]*(pair-\S+[^\n\r]*?)[ \t]*$/m
 
-/** A template, not a token: the documented form keeps its `<placeholders>` and `[optionals]`. */
+/**
+ * A template, not a token: the documented form keeps its `<placeholders>` and `[--optional flags]`.
+ *
+ * Narrow on PURPOSE. An earlier version rejected any candidate containing `<`, `>`, `[` or `]`,
+ * which is not "placeholder syntax" — it is a character class, and it swept up legitimate values:
+ * a predicate spelled `tag:risk:red => Done` carries `>` and is not a template at all, so the
+ * token was discarded and an unattended run stopped after ONE card reporting success (round 3,
+ * Major — the same failure mode as round 2's, reached through a different input). The rule is now
+ * the two shapes a real template actually has:
+ *
+ * - `<…>` — an angle-bracket placeholder (`<id>`, `<text>`, `<n+1>`);
+ * - `[--` — an uncompiled optional flag (`[--root <id>]`).
+ *
+ * A concrete token has neither. Anything else about its content is the skill's business, not this
+ * reader's: guessing at "looks unfinished" is what cost two rounds.
+ */
 function isConcreteToken(candidate: string): boolean {
-  return !/[<>[\]]/.test(candidate)
+  return !/<[^>]*>/.test(candidate) && !candidate.includes('[--')
 }
 
 /** How deep into an event's structure the token is looked for — engines nest text a few levels. */

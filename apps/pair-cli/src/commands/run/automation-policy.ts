@@ -245,7 +245,20 @@ export function describeMergePosture(policy: AutomationPolicy): string {
 
 /* ------------------------------------------------------------ stop predicate */
 
-const SELECTOR = /^(root|tag:.+|type:.+)\s*(⇒|=>)\s*(.+)$/
+/**
+ * `<selector> ⇒ <condition>` — the arrow is `⇒`, and ONLY `⇒`.
+ *
+ * The driver borrows this grammar; it does not get to widen it (AC8, BR2, D18). An earlier version
+ * also accepted the ASCII `=>`, which was this module inventing schema: `automation-policy.md`
+ * §Stop Predicate documents `⇒` alone, and the tier-1 workflow (`.claude/workflows/pair-loop.js`)
+ * matches `⇒` alone — so the SAME adoption file ran unattended on tier 2 and HALTed on tier 1,
+ * which is exactly the divergence ADR-021's "one capability, three realizations" rules out. The
+ * ASCII form is now a HALT with the correct spelling in the message (round 3, Major).
+ */
+const SELECTOR = /^(root|tag:.+|type:.+)\s*⇒\s*(.+)$/
+
+/** The near-miss worth naming explicitly rather than reporting as "matches neither grammar". */
+const ASCII_ARROW = /^(root|tag:.+|type:.+)\s*=>\s*(.+)$/
 const CONDITIONS = ['Draft', 'Ready', 'In Progress', 'Done']
 
 /** `## Stop Predicate` — the predicate line (borrowed verbatim) plus its `max-iterations` backstop. */
@@ -266,11 +279,20 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
     }
     const match = SELECTOR.exec(line)
     if (!match) {
+      // Named separately from "matches neither grammar": an ASCII arrow is a spelling mistake with
+      // an obvious fix, and reporting it as an unrecognised line sends the maintainer hunting.
+      if (ASCII_ARROW.test(line)) {
+        halt(
+          `\`## Stop Predicate\` line \`${line}\` uses \`=>\`, but the documented arrow is \`⇒\` ` +
+            `(U+21D2) — the same form the fan-out workflow requires, so the two realizations of the ` +
+            `loop read this file identically`,
+        )
+      }
       halt(
         `\`## Stop Predicate\` line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\``,
       )
     }
-    assertCondition(match[3]!.trim(), line)
+    assertCondition(match[2]!.trim(), line)
     predicate = line
   }
 

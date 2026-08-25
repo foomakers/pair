@@ -96,10 +96,23 @@ describe('readAutomationPolicy — present file', () => {
     expect(policy.eligibility).toBe('risk:green')
   })
 
-  it('accepts an ASCII `=>` predicate arrow', () => {
-    const policy = policyFrom('## Stop Predicate\n\nroot => Done\n').read()
+  it('accepts ONLY the documented `⇒` arrow', () => {
+    const policy = policyFrom('## Stop Predicate\n\nroot ⇒ Done\n').read()
 
-    expect(policy.stopPredicate).toBe('root => Done')
+    expect(policy.stopPredicate).toBe('root ⇒ Done')
+  })
+
+  it('HALTS on the ASCII `=>` arrow, naming the documented form (round 3, Major)', () => {
+    // The schema (`automation-policy.md` §Stop Predicate) documents `⇒` and nothing else, and the
+    // tier-1 workflow accepts `⇒` alone. A driver that ALSO accepted `=>` would be inventing a
+    // laxer grammar than the schema owner — and the same adoption file would then run on tier 2
+    // and HALT on tier 1, which is precisely what ADR-021's "one capability" claim forbids.
+    expect(() => policyFrom('## Stop Predicate\n\nroot => Done\n').read()).toThrow(
+      /uses `=>`, but the documented arrow is `⇒`/,
+    )
+    expect(() => policyFrom('## Stop Predicate\n\ntag:risk:red => Done\n').read()).toThrow(
+      /`## Stop Predicate`/,
+    )
   })
 })
 
