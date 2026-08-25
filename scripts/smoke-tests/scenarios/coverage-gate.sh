@@ -387,6 +387,15 @@ else
   expect_out "AC3 drop -> hold, never lowered" "shared — hold" "$OUT"
   cfg_untouched "AC3 config untouched by a drop"
 
+  # --- MULTI-TYPE, the dimension a generated workflow gets wrong by passing a
+  # single hardcoded `default=`: a config with TWO committed baselines must see
+  # BOTH raised from one invocation, each against its own committed value. ---
+  OUT="$(ratchet push main 'feat: both types improved' 90.5 --measured shared=90.5,frontend=80 --dry-run)"
+  expect_out "multi-type: shared raised on its own baseline"   "shared — raise"   "$OUT"
+  expect_out "multi-type: frontend raised on its own baseline" "frontend — raise" "$OUT"
+  expect_out "multi-type: one commit carries both raises" "shared 84->89, frontend 19->79" "$OUT"
+  cfg_untouched "multi-type dry run wrote nothing"
+
   # --- Edge case: a type measured but absent from the config is reported, never written.
   # The second `--measured` supersedes the helper's own (last flag wins), so the
   # list passed here is the whole measured set for this invocation. ---

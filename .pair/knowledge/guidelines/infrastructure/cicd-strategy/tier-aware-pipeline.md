@@ -224,16 +224,36 @@ jobs:
       - run: pnpm test:coverage
       - id: measure
         run: |
-          # Same extraction the gate job uses; adapt to the adopted tool's report.
-          COV="$(jq '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null)"
+          # ONE `<type>=<pct>` entry per TYPE the coverage config declares a
+          # `baseline.<type>` for — the same per-type dimension the `coverage` gate
+          # job passes to `coverage_gate`. A single-type repo has one entry and the
+          # loop runs once; a monorepo with `baseline.backend` + `baseline.frontend`
+          # needs BOTH, because a hardcoded `default=` would make the ratchet report
+          # "no valid committed baseline.default" on every push and no per-type
+          # baseline would ever rise.
+          MEASURED=""
+          for cov_type in backend frontend; do # the types YOUR config declares
+            # Adapt the extraction and the report path to the adopted tool; this is
+            # the istanbul example, one summary per package.
+            COV="$(jq '.total.lines.pct' "packages/$cov_type/coverage/coverage-summary.json" 2>/dev/null)"
+            case "$COV" in
+              '' | *[!0-9.]*)
+                # Dropped, not guessed: the ratchet proposes nothing for a type it
+                # has no usable number for, which is the conservative outcome.
+                echo "::warning::no usable coverage for '$cov_type' — not proposed"
+                ;;
+              *) MEASURED="${MEASURED:+$MEASURED,}$cov_type=$COV" ;;
+            esac
+          done
           # GUARDED: anything reaching $GITHUB_ENV is an environment-injection sink,
-          # so a non-numeric value is dropped with a warning — the ratchet then sees
-          # no measurement and proposes nothing, the conservative outcome.
-          case "$COV" in
-            '' | *[!0-9.]*) echo "::warning::non-numeric coverage, not exported" ;;
-            *) echo "PAIR_COV=$COV" >>"$GITHUB_ENV" ;;
-          esac
+          # and every value here has already passed the numeric case above.
+          echo "PAIR_MEASURED=$MEASURED" >>"$GITHUB_ENV"
       - name: Coverage baseline commit-back (opt-in)
+        # Nothing measured ⇒ nothing to propose. Skipped rather than invoked with an
+        # empty list, which is a malformed invocation and exits non-zero by design —
+        # a workflow that gates nothing must not go red on the base branch for a
+        # non-event.
+        if: env.PAIR_MEASURED != ''
         env:
           # Attacker-controlled text: read via env, never interpolated into the run script.
           PAIR_RATCHET_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
@@ -249,10 +269,10 @@ jobs:
           npx --yes @foomakers/pair-cli@<cli-version> coverage-ratchet \
             --coverage-config .pair/adoption/tech/coverage-baseline.md \
             --base-branch <base-branch> \
-            --measured "${TYPE:-default}=${PAIR_COV:-}"
+            --measured "$PAIR_MEASURED"
 ```
 
-Replace `<base-branch>` with the project's own base branch (the same value `way-of-working.md` → `## Git Workflow` declares) and `<cli-version>` with a pinned CLI version. The step always exits 0 — a refused write is a warning naming the reason, and there is no verdict here for it to affect.
+Three substitutions before this workflow is yours: `<base-branch>` (the same value `way-of-working.md` → `## Git Workflow` declares), `<cli-version>` (a pinned CLI version), and the **type list in the loop** — one entry per `baseline.<type>` in your coverage config, with the report path each of them is measured from. Leave a type out and its baseline simply never rises; invent one the config does not declare and the ratchet reports it and writes nothing. The step always exits 0 — a refused write is a warning naming the reason, and there is no verdict here for it to affect.
 
 ## Required-check wiring (what makes red block merge)
 

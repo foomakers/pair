@@ -90,6 +90,26 @@ function ratchetWorkflow(text: string): { source: string; doc: Workflow } | unde
   return carrying[0] as { source: string; doc: Workflow } | undefined
 }
 
+/**
+ * Shell variable references in a snippet — `${NAME}` / `${NAME:-default}` /
+ * `$NAME` — excluding GitHub's own `${{ … }}` expressions, which the runner
+ * substitutes before the shell ever sees them.
+ */
+function shellRefs(snippet: string): string[] {
+  const withoutContexts = snippet.replace(/\$\{\{[\s\S]*?\}\}/g, '')
+  const braced = [...withoutContexts.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)[:}-]/g)]
+  const bare = [...withoutContexts.matchAll(/\$([A-Za-z_][A-Za-z0-9_]*)/g)]
+  return [...new Set([...braced, ...bare].map(match => match[1] as string))]
+}
+
+/** Variables the workflow assigns itself, plus the ones the runner always provides. */
+function assignedIn(snippet: string): Set<string> {
+  const assigned = [...snippet.matchAll(/([A-Za-z_][A-Za-z0-9_]*)=/g)].map(m => m[1] as string)
+  // `GITHUB_ENV` and friends come from the runner; `PAIR_RATCHET_*` are declared
+  // in the step's own `env:` block, which this scan reads as assignments anyway.
+  return new Set([...assigned, 'GITHUB_ENV', 'GITHUB_OUTPUT', 'GITHUB_WORKSPACE'])
+}
+
 // The exact sentences #405 shipped and this story removes. Matched on the CLAIM,
 // not on a whole paragraph, so a reworded revival still fails.
 const DEAD_CAVEATS = [
@@ -158,6 +178,44 @@ describe('what replaced it — the emitted step', () => {
       expect(on['push']?.branches ?? []).toContain('<base-branch>')
     },
   )
+
+  it.each(GUIDELINES)('%s defines every shell variable the ratchet workflow reads', path => {
+    // The bug this exists for: the workflow passed `--measured "${TYPE:-default}=…"`
+    // with `TYPE` defined NOWHERE in it, so a monorepo with per-type baselines
+    // proposed `default=<pct>` on every push and the ratchet answered "no valid
+    // committed baseline.default" forever — the same silent no-op as the original
+    // Critical, narrowed to multi-type repos. An undefined variable in generated
+    // shell is invisible to a text assertion and to YAML parsing alike.
+    const source = ratchetWorkflow(read(path))?.source ?? ''
+    const assigned = assignedIn(source)
+    const undefinedRefs = shellRefs(source).filter(name => !assigned.has(name))
+    expect(
+      undefinedRefs,
+      `${label(path)}: the ratchet workflow reads shell variables it never sets — a value the adopter cannot see is missing`,
+    ).toEqual([])
+  })
+
+  it.each(GUIDELINES)('%s measures PER TYPE, as the config declares baselines', path => {
+    // A repo with `baseline.backend` + `baseline.frontend` needs one `type=pct`
+    // entry per type: a hardcoded `default=` can never raise either of them. This
+    // is also the dimension where AC2 ("the same shape pair runs") bites — pair's
+    // own step passes `shared=…,frontend=…`.
+    const source = ratchetWorkflow(read(path))?.source ?? ''
+    expect(
+      source,
+      'a hardcoded single-type measurement cannot raise a per-type baseline',
+    ).not.toMatch(/--measured "default=/)
+    expect(source).toMatch(/for .* in .*# the types/)
+    expect(source).toMatch(/baseline\.<type>/)
+  })
+
+  it.each(GUIDELINES)('%s skips the write when nothing was measured', path => {
+    // `--measured ""` is a malformed invocation and exits non-zero by design, so a
+    // run that measured nothing must not invoke the command at all — otherwise a
+    // workflow that gates nothing goes red on the base branch for a non-event.
+    const source = ratchetWorkflow(read(path))?.source ?? ''
+    expect(source).toMatch(/if: env\.PAIR_MEASURED != ''/)
+  })
 
   it.each(GUIDELINES)('%s binds the credential to that workflow, not to a gate job', path => {
     // Least privilege in the EVENT dimension: a pull-request run — whose diff can
@@ -252,6 +310,22 @@ describe('setup-gates: the nested question, gated on the parent flag', () => {
     expect(text).toMatch(/SEPARATE, push-triggered workflow, never a step in the gate/)
     expect(text).toMatch(/Do not put the commit-back in the pre-merge pipeline/)
     expect(text).toMatch(/SKIPPED \(not-base-push\)/)
+  })
+
+  it.each(SETUP_GATES)('%s says nothing contradictory about what is emitted', path => {
+    // The bullet said "emitted as a step" and, three sentences later, "a separate
+    // workflow, not a step". An executor reading the first clause emits the shape
+    // the second forbids — and this file IS the instruction, so an ambiguity here
+    // is a defect, not a wording preference.
+    const text = read(path)
+    expect(text, 'the pre-fix phrasing is back').not.toMatch(/emitted as a step/)
+    expect(text).toMatch(/emitted as a separate workflow/)
+  })
+
+  it.each(SETUP_GATES)('%s substitutes the measured TYPES, not just the branch', path => {
+    const text = read(path)
+    expect(text).toMatch(/one `<type>=<pct>` entry per `baseline\.<type>`/)
+    expect(text).toMatch(/single hardcoded `default=`/)
   })
 
   it.each(SETUP_GATES)('%s substitutes the base branch instead of hardcoding one', path => {
