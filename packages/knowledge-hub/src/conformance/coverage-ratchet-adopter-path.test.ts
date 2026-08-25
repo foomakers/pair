@@ -209,14 +209,31 @@ describe('what replaced it — the emitted step', () => {
     expect(source).toMatch(/baseline\.<type>/)
   })
 
-  it.each(GUIDELINES)('%s never lets a missing report abort the step', path => {
+  it.each(GUIDELINES)('%s never lets a missing report abort ANY generated step', path => {
     // GitHub Actions runs `run:` blocks under `bash -e`, so `VAR="$(jq … )"` with
-    // no report inherits jq's exit 2 and KILLS the step: the
-    // "no usable coverage" warning below it becomes unreachable in the most common
-    // adopter state (a report path not adapted yet), and a workflow whose whole
-    // point is that it gates nothing goes red on the base branch on every push.
-    // pair's own step has carried `|| true` for exactly this reason.
-    const source = ratchetWorkflow(read(path))?.source ?? ''
+    // no report inherits jq's exit 2 and KILLS the step before the next line runs.
+    //
+    // The consequence differs per snippet and both are wrong:
+    //   - post-merge ratchet: the "no usable coverage" warning under it becomes
+    //     unreachable in the most common adopter state (a report path not adapted
+    //     yet), and a workflow whose whole point is that it gates nothing goes red
+    //     on the base branch on every push;
+    //   - pre-merge `coverage` job: the step dies BEFORE `coverage_gate` is called,
+    //     so the fail-safe this same guideline documents — "blocks at 🔴, warns at
+    //     lower tiers" on an unmeasured report — is unreachable, and a 🟡 PR is
+    //     blocked where the corpus promises a warning. It fails CLOSED, which is
+    //     why it survived review twice: visible, but wrong.
+    //
+    // pair's own step has carried `|| true` all along, so this is also the last
+    // shape difference between what pair runs and what it tells adopters to run.
+    //
+    // Scanned over EVERY yaml block, not just the ratchet workflow: the first
+    // version of this assertion filtered blocks by the command name, so it could
+    // not see the pre-merge job at all — the same "the guard cannot see it" hole
+    // that let the trigger bug through in round 1.
+    const source = yamlBlocks(read(path))
+      .map(block => block.source)
+      .join('\n')
     const substitutions = source
       .split('\n')
       .filter(line => /^\s*[A-Za-z_][A-Za-z0-9_]*="\$\(/.test(line))

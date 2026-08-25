@@ -233,6 +233,40 @@ else
   fi
 fi
 
+# --- Same invariant, the OTHER generated snippet: the PRE-MERGE coverage step,
+# also executed as Actions would (`bash -e`) with no report present. Here the
+# consequence of aborting is different and worse-looking: the step would die
+# BEFORE `coverage_gate` is called, so this guideline's own documented fail-safe
+# (block at red, WARN at lower tiers on an unmeasured report) would be
+# unreachable and a yellow PR blocked where the corpus promises a warning.
+#
+# The one GitHub expression in the block is substituted with a tier, since a
+# runner would have substituted it before the shell ever saw it. ---
+GATE_SNIPPET="$TMP_DIR/premerge-coverage-step.sh"
+# From the `source coverage-gate.sh` line to the end of that run-block body,
+# anchored on the body's 10-space indentation — so the extraction stops at the
+# next YAML key instead of running to EOF.
+awk '/source \.pair\/knowledge\/assets\/coverage-gate\.sh/{f=1} f{ if ($0 !~ /^          / && $0 != "") exit; print }' \
+  "$GUIDELINE" |
+  sed -e 's/^          //' -e "s/\${{ needs.resolve-tier.outputs.tier }}/yellow/" >"$GATE_SNIPPET"
+if ! grep -q 'coverage_gate' "$GATE_SNIPPET"; then
+  log_fail "could not extract the pre-merge coverage step from the guideline — repoint this check"; FAILED=1
+else
+  if OUT="$(cd "$REPO_ROOT" && bash -e "$GATE_SNIPPET" 2>&1)"; then
+    log_succ "pre-merge coverage step survives a missing report under bash -e (reaches the gate)"
+  else
+    log_fail "pre-merge coverage step ABORTED before coverage_gate — the documented fail-safe is unreachable"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+  fi
+  case "$OUT" in
+  *"not measured"*) log_succ "pre-merge step reaches the fail-safe and WARNS at yellow (not blocks)" ;;
+  *)
+    log_fail "the yellow-tier warning never printed — the fail-safe was not reached"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+    ;;
+  esac
+fi
+
 # --- "machine-maintained" wording must be gone from the shipped assets (Major fix). ---
 if grep -qi 'machine-maintained' "$GATE" "$EXAMPLE" "$GUIDELINE"; then
   log_fail "'machine-maintained' wording still present (should be removed)"; FAILED=1

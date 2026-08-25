@@ -154,8 +154,14 @@ jobs:
       - run: |
           source .pair/knowledge/assets/coverage-gate.sh   # reads adoption config + a number, no criteria
           CFG=.pair/adoption/tech/coverage-baseline.md      # committed by the adopter when the guardrail is enabled
-          # Extract the measured % from whatever the adopted tool emitted. istanbul example:
-          COV="$(jq '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null)"
+          # Extract the measured % from whatever the adopted tool emitted. istanbul example.
+          # `|| true` is REQUIRED, not defensive: Actions runs `run:` blocks under
+          # `bash -e`, so with no report this assignment would inherit jq's non-zero
+          # status and ABORT the step BEFORE `coverage_gate` is reached — making the
+          # documented fail-safe below (block at red, warn at lower tiers on an
+          # unmeasured report) unreachable, and blocking a yellow PR the corpus
+          # promises only to warn on.
+          COV="$(jq '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null || true)"
           # TYPE is the touched code's type (backend|frontend|shared|…): a constant for a
           # single-type repo, or run one coverage_gate call per package report in a monorepo.
           # The tier is passed only to choose the fail-safe when no report was measured.
