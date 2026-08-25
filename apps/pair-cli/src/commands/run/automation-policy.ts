@@ -163,7 +163,9 @@ function sectionLines(markdown: string, heading: string): string[] | undefined {
 
 /* -------------------------------------------------------------- eligibility */
 
-const MARKDOWN_BLOCK_MARKERS = ['```', '-', '*', '+', '>', '#']
+// The schema's list, plus a leading SINGLE backtick: an inline-code paste is the same copied-wrapper
+// mistake as a fence, and tier 1 already rejected it (round 7, minor 1).
+const MARKDOWN_BLOCK_MARKERS = ['`', '-', '*', '+', '>', '#']
 const GITHUB_LABEL_CAP = 50
 
 /**
@@ -184,7 +186,9 @@ function readEligibility(markdown: string, warnings: string[]): string | undefin
   }
 
   const value = lines[0]!
-  if (value.includes(',') || /\b(AND|OR|NOT)\b/.test(value)) {
+  // A STANDALONE token, as the schema says and tier 1 matches — `\b` made `area:OR-tools` a HALT,
+  // rejecting a legitimate label (round 7, minor 1).
+  if (value.includes(',') || /(^|\s)(AND|OR|NOT)(\s|$)/.test(value)) {
     halt(`\`## Eligibility\` declares \`${value}\`, but the declaration takes exactly one label`)
   }
   if (MARKDOWN_BLOCK_MARKERS.some(marker => value.startsWith(marker))) {

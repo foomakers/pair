@@ -1,12 +1,21 @@
 /**
  * The content checks for every value the driver splices into an agent prompt (US-451).
  *
- * ONE home, because the alternative has been measured five times: this rule set started inside
+ * ONE home, because the alternative has been measured repeatedly: this rule set started inside
  * `automation-policy.ts`, so the values that did NOT come from the policy file — `--root` and
  * `--filter` — reached `buildPromptText` with only a trim and a non-empty check (round 6, Major).
  * The rules are byte-consistent with tier 1 (`.claude/workflows/pair-loop.js`), whose own review
- * introduced them, and every new prompt-bound value must pass through here rather than growing a
- * fourth copy.
+ * introduced them — a claim `prompt-safety.test.ts` and `tier-parity.test.ts` ASSERT against tier
+ * 1's source rather than restate, because round 7 found four values where it was not true (DEL and
+ * the C1 range, the boolean-token boundary, the `+` marker, an unbounded id) and all four were
+ * closed on whichever side was wrong.
+ *
+ * **Every prompt-bound value passes through here.** There are SIX, and the count belongs in the
+ * code rather than in a review comment that can go stale: `--root`, `--filter`, `--skill` (the one
+ * round 6's sweep missed), the eligibility label, the whole stop-predicate line, and the audit
+ * location. `--prompt` is the deliberate exemption — it IS the operator's instruction (AC3), not an
+ * identifier the driver splices. Adding a seventh means adding its check here and its case to the
+ * parity corpus.
  *
  * WHY at all: the prompt travels to a headless agent with repository write access and `gh`. The
  * schema's MUST is two-part — the value goes in a delimited data slot **and** it is never a command
@@ -56,7 +65,16 @@ export function isSafePromptText(value: string): boolean {
  * an issue id has no legitimate need for a space, a quote or a shell character.
  */
 export function isSafeId(value: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) && !value.includes('..')
+  return (
+    value.length > 0 &&
+    // BOUNDED (round 7, minor 2): the charset alone let a 50,000-character `--root` through, to be
+    // re-rendered into a fresh prompt on every iteration of the loop. The bound is the same one
+    // `isSafePromptText` carries, because the reason is the same — half of the schema's MUST is
+    // that a prompt-bound value is delimited AND bounded, and this one is spliced, not delimited.
+    value.length <= MAX_PROMPT_VALUE_LENGTH &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) &&
+    !value.includes('..')
+  )
 }
 
 /** Tier 1's `isLabelShape` — a well-formed `family:tier` label. */

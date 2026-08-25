@@ -308,6 +308,39 @@ describe('readAutomationPolicy — a policy value is never a command fragment (r
     )
   })
 
+  /**
+   * Round 7, minor 1: four values where the "byte-consistent with tier 1" claim did not hold. Each
+   * is fixed toward the SCHEMA rather than registered as a divergence — the schema's own trigger
+   * list settles all four, so there was nothing deliberate to record.
+   */
+  it('accepts a label whose name merely CONTAINS a boolean word', () => {
+    // The schema says a "standalone upper-case AND/OR/NOT token"; `\b` made `area:OR-tools` a HALT,
+    // rejecting a legitimate label. Tier 1's `(^|\s)…(\s|$)` is the correct reading.
+    expect(policyFrom('## Eligibility\n\narea:OR-tools\n').read().eligibility).toBe('area:OR-tools')
+  })
+
+  it('still HALTs on a genuinely standalone boolean operator', () => {
+    expect(() => policyFrom('## Eligibility\n\nrisk:green OR risk:yellow\n').read()).toThrow(
+      /exactly one label/,
+    )
+  })
+
+  it('HALTs on a leading single backtick, as tier 1 does', () => {
+    // An inline-code paste (`` `risk:green ``) is the same copied-wrapper mistake as a fence.
+    expect(() => policyFrom('## Eligibility\n\n`risk:green\n').read()).toThrow(
+      /copied markdown wrapper|command fragment/,
+    )
+  })
+
+  it.each([
+    ['DEL', 0x7f],
+    ['a C1 control', 0x9b],
+  ])('HALTs on %s in a policy value', (_case, code) => {
+    const value = `risk:${String.fromCharCode(code)}green`
+
+    expect(() => policyFrom(`## Eligibility\n\n${value}\n`).read()).toThrow(/command fragment/)
+  })
+
   it('still accepts every legitimate value, spaces included', () => {
     const policy = policyFrom(
       '## Eligibility\n\ngood first issue\n\n## Stop Predicate\n\ntype:user story ⇒ Done and has-tag:risk:red\nmax-iterations: 20\n',

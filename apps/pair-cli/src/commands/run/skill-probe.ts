@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { join, relative, resolve, isAbsolute } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import { extractRegistries, type Config } from '#registry'
 import type { SkillProbe } from './resolve-skill'
@@ -29,11 +29,31 @@ export function createSkillProbe(
   return (name: string) => {
     const directories = prefix ? [name, `${prefix}-${name}`, stripPrefix(name, prefix)] : [name]
     return targets.some(target =>
-      directories.some(directory =>
-        fs.existsSync(join(projectRoot, target, directory, 'SKILL.md')),
-      ),
+      directories.some(directory => isInstalledUnder(fs, projectRoot, target, directory)),
     )
   }
+}
+
+/**
+ * Whether `<target>/<directory>/SKILL.md` exists AND stays inside `<target>` (round 7, Major).
+ *
+ * `existsSync` answers "is there a file at this path", which is not a boundary: the skill name is a
+ * PATH SEGMENT, so a traversing name resolves to a real file outside the project and the probe used
+ * to report it installed — `/project/.claude/skills/` + `../../../outside/x` lands on `/outside/x`.
+ * `--skill` is `isSafeId`-checked at parse time too, but the containment belongs HERE as well: the
+ * probe is also called with the cascade names, and a path check belongs where the path is built.
+ */
+function isInstalledUnder(
+  fs: FileSystemService,
+  projectRoot: string,
+  target: string,
+  directory: string,
+): boolean {
+  const targetRoot = resolve(projectRoot, target)
+  const candidate = resolve(targetRoot, directory)
+  const inside = relative(targetRoot, candidate)
+  if (inside.startsWith('..') || isAbsolute(inside)) return false
+  return fs.existsSync(join(candidate, 'SKILL.md'))
 }
 
 /** `pair-loop` installed from dataset entry `loop`: probe the bare name too. */

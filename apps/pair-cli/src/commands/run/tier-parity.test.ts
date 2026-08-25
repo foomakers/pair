@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { readAutomationPolicy, POLICY_PATH } from './automation-policy'
+import { isSafeId } from './prompt-safety'
 
 /**
  * CROSS-IMPLEMENTATION PARITY — the structural guard this area was missing.
@@ -141,6 +142,16 @@ const ELIGIBILITY_CORPUS: Case[] = [
   ['a copied list item', '- risk:green'],
   ['juxtaposed labels', 'risk:green risk:yellow'],
   ['a 4000-character payload', 'a'.repeat(4000)],
+  // Round 7, minor 1: the four values where "byte-consistent with tier 1" did not hold. All four
+  // are now ALIGNED rather than registered as divergences — the schema's own trigger list settled
+  // each one, so there was nothing deliberate to record. They stay in the corpus as the regression
+  // guard for that alignment.
+  ['DEL inside the value', `risk:${String.fromCharCode(0x7f)}green`],
+  ['a C1 control inside the value', `risk:${String.fromCharCode(0x9b)}green`],
+  ['a label merely CONTAINING a boolean word', 'area:OR-tools'],
+  ['a leading `+` marker', '+ risk:green'],
+  ['a leading single backtick', '`risk:green'],
+  ['a standalone boolean operator', 'risk:green OR risk:yellow'],
 ]
 
 const PREDICATE_CORPUS: Case[] = [
@@ -297,6 +308,23 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
 
   it.each(AUDIT_CORPUS)('agrees on `## Audit Location` with %s', (_label, value, divergence) => {
     assertAgreement(`## Audit Location\n\n${value}\n`, 'Audit Location', divergence)
+  })
+
+  it.each([
+    ['a plain id', '212'],
+    ['a story key', 'US-451'],
+    ['a traversal', '../../etc/passwd'],
+    ['a 50,000-character id', 'a'.repeat(50_000)],
+    ['an id at the bound', 'a'.repeat(200)],
+    ['an id one over the bound', 'a'.repeat(201)],
+  ])('agrees on `isSafeId` with %s (the --root/--skill rule)', (_label, value) => {
+    const source = readFileSync(WORKFLOW, 'utf-8').replace(/^export /gm, '')
+    const prelude = source.slice(0, source.indexOf('// ── `## Eligibility`'))
+    const { isSafeId: tier1IsSafeId } = new Function(`${prelude}\nreturn { isSafeId }`)() as {
+      isSafeId: (v: string) => boolean
+    }
+
+    expect(isSafeId(value)).toBe(tier1IsSafeId(value))
   })
 
   it('agrees that this repo’s real adoption file is valid', () => {

@@ -65,7 +65,10 @@ const HALT = msg => {
 // pair-analyze-pr-batch already enforce, #250 review M4) — every one of these
 // values reaches an agent prompt that runs `gh`, so each gets the same
 // TYPE+CONTENT check the sibling workflows apply to theirs.
-const isSafeId = v => typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
+// US-451 review round 7 m2: bounded, like `isSafePromptText` — an unbounded id is re-rendered into
+// every prompt of a loop.
+const isSafeId = v =>
+  typeof v === 'string' && v.length > 0 && v.length <= 200 && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
 const isLabelShape = v => /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i.test(v)
 // Review round 3 Major-1: a value that reaches a prompt is delimited/labelled
 // (the guideline's own MUST) but delimiting is not validation — this is the
@@ -74,8 +77,15 @@ const isLabelShape = v => /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/i.test(v)
 // issue"), only the characters that turn a value into a command when an
 // agent puts it on a line: backtick, `$(`, control characters/newlines, and
 // an unbounded length.
+// US-451 review round 7 m1: DEL (\x7f) and the C1 range (\x80-\x9f) are control characters too —
+// they can move a cursor or forge a line in an operator's transcript exactly as C0 can, and they
+// were passing here while the external driver (#451) rejected them.
 const isSafePromptText = v =>
-  typeof v === 'string' && v.length > 0 && v.length <= 200 && !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
+  typeof v === 'string' &&
+  v.length > 0 &&
+  v.length <= 200 &&
+  !/[`\r\n\x00-\x1f\x7f-\x9f]/.test(v) &&
+  !v.includes('$(')
 
 // ── `## Eligibility` — the seven HALT triggers (automation-policy.md) ──────
 export function extractEligibility(policyText) {
@@ -106,7 +116,9 @@ export function extractEligibility(policyText) {
     HALT(`\`## Eligibility\` declares \`${value}\`, but the declaration takes exactly one label.`)
   if (/(^|\s)(AND|OR|NOT)(\s|$)/.test(value))
     HALT(`\`## Eligibility\` declares \`${value}\` — no AND/OR/NOT grammar.`)
-  if (/^[`\-*>#]/.test(value))
+  // US-451 review round 7 m1: the schema's marker list includes `+`; this pattern was one marker
+  // short, so `+ risk:green` HALTed on tier 2 and passed here.
+  if (/^[`\-*>#+]/.test(value))
     HALT(`\`## Eligibility\` declares \`${value}\` — begins with a markdown block marker, likely a copied fence/list/quote.`)
   if (value.length > 50)
     HALT(`\`## Eligibility\` declares a value longer than 50 characters — cannot be a label on this host.`)

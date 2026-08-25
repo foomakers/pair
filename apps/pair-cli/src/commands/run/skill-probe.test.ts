@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
 import { createSkillProbe } from './skill-probe'
@@ -56,6 +57,34 @@ describe('createSkillProbe', () => {
     )
 
     expect(isInstalled('pair-next')).toBe(true)
+  })
+
+  /**
+   * Round 7, Major (second half): `existsSync(join(root, target, name, 'SKILL.md'))` answers "is
+   * there a file there", which is NOT a containment check — `name` is a path segment, so a
+   * traversing name resolves to a real file OUTSIDE the project and the probe says "installed".
+   * `--skill` is now `isSafeId`-checked at parse time, but the probe must hold the boundary itself:
+   * it is also reachable with the cascade names, and defence belongs where the path is built.
+   */
+  it('refuses a name that escapes the registry target, even though a SKILL.md exists there', () => {
+    // The path is computed, not guessed: `/project/.claude/skills/` + `../../../` lands on `/`, so
+    // the traversing name resolves to a REAL file outside the project and `existsSync` says yes.
+    const escaping = '../../../outside/pair-next'
+    const fs = new InMemoryFileSystemService(
+      {
+        '/outside/pair-next/SKILL.md': '',
+        [`${cwd}/.claude/skills/pair-loop/SKILL.md`]: '',
+      },
+      cwd,
+      cwd,
+    )
+    expect(fs.existsSync(join(cwd, '.claude/skills/', escaping, 'SKILL.md'))).toBe(true)
+
+    const isInstalled = createSkillProbe(fs, skillsConfig(['.claude/skills/'], 'pair'), cwd)
+
+    expect(isInstalled(escaping)).toBe(false)
+    // The legitimate name in the same fixture still resolves.
+    expect(isInstalled('pair-loop')).toBe(true)
   })
 
   it('reports nothing installed when the registry is missing from the config', () => {

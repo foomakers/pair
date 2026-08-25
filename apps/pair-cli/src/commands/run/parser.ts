@@ -102,7 +102,10 @@ function promptSafeText(value: string | undefined, flag: string): string | undef
 
 /** `--skill` and `--prompt` are one choice, not two independent flags. */
 function resolveInvocation(options: ParseRunOptions): RunInvocationRequest {
-  const skill = optionalText(options.skill, '--skill')
+  // The SIXTH prompt-bound value (round 7, Major): a skill name is an identifier the driver
+  // splices into the invocation line, and it is also used as a PATH SEGMENT by the probe — so it
+  // gets `--root`'s rule, which rejects both the injection payload and the traversal.
+  const skill = identifierText(options.skill, '--skill')
   const { prompt } = options
   if (skill !== undefined && prompt !== undefined) {
     throw new Error('--skill and --prompt are mutually exclusive: pass one, not both')
