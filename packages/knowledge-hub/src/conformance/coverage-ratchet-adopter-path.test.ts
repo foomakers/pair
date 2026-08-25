@@ -209,6 +209,29 @@ describe('what replaced it — the emitted step', () => {
     expect(source).toMatch(/baseline\.<type>/)
   })
 
+  it.each(GUIDELINES)('%s never lets a missing report abort the step', path => {
+    // GitHub Actions runs `run:` blocks under `bash -e`, so `VAR="$(jq … )"` with
+    // no report inherits jq's exit 2 and KILLS the step: the
+    // "no usable coverage" warning below it becomes unreachable in the most common
+    // adopter state (a report path not adapted yet), and a workflow whose whole
+    // point is that it gates nothing goes red on the base branch on every push.
+    // pair's own step has carried `|| true` for exactly this reason.
+    const source = ratchetWorkflow(read(path))?.source ?? ''
+    const substitutions = source
+      .split('\n')
+      .filter(line => /^\s*[A-Za-z_][A-Za-z0-9_]*="\$\(/.test(line))
+    expect(
+      substitutions.length,
+      'no command substitution found — repoint this test',
+    ).toBeGreaterThan(0)
+    for (const line of substitutions) {
+      expect(
+        line,
+        `${label(path)}: this assignment aborts the step under \`bash -e\` when the command fails:\n${line.trim()}`,
+      ).toMatch(/\|\| true\)/)
+    }
+  })
+
   it.each(GUIDELINES)('%s skips the write when nothing was measured', path => {
     // `--measured ""` is a malformed invocation and exits non-zero by design, so a
     // run that measured nothing must not invoke the command at all — otherwise a

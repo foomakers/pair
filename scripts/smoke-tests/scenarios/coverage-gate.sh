@@ -192,6 +192,47 @@ else
   log_fail "example missing persistence / exclude clarification"; FAILED=1
 fi
 
+# --- The generated workflow's measure step, EXECUTED as GitHub Actions would run
+# it (`bash -e`), with NO coverage report present — the most common state for an
+# adopter who has not adapted the report path yet.
+#
+# The snippet is extracted from the SHIPPED guideline rather than retyped here: a
+# copy would pass while the shipped text aborts, which is exactly the class of
+# miss a text assertion cannot see. Invariants: exit 0 (the workflow gates
+# nothing and must not redden the base branch), the "no usable coverage" warning
+# is reachable, and the measured list comes out EMPTY so the write step's
+# `if: env.PAIR_MEASURED != ''` skips the invocation. ---
+MEASURE_SNIPPET="$TMP_DIR/measure-step.sh"
+awk '/^      - id: measure$/{f=1;next} /^      - name: Coverage baseline commit-back/{f=0} f' \
+  "$GUIDELINE" | sed -e 's/^        run: |$//' -e 's/^          //' >"$MEASURE_SNIPPET"
+if [ ! -s "$MEASURE_SNIPPET" ]; then
+  log_fail "could not extract the measure step from the guideline — repoint this check"; FAILED=1
+else
+  MEASURE_DIR="$TMP_DIR/measure-run"
+  rm -rf "$MEASURE_DIR"; mkdir -p "$MEASURE_DIR"
+  # `GITHUB_ENV` is a real file here, as on a runner: the step appends to it.
+  if OUT="$(cd "$MEASURE_DIR" && GITHUB_ENV="$MEASURE_DIR/github_env" bash -e "$MEASURE_SNIPPET" 2>&1)"; then
+    log_succ "measure step survives a missing report under bash -e (workflow does not go red)"
+  else
+    log_fail "measure step ABORTED with no report — the adopter's base branch goes red on every push"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+  fi
+  # Checked inline: `expect_out` is defined further down, in the ratchet section,
+  # so calling it here would be an unset command — a silently skipped assertion.
+  case "$OUT" in
+  *"no usable coverage"*) log_succ "missing report warns per type, reachably" ;;
+  *)
+    log_fail "the per-type warning never printed — unreachable branch"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+    ;;
+  esac
+  if [ "$(cat "$MEASURE_DIR/github_env" 2>/dev/null)" = "PAIR_MEASURED=" ]; then
+    log_succ "nothing measured => empty list, so the write step's if: skips the invocation"
+  else
+    log_fail "expected an empty PAIR_MEASURED, got: $(cat "$MEASURE_DIR/github_env" 2>/dev/null)"; FAILED=1
+  fi
+fi
+
 # --- "machine-maintained" wording must be gone from the shipped assets (Major fix). ---
 if grep -qi 'machine-maintained' "$GATE" "$EXAMPLE" "$GUIDELINE"; then
   log_fail "'machine-maintained' wording still present (should be removed)"; FAILED=1

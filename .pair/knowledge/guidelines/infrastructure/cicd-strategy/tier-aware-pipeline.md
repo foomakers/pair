@@ -235,7 +235,13 @@ jobs:
           for cov_type in backend frontend; do # the types YOUR config declares
             # Adapt the extraction and the report path to the adopted tool; this is
             # the istanbul example, one summary per package.
-            COV="$(jq '.total.lines.pct' "packages/$cov_type/coverage/coverage-summary.json" 2>/dev/null)"
+            #
+            # `|| true` is REQUIRED, not defensive: Actions runs `run:` blocks under
+            # `bash -e`, so with no report the assignment would inherit jq's non-zero
+            # status and ABORT the step — making the warning below unreachable in the
+            # most common state (a report path not adapted yet) and turning a workflow
+            # that gates nothing red on every push.
+            COV="$(jq '.total.lines.pct' "packages/$cov_type/coverage/coverage-summary.json" 2>/dev/null || true)"
             case "$COV" in
               '' | *[!0-9.]*)
                 # Dropped, not guessed: the ratchet proposes nothing for a type it

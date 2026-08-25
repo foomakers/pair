@@ -770,6 +770,15 @@ pair coverage-ratchet --measured <type=pct,...> [options]
   the value written is `floor(measured) - <margin>`, so unchanged coverage proposes what is already
   committed.
 
+### Environment it reads
+
+| Variable                            | Read for                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| `COVERAGE_RATCHET_TOKEN`            | the write credential (below). Absent ⇒ warning, exit 0                                        |
+| `PAIR_RATCHET_BASE_BRANCH`          | the base branch when `--base-branch` is not passed                                            |
+| `PAIR_RATCHET_HEAD_COMMIT_MESSAGE`  | the head commit's message, for the loop guard — a commit carrying `[coverage-baseline-ratchet]` is skipped. Pass it via `env:`, never interpolated into the run script |
+| `GITHUB_EVENT_NAME`, `GITHUB_REF_NAME` | whether this run may write at all (a `push` on the base branch, and nothing else)          |
+
 ### Credential (yours, not pair's)
 
 The write needs `COVERAGE_RATCHET_TOKEN` in the step's environment: a **repo-scoped** fine-grained
