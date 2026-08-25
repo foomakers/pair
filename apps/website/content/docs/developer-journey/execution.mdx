@@ -92,8 +92,14 @@ Phase 6 ── Merge ─────────── Merge PR, update story/ep
 The review is submitted as the **native GitHub review** (the verdict *is* the Approve / Request Changes / Comment action) — there is no separate review comment. Its body is **verdict-first** so a reader understands the outcome in about 30 seconds (D22):
 
 - **Top:** classification tags (`risk:<tier>` · `cost:<class>`), the decision, and a one-line reason. If the review-time classification differs from the story's refinement-time one, a **Classification changed** line states the change — it only ever fires *upward* (the review value is a floor: it may raise a tier, never lower it).
-- **Assessments** (each a one-line verdict, details collapsed): security — input validation, output handling, authentication, authorization, introduced vulnerabilities (from `/pair-capability-assess-security`); **cost** class (from `/pair-capability-assess-cost`); **architecture / coupling** balance (from `/pair-capability-assess-coupling`).
+- **Assessments** (each a one-line verdict, details collapsed): security — input validation, output handling, authentication, authorization, introduced vulnerabilities (from `/pair-capability-assess-security`); **cost** class (from `/pair-capability-assess-cost`); **architecture / coupling** balance (from `/pair-capability-assess-coupling`); **bug fix — red test before fix**.
 - When a capability is not installed, its section reads **not assessed** — explicit, never silently dropped.
+
+### The Bug-Fix Red Test
+
+Test-first bug fixing is policy (`AGENTS.md` § Bug Resolution Workflow), and the review is where it is verified instead of assumed. On a **bug-fix** PR the reviewer names the test that reproduces the bug and how the diff shows it failing-before / passing-after; a bug fix with no reproducing test and no recorded rationale is a **Major** finding — the fix has not proven it addresses the bug.
+
+The condition is half the check: a **feature** PR carries no test-first obligation, so its verdict reads *not applicable — not a bug fix* (written out, never dropped), and a genuinely untestable fix (a doc typo, a pure-formatting change) is closed by an explicit one-line rationale rather than a blocked merge. It is reviewer judgment aided by the checklist prompt — pair runs no automated commit-order analysis.
 
 ### ADR Enforcement
 

@@ -136,6 +136,30 @@ Feeds from `/assess-cost` against the diff. A **red** cost class surfaces a **bl
 
 </details>
 
+### Bug fix — Red test before fix
+
+**Verdict:** [green | red | not applicable — not a bug fix | not applicable — rationale recorded] — [the test that reproduces the bug, or the one-line rationale why an automated test is not the proof]
+
+<details>
+<summary>Details</summary>
+
+<!-- Bug-fix-conditional, and the condition is half the item. On a PR that fixes a bug (its
+label, its story type, or a defect it references) the fix is backed by a test that reproduces
+the bug and lands with or before it — the test-first bug-fix rule the agent contract states
+(`AGENTS.md` § Bug Resolution Workflow), verified here instead of assumed. A feature PR
+carries NO test-first obligation: its verdict is written out as "not applicable — not a bug
+fix", never a dropped section. Reviewer judgment aided by this prompt — no automated
+commit-order analysis. -->
+
+- **Which test reproduces the bug** — `file::test name`, and what it asserts about the reported behavior.
+- **Failing-before / passing-after** — how the diff shows it: the test is added in this PR at or before the fix commit and exercises the fixed path (a test that would pass on the unfixed code is not a reproduction). Naming the specific evidence is what keeps this item from being ticked empty.
+- **No reproducing test and no recorded rationale → a Major finding** under _Findings by severity_ (the fix has not proven it addresses the bug) — surfaced, never silently passed.
+- **Genuinely untestable fix** (a doc typo, a pure-formatting change classified as a fix): record the one-line rationale why an automated test is not the proof — verdict **not applicable — rationale recorded**. The point is proving the fix works, and for some fixes a test is not that proof.
+- **Mixed bug fix + feature PR**: the check applies to the bug-fix portion only; the feature portion is exempt.
+- **Ambiguous classification**: decide it here and record the decision — default to applying the check when the PR references a bug or a defect.
+
+</details>
+
 ## Details
 
 <details>
