@@ -106,12 +106,36 @@ describe('a per-skill delta on the shape is documented as one', () => {
   // rather than becoming a non-proposal), which makes it a delta to state — the
   // alternative, silently diverging from the shape you point at, is what this file
   // exists to prevent.
-  /** The `|`-separated alternatives inside an `Approval:` line's brackets. */
+  /**
+   * The `|`-separated alternatives inside an `Approval:` line's brackets.
+   *
+   * Round 6, Minor 2: this used to anchor the bracket group to end-of-line
+   * (`/\[(.*)\]\s*$/`), so ANY trailing text made the match fail and the skill was
+   * skipped **silently** — the non-vacuity counter stayed satisfied by another
+   * skill. Proven by mutation: a nonsense value plus " (see the note below)" after
+   * the bracket left the suite green. Now the first bracket group anywhere on the
+   * line, and an unparseable line is a loud failure (see `parsedAlternatives`)
+   * rather than an empty list.
+   */
   const alternatives = (line: string): string[] =>
-    (/\[(.*)\]\s*$/.exec(line)?.[1] ?? '')
+    (/\[([^\]]*)\]/.exec(line)?.[1] ?? '')
       .split('|')
       .map(a => a.trim())
       .filter(Boolean)
+
+  /**
+   * `alternatives`, but a line the parser cannot read fails the test that asked.
+   * A guard whose input parser degrades to "nothing to check" is not a guard.
+   */
+  const parsedAlternatives = (skill: string, line: string): string[] => {
+    const parsed = alternatives(line)
+    expect(
+      parsed.length,
+      `${skill}: this Approval line is not in a shape the guard can read — expected ` +
+        `\`Approval:  [a | b | …]\`, got "${line.trim()}"`,
+    ).toBeGreaterThan(1)
+    return parsed
+  }
 
   const approvalLineOf = (skill: string): string | undefined =>
     read(skillFile(skill))
@@ -132,31 +156,39 @@ describe('a per-skill delta on the shape is documented as one', () => {
     // to nonsense kept the suite green, while the same mutation on `assess-testing`
     // (not named in the paragraph) went red.
     //
-    // The assertion is now bound to the DIVERGENT VALUE ITSELF, which no other
-    // skill's delta can supply, and to that value appearing near its own skill's
-    // name. A skill name in the paragraph is no longer evidence of anything.
+    // The assertion is bound to the DIVERGENT VALUE ITSELF, which no other skill's
+    // delta can supply. Round 6, Minor 3 closed the other half: a ±400-character
+    // proximity window still admitted a NEIGHBOUR's name, so `assess-pm` carrying
+    // `assess-stack`'s literal value stayed green because "assess-pm" happened to
+    // sit within 400 chars of `assess-stack`'s delta sentence. The scope is now the
+    // SENTENCES THAT NAME THE SKILL — a character window is not attribution.
     const canonicalAlts = alternatives(canonicalApprovalLine())
     const section = decisionSection()
     let checked = 0
 
+    /** Sentences of § Decision Shape that name `skill`. */
+    const sentencesNaming = (skill: string): string[] =>
+      section.split(/(?<=\.)\s+/).filter(sentence => sentence.includes(skill))
+
     for (const skill of DECLARED) {
       const line = approvalLineOf(skill)
       expect(line, `${skill} has no Approval line`).toBeDefined()
-      for (const value of alternatives(line as string).filter(a => !canonicalAlts.includes(a))) {
+      for (const value of parsedAlternatives(skill, line as string).filter(
+        a => !canonicalAlts.includes(a),
+      )) {
         checked++
-        const at = section.indexOf(value)
+        const attributed = sentencesNaming(skill)
         expect(
-          at,
-          `${skill}: the Approval value "${value}" diverges from the canonical shape and is ` +
-            `not documented verbatim in § Decision Shape`,
-        ).toBeGreaterThan(-1)
-        // Proximity, so the documentation is attached to the skill it describes
-        // rather than sitting anywhere in the paragraph.
-        const window = section.slice(Math.max(0, at - 400), at + 400)
+          attributed.length,
+          `${skill}: its Approval line diverges from the canonical shape ("${value}") but ` +
+            `§ Decision Shape has no sentence naming ${skill} at all`,
+        ).toBeGreaterThan(0)
         expect(
-          window,
-          `${skill}: "${value}" is documented, but not in prose that names ${skill}`,
-        ).toContain(skill)
+          attributed.some(sentence => sentence.includes(value)),
+          `${skill}: the divergent Approval value "${value}" is not documented in a sentence ` +
+            `that names ${skill}. Documenting it beside another skill's delta does not ` +
+            `attribute it — ${attributed.length} sentence(s) name ${skill} and none carry it.`,
+        ).toBe(true)
       }
     }
 

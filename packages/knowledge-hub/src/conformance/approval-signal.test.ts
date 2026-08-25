@@ -215,14 +215,33 @@ describe('a tie-break resolves from a real source, not an invented order (round 
   })
 
   for (const [rel, file] of withTie) {
-    it(`${rel} — its tie-break names project state AND the unresolved fallback`, () => {
-      const content = read(file)
-      expect(content, `${rel} must resolve a tie from project state`).toMatch(
-        /tie[\s\S]{0,320}project state/i,
-      )
-      expect(content, `${rel} must say what happens when project state is silent`).toMatch(
-        /(no proposal|unresolved)/i,
-      )
+    it(`${rel} — ONE line resolves the tie: project state, then the unresolved fallback`, () => {
+      // Round 6, Minor 3: the fallback half used to be asserted over the WHOLE
+      // FILE, where `/(no proposal|unresolved)/` is permanently satisfied by the
+      // `$approval` Argument row and the `Approval:` output line that every family
+      // member now carries. Proven by mutation: replacing this skill's fallback with
+      // "the first framework simply wins" — the round-2 defect exactly, a tie
+      // resolved by list order — left the suite green.
+      //
+      // Both halves are now required on the SAME line as the word "tie", so the
+      // sentence that resolves the tie is the sentence being checked. That is also
+      // how the resolution actually reads in the corpus: one clause, both branches.
+      const resolving = read(file)
+        .split('\n')
+        .filter(line => /\btie\b/i.test(line) && /project state/i.test(line))
+
+      expect(
+        resolving.length,
+        `${rel}: no single line both names a tie and resolves it from project state`,
+      ).toBeGreaterThan(0)
+
+      for (const line of resolving) {
+        expect(
+          line,
+          `${rel}: this tie-break line resolves from project state but never says what ` +
+            `happens when project state is silent — "${line.trim().slice(0, 120)}…"`,
+        ).toMatch(/no proposal|unresolved/i)
+      }
     })
   }
 })
