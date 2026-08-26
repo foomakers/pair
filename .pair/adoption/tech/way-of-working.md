@@ -17,6 +17,12 @@
 
 **Nothing declared here — both keys are at their defaults**, and `.pair/adoption/` is delta-only (D21, ADR-018): a key belongs in this section only when it differs from the default. `code-host` omitted ⇒ the code host **is** the PM tool (GitHub Projects hosts the repo), so this is the zero-configuration single-tool path — no dual-write, no cross-link comment, every PR/review operation on GitHub; `base-branch` omitted ⇒ `main`. A split setup (e.g. Linear for the backlog + GitHub for the code) is what makes `code-host` load-bearing. Schema and resolution rule: [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
+## Story Closure (post-merge)
+
+Per merged PR, in order: **1)** squash merge, message per [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) · **2)** story: check the DoD boxes in the body, close (`completed`), write board state `Done` ([State Mapping](#state-mapping)) · **3)** cascade: epic/initiative close only when ALL sub-issues are Done · **4)** cleanup: delete branch **remote AND local** (remove any worktree holding it first), remove the story checkpoint and the PR analysis under `working/pr-analyses/` · **5)** optional P0 manual tests.
+
+Detail: [merge-and-cascade.md](../../knowledge/guidelines/technical-standards/) Steps 6.0–6.6 · local-branch + analysis-retention rules: [ADL 2026-08-25](decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md).
+
 ## State Mapping
 
 Maps this project's GitHub Projects board columns to the 5 canonical macrostates (see [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Skills read and write item state through this map, never the raw board labels.
