@@ -44,8 +44,6 @@ const GATES = KNOWLEDGE_ROOTS.map(root => join(root, 'assets/coverage-gate.sh'))
 const read = (path: string): string => readFileSync(path, 'utf-8')
 const label = (path: string): string => path.replace(REPO_ROOT, '').replace(/^\//, '')
 
-/** The shipped asset — generated from the tested module; the KB documents its real flags. */
-const ASSET = read(join(REPO_ROOT, '.pair/knowledge/assets/coverage-ratchet.cjs'))
 const SOURCE = read(join(REPO_ROOT, 'packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts'))
 
 const COMMAND = 'coverage-ratchet'

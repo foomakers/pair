@@ -399,7 +399,8 @@ function runPrepare(gitPlan, env) {
             (0, node_child_process_1.execFileSync)(bin, args, { env, stdio: 'pipe' });
         }
         catch {
-        }
+    void 0 // deliberately ignored
+  }
     }
 }
 function readPendingConfig(remote, configPath, env) {

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import ts from 'typescript'
 
@@ -44,16 +44,18 @@ export function compileRatchetAsset(sourceText: string): string {
     },
     fileName: 'coverage-baseline-ratchet.ts',
   })
-  return HEADER + outputText
+  // Comment-stripping can leave a catch block EMPTY (`catch {}`) when its only
+  // content was a comment — a lint violation in the shipped corpus. Give those
+  // blocks an explicit deliberate-no-op statement.
+  return HEADER + outputText.replace(/catch \{\s*\}/g, 'catch {\n    void 0 // deliberately ignored\n  }')
 }
 
 function main(): void {
   const source = readFileSync(SOURCE, 'utf8')
   const compiled = compileRatchetAsset(source)
   for (const target of TARGETS) {
-    const fs = require('node:fs') as typeof import('node:fs')
-    fs.mkdirSync(dirname(target), { recursive: true })
-    fs.writeFileSync(target, compiled)
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, compiled)
     console.log(`ratchet:asset → ${target}`)
   }
 }
