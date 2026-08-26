@@ -168,7 +168,24 @@ jobs:
       # (flag / base-branch push only / ratchet-marker loop guard), the monotonic
       # ratchet, the git+gh command plan and the refusal classification — lives in
       # the unit-tested module packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts;
-      # the CLI wiring is demonstrated by the coverage-gate smoke scenario.
+      # the wiring is demonstrated by the coverage-gate smoke scenario.
+      # SAME COMMAND AN ADOPTER RUNS (story #409, ADR-023): the shipped KB asset
+      # `.pair/knowledge/assets/coverage-ratchet.cjs` — generated from that same
+      # module by `ratchet:asset` — invoked here from the repo's own installed copy.
+      # One implementation, two thin invocations — pair cannot dogfood a step that
+      # drifts from the generated one, because there is no second implementation to
+      # drift and no CLI command was added for it.
+      #
+      # WHY IT IS A STEP HERE, while the guideline emits a SEPARATE
+      # push-triggered workflow for adopters: the requirement is that the
+      # commit-back run on a push to the base branch with a coverage measurement
+      # in hand. This workflow is triggered by `push: main` as well as
+      # `pull_request` (see `on:` at the top) and the job measures coverage a few
+      # steps up, so both hold here in one job. The generated adopter pipeline is
+      # `pull_request`-ONLY — a step there could never write (it would print
+      # `SKIPPED (not-base-push)` forever), which is why it gets its own workflow.
+      # Same guarantee, two pipeline shapes; the invariant is the trigger, not
+      # the file it lives in.
       # Placed AFTER the guardrail and always exiting 0: a refused write degrades
       # to a ::warning:: and can never change the gate's verdict (AC6).
       - name: Coverage baseline commit-back (ratchet — opt-in #372)
@@ -185,11 +202,10 @@ jobs:
           COVERAGE_RATCHET_TOKEN: ${{ (github.event_name == 'push' && github.ref_name == 'main') && secrets.COVERAGE_RATCHET_TOKEN || '' }}
         run: |
           set -euo pipefail
-          pnpm --filter @pair/knowledge-hub coverage:ratchet \
+          node .pair/knowledge/assets/coverage-ratchet.cjs \
             --config .pair/adoption/tech/coverage-baseline.md \
             --way-of-working .pair/adoption/tech/way-of-working.md \
-            --measured "shared=${PAIR_COV_SHARED:-}" \
-            --measured "frontend=${PAIR_COV_FRONTEND:-}"
+            --measured "shared=${PAIR_COV_SHARED:-},frontend=${PAIR_COV_FRONTEND:-}"
       - name: Run E2E tests
         run: pnpm --filter @pair/website e2e
 

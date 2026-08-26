@@ -729,9 +729,14 @@ const CLI_FLAGS: Record<string, { takesValue: boolean; apply: FlagHandler }> = {
   '--measured': {
     takesValue: true,
     apply: (o, v) => {
-      const [type, pct] = (v as string).split('=')
-      if (!type) throw new Error('--measured expects <type>=<pct>')
-      o.measured[type] = pct
+      // Comma-separated multi-type in ONE flag: the generated workflow builds the
+      // list from the config's baseline types, so `shared=90.5,frontend=80` is the
+      // normal shape (and a repeated flag still wins per type, last one applied).
+      for (const entry of (v as string).split(',')) {
+        const [type, pct] = entry.split('=')
+        if (!type || pct === undefined) throw new Error('--measured expects comma-separated <type>=<pct> entries')
+        o.measured[type] = pct
+      }
     },
   },
   '--base-branch': { takesValue: true, apply: (o, v) => void (o.baseBranch = v as string) },

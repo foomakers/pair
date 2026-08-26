@@ -178,14 +178,93 @@ else
   log_fail "guideline missing opt-in / persistence documentation"; FAILED=1
 fi
 
-# --- Example audit: persistence=A (human-committed, advisory, commit-back #372)
-# and the exclude-is-adopter-applied clarification (the two remaining Minors). ---
+# --- Example audit: persistence=A (human-committed, advisory, plus the nested
+# commit-back opt-in and the credential the ADOPTER provisions) and the
+# exclude-is-adopter-applied clarification. The commit-back grep names the
+# CAPABILITY, not the story that shipped it: a bare issue number has no referent
+# for the adopter reading this file, and it goes stale the moment the story does. ---
 if grep -Eqi 'human-committed|bootstrap-only' "$EXAMPLE" \
-  && grep -q '#372' "$EXAMPLE" \
+  && grep -q 'COVERAGE_RATCHET_TOKEN' "$EXAMPLE" \
+  && grep -q 'coverage-ratchet' "$EXAMPLE" \
   && grep -qi 'applied by the adopter' "$EXAMPLE"; then
-  log_succ "example documents persistence=A (#372) + exclude adopter-applied"
+  log_succ "example documents persistence=A + the commit-back command/credential + exclude adopter-applied"
 else
   log_fail "example missing persistence / exclude clarification"; FAILED=1
+fi
+
+# --- The generated workflow's measure step, EXECUTED as GitHub Actions would run
+# it (`bash -e`), with NO coverage report present — the most common state for an
+# adopter who has not adapted the report path yet.
+#
+# The snippet is extracted from the SHIPPED guideline rather than retyped here: a
+# copy would pass while the shipped text aborts, which is exactly the class of
+# miss a text assertion cannot see. Invariants: exit 0 (the workflow gates
+# nothing and must not redden the base branch), the "no usable coverage" warning
+# is reachable, and the measured list comes out EMPTY so the write step's
+# `if: env.PAIR_MEASURED != ''` skips the invocation. ---
+MEASURE_SNIPPET="$TMP_DIR/measure-step.sh"
+awk '/^      - id: measure$/{f=1;next} /^      - name: Coverage baseline commit-back/{f=0} f' \
+  "$GUIDELINE" | sed -e 's/^        run: |$//' -e 's/^          //' >"$MEASURE_SNIPPET"
+if [ ! -s "$MEASURE_SNIPPET" ]; then
+  log_fail "could not extract the measure step from the guideline — repoint this check"; FAILED=1
+else
+  MEASURE_DIR="$TMP_DIR/measure-run"
+  rm -rf "$MEASURE_DIR"; mkdir -p "$MEASURE_DIR"
+  # `GITHUB_ENV` is a real file here, as on a runner: the step appends to it.
+  if OUT="$(cd "$MEASURE_DIR" && GITHUB_ENV="$MEASURE_DIR/github_env" bash -e "$MEASURE_SNIPPET" 2>&1)"; then
+    log_succ "measure step survives a missing report under bash -e (workflow does not go red)"
+  else
+    log_fail "measure step ABORTED with no report — the adopter's base branch goes red on every push"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+  fi
+  # Checked inline: `expect_out` is defined further down, in the ratchet section,
+  # so calling it here would be an unset command — a silently skipped assertion.
+  case "$OUT" in
+  *"no usable coverage"*) log_succ "missing report warns per type, reachably" ;;
+  *)
+    log_fail "the per-type warning never printed — unreachable branch"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+    ;;
+  esac
+  if [ "$(cat "$MEASURE_DIR/github_env" 2>/dev/null)" = "PAIR_MEASURED=" ]; then
+    log_succ "nothing measured => empty list, so the write step's if: skips the invocation"
+  else
+    log_fail "expected an empty PAIR_MEASURED, got: $(cat "$MEASURE_DIR/github_env" 2>/dev/null)"; FAILED=1
+  fi
+fi
+
+# --- Same invariant, the OTHER generated snippet: the PRE-MERGE coverage step,
+# also executed as Actions would (`bash -e`) with no report present. Here the
+# consequence of aborting is different and worse-looking: the step would die
+# BEFORE `coverage_gate` is called, so this guideline's own documented fail-safe
+# (block at red, WARN at lower tiers on an unmeasured report) would be
+# unreachable and a yellow PR blocked where the corpus promises a warning.
+#
+# The one GitHub expression in the block is substituted with a tier, since a
+# runner would have substituted it before the shell ever saw it. ---
+GATE_SNIPPET="$TMP_DIR/premerge-coverage-step.sh"
+# From the `source coverage-gate.sh` line to the end of that run-block body,
+# anchored on the body's 10-space indentation — so the extraction stops at the
+# next YAML key instead of running to EOF.
+awk '/source \.pair\/knowledge\/assets\/coverage-gate\.sh/{f=1} f{ if ($0 !~ /^          / && $0 != "") exit; print }' \
+  "$GUIDELINE" |
+  sed -e 's/^          //' -e "s/\${{ needs.resolve-tier.outputs.tier }}/yellow/" >"$GATE_SNIPPET"
+if ! grep -q 'coverage_gate' "$GATE_SNIPPET"; then
+  log_fail "could not extract the pre-merge coverage step from the guideline — repoint this check"; FAILED=1
+else
+  if OUT="$(cd "$REPO_ROOT" && bash -e "$GATE_SNIPPET" 2>&1)"; then
+    log_succ "pre-merge coverage step survives a missing report under bash -e (reaches the gate)"
+  else
+    log_fail "pre-merge coverage step ABORTED before coverage_gate — the documented fail-safe is unreachable"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+  fi
+  case "$OUT" in
+  *"not measured"*) log_succ "pre-merge step reaches the fail-safe and WARNS at yellow (not blocks)" ;;
+  *)
+    log_fail "the yellow-tier warning never printed — the fail-safe was not reached"
+    echo "$OUT" | sed 's/^/      | /'; FAILED=1
+    ;;
+  esac
 fi
 
 # --- "machine-maintained" wording must be gone from the shipped assets (Major fix). ---
@@ -196,12 +275,19 @@ else
 fi
 
 # ===========================================================================
-# Commit-back ratchet (story #372) — CLI demonstration
+# Commit-back ratchet (story #372) — shipped-asset demonstration (ADR-023)
 #
 # The ratchet's decisions live in the unit-tested module
 # packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts; what is proven
-# HERE is the CLI wiring and, above all, that the CI LOOP TERMINATES (AC4) —
-# run as a real sequence, not asserted in prose.
+# HERE is the shipped wiring and, above all, that the CI LOOP TERMINATES (AC4)
+# — run as a real sequence, not asserted in prose.
+#
+# THE ENTRYPOINT EXERCISED IS THE ADOPTER'S (story #409, ADR-023): the generated
+# KB asset `node .pair/knowledge/assets/coverage-ratchet.cjs` — exactly what an
+# adopter's generated pipeline step invokes. Before #409 the only way to run the
+# ratchet was a `pnpm --filter` inside this monorepo — the reachability gap that
+# made `Coverage baseline commit-back: enabled` a silent no-op for everyone
+# else; ADR-023 closes it without adding a CLI command.
 #
 # Every invocation is either `--dry-run` or a path that refuses before writing,
 # so this scenario can create no git/gh side effect. Fixtures are temp files.
@@ -230,17 +316,26 @@ write_ratchet_wow() { # write_ratchet_wow <enabled|disabled>
   printf -- '- **Coverage guardrail**: `enabled`\n- **Coverage baseline commit-back**: `%s`\n' "$1" >"$R_WOW"
 }
 
+# How the ratchet is invoked: the packaged CLI the runner already resolved
+# ADR-023: the entrypoint is the installed KB asset, not the CLI — an adopter's
+# generated step invokes `node <their .pair>/knowledge/assets/coverage-ratchet.cjs`,
+# so this scenario always exercises that same relative path from pair's own
+# installed copy.
+RATCHET_CLI="node $REPO_ROOT/.pair/knowledge/assets/coverage-ratchet.cjs"
+
 # ratchet <event> <ref> <head-commit-message> <measured-shared> [extra-args...]
 # Echoes the CLI's combined output; always run WITHOUT a token in the env.
 ratchet() {
   local event="$1" ref="$2" msg="$3" pct="$4"; shift 4
   (
     cd "$REPO_ROOT" || exit 1
-    env -u COVERAGE_RATCHET_TOKEN \
+    # `INIT_CWD` leaks the `pnpm smoke-tests` invoker's directory into the CLI;
+    # the ratchet anchors itself to the repo root and needs neither.
+    env -u COVERAGE_RATCHET_TOKEN -u INIT_CWD \
       GITHUB_EVENT_NAME="$event" \
       GITHUB_REF_NAME="$ref" \
       PAIR_RATCHET_HEAD_COMMIT_MESSAGE="$msg" \
-      pnpm --filter @pair/knowledge-hub coverage:ratchet \
+      $RATCHET_CLI \
       --config "$R_CFG" \
       --way-of-working "$R_WOW" \
       --base-branch main \
@@ -270,10 +365,28 @@ cfg_untouched() {
   fi
 }
 
-if ! command -v pnpm >/dev/null 2>&1; then
-  log_fail "pnpm not available — cannot demonstrate the #372 ratchet CLI"; FAILED=1
+if ! ${RATCHET_CLI} --dry-run >/dev/null 2>&1 && ! ${RATCHET_CLI} --config /dev/null >/dev/null 2>&1; then
+  # Either flag proves the asset executes: --dry-run is a no-op run, a missing
+  # config exits non-zero but only AFTER the module loaded and parsed argv.
+  log_fail "shipped ratchet asset not runnable ($RATCHET_CLI)"; FAILED=1
 else
   write_ratchet_cfg 84
+
+  # --- #409 / ADR-023: the asset an adopter's generated step names IS the file
+  # `pair install` ships — reachable at the documented relative path, no CLI
+  # command, no npm round-trip. Before this, the ratchet could only be run
+  # through a pnpm filter inside pair's own monorepo, so the flag was documented
+  # and the capability was not there. ---
+  expect_out "the shipped ratchet asset is installed at the documented path" "GENERATED FILE" "$(cat "$REPO_ROOT/.pair/knowledge/assets/coverage-ratchet.cjs")"
+
+  # --- #409: a malformed invocation fails LOUDLY (non-zero), which is the exact
+  # counterpart of the run itself never failing: an authoring mistake must not
+  # look like "nothing to raise". ---
+  if (cd "$REPO_ROOT" && env -u INIT_CWD ${RATCHET_CLI} coverage-ratchet --way-of-working "$R_WOW" >/dev/null 2>&1); then
+    log_fail "an invocation with nothing measured exited 0 — a no-op that looks like success"; FAILED=1
+  else
+    log_succ "an invocation with nothing measured exits non-zero (authoring bug, not a silent no-op)"
+  fi
 
   # --- AC1: default off. The flag is `disabled` => nothing is written and the
   # step only says why (the framework default is the same, absent flag). ---
@@ -306,7 +419,7 @@ else
   #
   # The mapping is TRANSIENT (`git -c <key>=<refspec>`), not persisted with
   # `config --add`: the module leaves the job's checkout config untouched, and its
-  # unit tests assert exactly that (coverage-baseline-ratchet.test.ts). The two
+  # unit tests assert exactly that (coverage-ratchet/ratchet.test.ts). The two
   # assertions below were written against the `config --add` spelling and were
   # never executed — this scenario was committed mode 644 (#400), so the change of
   # spelling in #405 could not be caught here. Realigned to the decided behaviour,
@@ -353,8 +466,19 @@ else
   expect_out "AC3 drop -> hold, never lowered" "shared — hold" "$OUT"
   cfg_untouched "AC3 config untouched by a drop"
 
-  # --- Edge case: a type measured but absent from the config is reported, never written. ---
-  OUT="$(ratchet push main 'feat: new package' 90.5 --measured backend=77 --dry-run)"
+  # --- MULTI-TYPE, the dimension a generated workflow gets wrong by passing a
+  # single hardcoded `default=`: a config with TWO committed baselines must see
+  # BOTH raised from one invocation, each against its own committed value. ---
+  OUT="$(ratchet push main 'feat: both types improved' 90.5 --measured shared=90.5,frontend=80 --dry-run)"
+  expect_out "multi-type: shared raised on its own baseline"   "shared — raise"   "$OUT"
+  expect_out "multi-type: frontend raised on its own baseline" "frontend — raise" "$OUT"
+  expect_out "multi-type: one commit carries both raises" "shared 84->89, frontend 19->79" "$OUT"
+  cfg_untouched "multi-type dry run wrote nothing"
+
+  # --- Edge case: a type measured but absent from the config is reported, never written.
+  # The second `--measured` supersedes the helper's own (last flag wins), so the
+  # list passed here is the whole measured set for this invocation. ---
+  OUT="$(ratchet push main 'feat: new package' 90.5 --measured shared=90.5,backend=77 --dry-run)"
   expect_out "unknown type -> reported, not written" "backend — no-baseline-configured" "$OUT"
 
   # --- AC6: a refused write (no credential) degrades to a WARNING, exits 0 and

@@ -34,11 +34,12 @@
 # then throws away, and the regression guard would never fire). So bootstrapping is
 # ADVISORY: the gate echoes the suggested `baseline.<type>=NN` to stderr for a human
 # to copy into the committed config, and passes without blocking until that commit
-# lands. THIS FILE NEVER WRITES, in any configuration. Automated commit-back
-# (story #372) is a SEPARATE, nested opt-in that lives outside this gate: when
+# lands. THIS FILE NEVER WRITES, in any configuration. Automated commit-back is a
+# SEPARATE, nested opt-in that lives outside this gate: when
 # `Coverage baseline commit-back: enabled` is set, a push to the base branch
 # proposes a raised baseline as a bot pull request (never a push to the base
-# branch, never from a pull-request run). It is a side effect that may fail alone
+# branch, never from a pull-request run), run by the shipped `coverage-ratchet`
+# command as its own pipeline step. It is a side effect that may fail alone
 # — a refused write is a warning and leaves this gate's verdict untouched.
 #
 # See:
@@ -90,10 +91,11 @@ baseline_for_type() { cov_config_value "$1" "baseline.$2"; }
 
 # suggest_baseline <type> <current> — print an ADVISORY baseline suggestion to
 # stderr. The gate deliberately does NOT persist it (a CI checkout is ephemeral;
-# see the PERSISTENCE note above and story #372). A bootstrapped baseline only
-# takes effect once a human COMMITS the printed line to the coverage config.
+# see the PERSISTENCE note above). A bootstrapped baseline only takes effect once
+# a human COMMITS the printed line to the coverage config — or, with the nested
+# commit-back opt-in on, once the ratchet's bot pull request is merged.
 suggest_baseline() {
-  echo "coverage-gate: no committed baseline for '$1' — bootstrap-only mode: PASSING without blocking (not persisting; a CI checkout is ephemeral, see #372)." >&2
+  echo "coverage-gate: no committed baseline for '$1' — bootstrap-only mode: PASSING without blocking (not persisting; a CI checkout is ephemeral)." >&2
   echo "coverage-gate: to ACTIVATE the guardrail, commit this line to your coverage config:" >&2
   echo "  baseline.$1=$2" >&2
 }
