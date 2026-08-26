@@ -317,9 +317,11 @@ write_ratchet_wow() { # write_ratchet_wow <enabled|disabled>
 }
 
 # How the ratchet is invoked: the packaged CLI the runner already resolved
-# (`TEST_BINARY`, i.e. the artifact an adopter installs), falling back to the
-# repo's built dist when a scenario is run standalone.
-RATCHET_CLI="${TEST_BINARY:-node $REPO_ROOT/.pair/knowledge/assets/coverage-ratchet.cjs}"
+# ADR-023: the entrypoint is the installed KB asset, not the CLI — an adopter's
+# generated step invokes `node <their .pair>/knowledge/assets/coverage-ratchet.cjs`,
+# so this scenario always exercises that same relative path from pair's own
+# installed copy.
+RATCHET_CLI="node $REPO_ROOT/.pair/knowledge/assets/coverage-ratchet.cjs"
 
 # ratchet <event> <ref> <head-commit-message> <measured-shared> [extra-args...]
 # Echoes the CLI's combined output; always run WITHOUT a token in the env.
