@@ -19,7 +19,7 @@ const TARGETS = [
 describe('coverage-ratchet asset — generated, not hand-maintained (ADR-023)', () => {
   const expected = compileRatchetAsset(readFileSync(SOURCE, 'utf8'))
 
-  it.each(TARGETS.map((t) => [t, t.split('/').slice(-4).join('/')]))(
+  it.each(TARGETS.map(t => [t, t.split('/').slice(-4).join('/')]))(
     'the shipped copy matches a fresh compile of the tested source — %s',
     (target, _label) => {
       const committed = readFileSync(target as string, 'utf8')

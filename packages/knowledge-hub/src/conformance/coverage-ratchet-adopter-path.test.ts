@@ -44,7 +44,9 @@ const GATES = KNOWLEDGE_ROOTS.map(root => join(root, 'assets/coverage-gate.sh'))
 const read = (path: string): string => readFileSync(path, 'utf-8')
 const label = (path: string): string => path.replace(REPO_ROOT, '').replace(/^\//, '')
 
-const SOURCE = read(join(REPO_ROOT, 'packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts'))
+const SOURCE = read(
+  join(REPO_ROOT, 'packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts'),
+)
 
 const COMMAND = 'coverage-ratchet'
 const TOKEN = 'COVERAGE_RATCHET_TOKEN'
@@ -150,9 +152,10 @@ describe('what replaced it — the emitted step', () => {
   it.each(GUIDELINES)('%s invokes the installed asset, never a registry round-trip', path => {
     const text = read(path)
     expect(text).toContain('.pair/knowledge/assets/coverage-ratchet.cjs')
-    expect(text, 'ADR-023: no CLI command, no npm round-trip in the adopter pipeline').not.toContain(
-      'npx --yes @foomakers/pair-cli',
-    )
+    expect(
+      text,
+      'ADR-023: no CLI command, no npm round-trip in the adopter pipeline',
+    ).not.toContain('npx --yes @foomakers/pair-cli')
   })
 
   it.each(GUIDELINES)(
@@ -296,10 +299,9 @@ describe('what replaced it — the emitted step', () => {
       if (!['--coverage-config', '--measured', '--way-of-working', '--dry-run'].includes(flag)) {
         continue
       }
-      expect(
-        SOURCE,
-        `${label(path)} documents ${flag}, the command does not declare it`,
-      ).toContain(flag)
+      expect(SOURCE, `${label(path)} documents ${flag}, the command does not declare it`).toContain(
+        flag,
+      )
     }
   })
 })

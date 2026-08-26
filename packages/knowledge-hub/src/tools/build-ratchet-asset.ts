@@ -47,7 +47,10 @@ export function compileRatchetAsset(sourceText: string): string {
   // Comment-stripping can leave a catch block EMPTY (`catch {}`) when its only
   // content was a comment — a lint violation in the shipped corpus. Give those
   // blocks an explicit deliberate-no-op statement.
-  return HEADER + outputText.replace(/catch \{\s*\}/g, 'catch {\n    void 0 // deliberately ignored\n  }')
+  return (
+    HEADER +
+    outputText.replace(/catch \{\s*\}/g, 'catch {\n    void 0 // deliberately ignored\n  }')
+  )
 }
 
 function main(): void {

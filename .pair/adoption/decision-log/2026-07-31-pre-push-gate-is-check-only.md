@@ -48,9 +48,29 @@ A second failure mode surfaced while implementing this: generated artifacts. In 
 - **Enumerate generated directories in the shared ignore files**: rejected as the primary mechanism. It is reactive — each new generated tree blocks a push until someone adds a line — and it was already the cause of two blocked pushes here. Delegating to `.gitignore` makes the rule declarative.
 - **A comment/doc line saying "don't put `:fix` in the gate"**: rejected as the only safeguard. The regression is one word and its symptom (a diff full of unrelated files) reads as author error, not tooling behaviour; the executable guard is what makes it non-silent.
 
-## Open Decision — escalate before implementing
+## Resolved Decision (2026-08-05) — neither A nor B; a dedicated command instead
 
-**Should the gate apply the fix as well as failing, and should `pnpm format` realign the generated mirrors?** Raised by the maintainer 2026-08-04 while reviewing this story; **deliberately not implemented**, and not to be implemented without their call.
+**Decided by the maintainer on 2026-08-05. Tracked as story #419.** Both shapes below were declined as written, for reasons that only became visible when the actual remedy command was inspected.
+
+**The remedy was naming the wrong command.** `PRE_PUSH_REMEDY`, `DEVELOPMENT.md` and its docs-site twin all say `pair update` — which `DEVELOPMENT.md` itself documents as *"Update knowledge base to latest version"*. That resolves and installs the **published** KB; what a mirror divergence needs is regeneration **from the local dataset** (`pair update --source <local dataset>`, the form `CP3` and the `source-resolution` smoke scenario already exercise). So the documented fix for a reformatted table was a knowledge-base update — disproportionate and non-deterministic, and the most plausible explanation for why three of the seven incidents were hand-ports: a contributor faced with that command reasonably chose to edit the mirror instead.
+
+**Why A was declined**: a hook that writes files the contributor never staged is the symptom this story removed, and at pre-push the fix cannot reach the commits being pushed — it saves a keystroke, not a cycle.
+
+**Why B was declined**: `pair update` is an install command. Folding it into `pnpm format` would let every formatting run change the knowledge base, and would make `format` write outside format scope. (With `--source` the "newer version" risk disappears, but the scope violation does not.)
+
+**What was decided instead** — three parts, all in #419:
+
+1. **A dedicated, explicit command** that regenerates the mirrors from the local dataset only. Deterministic, idempotent, no version resolution.
+2. **The gate names that command** in its remedy, in all three places, replacing `pair update`.
+3. **`/pair-capability-publish-pr` runs it** and commits the output as its own commit — PR creation is the latest point at which regenerated output can still enter the branch, and it is an explicit, tracked act rather than a hook side effect.
+
+**`pnpm format` stays formatting**, and the gate stays check-only. Both invariants of this ADL survive intact.
+
+This also becomes load-bearing once **#414** lands: with the mirrors inside `format:check` scope, a contributor without this command would be pushed toward hand-formatting a generated file — which the mirror guards forbid.
+
+### Original framing (kept for the record)
+
+**Should the gate apply the fix as well as failing, and should `pnpm format` realign the generated mirrors?** Raised by the maintainer 2026-08-04 while reviewing this story; deliberately not implemented at the time, and not to be implemented without their call.
 
 What is settled: the gate **fails** on a formatting violation. That was the story's point, and it holds — before this change `prettier:fix` corrected the files, exited 0 and let the push through, so nothing failed except in the one sub-case where the fix touched `dataset/.skills/**` and `skills:conformance` then compared dataset against mirror.
 

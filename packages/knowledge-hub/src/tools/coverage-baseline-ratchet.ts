@@ -734,7 +734,8 @@ const CLI_FLAGS: Record<string, { takesValue: boolean; apply: FlagHandler }> = {
       // normal shape (and a repeated flag still wins per type, last one applied).
       for (const entry of (v as string).split(',')) {
         const [type, pct] = entry.split('=')
-        if (!type || pct === undefined) throw new Error('--measured expects comma-separated <type>=<pct> entries')
+        if (!type || pct === undefined)
+          throw new Error('--measured expects comma-separated <type>=<pct> entries')
         o.measured[type] = pct
       }
     },
