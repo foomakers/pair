@@ -275,19 +275,19 @@ else
 fi
 
 # ===========================================================================
-# Commit-back ratchet (story #372) — CLI demonstration
+# Commit-back ratchet (story #372) — shipped-asset demonstration (ADR-023)
 #
 # The ratchet's decisions live in the unit-tested module
-# apps/pair-cli/src/commands/coverage-ratchet/ratchet.ts; what is proven HERE is
-# the CLI wiring and, above all, that the CI LOOP TERMINATES (AC4) — run as a
-# real sequence, not asserted in prose.
+# packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts; what is proven
+# HERE is the shipped wiring and, above all, that the CI LOOP TERMINATES (AC4)
+# — run as a real sequence, not asserted in prose.
 #
-# THE COMMAND EXERCISED IS THE ADOPTER'S (story #409): `pair coverage-ratchet`,
-# run through the same binary every other scenario uses, so what an adopter's
-# generated pipeline step invokes is what this suite executes. Before #409 the
-# only way to run the ratchet was a `pnpm --filter` inside this monorepo — the
-# reachability gap that made `Coverage baseline commit-back: enabled` a silent
-# no-op for everyone else.
+# THE ENTRYPOINT EXERCISED IS THE ADOPTER'S (story #409, ADR-023): the generated
+# KB asset `node .pair/knowledge/assets/coverage-ratchet.cjs` — exactly what an
+# adopter's generated pipeline step invokes. Before #409 the only way to run the
+# ratchet was a `pnpm --filter` inside this monorepo — the reachability gap that
+# made `Coverage baseline commit-back: enabled` a silent no-op for everyone
+# else; ADR-023 closes it without adding a CLI command.
 #
 # Every invocation is either `--dry-run` or a path that refuses before writing,
 # so this scenario can create no git/gh side effect. Fixtures are temp files.
@@ -319,7 +319,7 @@ write_ratchet_wow() { # write_ratchet_wow <enabled|disabled>
 # How the ratchet is invoked: the packaged CLI the runner already resolved
 # (`TEST_BINARY`, i.e. the artifact an adopter installs), falling back to the
 # repo's built dist when a scenario is run standalone.
-RATCHET_CLI="${TEST_BINARY:-node $REPO_ROOT/apps/pair-cli/dist/cli.js}"
+RATCHET_CLI="${TEST_BINARY:-node $REPO_ROOT/.pair/knowledge/assets/coverage-ratchet.cjs}"
 
 # ratchet <event> <ref> <head-commit-message> <measured-shared> [extra-args...]
 # Echoes the CLI's combined output; always run WITHOUT a token in the env.
@@ -333,8 +333,8 @@ ratchet() {
       GITHUB_EVENT_NAME="$event" \
       GITHUB_REF_NAME="$ref" \
       PAIR_RATCHET_HEAD_COMMIT_MESSAGE="$msg" \
-      $RATCHET_CLI coverage-ratchet \
-      --coverage-config "$R_CFG" \
+      $RATCHET_CLI \
+      --config "$R_CFG" \
       --way-of-working "$R_WOW" \
       --base-branch main \
       --measured "shared=$pct" \
@@ -363,17 +363,19 @@ cfg_untouched() {
   fi
 }
 
-if ! ${RATCHET_CLI} --version >/dev/null 2>&1; then
-  log_fail "pair CLI not runnable ($RATCHET_CLI) — cannot demonstrate the ratchet command"; FAILED=1
+if ! ${RATCHET_CLI} --dry-run >/dev/null 2>&1 && ! ${RATCHET_CLI} --config /dev/null >/dev/null 2>&1; then
+  # Either flag proves the asset executes: --dry-run is a no-op run, a missing
+  # config exits non-zero but only AFTER the module loaded and parsed argv.
+  log_fail "shipped ratchet asset not runnable ($RATCHET_CLI)"; FAILED=1
 else
   write_ratchet_cfg 84
 
-  # --- #409: the command an adopter's generated step names is REACHABLE from the
-  # shipped CLI. Before this, the ratchet could only be run through a pnpm filter
-  # inside pair's own monorepo, so the flag was documented and the capability was
-  # not there — an opt-in that did nothing and said nothing. ---
-  OUT="$(${RATCHET_CLI} --help 2>&1)"
-  expect_out "the ratchet command is discoverable in the shipped CLI" "coverage-ratchet" "$OUT"
+  # --- #409 / ADR-023: the asset an adopter's generated step names IS the file
+  # `pair install` ships — reachable at the documented relative path, no CLI
+  # command, no npm round-trip. Before this, the ratchet could only be run
+  # through a pnpm filter inside pair's own monorepo, so the flag was documented
+  # and the capability was not there. ---
+  expect_out "the shipped ratchet asset is installed at the documented path" "GENERATED FILE" "$(cat "$REPO_ROOT/.pair/knowledge/assets/coverage-ratchet.cjs")"
 
   # --- #409: a malformed invocation fails LOUDLY (non-zero), which is the exact
   # counterpart of the run itself never failing: an authoring mistake must not

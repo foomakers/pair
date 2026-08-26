@@ -1,8 +1,7 @@
 # ADR-022: The coverage-baseline ratchet is EXPOSED through the published CLI, not ported to a shipped shell asset
 
 ## Status
-
-Accepted
+Accepted — **amended by [ADR-023](adr-023-coverage-ratchet-ships-as-a-generated-kb-asset.md)**: the distribution mechanism (Option 4, published CLI command) was reversed in favour of a generated KB asset; the single-tested-module invariant and the Option 1 rejection stand.
 
 ## Date
 
