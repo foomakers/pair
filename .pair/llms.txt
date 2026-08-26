@@ -38,6 +38,8 @@
 - [ADR-018: PR State Flow — Required Code-Host Checks as the Merge Authority (Labels Are a View)](.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md)
 - [ADR-020: Bounded flatten depth — a registry's entry granularity, opt-in per registry](.pair/adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md)
 - [ADR-021: The non-interactive signal is an argument on the composed skill, not a note on the caller](.pair/adoption/tech/adr/adr-021-approval-signal-on-the-composed-skill.md)
+- [ADR-022: The coverage-baseline ratchet is EXPOSED through the published CLI, not ported to a shipped shell asset](.pair/adoption/tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md)
+- [ADR-023: The coverage-baseline ratchet ships as a GENERATED KB asset, not as a CLI command](.pair/adoption/tech/adr/adr-023-coverage-ratchet-ships-as-a-generated-kb-asset.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Development Collaboration Context](.pair/adoption/tech/boundedcontext/development-collaboration.md)
@@ -96,6 +98,7 @@
 - [Decision: Implementation never files a new card; a debt found while implementing extends the story that surfaced it](.pair/adoption/decision-log/2026-08-12-implementation-never-files-a-card-it-extends-the-story.md)
 - [Decision: the manual CLI artifact ships without type declarations, and says so](.pair/adoption/decision-log/2026-08-12-manual-cli-artifact-types-are-optional.md)
 - [Decision: The story-local (ACn) marker ban covers the KB corpora, with a curated allowlist for the three legitimate shapes](.pair/adoption/decision-log/2026-08-12-story-local-marker-ban-covers-kb-with-curated-allowlist.md)
+- [Decision: Delivery state past Refined is read from the PR and its analysis, not from a board column](.pair/adoption/decision-log/2026-08-13-delivery-state-is-read-from-the-pr-not-the-board.md)
 - [Decision: `pair update` deletes what a mirror no longer ships — bounded by the copy, and never silently](.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md)
 - [Decision: The agent execution layer ships in the dataset, because a workflow without its agents cannot run](.pair/adoption/decision-log/2026-08-13-the-agent-execution-layer-ships.md)
 - [Decision: verify-quality's tree/PR-state resolution ships as an executable, smoke-tested asset — not as shell inlined in a skill](.pair/adoption/decision-log/2026-08-13-tree-resolution-ships-as-an-executable-asset.md)
@@ -116,6 +119,9 @@
 - [Decision: bootstrap composes setup-harness, optionally](.pair/adoption/decision-log/2026-08-23-bootstrap-composes-setup-harness-optionally.md)
 - [Decision: `pair-loop`'s shipped Auto-Advance default is `(none)` — fail-closed, not `risk:green`](.pair/adoption/decision-log/2026-08-23-pair-loop-auto-advance-fail-closed-default.md)
 - [Decision: `pair-loop`'s fan-out path resumes from its own audit file, not from `/pair-capability-checkpoint`](.pair/adoption/decision-log/2026-08-23-pair-loop-resumes-from-its-own-audit-file-not-a-checkpoint.md)
+- [Decision: the AI/retro metrics panel is an `analyze-*` capability, and its definitions live in a Delivery-pillar guideline](.pair/adoption/decision-log/2026-08-24-ai-metrics-panel-is-an-analyze-capability.md)
+- [Decision: the CLI invocation name is `pair-cli`, not `pair`](.pair/adoption/decision-log/2026-08-25-cli-invocation-canonical-name-is-pair-cli.md)
+- [Decision: Post-merge cleanup covers local branches and worktrees; PR analyses retire at merge](.pair/adoption/decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md)
 
 ## How-To Guides
 
@@ -379,6 +385,7 @@
 - [WCAG Compliance Implementation](.pair/knowledge/guidelines/quality-assurance/accessibility/wcag-compliance.md)
 - [Automated Verification Framework](.pair/knowledge/guidelines/quality-assurance/automated-verification.md)
 - [Cost Assessment](.pair/knowledge/guidelines/quality-assurance/cost-assessment.md)
+- [Delivery Metrics](.pair/knowledge/guidelines/quality-assurance/delivery-metrics.md)
 - [Manual Testing Guidelines](.pair/knowledge/guidelines/quality-assurance/manual-testing.md)
 - [Manual Verification Framework](.pair/knowledge/guidelines/quality-assurance/manual-verification.md)
 - [Performance Benchmarking Framework](.pair/knowledge/guidelines/quality-assurance/performance/benchmarking.md)
