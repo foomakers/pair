@@ -90,7 +90,7 @@ The working area is operational handoff state, not shared knowledge, so it is **
 | Checkpoint capability (e.g. `pair-capability-checkpoint`) | Writes/reads `.pair/working/checkpoints/` |
 | Reporting capabilities (e.g. quality, monitoring) | Write `.pair/working/reports/<category>/` |
 | One-shot audit writers (e.g. `pair-capability-assess-security` audit, `pair-capability-assess-coupling` full) | Write `reports/<category>/<YYYY-MM-DD>-<audit-name>.md` (run-date keyed) |
-| Panel writers (e.g. `pair-capability-assess-cost` report mode → `reports/cost/<period-key>-cost-panel.md`) | Apply [Report Panels — Period Key and Idempotent Update](#report-panels--period-key-and-idempotent-update) |
+| Panel writers (e.g. `pair-capability-assess-cost` report mode → `reports/cost/<period-key>-cost-panel.md`; `pair-capability-analyze-delivery-metrics` → `reports/metrics/<period-key>-delivery-metrics.md`) | Apply [Report Panels — Period Key and Idempotent Update](#report-panels--period-key-and-idempotent-update) |
 | `pair install` | Never scaffolds or touches the working area |
 | `pair update` | Never modifies or deletes anything under the working area |
 | `pair validate-config` | Errors on any registry/working-area overlap |

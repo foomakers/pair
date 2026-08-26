@@ -1,11 +1,11 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 43 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 44 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 43 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 44 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
-> **Last updated:** 2026-08-23. Source: `packages/knowledge-hub/dataset/.skills/`
+> **Last updated:** 2026-08-24. Source: `packages/knowledge-hub/dataset/.skills/`
 
 ## Meta Skills
 
@@ -74,12 +74,13 @@ The only writes any of them perform are **operational reports** under `.pair/wor
 
 ### Analysis Capabilities
 
-All `analyze-*` skills are **output-only report producers**: they analyze and report, propose no adoption decision, and never block a PR. Distinct from `assess-*` (evaluate options + propose an adoption choice) and `verify-*` (conformance pass/fail). See ADL `2026-07-13-skill-naming-verb-taxonomy.md` in the project decision log.
+All `analyze-*` skills **analyze and report**: they propose no adoption decision and never block a PR. Distinct from `assess-*` (evaluate options + propose an adoption choice) and `verify-*` (conformance pass/fail). See ADL `2026-07-13-skill-naming-verb-taxonomy.md` in the project decision log. Two of the three write nothing at all; `analyze-delivery-metrics` writes exactly one file — its own period panel under `.pair/working/reports/metrics/` — the same D14 operational-artifact exception `assess-security`'s audit uses, and still no adoption content and no backlog item.
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **analyze-code-quality** | `/pair-capability-analyze-code-quality` | Produces an objective code quality report — complexity, size, coverage, duplication, maintainability score — for a repo or package, with actionable recommendations. |
 | **analyze-debt** | `/pair-capability-analyze-debt` | Produces a technical debt report — categorized items (code, design, test, documentation, infrastructure), prioritized by impact x effort. |
+| **analyze-delivery-metrics** | `/pair-capability-analyze-delivery-metrics` | Generates the delivery/AI-metrics retro panel for a period — bug resolution time, PR lead time, process adoption — computed from the adopted PM tool/code host against the delivery-metrics guideline (definitions, aggregation, low-sample rule, bug mapping) and written as ONE period-keyed panel under .pair/working/reports/metrics/: headline numbers + trend first, raw breakdowns collapsed, idempotent by period key. |
 
 ### Verification Capabilities
 

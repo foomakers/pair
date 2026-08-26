@@ -151,5 +151,15 @@ describe('working-area.md — period-keyed report panels (#281)', () => {
       // not only from this section.
       expect(content).toMatch(/Panel writers[^\n]*report-panels--period-key/i)
     })
+
+    it(`${label} names EVERY in-tree panel writer with its path in that row (#222)`, () => {
+      // The row is the discovery surface, so a writer absent from it is a writer
+      // whose author never reaches the convention. Both current writers are named
+      // WITH the path they own, so two panels can never be read as one.
+      const row = content.split('\n').find(l => /^\| Panel writers/.test(l)) ?? ''
+      expect(row).toContain('reports/cost/<period-key>-cost-panel.md')
+      expect(row).toContain('analyze-delivery-metrics')
+      expect(row).toContain('reports/metrics/<period-key>-delivery-metrics.md')
+    })
   }
 })

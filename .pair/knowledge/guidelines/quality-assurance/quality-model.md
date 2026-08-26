@@ -183,6 +183,6 @@ Every quality theme not covered by §1–§6 lives under one of the three pillar
 | Code design / code quality | Delivery | [../code-design/README.md](../code-design/README.md) |
 | Architecture / modularity | Delivery | `architecture/design-patterns/coupling-balance.md` (not yet published — single home for the coupling model, see §3.1) |
 | Release | Delivery | [../technical-standards/deployment-workflow/release-management.md](../technical-standards/deployment-workflow/release-management.md) |
-| AI metrics / retro | Delivery | [../collaboration/project-tracking/README.md](../collaboration/project-tracking/README.md) (reports land in `.pair/working/reports/`, once available) |
+| AI metrics / retro | Delivery | [delivery-metrics.md](delivery-metrics.md) — the R9.5 metric set (bug resolution time, PR lead time, adoption), its aggregation rules and per-tool query mapping; applied by `analyze-delivery-metrics`, which writes one period panel under `.pair/working/reports/metrics/` |
 | Vulnerabilities / compliance | Security | [security/vulnerability-prevention.md](security/vulnerability-prevention.md), [security/compliance.md](security/compliance.md) |
 | Cost signals | Cost | [cost-assessment.md](cost-assessment.md) (see §3.3) |
