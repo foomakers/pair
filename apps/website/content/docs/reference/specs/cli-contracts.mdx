@@ -179,34 +179,6 @@ export interface VerificationReport {
 }
 ```
 
-### Coverage-Ratchet Command
-
-```typescript
-export interface CoverageRatchetCommandConfig {
-  command: 'coverage-ratchet'
-  configPath: string // --coverage-config, default .pair/adoption/tech/coverage-baseline.md
-  wowPath: string // --way-of-working, default .pair/adoption/tech/way-of-working.md
-  measured: Record<string, string> // --measured 'type=pct,type=pct' (required)
-  baseBranch: string // --base-branch, else $PAIR_RATCHET_BASE_BRANCH, else 'main'
-  remote: string // --remote, default 'origin'
-  marginPp: number // --margin, default 1
-  dryRun: boolean // --dry-run
-}
-```
-
-**Two-sided exit contract, and it is the point of the command.** A malformed invocation exits `1`
-(no `--measured`, a `--measured` entry without `type=`, a `--margin` that is not a non-negative
-number) — that is a pipeline-authoring bug, and a silent one would look exactly like "nothing to
-raise". Everything after a well-formed invocation exits `0`, including every refused write
-(missing/insufficient credential, protected branch, a concurrent run that already won the race):
-the coverage guardrail's verdict and this command's persistence are independent, so a failed write
-can neither redden a green gate nor green a red one.
-
-**Writes only when the adoption says so, twice.** `Coverage guardrail: enabled` **and**
-`Coverage baseline commit-back: enabled`, both read from `wowPath` as declaring bullets (a flag
-quoted in prose does not count), both defaulting to off; then only on a `push` whose ref equals
-`baseBranch`, and never on a commit carrying the `[coverage-baseline-ratchet]` marker.
-
 ## Validation Error Catalog
 
 ### Error Categories

@@ -44,8 +44,9 @@ const GATES = KNOWLEDGE_ROOTS.map(root => join(root, 'assets/coverage-gate.sh'))
 const read = (path: string): string => readFileSync(path, 'utf-8')
 const label = (path: string): string => path.replace(REPO_ROOT, '').replace(/^\//, '')
 
-/** The command's own option/name declarations — the source of truth the KB documents. */
-const METADATA = read(join(REPO_ROOT, 'apps/pair-cli/src/commands/coverage-ratchet/metadata.ts'))
+/** The shipped asset — generated from the tested module; the KB documents its real flags. */
+const ASSET = read(join(REPO_ROOT, '.pair/knowledge/assets/coverage-ratchet.cjs'))
+const SOURCE = read(join(REPO_ROOT, 'packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts'))
 
 const COMMAND = 'coverage-ratchet'
 const TOKEN = 'COVERAGE_RATCHET_TOKEN'
@@ -144,15 +145,15 @@ describe('what replaced it — the emitted step', () => {
   it.each(GUIDELINES)('%s emits a commit-back step invoking the shipped command', path => {
     const text = read(path)
     expect(text).toContain('Coverage baseline commit-back (opt-in)')
-    expect(text).toContain(`${COMMAND} \\`)
+    expect(text).toContain('node .pair/knowledge/assets/coverage-ratchet.cjs \\')
     expect(text).toContain(TOKEN)
   })
 
-  it.each(GUIDELINES)('%s pins the CLI version instead of tracking @latest', path => {
+  it.each(GUIDELINES)('%s invokes the installed asset, never a registry round-trip', path => {
     const text = read(path)
-    expect(text).toMatch(/@foomakers\/pair-cli@<cli-version>/)
-    expect(text, 'a pipeline must not float to a release nobody read').not.toContain(
-      '@foomakers/pair-cli@latest',
+    expect(text).toContain('.pair/knowledge/assets/coverage-ratchet.cjs')
+    expect(text, 'ADR-023: no CLI command, no npm round-trip in the adopter pipeline').not.toContain(
+      'npx --yes @foomakers/pair-cli',
     )
   })
 
@@ -298,7 +299,7 @@ describe('what replaced it — the emitted step', () => {
         continue
       }
       expect(
-        METADATA,
+        SOURCE,
         `${label(path)} documents ${flag}, the command does not declare it`,
       ).toContain(flag)
     }
