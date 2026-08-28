@@ -115,3 +115,69 @@ describe('tick-only body patch — the only body bytes that change (AC1, T1)', (
     expect(guidelineMirror()).toContain('/pair-capability-write-issue')
   })
 })
+
+describe('batching — one comment per run iteration (AC2, T2)', () => {
+  const BATCHING = '## Batching and the comment format'
+
+  it.each(guidelineCopies)('%s: posts exactly one comment per run iteration', (_label, load) => {
+    const section = sectionOf(load(), BATCHING)
+    expect(section.toLowerCase()).toContain('one comment per run iteration')
+  })
+
+  it.each(guidelineCopies)('%s: defines the run iteration so both paths measure it the same way', (_label, load) => {
+    // "per iteration" is meaningless unless the unit is pinned: without this the
+    // manual path reads it as "per session" and the supervised path as "per loop
+    // pass", and the same story gets two different comment cadences.
+    const section = sectionOf(load(), BATCHING)
+    expect(section.toLowerCase()).toContain('run iteration')
+    expect(section.toLowerCase()).toMatch(/one .*invocation|a single invocation/)
+  })
+
+  it.each(guidelineCopies)('%s: honours the D22 reading budget — a line per task, detail collapsed', (_label, load) => {
+    const section = sectionOf(load(), BATCHING)
+    expect(section).toContain('D22')
+    expect(section.toLowerCase()).toContain('one line per task')
+    expect(section).toContain('<details>')
+    expect(section).toContain('</details>')
+  })
+
+  it.each(guidelineCopies)('%s: posts nothing when the batch is empty', (_label, load) => {
+    // An implement invocation that completed no task must not leave a comment
+    // saying so — that is the comment spam AC2 rules out, one per no-op re-run.
+    const section = sectionOf(load(), BATCHING)
+    expect(section.toLowerCase()).toMatch(/empty.*no comment|no comment.*empty|nothing is posted/)
+  })
+})
+
+describe('outcome vocabulary — failure and skip are recorded, not ticked (AC3, T2)', () => {
+  const VOCAB = '## Outcome vocabulary'
+
+  it.each(guidelineCopies)('%s: carries every outcome the loop can produce', (_label, load) => {
+    const section = sectionOf(load(), VOCAB)
+    // The closed set: three the task itself produces, four the write path does.
+    for (const outcome of [
+      'ticked',
+      'failed',
+      'skipped',
+      'not-found',
+      'ambiguous',
+      'patch-rejected',
+      'write-failed',
+    ]) {
+      expect(section).toContain(outcome)
+    }
+  })
+
+  it.each(guidelineCopies)('%s: leaves the checklist item unticked on failure or skip', (_label, load) => {
+    const section = sectionOf(load(), VOCAB)
+    expect(section.toLowerCase()).toContain('stays unticked')
+  })
+
+  it.each(guidelineCopies)('%s: states the tick outcome per row, so no outcome is silent', (_label, load) => {
+    const section = sectionOf(load(), VOCAB)
+    // A table, one row per outcome, with an explicit "does the item get ticked"
+    // column — the shape that makes an unanswered outcome visible.
+    expect(section).toMatch(/\|\s*Outcome\s*\|/)
+    expect(section.toLowerCase()).toMatch(/\|\s*checklist item\s*\|/)
+  })
+})

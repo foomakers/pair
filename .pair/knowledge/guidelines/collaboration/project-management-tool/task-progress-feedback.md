@@ -44,3 +44,51 @@ Three properties make that a rule rather than an intention:
 3. **The patch never unticks.** An item **already ticked** (`[x]`) is already in the target state: no body write is sent at all, and the task is reported as ticked. That is what makes a re-run — a resumed story, a re-invocation after a context reset — free of writes and free of noise.
 
 Definition-of-Done boxes are patched by the same rule when a task factually satisfies one; boxes that need a reviewer's judgment stay unticked.
+
+## Batching and the comment format (D22)
+
+Ticks are silent. The narrative — what was attempted, what landed, what did not — is **one comment per run iteration**, and a **run iteration is one `/pair-process-implement` invocation over one story**: a manual session is one iteration, and a supervised run contributes one per card per pass. Pinning the unit is what keeps the two paths on the same cadence instead of one reading it as "per session" and the other as "per loop pass".
+
+Each task's outcome is **queued** as it happens and the queue is **flushed exactly once**, at the end of the invocation — including an invocation that ends early. A run that stops at a HALT has the most to report, so the flush is not a success path: it happens on the way out, whatever the way out is.
+
+The format honours the reading budget (D22): a headline, then **one line per task**, then everything else collapsed.
+
+```markdown
+**Task progress — 3 of 4 tasks this iteration** · `feature/US-220-breakdown-task-feedback-loop`
+
+- ✅ T1 — Checklist locator + body patcher
+- ✅ T2 — Comment batcher + failure recording
+- ❌ T3 — Wiring into implement — quality gate red (unit)
+
+<details>
+<summary>Details</summary>
+
+- T3: `pnpm --filter @pair/knowledge-hub test` failed on 2 assertions; run halted before commit, checklist item left unticked.
+
+</details>
+```
+
+Rules the shape encodes:
+
+- **One line per task, and the line is the whole story for a reader who does not expand.** Outcome glyph, task ID, title, and — for anything other than a plain success — a short reason on the same line.
+- **Everything longer goes in `<details>`**: error output, retry traces, locator mismatch diagnostics. No stack trace, no command transcript, and no diff outside the collapsed block.
+- **An empty batch posts nothing.** An invocation that completed no task leaves no comment — a re-run that finds every task already done is silent, which is what keeps an idempotent re-invocation from accreting one "nothing to report" comment per attempt.
+- **Never a second comment.** More detail belongs in `<details>`, never in another comment; the loop has no verbosity level that turns one comment into several.
+
+Verbosity and cadence are the defaults, not a law: a project that wants something else declares it in its own adoption. Absent a declaration, this is what runs.
+
+## Outcome vocabulary
+
+Every queued line carries exactly one outcome from this closed set, and the outcome decides the checklist item — never the other way around.
+
+| Outcome | What happened | Checklist item |
+| --- | --- | --- |
+| `ticked` | The task completed and the patch landed (or the item was already `[x]`) | `[x]` |
+| `failed` | The task did not complete — a red gate, an error, a HALT | stays unticked |
+| `skipped` | The task was deliberately not attempted this iteration (blocked, deferred, out of scope) | stays unticked |
+| `not-found` | The locator matched no line for this ID | stays unticked |
+| `ambiguous` | The locator matched more than one line for this ID | stays unticked |
+| `patch-rejected` | The patch diff was not a single checkbox-only line change, so the write was abandoned | stays unticked |
+| `write-failed` | The body write was attempted and did not land, retries included | stays unticked |
+
+The three write-path outcomes (`not-found`, `ambiguous`, `write-failed`) say nothing about the work: the task may well be done. The line reports the **feedback** failure and names the ID it could not tick, so a human can tick it by hand — and the run carries on.
