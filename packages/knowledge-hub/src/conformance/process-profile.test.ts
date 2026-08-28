@@ -190,6 +190,33 @@ describe('profile schema — built-in profiles and their normative error cases',
     expect(lower).toMatch(/no bullet|bullet-less|numbered|ordered/)
   })
 
+  // Round 5: the three CommonMark facts the reader has to know before any of the
+  // rules above can fire at all — how the heading may be spelled, which blocks are
+  // examples, and that a CRLF file is the same file.
+  it('states the setext heading as a HALT alongside the mis-levelled one', () => {
+    expect(profilesSource).toMatch(/SETEXT\*\*[^|]*\|\s*\*\*HALT/)
+    expect(profilesSource.toLowerCase()).toMatch(/underlined with `?-{3}`?/)
+  })
+
+  it('states that all three code-block forms are examples, never declarations', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/code-block forms are examples|never declarations/)
+    expect(profilesSource).toContain('`~~~`')
+    expect(lower).toMatch(/four-space-indented|four-space indent|indented/)
+  })
+
+  it('states that line endings are normalized before anything is read', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/line endings are normalized/)
+    expect(lower).toMatch(/crlf/)
+  })
+
+  it('accepts the closed-ATX and indented spellings of the heading', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/closed-atx/)
+    expect(lower).toMatch(/three spaces/)
+  })
+
   it('treats an empty whitelist as a misconfiguration, never as “everything disabled”', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/empty (custom )?whitelist/)
@@ -356,6 +383,17 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
       expect(lower).toMatch(/no bullet|bullet-less|numbered|ordered/)
     },
   )
+
+  // Round 5: the executing reader needs the same three CommonMark facts the
+  // schema now states — a setext heading is a HALT, a code block of any of the
+  // three forms is an example, and a CRLF file is read as the LF one.
+  it.each(sources)('%s: HALTs on a setext heading and normalizes line endings', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/setext/)
+    expect(lower).toMatch(/line endings|crlf/)
+    expect(lower).toMatch(/code-block forms|examples rather than declarations/)
+  })
 
   it.each(sources)('%s: HALTs on an empty custom whitelist (AC10)', (_, content) => {
     const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
