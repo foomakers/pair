@@ -176,11 +176,12 @@ still the design; this amendment layers a credential resolution step and one ado
 1. **A dedicated review identity, resolved through a host-agnostic adapter.** The skills that write to the code
    host (`/pair-process-review` Steps 5.3–5.4, `/pair-capability-publish-pr` Phase 5) no longer assume the
    session token. They resolve **which credential executes the host write** through one executable projection,
-   `assets/review-identity.sh` — six entry points, and a host adapter is wired from **all six**:
+   `assets/review-identity.sh` — seven entry points, and a host adapter is wired from **all seven**:
    `review_identity_kind_ok` (validates the adoption value, so present-but-unparseable HALTs instead of
    degrading to `none`), `resolve_identity_mode`, `review_identity_exclusion_ok` (**security-critical**: an
    adapter wired from a list that omits it lets a bot-user identity with no `REVIEW_IDENTITY_LOGIN` resolve to
-   `identity` and sign the 🔴 human approval), `identity_verdict_event`,
+   `identity` and sign the 🔴 human approval), `review_identity_health` (**the runtime source of the `healthy`
+   flag** — see below), `identity_verdict_event`,
    `pair_review_publication_mode`, `identity_audit_comment` — the same "one executable projection" pattern as
    `tier-resolve.sh` and `pr-state.sh`, so the recipe, the skills and the tests read one text. Three modes, and
    only three: `identity` (configured and usable), `session` (none configured — **today's behavior**, not an
@@ -235,10 +236,44 @@ still the design; this amendment layers a credential resolution step and one ado
   forbids, reached with **no HALT** because the flow never learns an identity was configured. Presence is now
   detected format-agnostically, the value is validated by `review_identity_kind_ok` (the adapter owns the
   vocabulary, so a host guide's snippet cannot drift from what `review_identity_exclusion_ok` and
-  `pair_review_publication_mode` accept), and only a genuinely absent key becomes `none`. Six entry points, not
-  five — and both consumer surfaces enumerate all six, `review_identity_exclusion_ok` included, since a host
-  adapter wired from a list that omits it lets a bot-user identity with no `REVIEW_IDENTITY_LOGIN` resolve to
-  `identity`.
+  `pair_review_publication_mode` accept), and only a genuinely absent key becomes `none`. Both consumer surfaces
+  enumerate every entry point, `review_identity_exclusion_ok` included, since a host adapter wired from a list
+  that omits it lets a bot-user identity with no `REVIEW_IDENTITY_LOGIN` resolve to `identity`.
+  **Presence is anchored to the key SHAPE — the phrase, then a colon — not to the bare phrase.** A
+  `grep -qi 'Review identity'` over the whole adoption file also matches *prose*, so a project that runs no
+  identity, deletes the key and keeps one explanatory sentence ("we use no dedicated review identity — reviews
+  run with the session token") is read as configured, extracts nothing, and HALTs every review and every publish
+  — being told to declare an identity it deliberately has not got. The anchored form still fires on both
+  unparseable shapes the design must HALT on (`- Review identity: app`, `**Review identity**: bot-user`), which
+  are colon-terminated keys.
+- **`healthy` is COMPUTED PER RUN, by `review_identity_health`, and the health probes are split in two.** It is
+  the single signal separating `identity` from `halt`, and it shipped with no runtime source at all: the host
+  guide's publication snippet carried an inert `PROBES_PASSED=0  # set to 1 by whatever ran step 5's probes`
+  that nothing in the corpus ever set, while step 5's probes are explicitly setup-time because they leave
+  artifacts (a check run cannot be deleted). Both readings were broken on a **correctly provisioned**
+  repository: taking the guide literally left `healthy` 0 forever ⇒ `resolve_identity_mode 1 0` ⇒ `halt` on
+  every review; re-running the setup probes per review branded every reviewed head with a neutral
+  `pair-identity-probe` check run plus a posted/deleted scratch comment. So the question is split — **per run**:
+  cheap, artifact-free probes (the credential authenticates and is scoped to this repository; the grants are
+  observed without writing — on GitHub the App's installation-token exchange requested with explicit
+  `permissions`, which GitHub 422s when the installation lacks one, or the bot account's repository-permission
+  read); **at setup, once**: the probes that must write to prove a write grant. What a read probe cannot prove
+  at run time is covered by one rule, stated on all three surfaces: a `403`/`422` met **mid-write is a HALT**,
+  reported against the artifact that failed — never a retry with the session token, and never a `pair-review`
+  publication implying a review that did not land.
+- **The review identity must not be an account that opens pull requests, and the mechanism backs the rule up.**
+  Nothing forbade it, and `<self_authored>` was read in `session` mode only — so an unattended-delivery project
+  that implements and publishes as `acme-bot` and then declares that same `acme-bot` as its `bot-user` identity
+  passed health, resolved `identity`, and had every native event rejected by the host
+  (`422 Can not request changes on your own pull request`). The verdict never landed as a review while the
+  separate publication step still marked `pair-review` `success`: an approving verdict as a green required check
+  on a PR carrying no review body. `identity_verdict_event` therefore reads authorship in **both** modes, with
+  **per-mode defaults that are deliberately asymmetric** — unknown ⇒ self-authored in `session` (the acting
+  account routinely is the author), unknown ⇒ *not* self-authored in `identity` (setup forbids it, and the other
+  default would collapse every identity verdict to COMMENT and delete the feature). A wrong guess there is loud
+  (the host answers 422) rather than silent, and Step 5.3's read-back now has a defined action: a review the
+  read does not show is `Review: NOT SUBMITTED`, the resolved check is **not** published, and the pending one
+  stays in place.
 - **The idempotency skip covers the publication acts only.** Step 5.3 submits a *fresh* native review on every
   re-invocation, so a re-review on an unchanged head is a new identity action: skipping from Step 5.4 straight
   past Step 5.4b would leave an identity `APPROVE` with no paired audit comment and no `Light row:` line — the

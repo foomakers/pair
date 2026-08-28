@@ -45,9 +45,10 @@
 #               in `human_approval_jq_filter` (pr-state.sh), which is INERT until the
 #               identity's login is provisioned to the job evaluating the predicate.
 #               A bot-user identity whose login is not provisioned is therefore NOT
-#               healthy: see `review_identity_exclusion_ok` below, whose result is an
-#               input to the `healthy` flag `resolve_identity_mode` reads, so a
-#               misconfigured bot user resolves to `halt` instead of running unguarded.
+#               healthy: see `review_identity_exclusion_ok` below, which
+#               `review_identity_health` folds into the `healthy` flag
+#               `resolve_identity_mode` reads, so a misconfigured bot user resolves to
+#               `halt` instead of running unguarded.
 # With that in place a `risk:red` pull request still needs a second HUMAN account. See:
 #   .pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md
 #   .pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md
@@ -58,13 +59,18 @@
 #   # The adoption value must be one of the vocabulary BEFORE it is trusted: a key that is
 #   # present but does not parse is configured-but-unusable, never `none`. See below.
 #   review_identity_kind_ok "$IDENTITY_KIND" || { echo "fix the Review identity key" >&2; exit 1; }
-#   review_identity_exclusion_ok "$IDENTITY_KIND" "$REVIEW_IDENTITY_LOGIN" || IDENTITY_HEALTHY=0
+#   # HEALTH IS COMPUTED ON THIS RUN, from the host guide's per-run, artifact-free probes
+#   # (AUTH_OK: the credential authenticated and is scoped to this repository; PERMS_OK:
+#   # the required grants were observed). It is never a remembered setup result.
+#   IDENTITY_HEALTHY="$(review_identity_health "$IDENTITY_KIND" "$AUTH_OK" "$PERMS_OK" \
+#     "${REVIEW_IDENTITY_LOGIN:-}")"
 #   MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
 #   [ "$MODE" = halt ] && exit 1
 #   # APPROVE only when the light row authorized it (pr-state.sh light_auto_approve_allowed):
 #   light_auto_approve_allowed "$PR_LABELS" "$LIGHT_DECLARED" "$TIER" "$STATE" && APPROVE_OK=1
-#   # SELF_AUTHORED is `session`-mode only: 0 when the acting account provably did NOT
-#   # author the pull request, 1 when it did, unset when the read failed (⇒ COMMENT).
+#   # SELF_AUTHORED: 0 when the acting account provably did NOT author the pull request,
+#   # 1 when it did. The DEFAULT differs by mode (see identity_verdict_event): unknown is
+#   # self-authored in `session`, not-self-authored in `identity`.
 #   EVENT="$(identity_verdict_event "$MODE" "$VERDICT" "${APPROVE_OK:-0}" "${SELF_AUTHORED:-}")"
 #   PUB="$(pair_review_publication_mode "$MODE" "$IDENTITY_KIND")"          # checks-api | commit-status
 
@@ -179,6 +185,63 @@ review_identity_exclusion_ok() {
   esac
 }
 
+# review_identity_health <identity_kind> <auth_ok> <perms_ok> <review_identity_login>
+#   auth_ok  : 1 when THIS RUN's credential probe answered 2xx — the token authenticated
+#              AND the identity is scoped to this repository. Anything else (empty, a
+#              probe that was not run, a malformed value) is NOT authenticated.
+#   perms_ok : 1 when THIS RUN observed the required grants — the host guide's per-run,
+#              ARTIFACT-FREE probes (for an App: the installation-token exchange requested
+#              with explicit `permissions`, which 422s when the installation lacks one;
+#              for a bot user: the account's repository permission read). Anything else is
+#              NOT granted.
+#
+# Echoes exactly `1` or `0` — the `healthy` argument of `resolve_identity_mode`, so an
+# unhealthy identity becomes `halt` and never a session fallback. Always exits 0.
+#
+# WHY THIS EXISTS. `healthy` is the single signal that separates `identity` from `halt`,
+# i.e. the security-critical decision point of the whole flow, and it had NO defined
+# runtime source: the host guide's publication snippet carried an inert
+# `PROBES_PASSED=0  # set to 1 by whatever ran step 5's probes` that nothing ever set. Two
+# ways to read that, both broken on a CORRECTLY provisioned repository: follow the guide
+# literally (its probes are explicitly setup-time — they leave an undeletable check run on
+# the head commit) and `healthy` is 0 forever, so every review and every publish HALTs
+# with a setup pointer to a setup that is already right; or re-run the setup probes per
+# review and every reviewed head permanently carries a neutral `pair-identity-probe` check
+# run plus a posted/deleted scratch comment. So the health question is split in two:
+#   PER RUN (here)  — cheap, artifact-free: does the credential authenticate, is it scoped
+#                     to this repository, are the grants observable without writing?
+#   AT SETUP (once) — the probes that must WRITE to prove a write grant (a check run, a
+#                     scratch comment). They leave artifacts; the guide says run them once.
+# What a read probe cannot prove at run time is covered by the third rule, stated in both
+# skills and the host guide: a 403/422 met MID-WRITE is a HALT — report it against the
+# artifact that failed, never continue with the session token and never leave `pair-review`
+# published as if a review had been written.
+#
+# The exclusion precondition is folded in deliberately: it is part of "may this identity
+# act at all", so no caller can compute health while forgetting it.
+review_identity_health() {
+  local kind="${1:-}" auth_ok="${2:-}" perms_ok="${3:-}" login="${4:-}"
+
+  if [ "$auth_ok" != "1" ]; then
+    echo "review-identity: the identity's credential did not authenticate on this run (auth probe='${auth_ok:-not run}') — NOT healthy. Unknown is never healthy: see the code host's implementation guide, section 'Dedicated review identity', for the per-run probes." >&2
+    echo "0"
+    return 0
+  fi
+
+  if [ "$perms_ok" != "1" ]; then
+    echo "review-identity: the identity's required permissions were not observed on this run (permission probe='${perms_ok:-not run}') — NOT healthy. A missing grant discovered later lands mid-flow, after pair-review was already published." >&2
+    echo "0"
+    return 0
+  fi
+
+  if ! review_identity_exclusion_ok "$kind" "$login"; then
+    echo "0"
+    return 0
+  fi
+
+  echo "1"
+}
+
 # identity_verdict_event <mode> <verdict> <approve_authorized> <self_authored>
 #   mode               : identity | session (a `halt` never reaches here — the caller stops first)
 #   verdict            : approved | changes-requested | <anything else ⇒ no decision>
@@ -187,10 +250,21 @@ review_identity_exclusion_ok() {
 #                        request; anything else — including empty and absent — is NOT
 #                        authorized (fail-safe). Read in `identity` mode ONLY: it governs
 #                        the review the IDENTITY would sign on the project's behalf.
-#   self_authored      : `session` mode only — 0 when the acting session account is
-#                        provably NOT the pull request's author, 1 when it is, and
-#                        anything else (empty, absent, unknown) is treated as SELF-authored
-#                        (fail-safe ⇒ COMMENT, the form the host always accepts)
+#   self_authored      : 0 when the acting account is provably NOT the pull request's
+#                        author, 1 when it is. Read in BOTH modes, with per-mode DEFAULTS
+#                        that are deliberately asymmetric:
+#                          session  — unknown ⇒ SELF-authored (the acting account is
+#                                     routinely the author: the solo maintainer, the agent
+#                                     reviewing the PR its own account opened) ⇒ COMMENT.
+#                          identity — unknown ⇒ NOT self-authored. Setup forbids using a
+#                                     PR-AUTHORING account as the review identity (host
+#                                     guide), so the common case is a distinct account;
+#                                     defaulting to self-authored here would collapse
+#                                     every identity verdict to COMMENT and delete the
+#                                     feature. The wrong guess is loud, not silent — the
+#                                     host answers 422 and the caller HALTs on the failed
+#                                     write (it never publishes `pair-review` as though a
+#                                     review had landed).
 #
 # Echoes the native review event to submit on the code host:
 #   APPROVE | REQUEST_CHANGES | COMMENT
@@ -215,11 +289,27 @@ review_identity_exclusion_ok() {
 # real approval (nothing the host counts toward `required_approving_review_count`). So the
 # session path returns the NATIVE event whenever self-authorship is provably false, and
 # COMMENT whenever it is true or unknown.
+#
+# WHY `identity` MODE READS AUTHORSHIP TOO. The same host rule applies to the identity: if
+# the review identity IS the account that opened the pull request — an unattended loop that
+# implements and publishes as `acme-bot` and then provisions `acme-bot` as its
+# `Review identity: bot-user` — the host rejects the native event
+# (`422 Can not request changes on your own pull request`). The verdict would never land as
+# a review while the check publication (a separate step) still marked `pair-review`
+# `success`: an approving verdict recorded as a green required check on a pull request
+# carrying NO review body. The setup rule is the primary containment (the identity must not
+# author pull requests in the repository — host guide); this arm is the mechanical one, and
+# it degrades to the COMMENT form rather than losing the verdict.
 identity_verdict_event() {
   local mode="${1:-}" verdict="${2:-}" approve_authorized="${3:-0}" self_authored="${4:-}"
 
   case "$mode" in
   identity)
+    if [ "$self_authored" = "1" ]; then
+      echo "review-identity: the review identity is the AUTHOR of this pull request — the host rejects a self-authored APPROVE/REQUEST_CHANGES, so the verdict is submitted as COMMENT with its token leading the body. Fix the setup: the review identity must not be an account that opens pull requests in this repository (see the code host's implementation guide, section 'Dedicated review identity')." >&2
+      echo "COMMENT"
+      return 0
+    fi
     case "$verdict" in
     approved)
       if [ "$approve_authorized" = "1" ]; then
