@@ -342,13 +342,15 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     }
   })
 
-  // REGRESSION (review round 4). Both consumer surfaces enumerated the adapter as four
-  // entry points, omitting the security-critical `review_identity_exclusion_ok` — a reader
-  // wiring a host adapter from either list builds the health input without the exclusion
-  // check, so a bot-user identity with no REVIEW_IDENTITY_LOGIN resolves to `identity` and
-  // can sign the 🔴 human approval.
-  it('both consumer surfaces enumerate every adapter entry point, exclusion included', () => {
-    for (const surface of [GUIDELINE, GITHUB_GUIDE]) {
+  // REGRESSION (review round 4, re-opened round 5 for the ADR). Both consumer surfaces
+  // enumerated the adapter as four entry points, omitting the security-critical
+  // `review_identity_exclusion_ok` — a reader wiring a host adapter from either list builds
+  // the health input without the exclusion check, so a bot-user identity with no
+  // REVIEW_IDENTITY_LOGIN resolves to `identity` and can sign the 🔴 human approval. Round 4
+  // fixed the two KB guides; the ADR — the decision record a second-host implementer reads
+  // FIRST — still carried the four-function list, and this loop did not cover it.
+  it('every adapter enumeration lists every entry point, exclusion included', () => {
+    for (const surface of [GUIDELINE, GITHUB_GUIDE, ADR_018]) {
       const at = surface.indexOf('six entry points')
       expect(at, 'each surface must announce the adapter enumeration').toBeGreaterThan(-1)
       const list = surface.slice(Math.max(0, at - 700), at + 900)
@@ -456,8 +458,14 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
   it('the Light row is spelled with the Output Format block’s own strings, everywhere', () => {
     // the row that never existed in the output block is gone
     expect(REVIEW).not.toContain('Identity approve:')
+    // REGRESSION (review round 5). The vocabulary had three values and the row is declared
+    // unconditional — but identity mode + CHANGES-REQUESTED (the most common identity
+    // action) and identity mode + an unresolved verdict match none of them: Step 5.3 step 3
+    // never runs, so there is no unmet condition to name and the verdict was not a COMMENT.
+    // A blocking review therefore had to fabricate one of the three.
     const values = [
       'n-a — no identity (session mode)',
+      'n-a — no approving verdict (row not consulted)',
       'not-authorized — <unmet condition>, verdict submitted as COMMENT',
       'approved — native APPROVE by the identity + audit comment posted',
     ]
@@ -470,6 +478,11 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     // the degradation bullet fills the placeholder, keeping the same shape
     expect(REVIEW).toContain(
       'Light row: not-authorized — adoption declares no light family, verdict submitted as COMMENT',
+    )
+    // and the fourth value is bound to the case that produces it, not left for the reader
+    // to guess: identity mode where Step 5.2 decided anything other than APPROVED.
+    expect(step).toMatch(
+      /row not consulted\)`\*\* — `identity` mode with a verdict that is not APPROVED/,
     )
   })
 })
@@ -491,6 +504,17 @@ describe('publish-pr — the same adapter governs ITS host writes (AC1, AC4)', (
   it('AC4 — HALTs on configured-but-broken and never falls back to the session token', () => {
     expect(PUBLISH_PR).toMatch(/configured but unusable[\s\S]{0,400}HALT/i)
     expect(PUBLISH_PR).toMatch(/never[\s\S]{0,80}fall back to the session (user|token)/i)
+  })
+
+  // REGRESSION (review round 5). The HALT entry enumerated what does not happen as "the
+  // check registration and the dispatch" — but the identity is resolved in Phase 5 step 3
+  // and the `pr-state:to-be-reviewed` label is applied in step 5, i.e. after it. The PR is
+  // left open and ready-for-review carrying NO `pr-state:*` label, while the model says a
+  // PR carries exactly one; an operator reading the entry never thinks to look.
+  it('the HALT entry enumerates the state label among what does not happen', () => {
+    const halt = PUBLISH_PR.slice(PUBLISH_PR.indexOf('## HALT Conditions'))
+    const entry = halt.slice(halt.indexOf('dedicated review identity is configured but unusable'))
+    expect(entry.slice(0, 900)).toContain('pr-state:to-be-reviewed')
   })
 
   it('the two skills cannot disagree — the resolution is single-sourced in the adapter', () => {
@@ -750,6 +774,16 @@ describe('ADR-018 — the amendment records adoption AND the non-changes (AC6)',
     expect(ADR_018).toMatch(/Superseded by the 2026-08-28 amendment/)
     // the half that still holds must be restated, not silently dropped
     expect(ADR_018).toMatch(/second human account remains the only way to satisfy 🔴/)
+    // REGRESSION (review round 5). That restatement justified the 🔴 exclusion by account
+    // type ALONE and claimed the amendment "does not touch that rule" — false for the
+    // `bot-user` form, which types as "User", and the login clause IS the one shipped
+    // predicate change in this amendment. An adopter reading Consequences concluded the
+    // exclusion was automatic and skipped provisioning REVIEW_IDENTITY_LOGIN.
+    const consequence = ADR_018.slice(
+      ADR_018.indexOf('second human account remains the only way to satisfy 🔴'),
+    ).slice(0, 600)
+    expect(consequence).toContain('REVIEW_IDENTITY_LOGIN')
+    expect(consequence).not.toMatch(/the amendment does not touch that rule/)
   })
 
   it('is honest about what is NOT yet verified on a live host (T11)', () => {

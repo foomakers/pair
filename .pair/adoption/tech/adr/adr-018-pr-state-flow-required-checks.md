@@ -176,8 +176,12 @@ still the design; this amendment layers a credential resolution step and one ado
 1. **A dedicated review identity, resolved through a host-agnostic adapter.** The skills that write to the code
    host (`/pair-process-review` Steps 5.3–5.4, `/pair-capability-publish-pr` Phase 5) no longer assume the
    session token. They resolve **which credential executes the host write** through one executable projection,
-   `assets/review-identity.sh` (`resolve_identity_mode`, `identity_verdict_event`,
-   `pair_review_publication_mode`, `identity_audit_comment`) — the same "one executable projection" pattern as
+   `assets/review-identity.sh` — six entry points, and a host adapter is wired from **all six**:
+   `review_identity_kind_ok` (validates the adoption value, so present-but-unparseable HALTs instead of
+   degrading to `none`), `resolve_identity_mode`, `review_identity_exclusion_ok` (**security-critical**: an
+   adapter wired from a list that omits it lets a bot-user identity with no `REVIEW_IDENTITY_LOGIN` resolve to
+   `identity` and sign the 🔴 human approval), `identity_verdict_event`,
+   `pair_review_publication_mode`, `identity_audit_comment` — the same "one executable projection" pattern as
    `tier-resolve.sh` and `pr-state.sh`, so the recipe, the skills and the tests read one text. Three modes, and
    only three: `identity` (configured and usable), `session` (none configured — **today's behavior**, not an
    error), `halt` (configured but unusable).
@@ -318,7 +322,11 @@ guide. Nothing in this repository enables the row — `tech/risk-matrix.md` decl
   identity — the flow resolves a project-provisioned identity through a host-agnostic adapter, and falls
   back to exactly the behavior described here when none is configured. The half of this bullet that
   still holds is the last one: **a second human account remains the only way to satisfy 🔴** — the
-  identity's approval is excluded by `user.type == "User"` and the amendment does not touch that rule.
+  identity's approval is excluded by **account type** for an App (`user.type == "User"`) and by **login**
+  (`REVIEW_IDENTITY_LOGIN`) for a bot user, which types as `"User"` like any other account. The amendment
+  **adds** that login clause — the one shipped-predicate change it makes, additive and inert while the
+  variable is unset — and provisioning it is a setup step (`review_identity_exclusion_ok` HALTs the flow
+  until it is). What the amendment does not do is relax the human requirement.
   The solo-approval token stays a separate design question
   ([#398](https://github.com/foomakers/pair/issues/398)), which needs this story's identity only for
   forgery-resistance and is not needed by it.
