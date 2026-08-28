@@ -57,15 +57,16 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 
 ## 🎯 Quick Start Process
 
-**With skills**: Run `/next` — it handles steps 1-3 automatically.
+**With skills**: Run `/next` — it handles steps 1-4 automatically (the profile included: it never proposes a disabled step).
 
 **Without skills** (manual flow):
 
 1. **Establish session context** (see Session Context above - maintain for entire conversation)
 2. **Understand the project**: Read `.pair/adoption/product/PRD.md` for project overview
-3. **Identify your task**: Match your request to a task category using `.pair/knowledge/how-to/`
-4. **Follow the guidance**: Use the selected how-to file for specific instructions
-5. **Apply constraints**: Check `.pair/adoption/tech/` for technical requirements
+3. **Check the process profile**: Read `.pair/adoption/tech/way-of-working.md` → `## Process Profile`. It declares which process **steps** this project runs. No section = `default` = every step. A step disabled there is one the project does not run — **do not run its how-to guide**; the [step catalogue](.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md) (`step-catalogue.md`) maps every step id to its guide, and the [profile schema](.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) says what an unreadable or unknown declaration does (HALT, never a quiet fallback)
+4. **Identify your task**: Match your request to a task category using `.pair/knowledge/how-to/`
+5. **Follow the guidance**: Use the selected how-to file for specific instructions
+6. **Apply constraints**: Check `.pair/adoption/tech/` for technical requirements
 
 ## 📋 Available Tasks
 

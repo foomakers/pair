@@ -27,6 +27,9 @@ import {
   parseProcessProfiles,
   checkStepCatalogue,
   checkStepMarkers,
+  checkStepMarkersInMirror,
+  checkManualPathEntrypoint,
+  extractProfileExamples,
   checkProcessProfiles,
   resolveProcessProfile,
   parseWowProfileSection,
@@ -1080,6 +1083,95 @@ describe('checkStepMarkers', () => {
   })
 })
 
+// Round 1 Minor: `checkStepMarkers` ran over the DATASET only, so the installed
+// mirrors — the files an assistant actually loads — were unguarded. Deleting a
+// `<!-- process-step: id=review -->` from `.claude/skills/pair-process-review/SKILL.md`
+// left every gate green: that skill can no longer tell which step it is, its profile
+// gate never fires under `poc`, and nothing reports it.
+describe('checkStepMarkersInMirror', () => {
+  const root = mkdtempSync(join(tmpdir(), 'step-markers-mirror-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  const dataset = join(root, 'dataset')
+  const mirror = join(root, 'mirror')
+
+  const write = (base: string, dir: string, file: string, body: string): void => {
+    mkdirSync(join(base, dir), { recursive: true })
+    writeFileSync(join(base, dir, file), body)
+  }
+  const skill = (base: string, dir: string, body: string): void =>
+    write(base, dir, 'SKILL.md', `---\nname: x\ndescription: "x"\n---\n${body}`)
+
+  const entries = [{ id: 'review', howTo: null, executable: '/review', requires: [] as string[] }]
+  const good = '<!-- process-step: id=review -->\nSee [gate](process-profile-gate.md).\n'
+
+  it('passes when the mirror carries the same marker and a gate pointer', () => {
+    skill(dataset, 'process/review', good)
+    skill(mirror, 'pair-process-review', good)
+    expect(checkStepMarkersInMirror(entries, dataset, mirror)).toEqual([])
+  })
+
+  it('fails when the mirror LOST the marker the dataset declares', () => {
+    skill(dataset, 'process/review', good)
+    skill(mirror, 'pair-process-review', 'See [gate](process-profile-gate.md).\n')
+    expect(checkStepMarkersInMirror(entries, dataset, mirror).join('\n')).toContain('declares no')
+  })
+
+  it('fails when the mirrored skill is missing entirely', () => {
+    skill(dataset, 'process/review', good)
+    rmSync(join(mirror, 'pair-process-review'), { recursive: true, force: true })
+    expect(checkStepMarkersInMirror(entries, dataset, mirror).join('\n')).toContain('not installed')
+  })
+
+  it('accepts the gate pointer disclosed to a mirrored SIBLING', () => {
+    skill(dataset, 'process/review', good)
+    skill(mirror, 'pair-process-review', '<!-- process-step: id=review -->\nSee [more](more.md).\n')
+    write(mirror, 'pair-process-review', 'more.md', 'See [gate](process-profile-gate.md).\n')
+    expect(checkStepMarkersInMirror(entries, dataset, mirror)).toEqual([])
+  })
+})
+
+// Round 1 Major: the profile was reachable from `/next` and from the 12 step skills,
+// but nothing a human with NO skills installed reads mentioned it — so a `poc` team
+// following AGENTS.md step 3 picked `03-how-to-create-and-prioritize-initiatives.md`
+// and ran by hand a step the project declared it does not run, with no warning.
+describe('checkManualPathEntrypoint', () => {
+  const flow = (extra: string): string =>
+    `# AGENTS.md\n\n## 🎯 Quick Start Process\n\n**Without skills** (manual flow):\n\n1. Understand the project\n${extra}2. Identify your task using \`.pair/knowledge/how-to/\`\n\n## Available Tasks\n\nsomething\n`
+
+  const governed =
+    '2. **Check the process profile**: `.pair/adoption/tech/way-of-working.md` → `## Process Profile`; the step-catalogue.md maps each step to its how-to guide.\n'
+
+  it('passes when the manual flow points at the profile, the file and the catalogue', () => {
+    expect(checkManualPathEntrypoint(flow(governed))).toEqual([])
+  })
+
+  it('fails when the manual flow never mentions the profile', () => {
+    expect(checkManualPathEntrypoint(flow('')).join('\n')).toContain('Process Profile')
+  })
+
+  it('does NOT accept the mention living outside the manual flow section', () => {
+    const elsewhere = `${flow('')}\n## Notes\n\n\`## Process Profile\` in way-of-working.md, step-catalogue.md.\n`
+    expect(checkManualPathEntrypoint(elsewhere)).not.toEqual([])
+  })
+
+  it('fails when the Quick Start section is missing altogether', () => {
+    expect(checkManualPathEntrypoint('# AGENTS.md\n\nnothing here\n').join('\n')).toContain(
+      'Quick Start',
+    )
+  })
+})
+
+describe('extractProfileExamples', () => {
+  it('finds the fenced worked examples, and nothing else', () => {
+    const doc =
+      '# Schema\n\n```text\n## Process Profile\n\n- `profile`: `poc`\n```\n\n```text\nunrelated\n```\n\n## Process Profile\n\n- `profile`: `custom`\n'
+    const examples = extractProfileExamples(doc)
+    expect(examples).toHaveLength(1)
+    expect(examples[0]).toContain('`poc`')
+  })
+})
+
 describe('checkProcessProfiles', () => {
   const entries = [
     { id: 'specify-prd', howTo: null, executable: '/specify-prd', requires: [] as string[] },
@@ -1231,6 +1323,83 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve(
       '## Process Profile\n\nOptional. Example:\n\n```text\n- `profile`: `poc`\n```\n',
     )
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Detection is LOOSE, acceptance is STRICT. Round 1 Major: a `profile` key whose
+  // value was not backticked matched no key regex at all, so the section resolved to
+  // `default` — 12 steps enabled — with zero halts and zero warnings. That narrows in
+  // the WIDENING direction, the one direction nothing else catches: a PoC team copying
+  // the shape from the schema TABLE rather than the fenced example silently got the
+  // full process.
+  it('HALTs on a `profile` line whose VALUE is not backticked, never silently `default`', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: poc\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    // The message hands back the schema shape rather than naming a state.
+    expect(r.halts[0]).toContain('- `profile`: `poc`')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('HALTs on a `profile` line with no backticks at all', () => {
+    const r = resolve('## Process Profile\n\n- profile: poc\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+  })
+
+  it('accepts a BOLDED key with a backticked value — a shape, not a different meaning', () => {
+    const r = resolve('## Process Profile\n\n- **profile**: `poc`\n')
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('HALTs on an unreadable `whitelist` line instead of reporting it as EMPTY', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: brainstorm, implement\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`whitelist`')
+    expect(r.halts[0]).not.toContain('empty')
+  })
+
+  // Round 1 Minor: `custom` with NO whitelist key reported "declares an empty
+  // whitelist", sending the reader looking for a line that does not exist — and
+  // conflating two distinct mistakes behind one message.
+  it('`custom` with no `whitelist` KEY is a different message from an EMPTY whitelist', () => {
+    const missing = resolve('## Process Profile\n\n- `profile`: `custom`\n')
+    expect(missing.halts).toHaveLength(1)
+    expect(missing.halts[0]).toContain('no `whitelist`')
+    expect(missing.halts[0]).not.toContain('empty')
+
+    const empty = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`:\n')
+    expect(empty.halts[0]).toContain('empty')
+    expect(empty.halts[0]).not.toBe(missing.halts[0])
+  })
+
+  // Round 1 Minor: the section was located with `content.indexOf('## ' + heading)` —
+  // the first TEXTUAL occurrence, prose and fences included. A file that mentions
+  // `## Process Profile` in an earlier sentence made that sentence the section start
+  // and the real heading its terminator, so the real declaration was never read.
+  it('is not fooled by a PROSE cross-reference to the heading', () => {
+    const r = resolve(
+      '## Way of Working\n\nSee `## Process Profile` below.\n\n## Process Profile\n\n- `profile`: `poc`\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('is not fooled by the heading appearing inside a fenced block', () => {
+    const r = resolve(
+      '## Intro\n\n```text\n## Process Profile\n\n- `profile`: `custom`\n```\n\n## Process Profile\n\n- `profile`: `poc`\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('does not read a `### Process Profile` sub-heading as the section', () => {
+    const r = resolve('## Notes\n\n### Process Profile\n\n- `profile`: `poc`\n')
     expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })

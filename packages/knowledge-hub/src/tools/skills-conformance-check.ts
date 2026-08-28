@@ -53,6 +53,9 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { basename, dirname, join, relative, resolve, sep } from 'path'
+// The real `pair update` dataset→`.claude/skills/**` name transform: the mirror
+// check below maps names through the production path, never a copy of it.
+import { installedSkillDir } from './skill-md-mirror'
 
 const ROOT = join(__dirname, '..', '..')
 const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
@@ -65,6 +68,9 @@ const PROCESS_PROFILES_FILE =
   'dataset/.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md'
 const HOW_TO_DIR = 'dataset/.pair/knowledge/how-to'
 const WOW_TEMPLATE_FILE = 'dataset/.pair/adoption/tech/way-of-working.md'
+const AGENTS_FILE = 'dataset/AGENTS.md'
+// The installed skills mirror, relative to the knowledge-hub package root.
+const MIRROR_SKILLS_DIR = join('..', '..', '.claude', 'skills')
 
 const KB_PROSE_FILES = [
   'dataset/.pair/knowledge/way-of-working.md',
@@ -855,13 +861,51 @@ export const STEP_MARKER = /<!--\s*process-step:\s*id=([a-z0-9-]+)\s*-->/
 /** The convention every step's executable representation must point at. */
 export const STEP_GATE_CONVENTION = 'process-profile-gate.md'
 
+/**
+ * Everything under the first `## ` heading line matching `matches`, up to the next
+ * `## ` heading line — `null` when no such heading exists.
+ *
+ * Anchored to a LINE-START heading outside a fence, never to the first textual
+ * occurrence of the string: `content.indexOf('## ' + heading)` also matched the
+ * heading named in prose (`See \`## Process Profile\` below.`) and inside a fenced
+ * example, which made the mention the section start and the real heading its
+ * terminator — so the real declaration was never read and the file silently
+ * resolved to `default`. That cross-reference style is in use in the very files
+ * this parses (way-of-working: "exactly like `## Git Workflow` above").
+ */
+function sectionOfWhere(content: string, matches: (heading: string) => boolean): string | null {
+  const lines = content.split('\n')
+  const inFence = scanFences(lines)
+  const headingAt = (i: number): string | undefined => {
+    if (inFence[i]) return undefined
+    return /^##[ \t]+/.test(lines[i] as string)
+      ? (lines[i] as string).replace(/^##[ \t]+/, '').trim()
+      : undefined
+  }
+
+  let start = -1
+  for (let i = 0; i < lines.length; i++) {
+    const h = headingAt(i)
+    if (h !== undefined && matches(h)) {
+      start = i
+      break
+    }
+  }
+  if (start === -1) return null
+
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (headingAt(i) !== undefined) {
+      end = i
+      break
+    }
+  }
+  return lines.slice(start + 1, end).join('\n')
+}
+
 /** Everything under the `## <heading>` section, up to the next `## ` heading. */
-function sectionOf(content: string, heading: string): string {
-  const start = content.indexOf(`## ${heading}`)
-  if (start === -1) return ''
-  const rest = content.slice(start + heading.length + 3)
-  const end = rest.indexOf('\n## ')
-  return end === -1 ? rest : rest.slice(0, end)
+function sectionOf(content: string, heading: string): string | null {
+  return sectionOfWhere(content, h => h === heading)
 }
 
 /** Markdown table rows of a section, as trimmed cell arrays (header/rule dropped). */
@@ -895,7 +939,7 @@ function backticked(cell: string): string[] {
  */
 export function parseStepCatalogue(content: string): StepEntry[] {
   const entries: StepEntry[] = []
-  for (const cells of tableRows(sectionOf(content, 'The Catalogue'))) {
+  for (const cells of tableRows(sectionOf(content, 'The Catalogue') ?? '')) {
     if (cells.length < 4) continue
     const ids = backticked(cells[0] as string)
     if (ids.length !== 1) continue
@@ -917,7 +961,7 @@ export type ProfileWhitelist = string[] | '*'
 /** The built-in profiles table, as data. */
 export function parseProcessProfiles(content: string): Record<string, ProfileWhitelist> {
   const profiles: Record<string, ProfileWhitelist> = {}
-  for (const cells of tableRows(sectionOf(content, 'Built-in Profiles'))) {
+  for (const cells of tableRows(sectionOf(content, 'Built-in Profiles') ?? '')) {
     if (cells.length < 2) continue
     const names = backticked(cells[0] as string)
     if (names.length !== 1) continue
@@ -1158,6 +1202,102 @@ export function checkStepMarkers(entries: StepEntry[], skillsDir: string): strin
 }
 
 /**
+ * The same marker + gate-pointer obligation, over the INSTALLED mirror.
+ *
+ * The dataset copy is the SOURCE; `.claude/skills/**` is the copy an assistant
+ * actually loads, so it is the binding one — the finding class #280 already
+ * recorded for `/next`. Without this, deleting a `<!-- process-step: id=review -->`
+ * from `.claude/skills/pair-process-review/SKILL.md` left every gate green: that
+ * skill can no longer tell which step it is, its profile gate never fires under
+ * `poc`, and nothing anywhere reports it.
+ *
+ * The dataset→mirror name mapping is not re-implemented here: `installedSkillDir`
+ * runs the real `pair update` path transform with the `skills` registry's options.
+ */
+export function checkStepMarkersInMirror(
+  entries: StepEntry[],
+  skillsDir: string,
+  mirrorDir: string,
+): string[] {
+  const byCommand = new Map(collectProcessSkillDirs(skillsDir).map(d => [commandOf(d), d]))
+
+  const errors: string[] = []
+  for (const entry of entries) {
+    if (entry.executable === null) continue
+    // An executable naming no dataset skill is already `checkStepCatalogue`'s error.
+    const datasetDir = byCommand.get(entry.executable)
+    if (datasetDir === undefined) continue
+
+    const installed = installedSkillDir(datasetDir)
+    const file = join(mirrorDir, ...installed.split('/'), 'SKILL.md')
+    if (!existsSync(file)) {
+      errors.push(
+        `${installed}/SKILL.md: step \`${entry.id}\` is not installed in the skills mirror — ` +
+          `the copy assistants load carries no representation of it (run \`pair update\`)`,
+      )
+      continue
+    }
+    errors.push(
+      ...checkOneStepMarker(mirrorDir, installed, readFileSync(file, 'utf-8'), entry).map(
+        e => `mirror: ${e}`,
+      ),
+    )
+  }
+  return errors
+}
+
+/**
+ * Every fenced `## Process Profile` block in a shipped file — the WORKED EXAMPLES.
+ *
+ * A reader copies the example, not the prose around it, so an example that resolves
+ * with a warning greets them with the inconsistency report the same file documents
+ * two sections later. Extracted here so the examples go through the SAME resolver as
+ * a real adoption file, rather than being trusted because they look plausible.
+ */
+export function extractProfileExamples(content: string): string[] {
+  return [...content.matchAll(/```[a-z]*\n([\s\S]*?)```/g)]
+    .map(m => m[1] as string)
+    .filter(block => new RegExp(`^##[ \t]+${WOW_PROFILE_SECTION}[ \t]*$`, 'm').test(block))
+}
+
+/** The AGENTS.md section a reader with no skills installed follows. */
+const MANUAL_FLOW_HEADING = 'Quick Start Process'
+
+/**
+ * The manual (no-skills) path must reach the profile before it picks a how-to guide.
+ *
+ * The step catalogue makes the step→how-to mapping EXPRESSIBLE; it does not make the
+ * manual path GOVERNED. Without a step in the flow a human actually reads, a team on
+ * `poc` follows "identify your task", opens
+ * `03-how-to-create-and-prioritize-initiatives.md` — `plan-initiatives`, disabled —
+ * and runs by hand a step the project declared it does not run, with no warning
+ * anywhere. Asserted on the SECTION, not the file: a mention parked in an appendix
+ * is not an entrypoint.
+ */
+export function checkManualPathEntrypoint(content: string): string[] {
+  const section = sectionOfWhere(content, h => h.includes(MANUAL_FLOW_HEADING))
+  if (section === null) {
+    return [
+      `AGENTS.md: no \`## ${MANUAL_FLOW_HEADING}\` section — the manual (no-skills) path has no ` +
+        `entrypoint to govern`,
+    ]
+  }
+
+  const required: Array<[string, string]> = [
+    [`## ${WOW_PROFILE_SECTION}`, 'names the adoption section that declares the profile'],
+    ['way-of-working.md', 'points at the file the section lives in'],
+    [STEP_CATALOGUE_FILE.split('/').pop() as string, 'points at the step→how-to mapping'],
+  ]
+  return required
+    .filter(([needle]) => !section.includes(needle))
+    .map(
+      ([needle, why]) =>
+        `AGENTS.md: the ${MANUAL_FLOW_HEADING} manual flow never ${why} (\`${needle}\`) — a ` +
+        `project with no skills installed would follow a how-to guide for a disabled step`,
+    )
+}
+
+/**
  * A built-in profile must name only catalogued steps, must not be empty, and must
  * be PREREQUISITE-CLOSED — the same consistency `/next` reports on a custom
  * whitelist, applied to the profiles the KB itself ships so a shipped profile
@@ -1200,7 +1340,21 @@ export interface ProfileDeclaration {
   whitelist: string[] | null
   /** True when a `## Process Profile` section exists at all. */
   present: boolean
+  /** Keys DETECTED on a line the value grammar rejects — resolved as a HALT. */
+  unreadable: string[]
 }
+
+/**
+ * A `profile` / `whitelist` key line, however it is decorated.
+ *
+ * DETECTION is loose and ACCEPTANCE (`backticked`) stays strict, because the two
+ * answer different questions: "did the author mean to declare this key?" and "is
+ * the value readable?". A single strict regex conflated them — `- \`profile\`: poc`
+ * (value unbackticked, the shape the schema TABLE suggests) matched nothing, so the
+ * section resolved to `default` with zero halts: the profile silently WIDENED to the
+ * full 12-step process, the one direction nothing else catches.
+ */
+const WOW_PROFILE_KEY = /^\s*[-*]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
 
 /**
  * The `## Process Profile` section of a way-of-working file, as data.
@@ -1210,10 +1364,11 @@ export interface ProfileDeclaration {
  */
 export function parseWowProfileSection(content: string): ProfileDeclaration {
   const section = sectionOf(content, WOW_PROFILE_SECTION)
-  if (section === '') return { profile: null, whitelist: null, present: false }
+  if (section === null) return { profile: null, whitelist: null, present: false, unreadable: [] }
 
   let profile: string | null = null
   let whitelist: string[] | null = null
+  const unreadable: string[] = []
   let fenced = false
   for (const line of section.split('\n')) {
     if (/^\s*```/.test(line)) {
@@ -1221,13 +1376,24 @@ export function parseWowProfileSection(content: string): ProfileDeclaration {
       continue
     }
     if (fenced) continue
-    const key = /^\s*[-*]\s*`(profile|whitelist)`\s*:(.*)$/.exec(line)
+    const key = WOW_PROFILE_KEY.exec(line)
     if (!key) continue
-    const values = backticked(key[2] as string)
-    if (key[1] === 'profile') profile = values[0] ?? null
-    else whitelist = values
+    const rest = key[2] as string
+    const values = backticked(rest)
+    if (key[1] === 'profile') {
+      // A detected `profile` line with no readable value is never "no profile":
+      // that is the silent widening. Reported, and the resolver HALTs on it.
+      if (values.length === 0) unreadable.push('profile')
+      else profile = values[0] as string
+    } else if (values.length === 0 && rest.trim() !== '') {
+      // Text the value grammar rejects — distinct from `- `whitelist`:` with
+      // nothing after it, which IS an empty whitelist and has its own HALT.
+      unreadable.push('whitelist')
+    } else {
+      whitelist = values
+    }
   }
-  return { profile, whitelist, present: true }
+  return { profile, whitelist, present: true, unreadable }
 }
 
 export interface ProfileResolution {
@@ -1239,6 +1405,20 @@ export interface ProfileResolution {
   halts: string[]
   /** Inconsistencies reported with their minimal fix, never silently repaired. */
   warnings: string[]
+}
+
+/** A `whitelist` with no `profile`: it applies to `custom` alone, so it never binds. */
+const WHITELIST_WITHOUT_PROFILE =
+  `\`## ${WOW_PROFILE_SECTION}\` declares a \`whitelist\` but no \`profile\` — a whitelist ` +
+  `only applies to \`profile: custom\``
+
+/** The HALT for a key detected in a shape the value grammar rejects. */
+function unreadableShapeHalt(keys: string[]): string {
+  return (
+    `\`## ${WOW_PROFILE_SECTION}\` declares ${keys.map(k => `\`${k}\``).join(' and ')} in a shape ` +
+    `this reader does not accept — keys and values are backticked list items: ` +
+    `\`- \`profile\`: \`poc\`\`, and under \`custom\` \`- \`whitelist\`: \`implement\`, \`review\`\``
+  )
 }
 
 /**
@@ -1273,14 +1453,14 @@ export function resolveProcessProfile(
     warnings: prerequisiteWarnings(enabled, entries),
   })
 
+  // A key the author clearly meant to declare, in a shape no reader accepts, is a
+  // HALT with the schema handed back — never a quiet fallback to `default`.
+  if (declaration.unreadable.length > 0) return halt(unreadableShapeHalt(declaration.unreadable))
+
   // Absent section ⇒ `default` ⇒ today's behaviour, byte for byte (D21).
   if (!declaration.present || declaration.profile === null) {
-    if (declaration.present && declaration.whitelist !== null) {
-      return halt(
-        `\`## ${WOW_PROFILE_SECTION}\` declares a \`whitelist\` but no \`profile\` — a whitelist ` +
-          `only applies to \`profile: custom\``,
-      )
-    }
+    if (declaration.present && declaration.whitelist !== null)
+      return halt(WHITELIST_WITHOUT_PROFILE)
     return { profile: 'default', enabled: allIds, halts: [], warnings: [] }
   }
 
@@ -1300,16 +1480,27 @@ export function resolveProcessProfile(
     const builtIn = builtIns[name] as ProfileWhitelist
     return resolved(name, builtIn === '*' ? allIds : builtIn)
   }
-  return resolveCustomWhitelist(declaration.whitelist ?? [], allIds, halt, resolved)
+  return resolveCustomWhitelist(declaration.whitelist, allIds, halt, resolved)
 }
 
-/** The `custom` arm: its two HALTs, then the resolution. */
+/** The `custom` arm: its three HALTs, then the resolution. */
 function resolveCustomWhitelist(
-  whitelist: string[],
+  whitelist: string[] | null,
   allIds: string[],
   halt: (message: string) => ProfileResolution,
   resolved: (profile: string, enabled: string[]) => ProfileResolution,
 ): ProfileResolution {
+  // NO key at all and an EMPTY one are two different mistakes, exactly as an
+  // unknown step id and an unknown profile name are: one sends the reader to write
+  // a line, the other to fill one in. A single message sent them hunting for a
+  // `whitelist` line that was not in their file.
+  if (whitelist === null) {
+    return halt(
+      `profile \`custom\` declares no \`whitelist\` — \`custom\` requires one: add ` +
+        `\`- \`whitelist\`: \`implement\`, \`review\`\` naming the steps to keep, or use a ` +
+        `built-in profile`,
+    )
+  }
   if (whitelist.length === 0) {
     return halt(
       `profile \`custom\` declares an empty whitelist — read as a misconfiguration, never as ` +
@@ -1410,6 +1601,17 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
     ...checkStepMarkers(entries, skillsDir),
   ]
 
+  // The installed mirror, when this is the framework repo (an adopting project has
+  // no dataset to check in the first place, and `runChecks` is also driven over
+  // synthetic corpora in unit tests). Present ⇒ checked; absent ⇒ nothing to bind.
+  const mirrorDir = join(proseRoot, MIRROR_SKILLS_DIR)
+  if (existsSync(mirrorDir)) errors.push(...checkStepMarkersInMirror(entries, skillsDir, mirrorDir))
+
+  const agentsPath = join(proseRoot, AGENTS_FILE)
+  if (existsSync(agentsPath)) {
+    errors.push(...checkManualPathEntrypoint(readFileSync(agentsPath, 'utf-8')))
+  }
+
   const profilesPath = join(proseRoot, PROCESS_PROFILES_FILE)
   if (!existsSync(profilesPath)) {
     errors.push(`${PROCESS_PROFILES_FILE}: missing — the catalogue has no profile schema to serve`)
@@ -1418,9 +1620,21 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
 
   const builtIns = parseProcessProfiles(readFileSync(profilesPath, 'utf-8'))
   errors.push(...checkProcessProfiles(builtIns, entries))
+  errors.push(...checkShippedProfileProse(proseRoot, entries, builtIns))
+  return errors
+}
 
-  // A shipped TEMPLATE that carries a section no reader accepts teaches the wrong
-  // shape to every project that copies it — so read it with the real reader.
+/**
+ * The shipped adoption TEMPLATE and every worked EXAMPLE, read through the real
+ * resolver — a template carrying a section no reader accepts, or an example that
+ * resolves with a warning, teaches the wrong shape to every project that copies it.
+ */
+function checkShippedProfileProse(
+  proseRoot: string,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): string[] {
+  const errors: string[] = []
   const wowPath = join(proseRoot, WOW_TEMPLATE_FILE)
   if (existsSync(wowPath)) {
     const wow = resolveProcessProfile(
@@ -1430,6 +1644,17 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
     )
     for (const problem of [...wow.halts, ...wow.warnings]) {
       errors.push(`${WOW_TEMPLATE_FILE}: ${problem}`)
+    }
+  }
+
+  for (const file of [PROCESS_PROFILES_FILE, WOW_TEMPLATE_FILE]) {
+    const path = join(proseRoot, file)
+    if (!existsSync(path)) continue
+    for (const example of extractProfileExamples(readFileSync(path, 'utf-8'))) {
+      const r = resolveProcessProfile(parseWowProfileSection(example), entries, builtIns)
+      for (const problem of [...r.halts, ...r.warnings]) {
+        errors.push(`${file}: worked example (\`${r.profile}\`): ${problem}`)
+      }
     }
   }
   return errors

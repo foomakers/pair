@@ -130,8 +130,10 @@ A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-
 3. **Validate, and HALT rather than narrow quietly** — a misread profile does not surface as an error a user sees, it removes a step from every suggestion, which looks exactly like that step not being due yet:
    - **unknown profile name** → **HALT**, listing the known profiles (`default`, `poc`, `custom`);
    - **unknown step id** in the whitelist → **HALT**, listing the valid ids from the catalogue. Deliberately a *different* message from the one above: a typo in a step id and a profile that does not exist are not the same mistake, and one generic message sends the reader to the wrong file. A typo must never resolve to "disabled";
+   - **no `whitelist` key** under `custom` → **HALT**: `custom` requires one. Deliberately a different message from the next line — "you wrote none" is not "you wrote an empty one", and one message sends the reader hunting for a line their file does not have;
    - **empty whitelist** under `custom` → **HALT** as a **misconfiguration**, never read as "every step disabled";
-   - **`whitelist` under a built-in profile, or with no `profile` key** → **HALT**: it would otherwise be silently ignored.
+   - **`whitelist` under a built-in profile, or with no `profile` key** → **HALT**: it would otherwise be silently ignored;
+   - **a key in a shape the schema does not accept** (`- profile: poc`, value unbackticked; a bolded key is fine) → **HALT** restating the shape. Read the key **loosely** and its value **strictly**: an unreadable line treated as "no declaration" resolves to `default`, which **widens** the profile to the whole process silently — the one direction of failure nothing downstream catches.
 4. **Filter, don't fail.** Any candidate row whose step is disabled is **SKIPPED** — dropped from the cascade and never proposed. A disabled step is **not an error**: evaluation simply continues to the next row, so enabled steps chain correctly across the gaps.
 5. **Prerequisite consistency (report, don't repair).** Prerequisites are an **any-of**: satisfied when the step's `Requires` list is empty or **at least one** listed step is enabled. For each enabled step whose list is entirely disabled, report the inconsistency with the **minimal fix** — the configuration is readable, so the run continues, and it is **never silently** repaired nor silently tolerated:
 
@@ -147,10 +149,11 @@ A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-
 | 4 `/pair-process-plan-epics`                         | `plan-epics`                                       |
 | 5 `/pair-process-plan-stories`                       | `plan-stories`                                     |
 | 6 `/pair-process-review`                             | `review`                                           |
+| 7 `/pair-capability-checkpoint`                         | *(none — not a step, therefore never filtered)*    |
 | 8, 9 `/pair-process-implement`                       | `implement`                                        |
 | 10 `/pair-process-plan-tasks`                        | `plan-tasks`                                       |
 | 11 `/pair-process-refine-story`                      | `refine-story`                                     |
-| 7 `/pair-capability-checkpoint`, rows 12–16             | *(none — not steps, therefore never filtered)*     |
+| 12–16                                   | *(none — not steps, therefore never filtered)*     |
 
 Row 7 and rows 12–16 propose **capabilities that are not steps** ([why](../../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md#what-this-catalogue-does-not-govern)): the profile governs the process a team runs, not every tool a skill reaches for, so those rows are never filtered by it. `/pair-process-brainstorm` and `/pair-capability-map-subdomains` / `/pair-capability-map-contexts` are steps but have no cascade row — nothing to filter there either; their profile handling is the [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md) at invocation.
 
