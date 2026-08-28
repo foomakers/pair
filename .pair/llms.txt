@@ -124,6 +124,7 @@
 - [Decision: a `pair.config.json` schema guard stays in `#config` and takes its vocabulary INJECTED, never imported from the command layer](.pair/adoption/decision-log/2026-08-24-config-schema-guards-take-their-vocabulary-injected.md)
 - [Decision: the CLI invocation name is `pair-cli`, not `pair`](.pair/adoption/decision-log/2026-08-25-cli-invocation-canonical-name-is-pair-cli.md)
 - [Decision: Post-merge cleanup covers local branches and worktrees; PR analyses retire at merge](.pair/adoption/decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md)
+- [Decision: tier 1's `$approval` posture is unconditional, and tier 1 has no declaring composition site yet](.pair/adoption/decision-log/2026-08-28-tier1-approval-posture-is-unconditional-and-has-no-declaring-composition-site-yet.md)
 
 ## How-To Guides
 

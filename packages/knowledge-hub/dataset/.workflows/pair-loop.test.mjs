@@ -34,7 +34,7 @@ const HELPERS_SRC = FULL_SRC.slice(0, FULL_SRC.indexOf(ORCH_MARKER))
 const SRC = FULL_SRC
 
 const HELPERS = new Function(
-  `${HELPERS_SRC}\nreturn { extractEligibility, extractAutoAdvance, parseStopPredicate, evaluateStopPredicate, parseMaxParallelism, resolveMaxParallelism, resolveAuditLocation, dependencyFilter, computeMutexBatch, resolveCards, composeBatch, reconcileCapAudit, renderContinueToken, validateArgs }`,
+  `${HELPERS_SRC}\nreturn { extractEligibility, extractAutoAdvance, parseStopPredicate, evaluateStopPredicate, parseMaxParallelism, resolveMaxParallelism, resolveAuditLocation, dependencyFilter, computeMutexBatch, resolveCards, composeBatch, reconcileCapAudit, renderContinueToken, validateArgs, APPROVAL_DECLARING_SKILLS, approvalArgsFor }`,
 )()
 
 function getHelpers() {
@@ -715,4 +715,100 @@ test('orchestration: startIteration seeds the loop counter (review M6 continue-t
     workflowDispatch: () => ({ batch: [] }),
   })
   assert.equal(result.iterations, 5) // breaks on "nothing eligible" before incrementing
+})
+
+// ── `$approval` threading (US-464 T-4) ───────────────────────────────────────
+// Tier 1's half of the seam #451 and #410 left unwired. The signal is threaded
+// ONLY to a skill that DECLARES it (AC3/D18 — borrowed, never invented), and the
+// posture is unconditional here because `pair-loop.js` IS the unattended fan-out
+// path: nobody is present for any of it. See the ADL, and the cross-tier corpus
+// in apps/pair-cli/src/commands/run/tier-parity.test.ts.
+
+test('approvalArgsFor: a declaring skill gets --approval auto', () => {
+  const { approvalArgsFor } = getHelpers()
+  assert.equal(approvalArgsFor('pair-capability-assess-stack'), ' --approval auto')
+  assert.equal(approvalArgsFor('pair-capability-map-contexts'), ' --approval auto')
+})
+
+test('approvalArgsFor: tolerates the rendered slash form, since prompts spell it `/skill`', () => {
+  const { approvalArgsFor } = getHelpers()
+  assert.equal(approvalArgsFor('/pair-capability-assess-stack'), ' --approval auto')
+})
+
+test('approvalArgsFor: a skill declaring no approval round gets NOTHING (AC3)', () => {
+  const { approvalArgsFor } = getHelpers()
+  // The two skills this workflow actually composes today.
+  assert.equal(approvalArgsFor('pair-next'), '')
+  assert.equal(approvalArgsFor('/pair-capability-verify-quality'), '')
+  // Callers that FORWARD the signal without declaring it, and the two assess-*
+  // members ADR-021 deliberately left out (no approval round at all).
+  assert.equal(approvalArgsFor('pair-process-bootstrap'), '')
+  assert.equal(approvalArgsFor('pair-process-refine-story'), '')
+  assert.equal(approvalArgsFor('pair-capability-assess-cost'), '')
+  assert.equal(approvalArgsFor('pair-capability-assess-coupling'), '')
+})
+
+test('approvalArgsFor: fails closed on a malformed skill name rather than inventing an argument', () => {
+  const { approvalArgsFor } = getHelpers()
+  for (const bogus of [undefined, null, '', 42, {}]) assert.equal(approvalArgsFor(bogus), '')
+})
+
+test('APPROVAL_DECLARING_SKILLS: exactly the eleven members ADR-021 converted', () => {
+  const { APPROVAL_DECLARING_SKILLS } = getHelpers()
+  assert.deepEqual([...APPROVAL_DECLARING_SKILLS].sort(), [
+    'pair-capability-assess-ai',
+    'pair-capability-assess-architecture',
+    'pair-capability-assess-infrastructure',
+    'pair-capability-assess-methodology',
+    'pair-capability-assess-observability',
+    'pair-capability-assess-pm',
+    'pair-capability-assess-security',
+    'pair-capability-assess-stack',
+    'pair-capability-assess-testing',
+    'pair-capability-map-contexts',
+    'pair-capability-map-subdomains',
+  ])
+})
+
+test('orchestration: the /pair-next Select prompt is UNCHANGED — pair-next declares no approval round', async () => {
+  const { calls } = await runWorkflow({
+    args: { policyText: '## Eligibility\n\nrisk:green\n' },
+    dispatch: () => ({ candidates: [] }),
+    workflowDispatch: () => ({ batch: [] }),
+  })
+  const select = calls.find(c => c.opts.phase === 'Select')
+  assert.ok(select, 'the Select phase must have run')
+  assert.ok(select.prompt.startsWith('Run /pair-next --filter "risk:green"'))
+  // The no-drift guarantee, tier 1's side: threading IS applied at this live call
+  // site and contributes nothing, because the composed skill declares none.
+  assert.equal(select.prompt.includes('--approval'), false)
+})
+
+test('orchestration: the /pair-capability-verify-quality merge prompt carries no --approval either', async () => {
+  const { calls } = await runWorkflow({
+    args: { policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n' },
+    dispatch: (prompt, opts) => {
+      if (opts.phase === 'Select')
+        return {
+          candidates: [
+            {
+              id: '1',
+              title: 'c1',
+              branch: 'feature/#1-c1',
+              tier: 'risk:green',
+              macrostate: 'Ready',
+              mutexResources: [],
+              prerequisites: [],
+            },
+          ],
+        }
+      if (prompt.includes('CURRENT `risk:*` label')) return { tier: 'risk:green' }
+      if (prompt.includes('review-approved on PR')) return { merged: true }
+      return {}
+    },
+    workflowDispatch: () => ({ batch: [{ id: '1', status: 'ready-for-merge', prNumber: 9 }] }),
+  })
+  const merge = calls.find(c => c.prompt.includes('/pair-capability-verify-quality'))
+  assert.ok(merge, 'the auto-advance merge prompt must have run')
+  assert.equal(merge.prompt.includes('--approval'), false)
 })

@@ -4,6 +4,7 @@ import { join } from 'path'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { readAutomationPolicy, POLICY_PATH } from './automation-policy'
 import { isSafeId } from './prompt-safety'
+import { APPROVAL_DECLARING_SKILLS, buildSkillArgs } from './invocation'
 
 /**
  * CROSS-IMPLEMENTATION PARITY — the structural guard this area was missing.
@@ -34,6 +35,9 @@ interface Tier1Helpers {
   parseStopPredicate: (policyText: string) => unknown
   parseMaxParallelism: (policyText: string, tagProjectionFamily?: Set<string>) => unknown
   resolveAuditLocation: (policyText: string) => string
+  /** US-464: the `$approval` family and its renderer, tier 1's own copies. */
+  APPROVAL_DECLARING_SKILLS: Set<string>
+  approvalArgsFor: (skill: unknown) => string
 }
 
 /**
@@ -58,7 +62,7 @@ function tier1(): Tier1Helpers {
   const helpers = source.slice(0, source.indexOf(ORCH_MARKER))
   const factory = new Function(
     `${helpers}
-    return { extractEligibility, extractAutoAdvance, parseStopPredicate, parseMaxParallelism, resolveAuditLocation }`,
+    return { extractEligibility, extractAutoAdvance, parseStopPredicate, parseMaxParallelism, resolveAuditLocation, APPROVAL_DECLARING_SKILLS, approvalArgsFor }`,
   )
   return factory() as Tier1Helpers
 }
@@ -325,6 +329,81 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
     }
 
     expect(isSafeId(value)).toBe(tier1IsSafeId(value))
+  })
+
+  /**
+   * `$approval` — the SECOND thing both tiers now implement twice (US-464).
+   *
+   * The policy corpus above guards a shared GRAMMAR; this guards a shared FAMILY: which composed
+   * skills receive the non-interactive signal. Same failure mode as the four Majors above — one
+   * side learns about a family member and the other does not — so it belongs in the same corpus,
+   * evaluated from tier 1's own source rather than a copy.
+   */
+  describe('agrees on the `$approval` family (US-464)', () => {
+    const tier2Family = [...APPROVAL_DECLARING_SKILLS].sort()
+
+    it('holds the SAME family list on both tiers, member for member', () => {
+      // The whole point of AC5: adding a member is a data edit on each tier, and this is what
+      // fails when someone edits one list and forgets the other.
+      expect([...tier1().APPROVAL_DECLARING_SKILLS].sort()).toEqual(tier2Family)
+    })
+
+    it.each(tier2Family)('renders the same argument for %s on both tiers', skill => {
+      // Tier 2 renders it from its parameter map; tier 1 from its own helper. Byte-identical
+      // spelling is deliberate — the signal is one thing, and two spellings of it would be a
+      // divergence a reader has to hold in their head.
+      expect(buildSkillArgs(skill, { approval: 'auto' })).toEqual(['--approval', 'auto'])
+      expect(tier1().approvalArgsFor(skill)).toBe(' --approval auto')
+    })
+
+    it.each([
+      // The skills tier 1 actually composes, plus tier 2's cascade pair and the callers that
+      // FORWARD the signal without declaring it (ADR-021: bootstrap passes it; refine-story is the
+      // untracked residual) and the two assess-* members with no approval round at all.
+      'pair-next',
+      'pair-loop',
+      'pair-capability-verify-quality',
+      'pair-process-bootstrap',
+      'pair-process-refine-story',
+      'pair-process-implement',
+      'pair-capability-assess-cost',
+      'pair-capability-assess-coupling',
+    ])('invents nothing for %s on either tier (AC3/D18)', skill => {
+      expect(buildSkillArgs(skill, { approval: 'auto' })).toEqual([])
+      expect(tier1().approvalArgsFor(skill)).toBe('')
+    })
+
+    it('DIVERGES on where the posture comes from, deliberately and in the safe direction', () => {
+      const declaring = tier2Family[0] as string
+
+      // Tier 2 has an ATTENDED mode, so the posture is gated on `--autonomous`: no flag, no signal.
+      expect(buildSkillArgs(declaring, {})).toEqual([])
+      // Tier 1 has none — `pair-loop.js` IS the unattended fan-out path (ADR-017 §4), reached only
+      // when a fan-out runner exists; the skill's degraded one-card path never loads this file. So
+      // there is no posture to read and the signal is unconditional.
+      //
+      // Recorded rather than assumed, because the natural reading of the asymmetry is drift. Note
+      // it is NOT gated on `## Auto-Advance`: that section decides whether an approved card is
+      // MERGED unattended, not whether a human is watching — a run with `## Auto-Advance: (none)`
+      // (this repo's own policy) is still fully unattended through implement and review.
+      expect(tier1().approvalArgsFor(declaring)).toBe(' --approval auto')
+    })
+
+    it('threads the signal to NO skill tier 1 composes today — the mechanism, not a live thread', () => {
+      // Stated as a test so it cannot rot silently. Tier 1 names exactly two skills, and neither
+      // declares an approval round; its declaring-skill exposure is TRANSITIVE, through
+      // `pair-implement-batch` -> `/pair-process-implement` -> `/pair-capability-assess-stack`,
+      // and neither intermediary declares `$approval` — so threading it there would be the
+      // invented argument AC3 forbids. When that changes, this test is what tells the next reader
+      // the situation moved, instead of a silent no-op.
+      const workflowSource = readFileSync(WORKFLOW, 'utf-8')
+      const composed = [...workflowSource.matchAll(/Run \/([a-z0-9-]+)|via \/([a-z0-9-]+)/g)].map(
+        match => match[1] ?? match[2],
+      )
+
+      expect([...new Set(composed)].sort()).toEqual(['pair-capability-verify-quality', 'pair-next'])
+      for (const skill of composed) expect(tier1().approvalArgsFor(skill)).toBe('')
+    })
   })
 
   it('agrees that this repo’s real adoption file is valid', () => {
