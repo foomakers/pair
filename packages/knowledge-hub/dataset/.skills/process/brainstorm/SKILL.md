@@ -17,7 +17,7 @@ Discovery is also the **only** new process skill (D24): every phase delegates to
 
 <!-- process-step: id=brainstorm -->
 
-This skill is the executable representation of the **`brainstorm`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. **As a composer**, this skill applies the same check *before* composing the `define-subdomains`, `define-bounded-contexts`, `plan-epics` and `plan-stories` steps, and treats a disabled one exactly as a skill that is not installed — skipped with a note, never a prompt. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
+Executable form of the **`brainstorm`** step. Gate and composer rule: [degradation.md](degradation.md).
 
 ## Composed Skills
 

@@ -1,13 +1,19 @@
 ---
 name: pair-process-plan-epics
 description: "Breaks a strategic initiative into epics — each delivering end-to-end value in 2-4 sprints — through structured analysis and validation. Composes /pair-capability-write-issue. Not for filing a single epic issue from text you already wrote (that's /pair-capability-write-issue directly)."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
 # /pair-process-plan-epics — Epic Breakdown
 
 Transform strategic initiatives into comprehensive epic breakdowns. Each epic delivers end-to-end user value in 2-4 sprints. Composes `/pair-capability-write-issue` for PM tool integration.
+
+## Process Profile
+
+<!-- process-step: id=plan-epics -->
+
+Executable form of the **`plan-epics`** step, and a composer of `define-subdomains`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

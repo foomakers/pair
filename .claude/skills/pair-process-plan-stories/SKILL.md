@@ -1,13 +1,19 @@
 ---
 name: pair-process-plan-stories
 description: "Slices an epic into user stories via vertical slicing and INVEST validation, each sized for one sprint. Composes /pair-capability-write-issue."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
 # /pair-process-plan-stories — User Story Breakdown
 
 Transform epics into user stories through vertical slicing, INVEST validation, and collaborative definition. Each story delivers end-to-end user value within a single sprint. Composes `/pair-capability-write-issue` for PM tool integration.
+
+## Process Profile
+
+<!-- process-step: id=plan-stories -->
+
+Executable form of the **`plan-stories`** step. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

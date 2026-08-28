@@ -1,13 +1,19 @@
 ---
 name: pair-process-bootstrap
 description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /pair-process-specify-prd, /pair-capability-setup-pm, /pair-capability-record-decision, assess-* (optional), /pair-capability-setup-harness (optional, agent harness configuration)."
-version: 0.8.0
+version: 0.9.0
 author: Foomakers
 ---
 
 # /pair-process-bootstrap — Project Bootstrap
 
 Orchestrate the complete project setup sequence. Transforms a PRD into a fully configured project with adopted standards, quality gates, and PM tool integration. Each phase checks output existence before acting — re-invocation resumes from the first incomplete phase.
+
+## Process Profile
+
+<!-- process-step: id=bootstrap -->
+
+Executable form of the **`bootstrap`** step, and a composer of `specify-prd`, `define-subdomains`, `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

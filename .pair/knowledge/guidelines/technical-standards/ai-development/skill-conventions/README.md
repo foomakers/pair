@@ -17,6 +17,7 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | Nested sub-documents / progressive disclosure (`references/` inside a skill dir) | [nested-sub-documents.md](nested-sub-documents.md) | 0 skills (authoring convention — describes the installed layout, not a skill step) |
 | Adoption-informed generation (decision log + ADR + context map read before drafting) | [adoption-informed-generation.md](adoption-informed-generation.md) | 3 generating skills (new convention — the reading step is defined here, never per skill) |
 | Approval rounds and the `$approval` signal (`interactive` default; `auto` asks nothing, still reports; a judgement gate still HALTs) | [approval-rounds.md](approval-rounds.md) | the `assess-*` and `map-*` families (replaces per-caller suppression notes) |
+| Process-profile gate (direct invocation of a step disabled by the project's profile warns and confirms; a composed one degrades as not-installed) | [process-profile-gate.md](process-profile-gate.md) | the 12 skills representing a [catalogued step](../step-catalogue.md) (new convention — written once, referenced) |
 
 ## Skill `version:` frontmatter — when to bump
 
