@@ -327,6 +327,32 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
     expect(section.toLowerCase()).toMatch(/every (run|invocation)|re-?read|never cached/)
   })
+
+  // Round 2 Major (a): Step 0.5 scoped its filter to "Steps 2–4" while Step 5 names
+  // skills unconditionally, so the fallback printed `/pair-process-plan-stories` and
+  // `/pair-process-review` verbatim even when the profile disabled them — AC4 says a
+  // disabled step is never suggested, and the fallback is not a row.
+  it.each(sources)('%s: carries the enabled set into the FALLBACK too (AC4)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section).toMatch(/Steps? 2[–-]5/)
+    expect(section.toLowerCase()).toMatch(/fallback/)
+  })
+
+  it.each(sources)('%s: the fallback names only enabled steps (AC4)', (_, content) => {
+    const section = sectionBetween(content, '### Step 5: Fallback', '\n## ')
+    expect(section.toLowerCase()).toMatch(/enabled/)
+    expect(section.toLowerCase()).toMatch(/disabled/)
+  })
+
+  // Round 2 Major (b): under `poc`, rows 3–4 are dropped and row 5 needs epics, so a
+  // fresh project fell through to a fallback recommending `plan-stories` — whose only
+  // enabled producer of input is `brainstorm`, a step `/next` proposes nowhere else.
+  it.each(sources)('%s: the fallback has a backlog entry point under `poc`', (_, content) => {
+    const section = sectionBetween(content, '### Step 5: Fallback', '\n## ')
+    // Dataset names skills bare, the mirror carries the install prefix.
+    expect(section).toMatch(/\/(pair-process-)?brainstorm/)
+    expect(section).toMatch(/`poc`/)
+  })
 })
 
 describe('the manual (no-skills) path is governed by the same profile (AC8)', () => {

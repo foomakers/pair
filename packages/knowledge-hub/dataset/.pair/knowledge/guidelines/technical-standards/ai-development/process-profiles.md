@@ -28,6 +28,8 @@ The section carries two keys, in the same shape as the file's other optional sec
 
 Both keys are **backticked list items, and so are their values** — copy a fenced example above verbatim, not the bare key spellings the table uses. The reader detects a key **loosely** (a bolded or unbackticked key is still a declaration) and accepts its value **strictly**: that split is what makes a mis-shaped line a HALT instead of a silent `default`.
 
+The **heading** is detected loosely for the same reason: `## Process profile`, `## Process Profile (optional)` and `## **Process Profile**` all name this section. Matching it exactly while matching the keys loosely leaves the widening hole open one level up — a decorated heading makes the whole declaration evaporate into `default`, with no halt and no warning. The comparison is an equality on the normalized text, not a prefix, so `## Process Profile Gate` remains a different section.
+
 **An absent `## Process Profile` section means `default`** — the full process, today's behaviour byte for byte. This is convention over configuration (D21): a project that runs everything configures nothing, and adding this feature changes no existing project's behaviour.
 
 ## Built-in Profiles
@@ -52,6 +54,8 @@ A profile misread does not surface as an error a user sees; it silently removes 
 | **`custom` with no `whitelist` key**        | **HALT** — `custom` requires one. A *different* message from the row below: "you wrote none" is not "you wrote an empty one", and one message sends the reader hunting for a line their file does not have. |
 | **Empty custom whitelist**                  | **HALT** — read as a **misconfiguration**, never as "everything disabled".                                      |
 | **A key in a shape the reader rejects** (`- profile: poc`, value unbackticked) | **HALT**, restating the schema shape. Detection of the key is loose (bold, missing backticks); acceptance of the VALUE is strict — otherwise an unreadable line resolves to `default` and **widens** the profile to the whole process, silently. |
+| **A PARTIALLY backticked whitelist** (`` - `whitelist`: `implement`, review ``) | **HALT** — the whole line, not the readable half. Accepting the backticked ids and dropping the bare ones removes a step from every suggestion with **nothing reported**: the narrowing direction, which no user sees. Readability is decided on the RESIDUE — backticked spans and separators removed, anything left means the line is not readable. |
+| **More than one value on a `profile` line** (`` - `profile`: `poc` (not `custom`) ``) | **HALT** — a profile is one name. Taking the first token silently discarded the rest of the line. |
 | **`whitelist` under `default` / `poc`**     | **HALT** — a built-in carries its own set, so the whitelist would be silently ignored.                          |
 | **`whitelist` with no `profile`**           | **HALT** — a whitelist only applies to `profile: custom`.                                                        |
 | **Enabled step, all prerequisites disabled** | **Reported, not fatal**: flag the inconsistency with the **minimal fix**, never silently repaired.              |

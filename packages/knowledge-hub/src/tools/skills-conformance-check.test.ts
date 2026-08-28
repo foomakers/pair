@@ -1403,4 +1403,67 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })
+
+  // Round 2 Major: the whitelist arm flagged a line as unreadable only when it
+  // yielded ZERO backticked tokens. A PARTIALLY backticked line yielded ≥1 and was
+  // accepted as-is, so every unbackticked id was dropped on the floor — the same
+  // silent NARROWING the schema calls the worse direction, reached by the likelier
+  // hand-edit (copy a correct example, append one id).
+  it('HALTs on a PARTIALLY backticked whitelist instead of dropping the bare ids', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`, plan-stories\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`whitelist`')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('HALTs when a bare id sits BETWEEN two backticked ones', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n' +
+        '- `whitelist`: `implement`, plan-stories, `brainstorm`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`whitelist`')
+  })
+
+  it('still accepts a fully backticked whitelist with irregular spacing', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`:  `brainstorm` ,  `plan-stories`\n',
+    )
+    expect(r.enabled).toEqual(['brainstorm', 'plan-stories'])
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 2 Minor: heading DETECTION was exact-match while key detection is
+  // deliberately loose — so a decorated heading made the whole declaration
+  // evaporate into `default` (every step re-enabled) with zero halts and zero
+  // warnings, byte-identical to having written nothing.
+  it.each([
+    ['sentence case', '## Process profile'],
+    ['trailing parenthetical', '## Process Profile (optional)'],
+    ['bolded', '## **Process Profile**'],
+    ['trailing colon', '## Process Profile:'],
+  ])('reads a %s heading as the section rather than widening to `default`', (_, heading) => {
+    const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('does NOT swallow a differently-named heading that merely starts the same', () => {
+    const r = resolve('## Process Profile Gate\n\n- `profile`: `poc`\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 2 Minor: a `profile` line carrying several backticked tokens took
+  // `values[0]` silently — the author's parenthetical qualifier decided nothing,
+  // and nothing reported that half the line was ignored.
+  it('HALTs on a `profile` line carrying more than one backticked value', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `poc` (not `custom`)\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
 })

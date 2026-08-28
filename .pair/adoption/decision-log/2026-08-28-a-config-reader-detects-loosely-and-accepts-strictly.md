@@ -31,6 +31,13 @@ Story #251's review found the same failure mode twice, on both sides of the prof
 - A key detected with no readable value is neither ignored nor guessed: it is a **HALT that restates the schema shape**. The two questions have different answers and must not share one regex.
 - The same principle produced two distinguished messages where one was doing double duty: `custom` with **no** `whitelist` key is not `custom` with an **empty** one.
 
+**The rule binds every level of the declaration, not just the key line** (round 2 — the review found the same hole through two other doors, both verified on the shipped resolver):
+
+- **The SECTION HEADING is detected as loosely as the key.** `## Process profile` (sentence case) over a valid `` - `profile`: `poc` `` resolved to `{profile: "default", enabled: 12 steps, halts: [], warnings: []}` — byte-identical to writing nothing. Matching the heading exactly while matching the keys loosely reopens the widening hole one level up. The comparison is an **equality on normalized text** (emphasis, a trailing parenthetical and trailing punctuation stripped), never a prefix — `## Process Profile Gate` stays a different section.
+- **Readability is decided on the RESIDUE, not on token count.** `values.length === 0` accepted a PARTIALLY backticked line: `` - `whitelist`: `implement`, review `` kept `implement` and dropped `review` on the floor, with no halt and one misleading prerequisite warning. Strip backticked spans and separators; anything left means the line is unreadable and the whole line HALTs. Applied to `profile` too: more than one backticked value is unreadable rather than "take the first".
+
+The direction differs — the key case widened, the whitelist case NARROWED — and the schema calls narrowing the worse of the two, because a removed step is indistinguishable from a step not being due.
+
 **A shipped mirror is a governed copy, not a build artifact.** `skills:conformance` and the conformance suite now bind the marker + gate pointer on `.claude/skills/pair-*/SKILL.md` as well as on the dataset, mapping names through the real `pair update` transform (`installedSkillDir`) rather than a copy of it.
 
 **The manual path is governed at its own entrypoint.** `AGENTS.md`'s "Without skills" flow carries a profile step before "identify your task", and `checkManualPathEntrypoint` asserts it — on the SECTION, not the file, since a mention parked in an appendix is not an entrypoint.
@@ -48,6 +55,8 @@ Story #251's review found the same failure mode twice, on both sides of the prof
 - `skills:conformance` fails on a hand-edited or half-regenerated skills mirror. Verified: deleting the `review` marker from the mirror prints `mirror: pair-process-review/SKILL.md: … declares no <!-- process-step: id=review --> marker` and exits 1 (it was green before).
 - The shipped worked EXAMPLES go through the real resolver too, so an example that resolves with a prerequisite warning is a red gate — the class of defect the review found in `process-profiles.md`'s own `custom` example.
 - `.claude/skills/**` is now inside the conformance surface for this convention: a mirror regeneration is required after a dataset edit, which `pair update` already does.
+- A team appending one id to a working whitelist without backticks now gets the schema handed back, instead of losing that step from every suggestion for the life of the project.
+- A decorated `## Process Profile` heading is honoured rather than ignored, so the section cannot be disabled by a cosmetic edit.
 
 ## Adoption Impact
 

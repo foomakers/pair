@@ -1,7 +1,7 @@
 ---
 name: pair-next
 description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.6.0
+version: 0.6.1
 author: Foomakers
 ---
 
@@ -123,7 +123,7 @@ The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) 
 
 ### Step 0.5: Resolve the Process Profile
 
-A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Process Profile`, resolve it against the [step catalogue](../../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md) per the [profile schema](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), and carry the resulting **enabled step set** into Steps 2–4. Like Step 0, this runs on **every invocation** and is **re-read every run, never cached** — an edit to way-of-working takes effect on the next run.
+A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Process Profile`, resolve it against the [step catalogue](../../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md) per the [profile schema](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), and carry the resulting **enabled step set** into Steps 2–5 — the cascade rows AND the Step 5 fallback, which names skills in prose and is therefore not covered by the row filter. Like Step 0, this runs on **every invocation** and is **re-read every run, never cached** — an edit to way-of-working takes effect on the next run.
 
 1. **No `## Process Profile` section** → the profile is `default`: **every** catalogued step is enabled and the whole cascade below runs **unchanged**, exactly as it did before profiles existed. This is the overwhelmingly common case; skip straight to Step 1.
 2. **`profile: default` / `poc`** → the built-in step set from the schema. **`profile: custom`** → the declared `whitelist`.
@@ -134,7 +134,7 @@ A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-
    - **empty whitelist** under `custom` → **HALT** as a **misconfiguration**, never read as "every step disabled";
    - **`whitelist` under a built-in profile, or with no `profile` key** → **HALT**: it would otherwise be silently ignored;
    - **a key in a shape the schema does not accept** (`- profile: poc`, value unbackticked; a bolded key is fine) → **HALT** restating the shape. Read the key **loosely** and its value **strictly**: an unreadable line treated as "no declaration" resolves to `default`, which **widens** the profile to the whole process silently — the one direction of failure nothing downstream catches.
-4. **Filter, don't fail.** Any candidate row whose step is disabled is **SKIPPED** — dropped from the cascade and never proposed. A disabled step is **not an error**: evaluation simply continues to the next row, so enabled steps chain correctly across the gaps.
+4. **Filter, don't fail.** Any candidate row whose step is disabled is **SKIPPED** — dropped from the cascade and never proposed. A disabled step is **not an error**: evaluation simply continues to the next row, so enabled steps chain correctly across the gaps. **The Step 5 fallback is bound by the same rule**: it is prose, not a row, so apply the filter to it explicitly (Step 5).
 5. **Prerequisite consistency (report, don't repair).** Prerequisites are an **any-of**: satisfied when the step's `Requires` list is empty or **at least one** listed step is enabled. For each enabled step whose list is entirely disabled, report the inconsistency with the **minimal fix** — the configuration is readable, so the run continues, and it is **never silently** repaired nor silently tolerated:
 
    > `plan-stories` is enabled but none of its prerequisites are — minimal fix: enable `plan-epics` or `brainstorm`, or drop `plan-stories`
@@ -236,6 +236,19 @@ If no condition matched in Steps 2-4:
 > All adoption files are populated and no actionable backlog items detected.
 > Consider: starting a new iteration with `/pair-process-plan-stories`, or running `/pair-process-review`
 > to check for open items.
+
+**The fallback names skills, so the Step 0.5 filter applies here too** — and it is prose, not a row, so it is applied explicitly, in this order:
+
+1. **Never name a disabled step.** Drop it from the sentence. If both named steps are disabled, the sentence is empty — go to rule 2.
+2. **Never name a step whose input cannot exist.** `/pair-process-plan-stories` needs epics. On a backlog with no epics, rows 3–4 normally fire first; a profile may disable them, and then nothing upstream covers the empty backlog. In that case name the enabled step that **produces** a backlog — `/pair-process-brainstorm`, which has no cascade row and is otherwise never proposed anywhere.
+3. If neither rule leaves a candidate, **report the state and propose no skill**. An empty backlog under a profile with no reachable entry point is a configuration to fix, not a step to run.
+
+| Profile   | Backlog                | Fallback names                                                                       |
+| --------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| `default` | any                    | `/pair-process-plan-stories` + `/pair-process-review`, verbatim above (row 3 covers the empty-backlog case first) |
+| `poc`     | epics exist            | `/pair-process-plan-stories` + `/pair-process-review`                                                            |
+| `poc`     | no epics               | `/pair-process-brainstorm` — rows 3–4 are disabled and row 5 needs epics, so it is the only enabled producer of the input `/pair-process-plan-stories` requires |
+| `custom`  | any                    | rules 1–3 above, in order                                                              |
 
 ## Output Format
 

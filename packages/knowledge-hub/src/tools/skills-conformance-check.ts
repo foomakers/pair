@@ -1257,7 +1257,11 @@ export function checkStepMarkersInMirror(
 export function extractProfileExamples(content: string): string[] {
   return [...content.matchAll(/```[a-z]*\n([\s\S]*?)```/g)]
     .map(m => m[1] as string)
-    .filter(block => new RegExp(`^##[ \t]+${WOW_PROFILE_SECTION}[ \t]*$`, 'm').test(block))
+    .filter(block =>
+      block
+        .split('\n')
+        .some(line => /^##[ \t]+/.test(line) && isWowProfileHeading(line.replace(/^##[ \t]+/, ''))),
+    )
 }
 
 /** The AGENTS.md section a reader with no skills installed follows. */
@@ -1333,6 +1337,37 @@ export function checkProcessProfiles(
 /** The adoption section that declares a project's profile. */
 export const WOW_PROFILE_SECTION = 'Process Profile'
 
+/**
+ * A heading's identity, stripped of decoration that carries no meaning.
+ *
+ * Emphasis markers, a trailing parenthetical and trailing punctuation are how a
+ * human decorates a heading; none of them says "a different section". The
+ * comparison stays an EQUALITY on the normalized text, never a prefix match, so
+ * `## Process Profile Gate` is still a different section.
+ */
+function normalizeHeading(heading: string): string {
+  return heading
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/[*_`]/g, '')
+    .replace(/[:.\s]+$/, '')
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * The `## Process Profile` heading, matched the way the KEYS inside it are.
+ *
+ * Round 2 Minor: section detection was an exact `h === heading` while key detection
+ * is deliberately loose, so decoration one level UP reopened the hole the loose key
+ * matching closed. `## Process profile` (sentence case) over a perfectly valid
+ * `- \`profile\`: \`poc\`` resolved to `default` — every step re-enabled, zero halts,
+ * zero warnings: byte-identical to having written nothing, in the widening direction
+ * nothing downstream catches.
+ */
+export function isWowProfileHeading(heading: string): boolean {
+  return normalizeHeading(heading) === normalizeHeading(WOW_PROFILE_SECTION)
+}
+
 export interface ProfileDeclaration {
   /** Declared profile name, or null when the section is absent / declares none. */
   profile: string | null
@@ -1363,7 +1398,7 @@ const WOW_PROFILE_KEY = /^\s*[-*]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
  * very keys this reads, and an example is not a declaration.
  */
 export function parseWowProfileSection(content: string): ProfileDeclaration {
-  const section = sectionOf(content, WOW_PROFILE_SECTION)
+  const section = sectionOfWhere(content, isWowProfileHeading)
   if (section === null) return { profile: null, whitelist: null, present: false, unreadable: [] }
 
   let profile: string | null = null
@@ -1380,14 +1415,26 @@ export function parseWowProfileSection(content: string): ProfileDeclaration {
     if (!key) continue
     const rest = key[2] as string
     const values = backticked(rest)
+    // What the value grammar did NOT consume: backticked spans and the separators
+    // between them removed, anything left is text the reader cannot account for.
+    // Checking the RESIDUE rather than `values.length === 0` is what catches a
+    // PARTIALLY readable line — the one a hand-edit actually produces.
+    const residue = rest.replace(/`[^`]*`/g, '').replace(/[,\s]+/g, '')
     if (key[1] === 'profile') {
       // A detected `profile` line with no readable value is never "no profile":
       // that is the silent widening. Reported, and the resolver HALTs on it.
-      if (values.length === 0) unreadable.push('profile')
+      // More than one backticked token is equally unreadable: taking `values[0]`
+      // let `- `profile`: `poc` (not `custom`)` resolve to `poc` with nothing said
+      // about the half of the line that decided nothing.
+      if (values.length !== 1 || residue !== '') unreadable.push('profile')
       else profile = values[0] as string
-    } else if (values.length === 0 && rest.trim() !== '') {
+    } else if (residue !== '') {
       // Text the value grammar rejects — distinct from `- `whitelist`:` with
       // nothing after it, which IS an empty whitelist and has its own HALT.
+      // Covers the fully unbackticked line AND the mixed one: without the residue
+      // check the mixed line yielded ≥1 token, passed as readable, and every bare
+      // id was dropped on the floor — a silent NARROWING, which the schema names
+      // the worse direction because nothing surfaces it to the user.
       unreadable.push('whitelist')
     } else {
       whitelist = values
