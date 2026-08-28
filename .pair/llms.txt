@@ -465,6 +465,7 @@
 - [Approval Rounds and the `$approval` Signal](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md)
 - [Graceful Degradation — Standard Bullets](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md)
 - [Guided / Quick Setup Convention](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md)
+- [Harness Realization — Probe, Bind, Announce, Degrade](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/harness-realization.md)
 - [Idempotency Convention](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md)
 - [Nested Sub-Documents (Progressive Disclosure)](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/nested-sub-documents.md)
 - [Output Format Shapes](.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/output-shapes.md)
