@@ -1,13 +1,21 @@
 ---
 name: pair-capability-map-contexts
 description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-brainstorm; full-scope re-mapping only via /pair-process-bootstrap."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
 # /pair-capability-map-contexts — Bounded Context Placement (Capability)
 
 Map subdomains to bounded context boundaries and assess each relationship between contexts on three dimensions — integration strength, socio-technical distance, volatility — to derive the integration pattern. A **capability**, not a standalone lifecycle step: always invoked scoped to the contexts/services the caller just touched, never as a full re-mapping outside `/pair-process-bootstrap`.
+
+## Process Profile
+
+<!-- process-step: id=define-bounded-contexts -->
+
+Executable form of the **`define-bounded-contexts`** step. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; under `$approval: auto` there is nobody to answer, so the run **HALTs**. <!-- approval-round: kind=gate; auto=halt -->
+
+A **composed** invocation never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Arguments
 

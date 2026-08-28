@@ -984,7 +984,10 @@ describe('checkStepCatalogue — bidirectional corpus binding', () => {
 
   it('tolerates a capability that is in no row — a capability is not always a step', () => {
     expect(
-      checkStepCatalogue(entries, { ...corpus, skillDirs: [...corpus.skillDirs, 'capability/estimate'] }),
+      checkStepCatalogue(entries, {
+        ...corpus,
+        skillDirs: [...corpus.skillDirs, 'capability/estimate'],
+      }),
     ).toEqual([])
   })
 
@@ -1012,9 +1015,9 @@ describe('checkStepCatalogue — bidirectional corpus binding', () => {
       ...entries,
       { id: 'ghost', howTo: null, executable: null, requires: [] as string[] },
     ]
-    expect(
-      checkStepCatalogue(orphan, corpus).join('\n'),
-    ).toContain('declares neither a how-to nor an executable')
+    expect(checkStepCatalogue(orphan, corpus).join('\n')).toContain(
+      'declares neither a how-to nor an executable',
+    )
   })
 })
 
@@ -1030,9 +1033,7 @@ describe('checkStepMarkers', () => {
     )
   }
 
-  const entries = [
-    { id: 'review', howTo: null, executable: '/review', requires: [] as string[] },
-  ]
+  const entries = [{ id: 'review', howTo: null, executable: '/review', requires: [] as string[] }]
 
   it('passes when the executable declares its id and points at the convention', () => {
     writeSkill(
@@ -1056,9 +1057,17 @@ describe('checkStepMarkers', () => {
     expect(checkStepMarkers(entries, root).join('\n')).toContain('maps `/review` to step `review`')
   })
 
-  it('fails when a step skill never points at the gate convention', () => {
+  it('fails when neither the skill nor a disclosed sibling points at the gate convention', () => {
     writeSkill('process/review', '<!-- process-step: id=review -->\nNothing else.\n')
-    expect(checkStepMarkers(entries, root).join('\n')).toContain('never points at')
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('points at skill-conventions/')
+  })
+
+  it('accepts the convention pointer in a DISCLOSED SIBLING (progressive disclosure)', () => {
+    // A skill under a byte budget keeps the marker in its entrypoint and discloses
+    // its half of the convention to the sibling that already owns that topic.
+    writeSkill('process/review', '<!-- process-step: id=review -->\nSee [more](more.md).\n')
+    writeFileSync(join(root, 'process/review', 'more.md'), 'See [gate](process-profile-gate.md).\n')
+    expect(checkStepMarkers(entries, root)).toEqual([])
   })
 
   it('fails when an UNCATALOGUED skill carries a marker', () => {
@@ -1076,12 +1085,20 @@ describe('checkProcessProfiles', () => {
     { id: 'specify-prd', howTo: null, executable: '/specify-prd', requires: [] as string[] },
     { id: 'brainstorm', howTo: null, executable: '/brainstorm', requires: [] as string[] },
     { id: 'plan-epics', howTo: null, executable: '/plan-epics', requires: ['specify-prd'] },
-    { id: 'plan-stories', howTo: null, executable: '/plan-stories', requires: ['plan-epics', 'brainstorm'] },
+    {
+      id: 'plan-stories',
+      howTo: null,
+      executable: '/plan-stories',
+      requires: ['plan-epics', 'brainstorm'],
+    },
   ]
 
   it('accepts `*` and a prerequisite-closed list', () => {
     expect(
-      checkProcessProfiles({ default: '*', poc: ['specify-prd', 'brainstorm', 'plan-stories'] }, entries),
+      checkProcessProfiles(
+        { default: '*', poc: ['specify-prd', 'brainstorm', 'plan-stories'] },
+        entries,
+      ),
     ).toEqual([])
   })
 

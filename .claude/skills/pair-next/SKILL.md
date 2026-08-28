@@ -1,7 +1,7 @@
 ---
 name: pair-next
 description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.5.1
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -121,6 +121,41 @@ Run this before every other step, on **every** invocation — the result is neve
 
 The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) and Step 4 row 16 (`/pair-capability-grill`). Step 2 and rows 12–15 (project-wide) are not surfaced under a scope; rows 3–5 are evaluated **root-relatively** (epic root → row 5 only; story root → skipped) — see Step 3. A scope **presupposes an established project** (adoption files populated, a real backlog): on a fresh template project `--root`/`--filter` are never passed — Step 2 fresh-project detection governs and steers to `/pair-process-bootstrap`, so the Step 3 "all adoption files populated" premise always holds under a scope. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
 
+### Step 0.5: Resolve the Process Profile
+
+A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Process Profile`, resolve it against the [step catalogue](../../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md) per the [profile schema](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), and carry the resulting **enabled step set** into Steps 2–4. Like Step 0, this runs on **every invocation** and is **re-read every run, never cached** — an edit to way-of-working takes effect on the next run.
+
+1. **No `## Process Profile` section** → the profile is `default`: **every** catalogued step is enabled and the whole cascade below runs **unchanged**, exactly as it did before profiles existed. This is the overwhelmingly common case; skip straight to Step 1.
+2. **`profile: default` / `poc`** → the built-in step set from the schema. **`profile: custom`** → the declared `whitelist`.
+3. **Validate, and HALT rather than narrow quietly** — a misread profile does not surface as an error a user sees, it removes a step from every suggestion, which looks exactly like that step not being due yet:
+   - **unknown profile name** → **HALT**, listing the known profiles (`default`, `poc`, `custom`);
+   - **unknown step id** in the whitelist → **HALT**, listing the valid ids from the catalogue. Deliberately a *different* message from the one above: a typo in a step id and a profile that does not exist are not the same mistake, and one generic message sends the reader to the wrong file. A typo must never resolve to "disabled";
+   - **empty whitelist** under `custom` → **HALT** as a **misconfiguration**, never read as "every step disabled";
+   - **`whitelist` under a built-in profile, or with no `profile` key** → **HALT**: it would otherwise be silently ignored.
+4. **Filter, don't fail.** Any candidate row whose step is disabled is **SKIPPED** — dropped from the cascade and never proposed. A disabled step is **not an error**: evaluation simply continues to the next row, so enabled steps chain correctly across the gaps.
+5. **Prerequisite consistency (report, don't repair).** Prerequisites are an **any-of**: satisfied when the step's `Requires` list is empty or **at least one** listed step is enabled. For each enabled step whose list is entirely disabled, report the inconsistency with the **minimal fix** — the configuration is readable, so the run continues, and it is **never silently** repaired nor silently tolerated:
+
+   > `plan-stories` is enabled but none of its prerequisites are — minimal fix: enable `plan-epics` or `brainstorm`, or drop `plan-stories`
+
+**Row → step id.** The filter is a lookup, not a judgement — this table is the mapping, so nothing about it is inferred from a row's wording:
+
+| Cascade row                             | Step id                                          |
+| --------------------------------------- | -------------------------------------------------- |
+| 1 `/pair-process-specify-prd`                        | `specify-prd`                                      |
+| 2 `/pair-process-bootstrap`                          | `bootstrap`                                        |
+| 3 `/pair-process-plan-initiatives`                   | `plan-initiatives`                                 |
+| 4 `/pair-process-plan-epics`                         | `plan-epics`                                       |
+| 5 `/pair-process-plan-stories`                       | `plan-stories`                                     |
+| 6 `/pair-process-review`                             | `review`                                           |
+| 8, 9 `/pair-process-implement`                       | `implement`                                        |
+| 10 `/pair-process-plan-tasks`                        | `plan-tasks`                                       |
+| 11 `/pair-process-refine-story`                      | `refine-story`                                     |
+| 7 `/pair-capability-checkpoint`, rows 12–16             | *(none — not steps, therefore never filtered)*     |
+
+Row 7 and rows 12–16 propose **capabilities that are not steps** ([why](../../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md#what-this-catalogue-does-not-govern)): the profile governs the process a team runs, not every tool a skill reaches for, so those rows are never filtered by it. `/pair-process-brainstorm` and `/pair-capability-map-subdomains` / `/pair-capability-map-contexts` are steps but have no cascade row — nothing to filter there either; their profile handling is the [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md) at invocation.
+
+Under `poc` this is what makes the guarantee hold end to end: rows 3 and 4 are dropped, and no DDD-mapping step is reachable from `/pair-next` at all.
+
 ### Step 1: Read Adoption Files
 
 Read the following files and classify each as **populated** or **template**:
@@ -157,6 +192,8 @@ All adoption files are populated. Query the PM tool to determine backlog state �
 
 Rows 12–15 are likewise project-wide and not surfaced under a scope; when the candidate set yields no actionable item, Step 0 item 5's clean exit governs (see Step 0).
 
+**Profile filter**: every row below is additionally subject to the enabled step set resolved in Step 0.5 — a row whose step is disabled is skipped, never proposed, and evaluation continues at the next row.
+
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
 **Code host discovery**: **row 6's open-PR detection queries the code host, not the PM tool** — a PR read is a code-host operation. Resolve `code-host` from way-of-working.md → `## Git Workflow`; **absent ⇒ the code host is the PM tool**, so a single-tool project queries one tool exactly as before. When the two differ, match each open PR to its backlog item through the `Refs: <issue-id>` cross-link in the PR body (that is how "the PR's linked issue" is determined for the candidate-set restriction), while every item/state read below stays on the PM tool. Resolution + routing table: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
@@ -179,7 +216,7 @@ Rows 12–15 are likewise project-wide and not surfaced under a scope; when the 
 
 ### Step 4: Capability Skill Suggestions
 
-If no process skill matched in Steps 2-3, check for capability skill opportunities (same rule: evaluate in order, stop at the first match):
+If no process skill matched in Steps 2-3, check for capability skill opportunities (same rule: evaluate in order, stop at the first match). These rows propose capabilities that are **not steps**, so the Step 0.5 profile filter never applies to them:
 
 | #   | Condition                                                                | Suggestion           | Rationale                                      |
 | --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
@@ -209,6 +246,7 @@ PROJECT STATE:
 ├── Bounded Contexts: [populated | template]
 ├── PM Tool: [tool name | not configured]
 ├── Scope: [full backlog | root #ID (subtree) | filter <tag> | root #ID ∩ <tag>]
+├── Profile: [default (no section) | poc | custom — N/M steps enabled]
 └── Backlog: [summary of current items — within scope]
 
 RECOMMENDATION: /skill-name
@@ -225,6 +263,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - **Argument edge cases** (see Step 0): `--root` not found → HALT, no action; `--root` resolves to a Done issue → report and exit; `--filter` (or the subtree) matches nothing → report `no matching issues` and exit cleanly (an empty result is not an error).
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
+- If way-of-working.md has no `## Process Profile` section, the `default` profile applies — every step enabled, cascade unchanged. This is the zero-configuration default, not a degradation; the profile's own error cases (unknown name/id, empty whitelist) HALT instead, per Step 0.5.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
 - If way-of-working.md declares no `code-host`, the code host is the PM tool — likewise the zero-configuration default, not a degradation. If a **declared** code host is unreachable, skip row 6's open-PR detection (say so) and evaluate the remaining rows from PM-tool state; never HALT a read-only recommendation over it.
 - If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.

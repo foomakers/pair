@@ -1,13 +1,19 @@
 ---
 name: pair-process-plan-tasks
 description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues are created. Composes /pair-capability-write-issue."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-process-plan-tasks — Task Breakdown
 
 Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Adds an integrated Technical Analysis + Task Breakdown section to the story issue body (the skill composes the full updated body; write-issue overwrites it, it does not append). Tasks live inside the story — no separate task issues are created in the PM tool.
+
+## Process Profile
+
+<!-- process-step: id=plan-tasks -->
+
+Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

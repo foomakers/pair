@@ -154,7 +154,7 @@ A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-
 
 Row 7 and rows 12–16 propose **capabilities that are not steps** ([why](../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md#what-this-catalogue-does-not-govern)): the profile governs the process a team runs, not every tool a skill reaches for, so those rows are never filtered by it. `/brainstorm` and `/map-subdomains` / `/map-contexts` are steps but have no cascade row — nothing to filter there either; their profile handling is the [process-profile gate](../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md) at invocation.
 
-Under `poc` this is what makes epic-level AC4 true end to end: rows 3 and 4 are dropped, and no DDD-mapping step is reachable from `/next` at all.
+Under `poc` this is what makes the guarantee hold end to end: rows 3 and 4 are dropped, and no DDD-mapping step is reachable from `/next` at all.
 
 ### Step 1: Read Adoption Files
 

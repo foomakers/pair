@@ -1,7 +1,7 @@
 ---
 name: pair-process-brainstorm
 description: "Runs discovery in three fixed phases — grill interview, domain integration, backlog tree triage — on a free theme or an existing `$root` issue, landing an integrated Draft epic/story tree while leaving the PRD untouched. Invoke to open a new feature area or to deepen an existing epic/story ('brainstorm the notifications area', 'explore what is missing under #205'); level (broad/punctual) and orientation (functional/technical) are deduced from the root's type and tags, or asked as the first interview question when no root is given (or its type label is unrecognized). Composes /pair-capability-grill, /pair-capability-map-subdomains, /pair-capability-map-contexts, /pair-process-plan-epics, /pair-process-plan-stories."
-version: 0.2.0
+version: 0.3.0
 author: Foomakers
 ---
 
@@ -12,6 +12,12 @@ Turn a rough theme — or an existing epic/story — into an **integrated Draft 
 Discovery is **parametrized**, not a fixed script: with `$root` the level, orientation and phase-3 writer are deduced from the root's type and tags (or asked, on the fallback row); without it, the level is the first question — [parametrization.md](./parametrization.md). **Per-phase idempotency** ([convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md), itemized list in [resume.md](./resume.md)): each phase checks its own output first, so a re-run resumes at the first unfinished phase instead of re-interviewing, re-placing or re-triaging.
 
 Discovery is also the **only** new process skill (D24): every phase delegates to existing capabilities — brainstorm owns the phase order, the parametrization, and nothing else.
+
+## Process Profile
+
+<!-- process-step: id=brainstorm -->
+
+Executable form of the **`brainstorm`** step. Gate and composer rule: [degradation.md](./degradation.md).
 
 ## Composed Skills
 

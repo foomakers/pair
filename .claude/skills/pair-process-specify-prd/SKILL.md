@@ -1,13 +1,19 @@
 ---
 name: pair-process-specify-prd
 description: "Creates or updates a Product Requirements Document through structured template analysis and iterative review — drafting a new PRD, or filling in a missing/outdated section."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-process-specify-prd — PRD Creation
 
 Create a comprehensive Product Requirements Document through collaborative analysis and structured information gathering. Follows a template-first approach: analyze PRD template, gather information via hypothesis-driven questions, create PRD, review and approve.
+
+## Process Profile
+
+<!-- process-step: id=specify-prd -->
+
+Executable form of the **`specify-prd`** step. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Arguments
 

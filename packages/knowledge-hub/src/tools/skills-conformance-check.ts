@@ -942,9 +942,7 @@ export function collectHowToGuides(howToDir: string): string[] {
  * `<name>` meta skill) — the same entry granularity `collectSkillFiles` walks.
  */
 export function collectProcessSkillDirs(skillsDir: string): string[] {
-  return collectSkillFiles(skillsDir).map(f =>
-    relative(skillsDir, dirname(f)).split(sep).join('/'),
-  )
+  return collectSkillFiles(skillsDir).map(f => relative(skillsDir, dirname(f)).split(sep).join('/'))
 }
 
 /** The unprefixed command a skill dir is invoked by (`process/review` → `/review`). */
@@ -969,140 +967,192 @@ export interface CorpusSets {
  * absent from the profile, which reads as "enabled" and is exactly the silent
  * ungoverned step the profile exists to prevent.
  */
-export function checkStepCatalogue(entries: StepEntry[], corpus: CorpusSets): string[] {
+/** A claim ledger: who owns a representation, and whether two rows fight over it. */
+class Claims {
+  private readonly owners = new Map<string, string>()
+  constructor(private readonly noun: string) {}
+
+  claim(key: string, by: string): string[] {
+    const owner = this.owners.get(key)
+    this.owners.set(key, by)
+    return owner === undefined
+      ? []
+      : [`step-catalogue: ${this.noun} \`${key}\` is claimed by both \`${owner}\` and \`${by}\``]
+  }
+
+  has(key: string): boolean {
+    return this.owners.has(key)
+  }
+}
+
+/** Forward direction, one row: every representation it names must resolve. */
+function checkCatalogueRow(
+  entry: StepEntry,
+  ids: Set<string>,
+  commands: Map<string, string>,
+  claimed: { guides: Claims; skills: Claims },
+): string[] {
   const errors: string[] = []
-  const ids = new Set<string>()
-  for (const entry of entries) {
-    if (ids.has(entry.id)) {
-      errors.push(`step-catalogue: duplicate step id \`${entry.id}\` — a whitelist entry would be ambiguous`)
-    }
-    ids.add(entry.id)
+  if (entry.howTo === null && entry.executable === null) {
+    errors.push(
+      `step-catalogue: step \`${entry.id}\` declares neither a how-to nor an executable — ` +
+        `a step with no representation at all cannot be run by any path`,
+    )
   }
-
-  const guides = new Set(corpus.howToGuides)
-  const skillDirs = new Set(corpus.skillDirs)
-  const commands = new Map(corpus.skillDirs.map(d => [commandOf(d), d]))
-
-  const claimedGuides = new Map<string, string>()
-  const claimedSkills = new Map<string, string>()
-
-  for (const entry of entries) {
-    if (entry.howTo === null && entry.executable === null) {
+  if (entry.howTo !== null) {
+    errors.push(...claimed.guides.claim(entry.howTo, entry.id))
+  }
+  if (entry.executable !== null) {
+    const dir = commands.get(entry.executable)
+    if (dir === undefined) {
       errors.push(
-        `step-catalogue: step \`${entry.id}\` declares neither a how-to nor an executable — ` +
-          `a step with no representation at all cannot be run by any path`,
+        `step-catalogue: step \`${entry.id}\` names executable \`${entry.executable}\`, which resolves to no skill in the corpus`,
       )
-    }
-    if (entry.howTo !== null) {
-      if (!guides.has(entry.howTo)) {
-        errors.push(
-          `step-catalogue: step \`${entry.id}\` names how-to \`${entry.howTo}\`, which is not in the how-to corpus`,
-        )
-      }
-      const owner = claimedGuides.get(entry.howTo)
-      if (owner !== undefined) {
-        errors.push(
-          `step-catalogue: how-to \`${entry.howTo}\` is claimed by both \`${owner}\` and \`${entry.id}\``,
-        )
-      }
-      claimedGuides.set(entry.howTo, entry.id)
-    }
-    if (entry.executable !== null) {
-      const dir = commands.get(entry.executable)
-      if (dir === undefined) {
-        errors.push(
-          `step-catalogue: step \`${entry.id}\` names executable \`${entry.executable}\`, which resolves to no skill in the corpus`,
-        )
-      } else {
-        const owner = claimedSkills.get(dir)
-        if (owner !== undefined) {
-          errors.push(
-            `step-catalogue: skill \`${entry.executable}\` is claimed by both \`${owner}\` and \`${entry.id}\``,
-          )
-        }
-        claimedSkills.set(dir, entry.id)
-      }
-    }
-    for (const required of entry.requires) {
-      if (!ids.has(required)) {
-        errors.push(
-          `step-catalogue: step \`${entry.id}\` requires \`${required}\`, which is not a catalogued step id`,
-        )
-      }
+    } else {
+      errors.push(...claimed.skills.claim(dir, entry.id))
     }
   }
-
-  for (const guide of corpus.howToGuides) {
-    if (!claimedGuides.has(guide)) {
+  for (const required of entry.requires) {
+    if (!ids.has(required)) {
       errors.push(
-        `step-catalogue: how-to \`${guide}\` appears in no catalogue row — the manual path of an ` +
-          `uncatalogued step is ungoverned by every profile`,
-      )
-    }
-  }
-  for (const dir of skillDirs) {
-    if (dir.split('/')[0] !== 'process') continue
-    if (!claimedSkills.has(dir)) {
-      errors.push(
-        `step-catalogue: process skill \`${commandOf(dir)}\` appears in no catalogue row — a ` +
-          `process skill IS a step, so a profile could never disable it`,
+        `step-catalogue: step \`${entry.id}\` requires \`${required}\`, which is not a catalogued step id`,
       )
     }
   }
   return errors
 }
 
-/**
- * Every catalogued executable declares its step id and points at the gate
- * convention — and nothing else declares one.
- *
- * The exclusivity half matters as much as the presence half: a marker on a skill
- * the catalogue does not know makes a step id exist in the corpus and nowhere in
- * the configuration surface.
- */
-export function checkStepMarkers(entries: StepEntry[], skillsDir: string): string[] {
+/** Reverse direction: a representation in the corpus that no row claims. */
+function checkCatalogueOrphans(
+  corpus: CorpusSets,
+  claimed: { guides: Claims; skills: Claims },
+): string[] {
   const errors: string[] = []
+  for (const guide of corpus.howToGuides) {
+    if (claimed.guides.has(guide)) continue
+    errors.push(
+      `step-catalogue: how-to \`${guide}\` appears in no catalogue row — the manual path of an ` +
+        `uncatalogued step is ungoverned by every profile`,
+    )
+  }
+  for (const dir of corpus.skillDirs) {
+    if (dir.split('/')[0] !== 'process' || claimed.skills.has(dir)) continue
+    errors.push(
+      `step-catalogue: process skill \`${commandOf(dir)}\` appears in no catalogue row — a ` +
+        `process skill IS a step, so a profile could never disable it`,
+    )
+  }
+  return errors
+}
+
+/** Ids are unique — a duplicate would make a whitelist entry ambiguous. */
+function checkUniqueStepIds(entries: StepEntry[]): { ids: Set<string>; errors: string[] } {
+  const ids = new Set<string>()
+  const errors: string[] = []
+  for (const entry of entries) {
+    if (ids.has(entry.id)) {
+      errors.push(
+        `step-catalogue: duplicate step id \`${entry.id}\` — a whitelist entry would be ambiguous`,
+      )
+    }
+    ids.add(entry.id)
+  }
+  return { ids, errors }
+}
+
+export function checkStepCatalogue(entries: StepEntry[], corpus: CorpusSets): string[] {
+  const { ids, errors } = checkUniqueStepIds(entries)
+  const guides = new Set(corpus.howToGuides)
+  const commands = new Map(corpus.skillDirs.map(d => [commandOf(d), d]))
+  const claimed = { guides: new Claims('how-to'), skills: new Claims('skill') }
+
+  for (const entry of entries) {
+    if (entry.howTo !== null && !guides.has(entry.howTo)) {
+      errors.push(
+        `step-catalogue: step \`${entry.id}\` names how-to \`${entry.howTo}\`, which is not in the how-to corpus`,
+      )
+    }
+    errors.push(...checkCatalogueRow(entry, ids, commands, claimed))
+  }
+
+  // The reverse half is the load-bearing one: a step present in the corpus and
+  // absent from the catalogue reads as "enabled" to every profile, silently.
+  errors.push(...checkCatalogueOrphans(corpus, claimed))
+  return errors
+}
+
+/** The convention pointer may sit in the SKILL.md or in any file disclosed beside it. */
+function pointsAtGateConvention(skillsDir: string, dir: string): boolean {
+  // The MARKER is the entrypoint's obligation — an assistant loads SKILL.md and
+  // must be able to tell which step it is holding. The POINTER may be disclosed:
+  // progressive disclosure is a shipped layout here, and a skill under a byte
+  // budget puts its half of this convention in the sibling that already owns
+  // "a composition is missing". Resolving the obligation over the skill's whole
+  // directory is the rule `checkApprovalSignalInSubDocs` applies in reverse.
+  return collectSkillMarkdownFiles(join(skillsDir, ...dir.split('/'))).some(f =>
+    readFileSync(f, 'utf-8').includes(STEP_GATE_CONVENTION),
+  )
+}
+
+/** One skill's marker obligations, resolved against the catalogue. */
+function checkOneStepMarker(
+  skillsDir: string,
+  dir: string,
+  content: string,
+  entry: StepEntry | undefined,
+): string[] {
+  const declared = STEP_MARKER.exec(content)?.[1]
+  const command = commandOf(dir)
+
+  if (entry === undefined) {
+    return declared === undefined
+      ? []
+      : [
+          `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but \`${command}\` is not a ` +
+            `catalogued step's executable — either catalogue the step or drop the marker`,
+        ]
+  }
+  if (declared === undefined) {
+    return [
+      `${dir}/SKILL.md: is the executable of step \`${entry.id}\` and declares no ` +
+        `\`<!-- process-step: id=${entry.id} -->\` marker (skill-conventions/${STEP_GATE_CONVENTION})`,
+    ]
+  }
+
+  const errors: string[] = []
+  if (declared !== entry.id) {
+    errors.push(
+      `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but the catalogue maps ` +
+        `\`${command}\` to step \`${entry.id}\``,
+    )
+  }
+  if (!pointsAtGateConvention(skillsDir, dir)) {
+    errors.push(
+      `${dir}/SKILL.md: represents step \`${entry.id}\` but neither it nor any file disclosed ` +
+        `beside it points at skill-conventions/${STEP_GATE_CONVENTION} — the gate is written once ` +
+        `and referenced, never re-implemented per skill`,
+    )
+  }
+  return errors
+}
+
+export function checkStepMarkers(entries: StepEntry[], skillsDir: string): string[] {
   const byCommand = new Map<string, StepEntry>()
   for (const entry of entries) {
     if (entry.executable !== null) byCommand.set(entry.executable, entry)
   }
 
+  const errors: string[] = []
   for (const file of collectSkillFiles(skillsDir)) {
     const dir = relative(skillsDir, dirname(file)).split(sep).join('/')
-    const command = commandOf(dir)
-    const content = readFileSync(file, 'utf-8')
-    const declared = STEP_MARKER.exec(content)?.[1]
-    const entry = byCommand.get(command)
-
-    if (entry === undefined) {
-      if (declared !== undefined) {
-        errors.push(
-          `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but \`${command}\` is not a ` +
-            `catalogued step's executable — either catalogue the step or drop the marker`,
-        )
-      }
-      continue
-    }
-    if (declared === undefined) {
-      errors.push(
-        `${dir}/SKILL.md: is the executable of step \`${entry.id}\` and declares no ` +
-          `\`<!-- process-step: id=${entry.id} -->\` marker (skill-conventions/${STEP_GATE_CONVENTION})`,
-      )
-      continue
-    }
-    if (declared !== entry.id) {
-      errors.push(
-        `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but the catalogue maps ` +
-          `\`${command}\` to step \`${entry.id}\``,
-      )
-    }
-    if (!content.includes(STEP_GATE_CONVENTION)) {
-      errors.push(
-        `${dir}/SKILL.md: represents step \`${entry.id}\` but never points at ` +
-          `skill-conventions/${STEP_GATE_CONVENTION} — the gate is written once and referenced, ` +
-          `never re-implemented per skill`,
-      )
-    }
+    errors.push(
+      ...checkOneStepMarker(
+        skillsDir,
+        dir,
+        readFileSync(file, 'utf-8'),
+        byCommand.get(commandOf(dir)),
+      ),
+    )
   }
   return errors
 }
@@ -1117,36 +1167,24 @@ export function checkProcessProfiles(
   profiles: Record<string, ProfileWhitelist>,
   entries: StepEntry[],
 ): string[] {
+  const allIds = entries.map(e => e.id)
+  const known = new Set(allIds)
   const errors: string[] = []
-  const byId = new Map(entries.map(e => [e.id, e]))
 
   for (const [name, whitelist] of Object.entries(profiles)) {
-    const enabled = whitelist === '*' ? entries.map(e => e.id) : whitelist
+    const enabled = whitelist === '*' ? allIds : whitelist
+    const at = `process-profiles: built-in profile \`${name}\``
     if (enabled.length === 0) {
       errors.push(
-        `process-profiles: built-in profile \`${name}\` enables no step — an empty whitelist is a ` +
-          `misconfiguration, never "everything disabled"`,
+        `${at} enables no step — an empty whitelist is a misconfiguration, never "everything disabled"`,
       )
       continue
     }
-    const enabledSet = new Set(enabled)
     for (const id of enabled) {
-      if (!byId.has(id)) {
-        errors.push(
-          `process-profiles: built-in profile \`${name}\` names \`${id}\`, which is not a catalogued step id`,
-        )
-      }
+      if (!known.has(id)) errors.push(`${at} names \`${id}\`, which is not a catalogued step id`)
     }
-    for (const id of enabled) {
-      const entry = byId.get(id)
-      if (entry === undefined || entry.requires.length === 0) continue
-      if (!entry.requires.some(r => enabledSet.has(r))) {
-        errors.push(
-          `process-profiles: built-in profile \`${name}\` enables \`${id}\` but none of its ` +
-            `prerequisites (${entry.requires.map(r => `\`${r}\``).join(', ')}) — enable one of them, ` +
-            `or drop \`${id}\``,
-        )
-      }
+    for (const warning of prerequisiteWarnings(enabled, entries)) {
+      errors.push(`${at}: ${warning}`)
     }
   }
   return errors
@@ -1222,67 +1260,70 @@ export function resolveProcessProfile(
 ): ProfileResolution {
   const allIds = entries.map(e => e.id)
   const known = [...Object.keys(builtIns), 'custom']
-  const asDefault = (halts: string[] = [], warnings: string[] = []): ProfileResolution => ({
+  const halt = (message: string): ProfileResolution => ({
     profile: 'default',
     enabled: allIds,
-    halts,
-    warnings,
+    halts: [message],
+    warnings: [],
+  })
+  const resolved = (profile: string, enabled: string[]): ProfileResolution => ({
+    profile,
+    enabled,
+    halts: [],
+    warnings: prerequisiteWarnings(enabled, entries),
   })
 
   // Absent section ⇒ `default` ⇒ today's behaviour, byte for byte (D21).
   if (!declaration.present || declaration.profile === null) {
     if (declaration.present && declaration.whitelist !== null) {
-      return asDefault([
+      return halt(
         `\`## ${WOW_PROFILE_SECTION}\` declares a \`whitelist\` but no \`profile\` — a whitelist ` +
           `only applies to \`profile: custom\``,
-      ])
+      )
     }
-    return asDefault()
+    return { profile: 'default', enabled: allIds, halts: [], warnings: [] }
   }
 
   const name = declaration.profile
   if (!known.includes(name)) {
-    return asDefault([
+    return halt(
       `unknown process profile \`${name}\` — known profiles: ${known.map(k => `\`${k}\``).join(', ')}`,
-    ])
+    )
   }
-
   if (name !== 'custom') {
     if (declaration.whitelist !== null) {
-      return asDefault([
+      return halt(
         `profile \`${name}\` is a built-in and carries its own step set — a \`whitelist\` here would ` +
           `be silently ignored. Use \`profile: custom\` to name steps explicitly`,
-      ])
+      )
     }
     const builtIn = builtIns[name] as ProfileWhitelist
-    return {
-      profile: name,
-      enabled: builtIn === '*' ? allIds : builtIn,
-      halts: [],
-      warnings: prerequisiteWarnings(builtIn === '*' ? allIds : builtIn, entries),
-    }
+    return resolved(name, builtIn === '*' ? allIds : builtIn)
   }
+  return resolveCustomWhitelist(declaration.whitelist ?? [], allIds, halt, resolved)
+}
 
-  const whitelist = declaration.whitelist ?? []
+/** The `custom` arm: its two HALTs, then the resolution. */
+function resolveCustomWhitelist(
+  whitelist: string[],
+  allIds: string[],
+  halt: (message: string) => ProfileResolution,
+  resolved: (profile: string, enabled: string[]) => ProfileResolution,
+): ProfileResolution {
   if (whitelist.length === 0) {
-    return asDefault([
+    return halt(
       `profile \`custom\` declares an empty whitelist — read as a misconfiguration, never as ` +
         `"every step disabled". Name the steps to keep, or remove the section to run \`default\``,
-    ])
+    )
   }
   const unknown = whitelist.filter(id => !allIds.includes(id))
   if (unknown.length > 0) {
-    return asDefault([
+    return halt(
       `unknown step id(s) ${unknown.map(u => `\`${u}\``).join(', ')} in the custom whitelist — ` +
         `valid ids: ${allIds.map(i => `\`${i}\``).join(', ')}`,
-    ])
+    )
   }
-  return {
-    profile: 'custom',
-    enabled: whitelist,
-    halts: [],
-    warnings: prerequisiteWarnings(whitelist, entries),
-  }
+  return resolved('custom', whitelist)
 }
 
 /** An enabled step whose prerequisites are all disabled, with the minimal fix. */
@@ -1344,6 +1385,56 @@ export function collectSkillFiles(skillsDir: string): string[] {
   return files
 }
 
+/**
+ * Process-step catalogue ↔ corpus, the markers, the built-in profiles, and the
+ * shipped way-of-working template read through the same resolver an adopting
+ * project's file goes through.
+ *
+ * Fails CLOSED on a missing catalogue: skipping it would make "no catalogue" the
+ * one state in which no step is governed and nothing says so.
+ */
+export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): string[] {
+  const cataloguePath = join(proseRoot, STEP_CATALOGUE_FILE)
+  if (!existsSync(cataloguePath)) {
+    return [
+      `${STEP_CATALOGUE_FILE}: missing — every process step is ungoverned and no profile can name one`,
+    ]
+  }
+
+  const entries = parseStepCatalogue(readFileSync(cataloguePath, 'utf-8'))
+  const errors = [
+    ...checkStepCatalogue(entries, {
+      howToGuides: collectHowToGuides(join(proseRoot, HOW_TO_DIR)),
+      skillDirs: collectProcessSkillDirs(skillsDir),
+    }),
+    ...checkStepMarkers(entries, skillsDir),
+  ]
+
+  const profilesPath = join(proseRoot, PROCESS_PROFILES_FILE)
+  if (!existsSync(profilesPath)) {
+    errors.push(`${PROCESS_PROFILES_FILE}: missing — the catalogue has no profile schema to serve`)
+    return errors
+  }
+
+  const builtIns = parseProcessProfiles(readFileSync(profilesPath, 'utf-8'))
+  errors.push(...checkProcessProfiles(builtIns, entries))
+
+  // A shipped TEMPLATE that carries a section no reader accepts teaches the wrong
+  // shape to every project that copies it — so read it with the real reader.
+  const wowPath = join(proseRoot, WOW_TEMPLATE_FILE)
+  if (existsSync(wowPath)) {
+    const wow = resolveProcessProfile(
+      parseWowProfileSection(readFileSync(wowPath, 'utf-8')),
+      entries,
+      builtIns,
+    )
+    for (const problem of [...wow.halts, ...wow.warnings]) {
+      errors.push(`${WOW_TEMPLATE_FILE}: ${problem}`)
+    }
+  }
+  return errors
+}
+
 export function runChecks(skillsDir: string): RunResult {
   const errors: string[] = []
   const files = collectSkillFiles(skillsDir)
@@ -1376,45 +1467,7 @@ export function runChecks(skillsDir: string): RunResult {
   const counts = countByCategory(files, skillsDir)
   const proseRoot = resolve(skillsDir, '..', '..')
 
-  // Process-step catalogue ↔ corpus, and the built-in profiles resolved against it.
-  // Fail CLOSED on a missing catalogue: skipping it would make "no catalogue" the
-  // one state in which no step is governed and nothing says so.
-  const cataloguePath = join(proseRoot, STEP_CATALOGUE_FILE)
-  if (!existsSync(cataloguePath)) {
-    errors.push(
-      `${STEP_CATALOGUE_FILE}: missing — every process step is ungoverned and no profile can name one`,
-    )
-  } else {
-    const entries = parseStepCatalogue(readFileSync(cataloguePath, 'utf-8'))
-    errors.push(
-      ...checkStepCatalogue(entries, {
-        howToGuides: collectHowToGuides(join(proseRoot, HOW_TO_DIR)),
-        skillDirs: collectProcessSkillDirs(skillsDir),
-      }),
-    )
-    errors.push(...checkStepMarkers(entries, skillsDir))
-    const profilesPath = join(proseRoot, PROCESS_PROFILES_FILE)
-    if (existsSync(profilesPath)) {
-      const builtIns = parseProcessProfiles(readFileSync(profilesPath, 'utf-8'))
-      errors.push(...checkProcessProfiles(builtIns, entries))
-      // The shipped adoption TEMPLATE is resolved through the same reader an
-      // adopting project's file goes through: a template that ships a section no
-      // reader accepts teaches the wrong shape to every project that copies it.
-      const wowPath = join(proseRoot, WOW_TEMPLATE_FILE)
-      if (existsSync(wowPath)) {
-        const resolution = resolveProcessProfile(
-          parseWowProfileSection(readFileSync(wowPath, 'utf-8')),
-          entries,
-          builtIns,
-        )
-        for (const halt of [...resolution.halts, ...resolution.warnings]) {
-          errors.push(`${WOW_TEMPLATE_FILE}: ${halt}`)
-        }
-      }
-    } else {
-      errors.push(`${PROCESS_PROFILES_FILE}: missing — the catalogue has no profile schema to serve`)
-    }
-  }
+  errors.push(...checkProcessStepCorpus(skillsDir, proseRoot))
 
   for (const rel of KB_PROSE_FILES) {
     const abs = join(proseRoot, rel)
