@@ -751,7 +751,7 @@ pair run [options]
 | `--filter <tag>`                | Label filter, for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
-| `--autonomous`                  | Explicit opt-in: run without confirmations                                                           |
+| `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
 | `--approve-project-trust`       | Explicit authorization to run where the engine does not trust the project                            |
 | `--iteration-timeout <seconds>` | Per-iteration wall-clock bound (hang guard, default `1800`)                                           |
 | `--dry-run`                     | Resolve engine, skill, perimeter and policy, print them, spawn nothing                               |
@@ -783,6 +783,39 @@ Both default **off**, and neither can be granted from `pair.config.json`:
 - **`--approve-project-trust`** — run where the engine's trust store has no decision for this
   project. `pair run` never writes that store: provision trust with the engine's own command or
   with `/pair-capability-setup-harness`.
+
+#### `--autonomous` also suppresses the skill's own approval rounds
+
+One operator decision — "nobody is watching this run" — governs **two** different things, and the
+flag now reaches both:
+
+1. the **engine's** permission posture (`--permission-mode bypassPermissions` for `claude`, `--auto`
+   for `opencode`, always-on for `pi`);
+2. the **composed skill's** approval rounds, through the `$approval` signal the skill itself
+   declares.
+
+Some skills stop and ask a human to accept what they just produced — the nine `assess-*` skills with
+an approval round and both `map-*` skills. Under `--autonomous` those skills receive
+`--approval auto` and each round resolves without asking: a proposal is accepted as-is and reported,
+an already-recorded value is kept with the delta reported unapplied, and a **judgement gate** — a
+round with no proposal to accept — still stops for a human, because `auto` suppresses *asking*,
+never *judging*.
+
+Three properties worth knowing:
+
+- **Only skills that declare it receive it.** A skill with no approval round (`pair-loop`,
+  `pair-next`) never gets the flag; the driver borrows arguments, it never invents them.
+- **Without `--autonomous`, nothing is passed at all** and every round runs exactly as it does
+  today — an omitted signal *is* the interactive default.
+- **The posture is printed before anything spawns**, next to the autonomy lines, so a run that will
+  approve its own proposals unattended says so in `--dry-run`:
+
+  ```text
+  Approval: --approval auto will be passed (pair-capability-assess-stack declares it; --autonomous is set)
+  ```
+
+`auto` never means "decide silently": every suppressed round still reports what was decided on the
+caller's behalf.
 
 ### How an iteration's outcome is decided
 
@@ -820,6 +853,9 @@ pair run --root 212 --dry-run
 
 # Scope the selector itself: --filter needs a skill that declares one
 pair run --skill pair-next --filter risk:green --max-iterations 1
+
+# A skill with approval rounds, driven unattended: it receives --approval auto
+pair run --skill pair-capability-assess-stack --root 212 --autonomous --max-iterations 1
 
 # A one-shot prompt on the default engine, bounded by its directory
 pair run --prompt "/pair-next --root 212" --cwd . --max-iterations 1
