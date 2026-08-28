@@ -205,6 +205,31 @@ describe('profile schema — built-in profiles and their normative error cases',
     expect(lower).toMatch(/four-space-indented|four-space indent|indented/)
   })
 
+  // Round 6: the four shapes between "the section exists" and "its keys are read"
+  // that the prose did not cover — a value spilling past its line, a key indented
+  // into sublist/code ambiguity, a nested fence, and a delimiter never closed.
+  it('states that a SPILLED value HALTs rather than being read up to the wrap', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/spill/)
+    expect(lower).toMatch(/wrapp?ed|wrap/)
+    expect(profilesSource).toMatch(/SPILLED[^|]*\|\s*\*\*HALT/)
+  })
+
+  it('states that a key indented by four spaces or a tab HALTs', () => {
+    expect(profilesSource).toMatch(/INDENTED[^|]*\|\s*\*\*HALT/)
+    expect(profilesSource.toLowerCase()).toMatch(/sublist/)
+  })
+
+  it('states the CommonMark fence-length rule', () => {
+    expect(profilesSource.toLowerCase()).toMatch(/at least as long/)
+  })
+
+  it('states that HTML comments are masked and an unterminated one HALTs', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/html comments? (are|is) not content|html comments are masked|masked/)
+    expect(profilesSource).toMatch(/UNTERMINATED[^|]*\|\s*\*\*HALT/)
+  })
+
   it('states that line endings are normalized before anything is read', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/line endings are normalized/)
