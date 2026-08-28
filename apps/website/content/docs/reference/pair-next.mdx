@@ -43,6 +43,18 @@ Both arguments **presuppose an established project** (adoption files populated, 
 
 Combining both arguments applies the **intersection**: `subtree ∩ matching tags`.
 
+## Process profile — steps this project does not run
+
+Independently of the two arguments above, `/pair-next` reads the optional `## Process Profile` section of `way-of-working.md` before the cascade and **never proposes a step the project has disabled** ([adoption files](/docs/concepts/adoption-files)). The two mechanisms are unrelated: arguments narrow **which items** are in scope, the profile narrows **which steps** exist at all.
+
+- **No section** ⇒ the `default` profile ⇒ every step, cascade unchanged. Nothing to configure.
+- A disabled row is **skipped**, not an error: evaluation continues, so the enabled steps still chain across the gaps.
+- The profile is re-read **every run**, exactly like the argument scope — never cached.
+- Rows proposing a capability that is not a step (`/pair-capability-checkpoint`, `/pair-capability-setup-gates`, `/pair-capability-assess-stack`, `/pair-capability-analyze-debt`, `/pair-capability-estimate`, `/pair-capability-grill`) are never filtered by it.
+- An unknown profile name, an unknown step id or an empty whitelist **HALT** with the valid values listed. An enabled step whose prerequisites are all disabled is reported with the minimal fix.
+
+Under `poc`, that means no DDD-mapping step and no strategic-planning step is ever offered — the shortest demonstration that a profile is enforced and not merely documented.
+
 ## Re-evaluation — selection is never cached
 
 Scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and re-applies `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (for example, a review raises `risk:yellow` to `risk:red`), the next step's selection reflects the change immediately. `/pair-next` never reuses a selection computed in a previous step.

@@ -67,6 +67,41 @@ Defines your development process:
 
 It also hosts an optional `## State Mapping` section — only needed if your board's column names differ from pair's [canonical states](/docs/concepts/canonical-states). Omitted by default.
 
+#### `## Process Profile` — running a subset of the process
+
+Optional. Not every team runs every step. A `## Process Profile` section declares which **process steps** this project does, and no disabled step is ever proposed.
+
+```text
+## Process Profile
+
+- `profile`: `poc`
+```
+
+| Profile   | What it enables                                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `default` | Every step. **This is what an absent section means** — a team running the full process configures nothing.             |
+| `poc`     | No DDD mapping and no strategic planning layer: `specify-prd`, `bootstrap`, `brainstorm`, `plan-stories`, `refine-story`, `plan-tasks`, `implement`, `review`. |
+| `custom`  | Exactly the steps you name in a `whitelist`.                                                                           |
+
+```text
+## Process Profile
+
+- `profile`: `custom`
+- `whitelist`: `brainstorm`, `plan-stories`, `refine-story`, `plan-tasks`, `implement`, `review`
+```
+
+**The unit is the step, not the skill.** A step has up to two representations — a how-to guide (the manual path) and an executable skill — and the profile governs the step, so a project with **no skills installed**, working from the how-to guides by hand, gets exactly the same behaviour. The mapping lives in the [step catalogue](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md); the schema and the built-in profiles in [process-profiles.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md).
+
+What a disabled step does, in the three places you can meet one:
+
+- `/pair-next` never proposes it.
+- Invoked **directly**, the skill warns that the step is disabled and asks for confirmation — a profile is a project convention, not a permission system.
+- Reached as a **composition** from an enabled step, it is silently skipped, exactly like a skill that is not installed. It never stops to ask about a step you did not name.
+
+A profile is validated, not trusted. An unknown profile name, an unknown step id and an **empty** whitelist all HALT with the valid values listed — a typo must never silently disable a step, and an empty whitelist is a misconfiguration rather than "everything off". A whitelist that disables a step another enabled step depends on is reported with the minimal fix, never silently repaired.
+
+Guidelines are **not** steps: testing, security, code design and the quality gates apply to whatever process you run, so `poc` shortens the process without loosening the bar on the code.
+
 ### PRD.md
 
 Your Product Requirements Document — the source of truth for what the project does, who it serves, and what features are prioritized (P0/P1/P2).
