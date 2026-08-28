@@ -809,6 +809,7 @@ test('smoke: all tutorials pages return 200 with correct titles', async ({ page 
     { url: '/docs/tutorials/existing-project', title: 'Adopting pair on an Existing Project' },
     { url: '/docs/tutorials/team-setup', title: 'Team Setup' },
     { url: '/docs/tutorials/enterprise-adoption', title: 'Enterprise Adoption' },
+    { url: '/docs/tutorials/unattended-delivery', title: 'Unattended Delivery' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -970,6 +971,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/tutorials/existing-project',
     '/docs/tutorials/team-setup',
     '/docs/tutorials/enterprise-adoption',
+    '/docs/tutorials/unattended-delivery',
     '/docs/contributing',
     '/docs/contributing/development-setup',
     '/docs/contributing/architecture',

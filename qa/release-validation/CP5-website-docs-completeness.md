@@ -115,13 +115,14 @@
 - `$BASE_URL/docs/support/general-faq`
 - `$BASE_URL/docs/support/troubleshooting`
 
-**Tutorials** (7 pages):
+**Tutorials** (8 pages):
 
 - `$BASE_URL/docs/tutorials`
 - `$BASE_URL/docs/tutorials/first-project`
 - `$BASE_URL/docs/tutorials/existing-project`
 - `$BASE_URL/docs/tutorials/team-setup`
 - `$BASE_URL/docs/tutorials/enterprise-adoption`
+- `$BASE_URL/docs/tutorials/unattended-delivery`
 - `$BASE_URL/docs/tutorials/managing-ai-artifacts`
 - `$BASE_URL/docs/tutorials/release-testing`
 
@@ -137,13 +138,13 @@
 
 ### Expected Result
 
-- All 83 URLs return HTTP 200
+- All 84 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 83 pages
+- Total: 84 pages
 
 ---
 
@@ -190,3 +191,4 @@
 - #225 (web/cloud environments): MT-CP501 page count 61 → 62, Integrations 6 → 7 — added `/docs/integrations/web-cloud-environments`.
 - #225 (review): MT-CP501 page count 62 → 80 — backfilled the 18 live pages the sweep had drifted past (`/docs`, 5 Concepts, `contributing/writing-migration-pages`, `customization/external-kb`, 2 Migrations, `pm-tools/azure-devops`, 5 Reference, 2 Tutorials). The list is now asserted against the filesystem by `packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts`, so a new page that is not listed here fails CI rather than silently escaping the sweep.
 - #451 (pair-cli execution adapter): MT-CP501 page count 80 → 83, Integrations 7 → 10 — added `/docs/integrations/pi`, `/docs/integrations/opencode` and `/docs/integrations/adding-a-harness` (the harness-execution layer the #450 coordination note left for this story).
+- #464 (approval signal threaded into composed skills): MT-CP501 page count 83 → 84, Tutorials 7 → 8 — added `/docs/tutorials/unattended-delivery` (configuring `tech/automation.md` and daemonizing `pair run` on a dedicated box).
