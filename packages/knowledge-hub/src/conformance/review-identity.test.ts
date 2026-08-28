@@ -51,11 +51,12 @@ const SMOKE = read(join(REPO, 'scripts/smoke-tests/scenarios/review-identity.sh'
 const CI_TESTS = read(join(REPO, 'scripts/smoke-tests/lib/ci-tests.sh'))
 
 describe('review-identity.sh — the host-agnostic identity adapter (AC1, AC4)', () => {
-  it('exposes the six entry points the flow composes', () => {
+  it('exposes the seven entry points the flow composes', () => {
     for (const fn of [
       'review_identity_kind_ok',
       'resolve_identity_mode',
       'review_identity_exclusion_ok',
+      'review_identity_health',
       'identity_verdict_event',
       'pair_review_publication_mode',
       'identity_audit_comment',
@@ -172,12 +173,52 @@ describe('review-identity.sh — the identity must be excluded from the 🔴 gat
   it('session mode returns the NATIVE event unless the acting account authored the PR', () => {
     expect(ADAPTER).toMatch(/WHY `session` MODE IS NOT UNIFORMLY A COMMENT/)
     expect(ADAPTER).toMatch(
-      /self_authored\s+: `session` mode only — 0 when the acting session account is/,
+      /self_authored\s+: 0 when the acting account is provably NOT the pull request's/,
     )
-    // fail-safe: unknown authorship is treated as self-authored
-    expect(ADAPTER).toMatch(/anything else \(empty, absent, unknown\) is treated as SELF-authored/)
+    // fail-safe in `session`: unknown authorship is treated as self-authored
+    expect(ADAPTER).toMatch(/session\s+— unknown ⇒ SELF-authored/)
     // the light row governs the IDENTITY's approval, so it is inert in session mode
     expect(ADAPTER).toMatch(/Read in `identity` mode ONLY/)
+  })
+
+  // REGRESSION (review round 6). `healthy` is the single signal separating `identity`
+  // from `halt` and it had NO runtime source: the host guide's snippet carried
+  // `PROBES_PASSED=0  # set to 1 by whatever ran step 5's probes` and nothing ever set it,
+  // while step 5's probes are explicitly setup-time ("run them once at setup, not per
+  // review") because they leave an undeletable check run on the head commit. Both shipped
+  // surfaces then told the agent `healthy` is 1 when "the required permissions were
+  // observed", with no way to observe them: on a CORRECTLY provisioned repository the
+  // literal reading HALTs every review forever, and the other reading brands every
+  // reviewed head with a `pair-identity-probe` check run.
+  it('review_identity_health is the runtime source of the health flag', () => {
+    expect(ADAPTER).toMatch(/^review_identity_health\(\) \{$/m)
+    expect(ADAPTER).toMatch(/review_identity_health <identity_kind> <auth_ok> <perms_ok>/)
+    // the per-run / at-setup split, stated where the function lives
+    expect(ADAPTER).toMatch(/PER RUN \(here\)\s+— cheap, artifact-free/)
+    expect(ADAPTER).toMatch(/AT SETUP \(once\) — the probes that must WRITE/)
+    // unknown is never healthy, and the exclusion precondition cannot be forgotten
+    expect(ADAPTER).toMatch(/\[ "\$auth_ok" != "1" \]/)
+    expect(ADAPTER).toMatch(/\[ "\$perms_ok" != "1" \]/)
+    expect(ADAPTER).toMatch(/if ! review_identity_exclusion_ok "\$kind" "\$login"; then/)
+    // and the rule that covers what a read probe cannot prove at run time
+    expect(ADAPTER).toMatch(/403\/422 met MID-WRITE is a HALT/)
+  })
+
+  // REGRESSION (review round 6). `<self-authored>` was read in `session` mode only, and
+  // nothing forbade the review identity from being the account that OPENS the PRs — the
+  // #219 unattended loop provisioning its own `acme-bot` as `Review identity: bot-user` is
+  // the concrete case. Health passes, the mode resolves `identity`, and GitHub answers
+  // `422 Can not request changes on your own pull request`: the verdict never lands as a
+  // review, while the check publication is a separate step that still marks `pair-review`
+  // `success` — an approving verdict as a green required check on a PR with no review body.
+  it('identity mode reads authorship too, with per-mode defaults', () => {
+    expect(ADAPTER).toMatch(/WHY `identity` MODE READS AUTHORSHIP TOO/)
+    expect(ADAPTER).toMatch(/422 Can not request changes on your own pull request/)
+    // the arm itself, before the verdict switch
+    expect(ADAPTER).toMatch(/if \[ "\$self_authored" = "1" \]; then[\s\S]{0,600}echo "COMMENT"/)
+    // the defaults are asymmetric ON PURPOSE — the other way deletes the feature
+    expect(ADAPTER).toMatch(/identity — unknown ⇒ NOT self-authored/)
+    expect(ADAPTER).toMatch(/would collapse\n#\s+every identity verdict to COMMENT/)
   })
 
   it('the audit comment names BOTH exclusion clauses, not just the type one', () => {
@@ -288,6 +329,37 @@ describe('review — resolves WHO acts, then submits (AC1, AC4)', () => {
     )
   })
 
+  // REGRESSION (review round 6). Both skills said `healthy` is 1 when "the required
+  // permissions were observed (the host guide lists the probes)" — and the guide's probes
+  // are setup-time. Neither surface named a runtime source, so the agent was left to
+  // improvise the flow's security-critical flag.
+  it('AC4 — both skills name the RUNTIME source of the health flag', () => {
+    for (const skill of [REVIEW, PUBLISH_PR]) {
+      expect(skill).toContain('review_identity_health')
+      expect(skill).toMatch(/per-run, artifact-free probes/)
+      expect(skill).toMatch(/artifact-leaving\*{0,2} probes[\s\S]{0,120}setup-time only/i)
+      expect(skill).toMatch(/mid-write is a HALT\*\*|\*\*HALT\*\* on the refused write/)
+      // the old, sourceless formulation is gone
+      expect(skill).not.toMatch(/the health the host guide's probes report/)
+    }
+  })
+
+  // REGRESSION (review round 6). Nothing forbade the identity from being the PR author,
+  // and no degradation covered it: the host rejects the native event, the verdict never
+  // lands as a review, and Step 5.4 still publishes `pair-review` + the `pr-state:*` label.
+  it('AC1 — identity-mode self-authorship degrades to COMMENT and is a documented case', () => {
+    expect(REVIEW).toMatch(/`identity` where the identity IS the PR author\*\* ⇒ `event = COMMENT`/)
+    expect(REVIEW).toMatch(/The review identity IS the PR author\*\* \(`identity` mode/)
+    expect(REVIEW).toMatch(/Never publish `pair-review` without the review/)
+    // and the read-back that catches a refused submission now has a defined action
+    expect(REVIEW).toMatch(/Review: NOT SUBMITTED/)
+    expect(REVIEW).toMatch(/not let Step 5\.4 publish a resolved `pair-review`/)
+    // the host guide states the setup rule the mechanism backs up
+    expect(GITHUB_GUIDE).toMatch(
+      /the identity must NOT be an account that opens pull requests in this repository/,
+    )
+  })
+
   it('AC3 — health includes being mechanically excluded from the 🔴 gate', () => {
     expect(REVIEW).toContain('review_identity_exclusion_ok')
     expect(REVIEW).toMatch(/not mechanically excluded from the 🔴 gate is \*\*not healthy\*\*/)
@@ -351,7 +423,7 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
   // FIRST — still carried the four-function list, and this loop did not cover it.
   it('every adapter enumeration lists every entry point, exclusion included', () => {
     for (const surface of [GUIDELINE, GITHUB_GUIDE, ADR_018]) {
-      const at = surface.indexOf('six entry points')
+      const at = surface.indexOf('seven entry points')
       expect(at, 'each surface must announce the adapter enumeration').toBeGreaterThan(-1)
       const list = surface.slice(Math.max(0, at - 700), at + 900)
       expect(list).toContain('review-identity.sh')
@@ -359,6 +431,7 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
         'review_identity_kind_ok',
         'resolve_identity_mode',
         'review_identity_exclusion_ok',
+        'review_identity_health',
         'identity_verdict_event',
         'pair_review_publication_mode',
         'identity_audit_comment',
@@ -448,7 +521,7 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
       /\*\*`session`\*\* \(or any unresolved verdict\) ⇒ `event = COMMENT`/,
     )
     // and the flow says HOW self-authorship is resolved, fail-safe closed
-    expect(REVIEW).toMatch(/pass `0` only when they provably differ/)
+    expect(REVIEW).toMatch(/Pass `0` only when they provably differ/)
   })
 
   // REGRESSION (review round 3). The same report row was spelled four ways, one of them
@@ -665,6 +738,21 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(GITHUB_GUIDE).toMatch(/403 Resource not accessible by integration/)
   })
 
+  it('AC4 — the guide separates the setup probes from the per-run health check', () => {
+    expect(GITHUB_GUIDE).toMatch(/5\. \*\*Verify ONCE, at setup\*\*/)
+    expect(GITHUB_GUIDE).toMatch(/\*\*Run them once at setup, never per review\*\*/)
+    expect(GITHUB_GUIDE).toMatch(/6\. \*\*Check the identity's health on EVERY run\*\*/)
+    expect(GITHUB_GUIDE).toMatch(/cheap and artifact-free/)
+    // the per-run App probes: an installation token can serve both
+    expect(GITHUB_GUIDE).toMatch(/AUTH_OK=0/)
+    expect(GITHUB_GUIDE).toMatch(/PERMS_OK=0/)
+    // the write grant is proved by the MINT, which 422s when the grant is absent
+    expect(GITHUB_GUIDE).toMatch(/"permissions":\{"pull_requests":"write","checks":"write"/)
+    expect(GITHUB_GUIDE).toMatch(/422 when the installation/)
+    // and the residual a read probe cannot cover
+    expect(GITHUB_GUIDE).toMatch(/A `403`\/`422` met MID-WRITE is a HALT, not a fallback/)
+  })
+
   it('AC4 — the probes cover pull_requests WRITE, not read only', () => {
     // a read-only grant passes every read probe and then 403s mid-flow, AFTER
     // pair-review was already published — the case the HALT exists to prevent
@@ -674,8 +762,8 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
 
   it('the probe snippet is self-contained and declares the artifacts it leaves', () => {
     const probes = GITHUB_GUIDE.slice(
-      GITHUB_GUIDE.indexOf('5. **Verify**, before relying on it'),
-      GITHUB_GUIDE.indexOf('6. **Publish `pair-review` as a check run**'),
+      GITHUB_GUIDE.indexOf('5. **Verify ONCE, at setup**'),
+      GITHUB_GUIDE.indexOf("6. **Check the identity's health on EVERY run**"),
     )
     expect(probes).toMatch(/PR=<pr-number>/)
     expect(probes).toMatch(/HEAD_SHA="\$\(gh pr view "\$PR" --json headRefOid/)
@@ -688,7 +776,7 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
   // publishes a commit status instead of the check run — no error, the wrong artifact.
   it('the App publication snippet assigns its three identity inputs from real sources', () => {
     const pub = GITHUB_GUIDE.slice(
-      GITHUB_GUIDE.indexOf('6. **Publish `pair-review` as a check run**'),
+      GITHUB_GUIDE.indexOf('7. **Publish `pair-review` as a check run**'),
       GITHUB_GUIDE.indexOf('#### Bot user (alternative)'),
     )
     // REGRESSION (review round 3). The round-2 assignment was anchored at
@@ -707,7 +795,18 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     // learned an identity was configured. Presence is now detected format-agnostically
     // and the value is validated by the adapter.
     expect(pub).toMatch(/^\s+IDENTITY_KEY_PRESENT=0$/m)
-    expect(pub).toMatch(/^\s+grep -qi 'Review identity' "\$WOW" && IDENTITY_KEY_PRESENT=1$/m)
+    // REGRESSION (review round 6). PRESENCE was a bare `grep -qi 'Review identity'` over
+    // the whole file, so ANY prose occurrence of the phrase set IDENTITY_KEY_PRESENT=1 and
+    // the empty extraction then HALTed instead of resolving `none`. A project that runs no
+    // identity, deletes the key and keeps one explanatory sentence ("we use no dedicated
+    // review identity — reviews run with the session token") gets a permanent review
+    // outage, with a HALT telling it to declare an identity it deliberately has not got.
+    // The probe is anchored to the KEY SHAPE — phrase, then colon — and both prose shapes
+    // are EXECUTED against it by the smoke scenario.
+    expect(pub).toMatch(/^\s+grep -qiE '\(\^\|\[\^\[:alnum:\]\]\)\\\*\{0,2\}Review identity/m)
+    // the bare form survives only inside the comment explaining why it was wrong
+    expect(pub).not.toMatch(/^\s+grep -qi 'Review identity' "\$WOW"/m)
+    expect(SMOKE).toMatch(/PROSE mentioning the phrase, no key ⇒ none \(never a HALT\)/)
     expect(pub).toMatch(/^\s+if ! review_identity_kind_ok "\$IDENTITY_KIND"; then$/m)
     expect(pub).toMatch(/if \[ "\$IDENTITY_KEY_PRESENT" = 1 \]; then[\s\S]{0,400}exit 1/)
     // and the negative variants are EXECUTED by the smoke scenario, both directions
@@ -715,8 +814,17 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(SMOKE).toMatch(/the key without the leading BULLET ⇒ HALT/)
     expect(pub).toMatch(/^\s+IDENTITY_CONFIGURED=0$/m)
     expect(pub).toMatch(/^\s+IDENTITY_HEALTHY=0$/m)
-    // and it names where the health flag comes from: the probes AND the exclusion check
-    expect(pub).toMatch(/review_identity_exclusion_ok "\$IDENTITY_KIND"/)
+    // and it names where the health flag comes from: THIS RUN's probes, through the
+    // adapter entry point that folds in the exclusion check.
+    expect(pub).toMatch(/review_identity_health "\$IDENTITY_KIND" "\$\{AUTH_OK:-0\}"/)
+    // REGRESSION (review round 6). The inert `PROBES_PASSED=0  # set to 1 by whatever ran
+    // step 5's probes` had NO writer anywhere in the corpus, and step 5's probes are
+    // explicitly setup-time (they leave an undeletable check run). Following the guide
+    // literally gave `resolve_identity_mode 1 0` ⇒ halt on EVERY review of a correctly
+    // provisioned repository; following the skills gave a `pair-identity-probe` check run
+    // branded on every reviewed head. The dead variable is gone, not merely explained.
+    expect(pub).not.toMatch(/PROBES_PASSED/)
+    expect(GITHUB_GUIDE).not.toMatch(/PROBES_PASSED/)
     // the kind is the adoption literal, forwarded — no undocumented mapping to invent
     expect(pub).toMatch(/forwarded VERBATIM/)
   })

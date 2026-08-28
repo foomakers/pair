@@ -174,6 +174,33 @@ check "session + NOT self-authored + no decision ⇒ COMMENT (fail-safe)" COMMEN
 # in `session` mode the third argument is inert.
 check "session + NOT self-authored + approved, no light authority ⇒ still APPROVE" APPROVE \
   "$(identity_verdict_event session approved 0 0 2>/dev/null)"
+# ROUND 6. `identity` mode never consulted the 4th argument, and nothing forbade the
+# identity from being the SAME account that opens the pull requests (an unattended loop
+# that runs implement/publish-pr as `acme-bot` and then provisions `acme-bot` as
+# `Review identity: bot-user`). Health passes, the mode resolves `identity`, and the host
+# then REJECTS the native event — `422 Can not request changes on your own pull request` —
+# so the verdict never lands as a review while Step 5.4 still publishes `pair-review`: an
+# APPROVED verdict leaves a `success` check on a PR carrying no review body at all.
+# The setup rule (the identity must not author PRs) is the primary containment; this arm
+# is the mechanical one. The DEFAULTS are per-mode and deliberately asymmetric: in
+# `session` mode unknown authorship is SELF-authored (the acting account routinely IS the
+# author), in `identity` mode it is NOT (setup forbids it, and defaulting the other way
+# would collapse every identity verdict to COMMENT and delete the feature).
+check "identity + SELF-authored + approved & authorized ⇒ COMMENT (host rejects it)" COMMENT \
+  "$(identity_verdict_event identity approved 1 1 2>/dev/null)"
+check "identity + SELF-authored + changes-requested ⇒ COMMENT (422 otherwise)" COMMENT \
+  "$(identity_verdict_event identity changes-requested 0 1 2>/dev/null)"
+check "identity + provably NOT self-authored ⇒ native REQUEST_CHANGES" REQUEST_CHANGES \
+  "$(identity_verdict_event identity changes-requested 0 0 2>/dev/null)"
+check "identity + authorship ABSENT ⇒ native event (setup forbids a PR-authoring identity)" APPROVE \
+  "$(identity_verdict_event identity approved 1 2>/dev/null)"
+IDENT_SELF_MSG="$(identity_verdict_event identity approved 1 1 2>&1 >/dev/null)"
+if printf '%s' "$IDENT_SELF_MSG" | grep -qi 'author'; then
+  log_succ "the identity-mode COMMENT names self-authorship as its reason"
+else
+  log_fail "identity-mode self-authored COMMENT does not name authorship: $IDENT_SELF_MSG"; FAILED=1
+fi
+
 SELF_MSG="$(identity_verdict_event session approved 0 1 2>&1 >/dev/null)"
 if printf '%s' "$SELF_MSG" | grep -qi 'author'; then
   log_succ "the session-mode COMMENT names self-authorship as its reason"
@@ -220,6 +247,48 @@ not_excluded "identity kind absent entirely"                                   '
 # repository would HALT forever. Both spellings must resolve identically.
 excluded     "bot-user (the ADOPTION literal) WITH its login provisioned"      bot-user acme-review-bot
 not_excluded "bot-user (the ADOPTION literal) with NO login provisioned"       bot-user ''
+# ==============================================================================
+# AC4 (ROUND 6) — `healthy` HAS A RUNTIME SOURCE. `resolve_identity_mode`'s second
+# argument is the single signal separating `identity` from `halt`, and nothing computed
+# it: the guide's step-6 snippet carried an inert `PROBES_PASSED=0  # set to 1 by
+# whatever ran step 5's probes` and nothing in the corpus ever set it. Following the
+# guide literally (probes are setup-time, nothing persists the result) left
+# PROBES_PASSED=0 on every run ⇒ `resolve_identity_mode 1 0` ⇒ halt ⇒ EVERY review and
+# every publish-pr on a CORRECTLY provisioned repository halted forever. The health
+# determination is now one adapter entry point fed by per-run, artifact-free probes.
+# ==============================================================================
+check "app + credential valid + grants observed ⇒ healthy"            1 \
+  "$(review_identity_health app 1 1 '' 2>/dev/null)"
+check "app + credential probe FAILED ⇒ not healthy"                   0 \
+  "$(review_identity_health app 0 1 '' 2>/dev/null)"
+check "app + permission probe FAILED (403/422) ⇒ not healthy"         0 \
+  "$(review_identity_health app 1 0 '' 2>/dev/null)"
+check "app + probes NOT RUN (arguments absent) ⇒ not healthy"         0 \
+  "$(review_identity_health app 2>/dev/null)"
+check "app + malformed probe outcome ⇒ not healthy (fail-safe)"       0 \
+  "$(review_identity_health app maybe 1 '' 2>/dev/null)"
+check "bot-user + probes green + login provisioned ⇒ healthy"         1 \
+  "$(review_identity_health bot-user 1 1 acme-review-bot 2>/dev/null)"
+check "bot-user + probes green, login UNSET ⇒ not healthy (🔴 gate open)" 0 \
+  "$(review_identity_health bot-user 1 1 '' 2>/dev/null)"
+check "user (short form) + probes green + login ⇒ healthy"            1 \
+  "$(review_identity_health user 1 1 acme-review-bot 2>/dev/null)"
+check "unknown kind, probes green ⇒ not healthy"                      0 \
+  "$(review_identity_health banana 1 1 acme-review-bot 2>/dev/null)"
+check "nothing passed at all ⇒ not healthy"                           0 \
+  "$(review_identity_health 2>/dev/null)"
+# End to end: the health answer is what `resolve_identity_mode` consumes.
+check "healthy identity ⇒ identity mode"  identity \
+  "$(resolve_identity_mode 1 "$(review_identity_health app 1 1 '' 2>/dev/null)" 2>/dev/null)"
+check "a 403 on the permission probe ⇒ halt, never a session fallback" halt \
+  "$(resolve_identity_mode 1 "$(review_identity_health app 1 0 '' 2>/dev/null)" 2>/dev/null)"
+HEALTH_MSG="$(review_identity_health app 1 0 '' 2>&1 >/dev/null)"
+if printf '%s' "$HEALTH_MSG" | grep -qi 'permission'; then
+  log_succ "the not-healthy reason names which probe failed"
+else
+  log_fail "not-healthy reason does not name the failed probe: $HEALTH_MSG"; FAILED=1
+fi
+
 EXCL_MSG="$(review_identity_exclusion_ok user '' 2>&1 >/dev/null)"
 if printf '%s' "$EXCL_MSG" | grep -q 'REVIEW_IDENTITY_LOGIN'; then
   log_succ "the not-excluded reason names the variable that must be provisioned"
@@ -565,6 +634,19 @@ else
     "$(extract_kind "$TMP_DIR/wow-absent.md" 2>/dev/null)"
   halts_on_kind "the key without the BOLD markers ⇒ HALT" "$TMP_DIR/wow-nobold.md"
   halts_on_kind "the key without the leading BULLET ⇒ HALT" "$TMP_DIR/wow-nobullet.md"
+  # ROUND 6. PRESENCE was a bare `grep -qi 'Review identity'` over the WHOLE file, so any
+  # PROSE occurrence of the phrase set IDENTITY_KEY_PRESENT=1 and the empty extraction
+  # then HALTed instead of resolving `none`. A project that runs no identity, deletes the
+  # key and keeps one explanatory sentence under `## Quality Gates` gets a permanent
+  # review outage — and a HALT telling it to declare an identity it deliberately has not
+  # got. The probe is anchored to the KEY SHAPE (the phrase, then a colon).
+  printf -- '## Quality Gates\n\nwe use no dedicated review identity — reviews run with the session token\n' \
+    >"$TMP_DIR/wow-prose.md"
+  printf -- 'we plan to add a dedicated review identity later\n' >"$TMP_DIR/wow-prose2.md"
+  check "PROSE mentioning the phrase, no key ⇒ none (never a HALT)" none \
+    "$(extract_kind "$TMP_DIR/wow-prose.md" 2>/dev/null)"
+  check "PROSE, second shape ⇒ none" none \
+    "$(extract_kind "$TMP_DIR/wow-prose2.md" 2>/dev/null)"
   # The adapter owns the vocabulary the guide validates against.
   for k in app user bot-user none; do
     review_identity_kind_ok "$k" 2>/dev/null ||
