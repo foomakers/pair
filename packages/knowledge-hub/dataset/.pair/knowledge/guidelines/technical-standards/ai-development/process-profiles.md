@@ -30,6 +30,8 @@ Both keys are **backticked list items, and so are their values** — copy a fenc
 
 The **heading** is detected loosely for the same reason: `## Process profile`, `## Process Profile (optional)` and `## **Process Profile**` all name this section. Matching it exactly while matching the keys loosely leaves the widening hole open one level up — a decorated heading makes the whole declaration evaporate into `default`, with no halt and no warning. The comparison is an equality on the normalized text, not a prefix, so `## Process Profile Gate` remains a different section.
 
+The section is **exactly one, at heading level 2**. Both remaining shapes of the same hole HALT rather than resolving to `default`: a **second** `## Process Profile` section (only the first would be read, so the later declaration would take effect nowhere) and a heading at **any other level** (`### Process Profile` is not this section, and being unmatched it would be reported nowhere either). Appending a section is the likelier hand-edit precisely because the template already ships one that is present and empty.
+
 **An absent `## Process Profile` section means `default`** — the full process, today's behaviour byte for byte. This is convention over configuration (D21): a project that runs everything configures nothing, and adding this feature changes no existing project's behaviour.
 
 ## Built-in Profiles
@@ -58,6 +60,8 @@ A profile misread does not surface as an error a user sees; it silently removes 
 | **More than one value on a `profile` line** (`` - `profile`: `poc` (not `custom`) ``) | **HALT** — a profile is one name. Taking the first token silently discarded the rest of the line. |
 | **`whitelist` under `default` / `poc`**     | **HALT** — a built-in carries its own set, so the whitelist would be silently ignored.                          |
 | **`whitelist` with no `profile`**           | **HALT** — a whitelist only applies to `profile: custom`.                                                        |
+| **The section declared MORE THAN ONCE**     | **HALT** — keep one section. Only the first is read, so a profile declared in a later one takes effect nowhere, silently. The template already ships an empty `## Process Profile` section, so *appending* a second is the likelier edit. |
+| **The heading at any level other than `##`** (`### Process Profile`) | **HALT**, restating the level. At another level it is not this section at all — and, being unmatched, it would otherwise be reported nowhere. |
 | **Enabled step, all prerequisites disabled** | **Reported, not fatal**: flag the inconsistency with the **minimal fix**, never silently repaired.              |
 
 The first two are deliberately **two different messages**. A typo in a step id and a profile name that does not exist are **not the same mistake** — one is "you meant a step that exists", the other is "you meant a profile that does not" — and a single generic message would send the reader looking in the wrong file.

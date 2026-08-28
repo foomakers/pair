@@ -169,6 +169,18 @@ describe('profile schema — built-in profiles and their normative error cases',
     expect(lower).toMatch(/different message|not the same mistake|two different/)
   })
 
+  // Round 3 Minor: the two remaining shapes of the widening hole. Both are
+  // normative rules a reader executes, so both are stated in the schema rather
+  // than left as behaviour only the reference resolver knows about.
+  it('states that the section is exactly ONE, at heading level `##`', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/more than once|declared twice|second .*section/)
+    expect(lower).toMatch(/heading level|level `?##`?|any level other/)
+    // Both HALT — never a quiet fallback to `default`.
+    expect(profilesSource).toMatch(/MORE THAN ONCE\*\*\s*\|\s*\*\*HALT/)
+    expect(profilesSource).toMatch(/other than `## `\*\*|other than `##`\*\*/)
+  })
+
   it('treats an empty whitelist as a misconfiguration, never as “everything disabled”', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/empty (custom )?whitelist/)
@@ -300,6 +312,12 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     expect(section).toMatch(/HALT/)
     expect(section.toLowerCase()).toMatch(/unknown profile/)
     expect(section.toLowerCase()).toMatch(/unknown (step )?id/)
+  })
+
+  it.each(sources)('%s: HALTs on a duplicated or mis-levelled section', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/more than one `?## process profile`?/)
+    expect(section.toLowerCase()).toMatch(/level other than `?##`?|### process profile/)
   })
 
   it.each(sources)('%s: HALTs on an empty custom whitelist (AC10)', (_, content) => {
