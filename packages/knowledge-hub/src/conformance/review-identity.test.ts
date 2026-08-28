@@ -5,8 +5,12 @@ import { join } from 'path'
 // Story #218 — dedicated review identity + adoption-gated light auto-approval.
 //
 // This story EXTENDS the shipped PR state flow (#234/#390, ADR-018 Option 3). It
-// rebuilds nothing: `resolve_pr_state`'s table is untouched, the required-check
-// enforcement is untouched, and the 🔴 human-approval predicate is untouched. What is
+// rebuilds nothing: `resolve_pr_state`'s table is untouched and the required-check
+// enforcement is untouched. The 🔴 human-approval predicate gains exactly ONE additive
+// clause — `.user.login != env.REVIEW_IDENTITY_LOGIN` — because the `bot-user` identity
+// form types as `user.type == "User"` on the reviews API and the type clause alone does
+// NOT exclude it; with the variable unset the clause matches nothing, so every prior
+// outcome is unchanged. What is
 // new is (a) WHO acts — a project-provisioned identity resolved through a
 // host-agnostic adapter, with HALT-not-fallback when it is configured but broken —
 // and (b) ONE adoption-gated row that lets that identity sign the approving review a
@@ -47,9 +51,10 @@ const SMOKE = read(join(REPO, 'scripts/smoke-tests/scenarios/review-identity.sh'
 const CI_TESTS = read(join(REPO, 'scripts/smoke-tests/lib/ci-tests.sh'))
 
 describe('review-identity.sh — the host-agnostic identity adapter (AC1, AC4)', () => {
-  it('exposes the four entry points the flow composes', () => {
+  it('exposes the five entry points the flow composes', () => {
     for (const fn of [
       'resolve_identity_mode',
+      'review_identity_exclusion_ok',
       'identity_verdict_event',
       'pair_review_publication_mode',
       'identity_audit_comment',
@@ -89,6 +94,39 @@ describe('review-identity.sh — the host-agnostic identity adapter (AC1, AC4)',
   })
 })
 
+describe('review-identity.sh — the identity must be excluded from the 🔴 gate to act (AC3, AC6)', () => {
+  it('review_identity_exclusion_ok distinguishes the App form from the bot-USER form', () => {
+    expect(ADAPTER).toMatch(/review_identity_exclusion_ok\(\)/)
+    // app ⇒ excluded by account type, nothing to configure
+    expect(ADAPTER).toMatch(/app\)\n\s+# `user\.type == "Bot"`/)
+    // user ⇒ excluded ONLY by login, so an unset login is a not-healthy identity
+    expect(ADAPTER).toMatch(/bot-USER identity types as user\.type == \\"User\\"/)
+    expect(ADAPTER).toMatch(/Treat this identity as NOT healthy until it is set/)
+    // unknown kind is fail-safe NOT excluded
+    expect(ADAPTER).toMatch(/fail-safe: not excluded/)
+  })
+
+  it('the header states the exclusion as two mechanisms, one per identity form', () => {
+    expect(ADAPTER).toMatch(/app\s+— a GitHub App installation types as `user\.type == "Bot"`/)
+    expect(ADAPTER).toMatch(/bot-user\s+— a machine USER account types as `"User"`/)
+  })
+
+  it('AC2/AC3 — identity_verdict_event gates APPROVE on the light row, fail-safe closed', () => {
+    expect(ADAPTER).toMatch(/identity_verdict_event <mode> <verdict> <approve_authorized>/)
+    expect(ADAPTER).toMatch(
+      /local mode="\$\{1:-\}" verdict="\$\{2:-\}" approve_authorized="\$\{3:-0\}"/,
+    )
+    expect(ADAPTER).toMatch(/WHY AN APPROVING VERDICT IS NOT AUTOMATICALLY AN `APPROVE` EVENT/)
+    // REQUEST_CHANGES is deliberately ungated — it blocks, it never unlocks
+    expect(ADAPTER).toMatch(/`REQUEST_CHANGES` needs no such gate/)
+  })
+
+  it('the audit comment names BOTH exclusion clauses, not just the type one', () => {
+    expect(ADAPTER).toMatch(/an App identity is rejected by[\s\S]{0,120}user\.type == "User"/)
+    expect(ADAPTER).toMatch(/bot-USER identity \(which does type as "User"\) by its login clause/)
+  })
+})
+
 describe('pr-state.sh — the light row is a SIBLING, not a change to the table (AC2, AC3)', () => {
   it('ships light_auto_approve_allowed beside the untouched resolve_pr_state', () => {
     expect(EVALUATOR).toContain('light_auto_approve_allowed()')
@@ -119,10 +157,27 @@ describe('pr-state.sh — the light row is a SIBLING, not a change to the table 
     expect(EVALUATOR).toMatch(/not comput(ed|able) here/i)
   })
 
-  it('the 🔴 approval predicate is unchanged by this story', () => {
+  it('the 🔴 approval predicate keeps its three shipped clauses', () => {
     expect(EVALUATOR).toMatch(/user\.type=="User"/)
     expect(EVALUATOR).toMatch(/commit_id==env\.HEAD_SHA/)
     expect(EVALUATOR).toMatch(/user\.login!=env\.PR_AUTHOR/)
+  })
+
+  it('AC3/AC6 — and gains the login clause that excludes a bot-USER identity', () => {
+    // A `Review identity: bot-user` is an ordinary machine account: GitHub answers
+    // `user.type == "User"` for it, so the type clause does NOT exclude it and its
+    // approving review would otherwise satisfy `pair-explicit-approval` on a risk:red
+    // PR — a red PR mergeable with no human involvement. Only an App types as "Bot".
+    expect(EVALUATOR).toMatch(/user\.login!=env\.REVIEW_IDENTITY_LOGIN/)
+    expect(EVALUATOR).toMatch(/WHY THE LOGIN CLAUSE IS NOT REDUNDANT WITH THE TYPE CLAUSE/)
+    expect(EVALUATOR).toMatch(
+      /REVIEW_IDENTITY_LOGIN \(the dedicated review identity's account login/,
+    )
+  })
+
+  it('the light row declares itself the sole authority for the APPROVE event', () => {
+    expect(EVALUATOR).toMatch(/THIS ROW IS THE ONLY AUTHORITY FOR AN `APPROVE` EVENT/)
+    expect(EVALUATOR).toMatch(/third argument of\s*\n?#\s*`identity_verdict_event`/)
   })
 })
 
@@ -159,6 +214,28 @@ describe('review — resolves WHO acts, then submits (AC1, AC4)', () => {
   it('AC5 — the acting account is confirmed by a READ, never assumed', () => {
     expect(REVIEW).toMatch(/read of the PR'?s reviews shows which account authored it/i)
   })
+
+  it('AC5 — decision Q5 is scoped to the VERDICT, so it does not suppress the audit comment', () => {
+    // Q5 ("the verdict is the review action; there is no separate PR comment") and the
+    // mandatory identity audit comment are both rules of this phase; unqualified, an
+    // implementer honouring Q5 literally skips the artifact AC5 requires.
+    expect(REVIEW).toMatch(/\*\*no separate VERDICT comment\*\* \(decision Q5\)/)
+    expect(REVIEW).toMatch(
+      /identity audit comment\*\* of Step 5\.4b is a distinct, required artifact/,
+    )
+  })
+
+  it('AC3 — health includes being mechanically excluded from the 🔴 gate', () => {
+    expect(REVIEW).toContain('review_identity_exclusion_ok')
+    expect(REVIEW).toMatch(/not mechanically excluded from the 🔴 gate is \*\*not healthy\*\*/)
+  })
+
+  it('AC2 — the state is synthesized ONCE, in Step 5.3, and Step 5.4 publishes that value', () => {
+    // the light row needs the synthesis to decide the APPROVE authority, and the label
+    // must describe the same value the event was resolved from
+    expect(REVIEW).toMatch(/Step 5\.4 publishes this same value and does not re-synthesize it/)
+    expect(REVIEW).toMatch(/apply the state Step 5\.3 already synthesized/i)
+  })
 })
 
 describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)', () => {
@@ -168,17 +245,26 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     expect(REVIEW).toMatch(/Tag Projection/)
   })
 
-  it('AC3 — it states there is no auto-approval path outside the light row', () => {
-    expect(REVIEW).toMatch(/no auto-approval path outside this light row/i)
+  it('AC3 — the light row is the only authority for the APPROVE event, mechanically', () => {
+    // The containment is load-bearing only because the row's result is the third
+    // argument of `identity_verdict_event`. Documentation alone would not gate anything:
+    // any approving native review satisfies a host `required_approving_review_count >= 1`.
+    expect(REVIEW).toMatch(/identity_verdict_event <mode> <verdict> <approve-authorized>/)
+    expect(REVIEW).toMatch(/light_auto_approve_allowed[\s\S]{0,400}approve-authorized/)
+    expect(REVIEW).toMatch(/APPROVED \+ not authorized\*\* ⇒ `event = COMMENT`/)
     // and every auto-approval mention in the skill is qualified by "light"
     for (const line of REVIEW.split('\n').filter(l => /auto-approv/i.test(l))) {
       expect(line, `unqualified auto-approval mention: ${line.slice(0, 90)}`).toMatch(/light/i)
     }
   })
 
-  it('AC5 — every identity approval AND every identity block writes the audit comment', () => {
+  it('AC5 — every identity action is audited, in all three directions', () => {
     expect(REVIEW).toContain('identity_audit_comment')
-    expect(REVIEW).toMatch(/every identity approval AND every identity block/i)
+    expect(REVIEW).toMatch(/on every identity action, in all three directions/i)
+    // approve / comment / block — the COMMENT-form approving verdict is audited too,
+    // otherwise an unauthorized approval would leave no trace of why it was refused.
+    expect(REVIEW).toMatch(/`approve`[\s\S]{0,200}`comment`[\s\S]{0,200}`block`/)
+    expect(ADAPTER).toMatch(/action\s+: approve \| comment \| block/)
   })
 
   it('AC2/AC5 — the pr-state:* label mechanics of Step 5.4 are explicitly unchanged', () => {
@@ -188,8 +274,10 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
   })
 
   it('AC3 — at 🔴 the row never fires, and the identity never satisfies the human gate', () => {
-    expect(REVIEW).toMatch(/At 🔴 nothing here ever fires/)
+    expect(REVIEW).toMatch(/At 🔴 the row never fires at all/)
+    // both exclusion clauses named — the type one covers an App, the login one a bot user
     expect(REVIEW).toMatch(/user\.type == "User"/)
+    expect(REVIEW).toMatch(/REVIEW_IDENTITY_LOGIN/)
   })
 
   it('reports the identity mode and the light-row outcome in the output block', () => {
@@ -291,17 +379,62 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
   })
 
   it('AC6 — the comparison table keeps the 🔴 row constant across all three modes', () => {
-    expect(GITHUB_GUIDE).toMatch(/🔴 explicit approval[\s\S]{0,200}second \*\*human\*\*/)
-    expect(GITHUB_GUIDE).toMatch(/excluded \*\*by construction\*\*/)
+    expect(GITHUB_GUIDE).toMatch(/🔴 explicit approval[\s\S]{0,300}second \*\*human\*\*/)
   })
 
-  it('warns about the bot-USER footgun (it types as "User" on the reviews API)', () => {
-    expect(GITHUB_GUIDE).toMatch(/keep it out of the repository'?s human-reviewer set/i)
+  it('states the bot-USER exclusion as a MECHANISM, not as advice', () => {
+    // The footgun is that a machine USER account types as "User" and is therefore
+    // indistinguishable from a human by the type clause. Prose telling a maintainer to
+    // "keep it out of the human-reviewer set" is not a containment — the login clause is.
+    expect(GITHUB_GUIDE).toMatch(/Only a GitHub \*\*App\*\* types as `"Bot"`/)
+    expect(GITHUB_GUIDE).toMatch(/MANDATORY for this form — provision `REVIEW_IDENTITY_LOGIN`/)
+    expect(GITHUB_GUIDE).toContain('gh variable set REVIEW_IDENTITY_LOGIN')
+    expect(GITHUB_GUIDE).toContain('REVIEW_IDENTITY_LOGIN: ${{ vars.REVIEW_IDENTITY_LOGIN }}')
+    expect(GITHUB_GUIDE).toMatch(/review_identity_exclusion_ok/)
   })
 
   it('AC3 — the light row section states both containments', () => {
     expect(GITHUB_GUIDE).toMatch(/The declaration is the gate, not the label/i)
     expect(GITHUB_GUIDE).toMatch(/It never touches 🔴/i)
+  })
+
+  it('AC3 — and says WHY the row gates anything at all', () => {
+    expect(GITHUB_GUIDE).toMatch(/Why it is this row and not every approving verdict/i)
+    expect(GITHUB_GUIDE).toMatch(/third argument of `identity_verdict_event`/)
+  })
+
+  it('AC1 — the App path documents how to obtain the installation token it depends on', () => {
+    // Step 4 declares GH_TOKEN to be the installation token; without the exchange a
+    // maintainer following the recommended path end-to-end cannot complete it.
+    expect(GITHUB_GUIDE).toMatch(/Mint the installation token/)
+    expect(GITHUB_GUIDE).toMatch(/app\/installations\/\$INSTALLATION_ID\/access_tokens/)
+    expect(GITHUB_GUIDE).toMatch(/actions\/create-github-app-token/)
+  })
+
+  it('AC4 — the App health probes are ones an INSTALLATION token can actually serve', () => {
+    // `gh api user` answers 403 for an installation token (it is not associated with a
+    // user), so using it as the first probe fails a correctly-provisioned App and HALTs
+    // every review on a setup that is in fact fine.
+    expect(GITHUB_GUIDE).toMatch(/gh api \/installation\/repositories --jq '\.total_count'/)
+    expect(GITHUB_GUIDE).toMatch(/`gh api user` does NOT work/)
+    expect(GITHUB_GUIDE).toMatch(/403 Resource not accessible by integration/)
+  })
+
+  it('AC4 — the probes cover pull_requests WRITE, not read only', () => {
+    // a read-only grant passes every read probe and then 403s mid-flow, AFTER
+    // pair-review was already published — the case the HALT exists to prevent
+    expect(GITHUB_GUIDE).toMatch(/pull_requests: WRITE/)
+    expect(GITHUB_GUIDE).toMatch(/gh api "repos\/\$REPO\/issues\/comments\/\$CID" -X DELETE/)
+  })
+
+  it('the probe snippet is self-contained and declares the artifacts it leaves', () => {
+    const probes = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('5. **Verify**, before relying on it'),
+      GITHUB_GUIDE.indexOf('6. **Publish `pair-review` as a check run**'),
+    )
+    expect(probes).toMatch(/PR=<pr-number>/)
+    expect(probes).toMatch(/HEAD_SHA="\$\(gh pr view "\$PR" --json headRefOid/)
+    expect(probes).toMatch(/These probes leave artifacts on a real pull request/)
   })
 })
 
@@ -354,6 +487,27 @@ describe('ADR-018 — the amendment records adoption AND the non-changes (AC6)',
   it('records the adoption impact of the amendment', () => {
     expect(ADR_018).toMatch(/Added by the 2026-08-28 amendment/)
   })
+
+  it('records the ONE predicate change honestly, as additive', () => {
+    expect(ADR_018).toMatch(/enforced by two clauses, not one/i)
+    expect(ADR_018).toContain('REVIEW_IDENTITY_LOGIN')
+    expect(ADR_018).toMatch(
+      /it is additive: with the variable unset the clause\n\s+matches nothing/,
+    )
+  })
+
+  it('records that the light row is the sole authority for a native APPROVE', () => {
+    expect(ADR_018).toMatch(/A native `APPROVE` is authorized by the light row and by nothing else/)
+    expect(ADR_018).toContain('identity_verdict_event')
+  })
+
+  it('points at the file that actually runs the offline matrix', () => {
+    // the matrix lives in review-identity.sh, not pr-state-flow.sh — a reader auditing
+    // what was verified must not be sent to a file that contains none of it
+    expect(ADR_018).toMatch(
+      /matrix runs offline in `scripts\/smoke-tests\/scenarios\/review-identity\.sh`/,
+    )
+  })
 })
 
 describe('verification split is real, not claimed (gate-tooling ADL)', () => {
@@ -378,6 +532,33 @@ describe('verification split is real, not claimed (gate-tooling ADL)', () => {
   it('the smoke scenario pins the 🔴 regression against the committed fixture', () => {
     expect(SMOKE).toContain('github-pr-reviews.json')
     expect(SMOKE).toMatch(/does not satisfy the 🔴 predicate/)
+  })
+
+  it('the smoke scenario exercises a type:"User" MACHINE approval, not only type:"Bot"', () => {
+    // Asserting that some non-User review exists in a fixture never exercises the
+    // bot-user form, which is the one the type clause does not cover.
+    expect(SMOKE).toMatch(/"login": "acme-review-bot", "type": "User"/)
+    expect(SMOKE).toMatch(
+      /bot-USER machine approval, login provisioned ⇒ does NOT satisfy the 🔴 gate" 0/,
+    )
+    expect(SMOKE).toMatch(/only a machine approval ⇒ still blocked" to-be-reviewed/)
+    expect(SMOKE).toContain('review_identity_exclusion_ok')
+  })
+
+  it('the no-auto-approval guard asserts the RESOLVED EVENT, not a keyword in prose', () => {
+    // A grep over skill prose passes on any wording that avoids the token, so it cannot
+    // regress-protect the behavior it names. The event matrix can.
+    expect(SMOKE).toMatch(/event_for\(\) \{/)
+    expect(SMOKE).toMatch(
+      /NO light tag ⇒ COMMENT \(this is the Major-finding regression\)" COMMENT/,
+    )
+    expect(SMOKE).toMatch(/DOCUMENTATION guard \(not behavioral/)
+  })
+
+  it('the docs page states the exclusion as two clauses and the APPROVE authority', () => {
+    expect(DOCS_PAGE).toContain('REVIEW_IDENTITY_LOGIN')
+    expect(DOCS_PAGE).toMatch(/A machine user is not a "Bot" to the API/)
+    expect(DOCS_PAGE).toMatch(/only thing that authorizes an approving review/i)
   })
 
   it('the smoke scenario asserts an INSTALLED project carries the adapter and the guide', () => {
