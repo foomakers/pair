@@ -101,8 +101,36 @@ export interface WaitTimeoutKeys {
 /** Ceilings the harness imposes on an orchestrator that dispatches and waits itself. */
 export interface RealizationBounding {
   readonly concurrencyKey: string
-  readonly waitTimeoutKeys: WaitTimeoutKeys
+  /**
+   * Config keys that make the wait bound configurable, where the harness HAS them — and `null`
+   * where it does not. Borrowing another feature's keys was worse than declaring none: the
+   * caller was told to read a triple belonging to a default-OFF feature, the read returned
+   * nothing on the default session, and the step had no third branch.
+   */
+  readonly waitTimeoutKeys: WaitTimeoutKeys | null
+  /**
+   * The bound to apply when the session reports none and no key yields one.
+   *
+   * AC10 admits no unbounded wait, so "nothing observable" cannot be an answer here. It is
+   * DATA on the entry rather than a number the run picks: versioned with the map, reviewed like
+   * every other field, announced with its source, and overridden the moment the session or a
+   * config key does report one. A caller choosing it mid-flight would be the inference the
+   * probe rule exists to keep out; the entry declaring it is the same kind of statement as the
+   * handle names next to it.
+   */
+  readonly fallbackWaitTimeoutMs: number
 }
+
+/**
+ * The declared fallback wait bound for a spawn/wait realization, in ms.
+ *
+ * Sized to the longest phase this lane dispatches — a full `implement` on one card in a fresh
+ * subagent — because the cost of the two errors is asymmetric: too short abandons work that was
+ * still progressing (the phase collects `timed-out`, the card halts for this run and is
+ * re-driven by the next), while too long is the hang this bound exists to prevent, and the run
+ * is unattended.
+ */
+const FALLBACK_WAIT_TIMEOUT_MS = 1_800_000
 
 export interface RealizationDefinition {
   readonly id: string
@@ -174,8 +202,14 @@ const CODEX_MULTI_AGENT_V2: RealizationDefinition = {
       max: 'features.multi_agent_v2.max_wait_timeout_ms',
       default: 'features.multi_agent_v2.default_wait_timeout_ms',
     },
+    fallbackWaitTimeoutMs: FALLBACK_WAIT_TIMEOUT_MS,
   },
-  verifiedAgainst: 'codex-cli 0.149.0 — `codex features list` (stable, default off), 2026-08-22',
+  verifiedAgainst:
+    'codex-cli 0.150.1 — `codex features list` reports `multi_agent_v2 stable false`; the ' +
+    'bounding keys read off the shipped binary, where `min_wait_timeout_ms`, ' +
+    '`max_wait_timeout_ms`, `default_wait_timeout_ms` and ' +
+    '`max_concurrent_threads_per_session` are all fields of this feature’s own config ' +
+    'section, 2026-08-28',
 }
 
 /**
@@ -197,13 +231,18 @@ const CODEX_MULTI_AGENT_V1: RealizationDefinition = {
   gating: { featureKey: 'features.multi_agent', defaultOn: true },
   bounding: {
     concurrencyKey: 'agents.max_concurrent_threads_per_session',
-    waitTimeoutKeys: {
-      min: 'features.multi_agent_v2.min_wait_timeout_ms',
-      max: 'features.multi_agent_v2.max_wait_timeout_ms',
-      default: 'features.multi_agent_v2.default_wait_timeout_ms',
-    },
+    // This generation exposes NO wait-timeout config key of its own. The entry used to name the
+    // other generation's triple, which is the worst of both: the keys belong to a feature that
+    // is off by default (and therefore unset), so on the session this entry actually serves the
+    // caller's read returned nothing — while the map asserted a bound it had never verified.
+    waitTimeoutKeys: null,
+    fallbackWaitTimeoutMs: FALLBACK_WAIT_TIMEOUT_MS,
   },
-  verifiedAgainst: 'codex-cli 0.149.0 — `codex features list` (stable, default on), 2026-08-22',
+  verifiedAgainst:
+    'codex-cli 0.150.1 — `codex features list` reports `multi_agent stable true`; the shipped ' +
+    'binary carries `agents.max_concurrent_threads_per_session` for this generation and NO ' +
+    'wait-timeout key outside the `multi_agent_v2` config section, so the wait bound here is ' +
+    'not configurable and the declared fallback is what applies, 2026-08-28',
 }
 
 /**
@@ -263,15 +302,19 @@ export interface Binding {
   /** Harness ceiling the binding contributes to the cap arithmetic, when observed. */
   readonly harnessCeiling: number | null
   /**
-   * The bound the caller must put on every wait it performs, resolved from the probe.
+   * The bound the caller must put on every wait it performs — ALWAYS a number for a
+   * `spawn-wait` binding, `null` only where this orchestrator does no waiting.
    *
    * AC10 requires every wait to be bounded, and the skill is deliberately barred from naming
-   * the vendor's config keys itself. So the bound is returned here: the resolved value when
-   * the session reported one, and otherwise the keys to read it from — never nothing, which
-   * left the caller inventing a timeout or omitting the argument and relying on a default
-   * nobody observed.
+   * the vendor's config keys itself. Returning the keys alone was not enough: the generation a
+   * bare session binds has none, so the read returned nothing and the caller's only remaining
+   * moves — invent a timeout, or omit the argument and trust an unseen default — are both
+   * forbidden. The resolution therefore always terminates in a number.
    */
   readonly waitTimeoutMs: number | null
+  /** Where `waitTimeoutMs` came from, so the announcement and the audit can say so. */
+  readonly waitTimeoutSource: 'probe' | 'realization-default' | null
+  /** Config keys that raise or lower it, where the realization has them. */
   readonly waitTimeoutKeys: WaitTimeoutKeys | null
 }
 
@@ -320,27 +363,36 @@ function degrade(probe: ProbeObservation): Binding {
     announcement: `fan-out realization: ${realization} (tier ${tier}) — ${next}`,
     harnessCeiling: null,
     waitTimeoutMs: null,
+    waitTimeoutSource: null,
     waitTimeoutKeys: null,
   }
 }
 
+type WaitBound = Pick<Binding, 'waitTimeoutMs' | 'waitTimeoutSource' | 'waitTimeoutKeys'>
+
 /**
- * The wait bound this binding hands back: the probed value when the session reported a usable
- * one, and the config keys either way — but only for a realization this orchestrator waits on.
- * A delegated run's waits belong to the runtime that owns them.
+ * The wait bound this binding hands back, for a realization this orchestrator waits on: the
+ * probed value when the session reported a usable one, otherwise the entry's DECLARED fallback
+ * — never nothing. A delegated run's waits belong to the runtime that owns them, so it gets
+ * none at all.
  */
-function waitBound(
-  def: RealizationDefinition,
-  probe: ProbeObservation,
-): { waitTimeoutMs: number | null; waitTimeoutKeys: WaitTimeoutKeys | null } {
+function waitBound(def: RealizationDefinition, probe: ProbeObservation): WaitBound {
   const bounding = def.bounding
-  if (!bounding) return { waitTimeoutMs: null, waitTimeoutKeys: null }
+  if (!bounding) return { waitTimeoutMs: null, waitTimeoutSource: null, waitTimeoutKeys: null }
   const reported = probe.harnessWaitTimeoutMs
   const usable = Number.isInteger(reported) && (reported as number) > 0
   return {
-    waitTimeoutMs: usable ? (reported as number) : null,
+    waitTimeoutMs: usable ? (reported as number) : bounding.fallbackWaitTimeoutMs,
+    waitTimeoutSource: usable ? 'probe' : 'realization-default',
     waitTimeoutKeys: bounding.waitTimeoutKeys,
   }
+}
+
+/** The announcement's wait clause, so an unattended run's bound is auditable, not implicit. */
+function waitClause(bound: WaitBound): string {
+  if (bound.waitTimeoutMs === null) return ''
+  const configurable = bound.waitTimeoutKeys === null ? ', not configurable here' : ''
+  return `; wait bound ${bound.waitTimeoutMs}ms (${bound.waitTimeoutSource}${configurable})`
 }
 
 /**
@@ -359,15 +411,18 @@ export function resolveRealization(probe: ProbeObservation): Binding {
       `probed this session: ${bound} ${hit.length > 1 ? 'are all' : 'is'} exposed ` +
       `(gated by \`${def.gating.featureKey}\`, default ${def.gating.defaultOn ? 'on' : 'off'}; ` +
       `verified against ${def.verifiedAgainst})`
+    const waiting = waitBound(def, probe)
     return {
       tier: def.tier,
       realization: def.id,
       dispatch: def.handles.dispatch,
       primitive: hit[0] ?? null,
       reason,
-      announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ${def.handles.dispatch}) — bound to ${bound}; ${reason}`,
+      announcement:
+        `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ` +
+        `${def.handles.dispatch}) — bound to ${bound}${waitClause(waiting)}; ${reason}`,
       harnessCeiling: def.bounding ? ceiling : null,
-      ...waitBound(def, probe),
+      ...waiting,
     }
   }
   return degrade(probe)
@@ -1250,18 +1305,39 @@ export function isCardRecord(record: AuditRecord): record is AuditRecord & { id:
   return record?.kind !== 'run' && typeof record?.id === 'string' && record.id.trim() !== ''
 }
 
+/** The only spellings that place a completed review cycle. Anything else leaves it OPEN. */
+export const REVIEW_ACTIONS: readonly ConvergeDecision['action'][] = Object.freeze([
+  'converged',
+  'fix',
+  'escalate',
+])
+
+function isReviewAction(value: unknown): value is ConvergeDecision['action'] {
+  return REVIEW_ACTIONS.includes(value as ConvergeDecision['action'])
+}
+
 /**
- * Refuses at WRITE time a record no reader could place. The two ways of getting it wrong were
- * both silent at write and both damaging at read, so the check is here rather than there.
+ * Refuses at WRITE time a record no reader could place. The three ways of getting it wrong were
+ * all silent at write and all damaging at read, so the check is here rather than there.
  */
 function assertAuditable(record: AuditRecord, index: number): void {
-  if (record?.kind === 'run' || isCardRecord(record)) return
+  if (record?.kind !== 'run' && !isCardRecord(record))
+    throw new Error(
+      `codex-fanout: audit record #${index} names no card \`id\` and is not marked \`kind:"run"\`. ` +
+        `A run-level line — the realization announcement, a run-level halt — is written as ` +
+        `\`{"kind":"run", …}\`; everything else names the card it belongs to. Neither is inferred, ` +
+        `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
+        `with no id at all is unreadable on resume.`,
+    )
+  if (record.phase !== 'review' || record.outcome !== 'completed') return
+  if (isReviewAction(record.action)) return
   throw new Error(
-    `codex-fanout: audit record #${index} names no card \`id\` and is not marked \`kind:"run"\`. ` +
-      `A run-level line — the realization announcement, a run-level halt — is written as ` +
-      `\`{"kind":"run", …}\`; everything else names the card it belongs to. Neither is inferred, ` +
-      `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
-      `with no id at all is unreadable on resume.`,
+    `codex-fanout: audit record #${index} completes a \`review\` without saying what \`converge\` ` +
+      `decided (\`action\` was ${JSON.stringify(record.action)}; expected one of ` +
+      `${REVIEW_ACTIONS.join(', ')}). A review round is not a finished cycle: with the action ` +
+      `missing or misspelled, a run killed between the review and its fix round resumes with ` +
+      `nothing left to do, and a PR carrying unresolved actionable findings reaches the merge ` +
+      `gate. The stamp is not optional and is not inferred.`,
   )
 }
 
@@ -1374,12 +1450,17 @@ function halt(state: CardState, by: Phase | null, reason: string): void {
 }
 
 /**
- * A completed `review` finishes the cycle only when `converge` said it did. A round that still
- * owes a fix leaves the cycle OPEN, so the card re-enters at `review` and its fixes are
- * re-reviewed rather than assumed good; an escalated round stops the card for a human.
+ * A completed `review` finishes the cycle only when `converge` said `converged` — and nothing
+ * else does, including an absent or misspelled action.
+ *
+ * This is the read half of the audit's one remaining silent default. Treating "not `fix` and
+ * not `escalate`" as done meant an omitted `action` reconstructed as a CLOSED cycle: the plan
+ * listed nothing to re-dispatch, the card went straight to auto-advance, and a PR carrying the
+ * findings the killed run never fixed merged at a tier the policy permits. Fail-closed, the
+ * same omission costs one re-review.
  */
 function applyReviewRecord(state: CardState, record: AuditRecord, canHalt: boolean): void {
-  state.cycleOpen = record.action === 'fix'
+  state.cycleOpen = record.action !== 'converged'
   if (record.action === 'escalate') {
     if (canHalt) halt(state, 'review', record.reason ?? 'the review cycle escalated to a human')
     return
@@ -1589,10 +1670,35 @@ function runResume(req: CommandRequest): unknown {
   return Object.keys(states).map(id => resumePlan(id, states[id]))
 }
 
+/** Every key a `probe` may carry. A misspelling here silently demotes the whole run. */
+const PROBE_KEYS: readonly string[] = [
+  'tools',
+  'namespace',
+  'harnessCeiling',
+  'harnessWaitTimeoutMs',
+  'externalDriverAvailable',
+]
+
+/** Every key a `ceilings` may carry. A dropped one reinstates "no ceiling from that source". */
+const CEILING_KEYS: readonly string[] = ['dependencyAllowed', 'policyMax', 'harnessCeiling']
+
+/**
+ * The two sub-objects the model composes besides `packet` and `card`. They were the last places
+ * an unknown key was dropped rather than rejected, and both reinstate exactly the default they
+ * were passed to override: a misspelled `harnessCeiling` inside `ceilings` dispatched the
+ * policy's parallelism into a harness that allows less, and a misspelled one inside `probe`
+ * bound tier 1 with no harness ceiling at all — while a misspelled `externalDriverAvailable`
+ * demoted an available tier-2 run to tier-3 degraded.
+ */
+function checked<T>(value: T, allowed: readonly string[], where: string): T {
+  assertKnownKeys(value, allowed, where, message => new Error(message))
+  return value
+}
+
 /** One handler per command — a table rather than a chain, so adding one adds a row. */
 const HANDLERS: Readonly<Record<Command, (req: CommandRequest) => unknown>> = Object.freeze({
-  bind: req => resolveRealization(req.probe ?? {}),
-  cap: req => effectiveParallelism(req.ceilings as Ceilings),
+  bind: req => resolveRealization(checked(req.probe ?? {}, PROBE_KEYS, 'the probe')),
+  cap: req => effectiveParallelism(checked(req.ceilings, CEILING_KEYS, 'the ceilings') as Ceilings),
   packet: req => buildPacket(packetRequestFrom(req)),
   collect: req => collectOutcome(req.phase as Phase, req.result, req.schema),
   converge: req => converge(req),

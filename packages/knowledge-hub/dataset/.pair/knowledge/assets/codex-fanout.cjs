@@ -4,7 +4,7 @@
 
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.main = exports.COMMANDS = exports.resumePlan = exports.reconstructState = exports.OWED_PHASES = exports.appendAudit = exports.isCardRecord = exports.auditLine = exports.converge = exports.MAX_FIX_ROUNDS_DEFAULT = exports.collectOutcome = exports.schemaViolations = exports.TERMINAL_OUTCOMES = exports.buildPacket = exports.assertBlind = exports.blindDenyPrefixes = exports.BLIND_DENY_PREFIXES = exports.WORKING_PATH_DEFAULT = exports.PacketRejected = exports.isPhase = exports.PHASE_CONTRACTS = exports.PHASES = exports.effectiveParallelism = exports.resolveRealization = exports.HARNESS_SURFACE_MAP = exports.requiredHandles = exports.REALIZATION_TIERS = void 0;
+exports.main = exports.COMMANDS = exports.resumePlan = exports.reconstructState = exports.OWED_PHASES = exports.appendAudit = exports.REVIEW_ACTIONS = exports.isCardRecord = exports.auditLine = exports.converge = exports.MAX_FIX_ROUNDS_DEFAULT = exports.collectOutcome = exports.schemaViolations = exports.TERMINAL_OUTCOMES = exports.buildPacket = exports.assertBlind = exports.blindDenyPrefixes = exports.BLIND_DENY_PREFIXES = exports.WORKING_PATH_DEFAULT = exports.PacketRejected = exports.isPhase = exports.PHASE_CONTRACTS = exports.PHASES = exports.effectiveParallelism = exports.resolveRealization = exports.HARNESS_SURFACE_MAP = exports.requiredHandles = exports.REALIZATION_TIERS = void 0;
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
 exports.REALIZATION_TIERS = Object.freeze({
@@ -16,6 +16,7 @@ function requiredHandles(handles) {
     return handles.dispatch === 'spawn-wait' ? [handles.spawn, handles.wait] : [handles.delegate];
 }
 exports.requiredHandles = requiredHandles;
+const FALLBACK_WAIT_TIMEOUT_MS = 1_800_000;
 const CLAUDE_CODE_WORKFLOW = {
     id: 'claude-code-workflow',
     tier: exports.REALIZATION_TIERS.IN_HARNESS,
@@ -41,8 +42,13 @@ const CODEX_MULTI_AGENT_V2 = {
             max: 'features.multi_agent_v2.max_wait_timeout_ms',
             default: 'features.multi_agent_v2.default_wait_timeout_ms',
         },
+        fallbackWaitTimeoutMs: FALLBACK_WAIT_TIMEOUT_MS,
     },
-    verifiedAgainst: 'codex-cli 0.149.0 — `codex features list` (stable, default off), 2026-08-22',
+    verifiedAgainst: 'codex-cli 0.150.1 — `codex features list` reports `multi_agent_v2 stable false`; the ' +
+        'bounding keys read off the shipped binary, where `min_wait_timeout_ms`, ' +
+        '`max_wait_timeout_ms`, `default_wait_timeout_ms` and ' +
+        '`max_concurrent_threads_per_session` are all fields of this feature’s own config ' +
+        'section, 2026-08-28',
 };
 const CODEX_MULTI_AGENT_V1 = {
     id: 'codex-multi-agent-v1',
@@ -59,13 +65,13 @@ const CODEX_MULTI_AGENT_V1 = {
     gating: { featureKey: 'features.multi_agent', defaultOn: true },
     bounding: {
         concurrencyKey: 'agents.max_concurrent_threads_per_session',
-        waitTimeoutKeys: {
-            min: 'features.multi_agent_v2.min_wait_timeout_ms',
-            max: 'features.multi_agent_v2.max_wait_timeout_ms',
-            default: 'features.multi_agent_v2.default_wait_timeout_ms',
-        },
+        waitTimeoutKeys: null,
+        fallbackWaitTimeoutMs: FALLBACK_WAIT_TIMEOUT_MS,
     },
-    verifiedAgainst: 'codex-cli 0.149.0 — `codex features list` (stable, default on), 2026-08-22',
+    verifiedAgainst: 'codex-cli 0.150.1 — `codex features list` reports `multi_agent stable true`; the shipped ' +
+        'binary carries `agents.max_concurrent_threads_per_session` for this generation and NO ' +
+        'wait-timeout key outside the `multi_agent_v2` config section, so the wait bound here is ' +
+        'not configurable and the declared fallback is what applies, 2026-08-28',
 };
 exports.HARNESS_SURFACE_MAP = Object.freeze([
     CLAUDE_CODE_WORKFLOW,
@@ -99,19 +105,27 @@ function degrade(probe) {
         announcement: `fan-out realization: ${realization} (tier ${tier}) — ${next}`,
         harnessCeiling: null,
         waitTimeoutMs: null,
+        waitTimeoutSource: null,
         waitTimeoutKeys: null,
     };
 }
 function waitBound(def, probe) {
     const bounding = def.bounding;
     if (!bounding)
-        return { waitTimeoutMs: null, waitTimeoutKeys: null };
+        return { waitTimeoutMs: null, waitTimeoutSource: null, waitTimeoutKeys: null };
     const reported = probe.harnessWaitTimeoutMs;
     const usable = Number.isInteger(reported) && reported > 0;
     return {
-        waitTimeoutMs: usable ? reported : null,
+        waitTimeoutMs: usable ? reported : bounding.fallbackWaitTimeoutMs,
+        waitTimeoutSource: usable ? 'probe' : 'realization-default',
         waitTimeoutKeys: bounding.waitTimeoutKeys,
     };
+}
+function waitClause(bound) {
+    if (bound.waitTimeoutMs === null)
+        return '';
+    const configurable = bound.waitTimeoutKeys === null ? ', not configurable here' : '';
+    return `; wait bound ${bound.waitTimeoutMs}ms (${bound.waitTimeoutSource}${configurable})`;
 }
 function resolveRealization(probe) {
     const exposed = new Set((probe.tools ?? []).filter(t => typeof t === 'string'));
@@ -124,15 +138,17 @@ function resolveRealization(probe) {
         const reason = `probed this session: ${bound} ${hit.length > 1 ? 'are all' : 'is'} exposed ` +
             `(gated by \`${def.gating.featureKey}\`, default ${def.gating.defaultOn ? 'on' : 'off'}; ` +
             `verified against ${def.verifiedAgainst})`;
+        const waiting = waitBound(def, probe);
         return {
             tier: def.tier,
             realization: def.id,
             dispatch: def.handles.dispatch,
             primitive: hit[0] ?? null,
             reason,
-            announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ${def.handles.dispatch}) — bound to ${bound}; ${reason}`,
+            announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ` +
+                `${def.handles.dispatch}) — bound to ${bound}${waitClause(waiting)}; ${reason}`,
             harnessCeiling: def.bounding ? ceiling : null,
-            ...waitBound(def, probe),
+            ...waiting,
         };
     }
     return degrade(probe);
@@ -570,14 +586,31 @@ function isCardRecord(record) {
     return record?.kind !== 'run' && typeof record?.id === 'string' && record.id.trim() !== '';
 }
 exports.isCardRecord = isCardRecord;
+exports.REVIEW_ACTIONS = Object.freeze([
+    'converged',
+    'fix',
+    'escalate',
+]);
+function isReviewAction(value) {
+    return exports.REVIEW_ACTIONS.includes(value);
+}
 function assertAuditable(record, index) {
-    if (record?.kind === 'run' || isCardRecord(record))
+    if (record?.kind !== 'run' && !isCardRecord(record))
+        throw new Error(`codex-fanout: audit record #${index} names no card \`id\` and is not marked \`kind:"run"\`. ` +
+            `A run-level line — the realization announcement, a run-level halt — is written as ` +
+            `\`{"kind":"run", …}\`; everything else names the card it belongs to. Neither is inferred, ` +
+            `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
+            `with no id at all is unreadable on resume.`);
+    if (record.phase !== 'review' || record.outcome !== 'completed')
         return;
-    throw new Error(`codex-fanout: audit record #${index} names no card \`id\` and is not marked \`kind:"run"\`. ` +
-        `A run-level line — the realization announcement, a run-level halt — is written as ` +
-        `\`{"kind":"run", …}\`; everything else names the card it belongs to. Neither is inferred, ` +
-        `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
-        `with no id at all is unreadable on resume.`);
+    if (isReviewAction(record.action))
+        return;
+    throw new Error(`codex-fanout: audit record #${index} completes a \`review\` without saying what \`converge\` ` +
+        `decided (\`action\` was ${JSON.stringify(record.action)}; expected one of ` +
+        `${exports.REVIEW_ACTIONS.join(', ')}). A review round is not a finished cycle: with the action ` +
+        `missing or misspelled, a run killed between the review and its fix round resumes with ` +
+        `nothing left to do, and a PR carrying unresolved actionable findings reaches the merge ` +
+        `gate. The stamp is not optional and is not inferred.`);
 }
 function appendAudit(path, records, fs = NODE_AUDIT_FS) {
     records.forEach(assertAuditable);
@@ -626,7 +659,7 @@ function halt(state, by, reason) {
     state.reason = reason;
 }
 function applyReviewRecord(state, record, canHalt) {
-    state.cycleOpen = record.action === 'fix';
+    state.cycleOpen = record.action !== 'converged';
     if (record.action === 'escalate') {
         if (canHalt)
             halt(state, 'review', record.reason ?? 'the review cycle escalated to a human');
@@ -778,9 +811,21 @@ function runResume(req) {
         return resumePlan(req.id, states[req.id]);
     return Object.keys(states).map(id => resumePlan(id, states[id]));
 }
+const PROBE_KEYS = [
+    'tools',
+    'namespace',
+    'harnessCeiling',
+    'harnessWaitTimeoutMs',
+    'externalDriverAvailable',
+];
+const CEILING_KEYS = ['dependencyAllowed', 'policyMax', 'harnessCeiling'];
+function checked(value, allowed, where) {
+    assertKnownKeys(value, allowed, where, message => new Error(message));
+    return value;
+}
 const HANDLERS = Object.freeze({
-    bind: req => resolveRealization(req.probe ?? {}),
-    cap: req => effectiveParallelism(req.ceilings),
+    bind: req => resolveRealization(checked(req.probe ?? {}, PROBE_KEYS, 'the probe')),
+    cap: req => effectiveParallelism(checked(req.ceilings, CEILING_KEYS, 'the ceilings')),
     packet: req => buildPacket(packetRequestFrom(req)),
     collect: req => collectOutcome(req.phase, req.result, req.schema),
     converge: req => converge(req),

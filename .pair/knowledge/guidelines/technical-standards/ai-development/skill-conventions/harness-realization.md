@@ -78,9 +78,22 @@ Realizations of one capability differ in more than a handle's name, and the diff
 
 The shape belongs to the entry and comes back in the binding, and **the caller branches on it, never on the harness's name**. Bounding keys belong only to entries of the first kind: declared on a delegated one, they would announce a bound nobody applies.
 
-### The bind returns the bounds it read
+### The bind returns a bound the caller can always apply
 
-A skill required to bound its waits, and rightly barred from naming vendor config keys in its own text, has no sanctioned way to learn the bound unless the bind hands it over. So it does: the resolved value where the probe reported one, and otherwise the keys to read it from. Anything less leaves the caller inventing a number, or omitting the argument and relying on a default nobody observed — step 1's inference, reappearing as a timeout.
+A skill required to bound its waits, and rightly barred from naming vendor config keys in its own text, has no sanctioned way to learn the bound unless the bind hands it over. So it does — and the resolution must **terminate in a number**, because the caller has no legal third move:
+
+| What is observable | What the bind returns |
+| --- | --- |
+| The session reports a usable bound | That value; source `probe` |
+| A config key the entry names yields one | That value; the entry names the key, the skill never does |
+| Neither | The entry's **declared fallback**, announced as such |
+
+The last row is not a loophole in "never assert what you did not probe" — it is what keeps that rule affordable. A realization may simply have no configurable wait bound (one observed generation of one harness has none, while the *next* generation of the same harness does), so "read the keys" legitimately returns nothing on the very session the entry serves. Returning nothing there leaves the caller inventing a number, or omitting the argument and relying on a default nobody observed — step 1's inference, reappearing as a timeout. A fallback **declared on the entry**, versioned with the map and reviewed like the handles beside it, is a different kind of statement from one a run picks mid-flight, which is why the binding reports *where the number came from* and the announcement carries it.
+
+Two corollaries, both learned the hard way:
+
+- **Bounding keys belong to the entry that owns them.** An entry must not name another feature's config keys as its own. Where one generation's keys were borrowed by a generation that had none, the borrowed feature was off by default and therefore unset, so the caller was pointed at a read that returns nothing — and the map asserted a bound nobody had verified, which is exactly what `Verified against` exists to prevent.
+- **`Verified against` covers the bounding keys too**, not just the handles. An entry citing only the gating check has not verified the keys it declares.
 
 ## Ceilings compose, they never replace
 
