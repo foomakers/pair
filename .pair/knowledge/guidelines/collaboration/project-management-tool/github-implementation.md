@@ -679,12 +679,19 @@ A **dedicated review identity** is a second principal — a GitHub App installat
 
 | | `Review identity: none` (default) | `bot-user` | `app` (recommended) |
 | --- | --- | --- | --- |
-| Verdict | `--comment` review — the host rejects a self-authored APPROVE | native **APPROVE / REQUEST_CHANGES** | native **APPROVE / REQUEST_CHANGES** |
+| Verdict | `--comment` review — the host rejects a self-authored APPROVE | native **REQUEST_CHANGES**; native **APPROVE** only where the light row authorizes it, `--comment` otherwise | native **REQUEST_CHANGES**; native **APPROVE** only where the light row authorizes it, `--comment` otherwise |
 | `pair-review` | commit status | commit status | **check run** (the Checks API needs an App token) |
 | Audit | "who reviewed" is a token in the review body | per-identity in the host's review events | per-identity in review events **and** check runs |
-| 🔴 explicit approval | still a second **human** | still a second **human** | still a second **human** |
+| 🔴 explicit approval | still a second **human** | still a second **human** — but only once `REVIEW_IDENTITY_LOGIN` is provisioned (below): this account types as `"User"` | still a second **human**, by account type — nothing to configure |
 
-**The last row is the point, and it does not move.** `pair-explicit-approval` counts approvals matching `human_approval_jq_filter`, which requires `user.type == "User"` — a bot user and an App installation are `"Bot"` on that API. So the identity's approval is excluded **by construction**: adopting it never relaxes the 🔴 rule, and a `risk:red` pull request still needs a second human account (ADR-018, amendment 2026-08-28). Two mechanisms live side by side deliberately — the identity signs the ordinary review, a human signs the 🔴 one.
+**The last row is the point, and it does not move — but the two forms are excluded by two different clauses, and only one of them is free.** `pair-explicit-approval` counts approvals matching `human_approval_jq_filter`.
+
+| Identity form | `user.type` on `GET /pulls/{n}/reviews` | What excludes it from the 🔴 predicate |
+| --- | --- | --- |
+| `app` (App installation) | `"Bot"` | the **type clause** (`user.type=="User"`) — nothing to configure |
+| `bot-user` (machine user account) | `"User"` — **an ordinary user, indistinguishable by type** | the **login clause** (`.user.login != env.REVIEW_IDENTITY_LOGIN`) — inert until you provision the login |
+
+Only a GitHub **App** types as `"Bot"`. A bot _user_ is an ordinary account: without the login clause its approving review satisfies `pair-explicit-approval` exactly like a human's, and a `risk:red` PR with green gates and an APPROVED verdict would reach `ready-to-merge` with no human involvement at all. That is why `Review identity: bot-user` **requires** `REVIEW_IDENTITY_LOGIN` (below), why `review_identity_exclusion_ok` treats a bot-user identity without it as **not healthy** (⇒ `halt`), and why this is a mechanism rather than a rule stated in prose. With it in place, adopting an identity never relaxes the 🔴 rule and a `risk:red` pull request still needs a second human account (ADR-018, amendment 2026-08-28). Two mechanisms live side by side deliberately — the identity signs the ordinary review, a human signs the 🔴 one.
 
 #### GitHub App (recommended)
 
@@ -698,20 +705,53 @@ Recommended because it is the only form that unlocks the Checks API, and because
    - Do **not** grant `administration` — the identity must not be able to edit branch protection.
 2. **Install** it on the repository (Settings → GitHub Apps → Install), and note the installation id.
 3. **Store the credential** per the [security guidelines](../../quality-assurance/security/security-guidelines.md): the App's private key is a secret and **never enters the repository** — no `.pem` committed, no key in an adoption file, no key in a skill argument. Put it in the project's secret store (GitHub Actions secret, or the local secret manager the project already uses) and reference it by name. The repository's deterministic secret scan (D24) is the backstop, not the policy.
-4. **Verify**, before relying on it — this is what `resolve_identity_mode`'s health input means in practice:
+4. **Mint the installation token.** Everything below runs as the App's **installation token**, which is not the private key and not a PAT: it is exchanged for one, expires in an hour, and is what `GH_TOKEN` must hold. Inside a workflow, use an action that performs the exchange (`actions/create-github-app-token@v1` with `app-id` + `private-key`, output `token`). Outside one, do it by hand — a JWT signed with the private key, then the installation's access-token endpoint:
 
    ```bash
-   # `GH_TOKEN` here is the App INSTALLATION token, minted from the private key.
-   REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
-   gh api user --jq '.login, .type'                 # expect the app slug and "Bot"
-   gh api "repos/$REPO/check-runs" -X POST -f name=pair-identity-probe \
-     -f head_sha="$HEAD_SHA" -f status=completed -f conclusion=neutral  # 201 ⇒ checks: write
-   gh api "repos/$REPO/pulls/$PR/reviews" --jq 'length'                 # 200 ⇒ pull_requests read
+   # $APP_ID, $INSTALLATION_ID (from step 2), $PRIVATE_KEY_PEM — from the secret store, never the repo.
+   b64() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+   NOW=$(date +%s)
+   HEADER="$(printf '{"alg":"RS256","typ":"JWT"}' | b64)"
+   PAYLOAD="$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((NOW - 60))" "$((NOW + 540))" "$APP_ID" | b64)"
+   SIG="$(printf '%s.%s' "$HEADER" "$PAYLOAD" | openssl dgst -sha256 -sign <(printf '%s' "$PRIVATE_KEY_PEM") | b64)"
+   JWT="$HEADER.$PAYLOAD.$SIG"
+   GH_TOKEN="$(GH_TOKEN="$JWT" gh api -X POST "app/installations/$INSTALLATION_ID/access_tokens" --jq .token)"
+   export GH_TOKEN
    ```
 
-   A `403` on the check-run probe means `checks: write` was not granted or the App is not installed on this repository — that is a **configured-but-broken** identity, and the flow HALTs on it rather than falling back to the session user.
+   The token is short-lived by design: mint it per run, never store it.
 
-5. **Publish `pair-review` as a check run** on the App path (the commit-status form stays exactly as documented above for every other path):
+5. **Verify**, before relying on it — this is what `resolve_identity_mode`'s health input means in practice. Every probe below runs with that installation token:
+
+   ```bash
+   REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+   PR=<pr-number>                                    # an open PR to probe against
+   HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
+
+   # 1. The token is valid AND the App is installed here. `gh api user` does NOT work:
+   #    an installation token is not associated with a user and answers
+   #    `403 Resource not accessible by integration`. Use the installation endpoint.
+   gh api /installation/repositories --jq '.total_count'          # >= 1 ⇒ valid + installed
+
+   # 2. checks: write — leaves a `pair-identity-probe` check run on $HEAD_SHA (see the note below).
+   gh api "repos/$REPO/check-runs" -X POST -f name=pair-identity-probe \
+     -f head_sha="$HEAD_SHA" -f status=completed -f conclusion=neutral   # 201 ⇒ checks: write
+
+   # 3. pull_requests: READ.
+   gh api "repos/$REPO/pulls/$PR/reviews" --jq 'length'                  # 200 ⇒ read granted
+
+   # 4. pull_requests: WRITE — a read probe cannot prove it, and a 403 discovered later
+   #    lands mid-flow, AFTER pair-review was already published. Post and delete a scratch
+   #    PR comment (issue comments and reviews share the `pull_requests` permission).
+   CID="$(gh api "repos/$REPO/issues/$PR/comments" -X POST -f body='pair identity write probe' --jq .id)"
+   gh api "repos/$REPO/issues/comments/$CID" -X DELETE                   # 204 ⇒ write granted
+   ```
+
+   **These probes leave artifacts on a real pull request**: the check run stays on `$HEAD_SHA` (check runs cannot be deleted — pick a scratch PR, or accept a `neutral` `pair-identity-probe` entry in the checks list), and the write probe creates then deletes a comment. Run them once at setup, not per review.
+
+   A `403` on the check-run probe means `checks: write` was not granted or the App is not installed on this repository; a `403` on the write probe means the grant is `pull_requests: read`. Either is a **configured-but-broken** identity, and the flow HALTs on it rather than falling back to the session user.
+
+6. **Publish `pair-review` as a check run** on the App path (the commit-status form stays exactly as documented above for every other path):
 
    ```bash
    source .pair/knowledge/assets/review-identity.sh
@@ -738,7 +778,17 @@ A second GitHub **user** account, invited to the repository with **write** acces
 - `Commit statuses: write` (`repo:status` on a classic PAT) — publish `pair-review` as a commit status
 - `Contents: read`
 
-Same secret rule: the PAT lives in the secret store, never in the repository. It costs a seat on paid plans and it does **not** unlock the Checks API (that is App-only), so `pair_review_publication_mode` keeps it on the commit-status form. Verify with `gh api user --jq '.login, .type'` (expect `"User"` for a bot _user_ — which is why a bot user must never be used as the second human approver at 🔴: it would satisfy the predicate while being a machine. **If you run a bot user, keep it out of the repository's human-reviewer set** and treat 🔴 approvals as belonging to real people; the App form has no such footgun because it types as `"Bot"`.)
+Same secret rule: the PAT lives in the secret store, never in the repository. It costs a seat on paid plans and it does **not** unlock the Checks API (that is App-only), so `pair_review_publication_mode` keeps it on the commit-status form. A user token _is_ associated with a user, so here `gh api user --jq '.login, .type'` is the right probe (expect `"User"`).
+
+**MANDATORY for this form — provision `REVIEW_IDENTITY_LOGIN`.** `"User"` is the answer that makes this account indistinguishable from a human on the reviews API: without the login clause its approving review satisfies `pair-explicit-approval`, and the 🔴 human gate is gone. Set the login as a repository **variable** (not a secret — it is not sensitive and the job needs it in plain text), so the `pair-explicit-approval` job can exclude it:
+
+```bash
+BOT_LOGIN="$(GH_TOKEN=$BOT_PAT gh api user --jq .login)"
+gh variable set REVIEW_IDENTITY_LOGIN --body "$BOT_LOGIN"     # repo variable, read by the job below
+gh variable get REVIEW_IDENTITY_LOGIN                          # verify: must echo the bot's login
+```
+
+That variable is the health input `review_identity_exclusion_ok user "$REVIEW_IDENTITY_LOGIN"` checks: **unset ⇒ the identity is not healthy ⇒ `resolve_identity_mode` yields `halt`**, and no review is written at all. Keeping the bot out of the repository's human-reviewer set is still good hygiene, but it is no longer the containment — the login clause is. The App form needs none of this because it types as `"Bot"`.
 
 #### Failure modes, and what each one does
 
@@ -749,12 +799,15 @@ Same secret rule: the PAT lives in the secret store, never in the repository. It
 | Configured, credential invalid / expired | `halt` | **HALT** with a pointer back to this section. Never a session-user fallback. |
 | Configured, a permission missing (`403` on a probe) | `halt` | Same — the setup is incomplete, and acting as the human whose token is loaded would misattribute the review. |
 | Configured, health unknown (probe not run, network error) | `halt` | Fail-safe: unknown is not healthy. |
+| Configured as `bot-user`, `REVIEW_IDENTITY_LOGIN` not provisioned | `halt` | `review_identity_exclusion_ok` fails, so the identity is not healthy. Deliberately a HALT and not a warning: this is the one misconfiguration that would let a machine account satisfy the 🔴 explicit **human** approval. |
 
 Do not "fall back to the session token so the review still runs". A review recorded against the maintainer's account, that the maintainer did not perform, is a worse outcome than a stopped review — and it is exactly the misattribution a dedicated identity exists to prevent.
 
 #### Adoption-gated light auto-approval (off unless declared)
 
-When a repository declares the `light` family in `## Tag Projection` (`tech/risk-matrix.md`), the identity may submit a **native approving review** on a PR that carries the `light` tag, is **below 🔴**, and has already synthesized `ready-to-merge` — so a light PR becomes mergeable with no human action. On a repository that sets `"required_approving_review_count": 1` or more (the payload below ships `0`, so this only bites where a project raised it), that review is what satisfies the host's approvals rule. All four conditions are evaluated by `light_auto_approve_allowed` in [`pr-state.sh`](../../../assets/pr-state.sh); every approval writes the audit comment `identity_audit_comment` renders. **Nothing here reads the change**: the row consumes a tag and a declaration (D18).
+When a repository declares the `light` family in `## Tag Projection` (`tech/risk-matrix.md`), the identity may submit a **native approving review** on a PR that carries the `light` tag, is **below 🔴**, and has already synthesized `ready-to-merge` — so a light PR becomes mergeable with no human action. On a repository that sets `"required_approving_review_count": 1` or more (the payload below ships `0`, so this only bites where a project raised it), that review is what satisfies the host's approvals rule.
+
+**Why it is this row and not every approving verdict.** `light_auto_approve_allowed` in [`pr-state.sh`](../../../assets/pr-state.sh) is the third argument of `identity_verdict_event` — it is the sole authority for the `APPROVE` event. An approving verdict the row does not authorize is submitted as a **COMMENT-form review** (verdict token leading the body), so it never satisfies `required_approving_review_count` on the project's behalf. Without that wiring the gate would be decorative: any green/yellow PR with an APPROVED verdict would be auto-approved, `light` tag or not, declaration or not. Every identity action writes the audit comment `identity_audit_comment` renders — the authorized approval, the unauthorized one, and the block. **Nothing here reads the change**: the row consumes a tag and a declaration (D18).
 
 Two containments are worth stating on the host page, because this is where someone will try to shortcut them:
 
@@ -861,6 +914,13 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # The dedicated review identity's login, excluded from the human-approval
+          # predicate. REQUIRED when `Review identity: bot-user` — that account types
+          # as `user.type == "User"`, so the type clause does not exclude it and its
+          # approval would otherwise satisfy this very gate. Empty/unset on a project
+          # with no identity, or with an App one (excluded by type): the clause is then
+          # inert, which is correct. See § Dedicated review identity.
+          REVIEW_IDENTITY_LOGIN: ${{ vars.REVIEW_IDENTITY_LOGIN }}
         run: |
           set -euo pipefail
           source .pair/knowledge/assets/tier-resolve.sh   # tags only, no criteria
@@ -876,7 +936,9 @@ jobs:
             # The predicate is NOT written out here — it is `human_approval_jq_filter`
             # from the sourced pr-state.sh, so this job and the tests that verify it
             # read one text and cannot drift (it rejects non-APPROVED, another commit,
-            # `user.type != "User"`, and the author's own approval).
+            # `user.type != "User"`, the author's own approval, and the dedicated review
+            # identity by login — the clause that covers a bot USER account, which types
+            # as "User" and the type clause therefore does NOT reject).
             # Use the REST reviews endpoint — it is the only one carrying BOTH the
             # account type and the reviewed commit. `gh pr view --json reviews` exposes
             # `author.login` and NO bot flag whatsoever, so filtering there on a

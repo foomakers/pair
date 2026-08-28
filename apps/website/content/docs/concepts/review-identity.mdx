@@ -16,7 +16,7 @@ A project that wants more can provision a **dedicated review identity**: a code-
 | Mode | When | What happens |
 | --- | --- | --- |
 | `session` | nothing configured — **the default** | Today's behavior, unchanged: session token, comment-form verdict, `pair-review` as a commit status. Not an error and not reported as a degradation. |
-| `identity` | configured and usable | Host writes execute as the identity. The verdict becomes a **native APPROVE / REQUEST_CHANGES** — the reviewer is no longer the author, so the host accepts the real event — and an App identity publishes `pair-review` as a **check run** instead of a commit status. Every action is attributable to the identity in the host's own records. |
+| `identity` | configured and usable | Host writes execute as the identity. A blocking verdict becomes a **native REQUEST_CHANGES** — the reviewer is no longer the author, so the host accepts the real event. An **approving** verdict becomes a native APPROVE only where the light row below authorizes it, and a comment-form review otherwise. An App identity publishes `pair-review` as a **check run** instead of a commit status. Every action is attributable to the identity in the host's own records. |
 | `halt` | configured but unusable — invalid credential, missing permission, unknown health | The flow **stops**, with a pointer to the host setup guide. |
 
 <Callout type="warn">
@@ -31,9 +31,21 @@ The resolution is one shipped, host-agnostic projection (`review-identity.sh`), 
 
 ## What it does not change
 
-An identity approval **still does not satisfy the 🔴 explicit human approval**. The `pair-explicit-approval` check counts approvals from accounts where `user.type == "User"` — which a bot account and an App installation are not — so the identity is excluded by construction. A `risk:red` pull request still needs a **second human account**, exactly as before.
+An identity approval **still does not satisfy the 🔴 explicit human approval**. `pair-explicit-approval` counts approvals from accounts where `user.type == "User"`, and it excludes the review identity — but by two different clauses, because the two forms are two different account kinds:
 
-That is deliberate rather than an oversight: the identity buys a native verdict and per-identity auditability; it does not buy the right to grant the human gate. The two mechanisms stay side by side — the identity signs the ordinary review, a human signs the 🔴 one.
+| Identity form | Account type on the reviews API | What excludes it |
+| --- | --- | --- |
+| App installation | `"Bot"` | the account-type clause. Automatic, nothing to configure. |
+| Machine **user** account | `"User"` — an ordinary user | its **login**. You must provision it (`REVIEW_IDENTITY_LOGIN`); until you do, that account's approval satisfies the 🔴 gate exactly like a human's. |
+
+<Callout type="warn">
+  **A machine user is not a "Bot" to the API.** Only a host App types as `"Bot"`. If you run the
+  bot-account form, the login exclusion is the whole containment — so the flow treats an identity
+  whose login is not provisioned as **unusable** and halts, rather than reviewing with the 🔴 gate
+  silently open.
+</Callout>
+
+That the identity cannot grant the human gate is deliberate rather than an oversight: it buys a native verdict and per-identity auditability, not the right to sign for a person. A `risk:red` pull request still needs a **second human account**, exactly as before. The two mechanisms stay side by side — the identity signs the ordinary review, a human signs the 🔴 one.
 
 ## Light auto-approval (off unless you declare it)
 
@@ -55,9 +67,10 @@ Three properties are worth stating plainly:
 
 - **Zero criteria.** Nothing here computes "lightness". The row reads a tag produced upstream by classification, a declaration made in adoption, the tier, and the state — it never inspects the change.
 - **It is a sibling, not a rewrite.** The state synthesis table is untouched; this row consumes its output. A green or yellow pull request still reaches `ready-to-merge` the same way, and a human still presses merge unless this row supplied the host's required approval.
+- **It is the only thing that authorizes an approving review.** Outside the row an approving verdict is published as a comment-form review, so the identity never satisfies a host's required-approvals rule on your project's behalf. Without that, the four conditions would gate nothing — any approving review satisfies the host rule on its own.
 - **Most restrictive wins.** `light` on a 🔴 — or on an untagged pull request, which is fail-safe 🔴 — is inert.
 
-Every approval **and** every block by the identity writes an audit comment naming the tag, the declaration, the tier and the state, so the reason is reconstructable from the pull request alone.
+Every identity review writes an audit comment naming the tag, the declaration, the tier and the state — the authorized approval, the approving verdict it did *not* authorize, and the block — so the reason is reconstructable from the pull request alone.
 
 ## Related
 

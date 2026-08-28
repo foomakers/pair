@@ -82,6 +82,12 @@ resolve_pr_state() {
 # pull request satisfies the host's required-approvals rule with no human action.
 # Exit 1 = no-op, with the unmet condition on stderr. Never a silent yes.
 #
+# THIS ROW IS THE ONLY AUTHORITY FOR AN `APPROVE` EVENT. It is the third argument of
+# `identity_verdict_event` (review-identity.sh): outside it, an approving verdict is
+# published as a COMMENT-form review, never as a native APPROVE. That is what makes the
+# gate below load-bearing rather than decorative — without it every approving verdict
+# would satisfy a host `required_approving_review_count >= 1` on its own.
+#
 # A SIBLING, NOT A CHANGE: `resolve_pr_state` above is not modified and not consulted
 # for anything but its already-computed output. This row does not decide the PR state;
 # it decides only whether the identity signs the approving review the host asks for.
@@ -99,7 +105,8 @@ resolve_pr_state() {
 # reads, so an untagged or malformed tier fails this row exactly as it fails the rest of
 # the flow: most restrictive wins, and light never bypasses the 🔴 human-approval rule
 # (ADR-018, amendment 2026-08-28 — the identity's approval is excluded from
-# `human_approval_jq_filter` by construction).
+# `human_approval_jq_filter` mechanically: by the type clause for an App, by the
+# `REVIEW_IDENTITY_LOGIN` clause for a bot user).
 light_auto_approve_allowed() {
   local labels="${1:-}" declared="${2:-0}" tier="${3:-}" state="${4:-}"
 
@@ -169,16 +176,29 @@ merge_allowed() {
 # projection", as for tier-resolve.sh).
 #
 #   Input  : a REST `GET /repos/{owner}/{repo}/pulls/{n}/reviews` payload (an array).
-#   Env    : HEAD_SHA (the only commit branch protection evaluates), PR_AUTHOR (login).
+#   Env    : HEAD_SHA (the only commit branch protection evaluates), PR_AUTHOR (login),
+#            REVIEW_IDENTITY_LOGIN (the dedicated review identity's account login, when
+#            one is configured — see below; unset ⇒ the clause is inert, which is correct
+#            only for a project running no identity or an App one).
 #   Output : one line per qualifying review id — count them; and always read ALL pages
 #            (`--paginate`), since an approval can sit past page 1.
 #
 # Rejects by construction: a non-APPROVED review, an approval on any other commit
 # (i.e. stale after a force-push), a non-human account (`user.type != "User"` — bots
-# and GitHub Apps, so the pair review itself can never satisfy the gate), and the PR
-# author's own approval.
+# and GitHub Apps), the PR author's own approval, and the DEDICATED REVIEW IDENTITY's
+# own account by login.
+#
+# WHY THE LOGIN CLAUSE IS NOT REDUNDANT WITH THE TYPE CLAUSE. A GitHub **App**
+# installation types as `"Bot"`, so the type clause alone excludes it. A **bot user** —
+# an ordinary machine account, the `Review identity: bot-user` form — types as `"User"`
+# on this API: the type clause does NOT exclude it, and without the login clause a
+# machine account could sign the 🔴 explicit HUMAN approval. The clause is the mechanical
+# exclusion for that form; `review_identity_exclusion_ok` (review-identity.sh) makes an
+# unprovisioned `REVIEW_IDENTITY_LOGIN` a not-healthy identity, so the flow HALTs rather
+# than running with the clause inert. See github-implementation.md § "Dedicated review
+# identity" for how the variable reaches the `pair-explicit-approval` job.
 human_approval_jq_filter() {
-  printf '%s' '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR) | .id'
+  printf '%s' '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR and .user.login!=env.REVIEW_IDENTITY_LOGIN) | .id'
 }
 
 # review_check_conclusion <verdict> — maps a review verdict onto the conclusion the

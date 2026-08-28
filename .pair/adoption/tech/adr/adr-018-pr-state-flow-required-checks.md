@@ -195,11 +195,23 @@ still the design; this amendment layers a credential resolution step and one ado
 
 **What is NOT changed — stated because this is the part that is easy to get wrong.**
 
-- **The 🔴 human-approval predicate stands.** `human_approval_jq_filter` still requires `user.type == "User"`,
-  which is exactly what a bot user or an App is not. Adopting the identity does **not** let it satisfy
-  `pair-explicit-approval`; a `risk:red` PR still requires an explicit approval from a second human account.
-  Light applies **below red only**. This is the one line of Option 4's Cons that is *not* being reversed here:
-  we take the identity's auditability and native verdict, and we decline the rule change it tempted.
+- **The 🔴 human-approval requirement stands — and it is now enforced by two clauses, not one.**
+  `human_approval_jq_filter` still requires `user.type == "User"`, which excludes a GitHub **App** installation
+  (it types as `"Bot"`). It does **not** exclude a **bot user**: that is an ordinary account and types as
+  `"User"`, so the type clause alone would have let a machine account satisfy `pair-explicit-approval` on a
+  `risk:red` PR. The filter therefore also excludes the identity by **login**
+  (`.user.login != env.REVIEW_IDENTITY_LOGIN`), and `review_identity_exclusion_ok` makes an unprovisioned login
+  a **not-healthy** identity so the flow HALTs rather than running with the clause inert. This is the single
+  change to a shipped predicate in this amendment, and it is additive: with the variable unset the clause
+  matches nothing and every prior outcome is unchanged. A `risk:red` PR still requires an explicit approval
+  from a second human account; light applies **below red only**. This is the one line of Option 4's Cons that
+  is *not* being reversed here: we take the identity's auditability and native verdict, and we decline the rule
+  change it tempted.
+- **A native `APPROVE` is authorized by the light row and by nothing else.** `light_auto_approve_allowed` is an
+  input to `identity_verdict_event`, so an approving verdict outside the row is submitted as a comment-form
+  review. Without that wiring the row's four conditions would gate nothing: on a repository with
+  `required_approving_review_count >= 1` any approving native review satisfies the host's approvals rule on its
+  own, tagged `light` or not, declared or not. `REQUEST_CHANGES` is ungated — it blocks, it never unlocks.
 - **`resolve_pr_state`'s table is untouched.** No row is added, removed, or reordered; the light row is a
   **sibling** function that consumes its output. A green/yellow PR still reaches `ready-to-merge` and a human
   still merges — the light row changes *who supplies the host's required approving review*, never what the
@@ -217,7 +229,7 @@ still the design; this amendment layers a credential resolution step and one ado
   credential storage live in `github-implementation.md`; the skills and the adapter name no host.
 
 **Verification status.** Everything above is implemented and asserted against fixtures — the identity ×
-`light` × tier × verdict matrix runs offline in `scripts/smoke-tests/scenarios/pr-state-flow.sh`, the contracts
+`light` × tier × verdict matrix runs offline in `scripts/smoke-tests/scenarios/review-identity.sh`, the contracts
 in `packages/knowledge-hub/src/conformance/review-identity.test.ts`. What is **not** yet observed on a live host
 is the end-to-end run with a real App (native APPROVE attributable to the identity, `pair-review` as a check
 run, a `light` sub-red PR mergeable with no human action): that needs a maintainer-provisioned App and is

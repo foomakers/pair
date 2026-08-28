@@ -30,20 +30,36 @@
 #              whoever's token happened to be loaded is worse than a stopped review.
 #
 # WHAT ADOPTING AN IDENTITY DOES *NOT* CHANGE (ADR-018, amendment 2026-08-28):
-# the 🔴 explicit-human-approval rule. `human_approval_jq_filter` (pr-state.sh)
-# requires `user.type == "User"`, which is exactly what a bot user or a GitHub App is
-# not — so an identity approval can never satisfy `pair-explicit-approval`, and a
-# `risk:red` pull request still needs a second HUMAN account. See:
+# the 🔴 explicit-human-approval rule. An identity approval must never satisfy
+# `pair-explicit-approval` — and that exclusion is MECHANICAL, by two different
+# mechanisms, because the two identity forms are two different account kinds on the
+# host and only ONE of them is covered by the account-type clause:
+#   app       — a GitHub App installation types as `user.type == "Bot"` on the reviews
+#               API, so `human_approval_jq_filter`'s `user.type == "User"` clause
+#               already rejects it. Nothing further is required.
+#   bot-user  — a machine USER account types as `"User"`. The type clause does NOT
+#               reject it, and a bot-user approval would otherwise satisfy the 🔴 gate.
+#               The exclusion is the login clause `.user.login != env.REVIEW_IDENTITY_LOGIN`
+#               in `human_approval_jq_filter` (pr-state.sh), which is INERT until the
+#               identity's login is provisioned to the job evaluating the predicate.
+#               A bot-user identity whose login is not provisioned is therefore NOT
+#               healthy: see `review_identity_exclusion_ok` below, whose result is an
+#               input to the `healthy` flag `resolve_identity_mode` reads, so a
+#               misconfigured bot user resolves to `halt` instead of running unguarded.
+# With that in place a `risk:red` pull request still needs a second HUMAN account. See:
 #   .pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md
 #   .pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md
 #     § "Dedicated review identity"  (per-host setup: GitHub App vs bot user — R2.12)
 #
 # Usage (in /pair-process-review, /pair-capability-publish-pr, or a code host's automation):
 #   source review-identity.sh
+#   review_identity_exclusion_ok "$IDENTITY_KIND" "$REVIEW_IDENTITY_LOGIN" || IDENTITY_HEALTHY=0
 #   MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
 #   [ "$MODE" = halt ] && exit 1
-#   EVENT="$(identity_verdict_event "$MODE" "$VERDICT")"          # APPROVE | REQUEST_CHANGES | COMMENT
-#   PUB="$(pair_review_publication_mode "$MODE" "$IDENTITY_KIND")" # checks-api | commit-status
+#   # APPROVE only when the light row authorized it (pr-state.sh light_auto_approve_allowed):
+#   light_auto_approve_allowed "$PR_LABELS" "$LIGHT_DECLARED" "$TIER" "$STATE" && APPROVE_OK=1
+#   EVENT="$(identity_verdict_event "$MODE" "$VERDICT" "${APPROVE_OK:-0}")" # APPROVE | REQUEST_CHANGES | COMMENT
+#   PUB="$(pair_review_publication_mode "$MODE" "$IDENTITY_KIND")"          # checks-api | commit-status
 
 # resolve_identity_mode <configured> <healthy>
 #   configured : 1 when the project's adoption declares a dedicated review identity
@@ -74,19 +90,69 @@ resolve_identity_mode() {
   echo "halt"
 }
 
-# identity_verdict_event <mode> <verdict>
-#   mode    : identity | session (a `halt` never reaches here — the caller stops first)
-#   verdict : approved | changes-requested | <anything else ⇒ no decision>
+# review_identity_exclusion_ok <identity_kind> <review_identity_login>
+#   identity_kind        : app | user | <anything else ⇒ unknown, fail-safe>
+#   review_identity_login: the identity's account login, as provisioned to the job that
+#                          evaluates `human_approval_jq_filter` (on GitHub: the repository
+#                          variable `REVIEW_IDENTITY_LOGIN`, read into the environment of
+#                          the `pair-explicit-approval` job)
+#
+# Exit 0 = the identity is MECHANICALLY excluded from the 🔴 explicit-human-approval
+# predicate. Exit 1 = it is NOT, with the missing piece on stderr; the caller must then
+# treat the identity as NOT healthy, so `resolve_identity_mode` yields `halt`.
+#
+# WHY THIS EXISTS. The exclusion is not one rule but two, because the account kinds are
+# different on the host: an App installation is `user.type == "Bot"` and the predicate's
+# type clause rejects it outright; a bot USER account is `user.type == "User"` and the
+# type clause does not. For the bot-user form the exclusion is the login clause, and a
+# login clause with nothing to compare against excludes nothing — an unprovisioned
+# `REVIEW_IDENTITY_LOGIN` would leave a machine account able to sign the 🔴 human
+# approval. This function is what makes "the identity is excluded by construction" a
+# checked precondition rather than a claim in prose.
+review_identity_exclusion_ok() {
+  local kind="${1:-}" login="${2:-}"
+
+  case "$kind" in
+  app)
+    # `user.type == "Bot"` — the shipped type clause already rejects it.
+    return 0
+    ;;
+  user)
+    if [ -n "$login" ]; then
+      return 0
+    fi
+    echo "review-identity: a bot-USER identity types as user.type == \"User\" on the reviews API, so the 🔴 predicate's type clause does NOT exclude it. Its login must be provisioned as REVIEW_IDENTITY_LOGIN to the job evaluating human_approval_jq_filter, or the identity could sign the explicit human approval itself. Treat this identity as NOT healthy until it is set — see the code host's implementation guide, section 'Dedicated review identity'." >&2
+    return 1
+    ;;
+  *)
+    echo "review-identity: identity kind '${kind:-unknown}' is unknown — cannot establish that it is excluded from the 🔴 human-approval predicate (fail-safe: not excluded)" >&2
+    return 1
+    ;;
+  esac
+}
+
+# identity_verdict_event <mode> <verdict> <approve_authorized>
+#   mode               : identity | session (a `halt` never reaches here — the caller stops first)
+#   verdict            : approved | changes-requested | <anything else ⇒ no decision>
+#   approve_authorized : 1 when the adoption-gated light row (`light_auto_approve_allowed`
+#                        in pr-state.sh) authorized an APPROVING review on this pull
+#                        request; anything else — including empty and absent — is NOT
+#                        authorized (fail-safe)
 #
 # Echoes the native review event to submit on the code host:
 #   APPROVE | REQUEST_CHANGES | COMMENT
 #
-# In `session` mode the answer is always COMMENT — the reviewer IS the author there,
-# and hosts reject a self-authored APPROVE/REQUEST_CHANGES; the verdict token still
-# leads the review body, so nothing is lost. That degraded form stays documented and
-# supported; the identity is what upgrades it, not what replaces it.
+# WHY AN APPROVING VERDICT IS NOT AUTOMATICALLY AN `APPROVE` EVENT. On a repository whose
+# branch protection sets `required_approving_review_count >= 1`, a native APPROVE by the
+# identity IS what satisfies the host's approvals rule — it makes the pull request
+# mergeable with no human action. That outcome is exactly what the adoption-gated light
+# row governs, so it is that row, and only that row, that authorizes the APPROVE event.
+# An approving verdict outside it is recorded as a COMMENT-form review with the verdict
+# token leading the body: the judgment is published in full, it simply does not sign the
+# host's approval on the project's behalf. `REQUEST_CHANGES` needs no such gate — it
+# blocks, it never unlocks.
 identity_verdict_event() {
-  local mode="${1:-}" verdict="${2:-}"
+  local mode="${1:-}" verdict="${2:-}" approve_authorized="${3:-0}"
 
   if [ "$mode" != "identity" ]; then
     echo "COMMENT"
@@ -94,7 +160,14 @@ identity_verdict_event() {
   fi
 
   case "$verdict" in
-  approved) echo "APPROVE" ;;
+  approved)
+    if [ "$approve_authorized" = "1" ]; then
+      echo "APPROVE"
+    else
+      echo "review-identity: the verdict is APPROVED but no adoption-gated light row authorized an approving review — submitting as COMMENT, so the identity never satisfies the host's required-approvals rule on the project's behalf" >&2
+      echo "COMMENT"
+    fi
+    ;;
   changes-requested) echo "REQUEST_CHANGES" ;;
   *)
     echo "review-identity: verdict '${verdict:-unknown}' is not a decision — submitting as COMMENT, never as an approval (fail-safe)" >&2
@@ -121,7 +194,9 @@ pair_review_publication_mode() {
 }
 
 # identity_audit_comment <action> <tag> <declared> <tier> <state>
-#   action   : approve | block  (every identity action is audited, both directions)
+#   action   : approve | comment | block  (every identity action is audited — the
+#              approving review the light row authorized, the COMMENT-form approving
+#              verdict it did not, and the block)
 #   tag      : the tag that drove it (e.g. `light`), or empty when none did
 #   declared : 1 when adoption declares that tag family in `## Tag Projection`
 #   tier     : the tier read from the pull request's `risk:*` label
@@ -136,6 +211,6 @@ identity_audit_comment() {
   local declaration="not declared"
   [ "$declared" = "1" ] && declaration="declared in ## Tag Projection"
 
-  printf 'pair review identity — %s. Tag: %s (%s) · tier: %s · PR state: %s. Inputs are tags, gate results and the review verdict only; nothing here classifies the change (D18). An identity approval never satisfies the explicit human approval required at risk:red — that predicate requires user.type == "User", which this identity is not.\n' \
+  printf 'pair review identity — %s. Tag: %s (%s) · tier: %s · PR state: %s. Inputs are tags, gate results and the review verdict only; nothing here classifies the change (D18). An identity approval never satisfies the explicit human approval required at risk:red: an App identity is rejected by human_approval_jq_filter user.type == "User" clause, a bot-USER identity (which does type as "User") by its login clause against REVIEW_IDENTITY_LOGIN.\n' \
     "${action:-unknown}" "${tag:-none}" "$declaration" "${tier:-unknown}" "${state:-unknown}"
 }
