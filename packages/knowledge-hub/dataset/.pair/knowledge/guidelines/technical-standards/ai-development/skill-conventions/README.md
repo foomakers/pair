@@ -16,6 +16,7 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | Story-local (AC<n>) marker ban (rule, rationale, legitimate shapes) | [story-local-markers.md](story-local-markers.md) | 22 files across skills + KB (purged when the corpus-wide guard landed) |
 | Nested sub-documents / progressive disclosure (`references/` inside a skill dir) | [nested-sub-documents.md](nested-sub-documents.md) | 0 skills (authoring convention — describes the installed layout, not a skill step) |
 | Adoption-informed generation (decision log + ADR + context map read before drafting) | [adoption-informed-generation.md](adoption-informed-generation.md) | 3 generating skills (new convention — the reading step is defined here, never per skill) |
+| Approval rounds and the `$approval` signal (`interactive` default; `auto` asks nothing, still reports; a judgement gate still HALTs) | [approval-rounds.md](approval-rounds.md) | the `assess-*` and `map-*` families (replaces per-caller suppression notes) |
 
 ## Skill `version:` frontmatter — when to bump
 

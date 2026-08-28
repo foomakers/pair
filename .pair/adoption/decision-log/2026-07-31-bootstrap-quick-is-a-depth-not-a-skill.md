@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Active — **partially superseded** by [ADR-021](../tech/adr/adr-021-approval-signal-on-the-composed-skill.md) (story #410). The depth-not-a-skill decision and bootstrap's guided default stand unchanged. What changed is the alternative this entry rejected *only for scope*, below: the composed families now carry a first-class non-interactive signal (`$approval`), so quick mode passes one argument instead of disclosing a suppression per composed family, and disclosed deviations 2 and 3 are retired. Read the rejected-alternative bullet as "rejected here, adopted in #410".
 
 ## Category
 

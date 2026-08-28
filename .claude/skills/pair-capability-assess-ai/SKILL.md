@@ -1,7 +1,7 @@
 ---
 name: pair-capability-assess-ai
 description: "Evaluates and recommends AI development tools — coding assistants (Copilot, Claude Code, Cursor), agent frameworks, MCP integrations, models — when the choice is open. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Evaluate and recommend AI development tools: AI assistants, MCP integrations, AI
 | Argument  | Required | Description                                                                            |
 | --------- | -------- | -------------------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this AI tool directly (e.g. `claude-code`, `cursor`) |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -30,7 +31,7 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify). Paths A and B carry their `$approval` qualification **there** — it is never restated per skill; only the rounds Path C adds below are qualified here.
 
 - **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — populated **AI** section. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
@@ -74,7 +75,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    > - AI maturity target: Level [N]
    > - Additional tools: [list with versions]
 
-5. **Verify**: Developer approves.
+5. **Verify** (`$approval: interactive`): Developer approves. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 4: Render Adoption Proposal
 
@@ -106,7 +107,8 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Proposal:  [content rendered for tech-stack.md AI section]
 ├── Target:    adoption/tech/tech-stack.md (AI section)
 ├── Persist:   [caller composes /record-decision(content, target) → ADL]
-└── Status:    [Proposal ready | Confirmed existing]
+├── Approval:  [interactive — approved | auto — accepted as-is | auto — existing kept, delta not applied | auto — UNRESOLVED, no proposal]
+└── Status:    [Proposal ready | Confirmed existing | Unresolved — no proposal]
 ```
 
 ## Composition Interface
