@@ -45,6 +45,16 @@ The direction differs — the key case widened, the whitelist case NARROWED — 
 
 Both HALT. The level check is a **separate scan**, deliberately not a widening of `sectionOfWhere`'s `^##` predicate: that predicate also decides where a section ENDS, and for `## The Catalogue` / `## Built-in Profiles` / `## Quick Start Process` an `###` sub-heading is legitimately *inside* the section — widening it would silently truncate parsers no finding is about.
 
+**"Every level" reaches the KEY and its LIST MARKER — the two rungs between the section and the value** (round 4, all three verified on the shipped resolver against the shipped catalogue and built-ins):
+
+- **The same key on two LINES of one section resolved last-wins, silently.** `` - `profile`: `poc` `` followed by `` - `profile`: `custom` `` returned `{profile: "custom", enabled: ["implement"], halts: [], warnings: []}` — the `poc` line evaporated with nothing reported, and a team narrowed from 8 steps to 1 without a word. It was also **order-dependent**: the reverse order tripped the "whitelist under a built-in" HALT instead, so the same two lines halted or not depending on which came first. Now both orders return the same HALT naming the key. Counting is per key, not per section, because the section-level guard (round 3) and the value-level guard (round 2) each leave this rung untouched.
+- **The marker class was `[-*]`.** `` + `profile`: `poc` `` — `+` is a CommonMark bullet, so that line IS "a backticked list item", exactly what the schema instructs — resolved to `default` with all 12 steps, zero halts: byte-identical to writing nothing. All three bullets are accepted.
+- **A bullet-less or ordered-list key is DETECTED, not invisible.** `` `profile`: `poc` `` (the shape the `| profile | … |` schema table suggests) and `` 1. `profile`: `poc` `` were text the reader walked past, so they widened in silence too. They now land in `unreadable` and HALT with the schema handed back. Detection there requires the key to be **backticked**: without a list marker that is the only signal separating a declaration from a sentence about the key, and a looser test would read the schema's own prose as configuration.
+
+**A shipped worked EXAMPLE is recognized by its key lines, not by a heading inside its fence.** `extractProfileExamples` required a `## Process Profile` line *within* the fenced block. The KB schema writes its examples that way; the shipped adoption **template** does not — its heading is the section the fence sits in, and the fence holds bare key lines. So the file `pair update` writes into every adopting project had **none** of its examples checked while the gate reported them checked. Verified: replacing `plan-stories` with `plan-storys` in the template's `custom` example printed `PASS — 44 skills conformant`, exit 0; now it prints `dataset/.pair/adoption/tech/way-of-working.md: worked example (default): unknown step id(s) plan-storys ...` and exits 1. A fence carrying a `profile`/`whitelist` key line is an example; with no heading of its own it is given the one it is an example OF.
+
+**A convention's normative snippet is pinned to the corpus it governs.** `process-profile-gate.md`'s "what stays in the skill" block prescribed a delta none of the twelve shipped skills carries. `checkOneStepMarker` only requires the marker plus the pointer *somewhere* in the skill dir, so a thirteenth author copying that snippet verbatim would land a differently-worded delta with every gate green. The snippet is now the `/refine-story` block verbatim, and a conformance test asserts the two are byte-equal.
+
 **A shipped mirror is a governed copy, not a build artifact.** `skills:conformance` and the conformance suite now bind the marker + gate pointer on `.claude/skills/pair-*/SKILL.md` as well as on the dataset, mapping names through the real `pair update` transform (`installedSkillDir`) rather than a copy of it.
 
 **The manual path is governed at its own entrypoint.** `AGENTS.md`'s "Without skills" flow carries a profile step before "identify your task", and `checkManualPathEntrypoint` asserts it — on the SECTION, not the file, since a mention parked in an appendix is not an entrypoint.
@@ -65,6 +75,10 @@ Both HALT. The level check is a **separate scan**, deliberately not a widening o
 - A team appending one id to a working whitelist without backticks now gets the schema handed back, instead of losing that step from every suggestion for the life of the project.
 - A decorated `## Process Profile` heading is honoured rather than ignored, so the section cannot be disabled by a cosmetic edit.
 - A project that **appends** a `## Process Profile` section instead of editing the empty one the template ships now gets a HALT naming the duplication, rather than the full process back in silence. Same for a section written at `#`, `###` or deeper.
+- A team hand-adding a second `profile` (or `whitelist`) line under an existing section gets a HALT naming the key, and the same one whichever order the two lines are in.
+- `+` joins `-` and `*` as an accepted bullet; a bullet-less or numbered key line stops the run instead of resolving to `default`. A project whose section already uses `-` sees no change.
+- Corrupting any worked example in the shipped `way-of-working.md` template is now a red gate, not a shape CI certifies and every adopting project copies.
+- The gate's PASS line enumerates the checks this story added, so a green run is evidence they ran.
 
 ## Adoption Impact
 

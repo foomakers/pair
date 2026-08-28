@@ -67,7 +67,7 @@ const STEP_CATALOGUE_FILE =
 const PROCESS_PROFILES_FILE =
   'dataset/.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md'
 const HOW_TO_DIR = 'dataset/.pair/knowledge/how-to'
-const WOW_TEMPLATE_FILE = 'dataset/.pair/adoption/tech/way-of-working.md'
+export const WOW_TEMPLATE_FILE = 'dataset/.pair/adoption/tech/way-of-working.md'
 const AGENTS_FILE = 'dataset/AGENTS.md'
 // The installed skills mirror, relative to the knowledge-hub package root.
 const MIRROR_SKILLS_DIR = join('..', '..', '.claude', 'skills')
@@ -1246,22 +1246,35 @@ export function checkStepMarkersInMirror(
   return errors
 }
 
+/** A fenced block that already carries the section heading of its own. */
+function hasProfileHeading(block: string): boolean {
+  return block
+    .split('\n')
+    .some(line => /^##[ \t]+/.test(line) && isWowProfileHeading(line.replace(/^##[ \t]+/, '')))
+}
+
 /**
- * Every fenced `## Process Profile` block in a shipped file — the WORKED EXAMPLES.
+ * Every fenced WORKED EXAMPLE of a profile declaration in a shipped file.
  *
  * A reader copies the example, not the prose around it, so an example that resolves
  * with a warning greets them with the inconsistency report the same file documents
  * two sections later. Extracted here so the examples go through the SAME resolver as
  * a real adoption file, rather than being trusted because they look plausible.
+ *
+ * Round 4 Major: recognition used to require the `## Process Profile` heading INSIDE
+ * the fence. The KB schema writes its examples that way; the shipped adoption
+ * TEMPLATE does not — its heading is the section the fence sits in, and the fence
+ * holds bare key lines. So the file `pair update` writes into every adopting project
+ * had exactly zero of its examples checked, while the PR claimed all of them were.
+ * A fence carrying a `profile`/`whitelist` key line IS an example; when it brings no
+ * heading of its own it is given the one it is an example OF, so the same resolver
+ * can read it.
  */
 export function extractProfileExamples(content: string): string[] {
   return [...content.matchAll(/```[a-z]*\n([\s\S]*?)```/g)]
     .map(m => m[1] as string)
-    .filter(block =>
-      block
-        .split('\n')
-        .some(line => /^##[ \t]+/.test(line) && isWowProfileHeading(line.replace(/^##[ \t]+/, ''))),
-    )
+    .filter(block => hasProfileHeading(block) || block.split('\n').some(isProfileKeyLine))
+    .map(block => (hasProfileHeading(block) ? block : `## ${WOW_PROFILE_SECTION}\n\n${block}`))
 }
 
 /** The AGENTS.md section a reader with no skills installed follows. */
@@ -1377,6 +1390,8 @@ export interface ProfileDeclaration {
   present: boolean
   /** Keys DETECTED on a line the value grammar rejects — resolved as a HALT. */
   unreadable: string[]
+  /** Keys declared on MORE THAN ONE line of the section — each a HALT. */
+  duplicateKeys: Array<{ key: string; count: number }>
   /** Problems with the SECTION itself (duplicated, mis-levelled) — each a HALT. */
   sectionHalts: string[]
 }
@@ -1448,24 +1463,90 @@ export function profileSectionProblems(content: string): string[] {
  * (value unbackticked, the shape the schema TABLE suggests) matched nothing, so the
  * section resolved to `default` with zero halts: the profile silently WIDENED to the
  * full 12-step process, the one direction nothing else catches.
+ *
+ * The marker class is all three CommonMark bullets. Round 4 Major: it was `[-*]`,
+ * so `+ \`profile\`: \`poc\`` — a valid list item in the exact shape the schema
+ * prescribes — resolved to `default` with every step re-enabled, zero halts, zero
+ * warnings: byte-identical to writing nothing.
  */
-const WOW_PROFILE_KEY = /^\s*[-*]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
+const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
+
+/**
+ * A key written with a marker this reader does not accept — no bullet at all, or an
+ * ordered-list one (`1.` / `1)`).
+ *
+ * The key must be BACKTICKED here, unlike on a bullet: without a list marker that is
+ * the only signal separating a declaration from a sentence mentioning the key. Such
+ * a line is DETECTED (it lands in `unreadable`, and HALTs) rather than skipped as
+ * invisible text — skipping it is the silent widening one more time, and both shapes
+ * are plausible reads of the schema (the `| profile | … |` table row, and a numbered
+ * list of "the two keys").
+ */
+const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/
+
+/** Does this line declare a key at all — in an accepted shape or a rejected one? */
+function isProfileKeyLine(line: string): boolean {
+  return WOW_PROFILE_KEY.test(line) || WOW_PROFILE_KEY_OFF_MARKER.test(line)
+}
+
+/** One declaration line, as data: which key, and its values or `null` if unreadable. */
+interface ProfileKeyLine {
+  key: 'profile' | 'whitelist'
+  values: string[] | null
+}
+
+/** What a single line of the section declares, or `null` when it declares nothing. */
+function readProfileKeyLine(line: string): ProfileKeyLine | null {
+  const key = WOW_PROFILE_KEY.exec(line)
+  if (!key) {
+    const offMarker = WOW_PROFILE_KEY_OFF_MARKER.exec(line)
+    return offMarker ? { key: offMarker[1] as ProfileKeyLine['key'], values: null } : null
+  }
+  const rest = key[2] as string
+  const values = backticked(rest)
+  // What the value grammar did NOT consume: backticked spans and the separators
+  // between them removed, anything left is text the reader cannot account for.
+  // Checking the RESIDUE rather than `values.length === 0` is what catches a
+  // PARTIALLY readable line — the one a hand-edit actually produces.
+  const residue = rest.replace(/`[^`]*`/g, '').replace(/[,\s]+/g, '')
+  if (key[1] === 'profile') {
+    // A detected `profile` line with no readable value is never "no profile": that
+    // is the silent widening. More than one backticked token is equally unreadable:
+    // taking `values[0]` let `- `profile`: `poc` (not `custom`)` resolve to `poc`
+    // with nothing said about the half of the line that decided nothing.
+    return { key: 'profile', values: values.length === 1 && residue === '' ? values : null }
+  }
+  // Text the value grammar rejects — distinct from `- `whitelist`:` with nothing
+  // after it, which IS an empty whitelist and has its own HALT. Covers the fully
+  // unbackticked line AND the mixed one: without the residue check the mixed line
+  // yielded ≥1 token, passed as readable, and every bare id was dropped on the
+  // floor — a silent NARROWING, the worse direction because nothing surfaces it.
+  return { key: 'whitelist', values: residue === '' ? values : null }
+}
 
 /**
  * The `## Process Profile` section of a way-of-working file, as data.
  *
  * Fenced blocks are skipped: the shipped template carries worked EXAMPLES of the
  * very keys this reads, and an example is not a declaration.
+ *
+ * Each key is counted, because the same key on two LINES is the third level of the
+ * same hole (round 4 Major). A second SECTION halts and a `profile` LINE carrying
+ * two values halts; between them, `- \`profile\`: \`poc\`` followed by
+ * `- \`profile\`: \`custom\`` resolved LAST-WINS with nothing reported — and the
+ * outcome was order-dependent, since the reverse order tripped the "whitelist under
+ * a built-in" HALT instead.
  */
 export function parseWowProfileSection(content: string): ProfileDeclaration {
   const sectionHalts = profileSectionProblems(content)
   const section = sectionOfWhere(content, isWowProfileHeading)
-  if (section === null)
-    return { profile: null, whitelist: null, present: false, unreadable: [], sectionHalts }
+  const empty = { profile: null, whitelist: null, unreadable: [], duplicateKeys: [] }
+  if (section === null) return { ...empty, present: false, sectionHalts }
 
   let profile: string | null = null
   let whitelist: string[] | null = null
   const unreadable: string[] = []
+  const seen = new Map<string, number>()
   let fenced = false
   for (const line of section.split('\n')) {
     if (/^\s*```/.test(line)) {
@@ -1473,36 +1554,24 @@ export function parseWowProfileSection(content: string): ProfileDeclaration {
       continue
     }
     if (fenced) continue
-    const key = WOW_PROFILE_KEY.exec(line)
-    if (!key) continue
-    const rest = key[2] as string
-    const values = backticked(rest)
-    // What the value grammar did NOT consume: backticked spans and the separators
-    // between them removed, anything left is text the reader cannot account for.
-    // Checking the RESIDUE rather than `values.length === 0` is what catches a
-    // PARTIALLY readable line — the one a hand-edit actually produces.
-    const residue = rest.replace(/`[^`]*`/g, '').replace(/[,\s]+/g, '')
-    if (key[1] === 'profile') {
-      // A detected `profile` line with no readable value is never "no profile":
-      // that is the silent widening. Reported, and the resolver HALTs on it.
-      // More than one backticked token is equally unreadable: taking `values[0]`
-      // let `- `profile`: `poc` (not `custom`)` resolve to `poc` with nothing said
-      // about the half of the line that decided nothing.
-      if (values.length !== 1 || residue !== '') unreadable.push('profile')
-      else profile = values[0] as string
-    } else if (residue !== '') {
-      // Text the value grammar rejects — distinct from `- `whitelist`:` with
-      // nothing after it, which IS an empty whitelist and has its own HALT.
-      // Covers the fully unbackticked line AND the mixed one: without the residue
-      // check the mixed line yielded ≥1 token, passed as readable, and every bare
-      // id was dropped on the floor — a silent NARROWING, which the schema names
-      // the worse direction because nothing surfaces it to the user.
-      unreadable.push('whitelist')
-    } else {
-      whitelist = values
-    }
+    const declared = readProfileKeyLine(line)
+    if (declared === null) continue
+    seen.set(declared.key, (seen.get(declared.key) ?? 0) + 1)
+    if (declared.values === null) unreadable.push(declared.key)
+    else if (declared.key === 'profile') profile = declared.values[0] as string
+    else whitelist = declared.values
   }
-  return { profile, whitelist, present: true, unreadable, sectionHalts }
+  const duplicateKeys = [...seen]
+    .filter(([, count]) => count > 1)
+    .map(([key, count]) => ({ key, count }))
+  return {
+    profile,
+    whitelist,
+    present: true,
+    unreadable: [...new Set(unreadable)],
+    duplicateKeys,
+    sectionHalts,
+  }
 }
 
 export interface ProfileResolution {
@@ -1530,19 +1599,30 @@ function unreadableShapeHalt(keys: string[]): string {
   )
 }
 
+/** The HALT for one key declared on several lines of the same section. */
+function duplicateKeyHalt({ key, count }: { key: string; count: number }): string {
+  return (
+    `\`## ${WOW_PROFILE_SECTION}\` declares \`${key}\` more than once (${count} lines) — keep one ` +
+    `line per key. Only the last is read, so the value declared earlier takes effect nowhere`
+  )
+}
+
 /**
  * What is wrong with the declaration's SHAPE, before any profile name is read —
- * ordered outside-in: WHERE the section sits, then WHAT the keys inside it say.
+ * ordered outside-in: WHERE the section sits, then how often each KEY is declared,
+ * then WHAT the key lines say.
  *
  * Every case here is a HALT with the schema handed back, never a quiet fallback to
  * `default`: a section declared twice or at a level this reader does not treat as
- * a section makes every key under it moot, and a key the author clearly meant to
- * declare in a shape no reader accepts is not "no declaration".
+ * a section makes every key under it moot, a key declared twice makes one of the two
+ * declarations dead text, and a key the author clearly meant to declare in a shape
+ * no reader accepts is not "no declaration".
  */
 function declarationShapeHalts(declaration: ProfileDeclaration): string[] {
   if (declaration.sectionHalts.length > 0) return declaration.sectionHalts
-  if (declaration.unreadable.length > 0) return [unreadableShapeHalt(declaration.unreadable)]
-  return []
+  const halts = declaration.duplicateKeys.map(duplicateKeyHalt)
+  if (declaration.unreadable.length > 0) halts.push(unreadableShapeHalt(declaration.unreadable))
+  return halts
 }
 
 /**
@@ -1752,7 +1832,7 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
  * resolver — a template carrying a section no reader accepts, or an example that
  * resolves with a warning, teaches the wrong shape to every project that copies it.
  */
-function checkShippedProfileProse(
+export function checkShippedProfileProse(
   proseRoot: string,
   entries: StepEntry[],
   builtIns: Record<string, ProfileWhitelist>,
@@ -1837,7 +1917,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, shipped way-of-working template + its worked examples, manual-path entrypoint)`,
     )
     process.exit(0)
   } else {

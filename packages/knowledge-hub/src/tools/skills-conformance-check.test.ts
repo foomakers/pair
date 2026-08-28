@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -31,8 +31,10 @@ import {
   checkManualPathEntrypoint,
   extractProfileExamples,
   checkProcessProfiles,
+  checkShippedProfileProse,
   resolveProcessProfile,
   parseWowProfileSection,
+  WOW_TEMPLATE_FILE,
 } from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
@@ -1170,6 +1172,86 @@ describe('extractProfileExamples', () => {
     expect(examples).toHaveLength(1)
     expect(examples[0]).toContain('`poc`')
   })
+
+  // Round 4 Major: the shipped adoption TEMPLATE writes its examples as BARE key
+  // lines — the heading is the prose above the fence, not inside it. Requiring the
+  // heading inside the block made every template example invisible to the gate.
+  it('accepts a fence carrying only key lines, and gives it the heading to parse by', () => {
+    const doc = '# WoW\n\n## Process Profile\n\nExample:\n\n```text\n- `profile`: `poc`\n```\n'
+    const examples = extractProfileExamples(doc)
+    expect(examples).toHaveLength(1)
+    expect(parseWowProfileSection(examples[0] as string)).toMatchObject({
+      present: true,
+      profile: 'poc',
+    })
+  })
+
+  it('still ignores a fence that declares no profile key at all', () => {
+    const doc = '```text\n- `code-host`: `github`\n- `base-branch`: `main`\n```\n'
+    expect(extractProfileExamples(doc)).toEqual([])
+  })
+
+  it('does not double the heading when the fence already carries one', () => {
+    const doc = '```text\n## Process Profile\n\n- `profile`: `poc`\n```\n'
+    const [example] = extractProfileExamples(doc)
+    expect((example as string).match(/## Process Profile/g)).toHaveLength(1)
+    expect(parseWowProfileSection(example as string).sectionHalts).toEqual([])
+  })
+})
+
+describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples', () => {
+  const entries = [
+    { id: 'brainstorm', howTo: null, executable: '/brainstorm', requires: [] as string[] },
+    {
+      id: 'plan-stories',
+      howTo: null,
+      executable: '/plan-stories',
+      requires: ['brainstorm'],
+    },
+    { id: 'refine-story', howTo: null, executable: '/refine-story', requires: ['plan-stories'] },
+    { id: 'plan-tasks', howTo: null, executable: '/plan-tasks', requires: ['refine-story'] },
+    { id: 'implement', howTo: null, executable: '/implement', requires: ['plan-tasks'] },
+    { id: 'review', howTo: null, executable: '/review', requires: ['implement'] },
+  ]
+  const builtIns = {
+    default: '*' as const,
+    poc: ['brainstorm', 'plan-stories', 'refine-story', 'plan-tasks', 'implement'],
+  }
+  const shippedTemplate = readFileSync(join(__dirname, '../..', WOW_TEMPLATE_FILE), 'utf-8')
+
+  const proseRootWith = (template: string): string => {
+    const root = mkdtempSync(join(tmpdir(), 'wow-template-'))
+    mkdirSync(join(root, 'dataset/.pair/adoption/tech'), { recursive: true })
+    writeFileSync(join(root, WOW_TEMPLATE_FILE), template)
+    return root
+  }
+  const roots: string[] = []
+  const check = (template: string): string[] => {
+    const root = proseRootWith(template)
+    roots.push(root)
+    return checkShippedProfileProse(root, entries, builtIns)
+  }
+  afterAll(() => {
+    for (const r of roots) rmSync(r, { recursive: true, force: true })
+  })
+
+  it('passes on the template as shipped', () => {
+    expect(check(shippedTemplate)).toEqual([])
+  })
+
+  // The concrete failure the gate used to certify: one character in the template's
+  // `custom` example, copied by every adopting project, HALTing at /next.
+  it('FAILS when a step id in the template’s custom example is corrupted', () => {
+    const corrupted = shippedTemplate.replace('`plan-stories`,', '`plan-storys`,')
+    expect(corrupted).not.toBe(shippedTemplate)
+    expect(check(corrupted).join('\n')).toContain('unknown step id')
+  })
+
+  it('FAILS when the template’s `poc` example names a profile that does not exist', () => {
+    const corrupted = shippedTemplate.replace('- `profile`: `poc`', '- `profile`: `pocc`')
+    expect(corrupted).not.toBe(shippedTemplate)
+    expect(check(corrupted).join('\n')).toContain('unknown process profile')
+  })
 })
 
 describe('checkProcessProfiles', () => {
@@ -1528,5 +1610,102 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('`profile`')
     expect(r.profile).toBe('default')
     expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  // Round 4 Major: the KEY level, between the two the earlier rounds closed. A
+  // second SECTION halts and a `profile` LINE with two values halts, but the same
+  // key declared on two LINES of one section resolved last-wins in total silence.
+  // A team on `poc` hand-adding a `custom` line under the same section lost 7 of 8
+  // steps from every /next suggestion, with nothing reported.
+  it('HALTs when `profile` is declared on two lines of the same section', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n- `profile`: `custom`\n- `whitelist`: `implement`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expect(r.halts[0]).toContain('more than once')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('HALTs when `whitelist` is declared on two lines of the same section', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`, `brainstorm`\n- `whitelist`: `brainstorm`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`whitelist`')
+    expect(r.halts[0]).toContain('more than once')
+  })
+
+  // The old behaviour was order-dependent: `custom` then `poc` resolved silently,
+  // `poc` then `custom` HALTed on "whitelist under a built-in". Same two lines,
+  // opposite outcomes.
+  it('reports the duplicate the same way whichever order the two lines are in', () => {
+    const body = ['- `profile`: `poc`', '- `profile`: `custom`', '- `whitelist`: `implement`']
+    const a = resolve(`## Process Profile\n\n${body.join('\n')}\n`)
+    const b = resolve(`## Process Profile\n\n${[body[1], body[0], body[2]].join('\n')}\n`)
+    expect(a.halts).toEqual(b.halts)
+    expect(a.halts[0]).toContain('more than once')
+  })
+
+  it('does not read a repeated key inside a fenced EXAMPLE as a duplicate', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n\n```text\n- `profile`: `custom`\n```\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 4 Major: `+` is a CommonMark bullet, so `+ `profile`: `poc`` IS the
+  // "backticked list item" the schema asks for — and it resolved to `default`,
+  // every step re-enabled, byte-identical to writing nothing.
+  it('accepts a `+` bullet, the third CommonMark list marker', () => {
+    const r = resolve('## Process Profile\n\n+ `profile`: `poc`\n')
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('accepts a `*` bullet', () => {
+    const r = resolve('## Process Profile\n\n* `profile`: `poc`\n')
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  // A key the author plainly MEANT to declare, on a line whose marker this reader
+  // does not accept, is a detected key in an unreadable shape — never "no
+  // declaration", which is the silent widening again.
+  it.each([
+    ['no bullet at all', '`profile`: `poc`'],
+    ['an ordered-list marker', '1. `profile`: `poc`'],
+    ['an ordered-list paren marker', '1) `profile`: `poc`'],
+    ['a leading-space, bullet-less key', '  `profile`: `poc`'],
+  ])('HALTs on a `profile` key written with %s', (_, line) => {
+    const r = resolve(`## Process Profile\n\n${line}\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('HALTs on a bullet-less `whitelist` key too', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n`whitelist`: `implement`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`whitelist`')
+  })
+
+  it('does not read PROSE mentioning the key as a declaration', () => {
+    const r = resolve(
+      '## Process Profile\n\nA project that runs a subset declares `profile`: `poc` here.\n',
+    )
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  it('does not read the schema TABLE rows as declarations', () => {
+    const r = resolve(
+      '## Process Profile\n\n| Field | Default |\n| --- | --- |\n| `profile` | `default` |\n| `whitelist` | *(none)* |\n',
+    )
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
   })
 })

@@ -1,7 +1,7 @@
 ---
 name: next
 description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.6.2
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -134,6 +134,7 @@ A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-
    - **empty whitelist** under `custom` → **HALT** as a **misconfiguration**, never read as "every step disabled";
    - **`whitelist` under a built-in profile, or with no `profile` key** → **HALT**: it would otherwise be silently ignored;
    - **a key in a shape the schema does not accept** (`- profile: poc`, value unbackticked; a bolded key is fine) → **HALT** restating the shape. Read the key **loosely** and its value **strictly**: an unreadable line treated as "no declaration" resolves to `default`, which **widens** the profile to the whole process silently — the one direction of failure nothing downstream catches;
+   - **the same key declared twice** in one section (two `profile` lines, or two `whitelist` lines) → **HALT** naming the key. Only the last would be read, so the earlier declaration takes effect nowhere, and which HALT fired used to depend on the two lines' order. A key is **one line, on a `-`, `*` or `+` list item**: a key written with **no bullet** or with an ordered-list marker (`1.`, `1)`) is a **HALT** too, never invisible text — reading it as prose resolves the section to `default` and re-widens the project to the whole process;
    - **more than one `## Process Profile` section**, or the heading at **any level other than `##`** (`### Process Profile`) → **HALT**. Same widening hole one level further up: only the first section is read and the rest is dropped in silence, and a mis-levelled heading is neither a section nor a reported problem. The adoption template ships an empty `## Process Profile` section already, so *appending* a second is the likelier edit — check the count and the level before reading the keys.
 4. **Filter, don't fail.** Any candidate row whose step is disabled is **SKIPPED** — dropped from the cascade and never proposed. A disabled step is **not an error**: evaluation simply continues to the next row, so enabled steps chain correctly across the gaps. **The Step 5 fallback is bound by the same rule**: it is prose, not a row, so apply the filter to it explicitly (Step 5).
 5. **Prerequisite consistency (report, don't repair).** Prerequisites are an **any-of**: satisfied when the step's `Requires` list is empty or **at least one** listed step is enabled. For each enabled step whose list is entirely disabled, report the inconsistency with the **minimal fix** — the configuration is readable, so the run continues, and it is **never silently** repaired nor silently tolerated:
