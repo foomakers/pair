@@ -164,7 +164,7 @@ what the policy says.
 
 ## Step 4: Turn it into a daemon
 
-`pair run` and the in-harness `pair-loop` workflow both **stop** when nothing is eligible — they
+`pair run` and the in-harness realizations (Claude Code's `pair-loop` workflow, Codex's subagents) all **stop** when nothing is eligible — they
 don't block waiting for new cards to appear. "Watching the backlog" is therefore an external
 scheduler re-invoking the command periodically, not a single long-lived process holding a socket
 open. Three ways to get there, in order of what most teams should actually use:

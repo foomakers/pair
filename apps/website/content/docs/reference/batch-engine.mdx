@@ -18,7 +18,7 @@ Three workflows ship:
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `pair-implement-batch` | a batch of cards, each to a review-approved PR — implement, open the PR, then an independent review ↔ fix loop until it converges         |
 | `pair-refine-batch`    | a batch of backlog cards to Ready — classify, refine, or read-only triage. By its dispatched prompts it writes to the PM tool only and touches no file in the repo — that is process, not permission: see the note below the agent table |
-| `pair-loop`            | the unattended delivery loop — selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, enacts the automation policy (auto-advance) and evaluates the stop predicate. Realization for the `/pair-loop` skill in Claude Code (ADR-017 §4); elsewhere the skill takes a degraded one-card + continue-token path and this workflow never runs |
+| `pair-loop`            | the unattended delivery loop — selects eligible cards via `/pair-next`, runs a dependency + mutex analysis, composes `pair-implement-batch` for the actual batch, enacts the automation policy (auto-advance) and evaluates the stop predicate. One of the `/pair-loop` skill's realizations — the one it binds in Claude Code (ADR-017 §4, amended by ADR-021). In Codex the skill drives the same lane through that harness's own subagents and this workflow never runs; where the skill's probe finds no fan-out primitive at all it falls back to `pair run`, then to a one-card + continue-token path |
 
 `pair-refine-batch` deliberately carries neither of the two knobs `pair-implement-batch` has.
 It has **no parallelism cap** because each card costs one API round trip and holds no worktree,
@@ -31,6 +31,11 @@ configurable one; generalizing it is a separate change, and the file says so at 
 
 The engine is a workflow script driven by Claude Code's orchestration primitives — it spawns
 subagents by type and runs their steps in parallel. No other tool executes it today.
+
+**That is a statement about these FILES, not about fan-out.** Codex has subagent primitives of
+its own, and `/pair-loop` uses them ([Codex integration](/docs/integrations/codex#unattended-delivery-fan-out)) —
+it just does not run a `.claude/workflows/*.js` file to do it. Which mechanism a session gets is
+decided by probing that session, never by naming the product.
 
 **Under any other tool the files are inert.** They are never read, never executed, and cost
 about **150 KB** on disk — mostly the implement engine itself, which carries its rationale

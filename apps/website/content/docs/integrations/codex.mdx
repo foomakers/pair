@@ -67,6 +67,38 @@ Codex discovers skills in `.agents/skills/` (symlinked to the canonical `.claude
 
 For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
 
+## Unattended Delivery (fan-out)
+
+Codex is one of two harnesses that can run pair's [unattended loop](/docs/tutorials/unattended-delivery) **in-harness** — driving several cards per run by spawning a fresh subagent per phase, instead of one card per invocation.
+
+### What has to be on
+
+`/pair-loop` binds a realization by **probing the session it is running in**, never by checking that you are in Codex or on a given version. It looks for a multi-agent spawn/wait pair among the tools actually exposed to it:
+
+- Codex's **first-generation** multi-agent tools are stable and on by default — a normal session already exposes them.
+- The **second generation** is stable but default-off, behind its own feature flag, and lets you rename the tool namespace and set concurrency/timeout ceilings. When it is on, `/pair-loop` prefers it, and reads the namespace from the probe rather than assuming a name.
+
+Enable nothing and the loop still works if the default-on set is exposed. Enable the second generation and you additionally get a harness-side concurrency ceiling the loop will respect.
+
+### What you will see
+
+Before anything is dispatched, the run prints which realization won, which primitive it bound to and why, plus the effective parallelism and which limit produced it:
+
+```text
+fan-out realization: codex-multi-agent-v1 (tier 1, codex) — bound to `spawn_agent`/`wait_agent`; …
+effective parallelism: 2 (bound by policy; dependency=4, policy=2, harness=8)
+```
+
+Both lines also go into the run's audit file, so a run can be reconstructed after the fact.
+
+### Where it stops
+
+- **No primitive exposed** — a feature turned off, a surface that does not offer the tools, an unfamiliar namespace — is not an error. The run degrades: to `pair run` (a fresh process per iteration) when that is available, otherwise to **one card plus a continue-token** you re-invoke. It never iterates several cards inside one context.
+- **The audit cannot be written** stops the run outright. An unattended run with no trail is not an acceptable degraded mode.
+- **Merge is never automatic** here, whatever the harness allows. Every run stops at the gate your `tech/automation.md` policy declares.
+
+Nothing about this is Codex-specific configuration on pair's side: no `.codex/` directory is written, and skills keep arriving through `.agents/skills/` and `AGENTS.md` exactly as above.
+
 ## Workflow Tips
 
 ### Sandboxed Execution
