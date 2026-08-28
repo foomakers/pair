@@ -75,6 +75,33 @@ Example — split configuration (Linear for the backlog, GitHub for the code):
 - `base-branch`: `main`.
 ```
 
+## Process Profile
+
+Optional. **Which process steps this project runs.** **Omitted by default**: pair assumes the full process, so a team that runs everything configures nothing here and behaves exactly as before this section existed (convention over configuration, D21). The schema, the built-in profiles and the step ids live in the KB — [process-profiles.md](../../knowledge/guidelines/technical-standards/ai-development/process-profiles.md) and the [step catalogue](../../knowledge/guidelines/technical-standards/ai-development/step-catalogue.md) — this section only names the choice.
+
+| Field       | Default     | Meaning                                                                                                       |
+| ----------- | ----------- | --------------------------------------------------------------------------------------------------------------- |
+| `profile`   | `default`   | `default` (every step), `poc` (no DDD mapping, no strategic planning layer) or `custom`.                        |
+| `whitelist` | *(none)*    | The enabled step ids. **Required with `custom`; invalid with `default` or `poc`**, which carry their own sets.  |
+
+- **Omitted ⇒ `default`.** Absence is a declaration, not a gap: the whole process applies.
+- The profile governs the **step**, not one of its representations — so a project with **no skills installed**, following the how-to guides by hand, is governed identically.
+- A **disabled** step is never proposed by `/next`; invoked directly it warns and asks for confirmation; reached as a composition it is skipped exactly like a skill that is not installed. See [process-profile gate](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
+- An unknown profile name, an unknown step id and an **empty** whitelist all **HALT** — a typo must never silently disable a step, and an empty whitelist is a misconfiguration, not "everything disabled".
+
+Example — a proof-of-concept team:
+
+```text
+- `profile`: `poc`
+```
+
+Example — a `custom` subset (delivery only, planning done elsewhere):
+
+```text
+- `profile`: `custom`
+- `whitelist`: `brainstorm`, `plan-stories`, `refine-story`, `plan-tasks`, `implement`, `review`
+```
+
 ## State Mapping
 
 Optional. Skills resolve item state to 5 canonical macrostates — `Draft`, `Ready`, `In Progress`, `Review`, `Done` — through this section. **Omitted by default**: pair assumes your board already uses canonical names, so nothing needs to be configured here. Add a `Board State → Macrostate` table only if your board uses different names — mapping is n-m (many board states may map to one macrostate, never the inverse). See [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full schema, semantics, and examples (default, GitHub Projects, minimal board, custom n-m).
