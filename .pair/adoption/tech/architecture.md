@@ -38,6 +38,13 @@
 - Canonical target (`.claude/skills/`) receives physical copies; secondary targets receive symlinks.
 - Windows environments fall back to copy mode (symlinks rejected at validation time). See [ADR-005](adr/adr-005-skills-infrastructure.md).
 
+## Unattended Fan-Out
+
+- Fan-out is ONE capability with THREE realizations, taken in preference order: **(1) in-harness**, **(2) external driver** (`pair run`), **(3) degraded** one card + continue-token. See [ADR-021](adr/adr-021-fan-out-three-realizations.md).
+- **Two in-harness realizations ship**: Claude Code's `Workflow` (`.claude/workflows/pair-loop.js`), and Codex's multi-agent subagents driven by the `/pair-loop` skill. They are two realizations of one lane, not two engines — same policy file, same per-card outcomes, same result contract.
+- **Which one a session may use is PROBED, never inferred** from a product name or a version string; an unrecognised probe result reads as absent and the run degrades. ADR-021 §7; the generic rule is the KB's [harness-realization convention](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/harness-realization.md).
+- The Codex realization's deterministic half — surface map, cap arithmetic, packet assembly and its blindness check, result validation, audit, resume — is a tested module shipped as the generated KB asset `.pair/knowledge/assets/codex-fanout.cjs`, the same pattern as the coverage ratchet ([ADR-023](adr/adr-023-coverage-ratchet-ships-as-a-generated-kb-asset.md)). No `.codex/` distribution target exists: Codex reads the shared `.agents/skills/` symlink and the root `AGENTS.md`.
+
 ---
 
 All architectural implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).

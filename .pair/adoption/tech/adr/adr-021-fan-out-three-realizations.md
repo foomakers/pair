@@ -4,6 +4,8 @@
 
 Accepted — **amends [ADR-017](adr-017-automation-loop-pair-loop-over-atom.md)** §4 (the `pair-loop` skill's Realization rule) and retires one of its stated limitations ("No portable unattended loop"). ADR-017 §1 (`pair-next` as a frozen atom), §2 (`implement-batch` as the batch engine), §3 (context isolation as an architectural invariant) and §6 (`tech/automation.md` as the policy home) are **left intact** and are not restated here.
 
+**Amended 2026-08-28 by #441** — the second tier-1 realization landed. §7 below states how a caller decides which realization it has, and corrects one factual premise this record inherited. The three tiers, their order and every other clause are **unchanged**: #441 is the sibling #451 already reserved a slot for, not a re-framing. Whichever of the two landed second was required to amend this record rather than write a second, divergent three-tier story; this is that amendment.
+
 > Numbering note: `adr-018` is claimed by two files already merged; `019` stays free for whichever of them renumbers. This ADR takes the next number above the highest in use.
 
 ## Date
@@ -41,7 +43,7 @@ See Decision.
 
    | # | Realization | What it is | When it applies |
    | --- | --- | --- | --- |
-   | 1 | **In-harness** | The harness's own fan-out primitive — Claude Code's `Workflow` (`pair-loop` / `pair-implement-batch`), Codex subagents (#441) | The harness has one, and the team wants to use it |
+   | 1 | **In-harness** | The harness's own fan-out primitive — Claude Code's `Workflow` (`pair-loop` / `pair-implement-batch`), Codex's multi-agent subagents (#441, landed) | The **probe** finds one in this session (§7), and the team wants to use it |
    | 2 | **External driver** | `pair run` (#451): a headless process per iteration on a chosen engine, re-invoking on the continue-token. The **portable baseline** | Any environment with an engine on PATH — *including* harnesses that HAVE subagents but whose user prefers separate processes. `claude -p` and Codex are legitimate driver ENGINES, not competitors to tier 1 |
    | 3 | **Degraded** | ADR-017 §4's original rule: exactly one card per invocation, audit/checkpoint written, continue-token printed for a human/CI/cron to re-invoke | Only for a caller with neither of the above |
 
@@ -56,6 +58,19 @@ See Decision.
 5. **Merge is never automated by tier 2.** Whatever the autonomy flags, the driver stops at the gate; auto-advance authority stays exactly where `tech/automation.md` §Auto-Advance and quality-model §4 put it.
 
 6. **`pair-loop`'s Realization rule (ADR-017 §4, shipped in the skill) is amended to these three tiers**, and so is story #250's statement of it. §§1–3 and §6 of ADR-017 are unchanged.
+
+7. **A realization is PROBED, never inferred — and Codex's is the second one that exists** (added 2026-08-28, #441).
+
+   The tier table above is a preference order, not an availability claim. Which realization a caller may take is established by **probing the running session** for the primitive itself: the tool is exposed, or it is not. A product name, a version string, a documented-but-unobserved feature and a config key that merely *could* enable the mechanism are all inadmissible as evidence, and an unrecognised probe result reads as **absent**. The generic rule — probe → bind → announce → degrade, with the vendor's surface held as data — is stated once in the KB's [harness-realization convention](../../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/harness-realization.md); this clause only fixes that the capability's tiers are taken that way.
+
+   Two consequences are load-bearing:
+
+   - **The bound realization is announced before anything is dispatched**, and recorded in the run's audit. A silent fallback and a successful bind are otherwise indistinguishable in the result.
+   - **Degradation preserves the invariant.** Where no primitive binds, the caller drops to tier 2 and then tier 3. What it may never do, at any tier, is iterate several cards inside one context — that is ADR-017 §3's invariant, and dropping it would not be a lower tier but a defect.
+
+   **Why the probe rather than a version check**: the far side of this integration is observably in motion. On the build measured for #441 (`codex-cli 0.149.0`, 2026-08-22) Codex exposed *two* multi-agent toolsets — a default-on first generation (`spawn_agent`/`wait_agent`/`send_input`/`resume_agent`/`close_agent`) and a default-**off** second one behind `multi_agent_v2`, with a configurable tool namespace — while a third fan-out mechanism (`enable_fanout`) had already been withdrawn. A rule that read capability off a version would have been wrong for at least one of those three states.
+
+   **The factual correction this amendment carries**: ADL [`2026-07-11-agent-execution-layer`](../../decision-log/2026-07-11-agent-execution-layer.md) states that Claude Code's subagent and workflow primitives are ones "that other assistants (e.g. Codex) do not have". For Codex that is **no longer true**, on the evidence above; the ADL is amended in place. What remains true, and is what that record was really about, is narrower: `.claude/workflows/*.js` is a Claude-Code-specific *artifact* no other harness can execute. Codex's in-harness realization is therefore not that file ported — it is the `pair-loop` skill driving the same lane through Codex's own tools, with the lane's deterministic half in a tested module shipped as a KB asset. Both realizations validate a subagent's return against the **same** result contract; neither invents a second handoff format.
 
 ## Consequences
 
@@ -74,6 +89,8 @@ See Decision.
 - **Tier 2 costs one process per iteration**: slower than an in-harness subagent for a long run, and it re-reads project context every time. That is the price of the stronger isolation, not an accident of the implementation.
 - **Tier 2 has no per-run card exclusion** (see Decision §2): the one-card path does not read the prior audit to skip already-decided cards, so an unattended tier-2 run can re-decide a parked card until its cap. Bounded, audited, and fixable in the skill — but a real difference from tier 1 today.
 - **The driver depends on per-engine stream contracts** (which event is terminal). They are engine-map data, verified against each engine, and unrecognised output is fail-closed — an iteration with no terminal event counts as failed and stops the loop.
+- **Tier 1 now has two realizations to keep in step** (added 2026-08-28, #441). Claude's runs in JS, Codex's runs as a skill over a tested asset, and "one capability" is a claim only as long as a given card comes out of both with the same outcome and an equivalent audit. Two guards hold it mechanically — the per-phase result schemas are asserted equal across the two, and the vendor surface is asserted to appear only in its data map — but the semantics of the lane itself rest on the shared `implement-batch` contract, not on a test. A third harness would want the same pair of guards, not a third re-derivation.
+- **A model-driven orchestrator is less deterministic than a JS one** (added 2026-08-28, #441). Codex's tier 1 puts the arithmetic, the packet checks, the contract validation and the audit write in a tested module precisely because the surrounding sequencing is a model's. That narrows the gap; it does not close it, and it is the reason every dispatch is schema-validated and every outcome audited rather than trusted.
 
 ## Related
 
