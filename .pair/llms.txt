@@ -262,6 +262,7 @@
 - [Linear - Complete Implementation Guide](.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md)
 - [PR State Flow — gate ≠ review](.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md)
 - [Project Management Tool Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- [Task-Progress Feedback — checklist ticks + one batched comment](.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)
 - [Azure DevOps Project Tracking](.pair/knowledge/guidelines/collaboration/project-tracking/azure-devops-tracking.md)
 - [Filesystem Project Tracking](.pair/knowledge/guidelines/collaboration/project-tracking/filesystem-tracking.md)
 - [GitHub Project Tracking](.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md)
