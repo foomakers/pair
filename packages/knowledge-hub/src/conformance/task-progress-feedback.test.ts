@@ -12,11 +12,16 @@ import { join } from 'path'
 // the guideline, and the WIRING (where the tick happens, where the batch is
 // flushed, who never duplicates it) on the three skills involved.
 //
-// Both the dataset source and the generated root mirror are asserted, in the
-// vocabulary each one is written in: the KB mirror transform rewrites `/command`
-// references (`/write-issue` -> `/pair-capability-write-issue`), so a mirror
-// assertion pinning the short form would pass on a stale mirror and fail on a
-// correct one.
+// Coverage of the two copies is deliberately asymmetric. The MECHANISM runs over
+// both the dataset guideline and its generated root mirror, in the vocabulary
+// each one is written in: the KB mirror transform rewrites `/command` references
+// (`/write-issue` -> `/pair-capability-write-issue`), so a mirror assertion
+// pinning the short form would pass on a stale mirror and fail on a correct one.
+// The WIRING is asserted on the dataset source only (the `.claude/skills` mirror
+// is read once, to pin that the guideline reference survives the transform):
+// mirror equality for every skill artifact is already guarded by
+// `src/tools/skill-md-mirror.ts`, which runs the real copy pipeline — duplicating
+// it here would be a second, weaker copy of that check.
 
 const KB_REL = 'guidelines/collaboration/project-management-tool/task-progress-feedback.md'
 const GUIDELINE_DATASET = join(__dirname, '../../dataset/.pair/knowledge', KB_REL)
@@ -45,6 +50,18 @@ const sectionOf = (text: string, heading: string): string => {
   if (start === -1) throw new Error(`sectionOf: "${heading}" not found`)
   const next = text.indexOf('\n## ', start + heading.length)
   return next === -1 ? text.slice(start) : text.slice(start, next)
+}
+
+/**
+ * Document order of a step id (`3.1`, `3.1b`, `4`): major, minor, then the
+ * letter suffix — so `3.1 < 3.1b < 3.2`. Used to catch a skip target that jumps
+ * OVER a step, which plain heading order cannot see.
+ */
+const rank = (step: string): number => {
+  const [, major, minor = '0', suffix = ''] = /^(\d+)(?:\.(\d+))?([a-z])?$/.exec(step) ?? []
+  if (major === undefined) throw new Error(`rank: unparsable step "${step}"`)
+  const letter = suffix === '' ? 0 : suffix.charCodeAt(0) - 96
+  return Number(major) * 10_000 + Number(minor) * 100 + letter
 }
 
 /** Both copies of the guideline, so every mechanism assertion runs over each. */
@@ -122,6 +139,18 @@ describe('tick-only body patch — the only body bytes that change (AC1, T1)', (
       expect(section.toLowerCase()).toMatch(/diff/)
     },
   )
+
+  it.each(guidelineCopies)('%s: makes each checkbox its own diff-checked write', (_label, load) => {
+    const section = sectionOf(load(), '## The tick-only body patch')
+    const low = section.toLowerCase()
+    // "Exactly one changed line" AND "tick the Definition-of-Done box this task
+    // satisfies" are only compatible if the two boxes are two writes. Read as one
+    // write, a task that legitimately ticks both produces a two-line diff, the
+    // check rejects it, and the task's OWN tick is lost too — reported as a
+    // feedback failure with nothing actually wrong.
+    expect(low).toMatch(/one write per (check)?box|its own .*write|separate write/)
+    expect(low).toMatch(/definition[- ]of[- ]done/)
+  })
 
   it('dataset names the composed writer in short form, the mirror in prefixed form', () => {
     expect(guideline()).toContain('/write-issue')
@@ -245,11 +274,48 @@ describe('wiring — /implement owns both call sites (AC1/AC2, T3)', () => {
     expect(flushStep).toMatch(/\$mode:?\s*=?\s*comment/)
   })
 
+  it('no Phase-3 skip jumps over the flush', () => {
+    // The regression this pins: Step 3.1's `commit-per-task` skip used to read
+    // "Move to Step 3.2", so the recommended (and supervised-default) commit
+    // strategy reached the checkpoint/PR hand-off having never flushed the
+    // queue — a whole story's progress comment silently lost. Ordering the two
+    // headings (the assertion above) cannot see it: a jump target defeats
+    // document order.
+    const c = implement()
+    const phase3 = sectionOf(c, '## Phase 3:')
+    const flushIdx = phase3.search(/#+\s*Step\s*3\.1b:/i)
+    expect(flushIdx).toBeGreaterThanOrEqual(0)
+    const skips = [...phase3.matchAll(/Move to (?:Step|Phase)\s*(\d+(?:\.\d+)?[a-z]?)/gi)]
+    const jumpsOverTheFlush = skips
+      .filter(m => (m.index ?? 0) < flushIdx)
+      .filter(m => rank(m[1]) > rank('3.1b'))
+      .map(m => m[0])
+    expect(jumpsOverTheFlush).toEqual([])
+  })
+
   it('flushes on the way out of a HALT too', () => {
     // The run with the most to report is the one that stopped. A flush only on
     // the success path leaves exactly the failed iteration silent (AC3).
     const halts = sectionOf(implement(), '## HALT Conditions').toLowerCase()
     expect(halts).toMatch(/flush/)
+  })
+
+  it('never flushes twice in one invocation — the HALT flush is conditional on the batch not being out', () => {
+    // A HALT reachable AFTER Step 3.1b has already posted (Step 3.3's "gate red
+    // inside /publish-pr", "/publish-pr not installed") would otherwise re-flush
+    // the same batch: the guard "is the queue empty" stays false after a post,
+    // because those tasks were still attempted this invocation. Two near-identical
+    // progress comments on one story is exactly the spam the guideline forbids.
+    const c = implement()
+    const flushStep = c
+      .slice(c.search(/#+\s*Step\s*3\.1b:/i), c.search(/#+\s*Step\s*3\.2:/i))
+      .toLowerCase()
+    expect(flushStep).toMatch(/already flushed/)
+    // and the queue is drained by the flush, so "already flushed" is a fact the
+    // step establishes rather than a note the reader has to carry.
+    expect(flushStep).toMatch(/drain|empt(y|ies)\s+the\s+queue/)
+    const halts = sectionOf(c, '## HALT Conditions').toLowerCase()
+    expect(halts).toMatch(/unless[^\n]*already flushed/)
   })
 
   it('reports the feedback outcome in its own output block', () => {

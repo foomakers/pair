@@ -41,9 +41,10 @@ Three properties make that a rule rather than an intention:
 
 1. **The transport is a full-body overwrite.** `/pair-capability-write-issue`'s write mode replaces the body with what the caller passes, so the caller must pass the current body with the one line patched — read, patch, write. Nothing about the transport prevents a re-rendered body from replacing the story's acceptance criteria; the caller's own care is the only thing that does.
 2. **The write is diff-checked before it is sent.** Compare the patched body against the body just read: the diff must be exactly one line, and that line must differ only in its checkbox marker. A diff of any other shape is a bug in the patch, and the write is **abandoned** (recorded as `patch-rejected` in the batch), never sent hopefully.
-3. **The patch never unticks.** An item **already ticked** (`[x]`) is already in the target state: no body write is sent at all, and the task is reported as ticked. That is what makes a re-run — a resumed story, a re-invocation after a context reset — free of writes and free of noise.
+3. **One write per checkbox.** The single-line diff is the shape of one *write*, not of one task: a task that ticks its own item **and** a Definition-of-Done box is **two** sequential read-patch-write cycles, each with its own fresh read and its own one-line diff check. Batching both boxes into one body would present a two-line diff, the check would reject it, and the task's own tick would be lost with it — a `patch-rejected` reported over work that was entirely correct.
+4. **The patch never unticks.** An item **already ticked** (`[x]`) is already in the target state: no body write is sent at all, and the task is reported as ticked. That is what makes a re-run — a resumed story, a re-invocation after a context reset — free of writes and free of noise.
 
-Definition-of-Done boxes are patched by the same rule when a task factually satisfies one; boxes that need a reviewer's judgment stay unticked.
+Definition-of-Done boxes are patched by the same rule — its own write, its own diff check — when a task factually satisfies one; boxes that need a reviewer's judgment stay unticked.
 
 ## Batching and the comment format (D22)
 
