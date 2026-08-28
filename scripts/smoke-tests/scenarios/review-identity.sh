@@ -146,12 +146,40 @@ check "identity + no decision ⇒ COMMENT (fail-safe, not APPROVE)" COMMENT \
   "$(identity_verdict_event identity '' 1 2>/dev/null)"
 check "identity + unknown verdict ⇒ COMMENT (fail-safe) even when authorized" COMMENT \
   "$(identity_verdict_event identity banana 1 2>/dev/null)"
-check "session mode + approved ⇒ COMMENT (self-approval rejected by the host)" COMMENT \
-  "$(identity_verdict_event session approved 1 2>/dev/null)"
-check "session mode + changes-requested ⇒ COMMENT"           COMMENT \
-  "$(identity_verdict_event session changes-requested 0 2>/dev/null)"
 check "unknown mode ⇒ COMMENT (never a native verdict on an unresolved actor)" COMMENT \
   "$(identity_verdict_event '' approved 1 2>/dev/null)"
+
+# SESSION MODE IS NOT UNIFORMLY A COMMENT. `session` is the DEFAULT (no identity
+# configured), and COMMENT there is the workaround for ONE host rule: a self-authored
+# APPROVE / REQUEST_CHANGES is rejected. On a two-person team the reviewer is NOT the
+# author — the host accepts the native event, and collapsing it would record NO change
+# request (the merge button stays unblocked, no blocking reviewer) and NO approval the
+# host counts toward `required_approving_review_count`. The fourth argument is what tells
+# the two cases apart; unknown authorship is self-authored (fail-safe COMMENT).
+check "session + NOT self-authored + changes-requested ⇒ native REQUEST_CHANGES" REQUEST_CHANGES \
+  "$(identity_verdict_event session changes-requested 0 0 2>/dev/null)"
+check "session + NOT self-authored + approved ⇒ native APPROVE" APPROVE \
+  "$(identity_verdict_event session approved 0 0 2>/dev/null)"
+check "session + SELF-authored + changes-requested ⇒ COMMENT (host rejects it)" COMMENT \
+  "$(identity_verdict_event session changes-requested 0 1 2>/dev/null)"
+check "session + SELF-authored + approved ⇒ COMMENT (host rejects a self-approval)" COMMENT \
+  "$(identity_verdict_event session approved 0 1 2>/dev/null)"
+check "session + authorship ARGUMENT ABSENT ⇒ COMMENT (fail-safe)" COMMENT \
+  "$(identity_verdict_event session approved 0 2>/dev/null)"
+check "session + authorship malformed ⇒ COMMENT (fail-safe)" COMMENT \
+  "$(identity_verdict_event session changes-requested 0 maybe 2>/dev/null)"
+check "session + NOT self-authored + no decision ⇒ COMMENT (fail-safe)" COMMENT \
+  "$(identity_verdict_event session '' 0 0 2>/dev/null)"
+# The light row governs the IDENTITY's approval, not the session account's own review:
+# in `session` mode the third argument is inert.
+check "session + NOT self-authored + approved, no light authority ⇒ still APPROVE" APPROVE \
+  "$(identity_verdict_event session approved 0 0 2>/dev/null)"
+SELF_MSG="$(identity_verdict_event session approved 0 1 2>&1 >/dev/null)"
+if printf '%s' "$SELF_MSG" | grep -qi 'author'; then
+  log_succ "the session-mode COMMENT names self-authorship as its reason"
+else
+  log_fail "session-mode COMMENT does not name self-authorship: $SELF_MSG"; FAILED=1
+fi
 
 # The refusal must NAME the missing authority, or an operator cannot tell it from a
 # session-mode degradation.
@@ -273,6 +301,28 @@ check "regression: 🟢 gates green + approved"   ready-to-merge "$(resolve_pr_s
 check "regression: 🔴 approved, no human"       to-be-reviewed "$(resolve_pr_state pass approved red 0 2>/dev/null)"
 check "regression: untagged ⇒ 🔴 fail-safe"     to-be-reviewed "$(resolve_pr_state pass approved '' 0 2>/dev/null)"
 check "regression: changes-requested"           not-approved   "$(resolve_pr_state pass changes-requested green 0 2>/dev/null)"
+
+# THE SYNTHESIS IS UNCONDITIONAL. Step 5.4 applies exactly one `pr-state:*` label on every
+# run, so the single `resolve_pr_state` call it publishes must be reachable in EVERY mode
+# and for EVERY verdict — a synthesis scoped to `identity` mode + APPROVED leaves a
+# session-mode review (every project today) with no state label at all, losing the
+# #234/#390 state view. `resolve_pr_state` takes no mode argument, by design.
+label_for() { # label_for <gates> <verdict> <tier> <explicit-approval>
+  local state
+  state="$(resolve_pr_state "$1" "$2" "$3" "$4" 2>/dev/null)"
+  case "$state" in
+  to-be-reviewed | ready-to-merge | not-approved) echo "pr-state:$state" ;;
+  *) echo "pr-state:MISSING" ;;
+  esac
+}
+check "session-mode run, approving verdict ⇒ exactly one pr-state label" pr-state:ready-to-merge \
+  "$(label_for pass approved green 0)"
+check "session-mode run, CHANGES-REQUESTED ⇒ exactly one pr-state label" pr-state:not-approved \
+  "$(label_for pass changes-requested green 0)"
+check "session-mode run, no decision yet ⇒ exactly one pr-state label" pr-state:to-be-reviewed \
+  "$(label_for pass pending green 0)"
+check "identity-mode run, CHANGES-REQUESTED ⇒ exactly one pr-state label" pr-state:not-approved \
+  "$(label_for pass changes-requested red 0)"
 
 # The no-op reason must be legible — which of the four conditions failed.
 if light_auto_approve_allowed "$LIGHT_LABELS" 0 green ready-to-merge 2>&1 | grep -qi 'Tag Projection'; then
@@ -454,6 +504,51 @@ audit "github guide carries the per-host setup (App recommended + bot user)" "$G
   'Dedicated review identity' 'GitHub App' 'bot user' 'pull_requests: write' 'checks: write'
 audit "way-of-working template declares the Review identity key" "$WOW_TEMPLATE" \
   'Review identity' 'none'
+audit "the state synthesis is an unconditional step, reachable in session mode" "$REVIEW" \
+  'in \*\*all three modes and for every verdict\*\*'
+
+# ==============================================================================
+# The shipped ADOPTION-KIND EXTRACTION is EXECUTED here, not grepped.
+# ==============================================================================
+# The step-6 snippet reads `Review identity` out of way-of-working itself. Adoption ships
+# that key as a markdown bullet with bold markers, so an extraction anchored at
+# `^Review identity:` matches NOTHING: IDENTITY_KIND falls back to `none`, a correctly
+# provisioned App resolves `session` ⇒ `commit-status`, the `checks-api` guard never fires,
+# and the identity publishes nothing at all — with no error surfaced. Run the shipped lines
+# against the REAL files rather than asserting their text.
+KIND_EXTRACT="$(grep -m1 -F 'IDENTITY_KIND="$(sed -n' "$GITHUB_GUIDE")"
+KIND_DEFAULT="$(grep -m1 -F 'IDENTITY_KIND="${IDENTITY_KIND:-none}"' "$GITHUB_GUIDE")"
+extract_kind() { # extract_kind <way-of-working-file>
+  # shellcheck disable=SC2034  # WOW is consumed by the shipped line under eval
+  local WOW="$1" IDENTITY_KIND=''
+  eval "$KIND_EXTRACT"
+  eval "$KIND_DEFAULT"
+  printf '%s' "$IDENTITY_KIND"
+}
+if [ -z "$KIND_EXTRACT" ] || [ -z "$KIND_DEFAULT" ]; then
+  log_fail "the step-6 snippet no longer assigns IDENTITY_KIND — the extraction is untestable"
+  FAILED=1
+else
+  printf -- '- **Review identity**: `app` — a GitHub App.\n' >"$TMP_DIR/wow-app.md"
+  printf -- '- **Review identity**: `bot-user` — a machine account.\n' >"$TMP_DIR/wow-bot.md"
+  printf -- '- **Review identity**: app\n' >"$TMP_DIR/wow-bare.md"
+  printf -- '- **Something else**: nope\n' >"$TMP_DIR/wow-absent.md"
+  check "extraction on THIS repo's way-of-working (bullet form) ⇒ none" none \
+    "$(extract_kind "$REPO_ROOT/.pair/adoption/tech/way-of-working.md")"
+  check "extraction on the dataset TEMPLATE every adopter receives ⇒ none" none \
+    "$(extract_kind "$WOW_TEMPLATE")"
+  check "a configured App adoption ⇒ app"               app "$(extract_kind "$TMP_DIR/wow-app.md")"
+  check "a configured bot-user adoption ⇒ bot-user" bot-user "$(extract_kind "$TMP_DIR/wow-bot.md")"
+  check "the key written without backticks ⇒ app"       app "$(extract_kind "$TMP_DIR/wow-bare.md")"
+  check "the key absent ⇒ none (the documented default)" none \
+    "$(extract_kind "$TMP_DIR/wow-absent.md")"
+  # The extracted value must be one the ADAPTER accepts: decoration left in it would make a
+  # provisioned identity an unknown kind ⇒ not excluded ⇒ halt on every review.
+  check "the extracted App kind routes to the Checks API" checks-api \
+    "$(pair_review_publication_mode identity "$(extract_kind "$TMP_DIR/wow-app.md")" 2>/dev/null)"
+  excluded "the extracted bot-user kind is accepted by the exclusion check" \
+    "$(extract_kind "$TMP_DIR/wow-bot.md")" acme-review-bot
+fi
 audit "ADR-018 amendment records adoption + what is NOT changed" "$ADR" \
   'Amendment (2026-08-28)' 'light_auto_approve_allowed' 'user.type == "User"' \
   'resolve_pr_state' 'review-identity.sh'

@@ -7,7 +7,7 @@ import { Callout } from 'fumadocs-ui/components/callout'
 
 The [PR state flow](/docs/concepts/pr-state-flow) decides **what** a pull request's state is. This page is about **who acts**: which credential writes the review verdict, the `pair-review` check, and the audit comment to the code host.
 
-By default nobody special does. The flow writes with the **session token** — whoever is running it — so the reviewer is the pull request's own author, and the host rejects a self-approval. The verdict is therefore recorded as a comment-form review led by its verdict token, and the check is a commit status. That works, it is the default, and nothing below is required to use pair.
+By default nobody special does. The flow writes with the **session token** — whoever is running it — and the check is a commit status. The verdict is the host's native action (approve / request changes) when the session account is reviewing someone else's pull request; only when the account running the flow authored the pull request does the host reject the action, and the verdict is then recorded as a comment-form review led by its verdict token. That works, it is the default, and nothing below is required to use pair.
 
 A project that wants more can provision a **dedicated review identity**: a code-host App installation, or a machine account. The flow then executes its host writes as that identity instead.
 
@@ -15,7 +15,7 @@ A project that wants more can provision a **dedicated review identity**: a code-
 
 | Mode | When | What happens |
 | --- | --- | --- |
-| `session` | nothing configured — **the default** | Today's behavior, unchanged: session token, comment-form verdict, `pair-review` as a commit status. Not an error and not reported as a degradation. |
+| `session` | nothing configured — **the default** | Today's behavior, unchanged: session token, `pair-review` as a commit status, native verdict — except on a self-authored pull request, where the host rejects it and the verdict is a comment-form review. Not an error and not reported as a degradation. |
 | `identity` | configured and usable | Host writes execute as the identity. A blocking verdict becomes a **native REQUEST_CHANGES** — the reviewer is no longer the author, so the host accepts the real event. An **approving** verdict becomes a native APPROVE only where the light row below authorizes it, and a comment-form review otherwise. An App identity publishes `pair-review` as a **check run** instead of a commit status. Every action is attributable to the identity in the host's own records. |
 | `halt` | configured but unusable — invalid credential, missing permission, unknown health | The flow **stops**, with a pointer to the host setup guide. |
 
@@ -73,11 +73,11 @@ One optional row builds on the identity. When **all four** of these hold, the id
   is inert there.
 </Callout>
 
-Three properties are worth stating plainly:
+Four properties are worth stating plainly:
 
 - **Zero criteria.** Nothing here computes "lightness". The row reads a tag produced upstream by classification, a declaration made in adoption, the tier, and the state — it never inspects the change.
 - **It is a sibling, not a rewrite.** The state synthesis table is untouched; this row consumes its output. A green or yellow pull request still reaches `ready-to-merge` the same way, and a human still presses merge unless this row supplied the host's required approval.
-- **It is the only thing that authorizes an approving review.** Outside the row an approving verdict is published as a comment-form review, so the identity never satisfies a host's required-approvals rule on your project's behalf. Without that, the four conditions would gate nothing — any approving review satisfies the host rule on its own.
+- **It is the only thing that authorizes the identity's approving review.** Outside the row an approving verdict by the identity is published as a comment-form review, so the identity never satisfies a host's required-approvals rule on your project's behalf. Without that, the four conditions would gate nothing — any approving review satisfies the host rule on its own.
 - **Most restrictive wins.** `light` on a 🔴 — or on an untagged pull request, which is fail-safe 🔴 — is inert.
 
 Every identity review writes an audit comment naming the tag, the declaration, the tier and the state — the authorized approval, the approving verdict it did *not* authorize, and the block — so the reason is reconstructable from the pull request alone.

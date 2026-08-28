@@ -22,8 +22,10 @@
 #              (the reviewer is not the author, so the host no longer rejects it), and
 #              on a GitHub-App identity `pair-review` publishes through the Checks API.
 #   session  — no identity is configured. This is TODAY'S SHIPPED BEHAVIOR in full and
-#              is NOT an error: host writes execute with the session token, the verdict
-#              degrades to `--comment`, `pair-review` is a commit status.
+#              is NOT an error: host writes execute with the session token, `pair-review`
+#              is a commit status, and the verdict is the NATIVE event unless the acting
+#              account authored the pull request — the self-review case, where the host
+#              rejects it and the verdict degrades to `--comment`.
 #   halt     — an identity IS configured but is not usable (invalid credential, missing
 #              permission, unknown health). The flow STOPS with a setup pointer. It
 #              never falls back to the session user: a review silently attributed to
@@ -58,7 +60,9 @@
 #   [ "$MODE" = halt ] && exit 1
 #   # APPROVE only when the light row authorized it (pr-state.sh light_auto_approve_allowed):
 #   light_auto_approve_allowed "$PR_LABELS" "$LIGHT_DECLARED" "$TIER" "$STATE" && APPROVE_OK=1
-#   EVENT="$(identity_verdict_event "$MODE" "$VERDICT" "${APPROVE_OK:-0}")" # APPROVE | REQUEST_CHANGES | COMMENT
+#   # SELF_AUTHORED is `session`-mode only: 0 when the acting account provably did NOT
+#   # author the pull request, 1 when it did, unset when the read failed (⇒ COMMENT).
+#   EVENT="$(identity_verdict_event "$MODE" "$VERDICT" "${APPROVE_OK:-0}" "${SELF_AUTHORED:-}")"
 #   PUB="$(pair_review_publication_mode "$MODE" "$IDENTITY_KIND")"          # checks-api | commit-status
 
 # resolve_identity_mode <configured> <healthy>
@@ -139,13 +143,18 @@ review_identity_exclusion_ok() {
   esac
 }
 
-# identity_verdict_event <mode> <verdict> <approve_authorized>
+# identity_verdict_event <mode> <verdict> <approve_authorized> <self_authored>
 #   mode               : identity | session (a `halt` never reaches here — the caller stops first)
 #   verdict            : approved | changes-requested | <anything else ⇒ no decision>
 #   approve_authorized : 1 when the adoption-gated light row (`light_auto_approve_allowed`
 #                        in pr-state.sh) authorized an APPROVING review on this pull
 #                        request; anything else — including empty and absent — is NOT
-#                        authorized (fail-safe)
+#                        authorized (fail-safe). Read in `identity` mode ONLY: it governs
+#                        the review the IDENTITY would sign on the project's behalf.
+#   self_authored      : `session` mode only — 0 when the acting session account is
+#                        provably NOT the pull request's author, 1 when it is, and
+#                        anything else (empty, absent, unknown) is treated as SELF-authored
+#                        (fail-safe ⇒ COMMENT, the form the host always accepts)
 #
 # Echoes the native review event to submit on the code host:
 #   APPROVE | REQUEST_CHANGES | COMMENT
@@ -159,26 +168,55 @@ review_identity_exclusion_ok() {
 # token leading the body: the judgment is published in full, it simply does not sign the
 # host's approval on the project's behalf. `REQUEST_CHANGES` needs no such gate — it
 # blocks, it never unlocks.
+#
+# WHY `session` MODE IS NOT UNIFORMLY A COMMENT. The COMMENT form there is the workaround
+# for exactly ONE host rule: a code host rejects an APPROVE / REQUEST_CHANGES on a pull
+# request you authored yourself. That is the SELF-REVIEW case (the solo maintainer, the
+# agent reviewing the PR its own account opened) and nothing else. On a two-person team
+# with no identity configured — the shipped default — the reviewer is NOT the author, the
+# host accepts the native event, and collapsing it to a COMMENT would silently drop a real
+# change request (nothing blocks the merge button, no blocking reviewer is recorded) and a
+# real approval (nothing the host counts toward `required_approving_review_count`). So the
+# session path returns the NATIVE event whenever self-authorship is provably false, and
+# COMMENT whenever it is true or unknown.
 identity_verdict_event() {
-  local mode="${1:-}" verdict="${2:-}" approve_authorized="${3:-0}"
+  local mode="${1:-}" verdict="${2:-}" approve_authorized="${3:-0}" self_authored="${4:-}"
 
-  if [ "$mode" != "identity" ]; then
-    echo "COMMENT"
-    return 0
-  fi
-
-  case "$verdict" in
-  approved)
-    if [ "$approve_authorized" = "1" ]; then
-      echo "APPROVE"
-    else
-      echo "review-identity: the verdict is APPROVED but no adoption-gated light row authorized an approving review — submitting as COMMENT, so the identity never satisfies the host's required-approvals rule on the project's behalf" >&2
+  case "$mode" in
+  identity)
+    case "$verdict" in
+    approved)
+      if [ "$approve_authorized" = "1" ]; then
+        echo "APPROVE"
+      else
+        echo "review-identity: the verdict is APPROVED but no adoption-gated light row authorized an approving review — submitting as COMMENT, so the identity never satisfies the host's required-approvals rule on the project's behalf" >&2
+        echo "COMMENT"
+      fi
+      ;;
+    changes-requested) echo "REQUEST_CHANGES" ;;
+    *)
+      echo "review-identity: verdict '${verdict:-unknown}' is not a decision — submitting as COMMENT, never as an approval (fail-safe)" >&2
       echo "COMMENT"
-    fi
+      ;;
+    esac
     ;;
-  changes-requested) echo "REQUEST_CHANGES" ;;
+  session)
+    if [ "$self_authored" != "0" ]; then
+      echo "review-identity: the acting session account authored this pull request (self_authored='${self_authored:-unset}'; unknown is treated as self-authored, fail-safe) — the host rejects a self-authored APPROVE/REQUEST_CHANGES, so the verdict is submitted as COMMENT with its token leading the body" >&2
+      echo "COMMENT"
+      return 0
+    fi
+    case "$verdict" in
+    approved) echo "APPROVE" ;;
+    changes-requested) echo "REQUEST_CHANGES" ;;
+    *)
+      echo "review-identity: verdict '${verdict:-unknown}' is not a decision — submitting as COMMENT, never as an approval (fail-safe)" >&2
+      echo "COMMENT"
+      ;;
+    esac
+    ;;
   *)
-    echo "review-identity: verdict '${verdict:-unknown}' is not a decision — submitting as COMMENT, never as an approval (fail-safe)" >&2
+    echo "review-identity: mode '${mode:-unknown}' is not a resolved actor — submitting as COMMENT, never a native verdict (fail-safe)" >&2
     echo "COMMENT"
     ;;
   esac

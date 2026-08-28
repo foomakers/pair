@@ -673,7 +673,7 @@ HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
 
 ### Dedicated review identity
 
-**Optional, and off by default.** With nothing configured the flow runs exactly as documented above: the session token writes, the verdict is a `--comment` review, `pair-review` is a commit status. That is `Review identity: none` in [way-of-working.md](../../../../adoption/tech/way-of-working.md) and it is **not a degradation** — it is the zero-configuration mode.
+**Optional, and off by default.** With nothing configured the flow runs exactly as documented above: the session token writes, `pair-review` is a commit status, and the verdict is the native review action unless that account authored the pull request (self-review — GitHub rejects a self-approval, so it degrades to a `--comment` review). That is `Review identity: none` in [way-of-working.md](../../../../adoption/tech/way-of-working.md) and it is **not a degradation** — it is the zero-configuration mode.
 
 A **dedicated review identity** is a second principal — a GitHub App installation, or a bot user account — whose credential the review flow uses for its code-host writes instead of the session token. Provisioning it is **project infrastructure**: a registration/seat and a secret, which no skill can create for you. What the flow does is _consume_ it, through the host-agnostic adapter [`review-identity.sh`](../../../assets/review-identity.sh) (`resolve_identity_mode`, `identity_verdict_event`, `pair_review_publication_mode`, `identity_audit_comment`). The model is in [pr-states.md](pr-states.md); only the GitHub specifics live here (R2.12).
 
@@ -681,7 +681,7 @@ A **dedicated review identity** is a second principal — a GitHub App installat
 
 | | `Review identity: none` (default) | `bot-user` | `app` (recommended) |
 | --- | --- | --- | --- |
-| Verdict | `--comment` review — the host rejects a self-authored APPROVE | native **REQUEST_CHANGES**; native **APPROVE** only where the light row authorizes it, `--comment` otherwise | native **REQUEST_CHANGES**; native **APPROVE** only where the light row authorizes it, `--comment` otherwise |
+| Verdict | native review action; `--comment` on a **self-authored** PR, which the host rejects | native **REQUEST_CHANGES**; native **APPROVE** only where the light row authorizes it, `--comment` otherwise | native **REQUEST_CHANGES**; native **APPROVE** only where the light row authorizes it, `--comment` otherwise |
 | `pair-review` | commit status | commit status | **check run** (the Checks API needs an App token) |
 | Audit | "who reviewed" is a token in the review body | per-identity in the host's review events | per-identity in review events **and** check runs |
 | 🔴 explicit approval | still a second **human** | still a second **human** — but only once `REVIEW_IDENTITY_LOGIN` is provisioned (below): this account types as `"User"` | still a second **human**, by account type — nothing to configure |
@@ -760,11 +760,15 @@ Recommended because it is the only form that unlocks the Checks API, and because
    source .pair/knowledge/assets/pr-state.sh
 
    # The three inputs, from their real sources — none of them is ambient.
-   # 1. IDENTITY_KIND — the `Review identity:` value in adoption, forwarded VERBATIM.
-   #    The adapter accepts `app`, and both `bot-user` (the adoption literal) and its
-   #    short form `user`; `none` means no identity is configured.
-   IDENTITY_KIND="$(sed -n 's/^Review identity:[[:space:]]*//p' \
-     .pair/adoption/tech/way-of-working.md | head -1)"
+   # 1. IDENTITY_KIND — the `Review identity` value in adoption, forwarded VERBATIM.
+   #    Adoption ships the key as a markdown BULLET with bold markers and a backticked
+   #    value (`- **Review identity**: `app` — ...`), so the extraction strips the bullet,
+   #    the bold and the backticks and keeps the bare kind: an expression anchored at
+   #    `^Review identity:` matches nothing and silently yields `none`. The adapter
+   #    accepts `app`, and both `bot-user` (the adoption literal) and its short form
+   #    `user`; `none` means no identity is configured.
+   WOW=.pair/adoption/tech/way-of-working.md
+   IDENTITY_KIND="$(sed -n 's/^-[[:space:]]*\*\*Review identity\*\*:[[:space:]]*`\{0,1\}\([a-z-]*\).*/\1/p' "$WOW" | head -1)"
    IDENTITY_KIND="${IDENTITY_KIND:-none}"
    # 2. IDENTITY_CONFIGURED — 1 for any value other than `none`.
    IDENTITY_CONFIGURED=0
@@ -831,7 +835,7 @@ Do not "fall back to the session token so the review still runs". A review recor
 
 When a repository declares the `light` family in `## Tag Projection` (`tech/risk-matrix.md`), the identity may submit a **native approving review** on a PR that carries the `light` tag, is **below 🔴**, and has already synthesized `ready-to-merge` — so a light PR becomes mergeable with no human action. On a repository that sets `"required_approving_review_count": 1` or more (the payload below ships `0`, so this only bites where a project raised it), that review is what satisfies the host's approvals rule.
 
-**Why it is this row and not every approving verdict.** `light_auto_approve_allowed` in [`pr-state.sh`](../../../assets/pr-state.sh) is the third argument of `identity_verdict_event` — it is the sole authority for the `APPROVE` event. An approving verdict the row does not authorize is submitted as a **COMMENT-form review** (verdict token leading the body), so it never satisfies `required_approving_review_count` on the project's behalf. Without that wiring the gate would be decorative: any green/yellow PR with an APPROVED verdict would be auto-approved, `light` tag or not, declaration or not. Every identity action writes the audit comment `identity_audit_comment` renders — the authorized approval, the unauthorized one, and the block. **Nothing here reads the change**: the row consumes a tag and a declaration (D18).
+**Why it is this row and not every approving verdict.** `light_auto_approve_allowed` in [`pr-state.sh`](../../../assets/pr-state.sh) is the third argument of `identity_verdict_event` — it is the sole authority for an `APPROVE` event **the identity signs** (in `session` mode no identity acts and the argument is not read). An approving verdict the row does not authorize is submitted as a **COMMENT-form review** (verdict token leading the body), so it never satisfies `required_approving_review_count` on the project's behalf. Without that wiring the gate would be decorative: any green/yellow PR with an APPROVED verdict would be auto-approved, `light` tag or not, declaration or not. Every identity action writes the audit comment `identity_audit_comment` renders — the authorized approval, the unauthorized one, and the block. **Nothing here reads the change**: the row consumes a tag and a declaration (D18).
 
 Two containments are worth stating on the host page, because this is where someone will try to shortcut them:
 

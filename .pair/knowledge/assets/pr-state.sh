@@ -82,9 +82,11 @@ resolve_pr_state() {
 # pull request satisfies the host's required-approvals rule with no human action.
 # Exit 1 = no-op, with the unmet condition on stderr. Never a silent yes.
 #
-# THIS ROW IS THE ONLY AUTHORITY FOR AN `APPROVE` EVENT. It is the third argument of
-# `identity_verdict_event` (review-identity.sh): outside it, an approving verdict is
-# published as a COMMENT-form review, never as a native APPROVE. That is what makes the
+# THIS ROW IS THE ONLY AUTHORITY FOR AN `APPROVE` EVENT THE IDENTITY SIGNS. It is the
+# third argument of `identity_verdict_event` (review-identity.sh): in `identity` mode,
+# outside this row an approving verdict is published as a COMMENT-form review, never as a
+# native APPROVE. (In `session` mode no identity acts and the argument is not read: the
+# account whose token is loaded signs its own review, as it did before this row existed.) That is what makes the
 # gate below load-bearing rather than decorative — without it every approving verdict
 # would satisfy a host `required_approving_review_count >= 1` on its own.
 #
