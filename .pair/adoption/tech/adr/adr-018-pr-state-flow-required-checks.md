@@ -163,6 +163,67 @@ label is an advisory view that can never enable a merge. Concretely:
   carries a **non-interactive contract** for its two human prompts so a dispatched review neither stalls
   nor self-answers itself into a merge. The merge stays a human act at every tier.
 
+### Amendment (2026-08-28) — Option 4 adopted: a dedicated review identity + an adoption-gated light auto-approval row
+
+Story [#218](https://github.com/foomakers/pair/issues/218) adopts **Option 4**, which this ADR deferred above
+("A distinct reviewer identity stays out of scope, deliberately"). The deferral was correct for #234 — the
+identity is project infrastructure — and what changes here is not that fact but who provides it: the flow now
+**consumes** an identity a project provisions, instead of pretending none can exist. Option 3 is unchanged and
+still the design; this amendment layers a credential resolution step and one adoption-gated row on top of it.
+
+**What is adopted.**
+
+1. **A dedicated review identity, resolved through a host-agnostic adapter.** The skills that write to the code
+   host (`/pair-process-review` Steps 5.3–5.4, `/pair-capability-publish-pr` Phase 5) no longer assume the
+   session token. They resolve **which credential executes the host write** through one executable projection,
+   `assets/review-identity.sh` (`resolve_identity_mode`, `identity_verdict_event`,
+   `pair_review_publication_mode`, `identity_audit_comment`) — the same "one executable projection" pattern as
+   `tier-resolve.sh` and `pr-state.sh`, so the recipe, the skills and the tests read one text. Three modes, and
+   only three: `identity` (configured and usable), `session` (none configured — **today's behavior**, not an
+   error), `halt` (configured but unusable).
+2. **A native verdict and, on the App path, the Checks API.** With an identity resolved the reviewer is not the
+   author, so GitHub's self-approval rejection no longer applies: the verdict is a **native APPROVE /
+   REQUEST_CHANGES** by the identity rather than the `--comment` degradation, and a GitHub App identity holds
+   `checks: write`, so `pair-review` publishes as a **check run**. Both are *upgrades of a degraded path*: the
+   `--comment` verdict and the commit status remain exactly what `session` mode does, and remain documented.
+3. **An adoption-gated light auto-approval row.** `light_auto_approve_allowed` ships beside `resolve_pr_state`
+   in `pr-state.sh` and yields approve/no-op from four inputs — adoption declares `light` in
+   `## Tag Projection`, the PR carries the `light` tag, the tier is **below red**, and `resolve_pr_state`
+   already synthesized `ready-to-merge`. It reads tags, a declaration and the synthesis: **zero classification
+   criteria** (D18), no "lightness" is ever computed. Adoption is the gate, not the label: a hand-applied
+   `light` label on a repository that declares no projection triggers nothing.
+
+**What is NOT changed — stated because this is the part that is easy to get wrong.**
+
+- **The 🔴 human-approval predicate stands.** `human_approval_jq_filter` still requires `user.type == "User"`,
+  which is exactly what a bot user or an App is not. Adopting the identity does **not** let it satisfy
+  `pair-explicit-approval`; a `risk:red` PR still requires an explicit approval from a second human account.
+  Light applies **below red only**. This is the one line of Option 4's Cons that is *not* being reversed here:
+  we take the identity's auditability and native verdict, and we decline the rule change it tempted.
+- **`resolve_pr_state`'s table is untouched.** No row is added, removed, or reordered; the light row is a
+  **sibling** function that consumes its output. A green/yellow PR still reaches `ready-to-merge` and a human
+  still merges — the light row changes *who supplies the host's required approving review*, never what the
+  synthesis decides.
+- **`pair-review` remains anti-accident, not authorization**, in `session` mode. On the App path it becomes a
+  check run whose `app_id` the repository's own workflows cannot present, which is precisely the residual this
+  ADR recorded as "eliminated only by the GitHub-App/check-run form" — so the residual shrinks for projects
+  that provision an App, and is unchanged for those that do not.
+- **No identity configured is not an error.** `session` mode is the shipped behavior in full. The HALT applies
+  only to `identity`-configured-but-broken: a missing permission or an invalid credential stops the flow with a
+  pointer to the host guide's *Dedicated review identity* section, and **never** silently falls back to the
+  session user — a review silently attributed to the human whose token happened to be loaded is worse than a
+  stopped review.
+- **Host mechanics stay in the implementation guide** (R2.12): GitHub App vs bot user, permissions, install and
+  credential storage live in `github-implementation.md`; the skills and the adapter name no host.
+
+**Verification status.** Everything above is implemented and asserted against fixtures — the identity ×
+`light` × tier × verdict matrix runs offline in `scripts/smoke-tests/scenarios/pr-state-flow.sh`, the contracts
+in `packages/knowledge-hub/src/conformance/review-identity.test.ts`. What is **not** yet observed on a live host
+is the end-to-end run with a real App (native APPROVE attributable to the identity, `pair-review` as a check
+run, a `light` sub-red PR mergeable with no human action): that needs a maintainer-provisioned App and is
+tracked as story #218's task T11. Nothing in this repository enables the row — `tech/risk-matrix.md` declares
+`Active: risk` only, so the light row is **inert here** and its absence is grep-verifiable.
+
 ## Consequences
 
 - `publish-pr` registers `pair-review` as pending **before** dispatching the review to a clean-context
@@ -193,11 +254,17 @@ label is an advisory view that can never enable a merge. Concretely:
   otherwise a required context that never reports blocks every merge with no escape hatch.
 - Adding a code host means adding an implementation-guide section, not touching the model or the
   evaluator. Hosts lacking required checks remain usable in advisory mode.
-- **A distinct reviewer identity stays out of scope**, deliberately (Option 4): the dispatched reviewer
+- ~~**A distinct reviewer identity stays out of scope**, deliberately (Option 4): the dispatched reviewer
   runs as the author's account, so its verdict is a `--comment` review by construction, and a second
-  human account remains the only way to satisfy 🔴. The identity question is recorded here so it is not
-  rediscovered per project; it is weighed in the same follow-up story as the solo-approval token
-  ([#398](https://github.com/foomakers/pair/issues/398)).
+  human account remains the only way to satisfy 🔴.~~ **Superseded by the 2026-08-28 amendment above**
+  (story [#218](https://github.com/foomakers/pair/issues/218)): Option 4 is adopted as a *consumed*
+  identity — the flow resolves a project-provisioned identity through a host-agnostic adapter, and falls
+  back to exactly the behavior described here when none is configured. The half of this bullet that
+  still holds is the last one: **a second human account remains the only way to satisfy 🔴** — the
+  identity's approval is excluded by `user.type == "User"` and the amendment does not touch that rule.
+  The solo-approval token stays a separate design question
+  ([#398](https://github.com/foomakers/pair/issues/398)), which needs this story's identity only for
+  forgery-resistance and is not needed by it.
 - **Merge blocking was verified end-to-end on a live code host** (throwaway repository, 2026-07-30):
   labels → workflow → contexts observed on the head commit → protection applied with
   `enforce_admins: true` → one PR per tier. Observed: a **pending** `pair-review` blocks
@@ -226,3 +293,13 @@ label is an advisory view that can never enable a merge. Concretely:
 - KB: new `pr-states.md` + `assets/pr-state.sh`; `quality-model.md` §4 gains a pointer to the flow
   (criteria stay in the model); `github-implementation.md` gains the host recipe.
 - Docs site: new `concepts/pr-state-flow` page, cross-linked from `concepts/tag-driven-gates`.
+
+Added by the 2026-08-28 amendment (story #218):
+
+- KB: new `assets/review-identity.sh` (the identity adapter projection); `pr-state.sh` gains
+  `light_auto_approve_allowed`; `github-implementation.md` gains § *Dedicated review identity*;
+  `pr-states.md` gains the identity actor row and the one-line 🔴 rule.
+- `way-of-working.md` (template + this repo): a `Review identity` line under Quality Gates — `none` by
+  default, so adopting the identity is an explicit project act.
+- `tech/risk-matrix.md`: unchanged — `Active: risk`, so the light row ships **inert** on this repository.
+- Docs site: new `concepts/review-identity` page, cross-linked from `concepts/pr-state-flow`.
