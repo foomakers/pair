@@ -60,6 +60,15 @@ function fakeRunner(results: IterationResult[]) {
   return { calls, runner }
 }
 
+/** Captures the handler's pre-spawn report, so a test can assert what an operator would read. */
+function captureLog() {
+  const lines: string[] = []
+  vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+    lines.push(args.map(String).join(' '))
+  })
+  return () => lines.join('\n')
+}
+
 const ok = (continueToken?: string): IterationResult => ({
   outcome: 'success',
   detail: 'terminal event matched (success)',
@@ -74,14 +83,6 @@ describe('handleRunCommand — resolution reporting', () => {
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
-
-  function captureLog() {
-    const lines: string[] = []
-    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
-      lines.push(args.map(String).join(' '))
-    })
-    return () => lines.join('\n')
-  }
 
   it('resolves the schema default with no flags and no pair.config.json (AC12)', async () => {
     const output = captureLog()
@@ -256,6 +257,102 @@ describe('handleRunCommand — refusals happen before any spawn', () => {
       handleRunCommand(parseRunCommand({ root: '212' }), fs, { runIteration: runner }),
     ).rejects.toThrow(/exactly one label/)
     expect(calls).toHaveLength(0)
+  })
+
+  /**
+   * `$approval` end to end (US-464): `--autonomous` is ONE operator intent — "nobody is watching
+   * this run" — and it must reach both axes it governs, the engine's permission posture and the
+   * composed skill's approval round.
+   */
+  describe('threads --approval to a declaring skill under --autonomous', () => {
+    const DECLARES = 'pair-capability-assess-stack'
+
+    function withDeclaringSkill() {
+      return projectFs({
+        [`${cwd}/${POLICY_PATH}`]: POLICY,
+        [`${cwd}/.claude/skills/${DECLARES}/SKILL.md`]: '',
+      })
+    }
+
+    it('AC1: passes --approval auto in the prompt on an autonomous run', async () => {
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      const { calls, runner } = fakeRunner([ok()])
+
+      await handleRunCommand(
+        parseRunCommand({ skill: DECLARES, root: '212', maxIterations: '1', autonomous: true }),
+        withDeclaringSkill(),
+        { runIteration: runner },
+      )
+
+      expect(calls[0]?.promptText).toContain('--approval auto')
+      // Both axes of the one flag, in the same run: the engine's posture AND the skill's round.
+      expect(calls[0]?.autonomyArgs).not.toEqual([])
+    })
+
+    it('AC2: passes nothing on the non-autonomous path — byte-identical to pre-story', async () => {
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      const { calls, runner } = fakeRunner([ok()])
+
+      await handleRunCommand(
+        parseRunCommand({ skill: DECLARES, root: '212', filter: 'risk:green', maxIterations: '1' }),
+        withDeclaringSkill(),
+        { runIteration: runner },
+      )
+
+      // The WHOLE prompt, not merely "does not contain --approval": the no-drift guarantee is about
+      // the rendered bytes, and an assertion on absence alone would pass while the rest shifted.
+      expect(calls[0]?.promptText).toBe(`/${DECLARES} --root 212 --filter risk:green`)
+      expect(calls[0]?.autonomyArgs).toEqual([])
+    })
+
+    it('AC3: passes nothing to a skill that declares no approval, even under --autonomous', async () => {
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: POLICY })
+      const { calls, runner } = fakeRunner([ok()])
+
+      await handleRunCommand(
+        parseRunCommand({ root: '212', maxIterations: '1', autonomous: true }),
+        fs,
+        { runIteration: runner },
+      )
+
+      // Resolved through the cascade to `pair-loop`, which declares no approval round.
+      expect(calls[0]?.promptText).toBe(
+        '/pair-loop --root 212 --predicate "tag:risk:red ⇒ Done" --iteration 1',
+      )
+    })
+
+    it('AC6: the dry run states the posture before anything spawns', async () => {
+      const output = captureLog()
+
+      await handleRunCommand(
+        parseRunCommand({ skill: DECLARES, root: '212', dryRun: true, autonomous: true }),
+        withDeclaringSkill(),
+      )
+
+      expect(output()).toContain(
+        `Approval: --approval auto will be passed (${DECLARES} declares it`,
+      )
+    })
+
+    it('AC6: the dry run states the interactive default when not autonomous', async () => {
+      const output = captureLog()
+
+      await handleRunCommand(
+        parseRunCommand({ skill: DECLARES, root: '212', dryRun: true }),
+        withDeclaringSkill(),
+      )
+
+      expect(output()).toContain(`keeps its interactive default`)
+    })
+
+    it('AC6: says nothing about approval for a skill that declares none', async () => {
+      const output = captureLog()
+
+      await handleRunCommand(parseRunCommand({ root: '212', dryRun: true }), projectFs())
+
+      expect(output()).not.toContain('Approval:')
+    })
   })
 
   it('spawns nothing on a dry run', async () => {
