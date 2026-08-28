@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /verify-quality, /record-decision, /checkpoint, /publish-pr."
-version: 0.6.1
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -14,6 +14,12 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 **implement composes, it never re-does gate/PR logic.** The gate → PR → board sequence lives entirely in `/publish-pr`; this skill composes it (never re-implements PR creation). Task iteration and the checkpoint boundary are what `/implement` owns.
 
 **One PR per story:** the story lands on ONE branch with ONE PR; subsequent work on the story (further tasks/features) updates that same PR, never a new one unless a human explicitly requests it.
+
+## Process Profile
+
+<!-- process-step: id=implement -->
+
+This skill is the executable representation of the **`implement`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

@@ -1,13 +1,19 @@
 ---
 name: refine-story
 description: "Refines a user story from Draft to Ready — the single Draft→Ready path (D24): phase 0 grill(sync), Given-When-Then acceptance criteria, map-subdomains/map-contexts scoped analysis, classify matrix, sprint readiness. Composes /grill, /map-subdomains, /map-contexts, /classify, /write-issue. Not for sizing an already-refined story (use /estimate)."
-version: 0.7.0
+version: 0.8.0
 author: Foomakers
 ---
 
 # /refine-story — Story Refinement (single Draft→Ready)
 
 Transform a user story from rough breakdown (Draft) into a development-ready specification (Ready). This is **THE single Draft→Ready path** — no separate "make-ready" skill exists and none is ever born (R3.12, D24); refinement IS the transition (canonical-states.md). **Section-level idempotency** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): each refinement section is checked before acting; partial refinements resume from the first missing section, an already-Ready story is confirmed and exits.
+
+## Process Profile
+
+<!-- process-step: id=refine-story -->
+
+This skill is the executable representation of the **`refine-story`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. **As a composer**, this skill applies the same check *before* composing the `define-subdomains` and `define-bounded-contexts` steps, and treats a disabled one exactly as a skill that is not installed — skipped with a note, never a prompt. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

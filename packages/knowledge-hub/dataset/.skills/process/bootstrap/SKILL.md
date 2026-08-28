@@ -1,13 +1,19 @@
 ---
 name: bootstrap
 description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /specify-prd, /setup-pm, /record-decision, assess-* (optional), /setup-harness (optional, agent harness configuration)."
-version: 0.8.0
+version: 0.9.0
 author: Foomakers
 ---
 
 # /bootstrap — Project Bootstrap
 
 Orchestrate the complete project setup sequence. Transforms a PRD into a fully configured project with adopted standards, quality gates, and PM tool integration. Each phase checks output existence before acting — re-invocation resumes from the first incomplete phase.
+
+## Process Profile
+
+<!-- process-step: id=bootstrap -->
+
+This skill is the executable representation of the **`bootstrap`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. **As a composer**, this skill applies the same check *before* composing the `specify-prd`, `define-subdomains` and `define-bounded-contexts` steps, and treats a disabled one exactly as a skill that is not installed — skipped with a note, never a prompt. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 
