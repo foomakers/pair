@@ -1,7 +1,7 @@
 ---
 name: assess-security
 description: "Assesses security posture against resolved rules (KB global + per-service + per-web-app + adoption project rules): `$mode: review` — composed by /review to produce a 1-line verdict + collapsed findings feeding the risk matrix's security dimension (D22), CHANGES-REQUESTED on vulnerabilities the PR introduces; `$mode: audit` — one-shot codebase scan against OWASP Top 10, writes a report to .pair/working/reports/security/ and proposes project rules for /record-decision to persist. Deterministic secret-scanning is a separate CI layer (see /setup-gates) — this skill never scans for committed secrets itself (D24)."
-version: 0.1.0
+version: 0.2.0
 author: Foomakers
 ---
 
@@ -17,6 +17,7 @@ Assess security posture in two modes — `review` (per-PR, composed by `/review`
 | `$choice` | No       | Audit mode only. A named control set to adopt directly (e.g. `owasp-top10`), skipping full evaluation — resolution cascade Path A.             |
 | `$scope`  | No       | Audit mode only. Area/package to scope the assessment (default: whole codebase).                                                              |
 | `$output` | No       | Audit mode only. Directory the report is written to. Default: `.pair/working/reports/security/` (D14 — report path override).                  |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). Audit mode only — review mode has no approval round. See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Rule Set (both modes read this; only audit mode's re-derivation is cascade-gated)
 
@@ -65,10 +66,10 @@ Every rule the skill applies is resolved through the same layered set, most-spec
 
 ### Step 5: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics.
+See [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics, and [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md) for the `$approval` signal both rounds below carry.
 
-- **Path A** ($choice provided): adopt the named control set (e.g. `owasp-top10`) directly — render the `tech/security.md` proposal referencing it, skip full evaluation, confirm with the developer. Proceed to Step 8.
-- **Path B** (adoption check): `adoption/tech/security.md` exists with a populated project-rules section. Confirm it's still current with the developer; if its backing decision record is missing, report the gap (this skill still writes nothing to adoption — the caller backfills via `/record-decision`). No audit report is generated for an unchanged, confirmed ruleset ("no re-assessment", per the resolution cascade addendum). Exit.
+- **Path A** (`$choice` provided): adopt the named control set (e.g. `owasp-top10`) directly — render the `tech/security.md` proposal referencing it, skip full evaluation, confirm with the developer (`$approval: interactive`). Under `auto` the named set is accepted as passed, and any conflict with existing adoption is reported rather than asked. Proceed to Step 8. <!-- approval-round: kind=confirm; auto=accept -->
+- **Path B** (adoption check): `adoption/tech/security.md` exists with a populated project-rules section. Confirm it's still current with the developer (`$approval: interactive`; under `auto` the existing rules are **kept** and reported, the conservative branch — re-auditing would propose replacing a recorded decision nobody was asked about); if its backing decision record is missing, report the gap (this skill still writes nothing to adoption — the caller backfills via `/record-decision`). No audit report is generated for an unchanged, confirmed ruleset ("no re-assessment", per the resolution cascade addendum). Exit. <!-- approval-round: kind=keep-or-redo; auto=keep -->
 - **Path C** (no override, no populated adoption): proceed to Step 6 — full OWASP Top 10 assessment.
 
 ### Step 6: Evaluate Against OWASP Top 10
@@ -125,7 +126,8 @@ SECURITY AUDIT COMPLETE:
 ├── Proposal:  [content rendered for tech/security.md | N/A — Path B, already current]
 ├── Target:    adoption/tech/security.md
 ├── Persist:   [caller composes /record-decision(content, target) → ADL | N/A]
-└── Status:    [Report written | Confirmed existing | Proposal ready]
+├── Approval:  [interactive — approved | auto — accepted as passed | auto — existing rules kept | auto — UNRESOLVED, no proposal]
+└── Status:    [Report written | Confirmed existing | Proposal ready | Unresolved — no proposal]
 ```
 
 ## Composition Interface

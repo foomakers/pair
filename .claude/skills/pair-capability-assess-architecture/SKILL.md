@@ -1,7 +1,7 @@
 ---
 name: pair-capability-assess-architecture
 description: "Evaluates and recommends an architecture pattern (layered, hexagonal, microservices, modular monolith, etc.) when the choice is open. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -14,6 +14,7 @@ Evaluate and recommend the system architecture pattern. Follows the resolution c
 | Argument  | Required | Description                                                                 |
 | --------- | -------- | --------------------------------------------------------------------------- |
 | `$choice` | No       | Override: skip assessment, use this architecture directly (e.g. `hexagonal`) |
+| `$approval` | No     | Approval-round mode: `interactive` (default — every round runs as written) or `auto` (ask nothing — three outcomes, all reported on the `Approval` line: a proposal is accepted as-is; an existing recorded value is kept and the delta reported unapplied; a call the skill cannot make alone yields **no proposal**, reported unresolved). See [approval rounds](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/approval-rounds.md). |
 
 ## Composed Skills
 
@@ -30,9 +31,9 @@ The rendered adoption content is destined for this file — the caller writes it
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify). Paths A and B carry their `$approval` qualification **there** — this skill only names the prompt wording its Path A uses, and qualifies the round Path C adds below.
 
-- **Path A delta**: override argument is `$choice`. Confirmation prompt: "Architecture override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if adoption already holds a different pattern. On confirm, proceed to Step 2.
+- **Path A delta**: override argument is `$choice`. Confirmation prompt (`$approval: interactive`): "Architecture override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if adoption already holds a different pattern. On confirm, proceed to Step 2. <!-- approval-round: kind=confirm; auto=accept -->
 - **Path B delta**: adoption check is [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md), populated (not template). Decision-record check scans [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for `*architecture*` files; if missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
 - **Path C delta**: proceed to Step 2 (full assessment mode).
 
@@ -52,7 +53,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    - Score each candidate pattern on: Implementation Complexity, Team Skill Required, Maintenance Overhead, Scalability, Best For.
    - Weight criteria based on project type (from PRD or developer input).
 
-2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis:
+2. **Act**: If two or more patterns score within 10% of each other, present top 2 with trade-off analysis: <!-- approval-round: kind=choice; auto=accept -->
 
    > **Top candidates:**
    > 1. **[Pattern A]** — Score: X. Strengths: ... Weaknesses: ...
@@ -60,13 +61,15 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    >
    > Recommendation: **[Pattern A]** because [reason].
 
+   Under `$approval: auto` item 4 still has something to accept, because this presentation already **names a recommendation**: the named pattern stands, and the runner-up plus the margin are reported as a choice a human has not made.
+
 3. **Act**: If one pattern clearly wins, present recommendation:
 
    > **Recommendation: [Pattern]**
    > - Rationale: [evidence from constraints and matrix]
    > - Trade-offs: [key trade-offs acknowledged]
 
-4. **Verify**: Developer approves the choice.
+4. **Verify** (`$approval: interactive`): Developer approves the choice. Under `auto` the recommendation above is accepted as-is and reported in the Output Format, never asked. <!-- approval-round: kind=confirm; auto=accept -->
 
 ### Step 4: Render Adoption Proposal
 
@@ -97,7 +100,8 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Proposal:  [content rendered for adoption/tech/architecture.md]
 ├── Target:    adoption/tech/architecture.md (full file)
 ├── Persist:   [caller composes /record-decision(content, target) → ADR]
-└── Status:    [Proposal ready | Confirmed existing]
+├── Approval:  [interactive — approved | auto — accepted as-is | auto — existing kept, delta not applied | auto — UNRESOLVED, no proposal]
+└── Status:    [Proposal ready | Confirmed existing | Unresolved — no proposal]
 ```
 
 ## Composition Interface
@@ -113,14 +117,14 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 ## Edge Cases
 
-- **Argument conflicts with adoption**: Warn developer, ask for confirmation. If confirmed, the proposal supersedes the previous decision — the caller records the new decision record via `/pair-capability-record-decision`.
+- **Argument conflicts with adoption**: Warn developer, ask for confirmation (`$approval: interactive`). If confirmed, the proposal supersedes the previous decision — the caller records the new decision record via `/pair-capability-record-decision`. Under `auto` the caller's explicit `$choice` is accepted (it outranks adoption by the cascade's precedence) and the conflict is reported, not asked. <!-- approval-round: kind=confirm; auto=accept -->
 - **Adoption file partially exists** (e.g. has some sections but missing architecture pattern): Render content that fills the gap while preserving existing sections; the caller's write is a section-scoped update.
 - **No PRD available**: Proceed with assessment using developer-provided constraints. Warn: "No PRD found — relying on developer input for project context."
 - **Decision record already exists for same scope+decision**: Report "already recorded" — no proposal to persist (no duplicates).
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal decision framework: ask developer to choose between Modular Monolith, Hexagonal, and Microservices based on team size/scale) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal decision framework: ask developer to choose between Modular Monolith, Hexagonal, and Microservices based on team size/scale — `$approval: interactive`; under `auto` this question cannot be asked and there is no ranking to accept, so the skill emits **no proposal** and reports the missing guidelines to the caller, which is output-only's form of the judgement gate) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases. <!-- approval-round: kind=choice; auto=hand-back -->
 
 ## Notes
 
