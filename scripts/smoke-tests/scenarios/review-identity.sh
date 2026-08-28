@@ -249,6 +249,11 @@ yields "declared + tagged + 🟢 + ready-to-merge"        "$LIGHT_LABELS" 1 gree
 yields "declared + tagged + 🟡 + ready-to-merge"        "risk:yellow light" 1 yellow ready-to-merge
 # Comma-separated label lists are the other common host rendering.
 yields "declared + tagged (comma-separated labels)"     "risk:green,light,user story" 1 green ready-to-merge
+# ROUND 4. NEWLINE-separated is the third, and it is what the NATURAL host read produces
+# (`gh pr view <n> --json labels -q '.labels[].name'`). Normalising commas only refused
+# every correctly tagged PR, with a stderr denying a `light` tag the PR visibly carries.
+yields "declared + tagged (newline-separated labels)"   "$(printf 'risk:green\nlight\nuser story\n')" 1 green ready-to-merge
+blocks "newline-separated but no whole-label light"     "$(printf 'risk:green\nlightweight\n')" 1 green ready-to-merge
 
 # Adoption is the gate — a hand-applied label on a repo declaring no projection is inert.
 blocks "tagged but adoption declares NO light family"   "$LIGHT_LABELS" 0 green ready-to-merge
@@ -516,16 +521,29 @@ audit "the state synthesis is an unconditional step, reachable in session mode" 
 # provisioned App resolves `session` ⇒ `commit-status`, the `checks-api` guard never fires,
 # and the identity publishes nothing at all — with no error surfaced. Run the shipped lines
 # against the REAL files rather than asserting their text.
+# ROUND 4. The extraction recognised ONLY the exact bullet+bold form and defaulted every
+# other result to `none`. `none` is not neutral: it means NO identity ⇒ `session` ⇒ the
+# review (and, where the host counts it, the APPROVE) is written with the SESSION token on
+# a repository that DID provision one — and no HALT, because the flow never learns an
+# identity was configured. The read is now two questions (presence, then value), so the
+# whole slab is eval-ed, not one line.
 KIND_EXTRACT="$(grep -m1 -F 'IDENTITY_KIND="$(sed -n' "$GITHUB_GUIDE")"
-KIND_DEFAULT="$(grep -m1 -F 'IDENTITY_KIND="${IDENTITY_KIND:-none}"' "$GITHUB_GUIDE")"
-extract_kind() { # extract_kind <way-of-working-file>
-  # shellcheck disable=SC2034  # WOW is consumed by the shipped line under eval
-  local WOW="$1" IDENTITY_KIND=''
-  eval "$KIND_EXTRACT"
-  eval "$KIND_DEFAULT"
+KIND_READ="$(awk '/# 1a\. PRESENCE/{f=1} f&&/# 2\. IDENTITY_CONFIGURED/{exit} f' "$GITHUB_GUIDE")"
+extract_kind() { # extract_kind <way-of-working-file> — echoes the kind, exits 1 on the HALT
+  # shellcheck disable=SC2034  # WOW is consumed by the shipped lines under eval
+  local WOW="$1" IDENTITY_KIND='' IDENTITY_KEY_PRESENT=0
+  eval "$KIND_READ"
   printf '%s' "$IDENTITY_KIND"
 }
-if [ -z "$KIND_EXTRACT" ] || [ -z "$KIND_DEFAULT" ]; then
+halts_on_kind() { # halts_on_kind <label> <way-of-working-file>
+  local out
+  if out="$(extract_kind "$2" 2>/dev/null)"; then
+    log_fail "$1: expected HALT, got kind '$out'"; FAILED=1
+  else
+    log_succ "$1 => HALT (configured-but-unusable, never 'none')"
+  fi
+}
+if [ -z "$KIND_EXTRACT" ] || [ -z "$KIND_READ" ]; then
   log_fail "the step-6 snippet no longer assigns IDENTITY_KIND — the extraction is untestable"
   FAILED=1
 else
@@ -533,6 +551,9 @@ else
   printf -- '- **Review identity**: `bot-user` — a machine account.\n' >"$TMP_DIR/wow-bot.md"
   printf -- '- **Review identity**: app\n' >"$TMP_DIR/wow-bare.md"
   printf -- '- **Something else**: nope\n' >"$TMP_DIR/wow-absent.md"
+  # The two present-but-unparseable shapes an adopter hand-editing adoption produces.
+  printf -- '- Review identity: app\n' >"$TMP_DIR/wow-nobold.md"
+  printf -- '**Review identity**: bot-user\n' >"$TMP_DIR/wow-nobullet.md"
   check "extraction on THIS repo's way-of-working (bullet form) ⇒ none" none \
     "$(extract_kind "$REPO_ROOT/.pair/adoption/tech/way-of-working.md")"
   check "extraction on the dataset TEMPLATE every adopter receives ⇒ none" none \
@@ -541,7 +562,19 @@ else
   check "a configured bot-user adoption ⇒ bot-user" bot-user "$(extract_kind "$TMP_DIR/wow-bot.md")"
   check "the key written without backticks ⇒ app"       app "$(extract_kind "$TMP_DIR/wow-bare.md")"
   check "the key absent ⇒ none (the documented default)" none \
-    "$(extract_kind "$TMP_DIR/wow-absent.md")"
+    "$(extract_kind "$TMP_DIR/wow-absent.md" 2>/dev/null)"
+  halts_on_kind "the key without the BOLD markers ⇒ HALT" "$TMP_DIR/wow-nobold.md"
+  halts_on_kind "the key without the leading BULLET ⇒ HALT" "$TMP_DIR/wow-nobullet.md"
+  # The adapter owns the vocabulary the guide validates against.
+  for k in app user bot-user none; do
+    review_identity_kind_ok "$k" 2>/dev/null ||
+      { log_fail "review_identity_kind_ok rejects the documented kind '$k'"; FAILED=1; }
+  done
+  for k in '' App bot_user session; do
+    review_identity_kind_ok "$k" 2>/dev/null &&
+      { log_fail "review_identity_kind_ok accepts '$k', which is not a documented kind"; FAILED=1; }
+  done
+  log_succ "review_identity_kind_ok accepts exactly the documented vocabulary"
   # The extracted value must be one the ADAPTER accepts: decoration left in it would make a
   # provisioned identity an unknown kind ⇒ not excluded ⇒ halt on every review.
   check "the extracted App kind routes to the Checks API" checks-api \
