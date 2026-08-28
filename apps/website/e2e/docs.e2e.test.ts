@@ -990,6 +990,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/concepts/code-host',
     '/docs/concepts/definition-of-ready-and-done',
     '/docs/concepts/pr-state-flow',
+    '/docs/concepts/review-identity',
     '/docs/concepts/tag-driven-gates',
     '/docs/contributing/writing-migration-pages',
     '/docs/customization/external-kb',

@@ -71,6 +71,66 @@ resolve_pr_state() {
   echo "ready-to-merge"
 }
 
+# light_auto_approve_allowed <pr_labels> <light_declared> <tier> <state>
+#   pr_labels      : the pull request's label list, space- or comma-separated (TAGS ONLY)
+#   light_declared : 1 when the project's adoption declares the `light` family in
+#                    `## Tag Projection` (tech/risk-matrix.md); anything else ⇒ not declared
+#   tier           : green | yellow | red | <anything else ⇒ red (fail-safe)>
+#   state          : the synthesis `resolve_pr_state` already produced
+#
+# Exit 0 = the dedicated review identity may submit a native approving review, so the
+# pull request satisfies the host's required-approvals rule with no human action.
+# Exit 1 = no-op, with the unmet condition on stderr. Never a silent yes.
+#
+# A SIBLING, NOT A CHANGE: `resolve_pr_state` above is not modified and not consulted
+# for anything but its already-computed output. This row does not decide the PR state;
+# it decides only whether the identity signs the approving review the host asks for.
+#
+# ZERO CRITERIA (D18). "Light" is not computed here and is not computable here: this
+# reads a TAG the classification produced upstream, a DECLARATION the project made in
+# its adoption, the tier, and the synthesis. It never inspects the change.
+#
+# ADOPTION IS THE GATE, NOT THE LABEL. All four conditions must hold, and the
+# declaration is deliberately one of them: a hand-applied `light` label on a repository
+# whose adoption declares no `light` projection triggers nothing at all. That is the
+# containment for the obvious abuse — mis-tagging a pull request to auto-approve it.
+#
+# BELOW RED ONLY. `explicit_approval_required` is the same per-tier row the synthesis
+# reads, so an untagged or malformed tier fails this row exactly as it fails the rest of
+# the flow: most restrictive wins, and light never bypasses the 🔴 human-approval rule
+# (ADR-018, amendment 2026-08-28 — the identity's approval is excluded from
+# `human_approval_jq_filter` by construction).
+light_auto_approve_allowed() {
+  local labels="${1:-}" declared="${2:-0}" tier="${3:-}" state="${4:-}"
+
+  if [ "$declared" != "1" ]; then
+    echo "pr-state: adoption declares no 'light' family in ## Tag Projection — no auto-approval (the label alone is inert)" >&2
+    return 1
+  fi
+
+  # Whole-label match: `lightweight` is not `light`. Commas are normalised to spaces
+  # because hosts render a label list either way.
+  case " ${labels//,/ } " in
+  *" light "*) ;;
+  *)
+    echo "pr-state: the pull request does not carry the 'light' tag — no auto-approval" >&2
+    return 1
+    ;;
+  esac
+
+  if explicit_approval_required "$tier"; then
+    echo "pr-state: tier '${tier:-unknown}' requires an explicit human approval — light applies below red only, and never bypasses that rule" >&2
+    return 1
+  fi
+
+  if [ "$state" != "ready-to-merge" ]; then
+    echo "pr-state: state is '${state:-unknown}', not merge-enabling — no auto-approval (this row never overrides the synthesis)" >&2
+    return 1
+  fi
+
+  return 0
+}
+
 # explicit_approval_required <tier> — exit 0 (required) for red and for any
 # unknown/absent tier (fail-safe), exit 1 (not required) for green/yellow.
 # The requirement itself is the quality model's §4 row, not a rule invented here.

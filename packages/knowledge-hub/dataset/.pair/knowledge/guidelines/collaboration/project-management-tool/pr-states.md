@@ -86,6 +86,32 @@ Because it is only a view, the label family is a **prerequisite, not a dependenc
 
 Host mechanics — how the check run is published, the exact branch-protection payload, the `pair-explicit-approval` job — live in the code host's implementation guide (R2.12): [github-implementation.md](github-implementation.md) § "PR state flow — required checks & branch protection".
 
+## Dedicated review identity (optional)
+
+Everything above describes who *decides*. This section is about who **acts**: which credential executes the code-host writes the flow performs — the native review carrying the verdict, the `pair-review` publication, the audit comment.
+
+By default there is no separate actor: the session token writes, so the reviewer is the author's own account and the verdict degrades to a comment-form review. A project may instead provision a **dedicated review identity** (a code-host App installation, or a machine account). The flow then resolves **which credential acts** through the shipped, provider-agnostic [`review-identity.sh`](../../../assets/review-identity.sh) — the same "one executable projection" pattern as `pr-state.sh` — into exactly three modes:
+
+| Mode | When | Behavior |
+| --- | --- | --- |
+| `session` | no identity configured — **the default** | Today's behavior, unchanged and unreported: session token, comment-form verdict, `pair-review` as a commit status. Not an error, not a degradation. |
+| `identity` | configured and usable | Host writes execute as the identity: the verdict is a **native APPROVE / REQUEST_CHANGES** (the reviewer is not the author, so the host no longer rejects it), and where the identity is an App the required check publishes through the host's check-run API instead of a commit status. Every action is attributable to the identity in the host's own records. |
+| `halt` | configured but unusable — invalid credential, missing permission, unknown health | The flow **HALTs** with a pointer to the host guide's *Dedicated review identity* section. It **never** falls back to the session user: a review recorded against a human who did not perform it is worse than a stopped review, and is exactly the misattribution the identity exists to remove. |
+
+**An identity approval never counts as the explicit human approval at 🔴.** `human_approval_jq_filter` requires `user.type == "User"`; a code-host App and a bot account are not that, so the identity is excluded from the 🔴 predicate **by construction**. Adopting an identity does not relax D10 — a `risk:red` pull request still needs a second human account, and the two mechanisms stay side by side on purpose: the identity signs the ordinary review, a human signs the 🔴 one.
+
+Per-host setup — which identity form, which permissions, where the credential lives — is the code host's concern and lives in its implementation guide (R2.12): [github-implementation.md](github-implementation.md) § "Dedicated review identity". The mechanism above names no host.
+
+### Adoption-gated light auto-approval
+
+One row, and it is inert unless a project turns it on. When **all four** hold — the project's adoption declares the `light` family in `## Tag Projection`, the pull request carries the `light` tag, the tier is **below 🔴**, and the synthesis is already `ready-to-merge` — the identity submits the approving review, so the pull request is mergeable with no human action. The evaluation is `light_auto_approve_allowed` in [`pr-state.sh`](../../../assets/pr-state.sh), a **sibling** of `resolve_pr_state`: the synthesis table above is unchanged, and this row consumes its output rather than adding to it.
+
+- **Zero criteria** (D18). "Light" is read from a tag the classification produced upstream; nothing in this flow computes it, and nothing here inspects the change.
+- **Adoption is the gate, the label is not.** A hand-applied `light` label on a project that declares no `light` projection triggers nothing — which is what contains the obvious abuse of mis-tagging a pull request to auto-approve it.
+- **Most restrictive wins.** `light` on a 🔴 (or untagged, i.e. fail-safe 🔴) pull request is inert; light applies below red only.
+- **Every action is audited.** An approval or a block by the identity writes a comment naming the tag, the declaration, the tier and the state — the reason has to be reconstructable from the pull request alone. The `pr-state:*` label view stays in sync exactly as before; nothing about the label mechanics changes.
+- **Absent a declaration, the row does not exist as a behavior** — grep-verifiable, and that is the state of every project that has not opted in.
+
 ## Edge cases
 
 | Case | Behavior |
@@ -104,6 +130,7 @@ Host mechanics — how the check run is published, the exact branch-protection p
 | `/publish-pr` | Creates the PR, propagates the story's classification tags, registers `pair-review` as **pending**, labels the PR `pr-state:to-be-reviewed`, and triggers the review in a clean-context subagent |
 | `/review` | Produces the judgment verdict in the native review, publishes the `pair-review` check conclusion (`review_check_conclusion`), computes the state (`resolve_pr_state`), swaps the `pr-state:*` label, and refuses to merge unless `merge_allowed` passes |
 | `/implement` Phase 4 | The **other** merge path (the author re-invoked after an approving review): runs the *same* precondition as `/review`'s — re-synthesize the current signals, `merge_allowed`, HALT otherwise — before merging. "At least one approval" is **not** the condition; a 🔴 PR with an approving verdict and no explicit human approval must not merge here either |
+| **Dedicated review identity** (optional) | The **actor**, not a decider: executes the code-host writes `/publish-pr` and `/review` perform — the native verdict, the `pair-review` publication, the audit comment — when one is configured. Below 🔴 and only where adoption declares it, it also signs the `light` row's approving review. It never satisfies the 🔴 explicit human approval |
 | `/setup-gates` | Wires `pair-review` + `pair-explicit-approval` as required checks on the protected branch alongside the gate jobs, or reports degraded mode |
 | Code host | Enforces: blocks the merge button while any required check is red, pending, or absent |
 | Human | Fixes findings, gives the explicit approval at 🔴, and presses merge |
@@ -113,7 +140,8 @@ Host mechanics — how the check run is published, the exact branch-protection p
 - [canonical-states.md](canonical-states.md) — the five work-item macrostates (`Review` is the macrostate a PR lives under)
 - [quality-model.md](../../quality-assurance/quality-model.md) — §3.2 fail-safe tier, §4 per-tier requirements (the single source of the thresholds this flow reads)
 - [tier-aware-pipeline.md](../../infrastructure/cicd-strategy/tier-aware-pipeline.md) — the gate side of the flow (tags-only pre-merge pipeline, fail-safe red)
-- [`pr-state.sh`](../../../assets/pr-state.sh) — the provider-agnostic synthesis evaluator (`resolve_pr_state`, `merge_allowed`, `explicit_approval_required`, `review_check_conclusion`, `human_approval_jq_filter`)
+- [`pr-state.sh`](../../../assets/pr-state.sh) — the provider-agnostic synthesis evaluator (`resolve_pr_state`, `merge_allowed`, `explicit_approval_required`, `review_check_conclusion`, `human_approval_jq_filter`) plus the adoption-gated `light_auto_approve_allowed` row
+- [`review-identity.sh`](../../../assets/review-identity.sh) — the provider-agnostic identity adapter (`resolve_identity_mode`, `identity_verdict_event`, `pair_review_publication_mode`, `identity_audit_comment`)
 - [`tier-resolve.sh`](../../../assets/tier-resolve.sh) — the provider-agnostic, tags-only tier resolver
 - [code-review-template.md](../templates/code-review-template.md) — the verdict-first review body whose verdict this flow consumes
 - [github-implementation.md](github-implementation.md) — GitHub check-run + branch-protection mechanics for the two pair checks
