@@ -541,20 +541,111 @@ function lf(content: string): string {
  * that OPENED it — `~~~` is the standard way to nest a block that itself contains
  * backticks, and a single toggle would have let a `~~~` line inside a ``` block
  * close it.
+ *
+ * The run's LENGTH is tracked for the same reason (round 6 Minor): CommonMark closes
+ * a fence only on a run at least as long as the opening one, so a ```` block wrapping
+ * a ``` example — the standard way to SHOW a backticked declaration — was closed by
+ * its own inner fence and the example escaped into declaration space.
  */
+interface FenceRun {
+  char: string
+  len: number
+}
+
+/** The fence delimiter this line is, or `null` when it is not one. */
+function fenceRun(line: string): FenceRun | null {
+  const fence = /^\s*(`{3,}|~{3,})/.exec(line)
+  if (!fence) return null
+  const run = fence[1] as string
+  return { char: run[0] as string, len: run.length }
+}
+
+/** Does `run` close a fence opened by `open`? Same character, at least as long. */
+function closesFence(open: FenceRun, run: FenceRun): boolean {
+  return run.char === open.char && run.len >= open.len
+}
+
 function scanFences(lines: string[]): boolean[] {
   const inFence: boolean[] = []
-  let open: string | null = null
+  let open: FenceRun | null = null
   lines.forEach((line, i) => {
-    const fence = /^\s*(`{3,}|~{3,})/.exec(line)
-    if (fence) {
-      const char = (fence[1] as string)[0] as string
-      if (open === null) open = char
-      else if (open === char) open = null
+    const run = fenceRun(line)
+    if (run) {
+      if (open === null) open = run
+      else if (closesFence(open, run)) open = null
     }
     inFence[i] = open !== null
   })
   return inFence
+}
+
+/** A document read as CommonMark layout rather than as lines of text. */
+interface ProfileDocument {
+  /** Lines with HTML-comment spans blanked; fenced lines kept verbatim. */
+  lines: string[]
+  /** Which lines sit inside a fenced block, delimiters included. */
+  inFence: boolean[]
+  /** A fence or comment still open at end of file — the document is mis-formed. */
+  unterminated: 'fence' | 'comment' | null
+}
+
+/**
+ * The layout every profile reader works from: fences located, HTML comments masked,
+ * and the fact that the document never closed one of them reported rather than acted
+ * on.
+ *
+ * Round 6 Minor, twice over:
+ *
+ * - **An HTML comment is not content.** A `## Process Profile` heading parked in a
+ *   `<!-- ... -->` — the ordinary way to disable a markdown block without deleting
+ *   it — was counted as a real section, so a team trying a new profile while keeping
+ *   the old one commented out got a HALT on every run telling them to keep ONE
+ *   section, while the rendered file visibly shows one. Fences were already excluded
+ *   from heading detection for exactly this reason; a comment is the same class.
+ * - **An unterminated delimiter is not a licence to read a truncated document.** One
+ *   missing closing fence anywhere above the section left every later line "inside a
+ *   fence", so the real heading was never found and the file resolved to `default`
+ *   with the whole process re-enabled — zero halts, byte-identical to writing
+ *   nothing. It is reported here and HALTs at `profileSectionProblems`.
+ *
+ * The two states are mutually exclusive and resolved in CommonMark's order: inside a
+ * fence a comment is literal text, and inside a comment a fence line is not a fence.
+ */
+function scanProfileDocument(content: string): ProfileDocument {
+  const lines: string[] = []
+  const inFence: boolean[] = []
+  let open: FenceRun | null = null
+  let comment = false
+  for (const raw of lf(content).split('\n')) {
+    if (open !== null) {
+      const run = fenceRun(raw)
+      if (run !== null && closesFence(open, run)) open = null
+      lines.push(raw)
+      inFence.push(true)
+      continue
+    }
+    let text = raw
+    if (comment) {
+      const end = text.indexOf('-->')
+      if (end === -1) {
+        lines.push('')
+        inFence.push(false)
+        continue
+      }
+      text = text.slice(end + 3)
+      comment = false
+    }
+    text = text.replace(/<!--[\s\S]*?-->/g, '')
+    const start = text.indexOf('<!--')
+    if (start !== -1) {
+      text = text.slice(0, start)
+      comment = true
+    }
+    open = fenceRun(text)
+    lines.push(text)
+    inFence.push(open !== null)
+  }
+  return { lines, inFence, unterminated: open !== null ? 'fence' : comment ? 'comment' : null }
 }
 
 /**
@@ -918,8 +1009,7 @@ export const STEP_GATE_CONVENTION = 'process-profile-gate.md'
  * this parses (way-of-working: "exactly like `## Git Workflow` above").
  */
 function sectionOfWhere(content: string, matches: (heading: string) => boolean): string | null {
-  const lines = lf(content).split('\n')
-  const inFence = scanFences(lines)
+  const { lines, inFence } = scanProfileDocument(content)
   const headingAt = (i: number): string | undefined => {
     if (inFence[i]) return undefined
     return ATX_LEVEL_TWO.test(lines[i] as string)
@@ -1457,6 +1547,8 @@ export interface ProfileDeclaration {
   duplicateKeys: Array<{ key: string; count: number }>
   /** Problems with the SECTION itself (duplicated, mis-levelled) — each a HALT. */
   sectionHalts: string[]
+  /** Keys whose value SPILLS past its line (wrapped, or a dangling `,`) — a HALT. */
+  spilled: string[]
 }
 
 /**
@@ -1474,6 +1566,23 @@ const ATX_LEVEL_TWO = /^ {0,3}##[ \t]+/
 
 /** A setext underline: the CommonMark heading form this reader does NOT accept. */
 const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/
+
+/**
+ * The HALT for a document that never closes a fence or an HTML comment.
+ *
+ * Round 6 Minor: a truncated view is not a view. One missing ``` in an unrelated
+ * section above put every later line inside a fence, so the real `## Process Profile`
+ * heading was never found and the profile resolved to `default` — the whole process
+ * re-enabled on a project that declared `poc`, with nothing reported anywhere.
+ */
+function unterminatedDelimiterHalt(kind: 'fence' | 'comment'): string {
+  const what = kind === 'fence' ? 'a code fence (```` ``` ````/`~~~`)' : 'an HTML comment (`<!--`)'
+  return (
+    `the file leaves ${what} UNTERMINATED — everything after it is read as non-content, so a ` +
+    `\`## ${WOW_PROFILE_SECTION}\` section below it is not read at all and the profile it ` +
+    `declares takes effect nowhere. Close the delimiter`
+  )
+}
 
 /** `Process Profile` written as a setext heading — a text line plus its underline. */
 function isSetextProfileHeading(line: string, next: string | undefined): boolean {
@@ -1505,23 +1614,36 @@ function isSetextProfileHeading(line: string, next: string | undefined): boolean
  * not a terminator. So the mis-levelled heading is scanned for SEPARATELY and
  * reported, and `sectionOf` keeps the semantics its other callers rely on.
  */
-export function profileSectionProblems(content: string): string[] {
-  const lines = lf(content).split('\n')
-  const inFence = scanFences(lines)
-  let atLevelTwo = 0
-  const misLevelled: number[] = []
-  let setext = 0
+/** Every spelling of the section heading the document carries, counted by form. */
+interface ProfileHeadings {
+  /** How many `## Process Profile` headings — more than one is a HALT. */
+  atLevelTwo: number
+  /** The levels of the headings written at any OTHER level. */
+  misLevelled: number[]
+  /** How many setext-underlined ones. */
+  setext: number
+}
+
+function countProfileHeadings(lines: string[], inFence: boolean[]): ProfileHeadings {
+  const found: ProfileHeadings = { atLevelTwo: 0, misLevelled: [], setext: 0 }
   for (let i = 0; i < lines.length; i++) {
     if (inFence[i]) continue
     const heading = ATX_HEADING.exec(lines[i] as string)
     if (!heading) {
-      if (isSetextProfileHeading(lines[i] as string, lines[i + 1])) setext++
+      if (isSetextProfileHeading(lines[i] as string, lines[i + 1])) found.setext++
       continue
     }
     if (!isWowProfileHeading((heading[2] as string).trim())) continue
-    if ((heading[1] as string).length === 2) atLevelTwo++
-    else misLevelled.push((heading[1] as string).length)
+    if ((heading[1] as string).length === 2) found.atLevelTwo++
+    else found.misLevelled.push((heading[1] as string).length)
   }
+  return found
+}
+
+export function profileSectionProblems(content: string): string[] {
+  const { lines, inFence, unterminated } = scanProfileDocument(content)
+  if (unterminated !== null) return [unterminatedDelimiterHalt(unterminated)]
+  const { atLevelTwo, misLevelled, setext } = countProfileHeadings(lines, inFence)
 
   const problems: string[] = []
   if (setext > 0) {
@@ -1586,11 +1708,41 @@ function isProfileKeyLine(line: string): boolean {
   return WOW_PROFILE_KEY.test(line) || WOW_PROFILE_KEY_OFF_MARKER.test(line)
 }
 
+/** A new list item — the next block, never a continuation of the previous one. */
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])[ \t]/
+
+/** A thematic break (`---`, `***`, `___`): a block of its own, not spilled text. */
+const THEMATIC_BREAK = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/
+
+/**
+ * Is this line the CONTINUATION of the key line above it?
+ *
+ * A non-blank line that starts no block of its own is a lazy continuation of the
+ * preceding paragraph in CommonMark — which, after a key line, is the second half of
+ * a wrapped value. Anything that opens a block (a bullet, a heading, a thematic
+ * break) is not, and a blank line has already ended the paragraph.
+ */
+function isSpilledValueLine(line: string): boolean {
+  if (line.trim() === '') return false
+  return !LIST_ITEM.test(line) && !ATX_HEADING.test(line) && !THEMATIC_BREAK.test(line)
+}
+
 /** One declaration line, as data: which key, and its values or `null` if unreadable. */
 interface ProfileKeyLine {
   key: 'profile' | 'whitelist'
   values: string[] | null
+  /** The value SPILLS: it ends on a separator, so what follows it is lost. */
+  spilled?: boolean
 }
+
+/**
+ * A value list that ends on a separator — the line CONTINUES.
+ *
+ * Tested on the raw remainder, never on the residue: `.replace(/[,\s]+/g,'')` erases
+ * a trailing `,` exactly as it erases the ones BETWEEN two ids, so on the residue a
+ * wrapped line and a complete one are the same string.
+ */
+const DANGLING_SEPARATOR = /[,;]\s*$/
 
 /** What a single line of the section declares, or `null` when it declares nothing. */
 function readProfileKeyLine(line: string): ProfileKeyLine | null {
@@ -1600,6 +1752,9 @@ function readProfileKeyLine(line: string): ProfileKeyLine | null {
     return offMarker ? { key: offMarker[1] as ProfileKeyLine['key'], values: null } : null
   }
   const rest = key[2] as string
+  if (DANGLING_SEPARATOR.test(rest)) {
+    return { key: key[1] as ProfileKeyLine['key'], values: null, spilled: true }
+  }
   const values = backticked(rest)
   // What the value grammar did NOT consume: backticked spans and the separators
   // between them removed, anything left is text the reader cannot account for.
@@ -1638,38 +1793,88 @@ export function parseWowProfileSection(content: string): ProfileDeclaration {
   const normalized = lf(content)
   const sectionHalts = profileSectionProblems(normalized)
   const section = sectionOfWhere(normalized, isWowProfileHeading)
-  const empty = { profile: null, whitelist: null, unreadable: [], duplicateKeys: [] }
+  const empty = {
+    profile: null,
+    whitelist: null,
+    unreadable: [],
+    duplicateKeys: [],
+    spilled: [],
+  }
   if (section === null) return { ...empty, present: false, sectionHalts }
 
-  let profile: string | null = null
-  let whitelist: string[] | null = null
-  const unreadable: string[] = []
-  const seen = new Map<string, number>()
-  const lines = section.split('\n')
-  const inFence = scanFences(lines)
-  for (const [i, line] of lines.entries()) {
-    // The three CommonMark code-block forms, all of them examples rather than
-    // declarations: ```-fenced, ~~~-fenced (both via the shared scanner) and
-    // indented. An indented example used silently to BECOME the profile.
-    if (inFence[i] || INDENTED_CODE.test(line)) continue
-    const declared = readProfileKeyLine(line)
-    if (declared === null) continue
-    seen.set(declared.key, (seen.get(declared.key) ?? 0) + 1)
-    if (declared.values === null) unreadable.push(declared.key)
-    else if (declared.key === 'profile') profile = declared.values[0] as string
-    else whitelist = declared.values
-  }
-  const duplicateKeys = [...seen]
+  const keys = readSectionKeyLines(section)
+  const duplicateKeys = [...keys.counts]
     .filter(([, count]) => count > 1)
     .map(([key, count]) => ({ key, count }))
   return {
-    profile,
-    whitelist,
+    profile: keys.profile,
+    whitelist: keys.whitelist,
     present: true,
-    unreadable: [...new Set(unreadable)],
+    unreadable: [...new Set(keys.unreadable)],
     duplicateKeys,
     sectionHalts,
+    spilled: [...new Set(keys.spilled)],
   }
+}
+
+/** What the key lines of one section say, before any of it is judged. */
+interface SectionKeys {
+  profile: string | null
+  whitelist: string[] | null
+  unreadable: string[]
+  spilled: string[]
+  /** How many LINES declared each key. */
+  counts: Map<string, number>
+}
+
+function readSectionKeyLines(section: string): SectionKeys {
+  const keys: SectionKeys = {
+    profile: null,
+    whitelist: null,
+    unreadable: [],
+    spilled: [],
+    counts: new Map(),
+  }
+  const lines = section.split('\n')
+  const inFence = scanFences(lines)
+  // The key whose line could still SPILL onto this one. Reset by anything that ends
+  // the key's paragraph — a blank line, a fence, a new list item, a heading.
+  let pending: string | null = null
+  for (const [i, line] of lines.entries()) {
+    // ```-fenced and ~~~-fenced blocks are examples, never declarations.
+    if (inFence[i]) {
+      pending = null
+      continue
+    }
+    const declared = readProfileKeyLine(line)
+    if (declared !== null) {
+      recordKeyLine(keys, declared, INDENTED_CODE.test(line))
+      pending = declared.key
+      continue
+    }
+    if (pending !== null && isSpilledValueLine(line)) keys.spilled.push(pending)
+    pending = null
+  }
+  return keys
+}
+
+/**
+ * One key line folded into the section's reading.
+ *
+ * Four spaces (or a tab) in front of a key is BOTH CommonMark's indented code block
+ * and an ordinary sublist item, and the line alone does not say which. Round 6 Minor:
+ * the ambiguity was resolved by SKIPPING — `default`, every step re-enabled, in
+ * silence — while the same key indented by TWO spaces read as a declaration, so which
+ * one a team got depended on their editor's Tab width. Ambiguous resolves to a HALT,
+ * per this module's asymmetric-cost rule.
+ */
+function recordKeyLine(keys: SectionKeys, declared: ProfileKeyLine, indented: boolean): void {
+  keys.counts.set(declared.key, (keys.counts.get(declared.key) ?? 0) + 1)
+  const values = indented ? null : declared.values
+  if (declared.spilled === true) keys.spilled.push(declared.key)
+  else if (values === null) keys.unreadable.push(declared.key)
+  else if (declared.key === 'profile') keys.profile = values[0] as string
+  else keys.whitelist = values
 }
 
 export interface ProfileResolution {
@@ -1692,8 +1897,27 @@ const WHITELIST_WITHOUT_PROFILE =
 function unreadableShapeHalt(keys: string[]): string {
   return (
     `\`## ${WOW_PROFILE_SECTION}\` declares ${keys.map(k => `\`${k}\``).join(' and ')} in a shape ` +
-    `this reader does not accept — keys and values are backticked list items: ` +
-    `\`- \`profile\`: \`poc\`\`, and under \`custom\` \`- \`whitelist\`: \`implement\`, \`review\`\``
+    `this reader does not accept — keys and values are backticked list items, at the top level ` +
+    `of the section and indented by no more than three spaces: \`- \`profile\`: \`poc\`\`, and ` +
+    `under \`custom\` \`- \`whitelist\`: \`implement\`, \`review\`\``
+  )
+}
+
+/**
+ * The HALT for a value that does not fit on its key's line.
+ *
+ * Round 6 Major: this was neither read nor reported. A whitelist wrapped onto a
+ * second line — the natural edit, since the shipped example is 131 columns wide and
+ * markdownlint's default line-length rule is 80 — resolved as the FIRST line's ids
+ * alone, zero halts, zero warnings. Four steps disappeared from every `/next`
+ * suggestion, indistinguishable from those steps not being due yet.
+ */
+function spilledValueHalt(keys: string[]): string {
+  return (
+    `\`## ${WOW_PROFILE_SECTION}\` declares ${keys.map(k => `\`${k}\``).join(' and ')} on a line ` +
+    `whose value SPILLS — it ends on a separator, or is continued on the line below. Each key is ` +
+    `ONE line, however long: read up to the wrap, everything after it is dropped from every ` +
+    `suggestion with nothing reported. Keep the whole value on the key's line`
   )
 }
 
@@ -1719,6 +1943,7 @@ function duplicateKeyHalt({ key, count }: { key: string; count: number }): strin
 function declarationShapeHalts(declaration: ProfileDeclaration): string[] {
   if (declaration.sectionHalts.length > 0) return declaration.sectionHalts
   const halts = declaration.duplicateKeys.map(duplicateKeyHalt)
+  if (declaration.spilled.length > 0) halts.push(spilledValueHalt(declaration.spilled))
   if (declaration.unreadable.length > 0) halts.push(unreadableShapeHalt(declaration.unreadable))
   return halts
 }

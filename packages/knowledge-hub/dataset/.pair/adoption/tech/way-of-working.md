@@ -88,6 +88,7 @@ Optional. **Which process steps this project runs.** **Omitted by default**: pai
 - The profile governs the **step**, not one of its representations — so a project with **no skills installed**, following the how-to guides by hand, is governed identically.
 - A **disabled** step is never proposed by `/next`; invoked directly it warns and asks for confirmation; reached as a composition it is skipped exactly like a skill that is not installed. See [process-profile gate](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 - An unknown profile name, an unknown step id and an **empty** whitelist all **HALT** — a typo must never silently disable a step, and an empty whitelist is a misconfiguration, not "everything disabled".
+- Each key is **one line, however long**: a value wrapped onto a second line **HALTs** rather than being read up to the wrap (the ids after it would vanish from every suggestion with nothing reported). If a line-length lint rule objects, exempt the line — do not wrap it.
 
 Example — a proof-of-concept team:
 

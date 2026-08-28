@@ -1222,6 +1222,16 @@ describe('extractProfileExamples', () => {
     expect(extractProfileExamples(doc)).toHaveLength(1)
   })
 
+  // Round 6 Minor: a closing fence must be at least as long as the one that opened
+  // it (CommonMark). The recognizer's backreference already enforces that; pinned
+  // here so it stays mirrored with `scanFences`, which did NOT.
+  it('takes a ````-fenced block containing a ``` example as ONE example', () => {
+    const doc = '## Process Profile\n\n````text\n```\n- `profile`: `poc`\n```\n````\n'
+    const examples = extractProfileExamples(doc)
+    expect(examples).toHaveLength(1)
+    expect(examples[0]).toContain('```')
+  })
+
   it('reads a CRLF document', () => {
     const doc = '## Process Profile\r\n\r\n```text\r\n- `profile`: `poc`\r\n```\r\n'
     const examples = extractProfileExamples(doc)
@@ -1830,8 +1840,31 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
-  it('does not read a 4-space-indented code block as the declaration', () => {
-    const r = resolve('## Process Profile\n\nFor example:\n\n    - `profile`: `poc`\n')
+  // Round 6 Minor: four spaces (or a tab) in front of a key is ALSO a legitimate
+  // CommonMark sublist, and the two are indistinguishable from the line alone. The
+  // ambiguity was resolved silently in the widening direction — skipped as an
+  // example, section resolved to `default`, all 12 steps back, zero halts — while
+  // the SAME content indented by two spaces resolved to `poc`. Which one a team got
+  // depended on their editor's Tab width.
+  it.each([
+    ['four spaces', '    '],
+    ['a tab', '\t'],
+  ])('HALTs on a key indented by %s rather than skipping it as an example', (_, indent) => {
+    const r = resolve(`## Process Profile\n\n- Configuration:\n${indent}- \`profile\`: \`poc\`\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('does not accept')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('still reads a key nested under a bullet by TWO spaces', () => {
+    const r = resolve('## Process Profile\n\n- Configuration:\n  - `profile`: `poc`\n')
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('does not read an indented code block with no key line as a declaration', () => {
+    const r = resolve('## Process Profile\n\nFor example:\n\n    some sample text\n')
     expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })
@@ -1873,5 +1906,111 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `poc`\n\nSome prose\n\n---\n')
     expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
+  })
+
+  // Round 6 Major: a whitelist WRAPPED onto a second line was truncated in silence.
+  // The residue check erased the trailing `,` before looking, so the first line read
+  // as complete, and the continuation line matched no key regex and was discarded.
+  // The shipped example is 131 columns wide, so wrapping it is the natural edit in
+  // any project whose markdownlint keeps the default 80-column rule.
+  it('HALTs on a whitelist wrapped onto a second line instead of truncating it', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n' +
+        '- `whitelist`: `specify-prd`, `brainstorm`,\n  `plan-stories`, `implement`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('ONE line')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('HALTs on a value line that ends on a dangling separator', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`,\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('ONE line')
+  })
+
+  it('HALTs on a value continued on the next line with no trailing separator', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n' +
+        '- `whitelist`: `specify-prd` `brainstorm`\n  `plan-stories` `implement`\n',
+    )
+    expect(r.halts.join('\n')).toContain('ONE line')
+  })
+
+  it('leaves an ordinary paragraph after a key line alone', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n\nThe profile governs the step, not a skill.\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('leaves a following bullet that is not a key alone', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n- see the KB schema for the rest\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 6 Minor: the fence scanner tracked the fence CHARACTER but not its LENGTH,
+  // so the inner ``` closed the outer ````. Wrapping a four-backtick fence around a
+  // block that itself contains backticks is exactly how a markdown example of a
+  // backticked declaration is shown — which is all this section documents.
+  it('does not let an inner ``` close an outer ```` fence', () => {
+    const r = resolve(
+      '## Process Profile\n\n````text\n```\n- `profile`: `poc`\n```\n````\n\n' +
+        '- `profile`: `custom`\n- `whitelist`: `implement`, `plan-stories`\n',
+    )
+    expect(r.profile).toBe('custom')
+    expect(r.enabled).toEqual(['implement', 'plan-stories'])
+    expect(r.halts).toEqual([])
+  })
+
+  it('reads a nested example alone as no declaration at all', () => {
+    const r = resolve('## Process Profile\n\n````text\n```\n- `profile`: `poc`\n```\n````\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 6 Minor: commenting a block out is the ordinary way to disable it without
+  // deleting it, and an HTML comment is the same class of non-content as a fence.
+  it('does not count a commented-out section as a second section', () => {
+    const r = resolve(
+      '<!--\n## Process Profile\n\n- `profile`: `custom`\n-->\n\n' +
+        '## Process Profile\n\n- `profile`: `poc`\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('does not read a commented-out key inside the live section', () => {
+    const r = resolve('## Process Profile\n\n<!-- - `profile`: `custom` -->\n- `profile`: `poc`\n')
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('still reads a `<!-- -->` example printed inside a fence as an example', () => {
+    const r = resolve('## Process Profile\n\n```text\n<!-- - `profile`: `custom` -->\n```\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 6 Minor: `open` stayed set for every remaining line, so the real heading
+  // was inside a fence as far as the reader was concerned and the section was simply
+  // not found — `default`, 12 steps, byte-identical to writing nothing.
+  it('HALTs on an UNTERMINATED fence above the section instead of not seeing it', () => {
+    const r = resolve('## Intro\n\n```text\nblah\n\n## Process Profile\n\n- `profile`: `poc`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('UNTERMINATED')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('HALTs on an unterminated HTML comment for the same reason', () => {
+    const r = resolve('## Intro\n\n<!-- parked\n\n## Process Profile\n\n- `profile`: `poc`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('UNTERMINATED')
   })
 })
