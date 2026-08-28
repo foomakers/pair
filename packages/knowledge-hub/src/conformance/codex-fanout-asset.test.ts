@@ -1,0 +1,124 @@
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { CODEX_FANOUT_ASSET } from '../tools/build-codex-asset'
+import { compileKbAsset } from '../tools/build-kb-asset'
+import { PHASE_CONTRACTS, PHASES, type JsonSchema } from '../tools/codex-fanout'
+
+/**
+ * Three guards over the Codex fan-out realization, all of them mechanical.
+ *
+ * 1. DRIFT — the two committed copies of the asset are build outputs of one tested source.
+ *    Editing a copy by hand, or editing the source without regenerating, turns this red.
+ * 2. SMOKE — the shipped asset is what the skill actually runs, so it is executed here as
+ *    the skill executes it. The logic is unit-tested in `tools/codex-fanout.test.ts`; this
+ *    is the CLI-behaviour check the testing convention asks for instead of unit-testing a
+ *    script.
+ * 3. RESULT-CONTRACT PARITY — the per-phase return schemas exist twice: once in the
+ *    in-harness workflow the Claude realization runs, once in the module the Codex
+ *    realization runs. Two realizations of ONE capability must validate a subagent's return
+ *    the same way, and prose cannot hold that. The workflow's own constants are read out of
+ *    its source and compared, so a divergence fails on whichever side moves first — the
+ *    approach the driver's tier-parity guard already established for the policy grammar.
+ */
+
+const REPO_ROOT = join(__dirname, '../../../..')
+const WORKFLOW = join(REPO_ROOT, '.claude/workflows/pair-implement-batch.js')
+const SOURCE = join(REPO_ROOT, CODEX_FANOUT_ASSET.source)
+
+describe('the shipped asset is a build output, not a hand-maintained file', () => {
+  const expected = compileKbAsset(readFileSync(SOURCE, 'utf8'), CODEX_FANOUT_ASSET)
+
+  it.each(CODEX_FANOUT_ASSET.targets)('the committed copy matches a fresh compile — %s', target => {
+    expect(readFileSync(join(REPO_ROOT, target), 'utf8')).toBe(expected)
+  })
+
+  it('names its source and its regeneration command in the generated header', () => {
+    expect(expected).toContain('GENERATED FILE')
+    expect(expected).toContain('src/tools/codex-fanout.ts')
+    expect(expected).toContain('codex:asset')
+  })
+
+  it('carries no story-local acceptance marker into the shipped corpus', () => {
+    expect(expected).not.toMatch(/\bAC\d+\b/)
+  })
+})
+
+describe('the shipped asset runs as the skill invokes it', () => {
+  const asset = join(REPO_ROOT, '.pair/knowledge/assets/codex-fanout.cjs')
+
+  const run = (command: string, request: unknown): { code: number; body: unknown } => {
+    try {
+      const out = execFileSync('node', [asset, command], {
+        input: JSON.stringify(request),
+        encoding: 'utf8',
+      })
+      return { code: 0, body: JSON.parse(out) }
+    } catch (err) {
+      const e = err as { status?: number; stdout?: string }
+      return { code: e.status ?? 1, body: JSON.parse(e.stdout ?? '{}') }
+    }
+  }
+
+  it('binds a probed v1 session and announces the primitive it bound to', () => {
+    const { code, body } = run('bind', { probe: { tools: ['spawn_agent', 'wait_agent'] } })
+    expect(code).toBe(0)
+    expect(body).toMatchObject({
+      tier: 1,
+      realization: 'codex-multi-agent-v1',
+      primitive: 'spawn_agent',
+    })
+  })
+
+  it('degrades on a probe miss instead of assuming the harness has the primitive', () => {
+    const { body } = run('bind', { probe: { tools: ['shell'] } })
+    expect(body).toMatchObject({ tier: 3, realization: 'degraded-one-card' })
+  })
+
+  it('exits non-zero when a review packet would carry the working area', () => {
+    const { code, body } = run('packet', {
+      packet: {
+        phase: 'review',
+        card: { id: '1', title: 't', branch: 'b' },
+        attachments: ['.pair/working/checkpoints/1.md'],
+      },
+    })
+    expect(code).toBe(1)
+    expect(String((body as { error: string }).error)).toContain('.pair/working/checkpoints/1.md')
+  })
+})
+
+/**
+ * The workflow's schema constants, read from its source the way the driver's parity guard
+ * reads its policy helpers: slice the self-contained declaration block and evaluate it. The
+ * block is bounded by two markers; a rename must fail loudly here rather than silently slice
+ * nothing and let every comparison pass against an empty object.
+ */
+function workflowSchemas(): Record<string, JsonSchema> {
+  const source = readFileSync(WORKFLOW, 'utf8')
+  const start = source.indexOf('const STEP_SCHEMA = {')
+  const end = source.indexOf('// ── Phase 0: ensure machine contracts')
+  if (start === -1 || end === -1 || end <= start)
+    throw new Error(
+      `${WORKFLOW} no longer contains the schema declaration block this guard slices ` +
+        `(\`const STEP_SCHEMA = {\` … \`// ── Phase 0: ensure machine contracts\`); update the markers`,
+    )
+  const block = source.slice(start, end)
+  const factory = new Function(
+    `${block}\nreturn { implement: STEP_SCHEMA, pr: PR_SCHEMA, review: LOOSE_REVIEW_SCHEMA, fix: FIX_SCHEMA }`,
+  ) as () => Record<string, JsonSchema>
+  return factory()
+}
+
+describe('one result contract, two realizations', () => {
+  const fromWorkflow = workflowSchemas()
+
+  it.each([...PHASES])('the %s return schema is identical on both sides', phase => {
+    expect(PHASE_CONTRACTS[phase].schema).toEqual(fromWorkflow[phase])
+  })
+
+  it('covers every phase the workflow declares a schema for', () => {
+    expect(Object.keys(fromWorkflow).sort()).toEqual([...PHASES].sort())
+  })
+})
