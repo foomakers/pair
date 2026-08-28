@@ -314,11 +314,11 @@ The verdict is judgment; the **merge block is mechanical**. This step turns the 
 
 ### Step 5.4b: Audit the Identity Action (and record what the light row decided)
 
-The light row itself was **evaluated in Step 5.3 step 2**, before the review was submitted — it is what authorized (or refused) the native `APPROVE`. Nothing is re-decided here: this step **records** the decision on the PR and reports it. Skip the whole step in `session` mode — no identity acted, so there is nothing to attribute. Model: [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md) § Adoption-gated light auto-approval.
+The light row itself was **evaluated in Step 5.3 step 2**, before the review was submitted — it is what authorized (or refused) the native `APPROVE`. Nothing is re-decided here: this step **records** the decision on the PR and reports it. In `session` mode no identity acted, so the **audit action** is skipped — post no audit comment (step 1 does not run) — and step 2 still runs, reporting `Light row: n-a — no identity (session mode)`. The report row is unconditional: every run emits it, in every mode. Model: [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md) § Adoption-gated light auto-approval.
 
-1. **Act — audit, on every identity action, in all three directions**: post the comment `identity_audit_comment <action> <tag> <declared> <tier> <state>` renders — `action` = `approve` (the light row authorized the native APPROVE), `comment` (an approving verdict the row did **not** authorize, published as a COMMENT-form review), or `block` (REQUEST_CHANGES). The audit is not optional and not summarized from memory: it is the adapter's projection of the same inputs, so the reason is reconstructable from the PR alone — which tag, which declaration, which tier, which state.
-2. **Act — report the row's outcome**: `Light row: approved | not-authorized (<unmet condition>) | n-a (session mode)`. The unmet condition is the one `light_auto_approve_allowed` named on stderr, not a re-derivation.
-3. **Verify**: A read of the PR shows every identity review paired with its audit comment, and **an `APPROVE` event only where the row authorized one**. The `pr-state:*` label from Step 5.4 is unchanged by this step (label mechanics are Step 5.4's, untouched).
+1. **Act — audit, on every identity action, in all three directions** (`identity` mode only — in `session` mode there is no actor to attribute, so this step 1 is skipped): post the comment `identity_audit_comment <action> <tag> <declared> <tier> <state>` renders — `action` = `approve` (the light row authorized the native APPROVE), `comment` (an approving verdict the row did **not** authorize, published as a COMMENT-form review), or `block` (REQUEST_CHANGES). The audit is not optional and not summarized from memory: it is the adapter's projection of the same inputs, so the reason is reconstructable from the PR alone — which tag, which declaration, which tier, which state.
+2. **Act — report the row's outcome, in every mode**: `Light row: approved | not-authorized (<unmet condition>) | n-a — no identity (session mode)`. The unmet condition is the one `light_auto_approve_allowed` named on stderr, not a re-derivation. This row is never omitted: the Output Format block below lists it unconditionally, so a report missing it is a defect regardless of mode.
+3. **Verify**: In `session` mode, the `Light row:` line reads `n-a — no identity (session mode)` and **no** audit comment was posted. In `identity` mode, a read of the PR shows every identity review paired with its audit comment, and **an `APPROVE` event only where the row authorized one**. The `pr-state:*` label from Step 5.4 is unchanged by this step (label mechanics are Step 5.4's, untouched).
 
 **The two containments, stated where someone would try to shortcut them:**
 
@@ -365,7 +365,7 @@ REVIEW COMPLETE:
 ├── Review:     [Submitted as native review body — no separate comment]
 ├── Identity:   [session (default — no identity configured) | identity: <app|bot-user> — native verdict, confirmed by read | HALTED — configured but unusable]
 ├── Check:      [pair-review → success | failure | pending (blocks merge) — published as commit status | check run (App identity)]
-├── Light row:  [n-a — no identity | not-authorized — <unmet condition>, verdict submitted as COMMENT | approved — native APPROVE by the identity + audit comment posted]
+├── Light row:  [n-a — no identity (session mode) | not-authorized — <unmet condition>, verdict submitted as COMMENT | approved — native APPROVE by the identity + audit comment posted]
 ├── Tier req.:  [🟢/🟡/🔴 — N reviewer(s) / SLA / standard|extended checklist / explicit approval: required-and-present | required-and-MISSING | n-a]
 └── PR state:   [pr-state:to-be-reviewed | pr-state:ready-to-merge | pr-state:not-approved]
 ```

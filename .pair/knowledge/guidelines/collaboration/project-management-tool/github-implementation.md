@@ -667,7 +667,9 @@ PR=<pr-number>
 HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
 ```
 
-**Token prerequisite (why a commit status, not a check run).** The Checks API (`POST /repos/{owner}/{repo}/check-runs`) is writable **only by a GitHub App installation token**: with an ordinary user token or PAT it answers `403 You must authenticate via a GitHub App`. The skills that publish the verdict (`/pair-capability-publish-pr` Phase 5, `/pair-process-review` Step 5.4) run agent-side with exactly that ordinary token, so a check run is not an option for them. The **commit-statuses API** accepts the same token and branch protection treats a status **context** as a required check identically. The token needs `repo:status` (classic PAT) / `Commit statuses: write` (fine-grained); inside a workflow that is `permissions: statuses: write`. If a project does publish through a GitHub App instead, keep the check-run form — but then the publication must happen inside a workflow holding `checks: write`, plus a relay that carries the agent's verdict there.
+**Token prerequisite (why a commit status, not a check run).** The Checks API (`POST /repos/{owner}/{repo}/check-runs`) is writable **only by a GitHub App installation token**: with an ordinary user token or PAT it answers `403 You must authenticate via a GitHub App`. The skills that publish the verdict (`/pair-capability-publish-pr` Phase 5, `/pair-process-review` Step 5.4) run agent-side with exactly that ordinary token **whenever no dedicated review identity is configured** — the default — so on that path a check run is not an option for them. The **commit-statuses API** accepts the same token and branch protection treats a status **context** as a required check identically. The token needs `repo:status` (classic PAT) / `Commit statuses: write` (fine-grained); inside a workflow that is `permissions: statuses: write`.
+
+**The App path is the documented exception, and it needs no relay.** With `Review identity: app` configured, the same skills mint an **installation token** agent-side (§ [Dedicated review identity](#dedicated-review-identity), step 4) and POST `/check-runs` directly with it — `pair_review_publication_mode` is what routes them there. Read the rest of this section as the `session`-token case; nothing below requires a workflow or a verdict relay.
 
 ### Dedicated review identity
 
@@ -756,8 +758,30 @@ Recommended because it is the only form that unlocks the Checks API, and because
    ```bash
    source .pair/knowledge/assets/review-identity.sh
    source .pair/knowledge/assets/pr-state.sh
+
+   # The three inputs, from their real sources — none of them is ambient.
+   # 1. IDENTITY_KIND — the `Review identity:` value in adoption, forwarded VERBATIM.
+   #    The adapter accepts `app`, and both `bot-user` (the adoption literal) and its
+   #    short form `user`; `none` means no identity is configured.
+   IDENTITY_KIND="$(sed -n 's/^Review identity:[[:space:]]*//p' \
+     .pair/adoption/tech/way-of-working.md | head -1)"
+   IDENTITY_KIND="${IDENTITY_KIND:-none}"
+   # 2. IDENTITY_CONFIGURED — 1 for any value other than `none`.
+   IDENTITY_CONFIGURED=0
+   [ "$IDENTITY_KIND" != none ] && IDENTITY_CONFIGURED=1
+   # 3. IDENTITY_HEALTHY — the PROBE OUTCOME of step 5 (all four probes 2xx), AND the
+   #    exclusion precondition. Unknown is not healthy, so this starts at 0.
+   PROBES_PASSED=0                       # set to 1 by whatever ran step 5's probes
+   IDENTITY_HEALTHY=0
+   if [ "$IDENTITY_CONFIGURED" = 1 ] && [ "${PROBES_PASSED:-0}" = 1 ] &&
+     review_identity_exclusion_ok "$IDENTITY_KIND" "${REVIEW_IDENTITY_LOGIN:-}"; then
+     IDENTITY_HEALTHY=1
+   fi
+
    MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
    [ "$MODE" = halt ] && exit 1
+   # $REPO / $HEAD_SHA: the section's shared variables (above). $VERDICT / $VERDICT_SUMMARY:
+   # the review decision and its one-line summary, from the review flow's decision step.
    STATE="$(review_check_conclusion "$VERDICT")"
    [ "$STATE" = pending ] && { echo "no decision yet — leaving the pending check in place"; exit 0; }
    if [ "$(pair_review_publication_mode "$MODE" "$IDENTITY_KIND")" = checks-api ]; then
@@ -812,6 +836,7 @@ When a repository declares the `light` family in `## Tag Projection` (`tech/risk
 Two containments are worth stating on the host page, because this is where someone will try to shortcut them:
 
 - **The declaration is the gate, not the label.** A hand-applied `light` label on a repository that declares no `light` projection triggers nothing. Do not add the label family to the repository "so the flow can use it" — provisioning a label is not declaring a projection.
+- **Residual, once you HAVE declared it: `light` becomes a merge-authorizing capability, so access-control it.** The declaration contains the mis-tagging abuse only on repositories that never opted in. On one that did — and that sets `required_approving_review_count >= 1` — anyone with **write or triage** access can label their own PR `light` + `risk:green`, and the identity's approving review then satisfies the host rule with no second human. Nothing in the flow verifies **who** applied the label. Treat it as a permissioned action, not a hint: apply `light` only from classification (the refinement/review skills), and restrict manual application — GitHub has no per-label ACL, so the practical controls are keeping write access small and auditing label events (`gh api "repos/$REPO/issues/$PR/events" --jq '.[] | select(.event=="labeled")'`), or requiring a `CODEOWNERS`-reviewed classification change. The 🔴 gate is unaffected either way (`light` is inert at red).
 - **It never touches 🔴.** `required_approving_review_count` is a _host_ rule; `pair-explicit-approval` is the pair rule, and it still demands a human. A `light` label on a `risk:red` PR is inert.
 
 ### Provision the `pr-state:*` labels (once per repository)

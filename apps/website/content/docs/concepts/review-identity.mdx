@@ -63,6 +63,16 @@ One optional row builds on the identity. When **all four** of these hold, the id
   than a convenience.
 </Callout>
 
+<Callout type="warn">
+  **Once you declare the family, `light` becomes a merge-authorizing label.** The containment above
+  holds on projects that never opted in. On one that has — and that requires an approving review to
+  merge — nothing verifies *who* applied the tag: anyone who can label a pull request can label their
+  own, and the identity's approving review then satisfies that requirement with no second person.
+  Declaring the family means access-controlling the label: apply it from classification, restrict and
+  audit manual application, and treat it as a permission rather than a hint. 🔴 is unaffected — `light`
+  is inert there.
+</Callout>
+
 Three properties are worth stating plainly:
 
 - **Zero criteria.** Nothing here computes "lightness". The row reads a tag produced upstream by classification, a declaration made in adoption, the tier, and the state — it never inspects the change.

@@ -91,7 +91,13 @@ resolve_identity_mode() {
 }
 
 # review_identity_exclusion_ok <identity_kind> <review_identity_login>
-#   identity_kind        : app | user | <anything else ⇒ unknown, fail-safe>
+#   identity_kind        : app | user | bot-user | <anything else ⇒ unknown, fail-safe>
+#                          `bot-user` is the ADOPTION literal (`Review identity: bot-user`
+#                          in way-of-working) and `user` its short form: the skills forward
+#                          the literal they read, so BOTH must resolve to the machine-user
+#                          arm. A spelling this function does not accept would make a
+#                          correctly provisioned bot user a NOT-healthy identity and HALT
+#                          every review on that repository.
 #   review_identity_login: the identity's account login, as provisioned to the job that
 #                          evaluates `human_approval_jq_filter` (on GitHub: the repository
 #                          variable `REVIEW_IDENTITY_LOGIN`, read into the environment of
@@ -117,7 +123,9 @@ review_identity_exclusion_ok() {
     # `user.type == "Bot"` — the shipped type clause already rejects it.
     return 0
     ;;
-  user)
+  user | bot-user)
+    # Both spellings of the machine-USER form: `bot-user` is what adoption declares and
+    # what the skills forward verbatim; `user` is the short form the adapter's own docs use.
     if [ -n "$login" ]; then
       return 0
     fi
@@ -177,14 +185,19 @@ identity_verdict_event() {
 }
 
 # pair_review_publication_mode <mode> <identity_kind>
-#   identity_kind : app | user | <anything else ⇒ treated as not an App>
+#   identity_kind : app | user | bot-user | <anything else ⇒ treated as not an App>
+#                   same vocabulary as `review_identity_exclusion_ok`: `bot-user` is the
+#                   adoption literal, `user` its short form, and both are machine-user
+#                   forms that the Checks API rejects.
 #
 # Echoes: checks-api | commit-status.
 #
 # The Checks API is writable ONLY by a GitHub App installation token; an ordinary
 # user token or PAT gets `403`. So the check-run form is available exactly when an
-# App identity is resolved, and every other combination — a bot user, an identity of
-# unknown kind, no identity at all — keeps the commit status the flow already ships.
+# App identity is resolved, and every other combination — a bot user under either
+# spelling, an identity of unknown kind, no identity at all — keeps the commit status
+# the flow already ships. Only `app` is matched positively, so a new or misspelled kind
+# degrades to the commit status rather than attempting a write it cannot perform.
 pair_review_publication_mode() {
   if [ "${1:-}" = "identity" ] && [ "${2:-}" = "app" ]; then
     echo "checks-api"
