@@ -181,6 +181,15 @@ describe('profile schema — built-in profiles and their normative error cases',
     expect(profilesSource).toMatch(/other than `## `\*\*|other than `##`\*\*/)
   })
 
+  // Round 4 Major: the two shapes between the section level and the value level —
+  // one key on two LINES, and a key whose list marker this reader does not accept.
+  it('states that a key is declared ONCE, on a `-`/`*`/`+` list item', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/twice|more than once/)
+    expect(profilesSource).toMatch(/`-`, `\*` or `\+`|`-` \/ `\*` \/ `\+`/)
+    expect(lower).toMatch(/no bullet|bullet-less|numbered|ordered/)
+  })
+
   it('treats an empty whitelist as a misconfiguration, never as “everything disabled”', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/empty (custom )?whitelist/)
@@ -253,6 +262,20 @@ describe('direct-invocation gate — written once as a convention, referenced ev
   it('leaves an enabled step (or an absent section) byte-for-byte unchanged', () => {
     expect(gateSource.toLowerCase()).toMatch(/unchanged|proceeds? silently|no prompt/)
   })
+
+  // Round 4 Minor: the convention's "what stays in the skill" snippet is the file
+  // the NEXT author copies from, and it prescribed a delta none of the 12 shipped
+  // skills carries. `checkOneStepMarker` only requires the marker plus a pointer
+  // anywhere in the dir, so a 13th, differently-worded delta would land green and
+  // the convention would drift from the corpus it governs. Pinned to the real one.
+  it('prescribes the delta the corpus actually ships, not a paraphrase of it', () => {
+    const marker = '<!-- process-step: id=refine-story -->'
+    const snippet = /```markdown\n([\s\S]*?)```/.exec(gateSource)?.[1]?.trim()
+    const skill = read(join(SKILLS_DIR, 'process/refine-story/SKILL.md'))
+    const from = skill.indexOf(marker)
+    expect(from).toBeGreaterThan(-1)
+    expect(snippet).toBe(skill.slice(from, skill.indexOf('\n## ', from)).trim())
+  })
 })
 
 describe('way-of-working — the `## Process Profile` adoption section', () => {
@@ -319,6 +342,20 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     expect(section.toLowerCase()).toMatch(/more than one `?## process profile`?/)
     expect(section.toLowerCase()).toMatch(/level other than `?##`?|### process profile/)
   })
+
+  // Round 4 Major: the KEY level, between the SECTION level (round 3) and the
+  // VALUE level (round 2). Both new rules are normative for the LLM path too —
+  // `/next` is the executing reader, the resolver only the reference one.
+  it.each(sources)(
+    '%s: HALTs on a key declared twice, and on an off-shape marker',
+    (_, content) => {
+      const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+      const lower = section.toLowerCase()
+      expect(lower).toMatch(/same key .*twice|key .*more than once|twice .*same section/)
+      expect(lower).toMatch(/`?[-*+]`?|bullet/)
+      expect(lower).toMatch(/no bullet|bullet-less|numbered|ordered/)
+    },
+  )
 
   it.each(sources)('%s: HALTs on an empty custom whitelist (AC10)', (_, content) => {
     const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')

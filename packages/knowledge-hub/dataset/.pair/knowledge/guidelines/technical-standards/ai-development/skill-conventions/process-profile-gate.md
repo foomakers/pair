@@ -35,12 +35,14 @@ Two consequences worth stating, because both have been got wrong:
 
 ## What stays in the skill (the delta)
 
-One line, at the skill's invocation entry point, carrying its **declared step id** — the marker is the contract `skills:conformance` checks, and the sentence is what the executor reads:
+A `## Process Profile` section at the skill's invocation entry point, carrying its **declared step id** — the marker is the contract `skills:conformance` checks, and the sentence is what the executor reads. This is the block the corpus ships, quoted from `/refine-story` verbatim (a conformance test pins the two together, so this snippet cannot drift from the twelve deltas it governs):
 
 ```markdown
 <!-- process-step: id=refine-story -->
 
-**Process profile** — see [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md). Direct invocation while `refine-story` is disabled warns and asks for confirmation; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed.
+Executable form of the **`refine-story`** step, and a composer of `define-subdomains`, `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 ```
+
+Substitute the skill's own step id in the marker and in the sentence, and its own composed step ids (drop that clause when it composes none).
 
 Nothing else is per-skill. The step ids, the profiles and the error cases all live in the two KB files this points at, so a change to the schema is one edit, not twelve.
