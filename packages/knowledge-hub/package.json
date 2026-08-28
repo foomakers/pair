@@ -21,6 +21,7 @@
     "transfer:dataset": "ts-node src/tools/transfer-dataset.ts",
     "skills:conformance": "ts-node src/tools/skills-conformance-check.ts",
     "ratchet:asset": "ts-node src/tools/build-ratchet-asset.ts",
+    "codex:asset": "ts-node src/tools/build-codex-asset.ts",
     "coverage:ratchet": "ts-node src/tools/coverage-baseline-ratchet.ts"
   },
   "devDependencies": {
