@@ -64,6 +64,43 @@ const rank = (step: string): number => {
   return Number(major) * 10_000 + Number(minor) * 100 + letter
 }
 
+/**
+ * Markdown emphasis markers, stripped. House style writes step references bold
+ * (`Move to **Step 3.1b**`), so a matcher written against the rendered prose
+ * (`Move to Step`) sees `Move to **Step` and matches NOTHING — and an assertion
+ * over "everything that matched" then passes on an empty set whatever the file
+ * says. Only asterisks: `_` is load-bearing inside identifiers (`merge_allowed`).
+ */
+const unemphasize = (text: string): string => text.replace(/\*+/g, '')
+
+/** From the first match of `from` up to the next match of `to`. Fails closed on either. */
+const sliceBetween = (text: string, from: RegExp, to: RegExp): string => {
+  const start = text.search(from)
+  if (start === -1) throw new Error(`sliceBetween: start ${from} not found`)
+  const rest = text.slice(start)
+  const end = rest.slice(1).search(to)
+  if (end === -1) throw new Error(`sliceBetween: end ${to} not found after ${from}`)
+  return rest.slice(0, end + 1)
+}
+
+/**
+ * Every `Move to Step X` in a Phase-3 slice that sits BEFORE Step 3.1b and targets
+ * a step ordered AFTER it — i.e. every jump that skips the flush. Emphasis is
+ * stripped first, so the detector reads the text as a human does.
+ */
+const jumpsOverTheFlush = (phase3: string): string[] => {
+  const plain = unemphasize(phase3)
+  const flushIdx = plain.search(/#+\s*Step\s*3\.1b:/i)
+  if (flushIdx === -1) throw new Error('jumpsOverTheFlush: Step 3.1b heading not found')
+  return [...plain.matchAll(/Move to (?:Step|Phase)\s*(\d+(?:\.\d+)?[a-z]?)/gi)]
+    .filter(m => (m.index ?? 0) < flushIdx)
+    .filter(m => rank(m[1]) > rank('3.1b'))
+    .map(m => m[0])
+}
+
+/** Spelled cardinals a lead-in can use to count a list. */
+const CARDINALS: Readonly<Record<string, number>> = { one: 1, two: 2, three: 3, four: 4, five: 5 }
+
 /** Both copies of the guideline, so every mechanism assertion runs over each. */
 const guidelineCopies: ReadonlyArray<readonly [string, () => string]> = [
   ['dataset', guideline],
@@ -152,6 +189,18 @@ describe('tick-only body patch — the only body bytes that change (AC1, T1)', (
     expect(low).toMatch(/definition[- ]of[- ]done/)
   })
 
+  it.each(guidelineCopies)('%s: the lead-in counts the properties it lists', (_label, load) => {
+    // Round 2 inserted a fourth property ("One write per checkbox") under a lead-in
+    // still reading "Three properties". An agent resolving the guideline enumerates
+    // three and treats the last — "the patch never unticks", the idempotence that
+    // keeps a resumed story write-free — as commentary rather than a rule.
+    const section = sectionOf(load(), '## The tick-only body patch')
+    const lead = /\b(one|two|three|four|five)\s+propert(?:y|ies)\b/i.exec(section)
+    expect(lead).not.toBeNull()
+    const items = section.split('\n').filter(l => /^\d+\.\s/.test(l)).length
+    expect(CARDINALS[lead![1].toLowerCase()]).toBe(items)
+  })
+
   it('dataset names the composed writer in short form, the mirror in prefixed form', () => {
     expect(guideline()).toContain('/write-issue')
     expect(guidelineMirror()).toContain('/pair-capability-write-issue')
@@ -195,6 +244,20 @@ describe('batching — one comment per run iteration (AC2, T2)', () => {
     const section = sectionOf(load(), BATCHING)
     expect(section.toLowerCase()).toMatch(/empty.*no comment|no comment.*empty|nothing is posted/)
   })
+
+  it.each(guidelineCopies)(
+    '%s: scopes the batch to work THIS invocation attempted',
+    (_label, load) => {
+      // "An empty batch posts nothing" is only reachable if a task the invocation
+      // never attempted stays OUT of the queue. Left implicit, a resumed story
+      // whose items are all `[x]` re-queues every one of them as `ticked`, the
+      // batch is non-empty, and the silent re-run posts a duplicate comment.
+      const section = sectionOf(load(), BATCHING)
+      const low = section.toLowerCase()
+      expect(low).toContain('this invocation')
+      expect(low).toMatch(/neither re-?written nor queued|not queued/)
+    },
+  )
 })
 
 describe('outcome vocabulary — failure and skip are recorded, not ticked (AC3, T2)', () => {
@@ -221,6 +284,19 @@ describe('outcome vocabulary — failure and skip are recorded, not ticked (AC3,
     (_label, load) => {
       const section = sectionOf(load(), VOCAB)
       expect(section.toLowerCase()).toContain('stays unticked')
+    },
+  )
+
+  it.each(guidelineCopies)(
+    '%s: says where `skipped` is produced, so it is not an orphan outcome',
+    (_label, load) => {
+      // An outcome in the closed set with no producing call site is a hole in AC3:
+      // the caller has no defined path for a task it declines to attempt, and the
+      // headline count silently shrinks instead of reporting the deferral.
+      const section = sectionOf(load(), VOCAB)
+      const low = section.toLowerCase()
+      expect(low).toMatch(/task selection|selection step|declines to attempt/)
+      expect(low).toMatch(/never .*outcome of an attempt|not .*attempt that failed/)
     },
   )
 
@@ -281,16 +357,60 @@ describe('wiring — /implement owns both call sites (AC1/AC2, T3)', () => {
     // queue — a whole story's progress comment silently lost. Ordering the two
     // headings (the assertion above) cannot see it: a jump target defeats
     // document order.
-    const c = implement()
-    const phase3 = sectionOf(c, '## Phase 3:')
-    const flushIdx = phase3.search(/#+\s*Step\s*3\.1b:/i)
-    expect(flushIdx).toBeGreaterThanOrEqual(0)
-    const skips = [...phase3.matchAll(/Move to (?:Step|Phase)\s*(\d+(?:\.\d+)?[a-z]?)/gi)]
-    const jumpsOverTheFlush = skips
-      .filter(m => (m.index ?? 0) < flushIdx)
-      .filter(m => rank(m[1]) > rank('3.1b'))
-      .map(m => m[0])
-    expect(jumpsOverTheFlush).toEqual([])
+    expect(jumpsOverTheFlush(sectionOf(implement(), '## Phase 3:'))).toEqual([])
+  })
+
+  it('the anti-jump detector fires on the round-1 bug, in the emphasis the file uses', () => {
+    // A pin that cannot see the line it pins is not a pin. The fixed line reads
+    // `Move to **Step 3.1b**` — bold markers between `to ` and `Step` — so a
+    // matcher over raw markdown matched nothing and the assertion above went
+    // green over an EMPTY set, for any target whatsoever. Mutation: restore the
+    // verbatim round-1 regression and require the detector to report it.
+    const mutated = sectionOf(implement(), '## Phase 3:').replace(
+      /Move to \*\*Step 3\.1b\*\*/,
+      'Move to **Step 3.2**',
+    )
+    expect(jumpsOverTheFlush(mutated)).toEqual(['Move to Step 3.2'])
+  })
+
+  it('ticks and queues on BOTH commit strategies — the queue site is not inside a strategy branch', () => {
+    // The regression: Step 2.8's item 2 short-circuited (`If commit-per-story,
+    // continue to next task — return to Step 2.1`) BEFORE item 7, the tick-and-queue.
+    // A 4-task commit-per-story story whose gate goes red on T3 then queued only
+    // the failure: the story body still showed `- [ ] T1`, `- [ ] T2` for finished
+    // work and the single comment reported one failure and no successes — the
+    // "on task 3 of 4 and failed on task 2 look identical" state the loop exists
+    // to end. Not exotic: Step 1.3 auto-selects commit-per-story for EVERY
+    // single-task story.
+    const step28 = sectionOf(implement(), '### Step 2.8: Task Completion')
+    const skip = unemphasize(sliceBetween(step28, /^2\.\s+\*\*Skip\*\*/m, /^3\.\s+\*\*Act\*\*/m))
+    expect(skip).toMatch(/commit-per-story/)
+    expect(skip.toLowerCase()).toMatch(/item 7|tick and queue/)
+  })
+
+  it('does not re-queue a task an earlier invocation completed', () => {
+    // Step 3.1's catch-up must be scoped to THIS invocation. Unscoped ("once per
+    // completed task") a single-task story re-invoked after a context reset jumps
+    // Step 2.1 -> Phase 3, re-applies the tick-and-queue over the already-`[x]`
+    // task, and Step 3.1b posts a SECOND identical progress comment for an
+    // invocation that did no work — the accretion the guideline forbids.
+    const step31 = sliceBetween(implement(), /#+\s*Step\s*3\.1:/i, /#+\s*Step\s*3\.1b:/i)
+    expect(step31.toLowerCase()).toContain('in this invocation')
+    expect(step31.toLowerCase()).toMatch(/neither re-?written nor queued|not .*queued/)
+  })
+
+  it('has an explicit call site that queues `skipped`', () => {
+    // `skipped` is in the guideline's closed set and AC3 names it beside failure,
+    // so the only caller must be able to produce it. Without a path, a task blocked
+    // mid-run either HALTs (reported `failed` — wrong, it was a deliberate
+    // deferral) or vanishes from the batch, so "N of M tasks this iteration"
+    // understates the run without saying why.
+    // The imperative act, not just the word: Step 2.1's exit condition mentions
+    // `skipped` too, so "the section contains `skipped`" stays green over a
+    // section that only CONSUMES the outcome and never produces one.
+    const step21 = sliceBetween(implement(), /#+\s*Step\s*2\.1:/i, /#+\s*Step\s*2\.2:/i)
+    expect(step21).toMatch(/queue it as `skipped`/i)
+    expect(step21.toLowerCase()).toMatch(/unmet dependenc|blocke|defer/)
   })
 
   it('flushes on the way out of a HALT too', () => {
