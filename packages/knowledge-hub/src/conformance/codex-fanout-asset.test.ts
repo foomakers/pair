@@ -87,6 +87,61 @@ describe('the shipped asset runs as the skill invokes it', () => {
     expect(code).toBe(1)
     expect(String((body as { error: string }).error)).toContain('.pair/working/checkpoints/1.md')
   })
+
+  it('exits non-zero on an OVERRIDDEN working area, and on a parent-relative spelling of one', () => {
+    // Both were accepted by the shipped asset — exit 0 with `blind:true`, carrying the author's
+    // checkpoint into the reviewer's packet. They are re-run HERE, against the built artifact,
+    // because that is the file the skill actually invokes.
+    const overridden = run('packet', {
+      packet: {
+        phase: 'review',
+        card: { id: '441', title: 't', branch: 'b' },
+        attachments: ['.pair/scratch/checkpoints/441.md'],
+        workingPath: '.pair/scratch',
+      },
+    })
+    expect(overridden.code).toBe(1)
+    const traversal = run('packet', {
+      packet: {
+        phase: 'review',
+        card: { id: '441', title: 't', branch: 'b' },
+        attachments: ['../../pair/.pair/working/checkpoints/441.md'],
+      },
+    })
+    expect(traversal.code).toBe(1)
+  })
+
+  it('never lets a caller-supplied schema replace the phase contract', () => {
+    const { body } = run('collect', {
+      phase: 'review',
+      result: { status: 'ok', value: {} },
+      schema: { type: 'object' },
+    })
+    expect(body).toMatchObject({ outcome: 'failed-validation', advances: false })
+  })
+
+  it('does not refuse a card forever because an earlier run recorded a failure', () => {
+    const audit = [
+      { iteration: 1, id: '441', phase: 'implement', outcome: 'timed-out' },
+      { iteration: 2, id: '441', phase: 'implement', outcome: 'completed' },
+    ]
+      .map(r => JSON.stringify(r))
+      .join('\n')
+    const { body } = run('resume', { audit, id: '441' })
+    expect(body).toMatchObject({ halted: false, redispatch: ['pr', 'review'] })
+  })
+
+  it('converges an approved review instead of owing a fix nobody asked for', () => {
+    expect(run('converge', { review: { verdict: 'APPROVED', findings: [] } }).body).toMatchObject({
+      action: 'converged',
+    })
+    expect(
+      run('converge', {
+        review: { verdict: 'CHANGES-REQUESTED', findings: [{ severity: 'Major' }] },
+        round: 3,
+      }).body,
+    ).toMatchObject({ action: 'escalate' })
+  })
 })
 
 /**

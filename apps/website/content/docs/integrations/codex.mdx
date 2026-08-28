@@ -78,7 +78,7 @@ Codex is one of two harnesses that can run pair's [unattended loop](/docs/tutori
 - Codex's **first-generation** multi-agent tools are stable and on by default — a normal session already exposes them.
 - The **second generation** is stable but default-off, behind its own feature flag, and lets you rename the tool namespace and set concurrency/timeout ceilings. When it is on, `/pair-loop` prefers it, and reads the namespace from the probe rather than assuming a name.
 
-Enable nothing and the loop still works if the default-on set is exposed. Enable the second generation and you additionally get a harness-side concurrency ceiling the loop will respect.
+Enable nothing and the loop still works if the default-on set is exposed — a harness-side concurrency ceiling included, since the first generation declares one too and it already enters the cap arithmetic. What the second generation adds is that the ceiling and the wait timeouts become **configurable**, and the tool namespace can be renamed — which is why the loop reads the namespace from the probe instead of assuming a name.
 
 ### What you will see
 

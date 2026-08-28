@@ -4,7 +4,7 @@
 
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.main = exports.COMMANDS = exports.resumePlan = exports.reconstructState = exports.appendAudit = exports.auditLine = exports.collectOutcome = exports.schemaViolations = exports.TERMINAL_OUTCOMES = exports.buildPacket = exports.assertBlind = exports.PacketRejected = exports.BLIND_DENY_PREFIXES = exports.isPhase = exports.PHASE_CONTRACTS = exports.PHASES = exports.effectiveParallelism = exports.resolveRealization = exports.HARNESS_SURFACE_MAP = exports.REALIZATION_TIERS = void 0;
+exports.main = exports.COMMANDS = exports.resumePlan = exports.reconstructState = exports.OWED_PHASES = exports.appendAudit = exports.auditLine = exports.converge = exports.MAX_FIX_ROUNDS_DEFAULT = exports.collectOutcome = exports.schemaViolations = exports.TERMINAL_OUTCOMES = exports.buildPacket = exports.assertBlind = exports.blindDenyPrefixes = exports.BLIND_DENY_PREFIXES = exports.WORKING_PATH_DEFAULT = exports.PacketRejected = exports.isPhase = exports.PHASE_CONTRACTS = exports.PHASES = exports.effectiveParallelism = exports.resolveRealization = exports.HARNESS_SURFACE_MAP = exports.REALIZATION_TIERS = void 0;
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
 exports.REALIZATION_TIERS = Object.freeze({
@@ -60,7 +60,8 @@ function qualify(namespace, handle) {
     return namespace === '' ? handle : `${namespace}.${handle}`;
 }
 function matchRealization(def, exposed, namespaceOverride) {
-    const ns = typeof namespaceOverride === 'string' ? namespaceOverride : def.namespace;
+    const renameable = typeof def.namespaceKey === 'string' && def.namespaceKey !== '';
+    const ns = renameable && typeof namespaceOverride === 'string' ? namespaceOverride : def.namespace;
     const spawn = qualify(ns, def.handles.spawn);
     const wait = qualify(ns, def.handles.wait);
     return exposed.has(spawn) && exposed.has(wait) ? { spawn, wait } : null;
@@ -196,8 +197,6 @@ function isPhase(value) {
     return typeof value === 'string' && exports.PHASES.includes(value);
 }
 exports.isPhase = isPhase;
-exports.BLIND_DENY_PREFIXES = Object.freeze(['.pair/working/']);
-const WORKTREE_ROOT_DEFAULT = '../pair-worktrees';
 class PacketRejected extends Error {
     constructor(message) {
         super(message);
@@ -205,17 +204,41 @@ class PacketRejected extends Error {
     }
 }
 exports.PacketRejected = PacketRejected;
+exports.WORKING_PATH_DEFAULT = '.pair/working';
+exports.BLIND_DENY_PREFIXES = Object.freeze([`${exports.WORKING_PATH_DEFAULT}/`]);
+function blindDenyPrefixes(workingPath) {
+    const raw = typeof workingPath === 'string' ? workingPath.trim() : '';
+    if (raw === '')
+        return exports.BLIND_DENY_PREFIXES;
+    const resolved = (0, node_path_1.normalize)(raw).replace(/\\/g, '/').replace(/\/+$/, '');
+    if (resolved === '' || resolved === '.' || (0, node_path_1.isAbsolute)(raw) || resolved.startsWith('..'))
+        throw new PacketRejected(`codex-fanout: working path \`${workingPath}\` is not a project-relative directory; ` +
+            `\`working_path\` must be project-relative (working-area.md) and an unresolvable one is ` +
+            `never silently replaced by the default — the blindness check would then guard the wrong path`);
+    const denied = [`${resolved}/`];
+    if (denied[0] !== exports.BLIND_DENY_PREFIXES[0])
+        denied.push(...exports.BLIND_DENY_PREFIXES);
+    return Object.freeze(denied);
+}
+exports.blindDenyPrefixes = blindDenyPrefixes;
+const WORKTREE_ROOT_DEFAULT = '../pair-worktrees';
 function normalizeAttachment(entry) {
     if (typeof entry !== 'string' || entry.trim() === '')
         throw new PacketRejected('codex-fanout: an attachment must be a non-empty path');
     if ((0, node_path_1.isAbsolute)(entry))
         throw new PacketRejected(`codex-fanout: attachment \`${entry}\` is absolute; a packet references project-relative paths only`);
-    return (0, node_path_1.normalize)(entry).replace(/\\/g, '/');
+    const normalized = (0, node_path_1.normalize)(entry).replace(/\\/g, '/');
+    if (normalized === '..' || normalized.startsWith('../'))
+        throw new PacketRejected(`codex-fanout: attachment \`${entry}\` escapes the project (\`${normalized}\`); a packet ` +
+            `references project-relative paths only, and a path that leaves the project can spell any ` +
+            `denied path from outside it`);
+    return normalized;
 }
-function assertBlind(attachments, phase) {
+function assertBlind(attachments, phase, workingPath) {
+    const prefixes = blindDenyPrefixes(workingPath);
     for (const raw of attachments) {
         const entry = normalizeAttachment(raw);
-        for (const denied of exports.BLIND_DENY_PREFIXES)
+        for (const denied of prefixes)
             if (entry === denied.replace(/\/$/, '') || entry.startsWith(denied))
                 throw new PacketRejected(`codex-fanout: the ${phase} packet would carry \`${entry}\`, which is under \`${denied}\` — ` +
                     `the ${phase} role is blind to the authoring chain's working artifacts. Rejected before spawn.`);
@@ -244,7 +267,7 @@ function buildPacket(request) {
     assertSingleCard(request.card);
     const attachments = (request.attachments ?? []).map(normalizeAttachment);
     if (contract.blind)
-        assertBlind(attachments, request.phase);
+        assertBlind(attachments, request.phase, request.workingPath);
     const root = request.worktreeRoot ?? WORKTREE_ROOT_DEFAULT;
     return {
         phase: request.phase,
@@ -306,13 +329,22 @@ function arrayViolations(value, schema, path) {
         return [];
     return value.flatMap((item, i) => schemaViolations(item, items, `${path}[${i}]`));
 }
+function enumViolations(value, schema, path) {
+    if (!Array.isArray(schema.enum))
+        return [];
+    return schema.enum.includes(value)
+        ? []
+        : [`${path} must be one of ${schema.enum.map(v => JSON.stringify(v)).join(', ')}`];
+}
 function schemaViolations(value, schema, path = 'value') {
     if (schema.type === 'object')
         return objectViolations(value, schema, path);
     if (schema.type === 'array')
         return arrayViolations(value, schema, path);
     const actual = typeof value;
-    return actual === schema.type ? [] : [`${path} must be ${schema.type}, got ${actual}`];
+    if (actual !== schema.type)
+        return [`${path} must be ${schema.type}, got ${actual}`];
+    return enumViolations(value, schema, path);
 }
 exports.schemaViolations = schemaViolations;
 function classifyWait(result) {
@@ -324,6 +356,9 @@ function classifyWait(result) {
     return null;
 }
 function collectOutcome(phase, result, schemaOverride) {
+    if (!isPhase(phase))
+        return failClosed('failed-validation', `unknown phase ${JSON.stringify(phase)}; expected one of ${exports.PHASES.join(', ')} — ` +
+            `an outcome this file cannot name is never read as success`);
     if (!result || typeof result !== 'object')
         return failClosed('not-started', 'the harness returned nothing for this dispatch');
     const nonTerminal = classifyWait(result);
@@ -331,7 +366,12 @@ function collectOutcome(phase, result, schemaOverride) {
         return nonTerminal;
     if (result.value === undefined || result.value === null)
         return failClosed('failed-validation', 'the dispatch completed with no return value');
-    const errs = schemaViolations(result.value, schemaOverride ?? exports.PHASE_CONTRACTS[phase].schema);
+    const errs = [
+        ...new Set([
+            ...schemaViolations(result.value, exports.PHASE_CONTRACTS[phase].schema),
+            ...(schemaOverride ? schemaViolations(result.value, schemaOverride) : []),
+        ]),
+    ];
     if (errs.length > 0)
         return failClosed('failed-validation', `return value violates the ${phase} contract: ${errs.join('; ')}`);
     return {
@@ -342,6 +382,107 @@ function collectOutcome(phase, result, schemaOverride) {
     };
 }
 exports.collectOutcome = collectOutcome;
+exports.MAX_FIX_ROUNDS_DEFAULT = 3;
+function normSeverity(name) {
+    return typeof name === 'string' ? name.trim().toLowerCase() : '';
+}
+function floorRank(req) {
+    if (typeof req.severityFloor !== 'string' || req.severityFloor.trim() === '')
+        return null;
+    const ranks = req.severityRanks;
+    if (!ranks || typeof ranks !== 'object' || Array.isArray(ranks))
+        throw new Error(`codex-fanout: severityFloor \`${req.severityFloor}\` was given with no severityRanks. ` +
+            `Rank is NEVER inferred from the order severities happen to appear in — pass the contract's ` +
+            `\`severityRanks\`, or omit the floor so every actionable finding blocks.`);
+    const entry = Object.entries(ranks).find(([name]) => normSeverity(name) === normSeverity(req.severityFloor));
+    if (!entry || !Number.isInteger(entry[1]))
+        throw new Error(`codex-fanout: severityFloor \`${req.severityFloor}\` is not ranked by severityRanks ` +
+            `(${Object.keys(ranks).join(', ') || 'empty'}); omit the floor so every actionable finding blocks.`);
+    return entry[1];
+}
+function hasVerdict(review) {
+    const v = review?.verdict;
+    return typeof v === 'string' && v.trim() !== '';
+}
+const NO_FINDINGS = { actionable: [], belowFloor: [], nonActionable: [] };
+function partition(review, req) {
+    const raw = review?.findings;
+    const findings = Array.isArray(raw) ? raw : [];
+    const floor = floorRank(req);
+    const ranks = Object.entries(req.severityRanks ?? {});
+    const rankOf = (f) => {
+        const hit = ranks.find(([name]) => normSeverity(name) === normSeverity(f?.severity));
+        return hit && Number.isInteger(hit[1]) ? hit[1] : Number.NaN;
+    };
+    const belowFloor = [];
+    const actionable = [];
+    for (const f of findings)
+        if (f?.nonActionable !== true)
+            (floor !== null && rankOf(f) < floor ? belowFloor : actionable).push(f);
+    return { actionable, belowFloor, nonActionable: findings.filter(f => f?.nonActionable === true) };
+}
+function convergeBounds(req) {
+    return {
+        round: Number.isInteger(req.round) ? req.round : 0,
+        max: Number.isInteger(req.maxFixRounds) ? req.maxFixRounds : exports.MAX_FIX_ROUNDS_DEFAULT,
+        pending: req.humanDecisionPending === true,
+    };
+}
+function decide(b, d) {
+    return {
+        action: d.action,
+        round: d.round ?? b.round,
+        ...d.parts,
+        humanDecisionPending: d.pending ?? b.pending,
+        reason: d.reason,
+        line: `review convergence: ${d.action} after ${b.round} fix round(s) of at most ${b.max} — ${d.reason}`,
+    };
+}
+function decideOpen(review, b, parts) {
+    const open = parts.actionable.length;
+    const wantsHuman = review.needsHumanDecision === true;
+    if (wantsHuman && !b.pending && b.round < b.max)
+        return decide(b, {
+            action: 'fix',
+            reason: `the reviewer asked for a human decision — spending one fix round on the ${open} ` +
+                `actionable finding(s) first, then escalating if it still stands`,
+            parts,
+            round: b.round + 1,
+            pending: true,
+        });
+    if (b.round >= b.max || wantsHuman)
+        return decide(b, {
+            action: 'escalate',
+            reason: wantsHuman
+                ? 'the reviewer asked for a human decision again after a fix round — a genuine disagreement'
+                : `${open} actionable finding(s) still open after ${b.round} fix round(s)`,
+            parts,
+        });
+    return decide(b, {
+        action: 'fix',
+        reason: `${open} actionable finding(s) — one fix round, then RE-REVIEW`,
+        parts,
+        round: b.round + 1,
+    });
+}
+function converge(req) {
+    const bounds = convergeBounds(req);
+    if (!hasVerdict(req.review))
+        return decide(bounds, {
+            action: 'escalate',
+            reason: 'the review returned no verdict — absence of findings is not evidence that a review happened',
+            parts: NO_FINDINGS,
+        });
+    const parts = partition(req.review, req);
+    if (parts.actionable.length === 0)
+        return decide(bounds, {
+            action: 'converged',
+            reason: 'no actionable finding remains — the PR is review-approved',
+            parts,
+        });
+    return decideOpen(req.review, bounds, parts);
+}
+exports.converge = converge;
 const NODE_AUDIT_FS = { mkdirSync: node_fs_1.mkdirSync, appendFileSync: node_fs_1.appendFileSync, readFileSync: node_fs_1.readFileSync };
 function auditLine(record) {
     return `${JSON.stringify(record)}\n`;
@@ -364,29 +505,80 @@ function appendAudit(path, records, fs = NODE_AUDIT_FS) {
     }
 }
 exports.appendAudit = appendAudit;
+exports.OWED_PHASES = ['implement', 'pr', 'review'];
 function emptyState() {
-    return { completed: [], prNumber: null, halted: false, reason: null };
+    return {
+        completed: [],
+        prNumber: null,
+        halted: false,
+        haltedBy: null,
+        reason: null,
+        round: 0,
+        cycleOpen: false,
+    };
 }
-function applyRecord(state, record) {
+function complete(state, phase) {
+    if (!state.completed.includes(phase))
+        state.completed.push(phase);
+}
+function clearHalt(state, phase) {
+    if (state.haltedBy === phase) {
+        state.halted = false;
+        state.haltedBy = null;
+        state.reason = null;
+    }
+}
+function halt(state, by, reason) {
+    state.halted = true;
+    state.haltedBy = by;
+    state.reason = reason;
+}
+function applyReviewRecord(state, record, canHalt) {
+    state.cycleOpen = record.action === 'fix';
+    if (record.action === 'escalate') {
+        if (canHalt)
+            halt(state, 'review', record.reason ?? 'the review cycle escalated to a human');
+        return;
+    }
+    if (!state.cycleOpen)
+        complete(state, 'review');
+}
+function applyCompleted(state, record, canHalt) {
+    const phase = record.phase;
+    clearHalt(state, phase);
+    if (phase === 'review')
+        return applyReviewRecord(state, record, canHalt);
+    complete(state, phase);
+}
+function carryForward(state, record) {
     if (typeof record.prNumber === 'number')
         state.prNumber = record.prNumber;
+    if (Number.isInteger(record.round))
+        state.round = record.round;
+}
+function haltReason(record) {
+    if (typeof record.reason === 'string' && record.reason !== '')
+        return record.reason;
+    if (record.excluded === true)
+        return 'excluded by a previous iteration';
+    return `${record.phase} ended \`${record.outcome}\``;
+}
+function applyRecord(state, record, canHalt) {
+    carryForward(state, record);
     if (record.excluded === true) {
-        state.halted = true;
-        state.reason = record.reason ?? 'excluded by a previous iteration';
+        if (canHalt)
+            halt(state, null, haltReason(record));
         return;
     }
     if (!isPhase(record.phase) || !record.outcome)
         return;
-    if (record.outcome === 'completed') {
-        if (!state.completed.includes(record.phase))
-            state.completed.push(record.phase);
-        return;
-    }
-    state.halted = true;
-    state.reason = record.reason ?? `${record.phase} ended \`${record.outcome}\``;
+    if (record.outcome === 'completed')
+        return applyCompleted(state, record, canHalt);
+    if (canHalt)
+        halt(state, record.phase, haltReason(record));
 }
-function reconstructState(auditText) {
-    const states = {};
+function parseAudit(auditText) {
+    const records = [];
     for (const line of auditText.split('\n')) {
         const trimmed = line.trim();
         if (trimmed === '')
@@ -400,9 +592,25 @@ function reconstructState(auditText) {
         }
         if (!record || typeof record.id !== 'string')
             continue;
+        records.push(record);
+    }
+    return records;
+}
+function reconstructState(auditText, scope = {}) {
+    const records = parseAudit(auditText);
+    const lastRun = records.at(-1)?.run;
+    const canHalt = (record) => {
+        if (typeof scope.run === 'string')
+            return record.run === scope.run;
+        if (Number.isInteger(scope.sinceIteration))
+            return Number(record.iteration) >= scope.sinceIteration;
+        return record.run === lastRun;
+    };
+    const states = {};
+    for (const record of records) {
         const state = states[record.id] ?? emptyState();
         states[record.id] = state;
-        applyRecord(state, record);
+        applyRecord(state, record, canHalt(record));
     }
     return states;
 }
@@ -412,38 +620,45 @@ function resumePlan(id, state) {
     const done = new Set(s.completed);
     if (s.prNumber !== null)
         done.add('pr');
-    const redispatch = s.halted ? [] : exports.PHASES.filter(p => !done.has(p));
+    const redispatch = s.halted ? [] : exports.OWED_PHASES.filter(p => !done.has(p));
     const note = s.halted
-        ? `halted by a previous iteration: ${s.reason ?? 'no reason recorded'} — not re-driven`
-        : s.prNumber !== null
-            ? `story already carries PR #${s.prNumber} — continued on it, never a second PR`
-            : 'no prior state recorded — full pipeline';
+        ? `halted in this run: ${s.reason ?? 'no reason recorded'} — not re-driven`
+        : s.cycleOpen
+            ? `review cycle open after ${s.round} fix round(s) — re-enters at \`review\`, never at a replayed \`fix\``
+            : s.prNumber !== null
+                ? `story already carries PR #${s.prNumber} — continued on it, never a second PR`
+                : s.completed.length > 0
+                    ? `resuming: ${s.completed.join(', ')} already recorded complete`
+                    : 'no prior state recorded — full pipeline';
     return {
         id,
         redispatch,
         skipped: exports.PHASES.filter(p => done.has(p)),
         halted: s.halted,
         prNumber: s.prNumber,
+        round: s.round,
         note,
     };
 }
 exports.resumePlan = resumePlan;
-exports.COMMANDS = ['bind', 'cap', 'packet', 'collect', 'audit', 'resume'];
-function runCommand(command, req) {
-    if (command === 'bind')
-        return resolveRealization(req.probe ?? {});
-    if (command === 'cap')
-        return effectiveParallelism(req.ceilings);
-    if (command === 'packet')
-        return buildPacket(req.packet);
-    if (command === 'collect')
-        return collectOutcome(req.phase, req.result, req.schema);
-    if (command === 'audit')
-        return appendAudit(req.path, req.records ?? []);
-    const states = reconstructState(req.audit ?? '');
+exports.COMMANDS = ['bind', 'cap', 'packet', 'collect', 'converge', 'audit', 'resume'];
+function runResume(req) {
+    const states = reconstructState(req.audit ?? '', req);
     if (typeof req.id === 'string')
         return resumePlan(req.id, states[req.id]);
     return Object.keys(states).map(id => resumePlan(id, states[id]));
+}
+const HANDLERS = Object.freeze({
+    bind: req => resolveRealization(req.probe ?? {}),
+    cap: req => effectiveParallelism(req.ceilings),
+    packet: req => buildPacket(req.packet),
+    collect: req => collectOutcome(req.phase, req.result, req.schema),
+    converge: req => converge(req),
+    audit: req => appendAudit(req.path, req.records ?? []),
+    resume: runResume,
+});
+function runCommand(command, req) {
+    return HANDLERS[command](req);
 }
 function readStdin() {
     try {

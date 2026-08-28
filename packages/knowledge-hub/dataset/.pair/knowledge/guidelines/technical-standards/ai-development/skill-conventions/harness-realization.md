@@ -62,7 +62,7 @@ Each entry states, at minimum:
 | Bounding keys | Concurrency ceilings and timeout bounds the harness imposes |
 | Verified against | Which product build the entry was read off, and when |
 
-`Verified against` is not decoration: it is what tells the next maintainer whether a probe miss means "the vendor moved" or "this entry was always wrong". An entry nobody could verify ships with **no handles**, which is fail-closed by construction — nothing to probe, nothing binds, the cascade degrades.
+`Verified against` is not decoration: it is what tells the next maintainer whether a probe miss means "the vendor moved" or "this entry was always wrong". An entry nobody could verify is **not added to the map**: handles are what the cascade probes for, so an entry that cannot state a verified pair of them has nothing to contribute, and its absence is the fail-closed answer — nothing binds, the cascade degrades. Do not park an unverified guess in the map with placeholder handles; a handle nobody observed is exactly the inadmissible evidence the probe rule exists to keep out.
 
 ## Ceilings compose, they never replace
 

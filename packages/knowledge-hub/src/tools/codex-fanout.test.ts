@@ -4,12 +4,16 @@ import {
   assertBlind,
   auditLine,
   BLIND_DENY_PREFIXES,
+  blindDenyPrefixes,
   buildPacket,
   collectOutcome,
   COMMANDS,
+  converge,
   effectiveParallelism,
   HARNESS_SURFACE_MAP,
   main,
+  MAX_FIX_ROUNDS_DEFAULT,
+  OWED_PHASES,
   PacketRejected,
   PHASE_CONTRACTS,
   PHASES,
@@ -22,6 +26,7 @@ import {
   type AuditFs,
   type AuditRecord,
   type Card,
+  type Finding,
 } from './codex-fanout'
 
 /**
@@ -119,6 +124,19 @@ describe('probe → bind → announce', () => {
     })
     expect(binding.realization).toBe('codex-multi-agent-v2')
     expect(binding.primitive).toBe('agents.spawn')
+  })
+
+  it('applies the reported namespace only to the entry that HAS a renameable one', () => {
+    // The session exposes the default-on, un-namespaced toolset AND reports the other entry's
+    // configured namespace. Applying the override to every entry matched neither and degraded
+    // a session that had tier 1 — the whole fan-out lost to a false negative.
+    const binding = resolveRealization({
+      tools: ['spawn_agent', 'wait_agent'],
+      namespace: 'agents',
+    })
+    expect(binding.tier).toBe(REALIZATION_TIERS.IN_HARNESS)
+    expect(binding.realization).toBe('codex-multi-agent-v1')
+    expect(binding.primitive).toBe('spawn_agent')
   })
 
   it('does not bind a realization whose wait handle is missing', () => {
@@ -227,6 +245,15 @@ describe('context packets', () => {
       buildPacket({ phase: 'implement', card: CARD, attachments: ['/etc/passwd'] }),
     ).toThrow(/absolute/)
   })
+
+  it.each(['../secrets.md', '../../pair/.pair/working/checkpoints/441.md', '..'])(
+    'rejects an attachment that escapes the project — %s',
+    entry => {
+      expect(() => buildPacket({ phase: 'implement', card: CARD, attachments: [entry] })).toThrow(
+        /escapes the project/,
+      )
+    },
+  )
 })
 
 describe('reviewer blindness is a pre-spawn rejection', () => {
@@ -276,6 +303,48 @@ describe('reviewer blindness is a pre-spawn rejection', () => {
   it('is assertable on its own, independently of packet assembly', () => {
     expect(() => assertBlind(['.pair/working/x.md'], 'review')).toThrow(PacketRejected)
     expect(() => assertBlind(['src/index.ts'], 'review')).not.toThrow()
+  })
+
+  it('guards the project’s OWN working area when `working_path` overrides the default', () => {
+    // `.pair/scratch` is working-area.md's own documented override example. Against a
+    // hard-coded `.pair/working/` the packet below was accepted and the reviewer got the
+    // author's checkpoint — the rejection silently no-opped for every project that overrides.
+    expect(() =>
+      buildPacket({
+        phase: 'review',
+        card: CARD,
+        attachments: ['.pair/scratch/checkpoints/441.md'],
+        workingPath: '.pair/scratch',
+      }),
+    ).toThrow(/\.pair\/scratch/)
+  })
+
+  it('keeps the default area denied under an override — a moved area leaves the old one behind', () => {
+    expect(blindDenyPrefixes('.pair/scratch')).toEqual(['.pair/scratch/', '.pair/working/'])
+    expect(() =>
+      assertBlind(['.pair/working/checkpoints/441.md'], 'review', '.pair/scratch'),
+    ).toThrow(PacketRejected)
+  })
+
+  it('refuses a working path it cannot resolve rather than falling back to the default', () => {
+    for (const bad of ['/abs/working', '../outside', '.'])
+      expect(() => blindDenyPrefixes(bad)).toThrow(/project-relative/)
+    expect(blindDenyPrefixes(undefined)).toBe(BLIND_DENY_PREFIXES)
+    expect(blindDenyPrefixes('  ')).toBe(BLIND_DENY_PREFIXES)
+  })
+
+  it('rejects a parent-relative spelling of a denied path instead of prefix-matching past it', () => {
+    // Worktrees live at `../pair-worktrees/<id>`, so from a dispatched subagent's cwd the main
+    // checkout's working area IS `../../<repo>/.pair/working/...`. Prefix-matching the
+    // normalized string let that spelling through while the sibling `./.pair/working/../…` in
+    // the same call was rejected — the guard looked alive while the traversal passed.
+    expect(() =>
+      buildPacket({
+        phase: 'review',
+        card: CARD,
+        attachments: ['../../pair/.pair/working/checkpoints/441.md'],
+      }),
+    ).toThrow(PacketRejected)
   })
 })
 
@@ -336,6 +405,54 @@ describe('the result contract, fail-closed', () => {
     ).toBe('completed')
   })
 
+  it('lets an override TIGHTEN the phase contract, never replace it', () => {
+    // The party composing the request is the model itself. A replacing override turned the
+    // validation into whatever the model typed: `{"schema":{"type":"object"}}` accepted an
+    // EMPTY review return as completed/advances — and under `## Auto-Advance` that merges.
+    const collected = collectOutcome(
+      'review',
+      { status: 'completed', value: {} },
+      { type: 'object' },
+    )
+    expect(collected.outcome).toBe('failed-validation')
+    expect(collected.advances).toBe(false)
+    expect(collected.reason).toContain('verdict')
+  })
+
+  it('enforces an enum the generated contract locks, so a free-text verdict is rejected', () => {
+    const enumLocked = {
+      type: 'object',
+      properties: { verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] } },
+      required: ['verdict'],
+    }
+    expect(
+      collectOutcome(
+        'review',
+        { status: 'completed', value: { verdict: 'looks good to me' } },
+        enumLocked,
+      ).outcome,
+    ).toBe('failed-validation')
+    expect(
+      collectOutcome('review', { status: 'completed', value: { verdict: 'APPROVED' } }, enumLocked)
+        .outcome,
+    ).toBe('completed')
+  })
+
+  it('names an unknown phase as a declared terminal outcome, never as a raw TypeError', () => {
+    const collected = collectOutcome('deploy' as 'review', {
+      status: 'completed',
+      value: { verdict: 'APPROVED' },
+    })
+    expect(collected.outcome).toBe('failed-validation')
+    expect(collected.reason).toContain('unknown phase')
+    const { code, out } = main(
+      ['collect'],
+      JSON.stringify({ phase: 'deploy', result: { status: 'completed', value: {} } }),
+    )
+    expect(code).toBe(0)
+    expect(JSON.parse(out)).toMatchObject({ outcome: 'failed-validation', advances: false })
+  })
+
   it('reports every violation, not just the first', () => {
     expect(schemaViolations({}, PHASE_CONTRACTS.implement.schema)).toEqual([
       'value.gatesPassed is required and absent',
@@ -391,6 +508,124 @@ describe('terminal phase outcomes and bounded waits', () => {
   })
 })
 
+describe('review ↔ fix convergence', () => {
+  const finding = (severity: string, extra: Partial<Finding> = {}): Finding => ({
+    location: 'src/x.ts:1',
+    severity,
+    description: 'd',
+    ...extra,
+  })
+  const RANKS = { Critical: 4, Major: 3, Minor: 2, Questions: 1 }
+
+  it('never owes a fix on an approved review with nothing to fix', () => {
+    const decision = converge({ review: { verdict: 'APPROVED', findings: [] } })
+    expect(decision.action).toBe('converged')
+    expect(decision.actionable).toEqual([])
+  })
+
+  it('owes ONE fix round per review, and a re-review after it — never a single terminal fix', () => {
+    // Five actionable findings used to get exactly one fix round whose result was never
+    // re-reviewed: all four phases recorded complete, the card treated as converged, and under
+    // `## Auto-Advance` that PR merged with nobody having looked at the fixes.
+    const findings = ['Major', 'Major', 'Minor', 'Minor', 'Minor'].map(s => finding(s))
+    let round = 0
+    const rounds: string[] = []
+    for (let i = 0; i < 5; i++) {
+      const decision = converge({ review: { verdict: 'CHANGES-REQUESTED', findings }, round })
+      rounds.push(decision.action)
+      if (decision.action !== 'fix') break
+      round = decision.round
+    }
+    expect(rounds).toEqual(['fix', 'fix', 'fix', 'escalate'])
+    expect(round).toBe(MAX_FIX_ROUNDS_DEFAULT)
+  })
+
+  it('escalates at the cap, naming what is still open', () => {
+    const decision = converge({
+      review: { verdict: 'CHANGES-REQUESTED', findings: [finding('Major')] },
+      round: MAX_FIX_ROUNDS_DEFAULT,
+    })
+    expect(decision.action).toBe('escalate')
+    expect(decision.reason).toContain('still open')
+  })
+
+  it('honours a caller-configured cap instead of the default', () => {
+    expect(
+      converge({
+        review: { verdict: 'CHANGES-REQUESTED', findings: [finding('Major')] },
+        round: 1,
+        maxFixRounds: 1,
+      }).action,
+    ).toBe('escalate')
+  })
+
+  it('spends one fix round before escalating a `needsHumanDecision`, then escalates', () => {
+    const review = {
+      verdict: 'CHANGES-REQUESTED',
+      needsHumanDecision: true,
+      findings: [finding('Major')],
+    }
+    const first = converge({ review })
+    expect(first).toMatchObject({ action: 'fix', humanDecisionPending: true, round: 1 })
+    const second = converge({ review, round: first.round, humanDecisionPending: true })
+    expect(second.action).toBe('escalate')
+    expect(second.reason).toContain('genuine disagreement')
+  })
+
+  it('escalates a review with no verdict instead of reading zero findings as approval', () => {
+    for (const review of [null, undefined, {}, { findings: [] }, { verdict: '  ' }])
+      expect(converge({ review }).action).toBe('escalate')
+    expect(converge({ review: {} }).reason).toContain('no verdict')
+  })
+
+  it('never counts a by-design finding as owed work', () => {
+    const decision = converge({
+      review: {
+        verdict: 'APPROVED',
+        findings: [finding('Major', { nonActionable: true }), finding('Minor')],
+      },
+      severityFloor: 'Major',
+      severityRanks: RANKS,
+    })
+    expect(decision.action).toBe('converged')
+    expect(decision.nonActionable).toHaveLength(1)
+    expect(decision.belowFloor).toHaveLength(1)
+  })
+
+  it('blocks on everything actionable when no floor is declared', () => {
+    expect(converge({ review: { verdict: 'X', findings: [finding('Minor')] } }).action).toBe('fix')
+  })
+
+  it('blocks on a finding whose severity the ranks do not name — the safe direction', () => {
+    const decision = converge({
+      review: { verdict: 'X', findings: [finding('Blocker')] },
+      severityFloor: 'Major',
+      severityRanks: RANKS,
+    })
+    expect(decision.action).toBe('fix')
+    expect(decision.actionable).toHaveLength(1)
+    expect(decision.belowFloor).toEqual([])
+  })
+
+  it('refuses a floor it cannot rank rather than guessing an order', () => {
+    expect(() => converge({ review: { verdict: 'X' }, severityFloor: 'Major' })).toThrow(
+      /never inferred/i,
+    )
+    expect(() =>
+      converge({ review: { verdict: 'X' }, severityFloor: 'Blocker', severityRanks: RANKS }),
+    ).toThrow(/not ranked/)
+  })
+
+  it('answers the converge command from the CLI', () => {
+    const { code, out } = main(
+      ['converge'],
+      JSON.stringify({ review: { verdict: 'APPROVED', findings: [] } }),
+    )
+    expect(code).toBe(0)
+    expect(JSON.parse(out)).toMatchObject({ action: 'converged' })
+  })
+})
+
 describe('audit persistence', () => {
   const record: AuditRecord = { iteration: 0, id: '441', phase: 'implement', outcome: 'completed' }
 
@@ -438,7 +673,98 @@ describe('resume', () => {
   it('re-dispatches only the phases not recorded complete', () => {
     const plan = resumePlan('441', reconstructState(audit)['441'])
     expect(plan.skipped).toEqual(['implement', 'pr'])
-    expect(plan.redispatch).toEqual(['review', 'fix'])
+    expect(plan.redispatch).toEqual(['review'])
+  })
+
+  it('never owes a phantom `fix` — a fix is owed by findings, not by a plan', () => {
+    for (const id of ['441', '999'])
+      expect(resumePlan(id, reconstructState(audit)[id]).redispatch).not.toContain('fix')
+  })
+
+  it('re-enters an open review cycle at `review`, so the fixes are re-reviewed', () => {
+    const open = [
+      { run: 'r1', iteration: 0, id: '441', phase: 'implement', outcome: 'completed' },
+      { run: 'r1', iteration: 0, id: '441', phase: 'pr', outcome: 'completed', prNumber: 700 },
+      {
+        run: 'r1',
+        iteration: 0,
+        id: '441',
+        phase: 'review',
+        outcome: 'completed',
+        action: 'fix',
+        round: 1,
+      },
+      { run: 'r1', iteration: 0, id: '441', phase: 'fix', outcome: 'completed', round: 1 },
+    ]
+      .map(r => JSON.stringify(r))
+      .join('\n')
+    const plan = resumePlan('441', reconstructState(open)['441'])
+    expect(plan.redispatch).toEqual(['review'])
+    expect(plan.round).toBe(1)
+    expect(plan.note).toContain('re-enters at `review`')
+  })
+
+  it('halts a card whose review cycle escalated to a human', () => {
+    const escalated = JSON.stringify({
+      run: 'r1',
+      iteration: 0,
+      id: '441',
+      phase: 'review',
+      outcome: 'completed',
+      action: 'escalate',
+      reason: 'non-convergence',
+    })
+    expect(resumePlan('441', reconstructState(escalated)['441']).halted).toBe(true)
+  })
+
+  it('retires a halt once a later record completes the SAME phase', () => {
+    // implement timed out at iteration 1 and completed at iteration 2. Reading the audit whole
+    // with a halt flag that is never cleared refused the card anyway.
+    const retried = [
+      { iteration: 1, id: '441', phase: 'implement', outcome: 'timed-out' },
+      { iteration: 2, id: '441', phase: 'implement', outcome: 'completed' },
+    ]
+      .map(r => JSON.stringify(r))
+      .join('\n')
+    const plan = resumePlan('441', reconstructState(retried)['441'])
+    expect(plan.halted).toBe(false)
+    expect(plan.skipped).toEqual(['implement'])
+    expect(plan.redispatch).toEqual(['pr', 'review'])
+  })
+
+  it('scopes a halt to the run that recorded it — Monday’s timeout is not Tuesday’s refusal', () => {
+    // The audit is ONE persistent append-only project file. Unscoped, a review that timed out
+    // once refused the card in EVERY later invocation, forever, and only hand-editing an
+    // append-only file unblocked it — stricter than the in-harness lane, whose exclusion is
+    // scoped to "every later iteration in the same run".
+    const history = [
+      { run: 'monday', iteration: 0, id: '441', phase: 'review', outcome: 'timed-out' },
+      { run: 'monday', iteration: 0, id: '442', phase: 'review', outcome: 'timed-out' },
+    ]
+      .map(r => JSON.stringify(r))
+      .join('\n')
+    expect(resumePlan('441', reconstructState(history, { run: 'tuesday' })['441']).halted).toBe(
+      false,
+    )
+    // Within its own run the exclusion still holds.
+    expect(resumePlan('441', reconstructState(history, { run: 'monday' })['441']).halted).toBe(true)
+    // With no run named, the audit's own last run is the boundary.
+    expect(resumePlan('442', reconstructState(history)['442']).halted).toBe(true)
+  })
+
+  it('scopes a halt by iteration when the caller counts iterations instead of runs', () => {
+    const history = [
+      { iteration: 1, id: '441', phase: 'review', outcome: 'timed-out' },
+      { iteration: 4, id: '441', phase: 'implement', outcome: 'completed' },
+    ]
+      .map(r => JSON.stringify(r))
+      .join('\n')
+    expect(resumePlan('441', reconstructState(history, { sinceIteration: 4 })['441']).halted).toBe(
+      false,
+    )
+    expect(resumePlan('441', reconstructState(history, { sinceIteration: 0 })['441']).halted).toBe(
+      true,
+    )
   })
 
   it('never re-opens a PR for a story that already carries one', () => {
@@ -455,7 +781,7 @@ describe('resume', () => {
 
   it('runs the full pipeline for a card the audit never mentions', () => {
     const plan = resumePlan('999', reconstructState(audit)['999'])
-    expect(plan.redispatch).toEqual([...PHASES])
+    expect(plan.redispatch).toEqual([...OWED_PHASES])
     expect(plan.note).toContain('full pipeline')
   })
 
@@ -523,7 +849,15 @@ describe('the command surface', () => {
     expect(main(['bind'], 'not json').code).toBe(1)
   })
 
-  it('declares exactly the six commands the skill invokes', () => {
-    expect([...COMMANDS]).toEqual(['bind', 'cap', 'packet', 'collect', 'audit', 'resume'])
+  it('declares exactly the seven commands the skill invokes', () => {
+    expect([...COMMANDS]).toEqual([
+      'bind',
+      'cap',
+      'packet',
+      'collect',
+      'converge',
+      'audit',
+      'resume',
+    ])
   })
 })
