@@ -14,6 +14,15 @@ export interface SkillArguments {
   filter?: string
   predicate?: string
   iteration?: number
+  /**
+   * The non-interactive approval signal (ADR-021), borrowed from the skills that declare it.
+   *
+   * A closed enum, sourced from the driver's own `--autonomous` flag and never from operator text
+   * — so it does not extend the prompt-injection surface the borrowed VALUES do. Absent means
+   * `interactive` by the signal's own default, which is why the non-autonomous path passes nothing
+   * at all rather than passing `interactive` explicitly (US-464 AC2).
+   */
+  approval?: 'interactive' | 'auto'
 }
 
 type SkillParameterMap = Readonly<Partial<Record<keyof SkillArguments, string>>>
@@ -37,8 +46,57 @@ export const SKILL_PARAMETERS: Readonly<Record<string, SkillParameterMap>> = Obj
  */
 const UNKNOWN_SKILL_PARAMETERS: SkillParameterMap = { root: '--root', filter: '--filter' }
 
+/**
+ * How `approval` is spelled on the wire, once (US-464).
+ *
+ * Kept beside the family below rather than inlined, so the anti-drift assertion can read every
+ * parameter name this driver may spell from ONE place — a flag that only exists inside a function
+ * body is a flag that assertion cannot see.
+ */
+export const APPROVAL_PARAMETER: SkillParameterMap = Object.freeze({ approval: '--approval' })
+
+/**
+ * Which skills DECLARE `$approval` — the family ADR-021 converted, as DATA (AC5).
+ *
+ * Nine `assess-*` members with an approval round plus both `map-*` skills. Deliberately absent:
+ * `assess-cost` and `assess-coupling` (no approval round at all — ADR-021's gate is defect-driven,
+ * not name-driven, so the corpus carries no argument nothing honours), and every CALLER that merely
+ * forwards the signal — `bootstrap`'s quick depth passes `$approval: auto` to this family without
+ * declaring it itself, and `refine-story` is ADR-021's untracked residual, which still asks.
+ *
+ * Adding or removing a member is a one-line data edit here and one in tier 1's own list
+ * (`.claude/workflows/pair-loop.js`); `tier-parity.test.ts` fails if the two disagree, and
+ * `invocation.test.ts` fails if either disagrees with the skills' own `## Arguments` tables. That
+ * corpus check is what keeps a hardcoded list about someone else's declaration honest.
+ */
+export const APPROVAL_DECLARING_SKILLS: ReadonlySet<string> = Object.freeze(
+  new Set([
+    'pair-capability-assess-ai',
+    'pair-capability-assess-architecture',
+    'pair-capability-assess-infrastructure',
+    'pair-capability-assess-methodology',
+    'pair-capability-assess-observability',
+    'pair-capability-assess-pm',
+    'pair-capability-assess-security',
+    'pair-capability-assess-stack',
+    'pair-capability-assess-testing',
+    'pair-capability-map-contexts',
+    'pair-capability-map-subdomains',
+  ]),
+)
+
+/**
+ * The parameters one skill may receive.
+ *
+ * `approval` is MERGED onto whatever the skill already had rather than replacing it, and that is
+ * the whole reason the family is a separate list instead of eleven `SKILL_PARAMETERS` rows: an
+ * explicit row per member would have overridden `UNKNOWN_SKILL_PARAMETERS` and silently cost every
+ * one of them the `--root`/`--filter` scoping it receives today — a drift on the NON-autonomous
+ * path, which is exactly what AC2 forbids.
+ */
 function parametersFor(skill: string): SkillParameterMap {
-  return SKILL_PARAMETERS[skill] ?? UNKNOWN_SKILL_PARAMETERS
+  const declared = SKILL_PARAMETERS[skill] ?? UNKNOWN_SKILL_PARAMETERS
+  return APPROVAL_DECLARING_SKILLS.has(skill) ? { ...declared, ...APPROVAL_PARAMETER } : declared
 }
 
 /**
@@ -73,23 +131,52 @@ function renderValue(value: string): string {
   return `"${value.replace(/(["\\])/g, '\\$1')}"`
 }
 
+/**
+ * The order borrowed values are rendered in — DATA, so a new one is a row here rather than a fifth
+ * hand-written branch in the loop below (which is what tipped this function over the complexity
+ * limit when `approval` arrived). Same philosophy as `SKILL_PARAMETERS` and `ENGINES`: the shape of
+ * the invocation is a table, not a chain of conditionals.
+ */
+const PARAMETER_ORDER: readonly (keyof SkillArguments)[] = [
+  'root',
+  'filter',
+  'predicate',
+  'iteration',
+  'approval',
+]
+
 /** The skill's own arguments, in a stable order, dropping anything it does not declare. */
 export function buildSkillArgs(skill: string, args: SkillArguments): string[] {
   const parameters = parametersFor(skill)
   const parts: string[] = []
-  if (args.root !== undefined && parameters.root) {
-    parts.push(parameters.root, renderValue(args.root))
-  }
-  if (args.filter !== undefined && parameters.filter) {
-    parts.push(parameters.filter, renderValue(args.filter))
-  }
-  if (args.predicate !== undefined && parameters.predicate) {
-    parts.push(parameters.predicate, renderValue(args.predicate))
-  }
-  if (args.iteration !== undefined && parameters.iteration) {
-    parts.push(parameters.iteration, String(args.iteration))
+  for (const key of PARAMETER_ORDER) {
+    const parameter = parameters[key]
+    const value = args[key]
+    if (parameter === undefined || value === undefined) continue
+    // A number has no delimiter problem and never took quotes; every string value goes through
+    // `renderValue`, exactly as each hand-written branch did before this became a loop.
+    parts.push(parameter, typeof value === 'number' ? String(value) : renderValue(value))
   }
   return parts
+}
+
+/**
+ * Whether this invocation will carry `--approval`, and why — for the pre-spawn preview (AC6).
+ *
+ * Same transparency principle as the engine-resolution line: a surprising posture must be visible
+ * BEFORE anything spawns, and "the skill will ask nobody for approval" is exactly that. Returns
+ * `undefined` when the resolved skill declares no approval round, because a line about an argument
+ * that cannot be passed is noise on every run that does not involve the family.
+ */
+export function describeApprovalPosture(
+  invocation: ResolvedInvocation,
+  autonomous: boolean,
+): string | undefined {
+  if (invocation.kind === 'prompt') return undefined
+  if (!APPROVAL_DECLARING_SKILLS.has(invocation.name)) return undefined
+  return autonomous
+    ? `Approval: --approval auto will be passed (${invocation.name} declares it; --autonomous is set)`
+    : `Approval: nothing passed — ${invocation.name} keeps its interactive default (no --autonomous)`
 }
 
 /**

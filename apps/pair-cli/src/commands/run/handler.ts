@@ -22,7 +22,7 @@ import {
   readAutomationPolicy,
   type AutomationPolicy,
 } from './automation-policy'
-import { buildPromptText, skillAcceptsFilter } from './invocation'
+import { buildPromptText, describeApprovalPosture, skillAcceptsFilter } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
 import type { IterationResult } from './stream-reader'
@@ -106,6 +106,10 @@ function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void 
   console.log(`  ${describeSkillResolution(resolved.invocation)}`)
   console.log(`  ${describePerimeter(resolved.perimeter)}`)
   for (const note of resolved.autonomy.notes) console.log(`  ${note}`)
+  // Next to the autonomy notes, because it is the OTHER thing `--autonomous` decides (AC6): a run
+  // whose composed skill will approve its own proposals unattended must say so before it spawns.
+  const approval = describeApprovalPosture(resolved.invocation, resolved.autonomy.autonomous)
+  if (approval !== undefined) console.log(`  ${approval}`)
   console.log(`  Policy: ${resolved.policy.source} · audit ${resolved.policy.auditLocation}`)
   console.log(`  ${describeParallelism(resolved.policy)}`)
   // Truthful per POLICY, not a blanket claim: with a tier under `## Auto-Advance` the invoked
@@ -177,6 +181,12 @@ function driveIteration(
       predicate: resolved.policy.stopPredicate,
     }),
     iteration: context.iteration,
+    // ONE operator intent, two axes (US-464): `--autonomous` already governs the ENGINE's
+    // permission posture; it governs the composed SKILL's approval round too, because "nobody is
+    // watching this run" is the same fact in both places. Passed only when the posture is
+    // autonomous — an absent `$approval` IS the `interactive` default (ADR-021), so the
+    // non-autonomous path renders exactly the bytes it rendered before this story (AC2).
+    ...(resolved.autonomy.autonomous && { approval: 'auto' as const }),
   })
 
   const run = deps.runIteration ?? spawnIteration
