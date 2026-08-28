@@ -37,12 +37,12 @@ Both outcomes leave the checklist exactly as it was. **Never guess-tick**: a tic
 
 The patch is a single-line edit. On the matched line, and on nothing else, `[ ]` becomes `[x]`; **every other byte of the body is identical** to the body that was just read — same sections, same ordering, same trailing whitespace, same Definition-of-Done boxes.
 
-Three properties make that a rule rather than an intention:
+Four properties make that a rule rather than an intention:
 
 1. **The transport is a full-body overwrite.** `/write-issue`'s write mode replaces the body with what the caller passes, so the caller must pass the current body with the one line patched — read, patch, write. Nothing about the transport prevents a re-rendered body from replacing the story's acceptance criteria; the caller's own care is the only thing that does.
 2. **The write is diff-checked before it is sent.** Compare the patched body against the body just read: the diff must be exactly one line, and that line must differ only in its checkbox marker. A diff of any other shape is a bug in the patch, and the write is **abandoned** (recorded as `patch-rejected` in the batch), never sent hopefully.
 3. **One write per checkbox.** The single-line diff is the shape of one *write*, not of one task: a task that ticks its own item **and** a Definition-of-Done box is **two** sequential read-patch-write cycles, each with its own fresh read and its own one-line diff check. Batching both boxes into one body would present a two-line diff, the check would reject it, and the task's own tick would be lost with it — a `patch-rejected` reported over work that was entirely correct.
-4. **The patch never unticks.** An item **already ticked** (`[x]`) is already in the target state: no body write is sent at all, and the task is reported as ticked. That is what makes a re-run — a resumed story, a re-invocation after a context reset — free of writes and free of noise.
+4. **The patch never unticks.** An item **already ticked** (`[x]`) is already in the target state: no body write is sent at all. Whether it is also *reported* depends on the invocation, never on the checkbox: a task **this invocation** completed and found already ticked is queued as `ticked`; a task this invocation did not attempt is **neither re-written nor queued**. That is what makes a re-run — a resumed story, a re-invocation after a context reset — free of writes, and (when it did no work) free of comment.
 
 Definition-of-Done boxes are patched by the same rule — its own write, its own diff check — when a task factually satisfies one; boxes that need a reviewer's judgment stay unticked.
 
@@ -73,7 +73,7 @@ Rules the shape encodes:
 
 - **One line per task, and the line is the whole story for a reader who does not expand.** Outcome glyph, task ID, title, and — for anything other than a plain success — a short reason on the same line.
 - **Everything longer goes in `<details>`**: error output, retry traces, locator mismatch diagnostics. No stack trace, no command transcript, and no diff outside the collapsed block.
-- **An empty batch posts nothing.** An invocation that completed no task leaves no comment — a re-run that finds every task already done is silent, which is what keeps an idempotent re-invocation from accreting one "nothing to report" comment per attempt.
+- **An empty batch posts nothing.** The queue holds only what **this invocation** attempted: an item already `[x]` for a task this invocation did not attempt is neither re-written nor queued. So an invocation that completed no task leaves no comment — a re-run that finds every task already done is silent, which is what keeps an idempotent re-invocation from accreting one "nothing to report" comment per attempt.
 - **Never a second comment.** More detail belongs in `<details>`, never in another comment; the loop has no verbosity level that turns one comment into several.
 
 Verbosity and cadence are the defaults, not a law: a project that wants something else declares it in its own adoption. Absent a declaration, this is what runs.
@@ -91,6 +91,8 @@ Every queued line carries exactly one outcome from this closed set, and the outc
 | `ambiguous` | The locator matched more than one line for this ID | stays unticked |
 | `patch-rejected` | The patch diff was not a single checkbox-only line change, so the write was abandoned | stays unticked |
 | `write-failed` | The body write was attempted and did not land, retries included | stays unticked |
+
+`skipped` is produced at **task selection**, not at task completion: the caller queues it when it declines to attempt a task at all — an unmet dependency, a deferral, work put out of scope mid-run — and carries on to the next task. It is **never the outcome of an attempt** that did not land; that is `failed`. Both halves matter: a deliberate deferral reported as `failed` misnames it, and one left out of the batch shrinks the "N of M tasks this iteration" headline without saying why.
 
 The three write-path outcomes (`not-found`, `ambiguous`, `write-failed`) say nothing about the work: the task may well be done. The line reports the **feedback** failure and names the ID it could not tick, so a human can tick it by hand — and the run carries on.
 

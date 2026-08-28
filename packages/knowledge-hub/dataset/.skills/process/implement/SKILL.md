@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /verify-quality, /record-decision, /checkpoint, /publish-pr."
-version: 0.7.1
+version: 0.7.2
 author: Foomakers
 ---
 
@@ -141,7 +141,8 @@ Process tasks **sequentially**, one at a time. For each task:
 
 1. **Check**: Scan all tasks in dependency order. Find the first task that is not yet completed.
    - A task is "completed" if its checklist item is marked ✅ in the story AND (if commit-per-task) the commit exists on the branch.
-2. **Skip**: If all tasks are completed, move to Phase 3.
+   - A task that **cannot be attempted this iteration** — an unmet dependency, an external blocker, work the developer defers or puts out of scope — is neither a HALT nor a failure: **queue it as `skipped`** with its one-line reason (the vocabulary is [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)'s), leave its checklist item unticked, and continue the scan to the next task. `failed` is for a task that was attempted and did not land: a deliberate deferral reported as `failed` misnames it, and one left silent shrinks the iteration's headline count without saying why.
+2. **Skip**: If no task remains that this iteration can attempt — all completed, or the rest queued as `skipped` — move to Phase 3.
 3. **Act**: Set the active task. Update session state:
 
    ```text
@@ -220,7 +221,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 ### Step 2.8: Task Completion
 
 1. **Check**: Is the commit strategy `commit-per-task`?
-2. **Skip**: If `commit-per-story`, continue to next task — return to Step 2.1. No inter-task confirmation.
+2. **Skip**: If `commit-per-story`, there is no inter-task confirmation and no commit here — but **still apply item 7 (tick and queue) and item 8** for the task just completed, then go to item 9. The tick-and-queue is not a property of the commit strategy: a 4-task `commit-per-story` story whose gate goes red on T3 (Step 2.7 → HALT) would otherwise queue only the failure, and the body would still show `- [ ] T1`, `- [ ] T2` over finished work — the state where "on task 3 of 4" and "failed on task 2" look identical, which is what this loop exists to end. Step 1.3 auto-selects this strategy for every single-task story, so it is the common path, not an exotic one. (The tick records the task's **work** as done, not a commit: on this strategy the single commit lands at Step 3.1, and Step 2.1's completion check requires a commit only under `commit-per-task`.)
 3. **Act** (BLOCKING): Present task summary and **ask developer for confirmation BEFORE committing**:
 
    ```text
@@ -247,7 +248,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    ```
 
 6. **Verify**: Commit created.
-7. **Act — tick and queue** (the task-progress feedback loop, per [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md); the mechanism is **not** restated here):
+7. **Act — tick and queue** (**every strategy** — item 2 routes `commit-per-story` through here too; the task-progress feedback loop, per [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md); the mechanism is **not** restated here):
    - Locate the task's checklist item in the **Task Breakdown** section by its **task ID**, and tick it (`- [ ]` → `- [x]`) with the tick-only, diff-checked patch the guideline defines. Mark any **Definition of Done** checkbox now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated") by the same rule — **one write per checkbox**, each with its own read and its own one-line diff check, never two boxes in one body; leave the ones needing reviewer confirmation (e.g., "Code reviewed and merged").
    - **Queue** the task's outcome line for this invocation's batched comment — `ticked`, or the outcome the guideline's vocabulary gives when the tick did not land. The queue is flushed once, at Step 3.1b.
    - **Never blocking**: a locator mismatch, a rejected patch or a failed write is queued and the run continues. A missing tick is a reporting defect, never a reason to stop implementing.
@@ -288,7 +289,7 @@ The task cycle is done. The closing phase writes the checkpoint (handoff artifac
    ```
 
 6. **Verify**: Commit created with all changes.
-7. **Act — tick and queue**: apply Step 2.8's item 7 once per completed task — same locator, same tick-only patch, same queued outcome line. Leave Definition-of-Done boxes that require reviewer confirmation unchecked.
+7. **Act — tick and queue (catch-up only)**: every task completed **in this invocation** was already ticked and queued at Step 2.8 item 7, on either strategy. Apply that item here only to a task completed **in this invocation** that did not reach it (an interrupted pass) — same locator, same tick-only patch, same queued outcome line. A task this invocation never attempted — already `[x]` from an earlier one — is **neither re-written nor queued**: a re-invocation that found everything done must reach Step 3.1b with an empty queue and post nothing, instead of accreting one identical progress comment per attempt. Leave Definition-of-Done boxes that require reviewer confirmation unchecked.
 
 ### Step 3.1b: Flush the Task-Progress Comment
 
