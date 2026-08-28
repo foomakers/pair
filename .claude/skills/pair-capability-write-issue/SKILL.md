@@ -1,7 +1,7 @@
 ---
 name: pair-capability-write-issue
 description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, /pair-process-plan-stories, /pair-capability-publish-pr."
-version: 0.10.0
+version: 0.11.0
 author: Foomakers
 ---
 
@@ -23,9 +23,10 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
 | `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. **Ignored in `comment` mode** (Step 6 and the board write never run — comment mode touches no board field). |
 | `$labels`  | No       | Additional **topical** labels to apply alongside the type label, e.g. `tech-debt` when a debt or quality finding is promoted to the backlog deliberately. A list of label names (created if the PM tool supports it). **Ignored in `comment` mode** (Step 7.2 never runs — labels are left byte-identical). |
+| `$on-failure` | No     | What a **tracker-side** failure does in write mode. `halt` (default) — it **HALTs**, as every other caller of this skill expects. `report` — it is **returned to the caller** as an outcome (`not-found`, `membership-unconfirmed`, `write-failed`) and this skill returns instead of HALTing (Step 8b). Only legitimate when the write is an **additive annotation** whose loss degrades the caller's reporting and invalidates none of its work — today exactly one composition passes it: `/pair-process-implement`'s task-progress **tick**. It exempts the three tracker-side HALTs **only** (Step 7 not-found, Step 7b beat 4 membership, Step 8 error); argument and configuration HALTs (Steps 1, 3, 6) still fire. **Ignored in `comment` mode**, which already warns instead of HALTing. |
 | `$assignee` | No      | Who the item is **assigned to** — a login/identifier the PM tool accepts. Resolved through the cascade in Step 6b (the argument first, then the adoption default, then none) and written **as part of the create and of the update, never as a follow-up step**. Absent or unresolvable ⇒ the item is still written, unassigned, with a warning. **Ignored in `comment` mode** (an existing item's assignee is never touched by a comment). |
 
-**In `comment` mode only `$id` and `$comment` are read**; `$type`, `$content`, `$status`, `$labels`, `$assignee` and `$parent` are ignored — passing one is a caller mistake, never a partial write.
+**In `comment` mode only `$id` and `$comment` are read**; `$type`, `$content`, `$status`, `$labels`, `$assignee` and `$parent` are ignored — passing one is a caller mistake, never a partial write. `$on-failure` is ignored there too, for a different reason: comment mode already warns instead of HALTing, so there is nothing left for it to exempt.
 
 ## Algorithm
 
@@ -152,7 +153,7 @@ The board is read **filtered by assignee**, so an item with no assignee is invis
    - Record the new issue identifier for return, then **re-read the created item** and report the assignee and labels the read observed (a create is a write, so the invariant above applies to it too).
 3. **Act (Update)**:
    - Read the existing issue to confirm it exists.
-   - If not found → **HALT**: `Issue #$id not found.`
+   - If not found → **HALT**: `Issue #$id not found.` — **unless `$on-failure: report`**, which returns `not-found` to the caller instead (Step 8b) and writes nothing.
    - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). That contract is also what makes a comment durable where the item **is** a file: on `filesystem` the back-link lives in the body's `## Activity Log` section, so a later write-mode render preserves it only because the caller read-merges the current body first — dropping the section is a caller bug, not an accepted behavior. Comment mode (Step 7c) never reaches here and never writes the body.
    - Preserve existing labels and hierarchy links unless explicitly changed.
    - Apply the assignee resolved in Step 6b **conditionally**: write it when the caller passed `$assignee` **explicitly**, or when the read above shows the item currently has **no** assignee. Otherwise **leave the existing assignee untouched** — an item deliberately assigned to someone else must not be reassigned as a side effect of a body update (the adoption default would otherwise silently pull every updated item back to the maintainer and out of that person's filtered view — the same invisibility failure, inverted). Resolved to none ⇒ leave whatever assignee the item already has; never clear one. Whether the adapter's call **adds** to or **replaces** the assignee set is the adapter's concern, documented in its guide — this skill states only which value applies and when.
@@ -171,6 +172,8 @@ The order is **membership, then a read that confirms it, then the state field**.
 4. **Act — the read is still negative** ⇒ **HALT**:
 
    > Board membership not established — item `$id` **could not be confirmed** as a member of `[view]` after adding it (`[tool's last response]`); no board state was written either. The item itself exists and is off the board: add it to the view manually, or re-invoke. A skipped board write is **never reported as success**.
+
+   **`$on-failure: report` exempts this beat** — return `membership-unconfirmed` (Step 8b) with the same text on the `Board` row, and do not HALT. These beats run on **every** write-mode write, board state requested or not (the preamble above), so on an explicit-membership tool they sit in the path of writes that never asked to touch the board at all: an additive annotation would otherwise be sunk — and its caller stopped — by a bookkeeping read on a board it has no business with. The item's own write already landed and was confirmed by its own read in Step 7. The item is still off the board and the caller is still told exactly that: reported, never laundered into success.
 
 5. **Act — write the state field**, **only when Step 6 resolved one**, to the board state it resolved, per the implementation guide (e.g. the GraphQL mutation for GitHub Projects). This is the **board field**, never body text. **No board state was resolved** (no `$status` was passed) ⇒ stop here and report the membership the read in 3 confirmed, with **no state written** — the item is on the board, its column is whatever the tool's own default is, and nothing claims otherwise.
 6. **Act — read the field back** and report the value the read returned. **A read-back that does not match the target is a failure**, not a success: report it as one rather than trusting the mutation's own response.
@@ -196,12 +199,27 @@ The **non-destructive** path: it appends a comment to the item and writes nothin
 ### Step 8: Handle Errors
 
 1. **Check**: Did the PM tool return an error during Step 7?
-2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here.
+2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here. **`$on-failure: report` is exempt too** — the error is returned as `write-failed` (Step 8b), not raised.
 3. **Act**: **HALT** with descriptive error:
 
    > PM tool error: `[error description]`. No fallback to alternative tools — resolve the issue with the adopted PM tool and re-invoke.
 
 4. **Verify**: Error reported to developer.
+
+### Step 8b: Report, Don't Raise (`$on-failure: report`)
+
+A **HALT propagates**: it stops the composed skill and the caller that composed it. That is right for a caller whose work the write **is** — a story that was not filed did not happen. It is wrong for a caller whose write is an **additive annotation**, where the loss degrades reporting and invalidates nothing: stopping that caller trades a whole run for a bookkeeping line. Such a caller passes `$on-failure: report`, and the three **tracker-side** failures above become returned values instead of this skill's HALT:
+
+| Failure | Where | Returned outcome |
+| --- | --- | --- |
+| `$id` does not resolve | Step 7 (update) | `not-found` — nothing was written |
+| Board membership could not be confirmed by the re-read | Step 7b beat 4 | `membership-unconfirmed` — the item write landed, the board add did not |
+| The PM tool returned an error | Step 8 | `write-failed` — the write did not land |
+
+1. **Act**: Report the outcome on the `Status` row (`Reported — <outcome>`) with the tool's own message, keep the `Board` / `Labels` / `Assignee` rows on what the reads observed, and **return**. **No HALT.**
+2. **Act — no retry here.** The retry budget belongs to the caller, which is the only party that knows how many attempts its own loop allows and what to record when they are spent. This skill reports once and returns.
+3. **Act — the exemption is narrow, and stays narrow.** Steps 1, 3 and 6 still HALT: an unsupported `$type`, a missing template and a malformed `state-mapping` are **caller or configuration bugs** — deterministic, identical on every re-invocation, and reporting them would hand the caller an outcome it can only re-trigger. Only the **tracker-side**, intermittent failures in the table are reported.
+4. **Verify**: Either the write was confirmed by its read as usual, or exactly one of the three outcomes above was returned — and in neither case did this skill HALT.
 
 ## Output Format
 
@@ -215,8 +233,8 @@ ISSUE WRITTEN:
 ├── Parent:   [parent issue ID | "none" | n-a (comment mode)]
 ├── Labels:   [type label + topical labels — confirmed by read | dropped by tracker: label — finding | n-a (comment mode)]
 ├── Assignee: [login — confirmed by read | unchanged: login — confirmed by read | none — WARNING: invisible in an assignee-filtered view | n-a (comment mode)]
-├── Board:    [board state — confirmed by read | member of <view> — confirmed by read; no state written (no $status) | n-a (no tracked view) | n-a (implicit membership; no $status, or no board state maps to the macrostate — readiness falls back to the item body) | HALT — reason]
-└── Status:   [Success | HALT — reason]
+├── Board:    [board state — confirmed by read | member of <view> — confirmed by read; no state written (no $status) | n-a (no tracked view) | n-a (implicit membership; no $status, or no board state maps to the macrostate — readiness falls back to the item body) | membership-unconfirmed — reported, not raised ($on-failure: report) | HALT — reason]
+└── Status:   [Success | Reported — not-found | membership-unconfirmed | write-failed (Step 8b, $on-failure: report) | HALT — reason]
 ```
 
 The `Board` row reports **membership and state separately** on purpose: an item can be a confirmed member of the tracked view with no state written (the create path, no `$status`), and a row that could only say "state" or `n-a` would render that item as absent from a board it is on.
@@ -288,9 +306,9 @@ When composed by `/pair-process-plan-stories`:
 
 When composed by `/pair-process-implement` (the task-progress feedback loop, [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)):
 
-- **Input, per task (the tick)**: `$type: story`, `$id: [story-id]`, `$content` = the story's **current full body with exactly one checklist line patched** (`[ ]` → `[x]`) by the caller. The same read-merge contract `/pair-process-plan-tasks` is held to, applied to a single line: this skill overwrites the body with what it is given, so a caller that re-renders instead of patching destroys the story's AC/DoD/task breakdown. `/pair-process-implement` diff-checks its own patch before composing here, and abandons a write whose diff is not one checkbox-only line.
+- **Input, per task (the tick)**: `$type: story`, `$id: [story-id]`, **`$on-failure: report`**, `$content` = the story's **current full body with exactly one checklist line patched** (`[ ]` → `[x]`) by the caller. The same read-merge contract `/pair-process-plan-tasks` is held to, applied to a single line: this skill overwrites the body with what it is given, so a caller that re-renders instead of patching destroys the story's AC/DoD/task breakdown. `/pair-process-implement` diff-checks its own patch before composing here, and abandons a write whose diff is not one checkbox-only line.
 - **Input, once per invocation (the batch)**: `$mode: comment`, `$id: [story-id]`, `$comment` = the rendered progress batch. No `$type`, no `$content`, no `$status` — the body is not touched by the flush.
-- **Output**: the issue identifier (tick) / `Commented` or `Comment warned` (batch). **Neither failure is load-bearing**: `/pair-process-implement` records the outcome in its batch and continues the story. Comment mode already warns instead of HALTing; a failed tick is likewise never a HALT for this caller.
+- **Output**: the issue identifier (tick) / `Commented` or `Comment warned` (batch). **Neither failure is load-bearing**: `/pair-process-implement` records the outcome in its batch and continues the story. Comment mode already warns instead of HALTing; the tick reaches the same place through `$on-failure: report`, so Step 7's `not-found`, Step 7b beat 4's unconfirmed membership and Step 8's tracker error come back as the three outcomes in **Step 8b** — `not-found`, `membership-unconfirmed`, `write-failed` — instead of HALTing. This is not a courtesy: a HALT here propagates, so without it a single 5xx while ticking task 1 of 4 would end the run — T2, T3 and T4 never implemented and no PR — because one checkbox could not be written.
 - **Dedup is the caller's**, as for every comment-mode composition: the tick is naturally idempotent (an already-`[x]` item is not re-written at all), and the batch is posted exactly once per invocation by construction.
 
 When composed by `/pair-capability-publish-pr` (the cross-link back-link, split PM-tool/code-host projects):
@@ -315,9 +333,11 @@ When invoked **independently**:
 - **Template not found** (Step 3) — missing knowledge base file.
 - **Target macrostate has no mapped board state** (Step 6) — reports the gap instead of guessing.
 - **Malformed `state-mapping` section** (Step 6) — points to canonical-states.md.
-- **Board membership could not be confirmed** by the re-read after adding it (Step 7b) — the item is off the board, and a skipped board write is never reported as success. Fires whenever a tracked view is named, `$status` or not (membership does not depend on a requested state). **Not** the minimal-board case (Step 6), which is a documented skip of the **state field** only.
-- **`$id` provided but issue not found** (Step 7) — issue does not exist. **Not a HALT in `comment` mode** — warn with the manual-link instruction (Step 7c.2).
-- **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2).
+- **Board membership could not be confirmed** by the re-read after adding it (Step 7b) — the item is off the board, and a skipped board write is never reported as success. Fires whenever a tracked view is named, `$status` or not (membership does not depend on a requested state). **Not** the minimal-board case (Step 6), which is a documented skip of the **state field** only. **Not a HALT under `$on-failure: report`** — returned as `membership-unconfirmed` (Step 8b).
+- **`$id` provided but issue not found** (Step 7) — issue does not exist. **Not a HALT in `comment` mode** — warn with the manual-link instruction (Step 7c.2). **Not a HALT under `$on-failure: report`** — returned as `not-found` (Step 8b).
+- **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2). **Not a HALT under `$on-failure: report`** — returned as `write-failed` (Step 8b).
+
+The three rows above are the **tracker-side** failures, and they are the only ones `$on-failure: report` exempts: they are intermittent (a 5xx, a secondary rate limit, an add that exited 0 having done nothing), so a caller that can carry on has something to carry on with. Every other row is a caller or configuration bug — deterministic, identical on re-invocation — and stays a HALT for every caller.
 
 ## Extensibility
 
@@ -337,6 +357,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - This skill **modifies PM tool state** — it creates and updates issues, and posts comments on them. It never touches code-host state (branches, PRs, reviews).
 - **No write is assumed** (Step 7): every write here is re-read back, because a tracker can return success for a write that did not happen. The rule is general on purpose — the concrete bug was `gh project item-add` exiting 0 with nothing created, but the class is "trusted the exit status", and only the read closes it.
 - **Comment mode is deliberately narrow**: one verbatim comment on one existing item, no template, no body write, no board write, warn-not-HALT on failure. It exists so a cross-link (or any additive annotation) never risks the item's body — the destructive full-body overwrite is write mode's contract alone.
+- **`$on-failure: report` is warn-not-HALT for an additive write-mode write** (Step 8b) — the same reasoning as comment mode, applied to the one write-mode composition whose payload is an annotation (`/pair-process-implement`'s task-progress tick). It changes **who raises**, never what is written or what is reported: the failure still comes out of a read, still names the item, and is still never a success.
 - No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent in write mode** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation. **Comment mode is the documented exception**: a comment carries no `$id` of its own, so nothing here can dedupe it — re-invocation appends another comment, and the duplicate-check belongs to the caller (Step 7c).
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.

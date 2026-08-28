@@ -1,7 +1,7 @@
 ---
 name: pair-process-implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /pair-capability-verify-quality, /pair-capability-record-decision, /pair-capability-checkpoint, /pair-capability-publish-pr."
-version: 0.7.2
+version: 0.7.3
 author: Foomakers
 ---
 
@@ -23,7 +23,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 | `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
 | `/pair-capability-checkpoint`      | Capability | Yes — `$mode=resume` at the opening phase (resume probe), `$mode=write` at the closing phase (handoff artifact). If not installed, degrade to git+PM-tool resume (see Graceful Degradation). |
 | `/pair-capability-publish-pr`      | Capability | Yes — the closing phase composes it (gate → PR → board) inside a handoff-only subagent. If not installed → **HALT** (implement never re-implements PR creation). |
-| `/pair-capability-write-issue`     | Capability | Optional — the task-progress feedback writer ([task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)): write mode for the tick (Step 2.8), `$mode: comment` for the batched progress comment (Step 3.1b). If not installed, warn and continue **without** ticks or comment — missing feedback never blocks the story. |
+| `/pair-capability-write-issue`     | Capability | Optional — the task-progress feedback writer ([task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)): write mode for the tick (Step 2.8, composed with **`$on-failure: report`** so a tracker error returns an outcome instead of a propagating HALT), `$mode: comment` for the batched progress comment (Step 3.1b). If not installed, warn and continue **without** ticks or comment — missing feedback never blocks the story. |
 | `/pair-capability-assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/pair-capability-verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
@@ -142,6 +142,7 @@ Process tasks **sequentially**, one at a time. For each task:
 1. **Check**: Scan all tasks in dependency order. Find the first task that is not yet completed.
    - A task is "completed" if its checklist item is marked ✅ in the story AND (if commit-per-task) the commit exists on the branch.
    - A task that **cannot be attempted this iteration** — an unmet dependency, an external blocker, work the developer defers or puts out of scope — is neither a HALT nor a failure: **queue it as `skipped`** with its one-line reason (the vocabulary is [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)'s), leave its checklist item unticked, and continue the scan to the next task. `failed` is for a task that was attempted and did not land: a deliberate deferral reported as `failed` misnames it, and one left silent shrinks the iteration's headline count without saying why.
+   - **At most once per invocation.** This scan restarts from the top after every task (item 1 is re-entered from Step 2.8 item 9), so a task that cannot be attempted is reached again on every later pass: a task **already queued as `skipped` this invocation** is passed over **silently** — no second queue entry, no second line. Otherwise a 5-task story blocked on T3 queues it after T2 _and_ after T4, and the one comment reads `Task progress — 6 of 5 tasks this iteration` with T3 listed twice.
 2. **Skip**: If no task remains that this iteration can attempt — all completed, or the rest queued as `skipped` — move to Phase 3.
 3. **Act**: Set the active task. Update session state:
 
@@ -251,7 +252,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 7. **Act — tick and queue** (**every strategy** — item 2 routes `commit-per-story` through here too; the task-progress feedback loop, per [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md); the mechanism is **not** restated here):
    - Locate the task's checklist item in the **Task Breakdown** section by its **task ID**, and tick it (`- [ ]` → `- [x]`) with the tick-only, diff-checked patch the guideline defines. Mark any **Definition of Done** checkbox now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated") by the same rule — **one write per checkbox**, each with its own read and its own one-line diff check, never two boxes in one body; leave the ones needing reviewer confirmation (e.g., "Code reviewed and merged").
    - **Queue** the task's outcome line for this invocation's batched comment — `ticked`, or the outcome the guideline's vocabulary gives when the tick did not land. The queue is flushed once, at Step 3.1b.
-   - **Never blocking**: a locator mismatch, a rejected patch or a failed write is queued and the run continues. A missing tick is a reporting defect, never a reason to stop implementing.
+   - **Never blocking**: a locator mismatch, a rejected patch or a failed write is queued and the run continues. A missing tick is a reporting defect, never a reason to stop implementing. The transport is held to it: the tick composes `/pair-capability-write-issue` write mode with **`$on-failure: report`**, so an unresolvable id, a tracker error and an unconfirmed board membership come back as `not-found` / `write-failed` / `membership-unconfirmed` (its Step 8b) instead of a **HALT that would propagate here** and end the story on the task it only annotates. `membership-unconfirmed` says nothing about the tick — the body write landed — so it goes in the batch's `<details>`, not on the task's outcome line.
 8. **Act — persist progress**: If `/pair-capability-checkpoint` is installed, compose `/pair-capability-checkpoint $mode=write` to update `.pair/working/checkpoints/<story-id>.md` with the tasks now done. This keeps the checkpoint current so an interruption after this task resumes from the next pending one (Step 0.0). If `/pair-capability-checkpoint` is not installed, skip — git+PM state still supports the git-based resume.
 9. **Check**: Is this the last task?
    - **Yes**: Move to Phase 3 (Closing: checkpoint + PR).
@@ -382,7 +383,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 1. **Checkpoint**: the opening-phase resume probe (Step 0.0) reads the checkpoint and jumps to the first pending task — never repeating completed tasks. When `/pair-capability-checkpoint` is absent, the git+PM resume below applies.
 2. **Branch**: detects existing branch, switches to it.
 3. **Commit strategy**: if commits already exist on branch, infer strategy from history.
-4. **Tasks**: scans task checklist and git log to identify completed tasks. Skips them.
+4. **Tasks**: scans task checklist and git log to identify completed tasks, and does **not re-run them** — this is **not the `skipped` outcome** (Step 2.1): a task an earlier invocation completed is neither re-written nor queued, so a re-invocation that finds everything done reaches Step 3.1b with an empty queue and posts nothing.
 5. **PR**: the closing phase re-composes `/pair-capability-publish-pr`, which detects an existing PR and updates it in place — never a duplicate. A subagent that failed mid-PR is recovered this way (the checkpoint stays valid, the rerun is idempotent).
 6. **Quality gates**: re-runs all gates (fast if already passing).
 7. **Merge**: if a PR exists and its state synthesizes to `ready-to-merge`, proceeds directly to Phase 4 (merge); otherwise Phase 4's Step 4.1 HALTs with the unmet condition.

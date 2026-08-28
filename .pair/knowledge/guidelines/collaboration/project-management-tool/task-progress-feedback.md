@@ -11,7 +11,7 @@ The call sites belong to `/pair-process-implement` — Step 2.8 (per task) and i
 What this guideline owns: the locator, the tick, the batch, its format, and the fallbacks when a write does not land. What it does not own:
 
 - **The transport.** The tick and the comment are both written through `/pair-capability-write-issue` — write mode for the body, `$mode: comment` for the batch — and every per-tool mechanic (which API call, which flag) stays in that skill and the implementation guide it resolves.
-- **The board state.** Ticking an item is not a state transition. `In Progress` is written once, at Step 0.1b, and this loop never touches a board field.
+- **The board state.** Ticking an item is not a state transition: `In Progress` is written once, at Step 0.1b, and this loop writes no board **state** field, ever. What it does not get to opt out of is the transport's own contract — `/pair-capability-write-issue` runs its **membership beats** (a project-item read, an idempotent add, a confirming re-read) on **every** write-mode write, board state requested or not. So on an explicit-membership tool (GitHub Projects) each tick — and each Definition-of-Done box, which is its own write — costs one board read and, at most once per item, one add. The tick therefore passes **`$on-failure: report`**, and a membership that cannot be confirmed is **reported to the caller** and carried in the batch's `<details>`, never raised as a HALT.
 - **The task model.** Tasks are inline checklist items; **no separate task issues are created**, and none are created here either — a tick is an edit to one line of one body.
 
 ## The task-ID locator
@@ -75,6 +75,7 @@ Rules the shape encodes:
 - **Everything longer goes in `<details>`**: error output, retry traces, locator mismatch diagnostics. No stack trace, no command transcript, and no diff outside the collapsed block.
 - **An empty batch posts nothing.** The queue holds only what **this invocation** attempted: an item already `[x]` for a task this invocation did not attempt is neither re-written nor queued. So an invocation that completed no task leaves no comment — a re-run that finds every task already done is silent, which is what keeps an idempotent re-invocation from accreting one "nothing to report" comment per attempt.
 - **Never a second comment.** More detail belongs in `<details>`, never in another comment; the loop has no verbosity level that turns one comment into several.
+- **A batch lost with its session is not recovered.** The queue lives in the invocation that built it. An invocation that ticked T1 and T2 and then died — a context reset before the flush — leaves those two outcome lines unposted on **any** invocation: the next one reports only what **it** attempted. **The ticks stand** (they are body writes, already on the item); the narrative does not, including any `write-failed` / `not-found` diagnostic queued for them. This is the price of the scoping rule above and it is deliberate: a queue outliving its session would have to be reconciled against work the resumed invocation may have redone, and it licenses exactly the accretion — one catch-up comment per resumed run — that the scoping closed. A human reading the item sees the ticks and the tasks still open; what is lost is one paragraph, never a state.
 
 Verbosity and cadence are the defaults, not a law: a project that wants something else declares it in its own adoption. Absent a declaration, this is what runs.
 
@@ -94,6 +95,8 @@ Every queued line carries exactly one outcome from this closed set, and the outc
 
 `skipped` is produced at **task selection**, not at task completion: the caller queues it when it declines to attempt a task at all — an unmet dependency, a deferral, work put out of scope mid-run — and carries on to the next task. It is **never the outcome of an attempt** that did not land; that is `failed`. Both halves matter: a deliberate deferral reported as `failed` misnames it, and one left out of the batch shrinks the "N of M tasks this iteration" headline without saying why.
 
+It is queued **at most once per invocation**. Selection scans restart from the top after every task, so a blocked task is reached once per remaining task: a task **already queued** as `skipped` this invocation is passed over silently on every later scan. Otherwise a five-task story blocked on one task reports six lines under a `6 of 5` headline, with that task named twice — breaking both "one line per task" and the headline shape.
+
 The three write-path outcomes (`not-found`, `ambiguous`, `write-failed`) say nothing about the work: the task may well be done. The line reports the **feedback** failure and names the ID it could not tick, so a human can tick it by hand — and the run carries on.
 
 ## Failure and conflict handling
@@ -108,11 +111,13 @@ A story body is shared: a human can be editing it while a run is ticking it, and
 
 **Comment-only fallback.** After the retry is spent — a repeated conflict, a rejected patch, a transport error, a read-only body — no further body write is attempted for that task. The outcome is queued (`write-failed`, or the more specific one) and the batched comment carries it, naming the task ID that could not be ticked so a human can do it in one click. The feedback degrades from *tick + comment* to *comment*, and never below.
 
+**The transport HALTs by default; the tick opts out.** `/pair-capability-write-issue`'s write mode is a HALTing skill — an unresolvable id (its Step 7), a board membership its re-read cannot confirm (Step 7b beat 4, which runs on every write-mode write) and any tracker error (Step 8) each stop it — and **a HALT inside a composed skill propagates to its caller**. Ticking through it unmodified would mean one 5xx or one secondary rate limit while ticking task 1 of 4 ends the run: T2, T3 and T4 never implemented, no pull request, because a checkbox could not be written. So the tick is composed with **`$on-failure: report`** (`/pair-capability-write-issue` Step 8b), which turns those three into returned outcomes: `not-found` and `write-failed` are queued as this vocabulary's outcomes for the task; `membership-unconfirmed` says nothing about the tick — the body write landed — so it rides in the batch's `<details>` instead of on the task's line.
+
 **A PM write failure never blocks implementation.** Ticks and comments annotate work that has already happened; the commit is on the branch either way. Whatever this loop fails to write, the run **continues** to the next task and the story to its pull request — the failure is reported, not raised.
 
 ## What never happens
 
 - **No separate task issues.** Tasks live inline in the story body; nothing here creates, links, or closes a task issue. A tick is an edit to one line.
 - **No other section is rewritten.** The acceptance criteria, the classification matrix, the technical analysis and the task titles come back byte-identical from every write this loop makes. Only checkbox markers change.
-- **No board state is written.** `In Progress` is set once when the story is activated; a tick is not a transition, and no board field is touched here.
+- **No board state is written.** `In Progress` is set once when the story is activated; a tick is not a transition, and this loop writes no board **state** field. The transport's **membership beats** still run on every write-mode write (Scope, above) — they are `/pair-capability-write-issue`'s contract, not this loop's — and a membership that cannot be confirmed is reported to the caller, never raised.
 - **No untick, ever**, and no second comment per iteration.
