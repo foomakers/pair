@@ -784,6 +784,58 @@ test('orchestration: the /pair-next Select prompt is UNCHANGED — pair-next dec
   assert.equal(select.prompt.includes('--approval'), false)
 })
 
+// Review of PR #465, Minor 1: the prompt assertions below are NECESSARY but not
+// SUFFICIENT. Deleting both `${approvalArgsFor(...)}` interpolations from
+// pair-loop.js left every suite green — the prompts they check are supposed to
+// be unchanged (neither composed skill declares an approval round), so an
+// assertion on the rendered output cannot tell a working no-op from a missing
+// mechanism. These two check the SOURCE: whatever verb introduces a composed
+// skill, its name must be followed by the `approvalArgsFor` CALL.
+// `/<name>` where the slash does not continue an identifier — which is what
+// separates an invocation (`Run /pair-next`) from a path or prose mention
+// (`apps/pair-cli/…`, `pair-implement-batch/pair-analyze-pr-batch`), both of
+// which occur in this file and are NOT invocations.
+function composedSkills() {
+  return [...FULL_SRC.matchAll(/(?<![\w-])\/(pair-[a-z0-9-]+)/g)].map(match => ({
+    name: match[1],
+    following: FULL_SRC.slice(match.index + match[0].length),
+  }))
+}
+
+test('source: every composed skill is followed by the approvalArgsFor call', () => {
+  // Deliberately independent of WHICH skills are composed, so a new site fails
+  // with "not wired at that site" rather than with a list mismatch.
+  const composed = composedSkills()
+  assert.ok(composed.length > 0, 'the invocation scan matched nothing — it would pass vacuously')
+
+  for (const { name, following } of composed) {
+    assert.ok(
+      following.startsWith(`\${approvalArgsFor('${name}')}`),
+      `/${name} is composed without \${approvalArgsFor('${name}')} immediately after it — ` +
+        `the threading mechanism is not wired at that site`,
+    )
+  }
+})
+
+test('source: the composed set is exactly the two skills tier 1 names, none declaring', () => {
+  const { APPROVAL_DECLARING_SKILLS } = getHelpers()
+  const names = composedSkills().map(s => s.name)
+
+  assert.deepEqual(names, ['pair-next', 'pair-capability-verify-quality'])
+  // The T-4 scope finding, pinned: tier 1's exposure to the family is TRANSITIVE
+  // (pair-implement-batch -> /pair-process-implement -> /pair-capability-assess-stack),
+  // and neither intermediary declares $approval, so threading it there would be
+  // the invented argument D18 forbids.
+  for (const name of names) assert.equal(APPROVAL_DECLARING_SKILLS.has(name), false)
+})
+
+test('source: the --approval literal exists only inside approvalArgsFor, never hardcoded in a prompt', () => {
+  // A second occurrence would be a prompt spelling the argument itself, which
+  // bypasses the family lookup and could hand it to a NON-declaring skill.
+  assert.equal(FULL_SRC.split(' --approval auto').length - 1, 1)
+  assert.ok(FULL_SRC.includes(`? ' --approval auto' : ''`))
+})
+
 test('orchestration: the /pair-capability-verify-quality merge prompt carries no --approval either', async () => {
   const { calls } = await runWorkflow({
     args: { policyText: '## Eligibility\n\nrisk:green\n\n## Auto-Advance\n\nrisk:green\n' },

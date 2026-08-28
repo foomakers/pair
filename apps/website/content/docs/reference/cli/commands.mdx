@@ -796,10 +796,31 @@ flag now reaches both:
 
 Some skills stop and ask a human to accept what they just produced — the nine `assess-*` skills with
 an approval round and both `map-*` skills. Under `--autonomous` those skills receive
-`--approval auto` and each round resolves without asking: a proposal is accepted as-is and reported,
-an already-recorded value is kept with the delta reported unapplied, and a **judgement gate** — a
-round with no proposal to accept — still stops for a human, because `auto` suppresses *asking*,
-never *judging*.
+`--approval auto` and every round resolves without asking. **How** it resolves depends on the round,
+and the difference matters when you are designing an unattended pipeline:
+
+| Resolution | What happens under `auto` | Where it occurs |
+| --- | --- | --- |
+| accept | the skill's own proposal is taken as-is and reported | every family member |
+| keep | an already-recorded value is kept; the proposed delta is reported **unapplied** | `assess-security`, `map-contexts`, `map-subdomains` |
+| settle from project state, else report unresolved | a tie is broken from what the project already shows; if project state is silent, no proposal is emitted and the tie is reported | `assess-methodology`, `assess-observability`, `assess-testing` |
+| hand back | the question is returned to **you**, unresolved, and the run **continues** | `assess-stack`, `assess-architecture` |
+| halt | the run **stops** and waits for a human | `map-contexts` only |
+
+The last two rows are the ones to plan around, because both are "a judgement the skill cannot make
+alone" and they behave differently:
+
+- **`map-contexts`** is the single round in the family that genuinely **halts** — it writes a domain
+  model, and recording a coupling risk nobody judged is worse than stopping. Budget for an
+  unattended run of it stopping.
+- **`assess-stack` and `assess-architecture`** are **output-only** (they propose; the caller
+  persists), so there is nothing to stop: they **hand the question back** in their report and the run
+  carries on. An operator who reads "judgement gate" and expects a halt here gets an
+  unresolved-and-continue instead — check the skill's report rather than assuming silence means
+  agreement.
+
+In every case `auto` suppresses *asking*, never *judging*: nothing is decided on your behalf that the
+skill could not state on its own.
 
 Three properties worth knowing:
 

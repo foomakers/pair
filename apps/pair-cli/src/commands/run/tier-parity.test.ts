@@ -404,6 +404,76 @@ describe('tier 1 and tier 2 read the same policy file the same way', () => {
       expect([...new Set(composed)].sort()).toEqual(['pair-capability-verify-quality', 'pair-next'])
       for (const skill of composed) expect(tier1().approvalArgsFor(skill)).toBe('')
     })
+
+    /**
+     * Tier 1's threading is a NO-OP TODAY (no skill it composes declares `$approval`), which makes
+     * it indistinguishable from a bug unless the guard checks the MECHANISM rather than its output.
+     *
+     * Review of PR #465, Minor 1: the test directly above enumerated the literal composition forms
+     * it expected (`Run /x`, `via /x`) and asserted each resolved to no argument. Deleting BOTH
+     * `${approvalArgsFor(...)}` interpolations from the workflow left every suite green — the
+     * enumeration still matched, and the skills it named still declared nothing, so the assertion
+     * held over a workflow that had lost the wiring entirely. A new site written
+     * `Compose /pair-capability-assess-stack` would have slipped past it too.
+     *
+     * So this guard is keyed on the SKILL INVOCATION, syntax-agnostically: whatever verb introduces
+     * it, a composed skill must be followed by the `approvalArgsFor` CALL. That catches a removed
+     * interpolation, a new site in any phrasing, and a hardcoded ` --approval auto` mimicking the
+     * helper's output.
+     */
+    describe('wires the mechanism at every site, not only where it happens to be inert', () => {
+      /**
+       * Every skill tier 1 COMPOSES, with the source text that follows its name.
+       *
+       * A composed skill is `/<name>` where the slash does not continue an identifier — which is
+       * what separates an invocation (`Run /pair-next`) from a path or prose mention
+       * (`apps/pair-cli/…`, `pair-implement-batch/pair-analyze-pr-batch`), both of which occur in
+       * this workflow and are NOT invocations.
+       */
+      function composedSkills(): Array<{ name: string; following: string }> {
+        const source = readFileSync(WORKFLOW, 'utf-8')
+        return [...source.matchAll(/(?<![\w-])\/(pair-[a-z0-9-]+)/g)].map(match => ({
+          name: match[1] as string,
+          following: source.slice((match.index as number) + match[0].length),
+        }))
+      }
+
+      it('extracts the real invocations and excludes path/prose mentions of the same shape', () => {
+        // Asserted, not assumed: an extraction that silently matched nothing would make every
+        // assertion below pass vacuously — the exact failure mode that produced this finding.
+        expect(composedSkills().map(skill => skill.name)).toEqual([
+          'pair-next',
+          'pair-capability-verify-quality',
+        ])
+      })
+
+      it('follows EVERY composed skill with the approvalArgsFor call (catches a deleted interpolation)', () => {
+        for (const { name, following } of composedSkills())
+          expect(
+            following.startsWith(`\${approvalArgsFor('${name}')}`),
+            `\`/${name}\` is composed without \`\${approvalArgsFor('${name}')}\` immediately after ` +
+              `it: the threading mechanism is not wired at that site, so a family member composed ` +
+              `there would silently receive no signal`,
+          ).toBe(true)
+      })
+
+      it('never hardcodes the argument — the literal exists only inside the helper', () => {
+        const source = readFileSync(WORKFLOW, 'utf-8')
+
+        // Exactly one occurrence: `approvalArgsFor`'s own return. A second would be a prompt
+        // spelling the argument itself, which bypasses the family lookup and reintroduces the
+        // invented-argument risk from the other direction (a NON-declaring skill receiving it).
+        expect(source.split(' --approval auto').length - 1).toBe(1)
+        expect(source).toContain(`? ' --approval auto' : ''`)
+      })
+
+      it('composes no declaring skill today — derived from the same syntax-agnostic scan', () => {
+        for (const { name } of composedSkills()) {
+          expect(APPROVAL_DECLARING_SKILLS.has(name)).toBe(false)
+          expect(tier1().approvalArgsFor(name)).toBe('')
+        }
+      })
+    })
   })
 
   it('agrees that this repo’s real adoption file is valid', () => {
