@@ -72,6 +72,26 @@ const AGENTS_FILE = 'dataset/AGENTS.md'
 // The installed skills mirror, relative to the knowledge-hub package root.
 const MIRROR_SKILLS_DIR = join('..', '..', '.claude', 'skills')
 
+/**
+ * Every shipped surface carrying a WORKED EXAMPLE of a profile declaration, read
+ * through the real resolver.
+ *
+ * The last three reach outside the package, exactly as the mirror check does. They
+ * carry the same declarations as the first two with no gate behind them: the docs
+ * site is the feature's public documentation (dropping one id from its `custom`
+ * example hands the inconsistency report to every reader who copies it), and this
+ * repo's own way-of-working is the file `/next` actually reads when run here.
+ * Each is swept only when present (`existsSync`), so an adopting project's
+ * knowledge-hub — which has none of them — checks exactly what it ships.
+ */
+const PROFILE_PROSE_FILES = [
+  PROCESS_PROFILES_FILE,
+  WOW_TEMPLATE_FILE,
+  '../../apps/website/content/docs/concepts/adoption-files.mdx',
+  '../../apps/website/content/docs/reference/pair-next.mdx',
+  '../../.pair/adoption/tech/way-of-working.md',
+]
+
 const KB_PROSE_FILES = [
   'dataset/.pair/knowledge/way-of-working.md',
   'dataset/.pair/knowledge/getting-started.md',
@@ -495,6 +515,20 @@ export function isApprovalSignalFamily(rel: string): boolean {
 }
 
 /**
+ * Line endings, normalized once at every parse boundary.
+ *
+ * Round 5 Major: the line regexes in this module end in `(.*)$` with no `m` flag —
+ * `.` cannot match `\r` and `$` anchors at end-of-string, so on a CRLF file a key
+ * line or a heading line matched NOTHING and every level of the profile guard went
+ * silent at once (a `poc` declaration resolved to `default`, 12 steps, zero halts).
+ * A team on Windows gets CRLF by default (`core.autocrlf=true`), so this is the
+ * checkout `pair update` produces there, not an exotic file.
+ */
+function lf(content: string): string {
+  return content.replace(/\r\n?/g, '\n')
+}
+
+/**
  * Which lines sit inside a fenced block — the ONLY layout fact these checks still
  * consult, and only to exclude a printed sample from being read as a step that asks.
  *
@@ -502,13 +536,23 @@ export function isApprovalSignalFamily(rel: string): boolean {
  * the windows that needed it: every check is now per line, keyed on the declared
  * marker. That deletion is the point, not a side effect — a span this module no
  * longer computes is a span a future guard cannot silently widen.
+ *
+ * Both CommonMark fence characters count, and a fence closes only on the character
+ * that OPENED it — `~~~` is the standard way to nest a block that itself contains
+ * backticks, and a single toggle would have let a `~~~` line inside a ``` block
+ * close it.
  */
 function scanFences(lines: string[]): boolean[] {
   const inFence: boolean[] = []
-  let fence = false
+  let open: string | null = null
   lines.forEach((line, i) => {
-    if (/^\s*```/.test(line)) fence = !fence
-    inFence[i] = fence
+    const fence = /^\s*(`{3,}|~{3,})/.exec(line)
+    if (fence) {
+      const char = (fence[1] as string)[0] as string
+      if (open === null) open = char
+      else if (open === char) open = null
+    }
+    inFence[i] = open !== null
   })
   return inFence
 }
@@ -874,12 +918,12 @@ export const STEP_GATE_CONVENTION = 'process-profile-gate.md'
  * this parses (way-of-working: "exactly like `## Git Workflow` above").
  */
 function sectionOfWhere(content: string, matches: (heading: string) => boolean): string | null {
-  const lines = content.split('\n')
+  const lines = lf(content).split('\n')
   const inFence = scanFences(lines)
   const headingAt = (i: number): string | undefined => {
     if (inFence[i]) return undefined
-    return /^##[ \t]+/.test(lines[i] as string)
-      ? (lines[i] as string).replace(/^##[ \t]+/, '').trim()
+    return ATX_LEVEL_TWO.test(lines[i] as string)
+      ? (lines[i] as string).replace(ATX_LEVEL_TWO, '').trim()
       : undefined
   }
 
@@ -1250,8 +1294,22 @@ export function checkStepMarkersInMirror(
 function hasProfileHeading(block: string): boolean {
   return block
     .split('\n')
-    .some(line => /^##[ \t]+/.test(line) && isWowProfileHeading(line.replace(/^##[ \t]+/, '')))
+    .some(line => ATX_LEVEL_TWO.test(line) && isWowProfileHeading(line.replace(ATX_LEVEL_TWO, '')))
 }
+
+/**
+ * A fenced block, whatever its fence is spelled like: both CommonMark fence
+ * characters, any info string, and a closing delimiter of the SAME character.
+ *
+ * Round 5 Major: this was ```` ```[a-z]*\n ````, so a fence whose info string was
+ * not bare lowercase (a titled one, `TEXT`, a `~~~` block) made its example
+ * invisible to the gate — while the section parser's fence skipper still skipped
+ * it, leaving it neither read as a declaration nor checked as an example. The
+ * recognizer and the skipper must accept the same fences or a shape falls between
+ * them, and a retitled fence is an ordinary docs edit on the file `pair update`
+ * writes into every adopting project.
+ */
+const FENCED_BLOCK = /^ {0,3}(`{3,}|~{3,})[^\n]*\n([\s\S]*?)^ {0,3}\1/gm
 
 /**
  * Every fenced WORKED EXAMPLE of a profile declaration in a shipped file.
@@ -1271,8 +1329,8 @@ function hasProfileHeading(block: string): boolean {
  * can read it.
  */
 export function extractProfileExamples(content: string): string[] {
-  return [...content.matchAll(/```[a-z]*\n([\s\S]*?)```/g)]
-    .map(m => m[1] as string)
+  return [...lf(content).matchAll(FENCED_BLOCK)]
+    .map(m => m[2] as string)
     .filter(block => hasProfileHeading(block) || block.split('\n').some(isProfileKeyLine))
     .map(block => (hasProfileHeading(block) ? block : `## ${WOW_PROFILE_SECTION}\n\n${block}`))
 }
@@ -1357,9 +1415,14 @@ export const WOW_PROFILE_SECTION = 'Process Profile'
  * human decorates a heading; none of them says "a different section". The
  * comparison stays an EQUALITY on the normalized text, never a prefix match, so
  * `## Process Profile Gate` is still a different section.
+ *
+ * The trailing run of `#` is CommonMark's CLOSED ATX form (`## Process Profile ##`),
+ * decoration in the same sense — and unstripped it made the heading unmatched,
+ * hence the section unread and unreported.
  */
 function normalizeHeading(heading: string): string {
   return heading
+    .replace(/\s+#+\s*$/, '')
     .replace(/\s*\([^)]*\)\s*$/, '')
     .replace(/[*_`]/g, '')
     .replace(/[:.\s]+$/, '')
@@ -1396,8 +1459,27 @@ export interface ProfileDeclaration {
   sectionHalts: string[]
 }
 
-/** A markdown ATX heading line, at any of the six levels. */
-const ATX_HEADING = /^(#{1,6})[ \t]+(.*)$/
+/**
+ * A markdown ATX heading line, at any of the six levels.
+ *
+ * Up to three leading spaces are legal ATX (four makes it an indented code block),
+ * so a hand-indented heading is a heading. Reading it as prose was the same widening
+ * hole one notch narrower: `   ## Process Profile` over a valid declaration resolved
+ * to `default` with 12 steps, no halt, no warning.
+ */
+const ATX_HEADING = /^ {0,3}(#{1,6})[ \t]+(.*)$/
+
+/** The level-2 half of the same rule, used where only `##` starts/ends a section. */
+const ATX_LEVEL_TWO = /^ {0,3}##[ \t]+/
+
+/** A setext underline: the CommonMark heading form this reader does NOT accept. */
+const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/
+
+/** `Process Profile` written as a setext heading — a text line plus its underline. */
+function isSetextProfileHeading(line: string, next: string | undefined): boolean {
+  if (next === undefined || !SETEXT_UNDERLINE.test(next)) return false
+  return line.trim() !== '' && isWowProfileHeading(line.trim())
+}
 
 /**
  * What is wrong with the DECLARATION SITE, before a single key is read.
@@ -1424,19 +1506,31 @@ const ATX_HEADING = /^(#{1,6})[ \t]+(.*)$/
  * reported, and `sectionOf` keeps the semantics its other callers rely on.
  */
 export function profileSectionProblems(content: string): string[] {
-  const lines = content.split('\n')
+  const lines = lf(content).split('\n')
   const inFence = scanFences(lines)
   let atLevelTwo = 0
   const misLevelled: number[] = []
+  let setext = 0
   for (let i = 0; i < lines.length; i++) {
     if (inFence[i]) continue
     const heading = ATX_HEADING.exec(lines[i] as string)
-    if (!heading || !isWowProfileHeading((heading[2] as string).trim())) continue
+    if (!heading) {
+      if (isSetextProfileHeading(lines[i] as string, lines[i + 1])) setext++
+      continue
+    }
+    if (!isWowProfileHeading((heading[2] as string).trim())) continue
     if ((heading[1] as string).length === 2) atLevelTwo++
     else misLevelled.push((heading[1] as string).length)
   }
 
   const problems: string[] = []
+  if (setext > 0) {
+    problems.push(
+      `\`${WOW_PROFILE_SECTION}\` is declared as a SETEXT heading (underlined with \`---\` or ` +
+        `\`===\`) — the section is \`## ${WOW_PROFILE_SECTION}\`, an ATX heading at level 2. ` +
+        `Underlined it is not read at all, and the profile it declares is silently ignored`,
+    )
+  }
   if (atLevelTwo > 1) {
     problems.push(
       `\`## ${WOW_PROFILE_SECTION}\` is declared more than once (${atLevelTwo} sections) — keep ` +
@@ -1483,6 +1577,9 @@ const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
  * list of "the two keys").
  */
 const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/
+
+/** An indented code block: four spaces (or a tab) of indent, CommonMark's third form. */
+const INDENTED_CODE = /^(?: {4}|\t)/
 
 /** Does this line declare a key at all — in an accepted shape or a rejected one? */
 function isProfileKeyLine(line: string): boolean {
@@ -1538,8 +1635,9 @@ function readProfileKeyLine(line: string): ProfileKeyLine | null {
  * a built-in" HALT instead.
  */
 export function parseWowProfileSection(content: string): ProfileDeclaration {
-  const sectionHalts = profileSectionProblems(content)
-  const section = sectionOfWhere(content, isWowProfileHeading)
+  const normalized = lf(content)
+  const sectionHalts = profileSectionProblems(normalized)
+  const section = sectionOfWhere(normalized, isWowProfileHeading)
   const empty = { profile: null, whitelist: null, unreadable: [], duplicateKeys: [] }
   if (section === null) return { ...empty, present: false, sectionHalts }
 
@@ -1547,13 +1645,13 @@ export function parseWowProfileSection(content: string): ProfileDeclaration {
   let whitelist: string[] | null = null
   const unreadable: string[] = []
   const seen = new Map<string, number>()
-  let fenced = false
-  for (const line of section.split('\n')) {
-    if (/^\s*```/.test(line)) {
-      fenced = !fenced
-      continue
-    }
-    if (fenced) continue
+  const lines = section.split('\n')
+  const inFence = scanFences(lines)
+  for (const [i, line] of lines.entries()) {
+    // The three CommonMark code-block forms, all of them examples rather than
+    // declarations: ```-fenced, ~~~-fenced (both via the shared scanner) and
+    // indented. An indented example used silently to BECOME the profile.
+    if (inFence[i] || INDENTED_CODE.test(line)) continue
     const declared = readProfileKeyLine(line)
     if (declared === null) continue
     seen.set(declared.key, (seen.get(declared.key) ?? 0) + 1)
@@ -1850,15 +1948,22 @@ export function checkShippedProfileProse(
     }
   }
 
-  for (const file of [PROCESS_PROFILES_FILE, WOW_TEMPLATE_FILE]) {
+  for (const file of PROFILE_PROSE_FILES) {
     const path = join(proseRoot, file)
     if (!existsSync(path)) continue
-    for (const example of extractProfileExamples(readFileSync(path, 'utf-8'))) {
-      const r = resolveProcessProfile(parseWowProfileSection(example), entries, builtIns)
+    extractProfileExamples(readFileSync(path, 'utf-8')).forEach((example, i) => {
+      const declaration = parseWowProfileSection(example)
+      const r = resolveProcessProfile(declaration, entries, builtIns)
+      // Labelled by POSITION and by the profile the example DECLARES, never by
+      // `r.profile`: every HALT path resolves to the fallback `default`, so a
+      // corrupted `custom` example used to be reported as a `default` one — and
+      // `default` accepts no whitelist at all, so the label contradicted the
+      // message and pointed a maintainer at the wrong fence.
+      const at = `worked example #${i + 1} (\`${declaration.profile ?? 'no profile'}\`)`
       for (const problem of [...r.halts, ...r.warnings]) {
-        errors.push(`${file}: worked example (\`${r.profile}\`): ${problem}`)
+        errors.push(`${file}: ${at}: ${problem}`)
       }
-    }
+    })
   }
   return errors
 }
@@ -1917,7 +2022,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, shipped way-of-working template + its worked examples, manual-path entrypoint)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, shipped way-of-working template + every shipped worked example (KB schema, adoption template, docs site, this repo's own way-of-working), manual-path entrypoint)`,
     )
     process.exit(0)
   } else {

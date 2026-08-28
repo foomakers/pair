@@ -1,4 +1,4 @@
-# ADR: The unit a process profile configures is the STEP, never one of its representations
+# ADR-024: The unit a process profile configures is the STEP, never one of its representations
 
 ## Status
 

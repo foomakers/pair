@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   parseFrontmatter,
   checkFrontmatterFields,
@@ -1197,6 +1197,37 @@ describe('extractProfileExamples', () => {
     expect((example as string).match(/## Process Profile/g)).toHaveLength(1)
     expect(parseWowProfileSection(example as string).sectionHalts).toEqual([])
   })
+
+  // Round 5 Major: extraction matched only ```[a-z]*\n, so any info string that is
+  // not bare lowercase made the example invisible again — while the section
+  // parser's own fence skipper still skipped it, leaving it neither read as a
+  // declaration nor checked as an example. A titled fence is an ordinary docs edit
+  // on the file `pair update` writes into every adopting project.
+  it.each([
+    ['a titled info string', '```text title="custom subset"'],
+    ['an uppercase info string', '```TEXT'],
+    ['no info string at all', '```'],
+    ['a `~~~` fence', '~~~text'],
+    ['a 4-backtick fence', '````text'],
+  ])('extracts an example behind %s', (_, open) => {
+    const close = open.startsWith('~') ? '~~~' : open.replace(/[^`]/g, '')
+    const doc = `## Process Profile\n\nExample:\n\n${open}\n- \`profile\`: \`poc\`\n${close}\n`
+    const examples = extractProfileExamples(doc)
+    expect(examples).toHaveLength(1)
+    expect(parseWowProfileSection(examples[0] as string).profile).toBe('poc')
+  })
+
+  it('does not close a ``` fence on a `~~~` line inside it', () => {
+    const doc = '```text\n~~~\n- `profile`: `poc`\n```\n'
+    expect(extractProfileExamples(doc)).toHaveLength(1)
+  })
+
+  it('reads a CRLF document', () => {
+    const doc = '## Process Profile\r\n\r\n```text\r\n- `profile`: `poc`\r\n```\r\n'
+    const examples = extractProfileExamples(doc)
+    expect(examples).toHaveLength(1)
+    expect(parseWowProfileSection(examples[0] as string).profile).toBe('poc')
+  })
 })
 
 describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples', () => {
@@ -1219,18 +1250,24 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
   }
   const shippedTemplate = readFileSync(join(__dirname, '../..', WOW_TEMPLATE_FILE), 'utf-8')
 
-  const proseRootWith = (template: string): string => {
-    const root = mkdtempSync(join(tmpdir(), 'wow-template-'))
-    mkdirSync(join(root, 'dataset/.pair/adoption/tech'), { recursive: true })
-    writeFileSync(join(root, WOW_TEMPLATE_FILE), template)
+  const roots: string[] = []
+  // The prose root sits two levels DOWN inside the temp box: the sweep reaches
+  // outside the package (`../../apps/website/…`, `../../.pair/…`) exactly as the
+  // mirror check does, and those writes must stay inside the box.
+  const proseRootWithFiles = (files: Record<string, string>): string => {
+    const box = mkdtempSync(join(tmpdir(), 'wow-template-'))
+    roots.push(box)
+    const root = join(box, 'repo', 'packages', 'knowledge-hub')
+    for (const [rel, content] of Object.entries(files)) {
+      const path = join(root, rel)
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, content)
+    }
     return root
   }
-  const roots: string[] = []
-  const check = (template: string): string[] => {
-    const root = proseRootWith(template)
-    roots.push(root)
-    return checkShippedProfileProse(root, entries, builtIns)
-  }
+  const checkFiles = (files: Record<string, string>): string[] =>
+    checkShippedProfileProse(proseRootWithFiles(files), entries, builtIns)
+  const check = (template: string): string[] => checkFiles({ [WOW_TEMPLATE_FILE]: template })
   afterAll(() => {
     for (const r of roots) rmSync(r, { recursive: true, force: true })
   })
@@ -1251,6 +1288,51 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     const corrupted = shippedTemplate.replace('- `profile`: `poc`', '- `profile`: `pocc`')
     expect(corrupted).not.toBe(shippedTemplate)
     expect(check(corrupted).join('\n')).toContain('unknown process profile')
+  })
+
+  // Round 5 Major: the round-4 fix held only for the exact fence spelling shipped
+  // that day. Retitling a fence — an ordinary docs edit — made the example
+  // invisible to the gate again, so a corrupted step id in the file `pair update`
+  // writes into every adopting project shipped green.
+  it.each([
+    ['a titled fence', '```text title="custom subset"', '```'],
+    ['a `~~~` fence', '~~~text', '~~~'],
+  ])('FAILS on a corrupted example behind %s', (_, open, close) => {
+    // Only the `custom` example's own fence is respelled — the template carries
+    // other fences whose delimiters must stay matched.
+    const retitled = shippedTemplate.replace(
+      /```text\n(- `profile`: `custom`[\s\S]*?)```/,
+      (_m, body: string) => `${open}\n${body}${close}`,
+    )
+    expect(retitled).not.toBe(shippedTemplate)
+    const corrupted = retitled.replace('`plan-stories`,', '`plan-storys`,')
+    expect(corrupted).not.toBe(retitled)
+    expect(checkFiles({ [WOW_TEMPLATE_FILE]: corrupted }).join('\n')).toContain('unknown step id')
+  })
+
+  // Round 5 Minor: the error named the RESOLUTION's fallback profile, because
+  // every HALT path returns `default` — so a corrupted `custom` example printed
+  // "worked example (`default`)", and `default` accepts no whitelist at all.
+  it('labels an example by position and by the profile IT declares', () => {
+    const template =
+      '## Process Profile\n\n```text\n- `profile`: `poc`\n```\n\n```text\n- `profile`: `custom`\n- `whitelist`: `plan-storys`\n```\n'
+    const errors = check(template).join('\n')
+    expect(errors).toContain('worked example #2 (`custom`)')
+    expect(errors).not.toContain('(`default`)')
+  })
+
+  // Round 5 Minor: the sweep resolved worked examples in exactly two files, so the
+  // feature's own public documentation — and the way-of-working `/next` reads when
+  // run in this repo — carried the same declarations with no gate behind them.
+  it.each([
+    ['the docs concepts page', '../../apps/website/content/docs/concepts/adoption-files.mdx'],
+    ['the docs reference page', '../../apps/website/content/docs/reference/pair-next.mdx'],
+    ['this repo’s own way-of-working', '../../.pair/adoption/tech/way-of-working.md'],
+  ])('sweeps the worked examples of %s', (_, file) => {
+    const page =
+      '## Process Profile\n\n```text\n## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `plan-stories`\n```\n'
+    expect(checkFiles({ [file]: page }).join('\n')).toContain('none of its prerequisites')
+    expect(checkFiles({ [file]: page }).join('\n')).toContain(file)
   })
 })
 
@@ -1706,6 +1788,90 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
       '## Process Profile\n\n| Field | Default |\n| --- | --- |\n| `profile` | `default` |\n| `whitelist` | *(none)* |\n',
     )
     expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 5 Major: both the key regex and the heading regex ended in `(.*)$` with
+  // no `m` flag — `.` cannot match `\r` and `$` anchors at end-of-string, so on a
+  // CRLF file EVERY line matched nothing. A team on Windows (`core.autocrlf=true`,
+  // the platform default) checks way-of-working.md out with CRLF, writes the
+  // documented declaration, and gets `default` with 12 steps, zero halts and zero
+  // warnings — byte-identical to writing nothing, with every level of this guard
+  // silent at once.
+  it('reads a CRLF file exactly as it reads the LF one', () => {
+    const crlf = resolve('## Process Profile\r\n\r\n- `profile`: `poc`\r\n')
+    expect(crlf.profile).toBe('poc')
+    expect(crlf.halts).toEqual([])
+    expect(crlf).toEqual(resolve('## Process Profile\n\n- `profile`: `poc`\n'))
+  })
+
+  it('reports the SECTION problems on a CRLF file too', () => {
+    const dup = resolve(
+      '## Process Profile\r\n\r\n- `profile`: `poc`\r\n\r\n## Process Profile\r\n\r\n- `profile`: `custom`\r\n',
+    )
+    expect(dup.halts).toHaveLength(1)
+    expect(dup.halts[0]).toContain('more than once')
+
+    const misLevelled = resolve('### Process Profile\r\n\r\n- `profile`: `poc`\r\n')
+    expect(misLevelled.halts).toHaveLength(1)
+    expect(misLevelled.halts[0]).toContain('heading level')
+  })
+
+  // Round 5 Minor: only ``` fences were skipped inside the section, so an
+  // illustrative example written in either other CommonMark code-block form was
+  // read as the project's real declaration — the 4-space-indented one silently
+  // BECAME the profile, and a `~~~` one carrying a placeholder id HALTed /next
+  // with an error naming a step the project never configured.
+  it('does not read a `~~~`-fenced example as the declaration', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n\n~~~text\n- `profile`: `custom`\n- `whitelist`: `nope-not-a-step`\n~~~\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('does not read a 4-space-indented code block as the declaration', () => {
+    const r = resolve('## Process Profile\n\nFor example:\n\n    - `profile`: `poc`\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  it('still closes a ``` fence on ``` and not on a `~~~` line inside it', () => {
+    const r = resolve(
+      '## Process Profile\n\n```text\n~~~\n- `profile`: `custom`\n```\n\n- `profile`: `poc`\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 5 Minor: three CommonMark-valid spellings of the heading were neither
+  // matched nor reported — each re-enabled all 12 steps on a project that declared
+  // `poc`, indistinguishable from having written nothing.
+  it.each([
+    ['closed ATX', '## Process Profile ##'],
+    ['a 3-space indent', '   ## Process Profile'],
+    ['both', '  ## Process Profile  ##'],
+  ])('reads a heading written with %s as the section', (_, heading) => {
+    const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it.each([
+    ['a level-2 underline', '---------------'],
+    ['a level-1 underline', '==============='],
+  ])('HALTs on a setext heading with %s rather than not seeing it', (_, underline) => {
+    const r = resolve(`Process Profile\n${underline}\n\n- \`profile\`: \`poc\`\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('SETEXT')
+    expect(r.halts[0]).toContain('## Process Profile')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('does not read a `---` after unrelated prose as a setext profile heading', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n\nSome prose\n\n---\n')
+    expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
   })
 })
