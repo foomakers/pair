@@ -287,6 +287,18 @@ describe('outcome vocabulary — failure and skip are recorded, not ticked (AC3,
     },
   )
 
+  it.each(guidelineCopies)('%s: queues `skipped` at most once per invocation', (_label, load) => {
+    // Without a dedup rule the outcome is queued once per SCAN, and Step 2.1 is
+    // re-entered after every task: a 5-task story with T3 blocked scans past T3
+    // twice (after T2 and after T4), queues two `skipped` lines for it, and the
+    // single comment reads `Task progress — 6 of 5 tasks this iteration` with T3
+    // listed twice — breaking both "one line per task" and the headline shape.
+    const section = sectionOf(load(), VOCAB)
+    const low = section.toLowerCase()
+    expect(low).toMatch(/at most once per invocation/)
+    expect(low).toMatch(/already queued/)
+  })
+
   it.each(guidelineCopies)(
     '%s: says where `skipped` is produced, so it is not an orphan outcome',
     (_label, load) => {
@@ -399,6 +411,32 @@ describe('wiring — /implement owns both call sites (AC1/AC2, T3)', () => {
     expect(step31.toLowerCase()).toMatch(/neither re-?written nor queued|not .*queued/)
   })
 
+  it('queues `skipped` at most once per invocation, not once per scan', () => {
+    // Step 2.1 item 1 re-scans ALL tasks from the top and Step 2.8 item 9 returns
+    // here after every task, so a task that cannot be attempted is reached once per
+    // remaining task. On a 5-task story with T3 blocked: 2.1 picks T1 -> 2.1 picks
+    // T2 -> scan reaches T3, queue `skipped` (#1) -> picks T4 -> scan reaches T3
+    // again, queue `skipped` (#2) -> picks T5 -> flush. Six lines for five tasks,
+    // T3 twice, under `Task progress — 6 of 5 tasks this iteration`.
+    const step21 = sliceBetween(implement(), /#+\s*Step\s*2\.1:/i, /#+\s*Step\s*2\.2:/i)
+    expect(step21.toLowerCase()).toMatch(/at most once per invocation/)
+    expect(step21.toLowerCase()).toMatch(/already queued as `skipped`/)
+  })
+
+  it('does not use the bare verb `skips them` for a completed task', () => {
+    // `skipped` is a reserved outcome with a producing call site in Step 2.1. The
+    // Idempotent Re-invocation section used the same verb for the OPPOSITE meaning
+    // ("scans task checklist and git log to identify completed tasks. Skips them.").
+    // Resolved against the vocabulary this same file defines, a re-invocation on a
+    // story whose 4 tasks are all `[x]` queues four `skipped` lines and posts
+    // `Task progress — 4 of 4 tasks this iteration` for an invocation that did no
+    // work — the accretion the guideline forbids, and the exact loss Step 3.1
+    // item 7's scoping fix was written to prevent.
+    const section = sectionOf(implement(), '## Idempotent Re-invocation')
+    expect(section.toLowerCase()).not.toMatch(/skips? them/)
+    expect(section.toLowerCase()).toMatch(/not the `skipped` outcome|neither re-run nor queued/)
+  })
+
   it('has an explicit call site that queues `skipped`', () => {
     // `skipped` is in the guideline's closed set and AC3 names it beside failure,
     // so the only caller must be able to produce it. Without a path, a task blocked
@@ -461,7 +499,94 @@ describe('wiring — nobody duplicates the loop (AC2, T3)', () => {
     // merges the full body), comment mode for the batch.
     expect(section).toContain('$mode: comment')
     expect(section.toLowerCase()).toContain('tick')
+    // and the tick carries the non-blocking signal, which is what makes the
+    // Composition-Interface promise below ("neither failure is load-bearing")
+    // something an agent executing the numbered steps can actually honour.
+    expect(section).toContain('$on-failure: report')
   })
+})
+
+// The tick rides `/write-issue` WRITE mode, and write mode HALTs. A HALT inside a
+// composed skill propagates to its caller, so before this carve-out existed an
+// ordinary tracker error on task 1 of 4 ended the run: no T2/T3/T4, no PR, because
+// one checkbox could not be written. The carve-out has to live where an agent
+// executing the numbered steps actually reads — at each HALT site and in the
+// canonical `## HALT Conditions` list — not only in the Composition Interface,
+// which that agent never reaches.
+describe('the tick never HALTs its caller — the write-mode carve-out (AC "never blocks", T4)', () => {
+  const writeIssue = (): string => read(SKILL_DATASET('capability/write-issue/SKILL.md'))
+
+  /** The non-blocking signal, wherever it is asserted. */
+  const SIGNAL = /\$on-failure/
+
+  it('declares the signal as an argument, defaulting to HALT', () => {
+    const args = sectionOf(writeIssue(), '## Arguments')
+    expect(args).toMatch(SIGNAL)
+    // default preserved: every OTHER caller of write mode still gets a HALT.
+    expect(args.toLowerCase()).toMatch(/`halt`\s*\(default\)|default.*`halt`/)
+    expect(args.toLowerCase()).toContain('report')
+  })
+
+  it('Step 7 returns `not-found` instead of HALTing on it', () => {
+    const step7 = sliceBetween(writeIssue(), /#+\s*Step\s*7:/i, /#+\s*Step\s*7b:/i)
+    expect(step7).toContain('Issue #$id not found.')
+    expect(step7).toMatch(SIGNAL)
+    expect(step7.toLowerCase()).toContain('not-found')
+  })
+
+  it('Step 7b beat 4 returns the unconfirmed membership instead of HALTing on it', () => {
+    // Beat 4 runs on EVERY write-mode write on an explicit-membership tool
+    // (Step 7b's preamble says so), so on GitHub Projects every single tick — and
+    // every DoD box, each its own write — passes through this HALT.
+    const step7b = sliceBetween(writeIssue(), /#+\s*Step\s*7b:/i, /#+\s*Step\s*7c:/i)
+    expect(step7b).toMatch(SIGNAL)
+    expect(step7b.toLowerCase()).toContain('membership-unconfirmed')
+  })
+
+  it('Step 8 returns `write-failed` instead of HALTing on a tracker error', () => {
+    const step8 = sliceBetween(writeIssue(), /#+\s*Step\s*8:/i, /^## Output Format/m)
+    expect(step8).toMatch(SIGNAL)
+    expect(step8.toLowerCase()).toContain('write-failed')
+  })
+
+  it('the canonical HALT Conditions list agrees with the steps', () => {
+    // The list is the second thing an agent consults, and a list that still says
+    // HALT re-establishes the bug the steps just fixed.
+    const rows = sectionOf(writeIssue(), '## HALT Conditions')
+      .split('\n')
+      .filter(l => /^- /.test(l))
+    // the three tracker-side rows — one each, and each carrying the carve-out.
+    for (const marker of [
+      /issue not found/i,
+      /membership could not be confirmed/i,
+      /PM tool error/i,
+    ]) {
+      const matched = rows.filter(l => marker.test(l))
+      expect(matched).toHaveLength(1)
+      expect(matched[0]).toMatch(SIGNAL)
+    }
+  })
+
+  it('keeps the exemption narrow — argument/config HALTs still fire', () => {
+    // A blanket "never HALT" would swallow an unsupported `$type`, a missing
+    // template and a malformed state-mapping: deterministic caller/config bugs that
+    // a report only invites the caller to re-trigger on every retry.
+    const halts = sectionOf(writeIssue(), '## HALT Conditions')
+    for (const row of ['Unsupported `$type`', 'Template not found', 'Malformed']) {
+      const line = halts.split('\n').find(l => l.includes(row))
+      expect(line).toBeDefined()
+      expect(line).not.toMatch(SIGNAL)
+    }
+  })
+
+  it.each(guidelineCopies)(
+    '%s: the guideline says the transport HALTs and how the tick opts out',
+    (_label, load) => {
+      const section = sectionOf(load(), '## Failure and conflict handling')
+      expect(section).toMatch(SIGNAL)
+      expect(section.toLowerCase()).toMatch(/halt/)
+    },
+  )
 })
 
 describe('conflict and write-failure fallbacks (edge cases, T4)', () => {
@@ -533,6 +658,44 @@ describe('what the loop never does (AC4, T4)', () => {
   it.each(guidelineCopies)('%s: writes no board state', (_label, load) => {
     expect(sectionOf(load(), NEVER).toLowerCase()).toMatch(/board (state|field)/)
   })
+
+  it.each(guidelineCopies)(
+    '%s: does not promise board-inertness the transport does not deliver',
+    (_label, load) => {
+      // "this loop never touches a board field" reads as zero board interaction, but
+      // the transport it mandates runs `/write-issue` Step 7b's membership beats on
+      // EVERY write-mode write whether or not a state was requested. On GitHub
+      // Projects (explicit membership) each tick — plus each DoD box, its own write —
+      // fires a project-item read and an idempotent add. So a reader plans a loop
+      // with no board interaction and gets one read/add per checkbox. Both places
+      // that make the promise must scope it to the STATE field and name the beats.
+      for (const heading of ['## Scope — one mechanism, one owner', NEVER]) {
+        const low = sectionOf(load(), heading).toLowerCase()
+        expect(low).toMatch(/board \*\*state\*\* field|board state field/)
+        expect(low).toMatch(/membership beat/)
+      }
+    },
+  )
+})
+
+describe('the invocation-scoped batch names its own cost (ADL Consequences)', () => {
+  it.each(guidelineCopies)(
+    '%s: states that a batch lost with its session is never recovered',
+    (_label, load) => {
+      // Invocation scoping buys idempotency at the price of a permanently unreported
+      // window: an invocation that ticks T1/T2 and dies on a context reset before the
+      // flush leaves those two lines — including any `write-failed`/`not-found`
+      // diagnostic a human needs in order to tick by hand — unposted on any
+      // invocation, because the queue lives in session memory while Step 2.8 item 8
+      // already persists a checkpoint after every task. The ticks survive; the
+      // narrative does not. Stated, it is a tradeoff; unstated, it reads as an
+      // oversight.
+      const section = sectionOf(load(), '## Batching and the comment format')
+      const low = section.toLowerCase()
+      expect(low).toMatch(/lost with its session|does not survive|is not recovered/)
+      expect(low).toMatch(/the ticks (stand|survive)/)
+    },
+  )
 })
 
 describe('the docs site carries the feature (DoD)', () => {
