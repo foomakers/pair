@@ -125,13 +125,32 @@ describe('review-identity.sh — the identity must be excluded from the 🔴 gat
   })
 
   it('AC2/AC3 — identity_verdict_event gates APPROVE on the light row, fail-safe closed', () => {
-    expect(ADAPTER).toMatch(/identity_verdict_event <mode> <verdict> <approve_authorized>/)
     expect(ADAPTER).toMatch(
-      /local mode="\$\{1:-\}" verdict="\$\{2:-\}" approve_authorized="\$\{3:-0\}"/,
+      /identity_verdict_event <mode> <verdict> <approve_authorized> <self_authored>/,
+    )
+    expect(ADAPTER).toMatch(
+      /local mode="\$\{1:-\}" verdict="\$\{2:-\}" approve_authorized="\$\{3:-0\}" self_authored="\$\{4:-\}"/,
     )
     expect(ADAPTER).toMatch(/WHY AN APPROVING VERDICT IS NOT AUTOMATICALLY AN `APPROVE` EVENT/)
     // REQUEST_CHANGES is deliberately ungated — it blocks, it never unlocks
     expect(ADAPTER).toMatch(/`REQUEST_CHANGES` needs no such gate/)
+  })
+
+  // REGRESSION (review round 3). `session` is the DEFAULT mode (no identity configured),
+  // and COMMENT there is the workaround for ONE host rule: a SELF-authored APPROVE /
+  // REQUEST_CHANGES is rejected. Returning COMMENT for every session verdict regressed the
+  // shipped non-self-authored case: a CHANGES-REQUESTED by a second maintainer stopped
+  // being a real change request (merge button unblocked, zero blocking reviewers) and an
+  // APPROVED stopped counting toward `required_approving_review_count`.
+  it('session mode returns the NATIVE event unless the acting account authored the PR', () => {
+    expect(ADAPTER).toMatch(/WHY `session` MODE IS NOT UNIFORMLY A COMMENT/)
+    expect(ADAPTER).toMatch(
+      /self_authored\s+: `session` mode only — 0 when the acting session account is/,
+    )
+    // fail-safe: unknown authorship is treated as self-authored
+    expect(ADAPTER).toMatch(/anything else \(empty, absent, unknown\) is treated as SELF-authored/)
+    // the light row governs the IDENTITY's approval, so it is inert in session mode
+    expect(ADAPTER).toMatch(/Read in `identity` mode ONLY/)
   })
 
   it('the audit comment names BOTH exclusion clauses, not just the type one', () => {
@@ -189,8 +208,12 @@ describe('pr-state.sh — the light row is a SIBLING, not a change to the table 
   })
 
   it('the light row declares itself the sole authority for the APPROVE event', () => {
-    expect(EVALUATOR).toMatch(/THIS ROW IS THE ONLY AUTHORITY FOR AN `APPROVE` EVENT/)
-    expect(EVALUATOR).toMatch(/third argument of\s*\n?#\s*`identity_verdict_event`/)
+    expect(EVALUATOR).toMatch(
+      /THIS ROW IS THE ONLY AUTHORITY FOR AN `APPROVE` EVENT THE IDENTITY SIGNS/,
+    )
+    expect(EVALUATOR).toMatch(/third argument of `identity_verdict_event`/)
+    // scoped, so it cannot be read as a rule over the session account's own review
+    expect(EVALUATOR).toMatch(/In `session` mode no identity acts and the argument is not read/)
   })
 })
 
@@ -249,6 +272,25 @@ describe('review — resolves WHO acts, then submits (AC1, AC4)', () => {
     expect(REVIEW).toMatch(/Step 5\.4 publishes this same value and does not re-synthesize it/)
     expect(REVIEW).toMatch(/apply the state Step 5\.3 already synthesized/i)
   })
+
+  // REGRESSION (review round 3). The single `resolve_pr_state` call was nested inside the
+  // APPROVE-authority step, which is scoped to `identity` mode AND to an APPROVED verdict,
+  // while Step 5.4 was forbidden from making the call itself. In `session` mode (every
+  // project today) nothing was ever synthesized, yet Step 5.4 still demands exactly one
+  // `pr-state:*` label — so the run either loses the #234/#390 state view or violates the
+  // "do not re-synthesize" instruction. Same on any CHANGES-REQUESTED verdict.
+  it('the synthesis is its own UNCONDITIONAL step, not nested in the APPROVE authority', () => {
+    const step53 = REVIEW.slice(REVIEW.indexOf('### Step 5.3'), REVIEW.indexOf('### Step 5.4:'))
+    const synthesis = step53.indexOf('resolve_pr_state <gates> <verdict> <tier>')
+    const authority = step53.indexOf('only in `identity` mode, and only when Step 5.2 decided')
+    expect(synthesis).toBeGreaterThan(-1)
+    expect(authority).toBeGreaterThan(-1)
+    // the synthesis comes FIRST and carries no mode/verdict scope of its own
+    expect(synthesis).toBeLessThan(authority)
+    expect(step53).toMatch(/in \*\*all three modes and for every verdict\*\*/)
+    // the `session` skip belongs to the authority step, never to the synthesis
+    expect(step53).toMatch(/In `session` mode skip this entirely: `approve-authorized = 0`/)
+  })
 })
 
 describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)', () => {
@@ -262,7 +304,9 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     // The containment is load-bearing only because the row's result is the third
     // argument of `identity_verdict_event`. Documentation alone would not gate anything:
     // any approving native review satisfies a host `required_approving_review_count >= 1`.
-    expect(REVIEW).toMatch(/identity_verdict_event <mode> <verdict> <approve-authorized>/)
+    expect(REVIEW).toMatch(
+      /identity_verdict_event <mode> <verdict> <approve-authorized> <self-authored>/,
+    )
     expect(REVIEW).toMatch(/light_auto_approve_allowed[\s\S]{0,400}approve-authorized/)
     expect(REVIEW).toMatch(/APPROVED \+ not authorized\*\* ⇒ `event = COMMENT`/)
     // and every auto-approval mention in the skill is qualified by "light"
@@ -310,6 +354,46 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     // and the token step 2 reports is exactly the one the Output Format block lists
     expect(step).toContain('n-a — no identity (session mode)')
     expect(REVIEW).toContain('├── Light row:  [n-a — no identity (session mode)')
+  })
+
+  // REGRESSION (review round 3). The session bullet stated COMMENT as an unconditional
+  // rule ("the reviewer is the author there"), which is true of self-review only. Scope it,
+  // and keep the Graceful Degradation self-review bullet saying the same thing.
+  it('the session bullet is scoped to SELF-review, not to the whole default mode', () => {
+    expect(REVIEW).toMatch(/`session` \+ a NON-self-authored PR\*\* ⇒ the native `APPROVE`/)
+    expect(REVIEW).toMatch(
+      /`session` \+ a SELF-authored PR \(or unknown authorship\)\*\* ⇒ `event = COMMENT`/,
+    )
+    // the blanket rule is gone, not merely counter-argued elsewhere
+    expect(REVIEW).not.toMatch(
+      /\*\*`session`\*\* \(or any unresolved verdict\) ⇒ `event = COMMENT`/,
+    )
+    // and the flow says HOW self-authorship is resolved, fail-safe closed
+    expect(REVIEW).toMatch(/pass `0` only when they provably differ/)
+  })
+
+  // REGRESSION (review round 3). The same report row was spelled four ways, one of them
+  // naming an `Identity approve:` row the Output Format block does not contain — so two
+  // runs on the same PR emit structurally different reports and a consumer (the #219
+  // automation loop) cannot key on either.
+  it('the Light row is spelled with the Output Format block’s own strings, everywhere', () => {
+    // the row that never existed in the output block is gone
+    expect(REVIEW).not.toContain('Identity approve:')
+    const values = [
+      'n-a — no identity (session mode)',
+      'not-authorized — <unmet condition>, verdict submitted as COMMENT',
+      'approved — native APPROVE by the identity + audit comment posted',
+    ]
+    const step = REVIEW.slice(REVIEW.indexOf('### Step 5.4b'), REVIEW.indexOf('### Step 5.5'))
+    const output = REVIEW.slice(REVIEW.indexOf('├── Light row:'), REVIEW.indexOf('├── Tier req.:'))
+    for (const v of values) {
+      expect(output, `the Output Format block must list: ${v}`).toContain(v)
+      expect(step, `Step 5.4b must quote the output block verbatim: ${v}`).toContain(v)
+    }
+    // the degradation bullet fills the placeholder, keeping the same shape
+    expect(REVIEW).toContain(
+      'Light row: not-authorized — adoption declares no light family, verdict submitted as COMMENT',
+    )
   })
 })
 
@@ -491,7 +575,16 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
       GITHUB_GUIDE.indexOf('6. **Publish `pair-review` as a check run**'),
       GITHUB_GUIDE.indexOf('#### Bot user (alternative)'),
     )
-    expect(pub).toMatch(/IDENTITY_KIND="\$\(sed -n 's\/\^Review identity:/)
+    // REGRESSION (review round 3). The round-2 assignment was anchored at
+    // `^Review identity:` while adoption ships the key as a markdown bullet with bold
+    // markers, so it matched NOTHING and every configured identity silently resolved
+    // `none` ⇒ `session` ⇒ `commit-status`. The extraction must strip bullet, bold and
+    // backticks — and it is EXECUTED against the real files by the smoke scenario, which
+    // is what makes this a behavior contract rather than a string.
+    expect(pub).toMatch(/IDENTITY_KIND="\$\(sed -n 's\/\^-\[\[:space:\]\]\*\\\*\\\*Review identity/)
+    expect(SMOKE).toMatch(/KIND_EXTRACT="\$\(grep -m1 -F 'IDENTITY_KIND="\$\(sed -n'/)
+    expect(SMOKE).toMatch(/extraction on THIS repo's way-of-working \(bullet form\) ⇒ none" none/)
+    expect(SMOKE).toMatch(/a configured App adoption ⇒ app"\s+app/)
     expect(pub).toMatch(/^\s+IDENTITY_CONFIGURED=0$/m)
     expect(pub).toMatch(/^\s+IDENTITY_HEALTHY=0$/m)
     // and it names where the health flag comes from: the probes AND the exclusion check
@@ -572,7 +665,12 @@ describe('ADR-018 — the amendment records adoption AND the non-changes (AC6)',
   })
 
   it('records that the light row is the sole authority for a native APPROVE', () => {
-    expect(ADR_018).toMatch(/A native `APPROVE` is authorized by the light row and by nothing else/)
+    expect(ADR_018).toMatch(
+      /A native `APPROVE` \*by the identity\* is authorized by the light row and by nothing else/,
+    )
+    // and the amendment records why `session` mode is NOT uniformly a comment-form review
+    expect(ADR_018).toMatch(/the comment form is the self-review case, not the mode/)
+    expect(ADR_018).toMatch(/The PR-state synthesis is unconditional/)
     expect(ADR_018).toContain('identity_verdict_event')
   })
 
@@ -643,7 +741,7 @@ describe('verification split is real, not claimed (gate-tooling ADL)', () => {
   it('the docs page states the exclusion as two clauses and the APPROVE authority', () => {
     expect(DOCS_PAGE).toContain('REVIEW_IDENTITY_LOGIN')
     expect(DOCS_PAGE).toMatch(/A machine user is not a "Bot" to the API/)
-    expect(DOCS_PAGE).toMatch(/only thing that authorizes an approving review/i)
+    expect(DOCS_PAGE).toMatch(/only thing that authorizes the identity's approving review/i)
   })
 
   it('the smoke scenario asserts an INSTALLED project carries the adapter and the guide', () => {
@@ -672,5 +770,24 @@ describe('docs site — the feature is documented where readers look', () => {
 
   it('cross-links the PR state flow page it extends', () => {
     expect(DOCS_PAGE).toContain('/docs/concepts/pr-state-flow')
+  })
+
+  // REGRESSION (review round 3). The list said "Three properties" and carried four — on a
+  // page whose subject is that the four conditions are exhaustive.
+  it('the property list announces the number of items it actually has', () => {
+    const intro = DOCS_PAGE.match(/(\w+) properties are worth stating plainly:/)
+    expect(intro?.[1]).toBe('Four')
+    const listed = DOCS_PAGE.slice(DOCS_PAGE.indexOf('properties are worth stating plainly:'))
+      .split('\n\n')[1]
+      .split('\n')
+      .filter(l => l.startsWith('- **')).length
+    expect(listed).toBe(4)
+  })
+
+  // REGRESSION (review round 3). The page presented the comment-form verdict as what
+  // `session` mode always does; it is the SELF-review case only.
+  it('scopes the comment-form verdict to self-review, not to the whole default mode', () => {
+    expect(DOCS_PAGE).toMatch(/when the account running the flow authored the pull request/i)
+    expect(DOCS_PAGE).toMatch(/reviewing someone else's pull request/i)
   })
 })

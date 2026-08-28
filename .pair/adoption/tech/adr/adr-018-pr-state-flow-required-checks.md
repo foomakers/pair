@@ -185,7 +185,8 @@ still the design; this amendment layers a credential resolution step and one ado
    author, so GitHub's self-approval rejection no longer applies: the verdict is a **native APPROVE /
    REQUEST_CHANGES** by the identity rather than the `--comment` degradation, and a GitHub App identity holds
    `checks: write`, so `pair-review` publishes as a **check run**. Both are *upgrades of a degraded path*: the
-   `--comment` verdict and the commit status remain exactly what `session` mode does, and remain documented.
+   `--comment` verdict (which `session` mode still produces on a **self-authored** PR) and the commit status
+   remain exactly what that mode does, and remain documented.
 3. **An adoption-gated light auto-approval row.** `light_auto_approve_allowed` ships beside `resolve_pr_state`
    in `pr-state.sh` and yields approve/no-op from four inputs — adoption declares `light` in
    `## Tag Projection`, the PR carries the `light` tag, the tier is **below red**, and `resolve_pr_state`
@@ -207,11 +208,25 @@ still the design; this amendment layers a credential resolution step and one ado
   from a second human account; light applies **below red only**. This is the one line of Option 4's Cons that
   is *not* being reversed here: we take the identity's auditability and native verdict, and we decline the rule
   change it tempted.
-- **A native `APPROVE` is authorized by the light row and by nothing else.** `light_auto_approve_allowed` is an
-  input to `identity_verdict_event`, so an approving verdict outside the row is submitted as a comment-form
-  review. Without that wiring the row's four conditions would gate nothing: on a repository with
+- **A native `APPROVE` *by the identity* is authorized by the light row and by nothing else.**
+  `light_auto_approve_allowed` is an input to `identity_verdict_event`, so an approving verdict the identity
+  would sign outside the row is submitted as a comment-form review. The row governs the review cast **on the
+  project's behalf**; it is not read in `session` mode, where the acting account signs its own review exactly as
+  it did before this amendment. Without that wiring the row's four conditions would gate nothing: on a repository with
   `required_approving_review_count >= 1` any approving native review satisfies the host's approvals rule on its
   own, tagged `light` or not, declared or not. `REQUEST_CHANGES` is ungated — it blocks, it never unlocks.
+- **`session` mode keeps the NATIVE verdict; the comment form is the self-review case, not the mode.** The
+  `--comment` verdict is the workaround for one host rule — GitHub rejects an APPROVE / REQUEST_CHANGES on a PR
+  you authored. With no identity configured and a *second* maintainer reviewing, the host accepts the native
+  event and always did: `identity_verdict_event` therefore takes a fourth argument, `self_authored`, and returns
+  COMMENT in `session` mode only when the acting account is the author or authorship could not be read
+  (fail-safe). Collapsing every `session` verdict to COMMENT would have removed a real change request (nothing
+  blocking the merge button) and a real approval (nothing counting toward `required_approving_review_count`) on
+  every two-human repository — i.e. it would have made the identity mandatory to keep behavior a project already
+  had.
+- **The PR-state synthesis is unconditional.** `resolve_pr_state` is called once per review, in its own step,
+  in **all three modes and for every verdict** — Step 5.4 publishes exactly one `pr-state:*` label on every run,
+  so the call can never be nested inside the (identity-only, APPROVED-only) APPROVE-authority step.
 - **`resolve_pr_state`'s table is untouched.** No row is added, removed, or reordered; the light row is a
   **sibling** function that consumes its output. A green/yellow PR still reaches `ready-to-merge` and a human
   still merges — the light row changes *who supplies the host's required approving review*, never what the
