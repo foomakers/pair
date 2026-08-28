@@ -22,6 +22,10 @@ const KB_REL = 'guidelines/collaboration/project-management-tool/task-progress-f
 const GUIDELINE_DATASET = join(__dirname, '../../dataset/.pair/knowledge', KB_REL)
 const GUIDELINE_MIRROR = join(__dirname, '../../../../.pair/knowledge', KB_REL)
 
+const SKILL_DATASET = (rel: string): string => join(__dirname, '../../dataset/.skills', rel)
+const SKILL_MIRROR = (name: string): string =>
+  join(__dirname, '../../../../.claude/skills', name, 'SKILL.md')
+
 const read = (path: string): string => readFileSync(path, 'utf-8')
 const guideline = (): string => read(GUIDELINE_DATASET)
 const guidelineMirror = (): string => read(GUIDELINE_MIRROR)
@@ -179,5 +183,76 @@ describe('outcome vocabulary — failure and skip are recorded, not ticked (AC3,
     // column — the shape that makes an unanswered outcome visible.
     expect(section).toMatch(/\|\s*Outcome\s*\|/)
     expect(section.toLowerCase()).toMatch(/\|\s*checklist item\s*\|/)
+  })
+})
+
+describe('wiring — /implement owns both call sites (AC1/AC2, T3)', () => {
+  const implement = (): string => read(SKILL_DATASET('process/implement/SKILL.md'))
+  const implementMirror = (): string => read(SKILL_MIRROR('pair-process-implement'))
+
+  it('points at the guideline rather than restating the mechanism', () => {
+    expect(implement()).toContain('task-progress-feedback.md')
+    expect(implementMirror()).toContain('task-progress-feedback.md')
+  })
+
+  it('declares /write-issue as an OPTIONAL composed skill — feedback never blocks the story', () => {
+    // Optional by design (AC "missing feedback never blocks implementation"): a
+    // required composition would turn an uninstalled writer into a HALT and stop
+    // the very work the comment only annotates.
+    const table = sectionOf(implement(), '## Composed Skills')
+    expect(table).toMatch(/\/write-issue\b/)
+    expect(table).toMatch(/\/write-issue[^\n]*Optional/)
+  })
+
+  it('ticks and queues per task at Step 2.8, not at the end', () => {
+    const step28 = sectionOf(implement(), '### Step 2.8: Task Completion')
+    const low = step28.toLowerCase()
+    expect(low).toContain('task-progress-feedback')
+    expect(low).toMatch(/queue/)
+  })
+
+  it('flushes the batch in the closing phase, before the checkpoint hand-off', () => {
+    const c = implement()
+    const flushIdx = c.search(/#+\s*Step\s*3\.1b:/i)
+    const checkpointIdx = c.search(/#+\s*Step\s*3\.2:\s*Write the Checkpoint/i)
+    expect(flushIdx).toBeGreaterThanOrEqual(0)
+    expect(checkpointIdx).toBeGreaterThan(flushIdx)
+    // and the flush step is about the progress comment, not something else that
+    // happens to occupy the slot.
+    const flushStep = c.slice(flushIdx, checkpointIdx).toLowerCase()
+    expect(flushStep).toMatch(/flush/)
+    expect(flushStep).toMatch(/\$mode:?\s*=?\s*comment/)
+  })
+
+  it('flushes on the way out of a HALT too', () => {
+    // The run with the most to report is the one that stopped. A flush only on
+    // the success path leaves exactly the failed iteration silent (AC3).
+    const halts = sectionOf(implement(), '## HALT Conditions').toLowerCase()
+    expect(halts).toMatch(/flush/)
+  })
+
+  it('reports the feedback outcome in its own output block', () => {
+    expect(sectionOf(implement(), '## Output Format')).toMatch(/Progress:/)
+  })
+})
+
+describe('wiring — nobody duplicates the loop (AC2, T3)', () => {
+  it('/loop states it never posts its own per-task progress comments', () => {
+    const boundaries = sectionOf(
+      read(SKILL_DATASET('loop/SKILL.md')),
+      '## Boundaries — What This Skill Does Not Do',
+    )
+    expect(boundaries.toLowerCase()).toMatch(/task-progress|per-task progress/)
+    expect(boundaries).toContain('task-progress-feedback.md')
+  })
+
+  it('/write-issue documents the composition /implement drives it through', () => {
+    const writeIssue = read(SKILL_DATASET('capability/write-issue/SKILL.md'))
+    const section = sectionOf(writeIssue, '## Composition Interface')
+    expect(section).toMatch(/When composed by `\/implement`/)
+    // both modes, because the loop uses both: write mode for the tick (caller
+    // merges the full body), comment mode for the batch.
+    expect(section).toContain('$mode: comment')
+    expect(section.toLowerCase()).toContain('tick')
   })
 })

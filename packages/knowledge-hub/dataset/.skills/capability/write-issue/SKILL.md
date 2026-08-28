@@ -1,7 +1,7 @@
 ---
 name: write-issue
 description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories, /publish-pr."
-version: 0.9.0
+version: 0.10.0
 author: Foomakers
 ---
 
@@ -285,6 +285,13 @@ When composed by `/plan-stories`:
 
 - **Input**: `/plan-stories` invokes `/write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/plan-stories` uses it for status tracking.
+
+When composed by `/implement` (the task-progress feedback loop, [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)):
+
+- **Input, per task (the tick)**: `$type: story`, `$id: [story-id]`, `$content` = the story's **current full body with exactly one checklist line patched** (`[ ]` → `[x]`) by the caller. The same read-merge contract `/plan-tasks` is held to, applied to a single line: this skill overwrites the body with what it is given, so a caller that re-renders instead of patching destroys the story's AC/DoD/task breakdown. `/implement` diff-checks its own patch before composing here, and abandons a write whose diff is not one checkbox-only line.
+- **Input, once per invocation (the batch)**: `$mode: comment`, `$id: [story-id]`, `$comment` = the rendered progress batch. No `$type`, no `$content`, no `$status` — the body is not touched by the flush.
+- **Output**: the issue identifier (tick) / `Commented` or `Comment warned` (batch). **Neither failure is load-bearing**: `/implement` records the outcome in its batch and continues the story. Comment mode already warns instead of HALTing; a failed tick is likewise never a HALT for this caller.
+- **Dedup is the caller's**, as for every comment-mode composition: the tick is naturally idempotent (an already-`[x]` item is not re-written at all), and the batch is posted exactly once per invocation by construction.
 
 When composed by `/publish-pr` (the cross-link back-link, split PM-tool/code-host projects):
 

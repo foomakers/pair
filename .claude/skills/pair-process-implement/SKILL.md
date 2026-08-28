@@ -1,7 +1,7 @@
 ---
 name: pair-process-implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /pair-capability-verify-quality, /pair-capability-record-decision, /pair-capability-checkpoint, /pair-capability-publish-pr."
-version: 0.6.1
+version: 0.7.0
 author: Foomakers
 ---
 
@@ -23,6 +23,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 | `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
 | `/pair-capability-checkpoint`      | Capability | Yes — `$mode=resume` at the opening phase (resume probe), `$mode=write` at the closing phase (handoff artifact). If not installed, degrade to git+PM-tool resume (see Graceful Degradation). |
 | `/pair-capability-publish-pr`      | Capability | Yes — the closing phase composes it (gate → PR → board) inside a handoff-only subagent. If not installed → **HALT** (implement never re-implements PR creation). |
+| `/pair-capability-write-issue`     | Capability | Optional — the task-progress feedback writer ([task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)): write mode for the tick (Step 2.8), `$mode: comment` for the batched progress comment (Step 3.1b). If not installed, warn and continue **without** ticks or comment — missing feedback never blocks the story. |
 | `/pair-capability-assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/pair-capability-verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
@@ -246,9 +247,10 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    ```
 
 6. **Verify**: Commit created.
-7. **Act**: Update the PM tool story issue body:
-   - Mark the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section.
-   - Mark any **Definition of Done** checkboxes that are now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated"). Leave unchecked items that require reviewer confirmation (e.g., "Code reviewed and merged").
+7. **Act — tick and queue** (the task-progress feedback loop, per [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md); the mechanism is **not** restated here):
+   - Locate the task's checklist item in the **Task Breakdown** section by its **task ID**, and tick it (`- [ ]` → `- [x]`) with the tick-only, diff-checked patch the guideline defines. Mark any **Definition of Done** checkbox now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated") by the same rule; leave the ones needing reviewer confirmation (e.g., "Code reviewed and merged").
+   - **Queue** the task's outcome line for this invocation's batched comment — `ticked`, or the outcome the guideline's vocabulary gives when the tick did not land. The queue is flushed once, at Step 3.1b.
+   - **Never blocking**: a locator mismatch, a rejected patch or a failed write is queued and the run continues. A missing tick is a reporting defect, never a reason to stop implementing.
 8. **Act — persist progress**: If `/pair-capability-checkpoint` is installed, compose `/pair-capability-checkpoint $mode=write` to update `.pair/working/checkpoints/<story-id>.md` with the tasks now done. This keeps the checkpoint current so an interruption after this task resumes from the next pending one (Step 0.0). If `/pair-capability-checkpoint` is not installed, skip — git+PM state still supports the git-based resume.
 9. **Check**: Is this the last task?
    - **Yes**: Move to Phase 3 (Closing: checkpoint + PR).
@@ -286,9 +288,16 @@ The task cycle is done. The closing phase writes the checkpoint (handoff artifac
    ```
 
 6. **Verify**: Commit created with all changes.
-7. **Act**: Update the PM tool story issue body:
-   - Mark ALL task checkboxes (`- [x] **T-N**`) in the **Task Breakdown** section.
-   - Mark all **Definition of Done** checkboxes that are factually satisfied by the implementation. Leave unchecked items that require reviewer confirmation (e.g., "Code reviewed and merged").
+7. **Act — tick and queue**: apply Step 2.8's item 7 once per completed task — same locator, same tick-only patch, same queued outcome line. Leave Definition-of-Done boxes that require reviewer confirmation unchecked.
+
+### Step 3.1b: Flush the Task-Progress Comment
+
+The batch queued across this invocation is posted **exactly once**, here, before the hand-off — so the story carries its progress narrative whether or not the PR pipeline that follows succeeds.
+
+1. **Check**: Is the queue empty (no task completed or attempted this invocation)? If so, post nothing and move to Step 3.2 — an empty batch never becomes a "nothing to report" comment.
+2. **Act**: Render the batch in the D22 shape [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md) defines (headline, one line per task, everything longer collapsed in `<details>`) and post it with `/pair-capability-write-issue` `$mode: comment`, `$id` = the story id. One comment per run iteration — never a second one, whatever the batch holds.
+3. **Act — degradation**: `/pair-capability-write-issue` not installed, or the comment warns instead of posting ⇒ report the queued lines in this skill's own output and continue. The PR is not held for a comment.
+4. **Verify**: Either the comment is confirmed by a read of the item's comments, or the warning plus the queued lines were surfaced. In both cases the story body, labels and board state are unchanged by this step.
 
 ### Step 3.2: Write the Checkpoint (handoff artifact)
 
@@ -338,6 +347,7 @@ IMPLEMENTATION COMPLETE:
 ├── Strategy:   [commit-per-task | commit-per-story]
 ├── Tasks:      [N/N completed]
 ├── Commits:    [N commits on branch]
+├── Progress:   [N ticked, N failed/skipped — 1 comment posted | queue empty, no comment | comment warned — lines below]
 ├── Checkpoint: [.pair/working/checkpoints/<id>.md — written]
 ├── Context:    [clean — subagent handoff-only | degraded — inline publish, no subagent reset]
 ├── PR:         [#PR-number — URL — Created | Updated (from /publish-pr)]
@@ -361,7 +371,7 @@ Implementation stops immediately when:
 - **Quality gate red inside `/pair-capability-publish-pr`** (Step 3.3) — propagates as implement's HALT; no PR side effects (the PR-template-not-found and gate HALTs live in `/pair-capability-publish-pr`)
 - **PR state is not `ready-to-merge`** (Step 4.1) — `merge_allowed` fails: red gate, review not approved/still pending, or 🔴 without an explicit non-author human approval on the current head. Never bypass a required check to merge
 
-On HALT: report the blocker clearly, propose resolution, wait for developer.
+On HALT: **flush the task-progress batch first** (Step 3.1b's rendering and posting rules, unchanged — the run that stopped is the one with the most to report, and a flush reached only on the success path would leave exactly the failed iteration silent), then report the blocker clearly, propose resolution, wait for developer. The failing task is queued as `failed` with its reason, so its checklist item stays unticked.
 
 ## Idempotent Re-invocation
 
