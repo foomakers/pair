@@ -2,6 +2,9 @@ import { describe, expect, test, beforeEach, vi } from 'vitest'
 import { dispatchCommand, finalExitCode } from './dispatcher'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createTestFs } from '#test-utils'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type {
   InstallCommandConfig,
   UpdateCommandConfig,
@@ -225,6 +228,74 @@ describe('dispatchCommand() - real handlers integration', () => {
     // Break config and verify it fails
     await fs.writeFile(`${cwd}/config.json`, 'invalid json')
     await expect(dispatchCommand(config, fs)).rejects.toThrow()
+  })
+
+  /**
+   * US-451: `run` is the only dispatch whose exit code carries a LOOP outcome, so the branch that
+   * forwards it is what keeps a failed unattended iteration from reading as success to CI or cron.
+   * Round-1 review finding 4: the branch shipped untested.
+   */
+  describe('dispatches run command, forwarding the loop outcome as the exit code', () => {
+    const runConfig = {
+      command: 'run' as const,
+      invocation: { kind: 'skill' as const },
+      scope: {},
+      autonomous: false,
+      approveProjectTrust: false,
+      iterationTimeoutSeconds: 60,
+      dryRun: true,
+    }
+
+    beforeEach(async () => {
+      process.exitCode = undefined
+      // The cascade needs a skill to resolve; this shared fs has no skills registry, so seed the
+      // conventional location the probe falls back to.
+      await fs.writeFile(`${cwd}/.claude/skills/pair-loop/SKILL.md`, '')
+    })
+
+    test('leaves the exit code untouched on a successful (dry) run', async () => {
+      await dispatchCommand({ ...runConfig, scope: { root: '212' } }, fs)
+
+      expect(finalExitCode(process.exitCode)).toBe(0)
+    })
+
+    test('propagates a refusal as a thrown error, never as a silent zero', async () => {
+      // No perimeter: the handler refuses before spawning anything.
+      await expect(dispatchCommand(runConfig, fs)).rejects.toThrow(/No work perimeter declared/)
+    })
+
+    /**
+     * The DISCRIMINATING case (round 2, minor 1): the two assertions above pass with or without
+     * `dispatchWithExitCode`, so only a genuinely non-zero outcome exercises the branch. A real
+     * child process is spawned — a stub "engine" that prints a non-terminal event and exits 0 —
+     * so this also pins the fail-closed rule end to end: exit status 0 from the engine, iteration
+     * failed, `pair run` exits 1.
+     */
+    test('forwards a failed iteration as exit code 1, whatever the engine exited with', async () => {
+      const realDir = mkdtempSync(join(tmpdir(), 'pair-dispatch-'))
+      const binDir = join(realDir, 'bin')
+      mkdirSync(binDir)
+      const stub = join(binDir, 'claude')
+      // Exits 0 deliberately, and emits no terminal event: the outcome must come from the stream.
+      writeFileSync(stub, '#!/usr/bin/env node\nconsole.log(\'{"type":"system"}\')\n')
+      chmodSync(stub, 0o755)
+
+      // The probes read the injected fs; the spawn reads the real one — so the stub and the run
+      // directory have to exist in both worlds.
+      await fs.writeFile(`${realDir}/.claude/skills/pair-loop/SKILL.md`, '')
+      await fs.writeFile(stub, '')
+      vi.stubEnv('PATH', binDir)
+      process.exitCode = 0
+
+      await dispatchCommand(
+        { ...runConfig, dryRun: false, engine: 'claude', scope: { root: '212' }, cwd: realDir },
+        fs,
+      )
+
+      expect(process.exitCode).toBe(1)
+      vi.unstubAllEnvs()
+      rmSync(realDir, { recursive: true, force: true })
+    }, 30000)
   })
 
   test('dispatches kb-validate command', async () => {

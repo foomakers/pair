@@ -69,6 +69,10 @@ export async function dispatchCommand(
       })
     case 'validate-config':
       return commandRegistry['validate-config'].handle(config, fs)
+    case 'run':
+      // The loop's outcome IS the exit code: a failed iteration (no terminal event, or an
+      // explicit failure one) must never read as success to a CI job or a cron wrapper.
+      return dispatchWithExitCode(() => commandRegistry.run.handle(config, fs))
     default:
       return dispatchKbCommand(config, fs, opts)
   }

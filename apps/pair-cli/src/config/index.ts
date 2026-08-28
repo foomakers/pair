@@ -1,4 +1,5 @@
 export * from './loader'
+export * from './engine-block'
 export * from './discovery'
 export * from './kb-resolver'
 export * from './fs-utils'

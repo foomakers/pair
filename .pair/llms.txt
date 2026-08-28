@@ -38,6 +38,7 @@
 - [ADR-018: PR State Flow — Required Code-Host Checks as the Merge Authority (Labels Are a View)](.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md)
 - [ADR-020: Bounded flatten depth — a registry's entry granularity, opt-in per registry](.pair/adoption/tech/adr/adr-020-bounded-flatten-depth-entry-granularity.md)
 - [ADR-021: The non-interactive signal is an argument on the composed skill, not a note on the caller](.pair/adoption/tech/adr/adr-021-approval-signal-on-the-composed-skill.md)
+- [ADR-021: Fan-out is one capability with three realizations — in-harness, external driver, degraded](.pair/adoption/tech/adr/adr-021-fan-out-three-realizations.md)
 - [ADR-022: The coverage-baseline ratchet is EXPOSED through the published CLI, not ported to a shipped shell asset](.pair/adoption/tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md)
 - [ADR-023: The coverage-baseline ratchet ships as a GENERATED KB asset, not as a CLI command](.pair/adoption/tech/adr/adr-023-coverage-ratchet-ships-as-a-generated-kb-asset.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
@@ -120,6 +121,7 @@
 - [Decision: `pair-loop`'s shipped Auto-Advance default is `(none)` — fail-closed, not `risk:green`](.pair/adoption/decision-log/2026-08-23-pair-loop-auto-advance-fail-closed-default.md)
 - [Decision: `pair-loop`'s fan-out path resumes from its own audit file, not from `/pair-capability-checkpoint`](.pair/adoption/decision-log/2026-08-23-pair-loop-resumes-from-its-own-audit-file-not-a-checkpoint.md)
 - [Decision: the AI/retro metrics panel is an `analyze-*` capability, and its definitions live in a Delivery-pillar guideline](.pair/adoption/decision-log/2026-08-24-ai-metrics-panel-is-an-analyze-capability.md)
+- [Decision: a `pair.config.json` schema guard stays in `#config` and takes its vocabulary INJECTED, never imported from the command layer](.pair/adoption/decision-log/2026-08-24-config-schema-guards-take-their-vocabulary-injected.md)
 - [Decision: the CLI invocation name is `pair-cli`, not `pair`](.pair/adoption/decision-log/2026-08-25-cli-invocation-canonical-name-is-pair-cli.md)
 - [Decision: Post-merge cleanup covers local branches and worktrees; PR analyses retire at merge](.pair/adoption/decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md)
 

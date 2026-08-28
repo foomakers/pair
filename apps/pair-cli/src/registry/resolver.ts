@@ -61,6 +61,16 @@ export interface Config {
    * `config.json`), merged with `--optional-link-patterns`.
    */
   link_validation?: LinkValidationConfig
+  /**
+   * Optional execution engine for `pair run` (US-451): `{"engine": {"id": "pi"}}`.
+   *
+   * DELTA-ONLY (D21) — hand-written only to deviate from the schema default, so a repository
+   * with no `pair.config.json` still resolves an engine and runs. Validated by
+   * `readEngineDeclaration` (`config/engine-block.ts`) and surfaced by `pair validate-config`;
+   * `--engine` still wins over it. Deliberately NOT the home of autonomy or trust approval:
+   * a committed file must never be able to grant either (AC6).
+   */
+  engine?: { id: string }
   [key: string]: unknown
 }
 

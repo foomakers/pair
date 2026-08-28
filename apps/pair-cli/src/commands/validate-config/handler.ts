@@ -1,7 +1,8 @@
 import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
-import { loadConfigWithOverrides } from '#config'
+import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
+import { ENGINE_IDS } from '../run/engines'
 import {
   extractRegistries,
   validateAllRegistries,
@@ -50,11 +51,18 @@ export async function handleValidateConfigCommand(
   const workingPath = resolveWorkingPathOverride(workingPathSource)
   const validation = validateAllRegistries(registries, workingPath)
 
-  if (!validation.valid) {
-    const errorMessages = validation.errors.join('\n  - ')
+  // The optional `engine` block (US-451) is validated in the SAME pass as the registries, and
+  // its errors are reported the same way: a malformed block must be a validation failure here
+  // rather than a surprise at `pair run` time. An ABSENT block adds nothing — delta-only.
+  const engineBlock = readEngineDeclaration(workingPathSource, ENGINE_IDS)
+  const errors = [...validation.errors, ...engineBlock.errors]
+
+  if (errors.length > 0) {
+    const errorMessages = errors.join('\n  - ')
     throw new Error(`Configuration validation failed:\n  - ${errorMessages}`)
   }
 
   const regCount = Object.keys(registries).length
-  console.log(chalk.green(`✓ Configuration valid (${regCount} registries)`))
+  const engineNote = engineBlock.engine ? `, engine: ${engineBlock.engine}` : ''
+  console.log(chalk.green(`✓ Configuration valid (${regCount} registries${engineNote})`))
 }

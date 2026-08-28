@@ -63,7 +63,7 @@
 - `$BASE_URL/docs/customization/organization`
 - `$BASE_URL/docs/customization/external-kb`
 
-**Integrations** (7 pages):
+**Integrations** (10 pages):
 
 - `$BASE_URL/docs/integrations`
 - `$BASE_URL/docs/integrations/claude-code`
@@ -71,6 +71,9 @@
 - `$BASE_URL/docs/integrations/github-copilot`
 - `$BASE_URL/docs/integrations/windsurf`
 - `$BASE_URL/docs/integrations/codex`
+- `$BASE_URL/docs/integrations/opencode`
+- `$BASE_URL/docs/integrations/pi`
+- `$BASE_URL/docs/integrations/adding-a-harness`
 - `$BASE_URL/docs/integrations/web-cloud-environments`
 
 **PM Tools** (5 pages):
@@ -134,13 +137,13 @@
 
 ### Expected Result
 
-- All 80 URLs return HTTP 200
+- All 83 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 80 pages
+- Total: 83 pages
 
 ---
 
@@ -186,3 +189,4 @@
 - #278 (bootstrap quick mode): MT-CP501 page count 60 → 61, Getting Started 6 → 7 — added `/docs/getting-started/bootstrap-quick-mode`.
 - #225 (web/cloud environments): MT-CP501 page count 61 → 62, Integrations 6 → 7 — added `/docs/integrations/web-cloud-environments`.
 - #225 (review): MT-CP501 page count 62 → 80 — backfilled the 18 live pages the sweep had drifted past (`/docs`, 5 Concepts, `contributing/writing-migration-pages`, `customization/external-kb`, 2 Migrations, `pm-tools/azure-devops`, 5 Reference, 2 Tutorials). The list is now asserted against the filesystem by `packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts`, so a new page that is not listed here fails CI rather than silently escaping the sweep.
+- #451 (pair-cli execution adapter): MT-CP501 page count 80 → 83, Integrations 7 → 10 — added `/docs/integrations/pi`, `/docs/integrations/opencode` and `/docs/integrations/adding-a-harness` (the harness-execution layer the #450 coordination note left for this story).

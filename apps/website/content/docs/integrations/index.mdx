@@ -45,11 +45,23 @@ pair skills coexist with custom skills or skills from other tools. The `prefix` 
 | [Codex](/docs/integrations/codex) | `AGENTS.md` + `.agents/skills/` | `/skill-name` slash commands |
 | [Cursor](/docs/integrations/cursor) | `.cursor/rules/` | Skill file discovery |
 | [GitHub Copilot](/docs/integrations/github-copilot) | `.github/agents/` | Agent mode |
+| [opencode](/docs/integrations/opencode) | `AGENTS.md` + `.claude/skills/` | Skill discovery, `opencode run` |
+| [pi](/docs/integrations/pi) | `AGENTS.md` + `.agents/skills/` | Skill discovery, `pi -p` |
 | [Windsurf](/docs/integrations/windsurf) | `.windsurf/rules/` | Skill file discovery |
 
 Pick your tool and follow the setup guide. The process takes a few minutes.
 
 Running from a cloud coding environment rather than a local terminal? See [Web and Cloud Environments](/docs/integrations/web-cloud-environments) — what holds there, and the one thing that does not.
+
+### Bridges vs. Harnesses
+
+The table above is about **skill-bridge discovery** — which file a tool reads to find your `.pair/`
+directory. There is a second, separate layer: a **harness** is a tool configured to *execute* pair's
+process (config locations, authentication, model provider, headless mode), and an **engine** is a
+process [`pair run`](/docs/reference/cli/commands#run) can drive one iteration at a time for
+unattended delivery. If you are setting up automation rather than an editor, start at
+[Adding a Harness](/docs/integrations/adding-a-harness) — it explains the three realizations of
+fan-out and what supporting a new engine involves.
 
 ### Other AGENTS.md-Compatible Tools
 

@@ -1,10 +1,13 @@
 {
   "title": "Integrations",
   "pages": [
+    "adding-a-harness",
     "claude-code",
     "codex",
     "cursor",
     "github-copilot",
+    "opencode",
+    "pi",
     "web-cloud-environments",
     "windsurf"
   ]
