@@ -4,6 +4,8 @@ A skill's `## Graceful Degradation` section lists what happens when something it
 
 **Rule of thumb**: degrade (don't HALT) when the missing thing is *optional context or an optional composed skill*; HALT only when the missing thing is *load-bearing* (e.g. a required template, a required composed skill, or the operation is meaningless without it).
 
+A fifth scenario has its own file because the missing thing is neither a file nor a skill but an **execution mechanism the harness owns**: see [harness realization](harness-realization.md) for probe > bind > announce > degrade, and for why a lower tier must preserve the invariant rather than drop it.
+
 ## The four standard scenarios
 
 1. **Guideline/reference file not found** → fall back to a minimal assessment: ask the developer directly for the preference/input the guideline would otherwise have informed, rather than failing.
