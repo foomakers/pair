@@ -1398,9 +1398,72 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
-  it('does not read a `### Process Profile` sub-heading as the section', () => {
-    const r = resolve('## Notes\n\n### Process Profile\n\n- `profile`: `poc`\n')
+  // Round 3 Minor: heading LEVEL was the one level of the declaration the round-2
+  // "detect loosely" fix did not reach. A `### Process Profile` was not a section
+  // AND was not reported — `## Git Workflow` + `### Process Profile` over a
+  // perfectly valid `- `profile`: `poc`` resolved to `default`, 12 steps, zero
+  // halts, zero warnings: byte-identical to having written nothing, in the
+  // widening direction nothing downstream catches.
+  it.each([
+    ['h1', '# Process Profile'],
+    ['h3', '### Process Profile'],
+    ['h4', '#### Process profile'],
+  ])('HALTs on a %s profile heading rather than not seeing it at all', (_, heading) => {
+    const r = resolve(`## Git Workflow\n\n- something\n\n${heading}\n\n- \`profile\`: \`poc\`\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('heading level')
+    expect(r.halts[0]).toContain('## Process Profile')
+    // Still not read as the section — but no longer silently.
     expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('HALTs on a mis-levelled heading even when a valid `##` section also exists', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n\n## Notes\n\n### Process Profile\n\n- `profile`: `custom`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('heading level')
+  })
+
+  it('does not read a `### Process Profile Gate` sub-heading as a profile heading', () => {
+    const r = resolve('## Notes\n\n### Process Profile Gate\n\n- `profile`: `poc`\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 3 Minor: a SECOND `## Process Profile` section was silently ignored —
+  // first match wins, nothing reported. Made likely by this very story: the
+  // shipped template AND this repo's own way-of-working.md both already carry a
+  // `## Process Profile` section that is present and EMPTY (prose only, no keys),
+  // so a team obeying the schema ("the profile lives only in way-of-working.md, in
+  // a `## Process Profile` section") by APPENDING one gets total silence —
+  // `default`, every step enabled, zero halts, zero warnings.
+  it('HALTs when `## Process Profile` is declared more than once', () => {
+    const r = resolve(
+      '## Process Profile\n\nNothing declared here — the profile is `default`.\n\n' +
+        '## Git Workflow\n\n- something\n\n## Process Profile\n\n- `profile`: `poc`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('more than once')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('counts a DECORATED second heading as the same section, not a different one', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n\n## **Process profile** (optional)\n\n- `profile`: `custom`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('more than once')
+  })
+
+  it('does not count a PROSE or FENCED mention as a second section', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n\n## Notes\n\nSee `## Process Profile` above.\n\n' +
+        '```text\n## Process Profile\n\n- `profile`: `custom`\n```\n',
+    )
+    expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
   })
 

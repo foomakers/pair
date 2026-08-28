@@ -38,6 +38,13 @@ Story #251's review found the same failure mode twice, on both sides of the prof
 
 The direction differs — the key case widened, the whitelist case NARROWED — and the schema calls narrowing the worse of the two, because a removed step is indistinguishable from a step not being due.
 
+**"Every level" includes WHERE the section sits, not only what it says** (round 3 — the last two doors into the same room, both verified on the shipped resolver against this repo's own `way-of-working.md`):
+
+- **A second `## Process Profile` section was silently ignored** (first match wins). This story is what makes that the likely edit: the shipped template AND this repo's own adoption file now both carry a `## Process Profile` section that is present and **empty** (prose only, no keys), so a team obeying the schema's own instruction — "the profile lives only in way-of-working.md, in a `## Process Profile` section" — by APPENDING one, rather than editing the existing paragraph, got `{profile: "default", enabled: 12, halts: [], warnings: []}`: byte-identical to the unmodified file.
+- **The heading LEVEL was outside the loose-detection rule.** `### Process Profile` over a valid `` - `profile`: `poc` `` was not a section and, being unmatched, was not reported either — same silent `default`.
+
+Both HALT. The level check is a **separate scan**, deliberately not a widening of `sectionOfWhere`'s `^##` predicate: that predicate also decides where a section ENDS, and for `## The Catalogue` / `## Built-in Profiles` / `## Quick Start Process` an `###` sub-heading is legitimately *inside* the section — widening it would silently truncate parsers no finding is about.
+
 **A shipped mirror is a governed copy, not a build artifact.** `skills:conformance` and the conformance suite now bind the marker + gate pointer on `.claude/skills/pair-*/SKILL.md` as well as on the dataset, mapping names through the real `pair update` transform (`installedSkillDir`) rather than a copy of it.
 
 **The manual path is governed at its own entrypoint.** `AGENTS.md`'s "Without skills" flow carries a profile step before "identify your task", and `checkManualPathEntrypoint` asserts it — on the SECTION, not the file, since a mention parked in an appendix is not an entrypoint.
@@ -57,6 +64,7 @@ The direction differs — the key case widened, the whitelist case NARROWED — 
 - `.claude/skills/**` is now inside the conformance surface for this convention: a mirror regeneration is required after a dataset edit, which `pair update` already does.
 - A team appending one id to a working whitelist without backticks now gets the schema handed back, instead of losing that step from every suggestion for the life of the project.
 - A decorated `## Process Profile` heading is honoured rather than ignored, so the section cannot be disabled by a cosmetic edit.
+- A project that **appends** a `## Process Profile` section instead of editing the empty one the template ships now gets a HALT naming the duplication, rather than the full process back in silence. Same for a section written at `#`, `###` or deeper.
 
 ## Adoption Impact
 

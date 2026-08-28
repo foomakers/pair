@@ -1377,6 +1377,66 @@ export interface ProfileDeclaration {
   present: boolean
   /** Keys DETECTED on a line the value grammar rejects — resolved as a HALT. */
   unreadable: string[]
+  /** Problems with the SECTION itself (duplicated, mis-levelled) — each a HALT. */
+  sectionHalts: string[]
+}
+
+/** A markdown ATX heading line, at any of the six levels. */
+const ATX_HEADING = /^(#{1,6})[ \t]+(.*)$/
+
+/**
+ * What is wrong with the DECLARATION SITE, before a single key is read.
+ *
+ * Rounds 1 and 2 read the key loosely, then the value strictly, then the heading
+ * TEXT loosely. Two levels of the declaration were still outside that rule, and
+ * both fail in the WIDENING direction — the one direction no downstream check
+ * looks at, because a step that vanished from every suggestion is
+ * indistinguishable from a step that is not due yet:
+ *
+ * - **Declared twice.** First match won and the second section was dropped in
+ *   silence. This story makes that the likely shape: the shipped template AND
+ *   this repo's own way-of-working already carry a `## Process Profile` section
+ *   that is present and EMPTY (prose only), so a team obeying the schema — "the
+ *   profile lives only in way-of-working.md, in a `## Process Profile` section" —
+ *   by APPENDING one gets `default` with zero halts and zero warnings.
+ * - **Declared at another heading level.** `### Process Profile` is not a section
+ *   and, being unmatched, was not reported either.
+ *
+ * Deliberately NOT fixed by widening `sectionOfWhere`'s `##` regex: that predicate
+ * also decides where a section ENDS, and for `The Catalogue` / `Built-in Profiles`
+ * / `Quick Start Process` an `###` sub-heading is legitimately inside the section,
+ * not a terminator. So the mis-levelled heading is scanned for SEPARATELY and
+ * reported, and `sectionOf` keeps the semantics its other callers rely on.
+ */
+export function profileSectionProblems(content: string): string[] {
+  const lines = content.split('\n')
+  const inFence = scanFences(lines)
+  let atLevelTwo = 0
+  const misLevelled: number[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i]) continue
+    const heading = ATX_HEADING.exec(lines[i] as string)
+    if (!heading || !isWowProfileHeading((heading[2] as string).trim())) continue
+    if ((heading[1] as string).length === 2) atLevelTwo++
+    else misLevelled.push((heading[1] as string).length)
+  }
+
+  const problems: string[] = []
+  if (atLevelTwo > 1) {
+    problems.push(
+      `\`## ${WOW_PROFILE_SECTION}\` is declared more than once (${atLevelTwo} sections) — keep ` +
+        `one section. Only the first is read, so a profile declared in a later one takes effect ` +
+        `nowhere`,
+    )
+  }
+  for (const level of misLevelled) {
+    problems.push(
+      `\`${WOW_PROFILE_SECTION}\` is declared at heading level ${level} (\`${'#'.repeat(level)}\`) ` +
+        `— the section is \`## ${WOW_PROFILE_SECTION}\`, at level 2. At any other level it is not ` +
+        `read at all, and the profile it declares is silently ignored`,
+    )
+  }
+  return problems
 }
 
 /**
@@ -1398,8 +1458,10 @@ const WOW_PROFILE_KEY = /^\s*[-*]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
  * very keys this reads, and an example is not a declaration.
  */
 export function parseWowProfileSection(content: string): ProfileDeclaration {
+  const sectionHalts = profileSectionProblems(content)
   const section = sectionOfWhere(content, isWowProfileHeading)
-  if (section === null) return { profile: null, whitelist: null, present: false, unreadable: [] }
+  if (section === null)
+    return { profile: null, whitelist: null, present: false, unreadable: [], sectionHalts }
 
   let profile: string | null = null
   let whitelist: string[] | null = null
@@ -1440,7 +1502,7 @@ export function parseWowProfileSection(content: string): ProfileDeclaration {
       whitelist = values
     }
   }
-  return { profile, whitelist, present: true, unreadable }
+  return { profile, whitelist, present: true, unreadable, sectionHalts }
 }
 
 export interface ProfileResolution {
@@ -1469,6 +1531,21 @@ function unreadableShapeHalt(keys: string[]): string {
 }
 
 /**
+ * What is wrong with the declaration's SHAPE, before any profile name is read —
+ * ordered outside-in: WHERE the section sits, then WHAT the keys inside it say.
+ *
+ * Every case here is a HALT with the schema handed back, never a quiet fallback to
+ * `default`: a section declared twice or at a level this reader does not treat as
+ * a section makes every key under it moot, and a key the author clearly meant to
+ * declare in a shape no reader accepts is not "no declaration".
+ */
+function declarationShapeHalts(declaration: ProfileDeclaration): string[] {
+  if (declaration.sectionHalts.length > 0) return declaration.sectionHalts
+  if (declaration.unreadable.length > 0) return [unreadableShapeHalt(declaration.unreadable)]
+  return []
+}
+
+/**
  * The reference resolution of a `## Process Profile` section — the executable
  * statement of the schema `/next` and the gate convention describe in prose.
  *
@@ -1487,10 +1564,10 @@ export function resolveProcessProfile(
 ): ProfileResolution {
   const allIds = entries.map(e => e.id)
   const known = [...Object.keys(builtIns), 'custom']
-  const halt = (message: string): ProfileResolution => ({
+  const halt = (...messages: string[]): ProfileResolution => ({
     profile: 'default',
     enabled: allIds,
-    halts: [message],
+    halts: messages,
     warnings: [],
   })
   const resolved = (profile: string, enabled: string[]): ProfileResolution => ({
@@ -1500,9 +1577,8 @@ export function resolveProcessProfile(
     warnings: prerequisiteWarnings(enabled, entries),
   })
 
-  // A key the author clearly meant to declare, in a shape no reader accepts, is a
-  // HALT with the schema handed back — never a quiet fallback to `default`.
-  if (declaration.unreadable.length > 0) return halt(unreadableShapeHalt(declaration.unreadable))
+  const shape = declarationShapeHalts(declaration)
+  if (shape.length > 0) return halt(...shape)
 
   // Absent section ⇒ `default` ⇒ today's behaviour, byte for byte (D21).
   if (!declaration.present || declaration.profile === null) {
