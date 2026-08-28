@@ -228,6 +228,17 @@ still the design; this amendment layers a credential resolution step and one ado
 - **Host mechanics stay in the implementation guide** (R2.12): GitHub App vs bot user, permissions, install and
   credential storage live in `github-implementation.md`; the skills and the adapter name no host.
 
+**Residual, recorded rather than assumed away — declaring the `light` family makes the label a
+merge-authorizing capability.** "Adoption is the gate, the label is not" contains the mis-tagging abuse only on
+repositories that never declared the family. On one that did, and that sets `required_approving_review_count >= 1`,
+nothing in the flow verifies **who** applied the tag: any collaborator with write or triage access can label
+their own sub-🔴 PR `light`, and the identity's authorized `APPROVE` then satisfies the host's approvals rule with
+no second person. That is the row working as designed, not a defect — but it means the declaration is an
+authorization decision, so `light` must be access-controlled (applied from classification; manual application
+restricted and audited) wherever the family is declared. The 🔴 gate is unaffected: `light` is inert at red.
+Stated on all three consumer surfaces (`pr-states.md`, `github-implementation.md`, the docs page) so an adopter
+meets it before opting in. It is **inert in this repository** — `Active: risk` only.
+
 **Verification status.** Everything above is implemented and asserted against fixtures — the identity ×
 `light` × tier × verdict matrix runs offline in `scripts/smoke-tests/scenarios/review-identity.sh`, the contracts
 in `packages/knowledge-hub/src/conformance/review-identity.test.ts`. What is **not** yet observed on a live host

@@ -185,6 +185,13 @@ excluded     "bot-user identity WITH its login provisioned"                    u
 not_excluded "bot-user identity with NO login provisioned"                     user ''
 not_excluded "identity of unknown kind (fail-safe: assume not excluded)"       banana acme-review-bot
 not_excluded "identity kind absent entirely"                                   '' ''
+# THE VOCABULARY THE SKILLS ACTUALLY PASS. `/pair-process-review` Step 5.3 reads
+# `Review identity:` from way-of-working and forwards that LITERAL as <kind>; adoption
+# spells the machine-account form `bot-user`, not `user`. A kind the adapter does not
+# accept is a not-healthy identity ⇒ every review on a correctly provisioned bot-user
+# repository would HALT forever. Both spellings must resolve identically.
+excluded     "bot-user (the ADOPTION literal) WITH its login provisioned"      bot-user acme-review-bot
+not_excluded "bot-user (the ADOPTION literal) with NO login provisioned"       bot-user ''
 EXCL_MSG="$(review_identity_exclusion_ok user '' 2>&1 >/dev/null)"
 if printf '%s' "$EXCL_MSG" | grep -q 'REVIEW_IDENTITY_LOGIN'; then
   log_succ "the not-excluded reason names the variable that must be provisioned"
@@ -197,6 +204,8 @@ check "App identity ⇒ pair-review via the Checks API"        checks-api \
   "$(pair_review_publication_mode identity app 2>/dev/null)"
 check "bot-user identity ⇒ commit status (no checks: write)" commit-status \
   "$(pair_review_publication_mode identity user 2>/dev/null)"
+check "bot-user (ADOPTION literal) ⇒ commit status"          commit-status \
+  "$(pair_review_publication_mode identity bot-user 2>/dev/null)"
 check "identity of unknown kind ⇒ commit status (fail-safe)" commit-status \
   "$(pair_review_publication_mode identity '' 2>/dev/null)"
 check "session mode ⇒ commit status (today's documented form)" commit-status \

@@ -106,6 +106,19 @@ describe('review-identity.sh — the identity must be excluded from the 🔴 gat
     expect(ADAPTER).toMatch(/fail-safe: not excluded/)
   })
 
+  // REGRESSION (review round 2). The `<identity_kind>` the skills pass is the LITERAL
+  // read from way-of-working (`app` | `bot-user`) — `/review` Step 5.3 forwards it
+  // verbatim. An adapter that accepts only `user` turns a correctly provisioned bot-user
+  // repository into a permanent HALT: exclusion_ok fails ⇒ healthy=0 ⇒ resolve_identity_mode
+  // 1 0 ⇒ halt, on every review, with a setup pointer to a setup already done.
+  it('accepts BOTH spellings of the machine-user kind — the adoption literal included', () => {
+    expect(ADAPTER).toMatch(/^ {2}user \| bot-user\)$/m)
+    expect(ADAPTER).toMatch(/identity_kind\s+: app \| user \| bot-user \|/)
+    // the same vocabulary on the publication side, so the two never drift apart
+    expect(ADAPTER).toMatch(/identity_kind : app \| user \| bot-user \|/)
+    expect(ADAPTER).toMatch(/`bot-user` is the ADOPTION literal/)
+  })
+
   it('the header states the exclusion as two mechanisms, one per identity form', () => {
     expect(ADAPTER).toMatch(/app\s+— a GitHub App installation types as `user\.type == "Bot"`/)
     expect(ADAPTER).toMatch(/bot-user\s+— a machine USER account types as `"User"`/)
@@ -284,6 +297,20 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     expect(REVIEW).toMatch(/├── Identity:/)
     expect(REVIEW).toMatch(/├── Light row:/)
   })
+
+  // REGRESSION (review round 2). Step 5.4b's preamble said "skip the whole step in
+  // `session` mode" while its step 2 and the Output Format block list `Light row:` as an
+  // unconditional row. Two runs of the same skill on the same PR then emit different
+  // report shapes — one with the row, one without it. Scope the skip to the AUDIT action.
+  it('Step 5.4b scopes the session-mode skip to the audit, keeping the report row', () => {
+    const step = REVIEW.slice(REVIEW.indexOf('### Step 5.4b'), REVIEW.indexOf('### Step 5.5'))
+    expect(step).not.toMatch(/Skip the whole step in `session` mode/)
+    expect(step).toMatch(/the \*\*audit action\*\* is skipped/)
+    expect(step).toMatch(/report row is unconditional/i)
+    // and the token step 2 reports is exactly the one the Output Format block lists
+    expect(step).toContain('n-a — no identity (session mode)')
+    expect(REVIEW).toContain('├── Light row:  [n-a — no identity (session mode)')
+  })
 })
 
 describe('publish-pr — the same adapter governs ITS host writes (AC1, AC4)', () => {
@@ -324,6 +351,13 @@ describe('pr-states.md — the model carries the identity and the light row (AC1
     expect(GUIDELINE).toMatch(/never counts as the explicit human approval/i)
     expect(GUIDELINE).toMatch(/user\.type == "User"/)
     expect(GUIDELINE).toMatch(/second human account/i)
+  })
+
+  it('carries the same residual as its two twins — the containment is CONDITIONAL', () => {
+    expect(GUIDELINE).toMatch(/That containment is conditional/i)
+    expect(GUIDELINE).toMatch(/merge-authorizing action/i)
+    expect(DOCS_PAGE).toMatch(/merge-authorizing label/i)
+    expect(DOCS_PAGE).toMatch(/nothing verifies \*who\* applied the tag/i)
   })
 
   it('AC3 — the light row is documented as adoption-gated and criteria-free', () => {
@@ -398,6 +432,17 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(GITHUB_GUIDE).toMatch(/It never touches 🔴/i)
   })
 
+  // REGRESSION (review round 2). "Adoption is the gate" contains the mis-tagging abuse
+  // only on repositories that did NOT declare the family. On one that HAS — and that sets
+  // required_approving_review_count >= 1 — any write/triage collaborator can label their
+  // own PR `light` + `risk:green` and the identity's APPROVE satisfies the host rule with
+  // no second human. Nothing verifies who applied the label; the adopter must be told.
+  it('states the residual: once declared, `light` is a merge-authorizing capability', () => {
+    expect(GITHUB_GUIDE).toMatch(/merge-authorizing capability/i)
+    expect(GITHUB_GUIDE).toMatch(/write or triage/i)
+    expect(GITHUB_GUIDE).toMatch(/Nothing in the flow verifies \*\*who\*\* applied the label/)
+  })
+
   it('AC3 — and says WHY the row gates anything at all', () => {
     expect(GITHUB_GUIDE).toMatch(/Why it is this row and not every approving verdict/i)
     expect(GITHUB_GUIDE).toMatch(/third argument of `identity_verdict_event`/)
@@ -435,6 +480,36 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(probes).toMatch(/PR=<pr-number>/)
     expect(probes).toMatch(/HEAD_SHA="\$\(gh pr view "\$PR" --json headRefOid/)
     expect(probes).toMatch(/These probes leave artifacts on a real pull request/)
+  })
+
+  // REGRESSION (review round 2). Same defect class as the probe block, one section
+  // later: with `$IDENTITY_CONFIGURED`/`$IDENTITY_HEALTHY`/`$IDENTITY_KIND` unset, the
+  // copied block resolves `session` ⇒ `commit-status` and the App identity silently
+  // publishes a commit status instead of the check run — no error, the wrong artifact.
+  it('the App publication snippet assigns its three identity inputs from real sources', () => {
+    const pub = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('6. **Publish `pair-review` as a check run**'),
+      GITHUB_GUIDE.indexOf('#### Bot user (alternative)'),
+    )
+    expect(pub).toMatch(/IDENTITY_KIND="\$\(sed -n 's\/\^Review identity:/)
+    expect(pub).toMatch(/^\s+IDENTITY_CONFIGURED=0$/m)
+    expect(pub).toMatch(/^\s+IDENTITY_HEALTHY=0$/m)
+    // and it names where the health flag comes from: the probes AND the exclusion check
+    expect(pub).toMatch(/review_identity_exclusion_ok "\$IDENTITY_KIND"/)
+    // the kind is the adoption literal, forwarded — no undocumented mapping to invent
+    expect(pub).toMatch(/forwarded VERBATIM/)
+  })
+
+  // REGRESSION (review round 2). The pre-existing "Token prerequisite" paragraph said a
+  // check run "must happen inside a workflow holding `checks: write`, plus a relay" — the
+  // opposite of the App path added below it, which mints an installation token agent-side.
+  // A maintainer reading top-to-bottom would build a relay, or pick `bot-user` to avoid it.
+  it('the token prerequisite is scoped to the session path and points at the App exception', () => {
+    expect(GITHUB_GUIDE).toMatch(/whenever no dedicated review identity is configured/)
+    expect(GITHUB_GUIDE).toMatch(/The App path is the documented exception, and it needs no relay/)
+    expect(GITHUB_GUIDE).toContain('installation token** agent-side')
+    // the contradicted claim is gone, not merely counter-argued elsewhere
+    expect(GITHUB_GUIDE).not.toMatch(/plus a relay that carries the agent's verdict there/)
   })
 })
 
@@ -527,6 +602,16 @@ describe('verification split is real, not claimed (gate-tooling ADL)', () => {
       expect(SMOKE).toContain(fn)
     }
     expect(SMOKE).toContain('human_approval_jq_filter')
+  })
+
+  it('the smoke scenario exercises the kind vocabulary the SKILLS pass, not only the short form', () => {
+    // Round-1 smoke passed `user` on every call while labelling it "bot-user identity",
+    // so the adoption literal the skills forward was never executed.
+    expect(SMOKE).toMatch(
+      /excluded\s+"bot-user \(the ADOPTION literal\)[^"]*"\s+bot-user acme-review-bot/,
+    )
+    expect(SMOKE).toMatch(/not_excluded "bot-user \(the ADOPTION literal\)[^"]*"\s+bot-user ''/)
+    expect(SMOKE).toMatch(/pair_review_publication_mode identity bot-user/)
   })
 
   it('the smoke scenario pins the 🔴 regression against the committed fixture', () => {
