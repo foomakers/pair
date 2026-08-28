@@ -51,8 +51,9 @@ const SMOKE = read(join(REPO, 'scripts/smoke-tests/scenarios/review-identity.sh'
 const CI_TESTS = read(join(REPO, 'scripts/smoke-tests/lib/ci-tests.sh'))
 
 describe('review-identity.sh — the host-agnostic identity adapter (AC1, AC4)', () => {
-  it('exposes the five entry points the flow composes', () => {
+  it('exposes the six entry points the flow composes', () => {
     for (const fn of [
+      'review_identity_kind_ok',
       'resolve_identity_mode',
       'review_identity_exclusion_ok',
       'identity_verdict_event',
@@ -61,6 +62,23 @@ describe('review-identity.sh — the host-agnostic identity adapter (AC1, AC4)',
     ]) {
       expect(ADAPTER).toContain(`${fn}()`)
     }
+  })
+
+  // REGRESSION (review round 4). The host guide extracted the adoption kind with ONE
+  // markdown-shaped expression and defaulted an empty result to `none`. `none` is not a
+  // neutral default: it means NO IDENTITY, so `resolve_identity_mode` yields `session`
+  // and the review is written — and where the host allows it, APPROVED — with the SESSION
+  // token, on a repository that provisioned an identity. No HALT is raised because the
+  // flow never learns one was configured. The vocabulary therefore lives in the adapter,
+  // and a present-but-unparseable value is configured-but-unusable.
+  it('review_identity_kind_ok parses the adoption value, so unparseable is never `none`', () => {
+    expect(ADAPTER).toMatch(/^review_identity_kind_ok\(\) \{$/m)
+    // the vocabulary, single-sourced here
+    expect(ADAPTER).toMatch(/^ {2}app \| user \| bot-user \| none\)$/m)
+    // and the reason the caller must not fall through to `none`
+    expect(ADAPTER).toMatch(/detects the key's PRESENCE format-agnostically/)
+    expect(ADAPTER).toMatch(/unparseable ⇒ configured-but-unusable ⇒ HALT with the setup pointer/)
+    expect(ADAPTER).toMatch(/That is the session-user/)
   })
 
   it('names no code host — the mechanism is agnostic, per-host setup is R2.12', () => {
@@ -86,6 +104,15 @@ describe('review-identity.sh — the host-agnostic identity adapter (AC1, AC4)',
     expect(ADAPTER).toMatch(/user\.type == "User"/)
     expect(ADAPTER).toMatch(/pair-explicit-approval/)
     expect(ADAPTER).toMatch(/second HUMAN account/i)
+  })
+
+  // REGRESSION (review round 4). The audit comment is rendered onto every PR the identity
+  // acts on, on every adopting project — its sentence was missing the possessive between
+  // the function name and `clause`.
+  it('the audit comment sentence is well-formed — it ships on every audited action', () => {
+    expect(ADAPTER).toContain(
+      'rejected by `human_approval_jq_filter`\'"\'"\'s `user.type == "User"` clause',
+    )
   })
 
   it('carries no classification criteria — it reads configuration, never the change (D18)', () => {
@@ -315,6 +342,30 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     }
   })
 
+  // REGRESSION (review round 4). Both consumer surfaces enumerated the adapter as four
+  // entry points, omitting the security-critical `review_identity_exclusion_ok` — a reader
+  // wiring a host adapter from either list builds the health input without the exclusion
+  // check, so a bot-user identity with no REVIEW_IDENTITY_LOGIN resolves to `identity` and
+  // can sign the 🔴 human approval.
+  it('both consumer surfaces enumerate every adapter entry point, exclusion included', () => {
+    for (const surface of [GUIDELINE, GITHUB_GUIDE]) {
+      const at = surface.indexOf('six entry points')
+      expect(at, 'each surface must announce the adapter enumeration').toBeGreaterThan(-1)
+      const list = surface.slice(Math.max(0, at - 700), at + 900)
+      expect(list).toContain('review-identity.sh')
+      for (const fn of [
+        'review_identity_kind_ok',
+        'resolve_identity_mode',
+        'review_identity_exclusion_ok',
+        'identity_verdict_event',
+        'pair_review_publication_mode',
+        'identity_audit_comment',
+      ]) {
+        expect(list, `enumeration must list ${fn}`).toContain(fn)
+      }
+    }
+  })
+
   it('AC5 — every identity action is audited, in all three directions', () => {
     expect(REVIEW).toContain('identity_audit_comment')
     expect(REVIEW).toMatch(/on every identity action, in all three directions/i)
@@ -335,6 +386,32 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     // both exclusion clauses named — the type one covers an App, the login one a bot user
     expect(REVIEW).toMatch(/user\.type == "User"/)
     expect(REVIEW).toMatch(/REVIEW_IDENTITY_LOGIN/)
+  })
+
+  // REGRESSION (review round 4). Step 5.4's idempotency skip jumped to Step 5.5, over the
+  // newly inserted Step 5.4b — while Step 5.3 has no skip guard and submits a FRESH native
+  // review on every re-invocation. A re-review on an unchanged head therefore produced a
+  // second identity review (possibly a second native APPROVE) with NO audit comment and no
+  // `Light row:` line, i.e. an identity approval whose reason is not reconstructable from
+  // the PR — the property 5.4b exists to guarantee.
+  it('Step 5.4 skips only the publication acts, never the identity audit of 5.4b', () => {
+    const step = REVIEW.slice(REVIEW.indexOf('### Step 5.4:'), REVIEW.indexOf('### Step 5.4b'))
+    expect(step).not.toContain('nothing to publish, move to Step 5.5')
+    expect(step).toMatch(
+      /skip \*\*steps 3–5 only\*\* and go to \*\*Step 5\.4b\*\*, which still runs/,
+    )
+    expect(step).toMatch(/submits a \*\*fresh\*\* native review on every re-invocation/)
+  })
+
+  // REGRESSION (review round 4). No surface named the command that produces <pr-labels>,
+  // and the helper normalised commas but not newlines — so the natural
+  // `gh pr view --json labels -q '.labels[].name'` read silently refused every correctly
+  // tagged PR, with a stderr denying a `light` tag the PR visibly carries.
+  it('the skill names the concrete label read, and the helper accepts all three shapes', () => {
+    expect(REVIEW).toContain(`gh pr view <number> --json labels -q '[.labels[].name] | join(" ")'`)
+    expect(REVIEW).toMatch(/normalises spaces, commas and newlines/)
+    expect(EVALUATOR).toContain(`case " \${labels//[$'\\n',]/ } " in`)
+    expect(EVALUATOR).toMatch(/newline-separated/)
   })
 
   it('reports the identity mode and the light-row outcome in the output block', () => {
@@ -540,6 +617,21 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(GITHUB_GUIDE).toMatch(/actions\/create-github-app-token/)
   })
 
+  // REGRESSION (review round 4). The exchange was documented as
+  // `GH_TOKEN="$JWT" gh api -X POST app/installations/.../access_tokens`, i.e. it assumed
+  // gh's own Authorization scheme is accepted for an App JWT. GitHub documents the
+  // endpoint with an explicit `Authorization: Bearer <JWT>` header, and a 401 here is
+  // indistinguishable from a bad signature — so an unverified scheme makes the whole App
+  // identity unprovisionable by following the guide, and the failure lands at setup.
+  it('the JWT → installation-token exchange uses the form GitHub documents', () => {
+    expect(GITHUB_GUIDE).toContain('-H "Authorization: Bearer $JWT"')
+    expect(GITHUB_GUIDE).toContain(
+      '"https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens"',
+    )
+    // the ambiguous form is gone, not merely commented on
+    expect(GITHUB_GUIDE).not.toMatch(/GH_TOKEN="\$JWT" gh api/)
+  })
+
   it('AC4 — the App health probes are ones an INSTALLATION token can actually serve', () => {
     // `gh api user` answers 403 for an installation token (it is not associated with a
     // user), so using it as the first probe fails a correctly-provisioned App and HALTs
@@ -585,6 +677,18 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(SMOKE).toMatch(/KIND_EXTRACT="\$\(grep -m1 -F 'IDENTITY_KIND="\$\(sed -n'/)
     expect(SMOKE).toMatch(/extraction on THIS repo's way-of-working \(bullet form\) ⇒ none" none/)
     expect(SMOKE).toMatch(/a configured App adoption ⇒ app"\s+app/)
+    // REGRESSION (review round 4). The round-3 extraction recognised ONLY the exact
+    // bullet+bold form and degraded anything else to `none` = session mode — the
+    // session-user fallback AC4 forbids, reached with no HALT because the flow never
+    // learned an identity was configured. Presence is now detected format-agnostically
+    // and the value is validated by the adapter.
+    expect(pub).toMatch(/^\s+IDENTITY_KEY_PRESENT=0$/m)
+    expect(pub).toMatch(/^\s+grep -qi 'Review identity' "\$WOW" && IDENTITY_KEY_PRESENT=1$/m)
+    expect(pub).toMatch(/^\s+if ! review_identity_kind_ok "\$IDENTITY_KIND"; then$/m)
+    expect(pub).toMatch(/if \[ "\$IDENTITY_KEY_PRESENT" = 1 \]; then[\s\S]{0,400}exit 1/)
+    // and the negative variants are EXECUTED by the smoke scenario, both directions
+    expect(SMOKE).toMatch(/the key without the BOLD markers ⇒ HALT/)
+    expect(SMOKE).toMatch(/the key without the leading BULLET ⇒ HALT/)
     expect(pub).toMatch(/^\s+IDENTITY_CONFIGURED=0$/m)
     expect(pub).toMatch(/^\s+IDENTITY_HEALTHY=0$/m)
     // and it names where the health flag comes from: the probes AND the exclusion check
@@ -691,6 +795,7 @@ describe('verification split is real, not claimed (gate-tooling ADL)', () => {
 
   it('the smoke scenario executes the adapter and the light row, not just greps them', () => {
     for (const fn of [
+      'review_identity_kind_ok',
       'resolve_identity_mode',
       'identity_verdict_event',
       'pair_review_publication_mode',

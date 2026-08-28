@@ -55,6 +55,9 @@
 #
 # Usage (in /pair-process-review, /pair-capability-publish-pr, or a code host's automation):
 #   source review-identity.sh
+#   # The adoption value must be one of the vocabulary BEFORE it is trusted: a key that is
+#   # present but does not parse is configured-but-unusable, never `none`. See below.
+#   review_identity_kind_ok "$IDENTITY_KIND" || { echo "fix the Review identity key" >&2; exit 1; }
 #   review_identity_exclusion_ok "$IDENTITY_KIND" "$REVIEW_IDENTITY_LOGIN" || IDENTITY_HEALTHY=0
 #   MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
 #   [ "$MODE" = halt ] && exit 1
@@ -92,6 +95,39 @@ resolve_identity_mode() {
 
   echo "review-identity: a dedicated review identity IS configured but is not usable ('${healthy:-unknown}' health) — HALT. This never falls back to the session user: see the code host's implementation guide, section 'Dedicated review identity', for the required permissions and the credential setup." >&2
   echo "halt"
+}
+
+# review_identity_kind_ok <identity_kind>
+#   identity_kind : the value read out of adoption's `Review identity` key
+#
+# Exit 0 = the value is one this adapter understands: `app`, `bot-user` (the adoption
+# literal) or its short form `user`, or `none` (no identity configured). Exit 1 = it is
+# not, with the vocabulary on stderr.
+#
+# WHY THE READ IS TWO QUESTIONS, NOT ONE. A caller extracts the value with a host-side
+# expression over a markdown adoption file, and any such expression can FAIL TO MATCH a
+# key an adopter did write in a slightly different shape (`**Review identity**: bot-user`
+# with no bullet, `- Review identity: app` with no bold). Treating that empty result as
+# `none` is not a harmless default: `none` means NO IDENTITY IS CONFIGURED, so
+# `resolve_identity_mode` returns `session` and the review is written — and, where the
+# host allows it, APPROVED — with the SESSION token, on a repository that provisioned a
+# dedicated identity precisely so that would not happen. That is the session-user
+# fallback the HALT rule forbids, reached without any HALT because the flow never learns
+# an identity was configured. So the caller detects the key's PRESENCE format-agnostically,
+# extracts the value, and then asks THIS function whether the value parsed: present but
+# unparseable ⇒ configured-but-unusable ⇒ HALT with the setup pointer; genuinely absent
+# ⇒ `none`. The vocabulary lives here, once, so a host guide's snippet cannot drift from
+# what `review_identity_exclusion_ok` and `pair_review_publication_mode` accept.
+review_identity_kind_ok() {
+  case "${1:-}" in
+  app | user | bot-user | none)
+    return 0
+    ;;
+  *)
+    echo "review-identity: '${1:-empty}' is not a Review identity value — expected one of: app | bot-user (or its short form user) | none. If the key IS present in adoption, this is a configured-but-unusable identity: HALT and fix the key, never treat it as 'none' (which means no identity and writes the review with the session token)." >&2
+    return 1
+    ;;
+  esac
 }
 
 # review_identity_exclusion_ok <identity_kind> <review_identity_login>
@@ -262,6 +298,6 @@ identity_audit_comment() {
   local declaration="not declared"
   [ "$declared" = "1" ] && declaration="declared in ## Tag Projection"
 
-  printf 'pair review identity — %s. Tag: %s (%s) · tier: %s · PR state: %s. Inputs are tags, gate results and the review verdict only; nothing here classifies the change (D18). An identity approval never satisfies the explicit human approval required at risk:red: an App identity is rejected by human_approval_jq_filter user.type == "User" clause, a bot-USER identity (which does type as "User") by its login clause against REVIEW_IDENTITY_LOGIN.\n' \
+  printf 'pair review identity — %s. Tag: %s (%s) · tier: %s · PR state: %s. Inputs are tags, gate results and the review verdict only; nothing here classifies the change (D18). An identity approval never satisfies the explicit human approval required at risk:red: an App identity is rejected by `human_approval_jq_filter`'"'"'s `user.type == "User"` clause, a bot-USER identity (which does type as "User") by its login clause against REVIEW_IDENTITY_LOGIN.\n' \
     "${action:-unknown}" "${tag:-none}" "$declaration" "${tier:-unknown}" "${state:-unknown}"
 }

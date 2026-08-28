@@ -72,7 +72,10 @@ resolve_pr_state() {
 }
 
 # light_auto_approve_allowed <pr_labels> <light_declared> <tier> <state>
-#   pr_labels      : the pull request's label list, space- or comma-separated (TAGS ONLY)
+#   pr_labels      : the pull request's label NAMES (TAGS ONLY), space-, comma- or
+#                    newline-separated — the three shapes a host's label read produces
+#                    (on GitHub: `gh pr view <n> --json labels -q '[.labels[].name]|join(" ")'`
+#                    and the bare `-q '.labels[].name'`, which emits one per line)
 #   light_declared : 1 when the project's adoption declares the `light` family in
 #                    `## Tag Projection` (tech/risk-matrix.md); anything else ⇒ not declared
 #   tier           : green | yellow | red | <anything else ⇒ red (fail-safe)>
@@ -117,9 +120,11 @@ light_auto_approve_allowed() {
     return 1
   fi
 
-  # Whole-label match: `lightweight` is not `light`. Commas are normalised to spaces
-  # because hosts render a label list either way.
-  case " ${labels//,/ } " in
+  # Whole-label match: `lightweight` is not `light`. Commas AND newlines are normalised to
+  # spaces because a host's label read produces all three shapes — normalising only commas
+  # would refuse every correctly tagged PR whose caller used the natural one-name-per-line
+  # read, and the stderr below would then deny a `light` tag the PR visibly carries.
+  case " ${labels//[$'\n',]/ } " in
   *" light "*) ;;
   *)
     echo "pr-state: the pull request does not carry the 'light' tag — no auto-approval" >&2

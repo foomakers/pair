@@ -675,7 +675,7 @@ HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
 
 **Optional, and off by default.** With nothing configured the flow runs exactly as documented above: the session token writes, `pair-review` is a commit status, and the verdict is the native review action unless that account authored the pull request (self-review — GitHub rejects a self-approval, so it degrades to a `--comment` review). That is `Review identity: none` in [way-of-working.md](../../../../adoption/tech/way-of-working.md) and it is **not a degradation** — it is the zero-configuration mode.
 
-A **dedicated review identity** is a second principal — a GitHub App installation, or a bot user account — whose credential the review flow uses for its code-host writes instead of the session token. Provisioning it is **project infrastructure**: a registration/seat and a secret, which no skill can create for you. What the flow does is _consume_ it, through the host-agnostic adapter [`review-identity.sh`](../../../assets/review-identity.sh) (`resolve_identity_mode`, `identity_verdict_event`, `pair_review_publication_mode`, `identity_audit_comment`). The model is in [pr-states.md](pr-states.md); only the GitHub specifics live here (R2.12).
+A **dedicated review identity** is a second principal — a GitHub App installation, or a bot user account — whose credential the review flow uses for its code-host writes instead of the session token. Provisioning it is **project infrastructure**: a registration/seat and a secret, which no skill can create for you. What the flow does is _consume_ it, through the host-agnostic adapter [`review-identity.sh`](../../../assets/review-identity.sh) (`review_identity_kind_ok`, `resolve_identity_mode`, `review_identity_exclusion_ok`, `identity_verdict_event`, `pair_review_publication_mode`, `identity_audit_comment` — six entry points; `review_identity_exclusion_ok` is the security-critical one, since it is what makes the bot-user 🔴 exclusion a **checked precondition** rather than prose, and a host adapter wired without it lets a bot-user identity with no `REVIEW_IDENTITY_LOGIN` resolve to `identity` and sign the 🔴 approval). The model is in [pr-states.md](pr-states.md); only the GitHub specifics live here (R2.12).
 
 **What it buys:**
 
@@ -717,8 +717,15 @@ Recommended because it is the only form that unlocks the Checks API, and because
    PAYLOAD="$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((NOW - 60))" "$((NOW + 540))" "$APP_ID" | b64)"
    SIG="$(printf '%s.%s' "$HEADER" "$PAYLOAD" | openssl dgst -sha256 -sign <(printf '%s' "$PRIVATE_KEY_PEM") | b64)"
    JWT="$HEADER.$PAYLOAD.$SIG"
-   GH_TOKEN="$(GH_TOKEN="$JWT" gh api -X POST "app/installations/$INSTALLATION_ID/access_tokens" --jq .token)"
-   export GH_TOKEN
+   # curl, not `gh api`: the exchange is the one call authenticated with the App JWT rather
+   # than a token, and GitHub documents it with an explicit `Authorization: Bearer <JWT>`
+   # header. Do not assume gh's own auth scheme is accepted here — a 401 at this step is
+   # indistinguishable from a bad signature and costs an hour of setup debugging.
+   GH_TOKEN="$(curl -sS -X POST \
+     -H "Authorization: Bearer $JWT" -H 'Accept: application/vnd.github+json' \
+     "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens" |
+     jq -r .token)"
+   export GH_TOKEN                                   # every `gh` call below uses this
    ```
 
    The token is short-lived by design: mint it per run, never store it.
@@ -760,16 +767,32 @@ Recommended because it is the only form that unlocks the Checks API, and because
    source .pair/knowledge/assets/pr-state.sh
 
    # The three inputs, from their real sources — none of them is ambient.
-   # 1. IDENTITY_KIND — the `Review identity` value in adoption, forwarded VERBATIM.
-   #    Adoption ships the key as a markdown BULLET with bold markers and a backticked
-   #    value (`- **Review identity**: `app` — ...`), so the extraction strips the bullet,
-   #    the bold and the backticks and keeps the bare kind: an expression anchored at
-   #    `^Review identity:` matches nothing and silently yields `none`. The adapter
-   #    accepts `app`, and both `bot-user` (the adoption literal) and its short form
-   #    `user`; `none` means no identity is configured.
+   # 1. IDENTITY_KIND — the `Review identity` value in adoption, forwarded VERBATIM. The
+   #    read is TWO questions, deliberately: is the key THERE, and does its value PARSE.
    WOW=.pair/adoption/tech/way-of-working.md
+   # 1a. PRESENCE — format-agnostic on purpose. The HALT below hangs off this answer, so it
+   #     must be true for any shape an adopter hand-wrote the key in, not only the shipped one.
+   IDENTITY_KEY_PRESENT=0
+   grep -qi 'Review identity' "$WOW" && IDENTITY_KEY_PRESENT=1
+   # 1b. VALUE — the shipped form is a markdown BULLET with bold markers and a backticked
+   #     value (`- **Review identity**: `app` — ...`), so strip bullet, bold and backticks
+   #     and keep the bare kind. An expression anchored at `^Review identity:` matches nothing.
    IDENTITY_KIND="$(sed -n 's/^-[[:space:]]*\*\*Review identity\*\*:[[:space:]]*`\{0,1\}\([a-z-]*\).*/\1/p' "$WOW" | head -1)"
-   IDENTITY_KIND="${IDENTITY_KIND:-none}"
+   # 1c. PRESENT BUT UNPARSEABLE IS NOT `none`. `- Review identity: app` (no bold) and
+   #     `**Review identity**: bot-user` (no bullet) both extract to EMPTY. Defaulting that
+   #     to `none` would mean "no identity configured" ⇒ MODE=session ⇒ the review, and on a
+   #     host that accepts it the APPROVE, written with the SESSION token on a repository
+   #     that provisioned an identity — and no HALT, because the flow never learned one was
+   #     configured. So the vocabulary is checked by the adapter (one source, no drift with
+   #     `review_identity_exclusion_ok` / `pair_review_publication_mode`), and only a
+   #     genuinely ABSENT key becomes `none`.
+   if ! review_identity_kind_ok "$IDENTITY_KIND"; then
+     if [ "$IDENTITY_KEY_PRESENT" = 1 ]; then
+       echo "review-identity: $WOW carries a 'Review identity' key whose value does not parse — configured-but-unusable, HALT (never 'none'). Write it as the shipped bullet: - **Review identity**: \`app\` — see this section." >&2
+       exit 1
+     fi
+     IDENTITY_KIND=none
+   fi
    # 2. IDENTITY_CONFIGURED — 1 for any value other than `none`.
    IDENTITY_CONFIGURED=0
    [ "$IDENTITY_KIND" != none ] && IDENTITY_CONFIGURED=1
@@ -822,7 +845,8 @@ That variable is the health input `review_identity_exclusion_ok user "$REVIEW_ID
 
 | Situation | `resolve_identity_mode` | Behavior |
 | --- | --- | --- |
-| Nothing configured (`Review identity: none`) | `session` | Today's mode, in full. Not an error, not reported as a degradation. |
+| Nothing configured — the key absent, or its value `none` | `session` | Today's mode, in full. Not an error, not reported as a degradation. |
+| The key **present** but its value unparseable (`- Review identity: app` — no bold; `**Review identity**: bot-user` — no bullet) | `halt` (before `resolve_identity_mode` is even called) | `review_identity_kind_ok` rejects it, so the read HALTs with a pointer here. Deliberately **not** `none`: `none` means _no identity_, which resolves `session` and would write the review with the session token on a repository that provisioned an identity — silently, since the flow would never learn one was configured. |
 | Configured and the probes pass | `identity` | Native verdict; check run on the App path. |
 | Configured, credential invalid / expired | `halt` | **HALT** with a pointer back to this section. Never a session-user fallback. |
 | Configured, a permission missing (`403` on a probe) | `halt` | Same — the setup is incomplete, and acting as the human whose token is loaded would misattribute the review. |

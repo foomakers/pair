@@ -224,6 +224,21 @@ still the design; this amendment layers a credential resolution step and one ado
   blocking the merge button) and a real approval (nothing counting toward `required_approving_review_count`) on
   every two-human repository — i.e. it would have made the identity mandatory to keep behavior a project already
   had.
+- **The adoption read is two questions — presence, then value — and present-but-unparseable HALTs.** `none`
+  is not a neutral default: it means *no identity*, so it resolves `session` and the review is written (and,
+  where the host counts it, APPROVED) with the **session token**. An extraction that recognises only one
+  markdown shape and degrades everything else to `none` is therefore the session-user fallback this amendment
+  forbids, reached with **no HALT** because the flow never learns an identity was configured. Presence is now
+  detected format-agnostically, the value is validated by `review_identity_kind_ok` (the adapter owns the
+  vocabulary, so a host guide's snippet cannot drift from what `review_identity_exclusion_ok` and
+  `pair_review_publication_mode` accept), and only a genuinely absent key becomes `none`. Six entry points, not
+  five — and both consumer surfaces enumerate all six, `review_identity_exclusion_ok` included, since a host
+  adapter wired from a list that omits it lets a bot-user identity with no `REVIEW_IDENTITY_LOGIN` resolve to
+  `identity`.
+- **The idempotency skip covers the publication acts only.** Step 5.3 submits a *fresh* native review on every
+  re-invocation, so a re-review on an unchanged head is a new identity action: skipping from Step 5.4 straight
+  past Step 5.4b would leave an identity `APPROVE` with no paired audit comment and no `Light row:` line — the
+  reason no longer reconstructable from the PR, which is the property the audit exists to guarantee.
 - **The PR-state synthesis is unconditional.** `resolve_pr_state` is called once per review, in its own step,
   in **all three modes and for every verdict** — Step 5.4 publishes exactly one `pr-state:*` label on every run,
   so the call can never be nested inside the (identity-only, APPROVED-only) APPROVE-authority step.
@@ -259,7 +274,11 @@ meets it before opting in. It is **inert in this repository** — `Active: risk`
 in `packages/knowledge-hub/src/conformance/review-identity.test.ts`. What is **not** yet observed on a live host
 is the end-to-end run with a real App (native APPROVE attributable to the identity, `pair-review` as a check
 run, a `light` sub-red PR mergeable with no human action): that needs a maintainer-provisioned App and is
-tracked as story #218's task T11. Nothing in this repository enables the row — `tech/risk-matrix.md` declares
+tracked as story #218's task T11. Because no live-host run has been observed, the **JWT → installation-token
+exchange** is documented in the form GitHub itself documents — `curl -H "Authorization: Bearer $JWT"` — rather
+than relying on `gh`'s own auth scheme being accepted for an App JWT: a `401` there is indistinguishable from a
+bad signature, and an unverifiable snippet at step 4 makes the whole App path unprovisionable by following the
+guide. Nothing in this repository enables the row — `tech/risk-matrix.md` declares
 `Active: risk` only, so the light row is **inert here** and its absence is grep-verifiable.
 
 ## Consequences
