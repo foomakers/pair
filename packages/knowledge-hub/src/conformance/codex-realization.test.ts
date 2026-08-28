@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { HARNESS_SURFACE_MAP, resolveRealization } from '../tools/codex-fanout'
+import { HARNESS_SURFACE_MAP, requiredHandles, resolveRealization } from '../tools/codex-fanout'
 
 /**
  * Conformance for the fan-out capability's SECOND in-harness realization.
@@ -62,10 +62,12 @@ describe('containment — the vendor surface lives in the map and nowhere else',
   it('names every known handle and bounding key inside the map', () => {
     const declared = new Set<string>()
     for (const realization of HARNESS_SURFACE_MAP) {
-      Object.values(realization.handles).forEach(h => declared.add(h))
+      requiredHandles(realization.handles).forEach(h => declared.add(h))
       declared.add(realization.gating.featureKey.split('.').pop() as string)
-      declared.add(realization.bounding.concurrencyKey.split('.').pop() as string)
-      Object.values(realization.bounding.waitTimeoutKeys).forEach(k =>
+      const bounding = realization.bounding
+      if (!bounding) continue
+      declared.add(bounding.concurrencyKey.split('.').pop() as string)
+      Object.values(bounding.waitTimeoutKeys).forEach(k =>
         declared.add(k.split('.').pop() as string),
       )
     }
@@ -135,14 +137,51 @@ describe('zero merit logic — the realization dispatches, it never selects', ()
 
 describe('regression by absence — the Claude realization and distribution are untouched', () => {
   it.each(SKILL_COPIES)('still delegates the whole unattended run to the workflow — %s', path => {
-    expect(read(path)).toContain('Delegate the entire unattended run to the `pair-loop` workflow')
+    const text = read(path)
+    expect(text).toContain('hand the entire unattended run to the runtime the binding named')
+    expect(text).toContain('the `pair-loop` workflow')
+    // The argument list the workflow validates by type and content is the Claude realization's
+    // whole interface; a story that touched it would be changing that realization, not adding one.
+    expect(text).toContain(
+      '{ policyText, root, overrides, predicateOverride, startIteration, tagProjectionFamily }',
+    )
   })
 
-  it('the fan-out cascade never binds a Codex realization for a session without its tools', () => {
+  it('binds a Claude Code session to the workflow realization, exactly as before this story', () => {
+    // This assertion used to read `tier: 3`, freezing the regression AC11 forbids: the map held
+    // only the Codex entries, so the `bind` every session is told to run answered a Claude
+    // session `degraded-one-card`. The skill then printed and AUDITED "no fan-out primitive is
+    // exposed in this session" on a run that fanned out through the workflow, and the step
+    // guarded by "the probe missed" was true at the same time as the in-harness step.
     const binding = resolveRealization({ tools: ['Workflow', 'Task', 'Read', 'Bash'] })
-    expect(binding.realization).not.toContain('codex')
-    expect(binding.tier).toBe(3)
+    expect(binding.realization).toBe('claude-code-workflow')
+    expect(binding.tier).toBe(1)
+    expect(binding.dispatch).toBe('delegated-run')
+    expect(binding.primitive).toBe('Workflow')
   })
+
+  it('never binds a Codex realization for a session without Codex’s tools', () => {
+    for (const tools of [
+      ['Workflow', 'Task', 'Read', 'Bash'],
+      ['Read', 'Bash'],
+    ])
+      expect(resolveRealization({ tools }).realization).not.toContain('codex')
+    expect(resolveRealization({ tools: ['Read', 'Bash'] }).tier).toBe(3)
+  })
+
+  it.each(SKILL_COPIES)(
+    'routes on the BINDING’s dispatch shape, never on a product name — %s',
+    path => {
+      const text = read(path)
+      const start = text.indexOf('## Step 1: Realization')
+      const end = text.indexOf('## Step 1b:')
+      const step = text.slice(start, end)
+      expect(step).toContain('`delegated-run`')
+      expect(step).toContain('`spawn-wait`')
+      // The branch conditions must be the bind result's, not "Act — Claude"/"Act — Codex".
+      expect(step).not.toMatch(/\*\*Act — (Claude|Codex)/)
+    },
+  )
 
   it('writes no `.codex/` distribution target — Codex reads the shared symlink and AGENTS.md', () => {
     const config = JSON.parse(read(CLI_CONFIG)) as {

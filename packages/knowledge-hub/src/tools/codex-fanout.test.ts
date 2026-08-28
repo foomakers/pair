@@ -19,6 +19,7 @@ import {
   PHASES,
   REALIZATION_TIERS,
   reconstructState,
+  requiredHandles,
   resolveRealization,
   resumePlan,
   schemaViolations,
@@ -47,6 +48,14 @@ const V2_TOOLS = [
   'followup_task',
   'interrupt_agent',
 ]
+
+/** What a Claude Code session exposes — the delegated-run handle plus ordinary tools. */
+const CLAUDE_TOOLS = ['Workflow', 'Task', 'Read', 'Bash', 'Edit']
+
+/** `fix` is the one phase whose packet is refused without findings; the rest carry none. */
+const FIX_FINDINGS: Readonly<Record<string, Finding[] | undefined>> = {
+  fix: [{ location: 'a.ts:1', severity: 'Major' }],
+}
 
 const CARD: Card = {
   id: '441',
@@ -80,19 +89,40 @@ class InMemoryAuditFs implements AuditFs {
 }
 
 describe('the surface map is data', () => {
-  it('holds both known Codex toolsets, in preference order, each with a verification note', () => {
+  it('holds EVERY known in-harness realization, in preference order, each with a verification note', () => {
+    // Claude Code belongs here as much as Codex does. While it was missing, `bind` answered a
+    // Claude session with `degraded-one-card` — the announcement the skill prints and audits
+    // said "no fan-out primitive is exposed" on the very session that then fanned out through
+    // the workflow, and the step whose condition is "the probe missed" was satisfied at the
+    // same time as the step that routes on the product name.
     expect(HARNESS_SURFACE_MAP.map(r => r.id)).toEqual([
+      'claude-code-workflow',
       'codex-multi-agent-v2',
       'codex-multi-agent-v1',
     ])
     for (const realization of HARNESS_SURFACE_MAP) {
       expect(realization.tier).toBe(REALIZATION_TIERS.IN_HARNESS)
-      expect(realization.handles.spawn).toBeTruthy()
-      expect(realization.handles.wait).toBeTruthy()
-      expect(realization.gating.featureKey).toMatch(/^features\./)
-      expect(realization.bounding.concurrencyKey).toBeTruthy()
-      expect(realization.verifiedAgainst).toMatch(/codex-cli/)
+      expect(requiredHandles(realization.handles).every(h => h !== '')).toBe(true)
+      expect(realization.gating.featureKey).toBeTruthy()
+      expect(realization.verifiedAgainst).toMatch(/\d{4}-\d{2}-\d{2}/)
     }
+  })
+
+  it('declares a dispatch shape per entry — the orchestrator sequences, or it delegates', () => {
+    const shapes = Object.fromEntries(HARNESS_SURFACE_MAP.map(r => [r.id, r.handles.dispatch]))
+    expect(shapes).toEqual({
+      'claude-code-workflow': 'delegated-run',
+      'codex-multi-agent-v2': 'spawn-wait',
+      'codex-multi-agent-v1': 'spawn-wait',
+    })
+  })
+
+  it('bounds only the realizations this orchestrator waits on itself', () => {
+    for (const realization of HARNESS_SURFACE_MAP)
+      if (realization.handles.dispatch === 'spawn-wait') {
+        expect(realization.bounding?.concurrencyKey).toBeTruthy()
+        expect(realization.bounding?.waitTimeoutKeys.max).toBeTruthy()
+      } else expect(realization.bounding).toBeUndefined()
   })
 
   it('is frozen, so a caller cannot mutate the map instead of editing it', () => {
@@ -163,6 +193,59 @@ describe('probe → bind → announce', () => {
     expect(resolveRealization({ tools: V1_TOOLS, harnessCeiling: 3 }).harnessCeiling).toBe(3)
     expect(resolveRealization({ tools: V1_TOOLS }).harnessCeiling).toBeNull()
   })
+
+  it('binds a Claude Code session to its own tier-1 realization instead of degrading it', () => {
+    const binding = resolveRealization({
+      tools: CLAUDE_TOOLS,
+      externalDriverAvailable: false,
+    })
+    expect(binding.tier).toBe(REALIZATION_TIERS.IN_HARNESS)
+    expect(binding.realization).toBe('claude-code-workflow')
+    expect(binding.dispatch).toBe('delegated-run')
+    expect(binding.primitive).toBe('Workflow')
+    expect(binding.announcement).toContain('Workflow')
+    expect(binding.announcement).not.toContain('degrading')
+  })
+
+  it('reports the dispatch shape, so a caller routes on the binding and not on a product name', () => {
+    expect(resolveRealization({ tools: V1_TOOLS }).dispatch).toBe('spawn-wait')
+    expect(resolveRealization({ tools: ['shell'] }).dispatch).toBeNull()
+  })
+
+  it('still degrades a session that exposes neither harness’s primitive', () => {
+    expect(resolveRealization({ tools: ['Task', 'Read', 'Bash', 'Edit'] }).tier).toBe(
+      REALIZATION_TIERS.DEGRADED,
+    )
+  })
+
+  it('returns the wait bound the caller must apply — the keys, and the value when probed', () => {
+    // AC10 requires every wait to be bounded, and the skill is forbidden from naming the
+    // vendor's config keys itself. A bind that returned neither left the model inventing a
+    // timeout or omitting the argument and relying on an unobserved default — the exact
+    // inference the probe convention exists to keep out.
+    const probed = resolveRealization({ tools: V1_TOOLS, harnessWaitTimeoutMs: 900_000 })
+    expect(probed.waitTimeoutMs).toBe(900_000)
+    expect(probed.waitTimeoutKeys).toEqual(
+      HARNESS_SURFACE_MAP.find(r => r.id === 'codex-multi-agent-v1')?.bounding?.waitTimeoutKeys,
+    )
+    const unprobed = resolveRealization({ tools: V1_TOOLS })
+    expect(unprobed.waitTimeoutMs).toBeNull()
+    expect(unprobed.waitTimeoutKeys?.max).toBeTruthy()
+  })
+
+  it('declares no wait bound for a delegated run or a degraded one — neither waits here', () => {
+    for (const binding of [resolveRealization({ tools: CLAUDE_TOOLS }), resolveRealization({})]) {
+      expect(binding.waitTimeoutMs).toBeNull()
+      expect(binding.waitTimeoutKeys).toBeNull()
+    }
+  })
+
+  it('ignores a non-integer or non-positive reported wait timeout instead of passing it on', () => {
+    for (const value of [0, -1, 1.5, Number.NaN])
+      expect(
+        resolveRealization({ tools: V1_TOOLS, harnessWaitTimeoutMs: value }).waitTimeoutMs,
+      ).toBeNull()
+  })
 })
 
 describe('cap arithmetic', () => {
@@ -222,7 +305,7 @@ describe('context packets', () => {
 
   it('works with no harness profile configured — the role text travels in the request', () => {
     for (const phase of PHASES) {
-      const packet = buildPacket({ phase, card: CARD })
+      const packet = buildPacket({ phase, card: CARD, findings: FIX_FINDINGS[phase] })
       expect(packet.instructions.length).toBeGreaterThan(0)
       expect(packet.role).toBe(PHASE_CONTRACTS[phase].role)
     }
@@ -254,6 +337,58 @@ describe('context packets', () => {
       )
     },
   )
+
+  it('rejects an unknown packet key rather than silently dropping it', () => {
+    expect(() =>
+      buildPacket({ phase: 'implement', card: CARD, working_path: '.pair/scratch' } as never),
+    ).toThrow(/working_path/)
+  })
+
+  it('rejects an unknown card key — a misspelled `prNumber` would open a second PR', () => {
+    expect(() => buildPacket({ phase: 'pr', card: { ...CARD, pr_number: 700 } as never })).toThrow(
+      /pr_number/,
+    )
+  })
+})
+
+describe('the fix packet carries the findings it must fix', () => {
+  const finding: Finding = {
+    location: 'a.ts:1',
+    severity: 'Major',
+    description: 'd',
+    recommendation: 'r',
+  }
+
+  it('carries the review’s actionable findings into the fixer’s packet', () => {
+    expect(buildPacket({ phase: 'fix', card: CARD, findings: [finding] }).findings).toEqual([
+      finding,
+    ])
+  })
+
+  it('refuses a `fix` packet with no findings instead of spawning a fixer with nothing to fix', () => {
+    // The silent version of this burned the whole round cap: the fixer returned `fixed:true`
+    // having fixed nothing determinable, the mandated re-review re-raised the same findings,
+    // and the card reached `escalate` — a human gate hit by a mechanical omission.
+    expect(() => buildPacket({ phase: 'fix', card: CARD })).toThrow(/findings/)
+    expect(() => buildPacket({ phase: 'fix', card: CARD, findings: [] })).toThrow(/findings/)
+  })
+
+  it('never hands findings to the blind reviewer — it derives its own', () => {
+    expect(() => buildPacket({ phase: 'review', card: CARD, findings: [finding] })).toThrow(
+      /derives its own/,
+    )
+  })
+
+  it('leaves the other authoring phases with an empty finding list', () => {
+    for (const phase of ['implement', 'pr'] as const)
+      expect(buildPacket({ phase, card: CARD }).findings).toEqual([])
+  })
+
+  it('rejects a finding that is not an object', () => {
+    expect(() => buildPacket({ phase: 'fix', card: CARD, findings: ['fix it'] as never })).toThrow(
+      PacketRejected,
+    )
+  })
 })
 
 describe('reviewer blindness is a pre-spawn rejection', () => {
@@ -295,6 +430,7 @@ describe('reviewer blindness is a pre-spawn rejection', () => {
     const packet = buildPacket({
       phase: 'fix',
       card: CARD,
+      findings: [{ location: 'a.ts:1', severity: 'Major' }],
       attachments: ['.pair/working/checkpoints/441.md'],
     })
     expect(packet.attachments).toHaveLength(1)
@@ -658,6 +794,28 @@ describe('audit persistence', () => {
     fs.swallowAppends = true
     expect(() => appendAudit('a.md', [record], fs)).toThrow(/could not be written and read back/)
   })
+
+  it('takes a run-level record with no card id — the realization announcement owns no card', () => {
+    const fs = new InMemoryAuditFs()
+    const announcement: AuditRecord = {
+      kind: 'run',
+      run: 'r1',
+      realization: 'claude-code-workflow',
+      announcement: 'fan-out realization: claude-code-workflow (tier 1, claude-code)',
+    }
+    expect(appendAudit('a.md', [announcement], fs).written).toBe(1)
+    expect(fs.files.get('a.md')).toBe(auditLine(announcement))
+  })
+
+  it('refuses a record that names neither a card nor a run — it would be unreadable on resume', () => {
+    // Both spellings of the omission were losses: with no `id` the record was silently dropped
+    // by `parseAudit`, so the announcement was unreadable on resume; with an invented one
+    // (`"run-2026-08-28"`) it materialized as a phantom card owed a full pipeline.
+    const fs = new InMemoryAuditFs()
+    expect(() => appendAudit('a.md', [{ iteration: 0, realization: 'x' }], fs)).toThrow(
+      /names no card `id` and is not marked/,
+    )
+  })
 })
 
 describe('resume', () => {
@@ -793,6 +951,26 @@ describe('resume', () => {
   it('ignores a line with no card id', () => {
     expect(reconstructState('{"iteration":0,"note":"nothing eligible"}')).toEqual({})
   })
+
+  it('never materializes a run-level record as a card owed a full pipeline', () => {
+    const withRun = [
+      '{"kind":"run","run":"r1","realization":"codex-multi-agent-v1","announcement":"bound"}',
+      '{"run":"r1","iteration":0,"id":"441","phase":"implement","outcome":"completed"}',
+    ].join('\n')
+    expect(Object.keys(reconstructState(withRun))).toEqual(['441'])
+    const plans = JSON.parse(main(['resume'], JSON.stringify({ audit: withRun })).out) as {
+      id: string
+    }[]
+    expect(plans.map(p => p.id)).toEqual(['441'])
+  })
+
+  it('reads the current run off a run-level record, so an older run’s halt is history', () => {
+    const audit = [
+      '{"run":"r1","iteration":0,"id":"441","phase":"implement","outcome":"timed-out"}',
+      '{"kind":"run","run":"r2","realization":"codex-multi-agent-v1","announcement":"bound"}',
+    ].join('\n')
+    expect(reconstructState(audit)['441']?.halted).toBe(false)
+  })
 })
 
 describe('the command surface', () => {
@@ -841,6 +1019,65 @@ describe('the command surface', () => {
     )
     expect(code).toBe(1)
     expect(JSON.parse(out).error).toContain('.pair/working/x.md')
+  })
+
+  it('reads `workingPath` and `worktreeRoot` at the TOP level too, where every sibling field lives', () => {
+    // `phase`, `result`, `schema`, `ceilings`, `audit`, `run`, `id`, `review` and `round` are all
+    // top-level in this same request shape, and the party composing the JSON is the model. With
+    // `workingPath` readable only inside `packet`, a top-level spelling exited 0 and produced a
+    // packet with `blind:true` carrying `.pair/scratch/checkpoints/441.md` — the author's
+    // checkpoint handed to the independent reviewer, silently, in exactly the project that set
+    // `working_path`.
+    const misplaced = main(
+      ['packet'],
+      JSON.stringify({
+        workingPath: '.pair/scratch',
+        packet: {
+          phase: 'review',
+          card: CARD,
+          attachments: ['.pair/scratch/checkpoints/441.md'],
+        },
+      }),
+    )
+    expect(misplaced.code).toBe(1)
+    expect(JSON.parse(misplaced.out).error).toContain('.pair/scratch/')
+    const root = main(
+      ['packet'],
+      JSON.stringify({ worktreeRoot: '/tmp/wt', packet: { phase: 'implement', card: CARD } }),
+    )
+    expect(JSON.parse(root.out).worktree).toBe('/tmp/wt/441')
+  })
+
+  it('lets the nested value win when both levels carry one', () => {
+    const { out } = main(
+      ['packet'],
+      JSON.stringify({
+        worktreeRoot: '/tmp/outer',
+        packet: { phase: 'implement', card: CARD, worktreeRoot: '/tmp/inner' },
+      }),
+    )
+    expect(JSON.parse(out).worktree).toBe('/tmp/inner/441')
+  })
+
+  it('carries top-level `findings` into a fix packet, so `converge`’s output pipes straight in', () => {
+    const { code, out } = main(
+      ['packet'],
+      JSON.stringify({
+        findings: [{ location: 'a.ts:1', severity: 'Major' }],
+        packet: { phase: 'fix', card: CARD },
+      }),
+    )
+    expect(code).toBe(0)
+    expect(JSON.parse(out).findings).toHaveLength(1)
+  })
+
+  it('rejects an unknown top-level key rather than falling back to the default it overrides', () => {
+    const { code, out } = main(
+      ['packet'],
+      JSON.stringify({ working_path: '.pair/scratch', packet: { phase: 'review', card: CARD } }),
+    )
+    expect(code).toBe(1)
+    expect(JSON.parse(out).error).toContain('working_path')
   })
 
   it('rejects an unknown command and non-JSON stdin', () => {

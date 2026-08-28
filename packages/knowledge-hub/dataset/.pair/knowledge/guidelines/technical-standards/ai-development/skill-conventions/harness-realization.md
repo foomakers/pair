@@ -56,13 +56,31 @@ Each entry states, at minimum:
 | --- | --- |
 | Realization id | The name the skill binds and announces |
 | Tier | Its position in the capability's preference order |
+| Dispatch shape | How much of the work the mechanism takes — see [below](#the-dispatch-shape-decides-what-the-caller-owns) |
 | Handles | The primitives to probe, and what each one does in the capability's own vocabulary |
 | Namespace | Where the handles live, when the harness namespaces them |
 | Gating keys | The config that turns the mechanism on, and whether it is on by default |
 | Bounding keys | Concurrency ceilings and timeout bounds the harness imposes |
 | Verified against | Which product build the entry was read off, and when |
 
-`Verified against` is not decoration: it is what tells the next maintainer whether a probe miss means "the vendor moved" or "this entry was always wrong". An entry nobody could verify is **not added to the map**: handles are what the cascade probes for, so an entry that cannot state a verified pair of them has nothing to contribute, and its absence is the fail-closed answer — nothing binds, the cascade degrades. Do not park an unverified guess in the map with placeholder handles; a handle nobody observed is exactly the inadmissible evidence the probe rule exists to keep out.
+`Verified against` is not decoration: it is what tells the next maintainer whether a probe miss means "the vendor moved" or "this entry was always wrong". An entry nobody could verify is **not added to the map**: handles are what the cascade probes for, so an entry that cannot state a verified set of them has nothing to contribute, and its absence is the fail-closed answer — nothing binds, the cascade degrades. Do not park an unverified guess in the map with placeholder handles; a handle nobody observed is exactly the inadmissible evidence the probe rule exists to keep out.
+
+**The map holds EVERY realization, the skill's own harness included.** Leaving that one out is the tempting omission — the session obviously has it — and it costs the whole convention: the `bind` a skill tells every session to run answers `degraded` for a session that then runs the mechanism anyway, so the announcement printed and audited is false, the degradation branch's stated condition ("the probe missed") is satisfied at the same moment as the in-harness branch, and the skill is back to routing on the product name it was written to stop reading. No realization is exempt from being probed.
+
+### The dispatch shape decides what the caller owns
+
+Realizations of one capability differ in more than a handle's name, and the difference the caller must know is **how much of the work the mechanism takes**. Two shapes cover what has been observed so far:
+
+| Shape | Handles it requires | What the skill still owns |
+| --- | --- | --- |
+| The skill sequences | A start handle **and** a wait handle | The concurrency cap, the wait bounds, collecting each dispatch |
+| The skill delegates | One handle the whole run is handed to | None of those — the delegated runtime schedules and waits |
+
+The shape belongs to the entry and comes back in the binding, and **the caller branches on it, never on the harness's name**. Bounding keys belong only to entries of the first kind: declared on a delegated one, they would announce a bound nobody applies.
+
+### The bind returns the bounds it read
+
+A skill required to bound its waits, and rightly barred from naming vendor config keys in its own text, has no sanctioned way to learn the bound unless the bind hands it over. So it does: the resolved value where the probe reported one, and otherwise the keys to read it from. Anything less leaves the caller inventing a number, or omitting the argument and relying on a default nobody observed — step 1's inference, reappearing as a timeout.
 
 ## Ceilings compose, they never replace
 
