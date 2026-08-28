@@ -92,3 +92,24 @@ Every queued line carries exactly one outcome from this closed set, and the outc
 | `write-failed` | The body write was attempted and did not land, retries included | stays unticked |
 
 The three write-path outcomes (`not-found`, `ambiguous`, `write-failed`) say nothing about the work: the task may well be done. The line reports the **feedback** failure and names the ID it could not tick, so a human can tick it by hand — and the run carries on.
+
+## Failure and conflict handling
+
+A story body is shared: a human can be editing it while a run is ticking it, and a tracker can accept a call and change nothing. Both are ordinary, and neither is allowed to stop the story.
+
+**A write is confirmed by reading the body back, never by an exit status.** A call that exits 0 while the item's body still shows `- [ ]` is `write-failed`, not `ticked` — a batch that reports a tick the body does not carry is worse than one that reports the failure, because nothing downstream ever contradicts it.
+
+**Concurrent body edit (the read-modify-write race).** The patch was computed against a body snapshot; between that read and the write, someone else may have changed the body. Compare before writing: if the current body no longer matches the snapshot, **discard the patch** and retry from a **fresh** read — **re-run the locator** on the new body rather than replaying the old patch, because the item may have moved, been renumbered, or already been ticked by the human who was editing. Replaying the stale patch is how the loop would silently revert someone else's edit.
+
+**Exactly one retry**, per task and per write. A second conflict, or a second failure of any kind, ends the attempt: the retry budget is bounded so a contended body or a broken tracker degrades the feedback instead of stalling the run.
+
+**Comment-only fallback.** After the retry is spent — a repeated conflict, a rejected patch, a transport error, a read-only body — no further body write is attempted for that task. The outcome is queued (`write-failed`, or the more specific one) and the batched comment carries it, naming the task ID that could not be ticked so a human can do it in one click. The feedback degrades from *tick + comment* to *comment*, and never below.
+
+**A PM write failure never blocks implementation.** Ticks and comments annotate work that has already happened; the commit is on the branch either way. Whatever this loop fails to write, the run **continues** to the next task and the story to its pull request — the failure is reported, not raised.
+
+## What never happens
+
+- **No separate task issues.** Tasks live inline in the story body; nothing here creates, links, or closes a task issue. A tick is an edit to one line.
+- **No other section is rewritten.** The acceptance criteria, the classification matrix, the technical analysis and the task titles come back byte-identical from every write this loop makes. Only checkbox markers change.
+- **No board state is written.** `In Progress` is set once when the story is activated; a tick is not a transition, and no board field is touched here.
+- **No untick, ever**, and no second comment per iteration.

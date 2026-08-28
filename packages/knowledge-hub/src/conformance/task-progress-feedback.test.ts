@@ -70,14 +70,17 @@ describe('checklist locator — task-ID anchored, never a guess (AC1, T1)', () =
     expect(c.toLowerCase()).toContain('anchored on the task id')
   })
 
-  it.each(guidelineCopies)('%s: tolerates the renderings plan-tasks and the story template produce', (_label, load) => {
-    const section = sectionOf(load(), '## The task-ID locator')
-    // The canonical `- [ ] **T-3**: title` AND the bare `- [ ] T3 — title` a real
-    // story body carries. A locator pinned to one punctuation shape silently fails
-    // to find the line on the other, which is the mismatch AC1's edge case is about.
-    expect(section).toContain('**T-3**')
-    expect(section).toContain('T3')
-  })
+  it.each(guidelineCopies)(
+    '%s: tolerates the renderings plan-tasks and the story template produce',
+    (_label, load) => {
+      const section = sectionOf(load(), '## The task-ID locator')
+      // The canonical `- [ ] **T-3**: title` AND the bare `- [ ] T3 — title` a real
+      // story body carries. A locator pinned to one punctuation shape silently fails
+      // to find the line on the other, which is the mismatch AC1's edge case is about.
+      expect(section).toContain('**T-3**')
+      expect(section).toContain('T3')
+    },
+  )
 
   it.each(guidelineCopies)('%s: requires exactly one match and never guesses', (_label, load) => {
     const section = sectionOf(load(), '## The task-ID locator')
@@ -99,20 +102,26 @@ describe('tick-only body patch — the only body bytes that change (AC1, T1)', (
     expect(section.toLowerCase()).toContain('every other byte of the body is identical')
   })
 
-  it.each(guidelineCopies)('%s: is idempotent — an already-ticked item is never rewritten', (_label, load) => {
-    const section = sectionOf(load(), '## The tick-only body patch')
-    const low = section.toLowerCase()
-    expect(low).toMatch(/already ticked|already `\[x\]`/)
-    expect(low).toContain('never unticks')
-  })
+  it.each(guidelineCopies)(
+    '%s: is idempotent — an already-ticked item is never rewritten',
+    (_label, load) => {
+      const section = sectionOf(load(), '## The tick-only body patch')
+      const low = section.toLowerCase()
+      expect(low).toMatch(/already ticked|already `\[x\]`/)
+      expect(low).toContain('never unticks')
+    },
+  )
 
-  it.each(guidelineCopies)('%s: names the full-body-overwrite hazard the diff check exists for', (_label, load) => {
-    const section = sectionOf(load(), '## The tick-only body patch')
-    // The transport is write mode, which OVERWRITES the body: the caller-side diff
-    // is the only thing standing between a tick and a clobbered AC/DoD section.
-    expect(section.toLowerCase()).toContain('full-body overwrite')
-    expect(section.toLowerCase()).toMatch(/diff/)
-  })
+  it.each(guidelineCopies)(
+    '%s: names the full-body-overwrite hazard the diff check exists for',
+    (_label, load) => {
+      const section = sectionOf(load(), '## The tick-only body patch')
+      // The transport is write mode, which OVERWRITES the body: the caller-side diff
+      // is the only thing standing between a tick and a clobbered AC/DoD section.
+      expect(section.toLowerCase()).toContain('full-body overwrite')
+      expect(section.toLowerCase()).toMatch(/diff/)
+    },
+  )
 
   it('dataset names the composed writer in short form, the mirror in prefixed form', () => {
     expect(guideline()).toContain('/write-issue')
@@ -128,22 +137,28 @@ describe('batching — one comment per run iteration (AC2, T2)', () => {
     expect(section.toLowerCase()).toContain('one comment per run iteration')
   })
 
-  it.each(guidelineCopies)('%s: defines the run iteration so both paths measure it the same way', (_label, load) => {
-    // "per iteration" is meaningless unless the unit is pinned: without this the
-    // manual path reads it as "per session" and the supervised path as "per loop
-    // pass", and the same story gets two different comment cadences.
-    const section = sectionOf(load(), BATCHING)
-    expect(section.toLowerCase()).toContain('run iteration')
-    expect(section.toLowerCase()).toMatch(/one .*invocation|a single invocation/)
-  })
+  it.each(guidelineCopies)(
+    '%s: defines the run iteration so both paths measure it the same way',
+    (_label, load) => {
+      // "per iteration" is meaningless unless the unit is pinned: without this the
+      // manual path reads it as "per session" and the supervised path as "per loop
+      // pass", and the same story gets two different comment cadences.
+      const section = sectionOf(load(), BATCHING)
+      expect(section.toLowerCase()).toContain('run iteration')
+      expect(section.toLowerCase()).toMatch(/one .*invocation|a single invocation/)
+    },
+  )
 
-  it.each(guidelineCopies)('%s: honours the D22 reading budget — a line per task, detail collapsed', (_label, load) => {
-    const section = sectionOf(load(), BATCHING)
-    expect(section).toContain('D22')
-    expect(section.toLowerCase()).toContain('one line per task')
-    expect(section).toContain('<details>')
-    expect(section).toContain('</details>')
-  })
+  it.each(guidelineCopies)(
+    '%s: honours the D22 reading budget — a line per task, detail collapsed',
+    (_label, load) => {
+      const section = sectionOf(load(), BATCHING)
+      expect(section).toContain('D22')
+      expect(section.toLowerCase()).toContain('one line per task')
+      expect(section).toContain('<details>')
+      expect(section).toContain('</details>')
+    },
+  )
 
   it.each(guidelineCopies)('%s: posts nothing when the batch is empty', (_label, load) => {
     // An implement invocation that completed no task must not leave a comment
@@ -172,18 +187,24 @@ describe('outcome vocabulary — failure and skip are recorded, not ticked (AC3,
     }
   })
 
-  it.each(guidelineCopies)('%s: leaves the checklist item unticked on failure or skip', (_label, load) => {
-    const section = sectionOf(load(), VOCAB)
-    expect(section.toLowerCase()).toContain('stays unticked')
-  })
+  it.each(guidelineCopies)(
+    '%s: leaves the checklist item unticked on failure or skip',
+    (_label, load) => {
+      const section = sectionOf(load(), VOCAB)
+      expect(section.toLowerCase()).toContain('stays unticked')
+    },
+  )
 
-  it.each(guidelineCopies)('%s: states the tick outcome per row, so no outcome is silent', (_label, load) => {
-    const section = sectionOf(load(), VOCAB)
-    // A table, one row per outcome, with an explicit "does the item get ticked"
-    // column — the shape that makes an unanswered outcome visible.
-    expect(section).toMatch(/\|\s*Outcome\s*\|/)
-    expect(section.toLowerCase()).toMatch(/\|\s*checklist item\s*\|/)
-  })
+  it.each(guidelineCopies)(
+    '%s: states the tick outcome per row, so no outcome is silent',
+    (_label, load) => {
+      const section = sectionOf(load(), VOCAB)
+      // A table, one row per outcome, with an explicit "does the item get ticked"
+      // column — the shape that makes an unanswered outcome visible.
+      expect(section).toMatch(/\|\s*Outcome\s*\|/)
+      expect(section.toLowerCase()).toMatch(/\|\s*checklist item\s*\|/)
+    },
+  )
 })
 
 describe('wiring — /implement owns both call sites (AC1/AC2, T3)', () => {
@@ -254,5 +275,90 @@ describe('wiring — nobody duplicates the loop (AC2, T3)', () => {
     // merges the full body), comment mode for the batch.
     expect(section).toContain('$mode: comment')
     expect(section.toLowerCase()).toContain('tick')
+  })
+})
+
+describe('conflict and write-failure fallbacks (edge cases, T4)', () => {
+  const FALLBACKS = '## Failure and conflict handling'
+
+  it.each(guidelineCopies)(
+    '%s: confirms the tick by a read, never by an exit status',
+    (_label, load) => {
+      // The repo-wide verified-writes contract, applied here: a call that exits 0
+      // having changed nothing must report `write-failed`, not `ticked` — otherwise
+      // the batch claims a tick the body does not carry.
+      const section = sectionOf(load(), FALLBACKS)
+      const low = section.toLowerCase()
+      expect(low).toMatch(/read (it |the body )?back|reading the body back/)
+      expect(low).toContain('exit status')
+    },
+  )
+
+  it.each(guidelineCopies)('%s: retries a body conflict from a FRESH read', (_label, load) => {
+    const section = sectionOf(load(), FALLBACKS)
+    const low = section.toLowerCase()
+    expect(low).toMatch(/concurrent|conflict/)
+    expect(low).toContain('fresh')
+    // and the locator is re-run on the new body: the item may have moved, or a
+    // human may have ticked it meanwhile.
+    expect(low).toMatch(/re-?run the locator|locator .*again/)
+  })
+
+  it.each(guidelineCopies)(
+    '%s: falls back to comment-only on a repeated conflict',
+    (_label, load) => {
+      const section = sectionOf(load(), FALLBACKS)
+      expect(section.toLowerCase()).toContain('comment-only')
+    },
+  )
+
+  it.each(guidelineCopies)(
+    '%s: bounds the retries so a broken tracker cannot stall the run',
+    (_label, load) => {
+      const section = sectionOf(load(), FALLBACKS)
+      const low = section.toLowerCase()
+      expect(low).toMatch(/retr/)
+      expect(low).toMatch(/one retry|once/)
+    },
+  )
+
+  it.each(guidelineCopies)('%s: a PM write failure never blocks implementation', (_label, load) => {
+    const section = sectionOf(load(), FALLBACKS)
+    const low = section.toLowerCase()
+    expect(low).toMatch(/never blocks?/)
+    expect(low).toMatch(/continue|carries on/)
+  })
+})
+
+describe('what the loop never does (AC4, T4)', () => {
+  const NEVER = '## What never happens'
+
+  it.each(guidelineCopies)('%s: creates no task issues — tasks stay inline', (_label, load) => {
+    const section = sectionOf(load(), NEVER)
+    expect(section.toLowerCase()).toContain('no separate task issues')
+  })
+
+  it.each(guidelineCopies)('%s: rewrites no other section of the body', (_label, load) => {
+    const section = sectionOf(load(), NEVER)
+    const low = section.toLowerCase()
+    expect(low).toMatch(/acceptance criteria|other section/)
+  })
+
+  it.each(guidelineCopies)('%s: writes no board state', (_label, load) => {
+    expect(sectionOf(load(), NEVER).toLowerCase()).toMatch(/board (state|field)/)
+  })
+})
+
+describe('the docs site carries the feature (DoD)', () => {
+  const docs = (rel: string): string =>
+    read(join(__dirname, '../../../../apps/website/content/docs', rel))
+
+  it('lists the guideline in the guidelines catalog', () => {
+    expect(docs('reference/guidelines-catalog.mdx')).toContain('task-progress')
+  })
+
+  it('describes the progress feedback on the execution journey page', () => {
+    const page = docs('developer-journey/execution.mdx').toLowerCase()
+    expect(page).toMatch(/task-progress|progress comment/)
   })
 })
