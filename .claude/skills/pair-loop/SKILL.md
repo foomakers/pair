@@ -1,7 +1,7 @@
 ---
 name: pair-loop
 description: "Unattended delivery loop: per iteration, selects eligible cards via pair-next, runs a dependency + mutex analysis, composes implement-batch for a mutex-safe parallel batch (or drives one card sequentially), enacts the automation policy (auto-advance) and evaluates the stop predicate. In an environment with a fan-out runner it delegates the whole unattended run to the pair-loop workflow; elsewhere it drives exactly one eligible card and reports a continue-token."
-version: 0.1.0
+version: 0.1.1
 author: Foomakers
 ---
 
@@ -50,6 +50,7 @@ Fan-out is ONE capability with THREE realizations, in preference order: **(1) in
 
 - **Never re-implements the per-card pipeline.** Implement→PR→review is `/implement-batch`'s (#219); this skill composes it and consumes its outcomes only (PR opened/updated, review-approved, escalated, failed).
 - **Never merges outside the tier the policy permits.** Merge authority belongs to `## Auto-Advance`, never to this skill inventing a looser rule, and never to branch protection it cannot count on (a project with `Review enforcement: disabled` gets no safety net there — this skill verifies the 🟢 gate set itself before ever pushing/merging).
+- **Never posts its own per-task progress comments.** The breakdown-to-task feedback loop — checklist ticks plus one batched comment per run iteration — belongs to `/pair-process-implement` ([task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)), which this skill reaches through `/implement-batch`, so a supervised run already carries it. A second writer here would double every line. The one comment this skill does post is its own: the card-level "awaits human action" note in the degraded path, which reports the loop's decision, not a task's outcome.
 - **Never modifies `/pair-next`.** Selection stays the frozen atom (ADR-017 §1) — this skill only ever passes `--root`/`--filter`.
 - **Never widens an override.** A pin-sequential or exclude override may only narrow the parallel set the dependency+mutex analysis computed; it can never add back an excluded card.
 
