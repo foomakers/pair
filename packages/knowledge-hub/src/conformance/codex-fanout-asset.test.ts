@@ -76,6 +76,81 @@ describe('the shipped asset runs as the skill invokes it', () => {
     expect(body).toMatchObject({ tier: 3, realization: 'degraded-one-card' })
   })
 
+  it('binds a Claude Code session to tier 1 rather than announcing a degradation to its audit', () => {
+    // Against the previously shipped asset this exact request returned
+    // {"tier":3,"realization":"degraded-one-card","announcement":"… degrading to the one-card
+    // path…"} — a false line printed and written to the audit on every Claude Code run.
+    const { code, body } = run('bind', {
+      probe: {
+        tools: ['Workflow', 'Task', 'Read', 'Bash', 'Edit'],
+        externalDriverAvailable: false,
+      },
+    })
+    expect(code).toBe(0)
+    expect(body).toMatchObject({
+      tier: 1,
+      realization: 'claude-code-workflow',
+      dispatch: 'delegated-run',
+      primitive: 'Workflow',
+    })
+    expect(String((body as { announcement: string }).announcement)).not.toContain('degrading')
+  })
+
+  it('hands the caller a wait bound to apply, instead of a timeout it would have to invent', () => {
+    const { body } = run('bind', { probe: { tools: ['spawn_agent', 'wait_agent'] } }) as {
+      body: { waitTimeoutKeys: { max: string } | null; waitTimeoutMs: number | null }
+    }
+    expect(body.waitTimeoutKeys?.max).toBeTruthy()
+    expect(body.waitTimeoutMs).toBeNull()
+    const probed = run('bind', {
+      probe: { tools: ['spawn_agent', 'wait_agent'], harnessWaitTimeoutMs: 600000 },
+    })
+    expect(probed.body).toMatchObject({ waitTimeoutMs: 600000 })
+  })
+
+  it('exits non-zero on a top-level `workingPath` instead of guarding the default it overrides', () => {
+    // Previously exit 0, emitting a packet with "blind":true carrying the author's checkpoint.
+    const { code, body } = run('packet', {
+      workingPath: '.pair/scratch',
+      packet: {
+        phase: 'review',
+        card: { id: '441', title: 't', branch: 'b' },
+        attachments: ['.pair/scratch/checkpoints/441.md'],
+      },
+    })
+    expect(code).toBe(1)
+    expect(String((body as { error: string }).error)).toContain('.pair/scratch/')
+  })
+
+  it('exits non-zero on a `fix` packet with no findings, instead of a fixer with nothing to fix', () => {
+    // Previously exit 0 with the findings silently dropped: the fixer returned {"fixed":true},
+    // the re-review re-raised the same findings, and the card burned all 3 rounds to `escalate`.
+    const dropped = run('packet', {
+      packet: {
+        phase: 'fix',
+        card: { id: '441', title: 't', branch: 'b' },
+        findings: [
+          { location: 'a.ts:1', severity: 'Major', description: 'd', recommendation: 'r' },
+        ],
+      },
+    })
+    expect(dropped.code).toBe(0)
+    expect((dropped.body as { findings: unknown[] }).findings).toHaveLength(1)
+    expect(
+      run('packet', { packet: { phase: 'fix', card: { id: '441', title: 't', branch: 'b' } } })
+        .code,
+    ).toBe(1)
+  })
+
+  it('takes a run-level audit record and never resumes it as a card', () => {
+    const audit = [
+      '{"kind":"run","run":"r1","realization":"claude-code-workflow","announcement":"bound"}',
+      '{"run":"r1","iteration":0,"id":"441","phase":"implement","outcome":"completed"}',
+    ].join('\n')
+    const plans = run('resume', { audit }).body as { id: string }[]
+    expect(plans.map(p => p.id)).toEqual(['441'])
+  })
+
   it('exits non-zero when a review packet would carry the working area', () => {
     const { code, body } = run('packet', {
       packet: {

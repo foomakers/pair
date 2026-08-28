@@ -4,7 +4,7 @@
 
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.main = exports.COMMANDS = exports.resumePlan = exports.reconstructState = exports.OWED_PHASES = exports.appendAudit = exports.auditLine = exports.converge = exports.MAX_FIX_ROUNDS_DEFAULT = exports.collectOutcome = exports.schemaViolations = exports.TERMINAL_OUTCOMES = exports.buildPacket = exports.assertBlind = exports.blindDenyPrefixes = exports.BLIND_DENY_PREFIXES = exports.WORKING_PATH_DEFAULT = exports.PacketRejected = exports.isPhase = exports.PHASE_CONTRACTS = exports.PHASES = exports.effectiveParallelism = exports.resolveRealization = exports.HARNESS_SURFACE_MAP = exports.REALIZATION_TIERS = void 0;
+exports.main = exports.COMMANDS = exports.resumePlan = exports.reconstructState = exports.OWED_PHASES = exports.appendAudit = exports.isCardRecord = exports.auditLine = exports.converge = exports.MAX_FIX_ROUNDS_DEFAULT = exports.collectOutcome = exports.schemaViolations = exports.TERMINAL_OUTCOMES = exports.buildPacket = exports.assertBlind = exports.blindDenyPrefixes = exports.BLIND_DENY_PREFIXES = exports.WORKING_PATH_DEFAULT = exports.PacketRejected = exports.isPhase = exports.PHASE_CONTRACTS = exports.PHASES = exports.effectiveParallelism = exports.resolveRealization = exports.HARNESS_SURFACE_MAP = exports.requiredHandles = exports.REALIZATION_TIERS = void 0;
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
 exports.REALIZATION_TIERS = Object.freeze({
@@ -12,13 +12,27 @@ exports.REALIZATION_TIERS = Object.freeze({
     EXTERNAL_DRIVER: 2,
     DEGRADED: 3,
 });
+function requiredHandles(handles) {
+    return handles.dispatch === 'spawn-wait' ? [handles.spawn, handles.wait] : [handles.delegate];
+}
+exports.requiredHandles = requiredHandles;
+const CLAUDE_CODE_WORKFLOW = {
+    id: 'claude-code-workflow',
+    tier: exports.REALIZATION_TIERS.IN_HARNESS,
+    harness: 'claude-code',
+    namespace: '',
+    handles: { dispatch: 'delegated-run', delegate: 'Workflow' },
+    gating: { featureKey: 'workflows', defaultOn: true },
+    verifiedAgainst: 'claude-code — the `Workflow` tool as exposed to a session with the `workflows` asset ' +
+        'registry installed (`pair-loop`, `pair-implement-batch`), 2026-08-28',
+};
 const CODEX_MULTI_AGENT_V2 = {
     id: 'codex-multi-agent-v2',
     tier: exports.REALIZATION_TIERS.IN_HARNESS,
     harness: 'codex',
     namespace: '',
     namespaceKey: 'features.multi_agent_v2.tool_namespace',
-    handles: { spawn: 'spawn', wait: 'wait', cancel: 'interrupt_agent' },
+    handles: { dispatch: 'spawn-wait', spawn: 'spawn', wait: 'wait', cancel: 'interrupt_agent' },
     gating: { featureKey: 'features.multi_agent_v2', defaultOn: false },
     bounding: {
         concurrencyKey: 'features.multi_agent_v2.max_concurrent_threads_per_session',
@@ -36,6 +50,7 @@ const CODEX_MULTI_AGENT_V1 = {
     harness: 'codex',
     namespace: '',
     handles: {
+        dispatch: 'spawn-wait',
         spawn: 'spawn_agent',
         wait: 'wait_agent',
         cancel: 'close_agent',
@@ -53,6 +68,7 @@ const CODEX_MULTI_AGENT_V1 = {
     verifiedAgainst: 'codex-cli 0.149.0 — `codex features list` (stable, default on), 2026-08-22',
 };
 exports.HARNESS_SURFACE_MAP = Object.freeze([
+    CLAUDE_CODE_WORKFLOW,
     CODEX_MULTI_AGENT_V2,
     CODEX_MULTI_AGENT_V1,
 ]);
@@ -62,9 +78,8 @@ function qualify(namespace, handle) {
 function matchRealization(def, exposed, namespaceOverride) {
     const renameable = typeof def.namespaceKey === 'string' && def.namespaceKey !== '';
     const ns = renameable && typeof namespaceOverride === 'string' ? namespaceOverride : def.namespace;
-    const spawn = qualify(ns, def.handles.spawn);
-    const wait = qualify(ns, def.handles.wait);
-    return exposed.has(spawn) && exposed.has(wait) ? { spawn, wait } : null;
+    const required = requiredHandles(def.handles).map(handle => qualify(ns, handle));
+    return required.every(handle => exposed.has(handle)) ? required : null;
 }
 const DEGRADED_REASON = 'no fan-out primitive is exposed in this session — availability is established by probing ' +
     'the tools the session actually offers, never by the product name or a version';
@@ -78,10 +93,24 @@ function degrade(probe) {
     return {
         tier,
         realization,
+        dispatch: null,
         primitive: null,
         reason: `${DEGRADED_REASON}; ${next}`,
         announcement: `fan-out realization: ${realization} (tier ${tier}) — ${next}`,
         harnessCeiling: null,
+        waitTimeoutMs: null,
+        waitTimeoutKeys: null,
+    };
+}
+function waitBound(def, probe) {
+    const bounding = def.bounding;
+    if (!bounding)
+        return { waitTimeoutMs: null, waitTimeoutKeys: null };
+    const reported = probe.harnessWaitTimeoutMs;
+    const usable = Number.isInteger(reported) && reported > 0;
+    return {
+        waitTimeoutMs: usable ? reported : null,
+        waitTimeoutKeys: bounding.waitTimeoutKeys,
     };
 }
 function resolveRealization(probe) {
@@ -91,16 +120,19 @@ function resolveRealization(probe) {
         if (!hit)
             continue;
         const ceiling = Number.isInteger(probe.harnessCeiling) ? probe.harnessCeiling : null;
-        const reason = `probed this session: \`${hit.spawn}\` and \`${hit.wait}\` are both exposed ` +
+        const bound = hit.map(handle => `\`${handle}\``).join('/');
+        const reason = `probed this session: ${bound} ${hit.length > 1 ? 'are all' : 'is'} exposed ` +
             `(gated by \`${def.gating.featureKey}\`, default ${def.gating.defaultOn ? 'on' : 'off'}; ` +
             `verified against ${def.verifiedAgainst})`;
         return {
             tier: def.tier,
             realization: def.id,
-            primitive: hit.spawn,
+            dispatch: def.handles.dispatch,
+            primitive: hit[0] ?? null,
             reason,
-            announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}) — bound to \`${hit.spawn}\`/\`${hit.wait}\`; ${reason}`,
-            harnessCeiling: ceiling,
+            announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ${def.handles.dispatch}) — bound to ${bound}; ${reason}`,
+            harnessCeiling: def.bounding ? ceiling : null,
+            ...waitBound(def, probe),
         };
     }
     return degrade(probe);
@@ -197,6 +229,15 @@ function isPhase(value) {
     return typeof value === 'string' && exports.PHASES.includes(value);
 }
 exports.isPhase = isPhase;
+const PACKET_KEYS = [
+    'phase',
+    'card',
+    'worktreeRoot',
+    'attachments',
+    'workingPath',
+    'findings',
+];
+const CARD_KEYS = ['id', 'title', 'branch', 'base', 'notes', 'prNumber'];
 class PacketRejected extends Error {
     constructor(message) {
         super(message);
@@ -245,11 +286,45 @@ function assertBlind(attachments, phase, workingPath) {
     }
 }
 exports.assertBlind = assertBlind;
+function assertKnownKeys(value, allowed, where, make) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        return;
+    const unknown = Object.keys(value).filter(key => !allowed.includes(key));
+    if (unknown.length > 0)
+        throw make(`codex-fanout: unknown key(s) ${unknown.map(k => `\`${k}\``).join(', ')} in ${where}; ` +
+            `expected one of ${allowed.join(', ')}. An unknown key is REJECTED rather than dropped: ` +
+            `a misplaced one would silently leave the default in force — and the defaults here are ` +
+            `exactly what the caller passes these keys to override.`);
+}
 function assertSingleCard(card) {
+    assertKnownKeys(card, CARD_KEYS, 'the card', message => new PacketRejected(message));
     const missing = ['id', 'title', 'branch'].filter(k => typeof card?.[k] !== 'string' || card[k].trim() === '');
     if (missing.length > 0)
         throw new PacketRejected(`codex-fanout: a packet describes exactly one card and needs ${missing.join(', ')}; ` +
             `a packet assembled from an incomplete card would spawn a subagent that has to guess its scope`);
+}
+function parseFindings(raw) {
+    if (raw === undefined)
+        return [];
+    if (!Array.isArray(raw))
+        throw new PacketRejected('codex-fanout: `findings` must be an array of finding objects');
+    for (const finding of raw)
+        if (finding === null || typeof finding !== 'object' || Array.isArray(finding))
+            throw new PacketRejected(`codex-fanout: every finding must be an object as the review contract carries it, got ` +
+                `${JSON.stringify(finding)}`);
+    return raw;
+}
+function resolveFindings(request, contract) {
+    const findings = parseFindings(request.findings);
+    if (contract.blind && findings.length > 0)
+        throw new PacketRejected(`codex-fanout: a blind packet carries no findings — the ${request.phase} role derives its own ` +
+            `from the diff, and a previous round's set primes the very judgement it is asked for`);
+    if (request.phase === 'fix' && findings.length === 0)
+        throw new PacketRejected('codex-fanout: a `fix` packet carries the findings it must fix, and none were passed. ' +
+            "Pass `converge`'s `actionable` set as `findings`. A fixer spawned without them fixes " +
+            'nothing determinable, the mandated re-review re-raises the same findings, and the card ' +
+            'burns its whole round cap to an escalation nobody chose.');
+    return findings;
 }
 const ROLE_INSTRUCTIONS = Object.freeze({
     implementer: 'You are the authoring chain for ONE story: implement, open or update its single PR, and apply review fixes. ' +
@@ -261,10 +336,12 @@ const ROLE_INSTRUCTIONS = Object.freeze({
         'Return the declared schema and nothing else.',
 });
 function buildPacket(request) {
+    assertKnownKeys(request, PACKET_KEYS, 'the packet request', m => new PacketRejected(m));
     if (!isPhase(request?.phase))
         throw new PacketRejected(`codex-fanout: unknown phase ${JSON.stringify(request?.phase)}; expected one of ${exports.PHASES.join(', ')}`);
     const contract = exports.PHASE_CONTRACTS[request.phase];
     assertSingleCard(request.card);
+    const findings = resolveFindings(request, contract);
     const attachments = (request.attachments ?? []).map(normalizeAttachment);
     if (contract.blind)
         assertBlind(attachments, request.phase, request.workingPath);
@@ -277,6 +354,7 @@ function buildPacket(request) {
         worktree: `${root}/${request.card.id}`,
         schema: contract.schema,
         attachments,
+        findings,
         instructions: ROLE_INSTRUCTIONS[contract.role],
         blind: contract.blind,
     };
@@ -488,7 +566,21 @@ function auditLine(record) {
     return `${JSON.stringify(record)}\n`;
 }
 exports.auditLine = auditLine;
+function isCardRecord(record) {
+    return record?.kind !== 'run' && typeof record?.id === 'string' && record.id.trim() !== '';
+}
+exports.isCardRecord = isCardRecord;
+function assertAuditable(record, index) {
+    if (record?.kind === 'run' || isCardRecord(record))
+        return;
+    throw new Error(`codex-fanout: audit record #${index} names no card \`id\` and is not marked \`kind:"run"\`. ` +
+        `A run-level line — the realization announcement, a run-level halt — is written as ` +
+        `\`{"kind":"run", …}\`; everything else names the card it belongs to. Neither is inferred, ` +
+        `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
+        `with no id at all is unreadable on resume.`);
+}
 function appendAudit(path, records, fs = NODE_AUDIT_FS) {
+    records.forEach(assertAuditable);
     const payload = records.map(auditLine).join('');
     try {
         fs.mkdirSync((0, node_path_1.dirname)(path), { recursive: true });
@@ -590,7 +682,7 @@ function parseAudit(auditText) {
         catch {
             continue;
         }
-        if (!record || typeof record.id !== 'string')
+        if (!record || (record.kind !== 'run' && typeof record.id !== 'string'))
             continue;
         records.push(record);
     }
@@ -608,6 +700,8 @@ function reconstructState(auditText, scope = {}) {
     };
     const states = {};
     for (const record of records) {
+        if (!isCardRecord(record))
+            continue;
         const state = states[record.id] ?? emptyState();
         states[record.id] = state;
         applyRecord(state, record, canHalt(record));
@@ -642,6 +736,42 @@ function resumePlan(id, state) {
 }
 exports.resumePlan = resumePlan;
 exports.COMMANDS = ['bind', 'cap', 'packet', 'collect', 'converge', 'audit', 'resume'];
+const REQUEST_KEYS = [
+    'probe',
+    'ceilings',
+    'packet',
+    'phase',
+    'result',
+    'schema',
+    'path',
+    'records',
+    'audit',
+    'id',
+    'review',
+    'round',
+    'maxFixRounds',
+    'severityFloor',
+    'severityRanks',
+    'humanDecisionPending',
+    'run',
+    'sinceIteration',
+    'workingPath',
+    'worktreeRoot',
+    'findings',
+];
+function packetRequestFrom(req) {
+    const packet = (req.packet ?? {});
+    assertKnownKeys(packet, PACKET_KEYS, 'the packet', m => new PacketRejected(m));
+    const workingPath = packet.workingPath ?? req.workingPath;
+    const worktreeRoot = packet.worktreeRoot ?? req.worktreeRoot;
+    const findings = packet.findings ?? req.findings;
+    return {
+        ...packet,
+        ...(workingPath === undefined ? {} : { workingPath }),
+        ...(worktreeRoot === undefined ? {} : { worktreeRoot }),
+        ...(findings === undefined ? {} : { findings }),
+    };
+}
 function runResume(req) {
     const states = reconstructState(req.audit ?? '', req);
     if (typeof req.id === 'string')
@@ -651,13 +781,14 @@ function runResume(req) {
 const HANDLERS = Object.freeze({
     bind: req => resolveRealization(req.probe ?? {}),
     cap: req => effectiveParallelism(req.ceilings),
-    packet: req => buildPacket(req.packet),
+    packet: req => buildPacket(packetRequestFrom(req)),
     collect: req => collectOutcome(req.phase, req.result, req.schema),
     converge: req => converge(req),
     audit: req => appendAudit(req.path, req.records ?? []),
     resume: runResume,
 });
 function runCommand(command, req) {
+    assertKnownKeys(req, REQUEST_KEYS, 'the request root', message => new Error(message));
     return HANDLERS[command](req);
 }
 function readStdin() {

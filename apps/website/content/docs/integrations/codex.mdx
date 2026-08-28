@@ -85,11 +85,11 @@ Enable nothing and the loop still works if the default-on set is exposed — a h
 Before anything is dispatched, the run prints which realization won, which primitive it bound to and why, plus the effective parallelism and which limit produced it:
 
 ```text
-fan-out realization: codex-multi-agent-v1 (tier 1, codex) — bound to `spawn_agent`/`wait_agent`; …
+fan-out realization: codex-multi-agent-v1 (tier 1, codex, spawn-wait) — bound to `spawn_agent`/`wait_agent`; …
 effective parallelism: 2 (bound by policy; dependency=4, policy=2, harness=8)
 ```
 
-Both lines also go into the run's audit file, so a run can be reconstructed after the fact.
+Both lines also go into the run's audit file, so a run can be reconstructed after the fact. `spawn-wait` is the third field: it says this session starts and awaits each subagent itself, and therefore owns the concurrency cap and the wait bound. The other in-harness realization pair knows — Claude Code's workflow — reports `delegated-run` instead, because there the whole run is handed over in one call. Both are probed the same way, and the loop branches on that field rather than on which product it is running in.
 
 ### Where it stops
 

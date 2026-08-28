@@ -20,7 +20,7 @@
  * `pair-loop`; this file is handed their results and does arithmetic on them.
  *
  * CLI (one JSON request on stdin, one JSON response on stdout; exit 1 on a rejection):
- *   bind    — probe result in, bound realization + announcement out
+ *   bind    — probe result in; bound realization, dispatch shape, announcement + wait bound out
  *   cap     — the three ceilings in, the effective cap + the binding one out
  *   packet  — a role + one card in, the spawn packet out (or a pre-spawn rejection)
  *   collect — a raw subagent return in, a terminal phase outcome out
@@ -45,8 +45,25 @@ export const REALIZATION_TIERS = Object.freeze({
   DEGRADED: 3,
 } as const)
 
-/** What a fan-out realization must be able to do, in the capability's own vocabulary. */
-export interface RealizationHandles {
+/**
+ * How a realization is DRIVEN, which is the one structural difference between the two
+ * in-harness realizations that ship.
+ *
+ * `spawn-wait` — this orchestrator starts each subagent and waits for it, so it owns the
+ * concurrency cap, the wait bounds and the per-dispatch collection.
+ * `delegated-run` — one call hands the WHOLE run to a runtime that owns the fan-out itself,
+ * so this orchestrator owns none of those and must not invent them.
+ *
+ * A realization is bound on the same evidence either way — the handle is exposed, or it is
+ * not — which is exactly why both belong in ONE map. While only the `spawn-wait` entries were
+ * in it, a caller told to bind by probing got `degraded` for a session that then fanned out
+ * through a delegated runtime, and had to route on the product name instead.
+ */
+export type DispatchShape = 'spawn-wait' | 'delegated-run'
+
+/** Handles for a realization this orchestrator sequences itself. */
+export interface SpawnWaitHandles {
+  readonly dispatch: 'spawn-wait'
   /** Starts one subagent from an explicit packet. Required — no spawn, no realization. */
   readonly spawn: string
   /** Blocks for a started subagent's result, under a timeout. Required. */
@@ -55,6 +72,36 @@ export interface RealizationHandles {
   readonly cancel?: string
   /** Re-attaches to a subagent after an interruption. Optional. */
   readonly resume?: string
+}
+
+/** Handle for a realization that takes the run whole. */
+export interface DelegatedRunHandles {
+  readonly dispatch: 'delegated-run'
+  /** The single call the whole run is handed to. Required — no delegate, no realization. */
+  readonly delegate: string
+}
+
+/** What a fan-out realization must be able to do, in the capability's own vocabulary. */
+export type RealizationHandles = SpawnWaitHandles | DelegatedRunHandles
+
+/**
+ * The handles that must ALL be exposed for the entry to bind. The first is the one announced
+ * as the bound primitive.
+ */
+export function requiredHandles(handles: RealizationHandles): readonly string[] {
+  return handles.dispatch === 'spawn-wait' ? [handles.spawn, handles.wait] : [handles.delegate]
+}
+
+export interface WaitTimeoutKeys {
+  readonly min: string
+  readonly max: string
+  readonly default: string
+}
+
+/** Ceilings the harness imposes on an orchestrator that dispatches and waits itself. */
+export interface RealizationBounding {
+  readonly concurrencyKey: string
+  readonly waitTimeoutKeys: WaitTimeoutKeys
 }
 
 export interface RealizationDefinition {
@@ -73,17 +120,38 @@ export interface RealizationDefinition {
   readonly handles: RealizationHandles
   /** Feature key that gates the mechanism, and whether the harness ships it on. */
   readonly gating: { readonly featureKey: string; readonly defaultOn: boolean }
-  /** Ceilings the harness imposes. Composed with policy — never replacing it. */
-  readonly bounding: {
-    readonly concurrencyKey: string
-    readonly waitTimeoutKeys: {
-      readonly min: string
-      readonly max: string
-      readonly default: string
-    }
-  }
+  /**
+   * Ceilings the harness imposes. Composed with policy — never replacing it. ABSENT for a
+   * `delegated-run` entry: the delegated runtime schedules and waits, so a ceiling declared
+   * here would be a bound on nothing, and an announced wait timeout would be a bound this
+   * orchestrator never applies.
+   */
+  readonly bounding?: RealizationBounding
   /** Which product build this entry was read off, and when. Read by the next maintainer. */
   readonly verifiedAgainst: string
+}
+
+/**
+ * Claude Code's workflow runtime — the FIRST tier-1 realization this capability had, and an
+ * entry here for the same reason the Codex ones are: the skill decides its realization by
+ * probing, so a realization missing from the map is a realization the probe cannot confirm,
+ * whatever else the session knows about itself.
+ *
+ * It is `delegated-run`: the `Workflow` call hands the whole unattended run to the workflow,
+ * which does its own fan-out into fresh subagents. Nothing about the packet assembly, the cap
+ * arithmetic or the wait bounds below applies to it — those are the orchestrating model's job
+ * only where the orchestrating model is the one dispatching.
+ */
+const CLAUDE_CODE_WORKFLOW: RealizationDefinition = {
+  id: 'claude-code-workflow',
+  tier: REALIZATION_TIERS.IN_HARNESS,
+  harness: 'claude-code',
+  namespace: '',
+  handles: { dispatch: 'delegated-run', delegate: 'Workflow' },
+  gating: { featureKey: 'workflows', defaultOn: true },
+  verifiedAgainst:
+    'claude-code — the `Workflow` tool as exposed to a session with the `workflows` asset ' +
+    'registry installed (`pair-loop`, `pair-implement-batch`), 2026-08-28',
 }
 
 /**
@@ -97,7 +165,7 @@ const CODEX_MULTI_AGENT_V2: RealizationDefinition = {
   harness: 'codex',
   namespace: '',
   namespaceKey: 'features.multi_agent_v2.tool_namespace',
-  handles: { spawn: 'spawn', wait: 'wait', cancel: 'interrupt_agent' },
+  handles: { dispatch: 'spawn-wait', spawn: 'spawn', wait: 'wait', cancel: 'interrupt_agent' },
   gating: { featureKey: 'features.multi_agent_v2', defaultOn: false },
   bounding: {
     concurrencyKey: 'features.multi_agent_v2.max_concurrent_threads_per_session',
@@ -120,6 +188,7 @@ const CODEX_MULTI_AGENT_V1: RealizationDefinition = {
   harness: 'codex',
   namespace: '',
   handles: {
+    dispatch: 'spawn-wait',
     spawn: 'spawn_agent',
     wait: 'wait_agent',
     cancel: 'close_agent',
@@ -146,6 +215,7 @@ const CODEX_MULTI_AGENT_V1: RealizationDefinition = {
  * the logic below.
  */
 export const HARNESS_SURFACE_MAP: readonly RealizationDefinition[] = Object.freeze([
+  CLAUDE_CODE_WORKFLOW,
   CODEX_MULTI_AGENT_V2,
   CODEX_MULTI_AGENT_V1,
 ])
@@ -168,6 +238,11 @@ export interface ProbeObservation {
   readonly namespace?: string
   /** Concurrency ceiling the session reports, when it reports one. */
   readonly harnessCeiling?: number
+  /**
+   * Maximum wait the session reports for its own wait handle, in ms, when it reports one.
+   * Read off the harness's config — the bounding keys the map declares name where.
+   */
+  readonly harnessWaitTimeoutMs?: number
   /** Whether an external driver (tier 2) is available to this caller. */
   readonly externalDriverAvailable?: boolean
 }
@@ -175,12 +250,29 @@ export interface ProbeObservation {
 export interface Binding {
   readonly tier: number
   readonly realization: string
-  /** The primitive pair actually bound to — the spawn handle, fully qualified. */
+  /**
+   * How the bound realization is driven. This — not the harness's name — is what a caller
+   * branches on: `spawn-wait` means this orchestrator dispatches and waits, `delegated-run`
+   * means it hands the run over, `null` means nothing in-harness bound.
+   */
+  readonly dispatch: DispatchShape | null
+  /** The primitive pair actually bound to — the spawn or delegate handle, fully qualified. */
   readonly primitive: string | null
   readonly reason: string
   readonly announcement: string
   /** Harness ceiling the binding contributes to the cap arithmetic, when observed. */
   readonly harnessCeiling: number | null
+  /**
+   * The bound the caller must put on every wait it performs, resolved from the probe.
+   *
+   * AC10 requires every wait to be bounded, and the skill is deliberately barred from naming
+   * the vendor's config keys itself. So the bound is returned here: the resolved value when
+   * the session reported one, and otherwise the keys to read it from — never nothing, which
+   * left the caller inventing a timeout or omitting the argument and relying on a default
+   * nobody observed.
+   */
+  readonly waitTimeoutMs: number | null
+  readonly waitTimeoutKeys: WaitTimeoutKeys | null
 }
 
 function qualify(namespace: string, handle: string): string {
@@ -188,7 +280,8 @@ function qualify(namespace: string, handle: string): string {
 }
 
 /**
- * A realization is confirmed only when BOTH required handles are exposed under its namespace.
+ * A realization is confirmed only when EVERY handle it requires is exposed under its namespace —
+ * both of a `spawn-wait` pair, the single one of a `delegated-run`.
  *
  * The probe's `namespace` is a report about the entry that HAS a renameable namespace, so it
  * is applied only to entries declaring `namespaceKey`. Applying it to every entry made a
@@ -200,12 +293,11 @@ function matchRealization(
   def: RealizationDefinition,
   exposed: ReadonlySet<string>,
   namespaceOverride?: string,
-): { spawn: string; wait: string } | null {
+): readonly string[] | null {
   const renameable = typeof def.namespaceKey === 'string' && def.namespaceKey !== ''
   const ns = renameable && typeof namespaceOverride === 'string' ? namespaceOverride : def.namespace
-  const spawn = qualify(ns, def.handles.spawn)
-  const wait = qualify(ns, def.handles.wait)
-  return exposed.has(spawn) && exposed.has(wait) ? { spawn, wait } : null
+  const required = requiredHandles(def.handles).map(handle => qualify(ns, handle))
+  return required.every(handle => exposed.has(handle)) ? required : null
 }
 
 const DEGRADED_REASON =
@@ -222,10 +314,32 @@ function degrade(probe: ProbeObservation): Binding {
   return {
     tier,
     realization,
+    dispatch: null,
     primitive: null,
     reason: `${DEGRADED_REASON}; ${next}`,
     announcement: `fan-out realization: ${realization} (tier ${tier}) — ${next}`,
     harnessCeiling: null,
+    waitTimeoutMs: null,
+    waitTimeoutKeys: null,
+  }
+}
+
+/**
+ * The wait bound this binding hands back: the probed value when the session reported a usable
+ * one, and the config keys either way — but only for a realization this orchestrator waits on.
+ * A delegated run's waits belong to the runtime that owns them.
+ */
+function waitBound(
+  def: RealizationDefinition,
+  probe: ProbeObservation,
+): { waitTimeoutMs: number | null; waitTimeoutKeys: WaitTimeoutKeys | null } {
+  const bounding = def.bounding
+  if (!bounding) return { waitTimeoutMs: null, waitTimeoutKeys: null }
+  const reported = probe.harnessWaitTimeoutMs
+  const usable = Number.isInteger(reported) && (reported as number) > 0
+  return {
+    waitTimeoutMs: usable ? (reported as number) : null,
+    waitTimeoutKeys: bounding.waitTimeoutKeys,
   }
 }
 
@@ -240,17 +354,20 @@ export function resolveRealization(probe: ProbeObservation): Binding {
     const hit = matchRealization(def, exposed, probe.namespace)
     if (!hit) continue
     const ceiling = Number.isInteger(probe.harnessCeiling) ? (probe.harnessCeiling as number) : null
+    const bound = hit.map(handle => `\`${handle}\``).join('/')
     const reason =
-      `probed this session: \`${hit.spawn}\` and \`${hit.wait}\` are both exposed ` +
+      `probed this session: ${bound} ${hit.length > 1 ? 'are all' : 'is'} exposed ` +
       `(gated by \`${def.gating.featureKey}\`, default ${def.gating.defaultOn ? 'on' : 'off'}; ` +
       `verified against ${def.verifiedAgainst})`
     return {
       tier: def.tier,
       realization: def.id,
-      primitive: hit.spawn,
+      dispatch: def.handles.dispatch,
+      primitive: hit[0] ?? null,
       reason,
-      announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}) — bound to \`${hit.spawn}\`/\`${hit.wait}\`; ${reason}`,
-      harnessCeiling: ceiling,
+      announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ${def.handles.dispatch}) — bound to ${bound}; ${reason}`,
+      harnessCeiling: def.bounding ? ceiling : null,
+      ...waitBound(def, probe),
     }
   }
   return degrade(probe)
@@ -445,7 +562,30 @@ export interface PacketRequest {
    * default). Passed in rather than assumed: it is what the blindness check guards.
    */
   readonly workingPath?: string
+  /**
+   * The findings the packet's role must act on — `converge`'s `actionable` set, for a `fix`.
+   *
+   * It is a FIELD rather than something the caller improvises into the spawn text because a
+   * fixer's input is part of the contract: with no channel for them the instruction "dispatch
+   * one fix with the actionable findings" produced a packet that said only "apply review
+   * fixes", the fixer returned `fixed:true` having fixed nothing determinable, and the
+   * mandated re-review re-raised the same findings until the round cap escalated the card.
+   */
+  readonly findings?: readonly Finding[]
 }
+
+/** Every key a packet request may carry. Anything else is rejected, never dropped. */
+const PACKET_KEYS: readonly string[] = [
+  'phase',
+  'card',
+  'worktreeRoot',
+  'attachments',
+  'workingPath',
+  'findings',
+]
+
+/** Every key a card may carry. A misspelled `prNumber` would open a second PR for the story. */
+const CARD_KEYS: readonly string[] = ['id', 'title', 'branch', 'base', 'notes', 'prNumber']
 
 export interface ContextPacket {
   readonly phase: Phase
@@ -455,6 +595,8 @@ export interface ContextPacket {
   readonly worktree: string
   readonly schema: JsonSchema
   readonly attachments: readonly string[]
+  /** The findings this role must act on. Empty for every phase but `fix`. */
+  readonly findings: readonly Finding[]
   /** The role text handed over IN the spawn request — never a named profile binding. */
   readonly instructions: string
   readonly blind: boolean
@@ -559,7 +701,35 @@ export function assertBlind(
   }
 }
 
+/**
+ * Rejects a key nobody declared, instead of dropping it.
+ *
+ * The party composing these requests is the orchestrating MODEL, so a misplaced or misspelled
+ * key is a live failure mode rather than a typo caught in review — and every one of them was
+ * silent: an unread `workingPath` re-admitted the author's checkpoint into the reviewer's
+ * packet, an unread `worktreeRoot` named a worktree the run never created, an unread
+ * `findings` spawned a fixer with nothing to fix. A key the module cannot honour now fails
+ * closed, loudly, before any spawn.
+ */
+function assertKnownKeys(
+  value: unknown,
+  allowed: readonly string[],
+  where: string,
+  make: (message: string) => Error,
+): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return
+  const unknown = Object.keys(value as object).filter(key => !allowed.includes(key))
+  if (unknown.length > 0)
+    throw make(
+      `codex-fanout: unknown key(s) ${unknown.map(k => `\`${k}\``).join(', ')} in ${where}; ` +
+        `expected one of ${allowed.join(', ')}. An unknown key is REJECTED rather than dropped: ` +
+        `a misplaced one would silently leave the default in force — and the defaults here are ` +
+        `exactly what the caller passes these keys to override.`,
+    )
+}
+
 function assertSingleCard(card: Card): void {
+  assertKnownKeys(card, CARD_KEYS, 'the card', message => new PacketRejected(message))
   const missing = (['id', 'title', 'branch'] as const).filter(
     k => typeof card?.[k] !== 'string' || card[k].trim() === '',
   )
@@ -568,6 +738,45 @@ function assertSingleCard(card: Card): void {
       `codex-fanout: a packet describes exactly one card and needs ${missing.join(', ')}; ` +
         `a packet assembled from an incomplete card would spawn a subagent that has to guess its scope`,
     )
+}
+
+/**
+ * The findings the packet carries, or a rejection.
+ *
+ * Two rules, both fail-closed. A `fix` packet with NO findings is refused — that is the
+ * mechanical omission that burns a card's whole round cap to an escalation nobody chose. And
+ * a BLIND packet may carry none at all: the reviewer's job is to derive findings from the
+ * diff, and handing it a previous round's is the same class of priming the blindness check
+ * exists to prevent.
+ */
+function parseFindings(raw: PacketRequest['findings']): readonly Finding[] {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw))
+    throw new PacketRejected('codex-fanout: `findings` must be an array of finding objects')
+  for (const finding of raw)
+    if (finding === null || typeof finding !== 'object' || Array.isArray(finding))
+      throw new PacketRejected(
+        `codex-fanout: every finding must be an object as the review contract carries it, got ` +
+          `${JSON.stringify(finding)}`,
+      )
+  return raw as readonly Finding[]
+}
+
+function resolveFindings(request: PacketRequest, contract: PhaseContract): readonly Finding[] {
+  const findings = parseFindings(request.findings)
+  if (contract.blind && findings.length > 0)
+    throw new PacketRejected(
+      `codex-fanout: a blind packet carries no findings — the ${request.phase} role derives its own ` +
+        `from the diff, and a previous round's set primes the very judgement it is asked for`,
+    )
+  if (request.phase === 'fix' && findings.length === 0)
+    throw new PacketRejected(
+      'codex-fanout: a `fix` packet carries the findings it must fix, and none were passed. ' +
+        "Pass `converge`'s `actionable` set as `findings`. A fixer spawned without them fixes " +
+        'nothing determinable, the mandated re-review re-raises the same findings, and the card ' +
+        'burns its whole round cap to an escalation nobody chose.',
+    )
+  return findings
 }
 
 const ROLE_INSTRUCTIONS: Readonly<Record<PhaseContract['role'], string>> = Object.freeze({
@@ -588,12 +797,14 @@ const ROLE_INSTRUCTIONS: Readonly<Record<PhaseContract['role'], string>> = Objec
  * adapter runs unchanged with none configured.
  */
 export function buildPacket(request: PacketRequest): ContextPacket {
+  assertKnownKeys(request, PACKET_KEYS, 'the packet request', m => new PacketRejected(m))
   if (!isPhase(request?.phase))
     throw new PacketRejected(
       `codex-fanout: unknown phase ${JSON.stringify(request?.phase)}; expected one of ${PHASES.join(', ')}`,
     )
   const contract = PHASE_CONTRACTS[request.phase]
   assertSingleCard(request.card)
+  const findings = resolveFindings(request, contract)
   const attachments = (request.attachments ?? []).map(normalizeAttachment)
   if (contract.blind) assertBlind(attachments, request.phase, request.workingPath)
   const root = request.worktreeRoot ?? WORKTREE_ROOT_DEFAULT
@@ -605,6 +816,7 @@ export function buildPacket(request: PacketRequest): ContextPacket {
     worktree: `${root}/${request.card.id}`,
     schema: contract.schema,
     attachments,
+    findings,
     instructions: ROLE_INSTRUCTIONS[contract.role],
     blind: contract.blind,
   }
@@ -986,8 +1198,21 @@ export function converge(req: ConvergeRequest): ConvergeDecision {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface AuditRecord {
-  readonly iteration: number
-  readonly id: string
+  /**
+   * What the record is ABOUT. `card` (the default) — one card's phase. `run` — the whole
+   * invocation: the realization announcement, a run-level halt.
+   *
+   * The distinction is not cosmetic. While every record needed a card `id`, the announcement
+   * AC2/AC8 require in the audit had none to give: omitting it made the line unreadable on
+   * resume (it was dropped at parse), and inventing one (`"run-2026-08-28"`) materialized a
+   * phantom card that `resume` then reported owed a full `implement, pr, review` pipeline.
+   */
+  readonly kind?: 'run' | 'card'
+  readonly iteration?: number
+  /** The card the record is about. Required on a card record; absent on a run record. */
+  readonly id?: string
+  /** The announcement line, on the run record that carries it. */
+  readonly announcement?: string
   /**
    * The pair-loop invocation that wrote the line. The audit is ONE append-only project file
    * that outlives every run, so without this a run cannot tell its own halts from a halt
@@ -1020,6 +1245,26 @@ export function auditLine(record: AuditRecord): string {
   return `${JSON.stringify(record)}\n`
 }
 
+/** A record the resume reconstruction reads as one card's history. */
+export function isCardRecord(record: AuditRecord): record is AuditRecord & { id: string } {
+  return record?.kind !== 'run' && typeof record?.id === 'string' && record.id.trim() !== ''
+}
+
+/**
+ * Refuses at WRITE time a record no reader could place. The two ways of getting it wrong were
+ * both silent at write and both damaging at read, so the check is here rather than there.
+ */
+function assertAuditable(record: AuditRecord, index: number): void {
+  if (record?.kind === 'run' || isCardRecord(record)) return
+  throw new Error(
+    `codex-fanout: audit record #${index} names no card \`id\` and is not marked \`kind:"run"\`. ` +
+      `A run-level line — the realization announcement, a run-level halt — is written as ` +
+      `\`{"kind":"run", …}\`; everything else names the card it belongs to. Neither is inferred, ` +
+      `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
+      `with no id at all is unreadable on resume.`,
+  )
+}
+
 /**
  * Appends and READS BACK. An unattended run with no audit trail is not an acceptable
  * degraded mode, so a write that cannot be confirmed throws instead of returning a flag the
@@ -1030,6 +1275,7 @@ export function appendAudit(
   records: readonly AuditRecord[],
   fs: AuditFs = NODE_AUDIT_FS,
 ): { written: number; path: string } {
+  records.forEach(assertAuditable)
   const payload = records.map(auditLine).join('')
   try {
     fs.mkdirSync(dirname(path), { recursive: true })
@@ -1184,7 +1430,10 @@ function parseAudit(auditText: string): AuditRecord[] {
       // would strand the very run this function exists to recover.
       continue
     }
-    if (!record || typeof record.id !== 'string') continue
+    // Run-level records are KEPT — `lastRun` is read off them, so the announcement that opens
+    // an invocation is what tells a later reconstruction which run is current. They are simply
+    // never turned into cards.
+    if (!record || (record.kind !== 'run' && typeof record.id !== 'string')) continue
     records.push(record)
   }
   return records
@@ -1209,6 +1458,7 @@ export function reconstructState(
   }
   const states: Record<string, CardState> = {}
   for (const record of records) {
+    if (!isCardRecord(record)) continue
     const state = states[record.id] ?? emptyState()
     states[record.id] = state
     applyRecord(state, record, canHalt(record))
@@ -1276,6 +1526,61 @@ interface CommandRequest extends ConvergeRequest, ResumeScope {
   records?: AuditRecord[]
   audit?: string
   id?: string
+  /** Accepted at the TOP level as well as inside `packet` — see `packetRequestFrom`. */
+  workingPath?: string
+  worktreeRoot?: string
+  findings?: readonly Finding[]
+}
+
+/** Every key the CLI request may carry, at the top level. */
+const REQUEST_KEYS: readonly string[] = [
+  'probe',
+  'ceilings',
+  'packet',
+  'phase',
+  'result',
+  'schema',
+  'path',
+  'records',
+  'audit',
+  'id',
+  'review',
+  'round',
+  'maxFixRounds',
+  'severityFloor',
+  'severityRanks',
+  'humanDecisionPending',
+  'run',
+  'sinceIteration',
+  'workingPath',
+  'worktreeRoot',
+  'findings',
+]
+
+/**
+ * Assembles the packet request from BOTH levels of the CLI request.
+ *
+ * `phase`, `result`, `schema`, `ceilings`, `audit`, `run`, `id`, `review` and `round` are all
+ * top-level in this same shape, so `workingPath`, `worktreeRoot` and `findings` reading ONLY
+ * from inside `packet` made a top-level spelling a silent no-op — and every one of those keys
+ * exists to override a default that is dangerous to keep. A top-level `workingPath` with the
+ * guard still pointed at `.pair/working` emitted a `blind:true` packet carrying
+ * `<working_path>/checkpoints/<id>.md`: the author's checkpoint, handed to the independent
+ * reviewer, exit 0. The nested value wins where both are given; unknown keys are rejected at
+ * either level, so a third spelling fails closed instead of falling back.
+ */
+function packetRequestFrom(req: CommandRequest): PacketRequest {
+  const packet = (req.packet ?? {}) as PacketRequest
+  assertKnownKeys(packet, PACKET_KEYS, 'the packet', m => new PacketRejected(m))
+  const workingPath = packet.workingPath ?? req.workingPath
+  const worktreeRoot = packet.worktreeRoot ?? req.worktreeRoot
+  const findings = packet.findings ?? req.findings
+  return {
+    ...packet,
+    ...(workingPath === undefined ? {} : { workingPath }),
+    ...(worktreeRoot === undefined ? {} : { worktreeRoot }),
+    ...(findings === undefined ? {} : { findings }),
+  }
 }
 
 function runResume(req: CommandRequest): unknown {
@@ -1288,7 +1593,7 @@ function runResume(req: CommandRequest): unknown {
 const HANDLERS: Readonly<Record<Command, (req: CommandRequest) => unknown>> = Object.freeze({
   bind: req => resolveRealization(req.probe ?? {}),
   cap: req => effectiveParallelism(req.ceilings as Ceilings),
-  packet: req => buildPacket(req.packet as PacketRequest),
+  packet: req => buildPacket(packetRequestFrom(req)),
   collect: req => collectOutcome(req.phase as Phase, req.result, req.schema),
   converge: req => converge(req),
   audit: req => appendAudit(req.path as string, req.records ?? []),
@@ -1296,6 +1601,7 @@ const HANDLERS: Readonly<Record<Command, (req: CommandRequest) => unknown>> = Ob
 })
 
 function runCommand(command: Command, req: CommandRequest): unknown {
+  assertKnownKeys(req, REQUEST_KEYS, 'the request root', message => new Error(message))
   return HANDLERS[command](req)
 }
 
