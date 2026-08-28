@@ -1,13 +1,21 @@
 ---
 name: map-contexts
 description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /refine-story, /plan-tasks, /brainstorm; full-scope re-mapping only via /bootstrap."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
 # /map-contexts — Bounded Context Placement (Capability)
 
 Map subdomains to bounded context boundaries and assess each relationship between contexts on three dimensions — integration strength, socio-technical distance, volatility — to derive the integration pattern. A **capability**, not a standalone lifecycle step: always invoked scoped to the contexts/services the caller just touched, never as a full re-mapping outside `/bootstrap`.
+
+## Process Profile
+
+<!-- process-step: id=define-bounded-contexts -->
+
+This skill is the executable representation of the **`define-bounded-contexts`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; under `$approval: auto` nobody is there to answer, so the run **HALTs** rather than running a step the project declared it does not run. <!-- approval-round: kind=gate; auto=halt -->
+
+A **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Arguments
 

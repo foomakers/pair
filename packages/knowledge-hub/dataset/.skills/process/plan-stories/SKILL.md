@@ -1,13 +1,19 @@
 ---
 name: plan-stories
 description: "Slices an epic into user stories via vertical slicing and INVEST validation, each sized for one sprint. Composes /write-issue."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
 # /plan-stories — User Story Breakdown
 
 Transform epics into user stories through vertical slicing, INVEST validation, and collaborative definition. Each story delivers end-to-end user value within a single sprint. Composes `/write-issue` for PM tool integration.
+
+## Process Profile
+
+<!-- process-step: id=plan-stories -->
+
+This skill is the executable representation of the **`plan-stories`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

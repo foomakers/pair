@@ -1,13 +1,19 @@
 ---
 name: specify-prd
 description: "Creates or updates a Product Requirements Document through structured template analysis and iterative review — drafting a new PRD, or filling in a missing/outdated section."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
 # /specify-prd — PRD Creation
 
 Create a comprehensive Product Requirements Document through collaborative analysis and structured information gathering. Follows a template-first approach: analyze PRD template, gather information via hypothesis-driven questions, create PRD, review and approve.
+
+## Process Profile
+
+<!-- process-step: id=specify-prd -->
+
+This skill is the executable representation of the **`specify-prd`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Arguments
 

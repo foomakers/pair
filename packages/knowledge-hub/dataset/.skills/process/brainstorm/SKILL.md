@@ -1,7 +1,7 @@
 ---
 name: brainstorm
 description: "Runs discovery in three fixed phases — grill interview, domain integration, backlog tree triage — on a free theme or an existing `$root` issue, landing an integrated Draft epic/story tree while leaving the PRD untouched. Invoke to open a new feature area or to deepen an existing epic/story ('brainstorm the notifications area', 'explore what is missing under #205'); level (broad/punctual) and orientation (functional/technical) are deduced from the root's type and tags, or asked as the first interview question when no root is given (or its type label is unrecognized). Composes /grill, /map-subdomains, /map-contexts, /plan-epics, /plan-stories."
-version: 0.2.0
+version: 0.3.0
 author: Foomakers
 ---
 
@@ -12,6 +12,12 @@ Turn a rough theme — or an existing epic/story — into an **integrated Draft 
 Discovery is **parametrized**, not a fixed script: with `$root` the level, orientation and phase-3 writer are deduced from the root's type and tags (or asked, on the fallback row); without it, the level is the first question — [parametrization.md](parametrization.md). **Per-phase idempotency** ([convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md), itemized list in [resume.md](resume.md)): each phase checks its own output first, so a re-run resumes at the first unfinished phase instead of re-interviewing, re-placing or re-triaging.
 
 Discovery is also the **only** new process skill (D24): every phase delegates to existing capabilities — brainstorm owns the phase order, the parametrization, and nothing else.
+
+## Process Profile
+
+<!-- process-step: id=brainstorm -->
+
+This skill is the executable representation of the **`brainstorm`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. **As a composer**, this skill applies the same check *before* composing the `define-subdomains`, `define-bounded-contexts`, `plan-epics` and `plan-stories` steps, and treats a disabled one exactly as a skill that is not installed — skipped with a note, never a prompt. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

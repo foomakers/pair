@@ -1,13 +1,19 @@
 ---
 name: plan-epics
 description: "Breaks a strategic initiative into epics — each delivering end-to-end value in 2-4 sprints — through structured analysis and validation. Composes /write-issue. Not for filing a single epic issue from text you already wrote (that's /write-issue directly)."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
 # /plan-epics — Epic Breakdown
 
 Transform strategic initiatives into comprehensive epic breakdowns. Each epic delivers end-to-end user value in 2-4 sprints. Composes `/write-issue` for PM tool integration.
+
+## Process Profile
+
+<!-- process-step: id=plan-epics -->
+
+This skill is the executable representation of the **`plan-epics`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. **As a composer**, this skill applies the same check *before* composing the `define-subdomains` step, and treats a disabled one exactly as a skill that is not installed — skipped with a note, never a prompt. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 

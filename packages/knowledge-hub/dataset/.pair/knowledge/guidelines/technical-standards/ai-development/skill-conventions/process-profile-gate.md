@@ -18,6 +18,8 @@ The user typed the skill's name. They asked for this step, and the profile says 
 
 A profile is a **project convention, not a permission system**. Disabling a step says "we do not normally do this", not "you may not"; a gate that refused outright would make the profile a thing users work around instead of configure.
 
+**Under an unattended run** (`$approval: auto`, for the skills that expose the signal — see [approval rounds](approval-rounds.md)) there is nobody to answer, and the two possible defaults are not equivalent: "proceed" runs a step the project declared it does not run, silently and repeatedly, while "stop" costs one reported HALT. So this round resolves to **`auto=halt`** — `kind=gate`, the judgement class the signal never suppresses. A profile is a project convention, but overriding one is a human's call, not an unattended default.
+
 **HALT cases** ([schema](../process-profiles.md#error-cases--all-normative-none-inferred)) are not this gate: an unknown profile name, an unknown step id, an empty custom whitelist and a whitelist under a built-in profile stop the run and are reported — a typo must never resolve to "disabled" and then be waved through by a confirmation.
 
 ## Composition — degrade exactly as "not installed", never prompt

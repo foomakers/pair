@@ -1,13 +1,19 @@
 ---
 name: review
 description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Gate before judgment: a red mechanical gate caps the verdict, and the decision is published as the required `pair-review` check plus the synthesized PR state (to-be-reviewed / ready-to-merge / not-approved), so merge stays blocked until gates are green, the review is approved, and (at risk:red) a human approves explicitly. Not a quick build/test sanity check (use /verify-quality). Composes /classify, /verify-quality, /verify-done, /record-decision, /analyze-debt, /assess-security (required), /verify-adoption, /assess-stack (optional)."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 
 # /review — Code Review
 
 Review a pull request through 6 sequential phases (5 review + 1 optional merge). Each phase composes atomic skills and follows the **check → skip → act → verify** pattern for idempotent re-invocation.
+
+## Process Profile
+
+<!-- process-step: id=review -->
+
+This skill is the executable representation of the **`review`** step. When the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) disables it, a **direct** invocation warns and asks for confirmation before proceeding; a **composed** invocation never prompts — a disabled composed step degrades exactly as one that is not installed. Absent a `## Process Profile` section in way-of-working every step is enabled and this check is a no-op. Mechanics: [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 
