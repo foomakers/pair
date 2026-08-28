@@ -8,6 +8,8 @@ import {
   collectProcessSkillDirs,
   checkStepCatalogue,
   checkStepMarkers,
+  checkStepMarkersInMirror,
+  checkManualPathEntrypoint,
   checkProcessProfiles,
   STEP_MARKER,
 } from '../tools/skills-conformance-check'
@@ -45,7 +47,9 @@ const WOW_TEMPLATE = join(DATASET, '.pair/adoption/tech/way-of-working.md')
 const CONVENTIONS_README = join(AI_DEV, 'skill-conventions/README.md')
 
 const NEXT_DATASET = join(SKILLS_DIR, 'next/SKILL.md')
-const NEXT_MIRROR = join(HUB, '../../.claude/skills/pair-next/SKILL.md')
+const MIRROR_SKILLS_DIR = join(HUB, '../../.claude/skills')
+const NEXT_MIRROR = join(MIRROR_SKILLS_DIR, 'pair-next/SKILL.md')
+const AGENTS_MD = join(DATASET, 'AGENTS.md')
 
 const read = (p: string): string => (existsSync(p) ? readFileSync(p, 'utf-8') : '')
 
@@ -116,6 +120,15 @@ describe('step markers — every executable representation declares its step id'
   it('carries a marker on each catalogued executable, and on nothing else', () => {
     const entries = parseStepCatalogue(catalogueSource)
     expect(checkStepMarkers(entries, SKILLS_DIR)).toEqual([])
+  })
+
+  it('carries it in the INSTALLED MIRROR too — the copy an assistant actually loads', () => {
+    // The dataset copy is the source; the mirror is the binding one (same finding
+    // class as #280's `brainstorm-phases.test.ts:820`). Guarded here AND in
+    // `skills:conformance`, so dropping a marker from `.claude/skills/**` during a
+    // regeneration is a red gate, not a silently ungoverned step.
+    const entries = parseStepCatalogue(catalogueSource)
+    expect(checkStepMarkersInMirror(entries, SKILLS_DIR, MIRROR_SKILLS_DIR)).toEqual([])
   })
 
   it('uses a declared marker, not a prose window', () => {
@@ -328,5 +341,20 @@ describe('the manual (no-skills) path is governed by the same profile (AC8)', ()
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/how-to/)
     expect(lower).toMatch(/no skills installed|without skills|manual path/)
+  })
+
+  // The catalogue makes the mapping EXPRESSIBLE; it does not make the manual path
+  // GOVERNED. The entrypoint a human with no skills reads is AGENTS.md's manual
+  // flow — without a step there, a `poc` team follows step "identify your task",
+  // opens `03-how-to-create-and-prioritize-initiatives.md` and runs a disabled step.
+  it('AGENTS.md’s manual flow sends the reader to the profile before picking a how-to', () => {
+    expect(checkManualPathEntrypoint(read(AGENTS_MD))).toEqual([])
+  })
+
+  it('the manual step names the section, the file and the catalogue', () => {
+    const section = sectionBetween(read(AGENTS_MD), '## 🎯 Quick Start Process', '\n## ')
+    expect(section).toContain('## Process Profile')
+    expect(section).toContain('way-of-working.md')
+    expect(section).toContain('step-catalogue.md')
   })
 })

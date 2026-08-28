@@ -18,13 +18,15 @@ The section carries two keys, in the same shape as the file's other optional sec
 ## Process Profile
 
 - `profile`: `custom`
-- `whitelist`: `specify-prd`, `refine-story`, `plan-tasks`, `implement`, `review`
+- `whitelist`: `specify-prd`, `plan-initiatives`, `plan-epics`, `plan-stories`, `refine-story`, `plan-tasks`, `implement`, `review`
 ```
 
 | Key         | Values                        | Meaning                                                                          |
 | ----------- | ----------------------------- | ---------------------------------------------------------------------------------- |
 | `profile`   | `default` \| `poc` \| `custom` | Which step set is in force.                                                        |
 | `whitelist` | catalogue step ids            | The enabled steps. **Required with `custom`, and invalid with anything else.**     |
+
+Both keys are **backticked list items, and so are their values** — copy a fenced example above verbatim, not the bare key spellings the table uses. The reader detects a key **loosely** (a bolded or unbackticked key is still a declaration) and accepts its value **strictly**: that split is what makes a mis-shaped line a HALT instead of a silent `default`.
 
 **An absent `## Process Profile` section means `default`** — the full process, today's behaviour byte for byte. This is convention over configuration (D21): a project that runs everything configures nothing, and adding this feature changes no existing project's behaviour.
 
@@ -47,7 +49,9 @@ A profile misread does not surface as an error a user sees; it silently removes 
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | **Unknown profile name** (`profile: pocc`)  | **HALT**, listing the known profiles (`default`, `poc`, `custom`).                                              |
 | **Unknown step id** in a whitelist          | **HALT**, listing the valid ids from the catalogue.                                                             |
+| **`custom` with no `whitelist` key**        | **HALT** — `custom` requires one. A *different* message from the row below: "you wrote none" is not "you wrote an empty one", and one message sends the reader hunting for a line their file does not have. |
 | **Empty custom whitelist**                  | **HALT** — read as a **misconfiguration**, never as "everything disabled".                                      |
+| **A key in a shape the reader rejects** (`- profile: poc`, value unbackticked) | **HALT**, restating the schema shape. Detection of the key is loose (bold, missing backticks); acceptance of the VALUE is strict — otherwise an unreadable line resolves to `default` and **widens** the profile to the whole process, silently. |
 | **`whitelist` under `default` / `poc`**     | **HALT** — a built-in carries its own set, so the whitelist would be silently ignored.                          |
 | **`whitelist` with no `profile`**           | **HALT** — a whitelist only applies to `profile: custom`.                                                        |
 | **Enabled step, all prerequisites disabled** | **Reported, not fatal**: flag the inconsistency with the **minimal fix**, never silently repaired.              |

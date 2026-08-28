@@ -37,7 +37,7 @@ The second row is the decisive one: the flagship reason a profile exists is a Po
 | `implement`               | [`10-how-to-implement-a-task.md`](../../../how-to/10-how-to-implement-a-task.md)                        | `/implement`        | `plan-tasks`                       |
 | `review`                  | [`11-how-to-code-review.md`](../../../how-to/11-how-to-code-review.md)                                  | `/review`           | `implement`                        |
 
-## The three asymmetries, as declared data
+## The three asymmetric steps, as declared data
 
 Every asymmetry below is a cell in the table above — not a conditional in `/next` and not a special case in any skill. That is the whole point of the catalogue: the same three facts handled as logic would be three branches to keep in step across `/next` and twelve step skills.
 
