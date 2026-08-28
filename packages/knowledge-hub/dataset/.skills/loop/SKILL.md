@@ -28,7 +28,8 @@ This skill classifies nothing and judges nothing. It reads tags, board state and
 3. **Act**: If so, report "automation is off — `tech/automation.md` declares no `## Eligibility`" and **exit cleanly**. This is not an error (D21) — never fall back to the KB's recommended `risk:green` default on the project's behalf.
 4. **Act**: Extract and validate `## Eligibility` (the seven HALT triggers), `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` — the full algorithm lives in [automation-policy.md](../../.pair/knowledge/guidelines/collaboration/automation/automation-policy.md) and is **not restated here** (D18: the matching/parsing rule has one owner). A malformed value at any of the five knobs **HALTs before any card is touched**, naming the file and the offending value. `## Auto-Advance` may only ever name the SAME tier `## Eligibility` declares — a card outside eligibility is never selected in the first place, so no other tier could legally advance.
 5. **Act**: Resolve `tech/risk-matrix.md`'s `## Tag Projection` declaration — every label this project actually emits (e.g. `risk:green`, `risk:yellow`, `risk:red`) — and hold it ready to pass as `tagProjectionFamily`. This is what lets `## Max Parallelism`'s per-tier override keys be checked against real, emitted tiers rather than shape alone (a tier that is emitted but never eligible, like a maintained-but-idle `risk:red` override, is still a legal narrowing target).
-6. **Verify**: All five knobs resolved (or their fail-closed default applied), and the Tag Projection family resolved. Proceed to Step 1.
+6. **Act**: Resolve the project's **working area** — `working_path` at the top level of `pair.config.json`, falling back to `.pair/working` when the file or the key is absent (working-area.md). It is where `## Audit Location` is rooted AND the path the fan-out asset's blindness check guards, so it is resolved ONCE here and passed in; a project that moved its working area and a skill that assumed the default disagree silently, and the disagreement is a reviewer reading the author's checkpoint.
+7. **Verify**: All five knobs resolved (or their fail-closed default applied), the Tag Projection family resolved and the working area resolved. Proceed to Step 1.
 
 ## Step 1: Realization — Three Tiers (ADR-017 §4, amended by ADR-021)
 
@@ -64,7 +65,12 @@ Every deterministic step below is the fan-out asset's, invoked as `node .pair/kn
 
 ### 1b.1 Resume before selecting
 
-**Act**: Read the audit file at the resolved `## Audit Location` (empty string when it does not exist yet) and pass it to `resume`. It returns, per card, which phases are already recorded complete, which are left, whether a previous iteration halted the card, and the PR it already carries. **Re-dispatch only what it lists**, never a card it reports halted, and never the `pr` phase for a story that already has one — an in-flight story re-enters through its existing PR.
+**Act**: Stamp this invocation with a **run id** — any value unique to it (the timestamp it started at will do) — and carry that id on every audit record the run writes. Read the audit file at the resolved `## Audit Location` (empty string when it does not exist yet) and pass it to `resume` together with the run id (`{audit, run}`). It returns, per card, which phases are already recorded complete, which are left, how many fix rounds are already spent, whether **this run** halted the card, and the PR it already carries. **Re-dispatch only what it lists**, never a card it reports halted, and never the `pr` phase for a story that already has one — an in-flight story re-enters through its existing PR.
+
+Two properties of that answer are worth stating, because a plan that lacked them was wrong in both directions:
+
+- **A halt belongs to the run that recorded it.** The audit is ONE persistent, append-only, project-relative file that outlives every invocation, so a card whose phase timed out last week is driven again today. Passing the run id is what scopes it — exactly as the Claude branch's exclusion is scoped to "every later iteration in the same run", and never a permanent refusal only a hand-edit of an append-only file could lift. A later record completing the same phase retires the halt too.
+- **A plan never owes `fix`.** A fix is owed by a review that returned findings (1b.3), never by a phase list. A card interrupted mid-cycle therefore re-enters at `review`, and its fixes get re-reviewed rather than assumed good.
 
 ### 1b.2 Compose the batch under three ceilings
 
@@ -72,13 +78,23 @@ Every deterministic step below is the fan-out asset's, invoked as `node .pair/kn
 
 ### 1b.3 Dispatch each phase into a fresh subagent
 
-For each card in the batch, for each phase it still owes (`implement` → `pr` → `review` → `fix`):
+For each card in the batch, dispatch the phases it still owes (`implement` → `pr` → `review`), then drive the **review ↔ fix loop** below. Each single dispatch:
 
-1. **Act**: Ask `packet` for the phase's context packet. It carries one card, that card's worktree, the role instructions, the skill to run and the return schema — and **nothing else**: no other card's content, no material the role must not see. Role text travels in the packet, so the run works with no harness agent profile configured.
+1. **Act**: Ask `packet` for the phase's context packet, passing the working area Step 0.6 resolved as `workingPath`. It carries one card, that card's worktree, the role instructions, the skill to run and the return schema — and **nothing else**: no other card's content, no material the role must not see. Role text travels in the packet, so the run works with no harness agent profile configured. `workingPath` is not decoration: it is the path the pre-spawn blindness check guards, and a project that moved its working area would otherwise get a reviewer holding the author's checkpoint.
 2. **Act**: Spawn a **fresh** subagent with the bound spawn handle, passing the packet's instructions + skill + card as the request and the packet's `schema` as the required structured result (`codex exec --output-schema` realizes the same contract when the spawn tool takes no schema of its own).
 3. **Act**: Wait with the bound wait handle, **always under an explicit timeout** — bound it by the harness's own maximum-wait ceiling, whose config key the surface map declares, when the session reports one. An unbounded wait is not permitted: it is how an unattended run hangs forever.
-4. **Act**: Pass what the wait returned to `collect` (`{phase, result:{status, value, detail}}`). It answers with a declared terminal outcome — `completed`, `failed-validation`, `timed-out`, `cancelled`, `died`, `not-started` — and whether the card may advance. An absent, unparseable or schema-invalid return is a **failed** phase, never a success; an outcome the taxonomy cannot name fails closed the same way.
+4. **Act**: Pass what the wait returned to `collect` (`{phase, result:{status, value, detail}}`). It answers with a declared terminal outcome — `completed`, `failed-validation`, `timed-out`, `cancelled`, `died`, `not-started` — and whether the card may advance. An absent, unparseable or schema-invalid return is a **failed** phase, never a success; an outcome the taxonomy cannot name — an unknown status, an unknown phase — fails closed the same way.
+
+   For the `review` phase, ALSO pass the project's generated review contract as `schema` when one is on disk and fresh (`.claude/workflows/pair-contracts/code-review.contract.json`; check it with `node .claude/workflows/pair-contracts/ensure-contract.mjs check <review-template> <contract>` and skip it on anything but `fresh`). That artifact is what enum-locks the verdict and the severity names to the project's own review template, and it is the contract the Claude branch validates against — passing it is what makes "the same result contract" true rather than "the same skeleton". It **tightens only**: `collect` always applies the built-in phase contract as well, so a stale, partial or hand-edited artifact can never widen the check. Absent or stale, the built-in skeleton stands alone.
 5. **Act**: Keep only that compact result. **Never** the subagent's transcript — the orchestrator's context must not grow with the batch (ADR-017 §3, architectural invariant).
+
+**The review ↔ fix loop.** A `review` that collected `completed` does not finish the card. Pass its returned value to `converge` (`{review, round}`, plus `maxFixRounds` and the contract's `severityRanks` + blocking threshold where the project declares them). Its answer — not a fixed phase list — decides what happens next:
+
+- **`converged`** — nothing actionable remains, the card is review-approved, continue to 1b.4. **No fixer is spawned**: a fixer dispatched on an approved PR has nothing to fix and burns a subagent to say so.
+- **`fix`** — dispatch exactly ONE `fix` phase, with the decision's `actionable` findings in the packet, and then **dispatch `review` again**, passing back the `round` it returned. Fixes are always re-reviewed; a card is never recorded converged on a review that ran before them.
+- **`escalate`** — stop the card for a human and leave the PR as it stands: the round cap was reached, the reviewer asked for a human decision a second time, or the review carried no verdict at all (absence of findings is not evidence a review happened). Never merge it.
+
+Record the decision on the review's audit record (`action`, `round`) — that is what lets 1b.1 resume an interrupted cycle at `review` instead of reading it as closed.
 
 A subagent that ends badly stops **its own** card, and nothing else: collect and audit its siblings' results as usual. A partial batch is reported, never discarded.
 
@@ -96,6 +112,7 @@ A subagent that ends badly stops **its own** card, and nothing else: collect and
 - **Never widens an override.** A pin-sequential or exclude override may only narrow the parallel set the dependency+mutex analysis computed; it can never add back an excluded card.
 - **Never asserts a realization it did not probe.** A product name, a version string and a documented-but-unobserved feature are all inadmissible evidence; an unrecognised probe result reads as absent.
 - **Never iterates several cards inside one context**, at any tier. That is not a degraded mode, it is the defect the tiers exist to prevent.
+- **Never converges a review cycle on a review that predates the fixes.** Every fix round is followed by a re-review, and the loop ends only on zero actionable findings or an escalation — the bound is the loop's own, not a merit criterion, and it never decides what to work on.
 - **Never invents a second handoff format.** The return contract is the one the in-harness workflow already uses, realized through the harness's own structured-result mechanism.
 
 ## Output Format

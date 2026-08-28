@@ -24,6 +24,7 @@
  *   cap     — the three ceilings in, the effective cap + the binding one out
  *   packet  — a role + one card in, the spawn packet out (or a pre-spawn rejection)
  *   collect — a raw subagent return in, a terminal phase outcome out
+ *   converge— a review's return in, out: converged | one fix round then a RE-review | escalate
  *   audit   — records in, appended to disk, read back, confirmed (or a loud failure)
  *   resume  — an audit file in, the per-card phase state out
  */
@@ -186,13 +187,22 @@ function qualify(namespace: string, handle: string): string {
   return namespace === '' ? handle : `${namespace}.${handle}`
 }
 
-/** A realization is confirmed only when BOTH required handles are exposed under its namespace. */
+/**
+ * A realization is confirmed only when BOTH required handles are exposed under its namespace.
+ *
+ * The probe's `namespace` is a report about the entry that HAS a renameable namespace, so it
+ * is applied only to entries declaring `namespaceKey`. Applying it to every entry made a
+ * session exposing the default-on, un-namespaced toolset while reporting the other one's
+ * configured namespace match nothing at all — a false-negative degradation that cost the whole
+ * tier-1 fan-out on a session that had it.
+ */
 function matchRealization(
   def: RealizationDefinition,
   exposed: ReadonlySet<string>,
   namespaceOverride?: string,
 ): { spawn: string; wait: string } | null {
-  const ns = typeof namespaceOverride === 'string' ? namespaceOverride : def.namespace
+  const renameable = typeof def.namespaceKey === 'string' && def.namespaceKey !== ''
+  const ns = renameable && typeof namespaceOverride === 'string' ? namespaceOverride : def.namespace
   const spawn = qualify(ns, def.handles.spawn)
   const wait = qualify(ns, def.handles.wait)
   return exposed.has(spawn) && exposed.has(wait) ? { spawn, wait } : null
@@ -320,6 +330,12 @@ export interface JsonSchema {
   readonly properties?: Readonly<Record<string, JsonSchema>>
   readonly items?: JsonSchema
   readonly required?: readonly string[]
+  /**
+   * Closed value set, when the contract locks one. The generated review contract enum-locks
+   * `verdict` and `findings[].severity` off the review template's own vocabulary, and a
+   * validator that ignored the enum would accept `"looks good to me"` as a verdict.
+   */
+  readonly enum?: readonly unknown[]
 }
 
 export interface PhaseContract {
@@ -424,6 +440,11 @@ export interface PacketRequest {
   readonly worktreeRoot?: string
   /** Extra material the caller wants in the packet. Every entry is checked, none is trusted. */
   readonly attachments?: readonly string[]
+  /**
+   * The project's resolved working area (`working_path` from `pair.config.json`, else the
+   * default). Passed in rather than assumed: it is what the blindness check guards.
+   */
+  readonly workingPath?: string
 }
 
 export interface ContextPacket {
@@ -439,6 +460,14 @@ export interface ContextPacket {
   readonly blind: boolean
 }
 
+/** Thrown before any spawn happens. Its message names the offending entry. */
+export class PacketRejected extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PacketRejected'
+  }
+}
+
 /**
  * Paths a blind packet may never carry.
  *
@@ -448,18 +477,49 @@ export interface ContextPacket {
  * states the same prohibition in prose; here it is a check that runs BEFORE the spawn, so a
  * packet that would carry the material is rejected rather than discouraged.
  */
-export const BLIND_DENY_PREFIXES: readonly string[] = Object.freeze(['.pair/working/'])
+export const WORKING_PATH_DEFAULT = '.pair/working'
+
+export const BLIND_DENY_PREFIXES: readonly string[] = Object.freeze([`${WORKING_PATH_DEFAULT}/`])
+
+/**
+ * The denied prefixes for a project whose working area is not at the default path.
+ *
+ * `working_path` is a supported top-level override in `pair.config.json` (working-area.md),
+ * and a hard-coded `.pair/working/` silently no-ops in every project that sets one: a review
+ * packet carrying `<working_path>/checkpoints/<id>.md` would be accepted, and the reviewer
+ * would review the author's own account of the work. The resolved path is therefore an INPUT,
+ * defaulting to the documented default rather than being fixed at it.
+ */
+export function blindDenyPrefixes(workingPath?: string): readonly string[] {
+  const raw = typeof workingPath === 'string' ? workingPath.trim() : ''
+  if (raw === '') return BLIND_DENY_PREFIXES
+  const resolved = normalize(raw).replace(/\\/g, '/').replace(/\/+$/, '')
+  if (resolved === '' || resolved === '.' || isAbsolute(raw) || resolved.startsWith('..'))
+    throw new PacketRejected(
+      `codex-fanout: working path \`${workingPath}\` is not a project-relative directory; ` +
+        `\`working_path\` must be project-relative (working-area.md) and an unresolvable one is ` +
+        `never silently replaced by the default — the blindness check would then guard the wrong path`,
+    )
+  const denied = [`${resolved}/`]
+  // The default stays denied even under an override: a project that MOVED its working area
+  // usually still carries the old one on disk, and re-admitting it would be a regression the
+  // override silently bought.
+  if (denied[0] !== BLIND_DENY_PREFIXES[0]) denied.push(...BLIND_DENY_PREFIXES)
+  return Object.freeze(denied)
+}
 
 const WORKTREE_ROOT_DEFAULT = '../pair-worktrees'
 
-/** Thrown before any spawn happens. Its message names the offending entry. */
-export class PacketRejected extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'PacketRejected'
-  }
-}
-
+/**
+ * Normalizes one attachment, or rejects it.
+ *
+ * A parent-relative spelling is REJECTED rather than normalized, because prefix-matching a
+ * string that starts with `..` cannot decide what it points at: `../../<repo>/.pair/working/
+ * checkpoints/<id>.md` is the same checkpoint a `.pair/working/…` entry names, and worktrees
+ * genuinely live at `../pair-worktrees/<id>`, so a dispatched subagent's cwd makes that
+ * spelling the natural one rather than a contrived one. The type already declares packets
+ * reference project-relative paths only; this is that declaration enforced.
+ */
 function normalizeAttachment(entry: string): string {
   if (typeof entry !== 'string' || entry.trim() === '')
     throw new PacketRejected('codex-fanout: an attachment must be a non-empty path')
@@ -467,7 +527,14 @@ function normalizeAttachment(entry: string): string {
     throw new PacketRejected(
       `codex-fanout: attachment \`${entry}\` is absolute; a packet references project-relative paths only`,
     )
-  return normalize(entry).replace(/\\/g, '/')
+  const normalized = normalize(entry).replace(/\\/g, '/')
+  if (normalized === '..' || normalized.startsWith('../'))
+    throw new PacketRejected(
+      `codex-fanout: attachment \`${entry}\` escapes the project (\`${normalized}\`); a packet ` +
+        `references project-relative paths only, and a path that leaves the project can spell any ` +
+        `denied path from outside it`,
+    )
+  return normalized
 }
 
 /**
@@ -475,10 +542,15 @@ function normalizeAttachment(entry: string): string {
  * not a detail of the assembly: it is asserted directly by the suite and would survive a
  * rewrite of everything around it.
  */
-export function assertBlind(attachments: readonly string[], phase: Phase): void {
+export function assertBlind(
+  attachments: readonly string[],
+  phase: Phase,
+  workingPath?: string,
+): void {
+  const prefixes = blindDenyPrefixes(workingPath)
   for (const raw of attachments) {
     const entry = normalizeAttachment(raw)
-    for (const denied of BLIND_DENY_PREFIXES)
+    for (const denied of prefixes)
       if (entry === denied.replace(/\/$/, '') || entry.startsWith(denied))
         throw new PacketRejected(
           `codex-fanout: the ${phase} packet would carry \`${entry}\`, which is under \`${denied}\` — ` +
@@ -523,7 +595,7 @@ export function buildPacket(request: PacketRequest): ContextPacket {
   const contract = PHASE_CONTRACTS[request.phase]
   assertSingleCard(request.card)
   const attachments = (request.attachments ?? []).map(normalizeAttachment)
-  if (contract.blind) assertBlind(attachments, request.phase)
+  if (contract.blind) assertBlind(attachments, request.phase, request.workingPath)
   const root = request.worktreeRoot ?? WORKTREE_ROOT_DEFAULT
   return {
     phase: request.phase,
@@ -616,12 +688,20 @@ function arrayViolations(value: unknown, schema: JsonSchema, path: string): stri
   return value.flatMap((item, i) => schemaViolations(item, items, `${path}[${i}]`))
 }
 
+function enumViolations(value: unknown, schema: JsonSchema, path: string): string[] {
+  if (!Array.isArray(schema.enum)) return []
+  return schema.enum.includes(value)
+    ? []
+    : [`${path} must be one of ${schema.enum.map(v => JSON.stringify(v)).join(', ')}`]
+}
+
 /** A minimal structural JSON-Schema check: enough to say whether the contract was honoured. */
 export function schemaViolations(value: unknown, schema: JsonSchema, path = 'value'): string[] {
   if (schema.type === 'object') return objectViolations(value, schema, path)
   if (schema.type === 'array') return arrayViolations(value, schema, path)
   const actual = typeof value
-  return actual === schema.type ? [] : [`${path} must be ${schema.type}, got ${actual}`]
+  if (actual !== schema.type) return [`${path} must be ${schema.type}, got ${actual}`]
+  return enumViolations(value, schema, path)
 }
 
 /**
@@ -641,18 +721,40 @@ function classifyWait(result: DispatchResult): CollectedOutcome | null {
   return null
 }
 
+/**
+ * Reads one dispatch's ending against the phase contract, and against a stricter contract when
+ * the caller resolved one.
+ *
+ * The override TIGHTENS, it never REPLACES. The party composing the request is the model
+ * itself, so an override that replaced the contract turned this validation into whatever the
+ * model happened to type: `{"phase":"review","schema":{"type":"object"}}` accepted an EMPTY
+ * review return as `completed`/`advances`, at precisely the seam where the non-deterministic
+ * actor sits, and under `## Auto-Advance` that merges a card on a review that returned
+ * nothing. The built-in contract is therefore always applied; the override is applied AS WELL.
+ */
 export function collectOutcome(
   phase: Phase,
   result: DispatchResult | null | undefined,
   schemaOverride?: JsonSchema,
 ): CollectedOutcome {
+  if (!isPhase(phase))
+    return failClosed(
+      'failed-validation',
+      `unknown phase ${JSON.stringify(phase)}; expected one of ${PHASES.join(', ')} — ` +
+        `an outcome this file cannot name is never read as success`,
+    )
   if (!result || typeof result !== 'object')
     return failClosed('not-started', 'the harness returned nothing for this dispatch')
   const nonTerminal = classifyWait(result)
   if (nonTerminal) return nonTerminal
   if (result.value === undefined || result.value === null)
     return failClosed('failed-validation', 'the dispatch completed with no return value')
-  const errs = schemaViolations(result.value, schemaOverride ?? PHASE_CONTRACTS[phase].schema)
+  const errs = [
+    ...new Set([
+      ...schemaViolations(result.value, PHASE_CONTRACTS[phase].schema),
+      ...(schemaOverride ? schemaViolations(result.value, schemaOverride) : []),
+    ]),
+  ]
   if (errs.length > 0)
     return failClosed(
       'failed-validation',
@@ -667,14 +769,238 @@ export function collectOutcome(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 7. AUDIT — on disk, verified, or the run fails loudly
+// 7. REVIEW ↔ FIX CONVERGENCE — a fix is owed by findings, never by a pipeline
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * One finding as the review contract carries it. Only the two control-flow fields are named;
+ * everything else travels through untouched, because the control flow is value-agnostic —
+ * it counts findings, it never reads what one says.
+ */
+export interface Finding {
+  readonly severity?: string
+  readonly nonActionable?: boolean
+  readonly disposition?: string
+  readonly [key: string]: unknown
+}
+
+/**
+ * Rounds of autonomous fix ↔ re-review before escalating to a human. The same 3 the in-harness
+ * workflow defaults to, for the same measured reason: an escalation costs a human round-trip,
+ * which is more expensive than one more fix round, and beyond 3 the loop is usually not
+ * converging for a reason a fourth round will not fix either. It is a bound on THIS loop, not
+ * a merit criterion: it decides nothing about what to work on or whether a card may proceed.
+ */
+export const MAX_FIX_ROUNDS_DEFAULT = 3
+
+export interface ConvergeRequest {
+  /** The review phase's returned value, exactly as `collect` accepted it. */
+  readonly review?: unknown
+  /** Fix rounds already spent on this PR. 0 at the first review. */
+  readonly round?: number
+  readonly maxFixRounds?: number
+  /** Severity at or above which a finding blocks. Absent ⇒ every actionable finding blocks. */
+  readonly severityFloor?: string
+  /** Explicit rank per severity, higher = more severe. Never inferred from an array's order. */
+  readonly severityRanks?: Readonly<Record<string, number>>
+  /** True once a previous round already deferred a `needsHumanDecision` request. */
+  readonly humanDecisionPending?: boolean
+}
+
+export interface ConvergeDecision {
+  /** `converged` — nothing actionable remains. `fix` — dispatch one fix round, then RE-REVIEW. */
+  readonly action: 'converged' | 'fix' | 'escalate'
+  /** Fix rounds spent once this decision is enacted. */
+  readonly round: number
+  readonly actionable: readonly Finding[]
+  readonly belowFloor: readonly Finding[]
+  readonly nonActionable: readonly Finding[]
+  readonly humanDecisionPending: boolean
+  readonly reason: string
+  readonly line: string
+}
+
+function normSeverity(name: unknown): string {
+  return typeof name === 'string' ? name.trim().toLowerCase() : ''
+}
+
+/** Resolves the blocking floor's rank, or throws. A floor nobody can rank is never guessed. */
+function floorRank(req: ConvergeRequest): number | null {
+  if (typeof req.severityFloor !== 'string' || req.severityFloor.trim() === '') return null
+  const ranks = req.severityRanks
+  if (!ranks || typeof ranks !== 'object' || Array.isArray(ranks))
+    throw new Error(
+      `codex-fanout: severityFloor \`${req.severityFloor}\` was given with no severityRanks. ` +
+        `Rank is NEVER inferred from the order severities happen to appear in — pass the contract's ` +
+        `\`severityRanks\`, or omit the floor so every actionable finding blocks.`,
+    )
+  const entry = Object.entries(ranks).find(
+    ([name]) => normSeverity(name) === normSeverity(req.severityFloor),
+  )
+  if (!entry || !Number.isInteger(entry[1]))
+    throw new Error(
+      `codex-fanout: severityFloor \`${req.severityFloor}\` is not ranked by severityRanks ` +
+        `(${Object.keys(ranks).join(', ') || 'empty'}); omit the floor so every actionable finding blocks.`,
+    )
+  return entry[1]
+}
+
+function hasVerdict(review: unknown): review is { verdict: string } {
+  const v = (review as { verdict?: unknown } | null | undefined)?.verdict
+  return typeof v === 'string' && v.trim() !== ''
+}
+
+/**
+ * Decides what a review's return owes next: nothing, one fix round, or a human.
+ *
+ * WHY THIS EXISTS. A pipeline that dispatches `implement → pr → review → fix` unconditionally
+ * is wrong in BOTH directions, and both were reachable: an APPROVED review with zero findings
+ * still spawned a fixer with nothing to fix, and a CHANGES-REQUESTED review with five findings
+ * got exactly ONE fix round whose result was never re-reviewed — under `## Auto-Advance` that
+ * merges a PR whose fixes nobody looked at. The in-harness workflow does the opposite: it
+ * partitions the findings, converges on zero actionable ones, re-reviews after every fix and
+ * escalates at the cap. Same lane, so the same rule, executed rather than narrated.
+ *
+ * Partitioning is on ONE predicate, not two filters: anything the below-floor test cannot
+ * answer YES for blocks. A finding whose severity is unranked is therefore actionable — the
+ * safe direction, and the reason no finding can fall out of both buckets and be recorded
+ * nowhere.
+ */
+type Partition = Pick<ConvergeDecision, 'actionable' | 'belowFloor' | 'nonActionable'>
+
+const NO_FINDINGS: Partition = { actionable: [], belowFloor: [], nonActionable: [] }
+
+/**
+ * Splits a review's findings into the by-design ones, the ones below a declared blocking
+ * threshold and the ones that block — on ONE predicate, so the blocking set is the complement
+ * by construction and no finding can fall out of both and be recorded nowhere.
+ */
+function partition(review: unknown, req: ConvergeRequest): Partition {
+  const raw = (review as { findings?: unknown } | null)?.findings
+  const findings: Finding[] = Array.isArray(raw) ? (raw as Finding[]) : []
+  const floor = floorRank(req)
+  const ranks = Object.entries(req.severityRanks ?? {})
+  const rankOf = (f: Finding): number => {
+    const hit = ranks.find(([name]) => normSeverity(name) === normSeverity(f?.severity))
+    return hit && Number.isInteger(hit[1]) ? hit[1] : Number.NaN
+  }
+  const belowFloor: Finding[] = []
+  const actionable: Finding[] = []
+  for (const f of findings)
+    if (f?.nonActionable !== true)
+      (floor !== null && rankOf(f) < floor ? belowFloor : actionable).push(f)
+  return { actionable, belowFloor, nonActionable: findings.filter(f => f?.nonActionable === true) }
+}
+
+interface Bounds {
+  readonly round: number
+  readonly max: number
+  readonly pending: boolean
+}
+
+/** The loop's bounds, normalized once so the decisions below are pure branching. */
+function convergeBounds(req: ConvergeRequest): Bounds {
+  return {
+    round: Number.isInteger(req.round) ? (req.round as number) : 0,
+    max: Number.isInteger(req.maxFixRounds) ? (req.maxFixRounds as number) : MAX_FIX_ROUNDS_DEFAULT,
+    pending: req.humanDecisionPending === true,
+  }
+}
+
+function decide(
+  b: Bounds,
+  d: {
+    action: ConvergeDecision['action']
+    reason: string
+    parts: Partition
+    round?: number
+    pending?: boolean
+  },
+): ConvergeDecision {
+  return {
+    action: d.action,
+    round: d.round ?? b.round,
+    ...d.parts,
+    humanDecisionPending: d.pending ?? b.pending,
+    reason: d.reason,
+    line: `review convergence: ${d.action} after ${b.round} fix round(s) of at most ${b.max} — ${d.reason}`,
+  }
+}
+
+/** What to do when findings remain: one more round, or a human. */
+function decideOpen(review: unknown, b: Bounds, parts: Partition): ConvergeDecision {
+  const open = parts.actionable.length
+  const wantsHuman = (review as { needsHumanDecision?: unknown }).needsHumanDecision === true
+  // A reviewer raising the flag says "one of these needs a human", not "none can be fixed": one
+  // fix round is spent first, and the request is REMEMBERED so the escalation still happens.
+  if (wantsHuman && !b.pending && b.round < b.max)
+    return decide(b, {
+      action: 'fix',
+      reason:
+        `the reviewer asked for a human decision — spending one fix round on the ${open} ` +
+        `actionable finding(s) first, then escalating if it still stands`,
+      parts,
+      round: b.round + 1,
+      pending: true,
+    })
+  if (b.round >= b.max || wantsHuman)
+    return decide(b, {
+      action: 'escalate',
+      reason: wantsHuman
+        ? 'the reviewer asked for a human decision again after a fix round — a genuine disagreement'
+        : `${open} actionable finding(s) still open after ${b.round} fix round(s)`,
+      parts,
+    })
+  return decide(b, {
+    action: 'fix',
+    reason: `${open} actionable finding(s) — one fix round, then RE-REVIEW`,
+    parts,
+    round: b.round + 1,
+  })
+}
+
+export function converge(req: ConvergeRequest): ConvergeDecision {
+  const bounds = convergeBounds(req)
+  // A dead or contentless reviewer yields zero findings, which a naive count reads as "nothing
+  // actionable remains" — the worst possible direction: a PR nobody reviewed, reported as
+  // review-approved. Absence of findings is not evidence a review happened; a verdict is.
+  if (!hasVerdict(req.review))
+    return decide(bounds, {
+      action: 'escalate',
+      reason:
+        'the review returned no verdict — absence of findings is not evidence that a review happened',
+      parts: NO_FINDINGS,
+    })
+  const parts = partition(req.review, req)
+  if (parts.actionable.length === 0)
+    return decide(bounds, {
+      action: 'converged',
+      reason: 'no actionable finding remains — the PR is review-approved',
+      parts,
+    })
+  return decideOpen(req.review, bounds, parts)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. AUDIT — on disk, verified, or the run fails loudly
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface AuditRecord {
   readonly iteration: number
   readonly id: string
+  /**
+   * The pair-loop invocation that wrote the line. The audit is ONE append-only project file
+   * that outlives every run, so without this a run cannot tell its own halts from a halt
+   * another run recorded weeks ago — and reading the file whole made a card halted once halted
+   * forever. Stamped by the caller on every record it writes.
+   */
+  readonly run?: string
   readonly phase?: Phase
   readonly outcome?: TerminalOutcome
+  /** For a `review` record: what `converge` decided. A cycle still owing a fix is not done. */
+  readonly action?: ConvergeDecision['action']
+  /** Fix rounds spent on this card when the record was written. */
+  readonly round?: number
   readonly realization?: string
   readonly excluded?: boolean
   readonly reason?: string
@@ -722,50 +1048,131 @@ export function appendAudit(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 8. RESUME — reconstruct from the audit, re-dispatch only what is unfinished
+// 9. RESUME — reconstruct from the audit, re-dispatch only what is unfinished
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The phases a resume plan can OWE, in order.
+ *
+ * `fix` is deliberately absent: a fix is owed by a review that returned actionable findings
+ * (`converge`), never by a pipeline listing it. A card resumed mid-cycle re-enters at `review`
+ * — the same re-entry the in-harness workflow uses for a story that already carries a PR — so
+ * the findings are re-derived from the PR rather than replayed from a plan.
+ */
+export const OWED_PHASES = ['implement', 'pr', 'review'] as const
 
 export interface CardState {
   /** Phases already recorded complete. Never re-dispatched. */
   readonly completed: Phase[]
   /** The PR this story already carries, when the audit recorded one. */
   prNumber: number | null
-  /** True once the audit recorded a terminal outcome that stops the card. */
+  /** True once an IN-SCOPE record stopped the card. Cleared by a later success of that phase. */
   halted: boolean
+  /** Which phase's failure halted the card, when a phase caused it. */
+  haltedBy: Phase | null
   reason: string | null
-}
-
-function emptyState(): CardState {
-  return { completed: [], prNumber: null, halted: false, reason: null }
-}
-
-function applyRecord(state: CardState, record: AuditRecord): void {
-  if (typeof record.prNumber === 'number') state.prNumber = record.prNumber
-  if (record.excluded === true) {
-    state.halted = true
-    state.reason = record.reason ?? 'excluded by a previous iteration'
-    return
-  }
-  if (!isPhase(record.phase) || !record.outcome) return
-  if (record.outcome === 'completed') {
-    if (!state.completed.includes(record.phase)) state.completed.push(record.phase)
-    return
-  }
-  state.halted = true
-  state.reason = record.reason ?? `${record.phase} ended \`${record.outcome}\``
+  /** Fix rounds the audit records for this card. */
+  round: number
+  /** True when the last review round recorded that a fix was still owed. */
+  cycleOpen: boolean
 }
 
 /**
- * Rebuilds per-card phase state from the audit alone. The audit is the loop's own
- * append-only record and therefore the one store that already knows what a killed run had
- * decided; nothing here invents a second one.
+ * Which records may HALT this run.
  *
- * A line that does not parse is SKIPPED rather than fatal: a run killed mid-append can leave
- * a truncated last line, and refusing to resume because of it would strand the very run this
- * function exists to recover.
+ * The audit is one persistent, project-relative, append-only file, so a run that treated every
+ * halt in it as its own refused a card forever: a review that timed out on Monday made every
+ * later invocation skip that card, and only hand-editing an append-only file unblocked it.
+ * That is stricter than the in-harness workflow, whose exclusion is scoped to "every later
+ * iteration in the SAME run". So halts are scoped: to the run the caller names, else to the
+ * iteration boundary it names, else to the last run the audit itself records. Completed phases
+ * and the PR number are NOT scoped — work that finished stays finished.
  */
-export function reconstructState(auditText: string): Record<string, CardState> {
-  const states: Record<string, CardState> = {}
+export interface ResumeScope {
+  /** The run this invocation is driving. Halts stamped with another run are history. */
+  readonly run?: string
+  /** Lower iteration bound of the current run, for a caller that counts iterations instead. */
+  readonly sinceIteration?: number
+}
+
+function emptyState(): CardState {
+  return {
+    completed: [],
+    prNumber: null,
+    halted: false,
+    haltedBy: null,
+    reason: null,
+    round: 0,
+    cycleOpen: false,
+  }
+}
+
+function complete(state: CardState, phase: Phase): void {
+  if (!state.completed.includes(phase)) state.completed.push(phase)
+}
+
+function clearHalt(state: CardState, phase: Phase): void {
+  // A later success for the SAME phase retires its earlier failure: an `implement` that timed
+  // out at iteration 1 and completed at iteration 2 is a completed implement, not a halt.
+  if (state.haltedBy === phase) {
+    state.halted = false
+    state.haltedBy = null
+    state.reason = null
+  }
+}
+
+function halt(state: CardState, by: Phase | null, reason: string): void {
+  state.halted = true
+  state.haltedBy = by
+  state.reason = reason
+}
+
+/**
+ * A completed `review` finishes the cycle only when `converge` said it did. A round that still
+ * owes a fix leaves the cycle OPEN, so the card re-enters at `review` and its fixes are
+ * re-reviewed rather than assumed good; an escalated round stops the card for a human.
+ */
+function applyReviewRecord(state: CardState, record: AuditRecord, canHalt: boolean): void {
+  state.cycleOpen = record.action === 'fix'
+  if (record.action === 'escalate') {
+    if (canHalt) halt(state, 'review', record.reason ?? 'the review cycle escalated to a human')
+    return
+  }
+  if (!state.cycleOpen) complete(state, 'review')
+}
+
+function applyCompleted(state: CardState, record: AuditRecord, canHalt: boolean): void {
+  const phase = record.phase as Phase
+  clearHalt(state, phase)
+  if (phase === 'review') return applyReviewRecord(state, record, canHalt)
+  complete(state, phase)
+}
+
+/** Facts a record carries about the card regardless of how the phase ended. */
+function carryForward(state: CardState, record: AuditRecord): void {
+  if (typeof record.prNumber === 'number') state.prNumber = record.prNumber
+  if (Number.isInteger(record.round)) state.round = record.round as number
+}
+
+function haltReason(record: AuditRecord): string {
+  if (typeof record.reason === 'string' && record.reason !== '') return record.reason
+  if (record.excluded === true) return 'excluded by a previous iteration'
+  return `${record.phase} ended \`${record.outcome}\``
+}
+
+function applyRecord(state: CardState, record: AuditRecord, canHalt: boolean): void {
+  carryForward(state, record)
+  if (record.excluded === true) {
+    if (canHalt) halt(state, null, haltReason(record))
+    return
+  }
+  if (!isPhase(record.phase) || !record.outcome) return
+  if (record.outcome === 'completed') return applyCompleted(state, record, canHalt)
+  if (canHalt) halt(state, record.phase, haltReason(record))
+}
+
+function parseAudit(auditText: string): AuditRecord[] {
+  const records: AuditRecord[] = []
   for (const line of auditText.split('\n')) {
     const trimmed = line.trim()
     if (trimmed === '') continue
@@ -773,12 +1180,38 @@ export function reconstructState(auditText: string): Record<string, CardState> {
     try {
       record = JSON.parse(trimmed) as AuditRecord
     } catch {
+      // A run killed mid-append leaves a truncated last line; refusing to resume because of it
+      // would strand the very run this function exists to recover.
       continue
     }
     if (!record || typeof record.id !== 'string') continue
+    records.push(record)
+  }
+  return records
+}
+
+/**
+ * Rebuilds per-card phase state from the audit alone. The audit is the loop's own
+ * append-only record and therefore the one store that already knows what a killed run had
+ * decided; nothing here invents a second one.
+ */
+export function reconstructState(
+  auditText: string,
+  scope: ResumeScope = {},
+): Record<string, CardState> {
+  const records = parseAudit(auditText)
+  const lastRun = records.at(-1)?.run
+  const canHalt = (record: AuditRecord): boolean => {
+    if (typeof scope.run === 'string') return record.run === scope.run
+    if (Number.isInteger(scope.sinceIteration))
+      return Number(record.iteration) >= (scope.sinceIteration as number)
+    return record.run === lastRun
+  }
+  const states: Record<string, CardState> = {}
+  for (const record of records) {
     const state = states[record.id] ?? emptyState()
     states[record.id] = state
-    applyRecord(state, record)
+    applyRecord(state, record, canHalt(record))
   }
   return states
 }
@@ -789,6 +1222,8 @@ export interface ResumePlan {
   readonly skipped: Phase[]
   readonly halted: boolean
   readonly prNumber: number | null
+  /** Fix rounds already spent — passed straight back to `converge` so the cap survives a resume. */
+  readonly round: number
   readonly note: string
 }
 
@@ -801,35 +1236,41 @@ export function resumePlan(id: string, state: CardState | undefined): ResumePlan
   const s = state ?? emptyState()
   const done = new Set<Phase>(s.completed)
   if (s.prNumber !== null) done.add('pr')
-  const redispatch = s.halted ? [] : PHASES.filter(p => !done.has(p))
+  const redispatch = s.halted ? [] : OWED_PHASES.filter(p => !done.has(p))
   const note = s.halted
-    ? `halted by a previous iteration: ${s.reason ?? 'no reason recorded'} — not re-driven`
-    : s.prNumber !== null
-      ? `story already carries PR #${s.prNumber} — continued on it, never a second PR`
-      : 'no prior state recorded — full pipeline'
+    ? `halted in this run: ${s.reason ?? 'no reason recorded'} — not re-driven`
+    : s.cycleOpen
+      ? `review cycle open after ${s.round} fix round(s) — re-enters at \`review\`, never at a replayed \`fix\``
+      : s.prNumber !== null
+        ? `story already carries PR #${s.prNumber} — continued on it, never a second PR`
+        : s.completed.length > 0
+          ? `resuming: ${s.completed.join(', ')} already recorded complete`
+          : 'no prior state recorded — full pipeline'
   return {
     id,
     redispatch,
     skipped: PHASES.filter(p => done.has(p)),
     halted: s.halted,
     prNumber: s.prNumber,
+    round: s.round,
     note,
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 9. CLI — JSON in on stdin, JSON out on stdout
+// 10. CLI — JSON in on stdin, JSON out on stdout
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const COMMANDS = ['bind', 'cap', 'packet', 'collect', 'audit', 'resume'] as const
+export const COMMANDS = ['bind', 'cap', 'packet', 'collect', 'converge', 'audit', 'resume'] as const
 export type Command = (typeof COMMANDS)[number]
 
-interface CommandRequest {
+interface CommandRequest extends ConvergeRequest, ResumeScope {
   probe?: ProbeObservation
   ceilings?: Ceilings
   packet?: PacketRequest
   phase?: Phase
   result?: DispatchResult
+  /** A stricter contract to validate the return against IN ADDITION to the phase contract. */
   schema?: JsonSchema
   path?: string
   records?: AuditRecord[]
@@ -837,15 +1278,25 @@ interface CommandRequest {
   id?: string
 }
 
-function runCommand(command: Command, req: CommandRequest): unknown {
-  if (command === 'bind') return resolveRealization(req.probe ?? {})
-  if (command === 'cap') return effectiveParallelism(req.ceilings as Ceilings)
-  if (command === 'packet') return buildPacket(req.packet as PacketRequest)
-  if (command === 'collect') return collectOutcome(req.phase as Phase, req.result, req.schema)
-  if (command === 'audit') return appendAudit(req.path as string, req.records ?? [])
-  const states = reconstructState(req.audit ?? '')
+function runResume(req: CommandRequest): unknown {
+  const states = reconstructState(req.audit ?? '', req)
   if (typeof req.id === 'string') return resumePlan(req.id, states[req.id])
   return Object.keys(states).map(id => resumePlan(id, states[id]))
+}
+
+/** One handler per command — a table rather than a chain, so adding one adds a row. */
+const HANDLERS: Readonly<Record<Command, (req: CommandRequest) => unknown>> = Object.freeze({
+  bind: req => resolveRealization(req.probe ?? {}),
+  cap: req => effectiveParallelism(req.ceilings as Ceilings),
+  packet: req => buildPacket(req.packet as PacketRequest),
+  collect: req => collectOutcome(req.phase as Phase, req.result, req.schema),
+  converge: req => converge(req),
+  audit: req => appendAudit(req.path as string, req.records ?? []),
+  resume: runResume,
+})
+
+function runCommand(command: Command, req: CommandRequest): unknown {
+  return HANDLERS[command](req)
 }
 
 function readStdin(): string {

@@ -72,6 +72,14 @@ See Decision.
 
    **The factual correction this amendment carries**: ADL [`2026-07-11-agent-execution-layer`](../../decision-log/2026-07-11-agent-execution-layer.md) states that Claude Code's subagent and workflow primitives are ones "that other assistants (e.g. Codex) do not have". For Codex that is **no longer true**, on the evidence above; the ADL is amended in place. What remains true, and is what that record was really about, is narrower: `.claude/workflows/*.js` is a Claude-Code-specific *artifact* no other harness can execute. Codex's in-harness realization is therefore not that file ported — it is the `pair-loop` skill driving the same lane through Codex's own tools, with the lane's deterministic half in a tested module shipped as a KB asset. Both realizations validate a subagent's return against the **same** result contract; neither invents a second handoff format.
 
+8. **"One lane" is a claim about the review ↔ fix cycle and the audit, not only about the schemas** (added 2026-08-28, #441).
+
+   Two realizations of one capability may differ in dispatch mechanism and in nothing a card can feel. Three properties are therefore fixed for both, and are what a third realization would have to honour too:
+
+   - **A fix is owed by findings, never by a phase list.** Actionable findings ⇒ one fix round ⇒ **re-review**; zero actionable findings ⇒ converged and no fixer is spawned; a cap on the rounds ⇒ escalate to a human. A realization that dispatched `implement → pr → review → fix` unconditionally would both spawn a fixer on an approved PR and record a card converged on a review that ran BEFORE the fixes — and under `## Auto-Advance` the second of those merges.
+   - **A project-supplied result contract may only TIGHTEN the built-in one.** Where the project has the generated review contract on disk, both realizations validate against it; where the request carrying it is composed by a model, a contract that model can also WIDEN is not a contract.
+   - **An exclusion is scoped to the run that recorded it.** The audit is one persistent, append-only, project-relative file. A halt read out of it unscoped refuses a card in every later invocation, forever — stricter than the Claude realization, whose exclusion covers "every later iteration in the same run", and incompatible with "re-dispatch only what is unfinished".
+
 ## Consequences
 
 ### Benefits
