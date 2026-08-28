@@ -59,6 +59,13 @@ const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
 
 // KB onboarding prose that restates skill counts (relative to ROOT). Kept in
 // lockstep with the real .skills corpus so a count sweep can't leave stale prose.
+const STEP_CATALOGUE_FILE =
+  'dataset/.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md'
+const PROCESS_PROFILES_FILE =
+  'dataset/.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md'
+const HOW_TO_DIR = 'dataset/.pair/knowledge/how-to'
+const WOW_TEMPLATE_FILE = 'dataset/.pair/adoption/tech/way-of-working.md'
+
 const KB_PROSE_FILES = [
   'dataset/.pair/knowledge/way-of-working.md',
   'dataset/.pair/knowledge/getting-started.md',
@@ -802,6 +809,499 @@ export function checkEntrypointDepth(skillsDir: string, markdownFiles: string[])
   return errors
 }
 
+// --- Process-step catalogue and profiles (#251) ---
+
+/**
+ * A process STEP: the unit a `## Process Profile` whitelists.
+ *
+ * Not a skill and not a how-to guide — BOTH of those are representations of the
+ * same step, and the two sets do not coincide. Keying the profile on either one
+ * makes a real case inexpressible: on skills, "a PoC never does DDD mapping"
+ * cannot be said (its steps are capabilities, not `process/*` skills); on how-to
+ * guides, `brainstorm` cannot be said (it has none). So the step is the unit and
+ * the catalogue carries the two representations as NULLABLE fields — which is
+ * exactly what turns the three asymmetries into data instead of conditionals in
+ * `/next` and in every step skill.
+ */
+export interface StepEntry {
+  /** Stable id — what a whitelist names. */
+  id: string
+  /** How-to filename (manual path), or null when the step has no guide. */
+  howTo: string | null
+  /** Unprefixed skill command (`/refine-story`), or null when there is none. */
+  executable: string | null
+  /**
+   * Prerequisite step ids, satisfied when the list is EMPTY or at least ONE
+   * member is enabled — an any-of, not an all-of.
+   *
+   * Any-of is what the corpus actually is, not a generalisation for its own
+   * sake: `brainstorm` and the strategic chain are alternative producers of the
+   * same input (a story tree), so `plan-stories` requires `plan-epics` OR
+   * `brainstorm`. All-of would make the shipped `poc` profile — which drops the
+   * strategic chain and keeps discovery — permanently self-inconsistent.
+   */
+  requires: string[]
+}
+
+/**
+ * The declared marker a step's executable representation carries.
+ *
+ * A marker, not a prose window, for the reason `approval-round` is one: layout is
+ * not contract, so a check keyed on a section heading widens when the prose
+ * changes shape instead of failing.
+ */
+export const STEP_MARKER = /<!--\s*process-step:\s*id=([a-z0-9-]+)\s*-->/
+
+/** The convention every step's executable representation must point at. */
+export const STEP_GATE_CONVENTION = 'process-profile-gate.md'
+
+/** Everything under the `## <heading>` section, up to the next `## ` heading. */
+function sectionOf(content: string, heading: string): string {
+  const start = content.indexOf(`## ${heading}`)
+  if (start === -1) return ''
+  const rest = content.slice(start + heading.length + 3)
+  const end = rest.indexOf('\n## ')
+  return end === -1 ? rest : rest.slice(0, end)
+}
+
+/** Markdown table rows of a section, as trimmed cell arrays (header/rule dropped). */
+function tableRows(section: string): string[][] {
+  const rows: string[][] = []
+  for (const line of section.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('|')) continue
+    if (/^\|[\s:|-]+\|$/.test(trimmed)) continue // alignment rule
+    const cells = trimmed
+      .slice(1, trimmed.endsWith('|') ? -1 : undefined)
+      .split('|')
+      .map(c => c.trim())
+    rows.push(cells)
+  }
+  return rows
+}
+
+/** Every backticked token in a cell (`—` / prose yields none). */
+function backticked(cell: string): string[] {
+  return [...cell.matchAll(/`([^`]+)`/g)].map(m => (m[1] as string).trim())
+}
+
+/**
+ * The catalogue's `## The Catalogue` table, as data.
+ *
+ * Deliberately tolerant of the surrounding prose and strict about the row shape:
+ * a row whose first cell is not a single backticked id is not a step (the file
+ * also carries a "capabilities that are NOT steps" table, which must never be
+ * read as one).
+ */
+export function parseStepCatalogue(content: string): StepEntry[] {
+  const entries: StepEntry[] = []
+  for (const cells of tableRows(sectionOf(content, 'The Catalogue'))) {
+    if (cells.length < 4) continue
+    const ids = backticked(cells[0] as string)
+    if (ids.length !== 1) continue
+    const id = ids[0] as string
+    if (!/^[a-z][a-z0-9-]*$/.test(id)) continue
+    entries.push({
+      id,
+      howTo: backticked(cells[1] as string)[0] ?? null,
+      executable: backticked(cells[2] as string)[0] ?? null,
+      requires: backticked(cells[3] as string),
+    })
+  }
+  return entries
+}
+
+/** `'*'` = every catalogue step (the `default` profile). */
+export type ProfileWhitelist = string[] | '*'
+
+/** The built-in profiles table, as data. */
+export function parseProcessProfiles(content: string): Record<string, ProfileWhitelist> {
+  const profiles: Record<string, ProfileWhitelist> = {}
+  for (const cells of tableRows(sectionOf(content, 'Built-in Profiles'))) {
+    if (cells.length < 2) continue
+    const names = backticked(cells[0] as string)
+    if (names.length !== 1) continue
+    const name = names[0] as string
+    if (!/^[a-z][a-z0-9-]*$/.test(name)) continue
+    const tokens = backticked(cells[1] as string)
+    profiles[name] = tokens.includes('*') ? '*' : tokens
+  }
+  return profiles
+}
+
+/** The how-to guides actually on disk, as filenames. */
+export function collectHowToGuides(howToDir: string): string[] {
+  if (!existsSync(howToDir)) return []
+  return readdirSync(howToDir)
+    .filter(f => f.endsWith('.md') && f !== 'README.md')
+    .sort()
+}
+
+/**
+ * Every skill directory in the corpus, as `<category>/<name>` (or the bare
+ * `<name>` meta skill) — the same entry granularity `collectSkillFiles` walks.
+ */
+export function collectProcessSkillDirs(skillsDir: string): string[] {
+  return collectSkillFiles(skillsDir).map(f =>
+    relative(skillsDir, dirname(f)).split(sep).join('/'),
+  )
+}
+
+/** The unprefixed command a skill dir is invoked by (`process/review` → `/review`). */
+function commandOf(skillDir: string): string {
+  const parts = skillDir.split('/')
+  return `/${parts[parts.length - 1] as string}`
+}
+
+export interface CorpusSets {
+  howToGuides: string[]
+  skillDirs: string[]
+}
+
+/**
+ * The catalogue↔corpus binding, BOTH directions — the guard that stops the
+ * catalogue becoming a third, silently-drifting list alongside the skills tree
+ * and the how-to directory.
+ *
+ * Forward: every representation a row names must resolve. Reverse: every how-to
+ * guide and every `process/*` skill must be reachable from some row. The reverse
+ * half is the load-bearing one — without it a step added to the corpus is simply
+ * absent from the profile, which reads as "enabled" and is exactly the silent
+ * ungoverned step the profile exists to prevent.
+ */
+export function checkStepCatalogue(entries: StepEntry[], corpus: CorpusSets): string[] {
+  const errors: string[] = []
+  const ids = new Set<string>()
+  for (const entry of entries) {
+    if (ids.has(entry.id)) {
+      errors.push(`step-catalogue: duplicate step id \`${entry.id}\` — a whitelist entry would be ambiguous`)
+    }
+    ids.add(entry.id)
+  }
+
+  const guides = new Set(corpus.howToGuides)
+  const skillDirs = new Set(corpus.skillDirs)
+  const commands = new Map(corpus.skillDirs.map(d => [commandOf(d), d]))
+
+  const claimedGuides = new Map<string, string>()
+  const claimedSkills = new Map<string, string>()
+
+  for (const entry of entries) {
+    if (entry.howTo === null && entry.executable === null) {
+      errors.push(
+        `step-catalogue: step \`${entry.id}\` declares neither a how-to nor an executable — ` +
+          `a step with no representation at all cannot be run by any path`,
+      )
+    }
+    if (entry.howTo !== null) {
+      if (!guides.has(entry.howTo)) {
+        errors.push(
+          `step-catalogue: step \`${entry.id}\` names how-to \`${entry.howTo}\`, which is not in the how-to corpus`,
+        )
+      }
+      const owner = claimedGuides.get(entry.howTo)
+      if (owner !== undefined) {
+        errors.push(
+          `step-catalogue: how-to \`${entry.howTo}\` is claimed by both \`${owner}\` and \`${entry.id}\``,
+        )
+      }
+      claimedGuides.set(entry.howTo, entry.id)
+    }
+    if (entry.executable !== null) {
+      const dir = commands.get(entry.executable)
+      if (dir === undefined) {
+        errors.push(
+          `step-catalogue: step \`${entry.id}\` names executable \`${entry.executable}\`, which resolves to no skill in the corpus`,
+        )
+      } else {
+        const owner = claimedSkills.get(dir)
+        if (owner !== undefined) {
+          errors.push(
+            `step-catalogue: skill \`${entry.executable}\` is claimed by both \`${owner}\` and \`${entry.id}\``,
+          )
+        }
+        claimedSkills.set(dir, entry.id)
+      }
+    }
+    for (const required of entry.requires) {
+      if (!ids.has(required)) {
+        errors.push(
+          `step-catalogue: step \`${entry.id}\` requires \`${required}\`, which is not a catalogued step id`,
+        )
+      }
+    }
+  }
+
+  for (const guide of corpus.howToGuides) {
+    if (!claimedGuides.has(guide)) {
+      errors.push(
+        `step-catalogue: how-to \`${guide}\` appears in no catalogue row — the manual path of an ` +
+          `uncatalogued step is ungoverned by every profile`,
+      )
+    }
+  }
+  for (const dir of skillDirs) {
+    if (dir.split('/')[0] !== 'process') continue
+    if (!claimedSkills.has(dir)) {
+      errors.push(
+        `step-catalogue: process skill \`${commandOf(dir)}\` appears in no catalogue row — a ` +
+          `process skill IS a step, so a profile could never disable it`,
+      )
+    }
+  }
+  return errors
+}
+
+/**
+ * Every catalogued executable declares its step id and points at the gate
+ * convention — and nothing else declares one.
+ *
+ * The exclusivity half matters as much as the presence half: a marker on a skill
+ * the catalogue does not know makes a step id exist in the corpus and nowhere in
+ * the configuration surface.
+ */
+export function checkStepMarkers(entries: StepEntry[], skillsDir: string): string[] {
+  const errors: string[] = []
+  const byCommand = new Map<string, StepEntry>()
+  for (const entry of entries) {
+    if (entry.executable !== null) byCommand.set(entry.executable, entry)
+  }
+
+  for (const file of collectSkillFiles(skillsDir)) {
+    const dir = relative(skillsDir, dirname(file)).split(sep).join('/')
+    const command = commandOf(dir)
+    const content = readFileSync(file, 'utf-8')
+    const declared = STEP_MARKER.exec(content)?.[1]
+    const entry = byCommand.get(command)
+
+    if (entry === undefined) {
+      if (declared !== undefined) {
+        errors.push(
+          `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but \`${command}\` is not a ` +
+            `catalogued step's executable — either catalogue the step or drop the marker`,
+        )
+      }
+      continue
+    }
+    if (declared === undefined) {
+      errors.push(
+        `${dir}/SKILL.md: is the executable of step \`${entry.id}\` and declares no ` +
+          `\`<!-- process-step: id=${entry.id} -->\` marker (skill-conventions/${STEP_GATE_CONVENTION})`,
+      )
+      continue
+    }
+    if (declared !== entry.id) {
+      errors.push(
+        `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but the catalogue maps ` +
+          `\`${command}\` to step \`${entry.id}\``,
+      )
+    }
+    if (!content.includes(STEP_GATE_CONVENTION)) {
+      errors.push(
+        `${dir}/SKILL.md: represents step \`${entry.id}\` but never points at ` +
+          `skill-conventions/${STEP_GATE_CONVENTION} — the gate is written once and referenced, ` +
+          `never re-implemented per skill`,
+      )
+    }
+  }
+  return errors
+}
+
+/**
+ * A built-in profile must name only catalogued steps, must not be empty, and must
+ * be PREREQUISITE-CLOSED — the same consistency `/next` reports on a custom
+ * whitelist, applied to the profiles the KB itself ships so a shipped profile
+ * cannot be the thing that trips the check.
+ */
+export function checkProcessProfiles(
+  profiles: Record<string, ProfileWhitelist>,
+  entries: StepEntry[],
+): string[] {
+  const errors: string[] = []
+  const byId = new Map(entries.map(e => [e.id, e]))
+
+  for (const [name, whitelist] of Object.entries(profiles)) {
+    const enabled = whitelist === '*' ? entries.map(e => e.id) : whitelist
+    if (enabled.length === 0) {
+      errors.push(
+        `process-profiles: built-in profile \`${name}\` enables no step — an empty whitelist is a ` +
+          `misconfiguration, never "everything disabled"`,
+      )
+      continue
+    }
+    const enabledSet = new Set(enabled)
+    for (const id of enabled) {
+      if (!byId.has(id)) {
+        errors.push(
+          `process-profiles: built-in profile \`${name}\` names \`${id}\`, which is not a catalogued step id`,
+        )
+      }
+    }
+    for (const id of enabled) {
+      const entry = byId.get(id)
+      if (entry === undefined || entry.requires.length === 0) continue
+      if (!entry.requires.some(r => enabledSet.has(r))) {
+        errors.push(
+          `process-profiles: built-in profile \`${name}\` enables \`${id}\` but none of its ` +
+            `prerequisites (${entry.requires.map(r => `\`${r}\``).join(', ')}) — enable one of them, ` +
+            `or drop \`${id}\``,
+        )
+      }
+    }
+  }
+  return errors
+}
+
+/** The adoption section that declares a project's profile. */
+export const WOW_PROFILE_SECTION = 'Process Profile'
+
+export interface ProfileDeclaration {
+  /** Declared profile name, or null when the section is absent / declares none. */
+  profile: string | null
+  /** Declared whitelist, or null when no `whitelist` key is present. */
+  whitelist: string[] | null
+  /** True when a `## Process Profile` section exists at all. */
+  present: boolean
+}
+
+/**
+ * The `## Process Profile` section of a way-of-working file, as data.
+ *
+ * Fenced blocks are skipped: the shipped template carries worked EXAMPLES of the
+ * very keys this reads, and an example is not a declaration.
+ */
+export function parseWowProfileSection(content: string): ProfileDeclaration {
+  const section = sectionOf(content, WOW_PROFILE_SECTION)
+  if (section === '') return { profile: null, whitelist: null, present: false }
+
+  let profile: string | null = null
+  let whitelist: string[] | null = null
+  let fenced = false
+  for (const line of section.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      fenced = !fenced
+      continue
+    }
+    if (fenced) continue
+    const key = /^\s*[-*]\s*`(profile|whitelist)`\s*:(.*)$/.exec(line)
+    if (!key) continue
+    const values = backticked(key[2] as string)
+    if (key[1] === 'profile') profile = values[0] ?? null
+    else whitelist = values
+  }
+  return { profile, whitelist, present: true }
+}
+
+export interface ProfileResolution {
+  /** The profile actually in force (`default` when nothing is declared). */
+  profile: string
+  /** Enabled step ids — the whole catalogue under `default`. */
+  enabled: string[]
+  /** Conditions that must stop the run: a typo must never silently disable a step. */
+  halts: string[]
+  /** Inconsistencies reported with their minimal fix, never silently repaired. */
+  warnings: string[]
+}
+
+/**
+ * The reference resolution of a `## Process Profile` section — the executable
+ * statement of the schema `/next` and the gate convention describe in prose.
+ *
+ * Every failure mode here is a HALT rather than a silent narrowing, for one
+ * reason: the cost of a mistake is asymmetric. A misread whitelist does not throw
+ * an error a user sees — it removes a step from every suggestion, which is
+ * indistinguishable from that step simply not being due yet.
+ *
+ * The one non-HALT is the prerequisite inconsistency: the configuration is
+ * readable, so the run continues and reports the minimal fix.
+ */
+export function resolveProcessProfile(
+  declaration: ProfileDeclaration,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): ProfileResolution {
+  const allIds = entries.map(e => e.id)
+  const known = [...Object.keys(builtIns), 'custom']
+  const asDefault = (halts: string[] = [], warnings: string[] = []): ProfileResolution => ({
+    profile: 'default',
+    enabled: allIds,
+    halts,
+    warnings,
+  })
+
+  // Absent section ⇒ `default` ⇒ today's behaviour, byte for byte (D21).
+  if (!declaration.present || declaration.profile === null) {
+    if (declaration.present && declaration.whitelist !== null) {
+      return asDefault([
+        `\`## ${WOW_PROFILE_SECTION}\` declares a \`whitelist\` but no \`profile\` — a whitelist ` +
+          `only applies to \`profile: custom\``,
+      ])
+    }
+    return asDefault()
+  }
+
+  const name = declaration.profile
+  if (!known.includes(name)) {
+    return asDefault([
+      `unknown process profile \`${name}\` — known profiles: ${known.map(k => `\`${k}\``).join(', ')}`,
+    ])
+  }
+
+  if (name !== 'custom') {
+    if (declaration.whitelist !== null) {
+      return asDefault([
+        `profile \`${name}\` is a built-in and carries its own step set — a \`whitelist\` here would ` +
+          `be silently ignored. Use \`profile: custom\` to name steps explicitly`,
+      ])
+    }
+    const builtIn = builtIns[name] as ProfileWhitelist
+    return {
+      profile: name,
+      enabled: builtIn === '*' ? allIds : builtIn,
+      halts: [],
+      warnings: prerequisiteWarnings(builtIn === '*' ? allIds : builtIn, entries),
+    }
+  }
+
+  const whitelist = declaration.whitelist ?? []
+  if (whitelist.length === 0) {
+    return asDefault([
+      `profile \`custom\` declares an empty whitelist — read as a misconfiguration, never as ` +
+        `"every step disabled". Name the steps to keep, or remove the section to run \`default\``,
+    ])
+  }
+  const unknown = whitelist.filter(id => !allIds.includes(id))
+  if (unknown.length > 0) {
+    return asDefault([
+      `unknown step id(s) ${unknown.map(u => `\`${u}\``).join(', ')} in the custom whitelist — ` +
+        `valid ids: ${allIds.map(i => `\`${i}\``).join(', ')}`,
+    ])
+  }
+  return {
+    profile: 'custom',
+    enabled: whitelist,
+    halts: [],
+    warnings: prerequisiteWarnings(whitelist, entries),
+  }
+}
+
+/** An enabled step whose prerequisites are all disabled, with the minimal fix. */
+function prerequisiteWarnings(enabled: string[], entries: StepEntry[]): string[] {
+  const enabledSet = new Set(enabled)
+  const byId = new Map(entries.map(e => [e.id, e]))
+  const warnings: string[] = []
+  for (const id of enabled) {
+    const entry = byId.get(id)
+    if (entry === undefined || entry.requires.length === 0) continue
+    if (entry.requires.some(r => enabledSet.has(r))) continue
+    warnings.push(
+      `\`${id}\` is enabled but none of its prerequisites are — minimal fix: enable ` +
+        `${entry.requires.map(r => `\`${r}\``).join(' or ')}, or drop \`${id}\``,
+    )
+  }
+  return warnings
+}
+
 // --- Corpus walk ---
 
 /**
@@ -875,6 +1375,47 @@ export function runChecks(skillsDir: string): RunResult {
 
   const counts = countByCategory(files, skillsDir)
   const proseRoot = resolve(skillsDir, '..', '..')
+
+  // Process-step catalogue ↔ corpus, and the built-in profiles resolved against it.
+  // Fail CLOSED on a missing catalogue: skipping it would make "no catalogue" the
+  // one state in which no step is governed and nothing says so.
+  const cataloguePath = join(proseRoot, STEP_CATALOGUE_FILE)
+  if (!existsSync(cataloguePath)) {
+    errors.push(
+      `${STEP_CATALOGUE_FILE}: missing — every process step is ungoverned and no profile can name one`,
+    )
+  } else {
+    const entries = parseStepCatalogue(readFileSync(cataloguePath, 'utf-8'))
+    errors.push(
+      ...checkStepCatalogue(entries, {
+        howToGuides: collectHowToGuides(join(proseRoot, HOW_TO_DIR)),
+        skillDirs: collectProcessSkillDirs(skillsDir),
+      }),
+    )
+    errors.push(...checkStepMarkers(entries, skillsDir))
+    const profilesPath = join(proseRoot, PROCESS_PROFILES_FILE)
+    if (existsSync(profilesPath)) {
+      const builtIns = parseProcessProfiles(readFileSync(profilesPath, 'utf-8'))
+      errors.push(...checkProcessProfiles(builtIns, entries))
+      // The shipped adoption TEMPLATE is resolved through the same reader an
+      // adopting project's file goes through: a template that ships a section no
+      // reader accepts teaches the wrong shape to every project that copies it.
+      const wowPath = join(proseRoot, WOW_TEMPLATE_FILE)
+      if (existsSync(wowPath)) {
+        const resolution = resolveProcessProfile(
+          parseWowProfileSection(readFileSync(wowPath, 'utf-8')),
+          entries,
+          builtIns,
+        )
+        for (const halt of [...resolution.halts, ...resolution.warnings]) {
+          errors.push(`${WOW_TEMPLATE_FILE}: ${halt}`)
+        }
+      }
+    } else {
+      errors.push(`${PROCESS_PROFILES_FILE}: missing — the catalogue has no profile schema to serve`)
+    }
+  }
+
   for (const rel of KB_PROSE_FILES) {
     const abs = join(proseRoot, rel)
     if (existsSync(abs)) {

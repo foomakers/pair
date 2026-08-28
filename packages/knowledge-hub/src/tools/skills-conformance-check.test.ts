@@ -23,6 +23,13 @@ import {
   parseRoundMarker,
   ROUND_KINDS,
   AUTO_RESOLUTIONS,
+  parseStepCatalogue,
+  parseProcessProfiles,
+  checkStepCatalogue,
+  checkStepMarkers,
+  checkProcessProfiles,
+  resolveProcessProfile,
+  parseWowProfileSection,
 } from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
@@ -863,5 +870,351 @@ describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', ()
     )
     const { errors } = runChecks(root)
     expect(errors.some(e => e.includes('process/other') && e.includes('$approval'))).toBe(false)
+  })
+})
+
+// --- Process-step catalogue and profiles (#251) ---
+
+const CATALOGUE = [
+  '# Step Catalogue',
+  '',
+  'Prose that mentions `plan-tasks` in passing.',
+  '',
+  '## The Catalogue',
+  '',
+  '| Step id | How-to | Executable | Requires (any-of) |',
+  '| --- | --- | --- | --- |',
+  '| `specify-prd` | `01-how-to-create-PRD.md` | `/specify-prd` | — |',
+  '| `define-subdomains` | — | `/map-subdomains` | `specify-prd` |',
+  '| `brainstorm` | — | `/brainstorm` | — |',
+  '',
+  '## Not Steps',
+  '',
+  '| Capability | Why |',
+  '| --- | --- |',
+  '| `/estimate` | Not a step. |',
+  '',
+].join('\n')
+
+const PROFILES = [
+  '# Process Profiles',
+  '',
+  '## Built-in Profiles',
+  '',
+  '| Profile | Enabled steps |',
+  '| --- | --- |',
+  '| `default` | `*` — every catalogue step |',
+  '| `poc` | `specify-prd`, `brainstorm` |',
+  '',
+].join('\n')
+
+describe('parseStepCatalogue', () => {
+  it('reads id, both representations and the any-of prerequisites', () => {
+    expect(parseStepCatalogue(CATALOGUE)).toEqual([
+      {
+        id: 'specify-prd',
+        howTo: '01-how-to-create-PRD.md',
+        executable: '/specify-prd',
+        requires: [],
+      },
+      {
+        id: 'define-subdomains',
+        howTo: null,
+        executable: '/map-subdomains',
+        requires: ['specify-prd'],
+      },
+      { id: 'brainstorm', howTo: null, executable: '/brainstorm', requires: [] },
+    ])
+  })
+
+  it('never reads a table from another section as steps', () => {
+    // The "not a step" table sits in its own section on purpose — reading it
+    // would catalogue `/estimate` as a governable step.
+    expect(parseStepCatalogue(CATALOGUE).map(e => e.id)).not.toContain('estimate')
+  })
+
+  it('returns nothing when the section is absent', () => {
+    expect(parseStepCatalogue('# Empty\n')).toEqual([])
+  })
+})
+
+describe('parseProcessProfiles', () => {
+  it('reads `*` as every step and a list as itself', () => {
+    expect(parseProcessProfiles(PROFILES)).toEqual({
+      default: '*',
+      poc: ['specify-prd', 'brainstorm'],
+    })
+  })
+})
+
+describe('checkStepCatalogue — bidirectional corpus binding', () => {
+  const corpus = {
+    howToGuides: ['01-how-to-create-PRD.md'],
+    skillDirs: ['process/specify-prd', 'capability/map-subdomains', 'process/brainstorm', 'next'],
+  }
+  const entries = parseStepCatalogue(CATALOGUE)
+
+  it('passes on a catalogue that matches the corpus', () => {
+    expect(checkStepCatalogue(entries, corpus)).toEqual([])
+  })
+
+  it('fails when a catalogued how-to does not exist', () => {
+    expect(checkStepCatalogue(entries, { ...corpus, howToGuides: [] }).join('\n')).toContain(
+      'not in the how-to corpus',
+    )
+  })
+
+  it('fails when a how-to guide is in no row (the reverse direction)', () => {
+    const errors = checkStepCatalogue(entries, {
+      ...corpus,
+      howToGuides: [...corpus.howToGuides, '99-how-to-orphan.md'],
+    })
+    expect(errors.join('\n')).toContain('99-how-to-orphan.md')
+    expect(errors.join('\n')).toContain('appears in no catalogue row')
+  })
+
+  it('fails when a process skill is in no row (the reverse direction)', () => {
+    const errors = checkStepCatalogue(entries, {
+      ...corpus,
+      skillDirs: [...corpus.skillDirs, 'process/newcomer'],
+    })
+    expect(errors.join('\n')).toContain('/newcomer')
+    expect(errors.join('\n')).toContain('appears in no catalogue row')
+  })
+
+  it('tolerates a capability that is in no row — a capability is not always a step', () => {
+    expect(
+      checkStepCatalogue(entries, { ...corpus, skillDirs: [...corpus.skillDirs, 'capability/estimate'] }),
+    ).toEqual([])
+  })
+
+  it('fails when an executable resolves to nothing', () => {
+    expect(
+      checkStepCatalogue(entries, {
+        ...corpus,
+        skillDirs: corpus.skillDirs.filter(d => d !== 'capability/map-subdomains'),
+      }).join('\n'),
+    ).toContain('resolves to no skill')
+  })
+
+  it('fails on a duplicate step id', () => {
+    const dup = [...entries, entries[0]!]
+    expect(checkStepCatalogue(dup, corpus).join('\n')).toContain('duplicate step id')
+  })
+
+  it('fails on a prerequisite that is not a catalogued id', () => {
+    const broken = [{ ...entries[0]!, requires: ['ghost'] }, ...entries.slice(1)]
+    expect(checkStepCatalogue(broken, corpus).join('\n')).toContain('not a catalogued step id')
+  })
+
+  it('fails on a step with no representation at all', () => {
+    const orphan = [
+      ...entries,
+      { id: 'ghost', howTo: null, executable: null, requires: [] as string[] },
+    ]
+    expect(
+      checkStepCatalogue(orphan, corpus).join('\n'),
+    ).toContain('declares neither a how-to nor an executable')
+  })
+})
+
+describe('checkStepMarkers', () => {
+  const root = mkdtempSync(join(tmpdir(), 'step-markers-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  const writeSkill = (dir: string, body: string): void => {
+    mkdirSync(join(root, dir), { recursive: true })
+    writeFileSync(
+      join(root, dir, 'SKILL.md'),
+      `---\nname: ${dir.split('/').pop()}\ndescription: "x"\n---\n${body}`,
+    )
+  }
+
+  const entries = [
+    { id: 'review', howTo: null, executable: '/review', requires: [] as string[] },
+  ]
+
+  it('passes when the executable declares its id and points at the convention', () => {
+    writeSkill(
+      'process/review',
+      '<!-- process-step: id=review -->\nSee [gate](process-profile-gate.md).\n',
+    )
+    writeSkill('capability/estimate', 'No marker here.\n')
+    expect(checkStepMarkers(entries, root)).toEqual([])
+  })
+
+  it('fails when the executable declares no marker', () => {
+    writeSkill('process/review', 'See [gate](process-profile-gate.md).\n')
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('declares no')
+  })
+
+  it('fails when the declared id disagrees with the catalogue', () => {
+    writeSkill(
+      'process/review',
+      '<!-- process-step: id=implement -->\nSee [gate](process-profile-gate.md).\n',
+    )
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('maps `/review` to step `review`')
+  })
+
+  it('fails when a step skill never points at the gate convention', () => {
+    writeSkill('process/review', '<!-- process-step: id=review -->\nNothing else.\n')
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('never points at')
+  })
+
+  it('fails when an UNCATALOGUED skill carries a marker', () => {
+    writeSkill(
+      'process/review',
+      '<!-- process-step: id=review -->\nSee [gate](process-profile-gate.md).\n',
+    )
+    writeSkill('capability/estimate', '<!-- process-step: id=estimate -->\n')
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('is not a catalogued step')
+  })
+})
+
+describe('checkProcessProfiles', () => {
+  const entries = [
+    { id: 'specify-prd', howTo: null, executable: '/specify-prd', requires: [] as string[] },
+    { id: 'brainstorm', howTo: null, executable: '/brainstorm', requires: [] as string[] },
+    { id: 'plan-epics', howTo: null, executable: '/plan-epics', requires: ['specify-prd'] },
+    { id: 'plan-stories', howTo: null, executable: '/plan-stories', requires: ['plan-epics', 'brainstorm'] },
+  ]
+
+  it('accepts `*` and a prerequisite-closed list', () => {
+    expect(
+      checkProcessProfiles({ default: '*', poc: ['specify-prd', 'brainstorm', 'plan-stories'] }, entries),
+    ).toEqual([])
+  })
+
+  it('accepts an any-of prerequisite satisfied by the ALTERNATIVE member', () => {
+    // `plan-stories` requires `plan-epics` OR `brainstorm`; the strategic chain is
+    // off and discovery is on — the shipped `poc` shape.
+    expect(checkProcessProfiles({ poc: ['brainstorm', 'plan-stories'] }, entries)).toEqual([])
+  })
+
+  it('rejects a profile whose enabled step has NO enabled prerequisite', () => {
+    expect(checkProcessProfiles({ poc: ['plan-stories'] }, entries).join('\n')).toContain(
+      'none of its prerequisites',
+    )
+  })
+
+  it('rejects an unknown step id', () => {
+    expect(checkProcessProfiles({ poc: ['ghost'] }, entries).join('\n')).toContain(
+      'not a catalogued step id',
+    )
+  })
+
+  it('rejects an empty whitelist as a misconfiguration, not “everything disabled”', () => {
+    const errors = checkProcessProfiles({ poc: [] }, entries).join('\n')
+    expect(errors).toContain('enables no step')
+    expect(errors).toContain('misconfiguration')
+  })
+})
+
+describe('runChecks — the catalogue is required, not optional', () => {
+  const root = mkdtempSync(join(tmpdir(), 'no-catalogue-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('reports a missing step catalogue instead of skipping the check', () => {
+    mkdirSync(join(root, 'process/thing'), { recursive: true })
+    writeFileSync(
+      join(root, 'process/thing', 'SKILL.md'),
+      '---\nname: thing\ndescription: "x"\n---\nbody\n',
+    )
+    const { errors } = runChecks(root)
+    expect(errors.join('\n')).toContain('step-catalogue.md: missing')
+  })
+})
+
+describe('resolveProcessProfile — the six way-of-working states', () => {
+  const entries = [
+    { id: 'specify-prd', howTo: null, executable: '/specify-prd', requires: [] as string[] },
+    { id: 'brainstorm', howTo: null, executable: '/brainstorm', requires: [] as string[] },
+    { id: 'plan-epics', howTo: null, executable: '/plan-epics', requires: ['specify-prd'] },
+    {
+      id: 'plan-stories',
+      howTo: null,
+      executable: '/plan-stories',
+      requires: ['plan-epics', 'brainstorm'],
+    },
+    { id: 'implement', howTo: null, executable: '/implement', requires: ['plan-stories'] },
+  ]
+  const builtIns = { default: '*' as const, poc: ['brainstorm', 'plan-stories', 'implement'] }
+  const resolve = (wow: string) =>
+    resolveProcessProfile(parseWowProfileSection(wow), entries, builtIns)
+
+  it('no section ⇒ `default` ⇒ every step, no halt, no warning (AC1)', () => {
+    const r = resolve('# Way of Working\n\n## Quality Gates\n\n- something\n')
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expect(r.halts).toEqual([])
+    expect(r.warnings).toEqual([])
+  })
+
+  it('`poc` ⇒ the built-in set, DDD/strategic steps excluded (AC3)', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n')
+    expect(r.profile).toBe('poc')
+    expect(r.enabled).toEqual(['brainstorm', 'plan-stories', 'implement'])
+    expect(r.enabled).not.toContain('plan-epics')
+    expect(r.halts).toEqual([])
+    expect(r.warnings).toEqual([])
+  })
+
+  it('a custom whitelist enables exactly what it names (AC4)', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `brainstorm`, `plan-stories`\n',
+    )
+    expect(r.profile).toBe('custom')
+    expect(r.enabled).toEqual(['brainstorm', 'plan-stories'])
+    expect(r.halts).toEqual([])
+  })
+
+  it('a disabled prerequisite is FLAGGED with the minimal fix, not repaired (AC9)', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`\n')
+    expect(r.halts).toEqual([])
+    expect(r.enabled).toEqual(['implement'])
+    expect(r.warnings).toHaveLength(1)
+    expect(r.warnings[0]).toContain('minimal fix')
+    expect(r.warnings[0]).toContain('`plan-stories`')
+  })
+
+  it('an empty whitelist is a misconfiguration, NOT "everything disabled" (AC10)', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`:\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('misconfiguration')
+    // Fail-safe: the run reports rather than silently disabling the whole process.
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+  })
+
+  it('an unknown step id HALTs listing the valid ids (AC5)', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `plan-tsaks`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('unknown step id')
+    expect(r.halts[0]).toContain('`plan-stories`')
+  })
+
+  it('an unknown profile name HALTs listing the known profiles — a different message (AC5)', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `pocc`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('unknown process profile')
+    expect(r.halts[0]).toContain('`poc`')
+    expect(r.halts[0]).not.toContain('unknown step id')
+  })
+
+  it('HALTs on a whitelist under a built-in profile rather than ignoring it', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n- `whitelist`: `implement`\n')
+    expect(r.halts[0]).toContain('silently ignored')
+  })
+
+  it('HALTs on a whitelist with no profile key', () => {
+    const r = resolve('## Process Profile\n\n- `whitelist`: `implement`\n')
+    expect(r.halts[0]).toContain('only applies to')
+  })
+
+  it('never reads a fenced EXAMPLE as a declaration', () => {
+    const r = resolve(
+      '## Process Profile\n\nOptional. Example:\n\n```text\n- `profile`: `poc`\n```\n',
+    )
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
   })
 })
