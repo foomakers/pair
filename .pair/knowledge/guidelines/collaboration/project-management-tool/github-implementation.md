@@ -669,6 +669,98 @@ HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
 
 **Token prerequisite (why a commit status, not a check run).** The Checks API (`POST /repos/{owner}/{repo}/check-runs`) is writable **only by a GitHub App installation token**: with an ordinary user token or PAT it answers `403 You must authenticate via a GitHub App`. The skills that publish the verdict (`/pair-capability-publish-pr` Phase 5, `/pair-process-review` Step 5.4) run agent-side with exactly that ordinary token, so a check run is not an option for them. The **commit-statuses API** accepts the same token and branch protection treats a status **context** as a required check identically. The token needs `repo:status` (classic PAT) / `Commit statuses: write` (fine-grained); inside a workflow that is `permissions: statuses: write`. If a project does publish through a GitHub App instead, keep the check-run form — but then the publication must happen inside a workflow holding `checks: write`, plus a relay that carries the agent's verdict there.
 
+### Dedicated review identity
+
+**Optional, and off by default.** With nothing configured the flow runs exactly as documented above: the session token writes, the verdict is a `--comment` review, `pair-review` is a commit status. That is `Review identity: none` in [way-of-working.md](../../../../adoption/tech/way-of-working.md) and it is **not a degradation** — it is the zero-configuration mode.
+
+A **dedicated review identity** is a second principal — a GitHub App installation, or a bot user account — whose credential the review flow uses for its code-host writes instead of the session token. Provisioning it is **project infrastructure**: a registration/seat and a secret, which no skill can create for you. What the flow does is _consume_ it, through the host-agnostic adapter [`review-identity.sh`](../../../assets/review-identity.sh) (`resolve_identity_mode`, `identity_verdict_event`, `pair_review_publication_mode`, `identity_audit_comment`). The model is in [pr-states.md](pr-states.md); only the GitHub specifics live here (R2.12).
+
+**What it buys:**
+
+| | `Review identity: none` (default) | `bot-user` | `app` (recommended) |
+| --- | --- | --- | --- |
+| Verdict | `--comment` review — the host rejects a self-authored APPROVE | native **APPROVE / REQUEST_CHANGES** | native **APPROVE / REQUEST_CHANGES** |
+| `pair-review` | commit status | commit status | **check run** (the Checks API needs an App token) |
+| Audit | "who reviewed" is a token in the review body | per-identity in the host's review events | per-identity in review events **and** check runs |
+| 🔴 explicit approval | still a second **human** | still a second **human** | still a second **human** |
+
+**The last row is the point, and it does not move.** `pair-explicit-approval` counts approvals matching `human_approval_jq_filter`, which requires `user.type == "User"` — a bot user and an App installation are `"Bot"` on that API. So the identity's approval is excluded **by construction**: adopting it never relaxes the 🔴 rule, and a `risk:red` pull request still needs a second human account (ADR-018, amendment 2026-08-28). Two mechanisms live side by side deliberately — the identity signs the ordinary review, a human signs the 🔴 one.
+
+#### GitHub App (recommended)
+
+Recommended because it is the only form that unlocks the Checks API, and because an App installation token is scoped to the repository rather than to a person's whole account.
+
+1. **Register** the App (Settings → Developer settings → GitHub Apps → New). Repository permissions, and nothing more:
+   - `pull_requests: write` — submit the native review, post the audit comment
+   - `checks: write` — publish `pair-review` as a check run
+   - `contents: read` — read the branch under review
+   - `metadata: read` (mandatory for every App)
+   - Do **not** grant `administration` — the identity must not be able to edit branch protection.
+2. **Install** it on the repository (Settings → GitHub Apps → Install), and note the installation id.
+3. **Store the credential** per the [security guidelines](../../quality-assurance/security/security-guidelines.md): the App's private key is a secret and **never enters the repository** — no `.pem` committed, no key in an adoption file, no key in a skill argument. Put it in the project's secret store (GitHub Actions secret, or the local secret manager the project already uses) and reference it by name. The repository's deterministic secret scan (D24) is the backstop, not the policy.
+4. **Verify**, before relying on it — this is what `resolve_identity_mode`'s health input means in practice:
+
+   ```bash
+   # `GH_TOKEN` here is the App INSTALLATION token, minted from the private key.
+   REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+   gh api user --jq '.login, .type'                 # expect the app slug and "Bot"
+   gh api "repos/$REPO/check-runs" -X POST -f name=pair-identity-probe \
+     -f head_sha="$HEAD_SHA" -f status=completed -f conclusion=neutral  # 201 ⇒ checks: write
+   gh api "repos/$REPO/pulls/$PR/reviews" --jq 'length'                 # 200 ⇒ pull_requests read
+   ```
+
+   A `403` on the check-run probe means `checks: write` was not granted or the App is not installed on this repository — that is a **configured-but-broken** identity, and the flow HALTs on it rather than falling back to the session user.
+
+5. **Publish `pair-review` as a check run** on the App path (the commit-status form stays exactly as documented above for every other path):
+
+   ```bash
+   source .pair/knowledge/assets/review-identity.sh
+   source .pair/knowledge/assets/pr-state.sh
+   MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
+   [ "$MODE" = halt ] && exit 1
+   STATE="$(review_check_conclusion "$VERDICT")"
+   [ "$STATE" = pending ] && { echo "no decision yet — leaving the pending check in place"; exit 0; }
+   if [ "$(pair_review_publication_mode "$MODE" "$IDENTITY_KIND")" = checks-api ]; then
+     gh api "repos/$REPO/check-runs" -X POST \
+       -f name='pair-review' -f head_sha="$HEAD_SHA" \
+       -f status=completed -f conclusion="$STATE" \
+       -f 'output[title]=pair review' -f "output[summary]=$VERDICT_SUMMARY"
+   fi
+   ```
+
+   The same `pending`-first discipline applies: the pending check is registered at PR creation, and only a real decision resolves it.
+
+#### Bot user (alternative)
+
+A second GitHub **user** account, invited to the repository with **write** access (never admin), authenticated with its own fine-grained PAT:
+
+- `Pull requests: write` (`pull_requests: write`) — the native review and the audit comment
+- `Commit statuses: write` (`repo:status` on a classic PAT) — publish `pair-review` as a commit status
+- `Contents: read`
+
+Same secret rule: the PAT lives in the secret store, never in the repository. It costs a seat on paid plans and it does **not** unlock the Checks API (that is App-only), so `pair_review_publication_mode` keeps it on the commit-status form. Verify with `gh api user --jq '.login, .type'` (expect `"User"` for a bot _user_ — which is why a bot user must never be used as the second human approver at 🔴: it would satisfy the predicate while being a machine. **If you run a bot user, keep it out of the repository's human-reviewer set** and treat 🔴 approvals as belonging to real people; the App form has no such footgun because it types as `"Bot"`.)
+
+#### Failure modes, and what each one does
+
+| Situation | `resolve_identity_mode` | Behavior |
+| --- | --- | --- |
+| Nothing configured (`Review identity: none`) | `session` | Today's mode, in full. Not an error, not reported as a degradation. |
+| Configured and the probes pass | `identity` | Native verdict; check run on the App path. |
+| Configured, credential invalid / expired | `halt` | **HALT** with a pointer back to this section. Never a session-user fallback. |
+| Configured, a permission missing (`403` on a probe) | `halt` | Same — the setup is incomplete, and acting as the human whose token is loaded would misattribute the review. |
+| Configured, health unknown (probe not run, network error) | `halt` | Fail-safe: unknown is not healthy. |
+
+Do not "fall back to the session token so the review still runs". A review recorded against the maintainer's account, that the maintainer did not perform, is a worse outcome than a stopped review — and it is exactly the misattribution a dedicated identity exists to prevent.
+
+#### Adoption-gated light auto-approval (off unless declared)
+
+When a repository declares the `light` family in `## Tag Projection` (`tech/risk-matrix.md`), the identity may submit a **native approving review** on a PR that carries the `light` tag, is **below 🔴**, and has already synthesized `ready-to-merge` — so a light PR becomes mergeable with no human action. On a repository that sets `"required_approving_review_count": 1` or more (the payload below ships `0`, so this only bites where a project raised it), that review is what satisfies the host's approvals rule. All four conditions are evaluated by `light_auto_approve_allowed` in [`pr-state.sh`](../../../assets/pr-state.sh); every approval writes the audit comment `identity_audit_comment` renders. **Nothing here reads the change**: the row consumes a tag and a declaration (D18).
+
+Two containments are worth stating on the host page, because this is where someone will try to shortcut them:
+
+- **The declaration is the gate, not the label.** A hand-applied `light` label on a repository that declares no `light` projection triggers nothing. Do not add the label family to the repository "so the flow can use it" — provisioning a label is not declaring a projection.
+- **It never touches 🔴.** `required_approving_review_count` is a _host_ rule; `pair-explicit-approval` is the pair rule, and it still demands a human. A `light` label on a `risk:red` PR is inert.
+
 ### Provision the `pr-state:*` labels (once per repository)
 
 Labels are never auto-created: `gh pr edit --add-label pr-state:to-be-reviewed` fails with `not found` until they exist.
