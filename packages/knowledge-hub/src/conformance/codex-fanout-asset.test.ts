@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CODEX_FANOUT_ASSET } from '../tools/build-codex-asset'
@@ -97,15 +98,55 @@ describe('the shipped asset runs as the skill invokes it', () => {
   })
 
   it('hands the caller a wait bound to apply, instead of a timeout it would have to invent', () => {
+    // The DEFAULT session — the first generation, on by default, exposing no wait-timeout
+    // config key of its own. The shipped asset used to answer `waitTimeoutMs: null` plus the
+    // OTHER generation's key triple, so the skill's "read the configured maximum from those
+    // keys" resolved to nothing on the common path and AC10 went unmet there.
     const { body } = run('bind', { probe: { tools: ['spawn_agent', 'wait_agent'] } }) as {
-      body: { waitTimeoutKeys: { max: string } | null; waitTimeoutMs: number | null }
+      body: {
+        waitTimeoutKeys: { max: string } | null
+        waitTimeoutMs: number | null
+        waitTimeoutSource: string | null
+        announcement: string
+      }
     }
-    expect(body.waitTimeoutKeys?.max).toBeTruthy()
-    expect(body.waitTimeoutMs).toBeNull()
+    expect(body.waitTimeoutMs).toBeGreaterThan(0)
+    expect(body.waitTimeoutSource).toBe('realization-default')
+    expect(body.waitTimeoutKeys).toBeNull()
+    expect(body.announcement).toContain('wait bound')
     const probed = run('bind', {
       probe: { tools: ['spawn_agent', 'wait_agent'], harnessWaitTimeoutMs: 600000 },
     })
-    expect(probed.body).toMatchObject({ waitTimeoutMs: 600000 })
+    expect(probed.body).toMatchObject({ waitTimeoutMs: 600000, waitTimeoutSource: 'probe' })
+  })
+
+  it('refuses a completed review with no `action`, and never resumes one as converged', () => {
+    const written = run('audit', {
+      path: join(tmpdir(), `codex-fanout-audit-${process.pid}.jsonl`),
+      records: [{ kind: 'card', id: '441', run: 'r1', phase: 'review', outcome: 'completed' }],
+    })
+    expect(written.code).toBe(1)
+    expect(String((written.body as { error: string }).error)).toContain('`action`')
+
+    const audit = [
+      '{"run":"r1","id":"441","phase":"implement","outcome":"completed"}',
+      '{"run":"r1","id":"441","phase":"pr","outcome":"completed","prNumber":9}',
+      '{"run":"r1","id":"441","phase":"review","outcome":"completed","round":1}',
+    ].join('\n')
+    expect(run('resume', { audit, run: 'r1', id: '441' }).body).toMatchObject({
+      redispatch: ['review'],
+      halted: false,
+    })
+  })
+
+  it('rejects an unknown key inside `ceilings` and inside `probe`, as it does at the packet', () => {
+    const capped = run('cap', {
+      ceilings: { dependencyAllowed: 5, policyMax: 5, harnessCieling: 2 },
+    })
+    expect(capped.code).toBe(1)
+    expect(String((capped.body as { error: string }).error)).toContain('harnessCieling')
+    const bound = run('bind', { probe: { tools: ['spawn_agent', 'wait_agent'], harnessCeling: 2 } })
+    expect(bound.code).toBe(1)
   })
 
   it('exits non-zero on a top-level `workingPath` instead of guarding the default it overrides', () => {

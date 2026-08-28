@@ -121,8 +121,31 @@ describe('the surface map is data', () => {
     for (const realization of HARNESS_SURFACE_MAP)
       if (realization.handles.dispatch === 'spawn-wait') {
         expect(realization.bounding?.concurrencyKey).toBeTruthy()
-        expect(realization.bounding?.waitTimeoutKeys.max).toBeTruthy()
+        // The bound to apply when NOTHING observable yields one is data on the entry. A
+        // `spawn-wait` entry without it leaves the caller with no legal wait bound at all,
+        // and AC10 ("every wait is bounded") unmet on the path that entry serves.
+        expect(realization.bounding?.fallbackWaitTimeoutMs).toBeGreaterThan(0)
+        const keys = realization.bounding?.waitTimeoutKeys
+        if (keys !== null) expect(keys?.max).toBeTruthy()
       } else expect(realization.bounding).toBeUndefined()
+  })
+
+  it('never borrows another feature’s config keys as its own bound', () => {
+    // v1 declared `features.multi_agent_v2.{min,max,default}_wait_timeout_ms` while gated by
+    // `features.multi_agent`. Verified on codex-cli 0.150.1: `codex features list` reports
+    // `multi_agent stable true` and `multi_agent_v2 stable false`, and the only wait-timeout
+    // keys in the binary hang off `MultiAgentV2ConfigToml`. So on the DEFAULT session — v1, the
+    // one a bare session binds — the caller was pointed at keys belonging to a feature that is
+    // OFF and therefore unset, the read returned nothing, and the step offered no third branch.
+    for (const realization of HARNESS_SURFACE_MAP) {
+      const keys = realization.bounding?.waitTimeoutKeys
+      if (!keys) continue
+      for (const key of Object.values(keys))
+        expect(key.startsWith(`${realization.gating.featureKey}.`)).toBe(true)
+    }
+    expect(
+      HARNESS_SURFACE_MAP.find(r => r.id === 'codex-multi-agent-v1')?.bounding?.waitTimeoutKeys,
+    ).toBeNull()
   })
 
   it('is frozen, so a caller cannot mutate the map instead of editing it', () => {
@@ -218,33 +241,43 @@ describe('probe → bind → announce', () => {
     )
   })
 
-  it('returns the wait bound the caller must apply — the keys, and the value when probed', () => {
-    // AC10 requires every wait to be bounded, and the skill is forbidden from naming the
-    // vendor's config keys itself. A bind that returned neither left the model inventing a
-    // timeout or omitting the argument and relying on an unobserved default — the exact
-    // inference the probe convention exists to keep out.
+  it('always hands a spawn/wait caller a NUMBER to bound its wait with, and says where it came from', () => {
+    // AC10 requires every wait to be bounded, and the skill is barred from naming vendor config
+    // keys itself. Returning `{waitTimeoutMs: null, waitTimeoutKeys: <v2 triple>}` for the
+    // DEFAULT v1 session met neither half: the keys named a default-off feature, so the read
+    // returned nothing, and the only remaining moves — invent a number, or omit the argument —
+    // are both forbidden. An unbounded wait on a dead subagent hangs the unattended run.
     const probed = resolveRealization({ tools: V1_TOOLS, harnessWaitTimeoutMs: 900_000 })
-    expect(probed.waitTimeoutMs).toBe(900_000)
-    expect(probed.waitTimeoutKeys).toEqual(
-      HARNESS_SURFACE_MAP.find(r => r.id === 'codex-multi-agent-v1')?.bounding?.waitTimeoutKeys,
-    )
-    const unprobed = resolveRealization({ tools: V1_TOOLS })
-    expect(unprobed.waitTimeoutMs).toBeNull()
-    expect(unprobed.waitTimeoutKeys?.max).toBeTruthy()
+    expect(probed).toMatchObject({ waitTimeoutMs: 900_000, waitTimeoutSource: 'probe' })
+
+    const bare = resolveRealization({ tools: V1_TOOLS })
+    expect(bare.waitTimeoutMs).toBeGreaterThan(0)
+    expect(bare.waitTimeoutSource).toBe('realization-default')
+    expect(bare.waitTimeoutKeys).toBeNull()
+    expect(bare.announcement).toContain('wait bound')
+  })
+
+  it('keeps the config keys where a generation actually has them, alongside the fallback', () => {
+    const v2 = resolveRealization({ tools: V2_TOOLS })
+    expect(v2.waitTimeoutKeys?.max).toBeTruthy()
+    expect(v2.waitTimeoutMs).toBeGreaterThan(0)
+    expect(v2.waitTimeoutSource).toBe('realization-default')
   })
 
   it('declares no wait bound for a delegated run or a degraded one — neither waits here', () => {
     for (const binding of [resolveRealization({ tools: CLAUDE_TOOLS }), resolveRealization({})]) {
       expect(binding.waitTimeoutMs).toBeNull()
       expect(binding.waitTimeoutKeys).toBeNull()
+      expect(binding.waitTimeoutSource).toBeNull()
     }
   })
 
-  it('ignores a non-integer or non-positive reported wait timeout instead of passing it on', () => {
-    for (const value of [0, -1, 1.5, Number.NaN])
-      expect(
-        resolveRealization({ tools: V1_TOOLS, harnessWaitTimeoutMs: value }).waitTimeoutMs,
-      ).toBeNull()
+  it('falls back to the declared bound rather than passing on a non-integer or non-positive one', () => {
+    for (const value of [0, -1, 1.5, Number.NaN]) {
+      const binding = resolveRealization({ tools: V1_TOOLS, harnessWaitTimeoutMs: value })
+      expect(binding.waitTimeoutSource).toBe('realization-default')
+      expect(binding.waitTimeoutMs).toBeGreaterThan(0)
+    }
   })
 })
 
@@ -816,6 +849,45 @@ describe('audit persistence', () => {
       /names no card `id` and is not marked/,
     )
   })
+
+  it('refuses a completed `review` record that does not say what `converge` decided', () => {
+    // The sequence that lost work: `converge` returns {action:'fix', actionable:[3 findings]},
+    // the run audits the review outcome but omits `action`, and the run is killed before the fix
+    // dispatch. On re-invocation the reconstruction read the record as a finished review, so the
+    // plan listed nothing, the card fell through to auto-advance, and a PR carrying three
+    // unresolved actionable findings merged at a tier `## Auto-Advance` permits. The record even
+    // carried `round:1` — evidence a fix was owed. The stamp was prose in SKILL.md; it is now a
+    // write-time refusal, because the party writing it is the non-deterministic one.
+    const fs = new InMemoryAuditFs()
+    const reviewed = {
+      kind: 'card',
+      id: '441',
+      run: 'r1',
+      phase: 'review',
+      outcome: 'completed',
+      round: 1,
+    } as const
+    expect(() => appendAudit('a.md', [reviewed], fs)).toThrow(/`action`/)
+    expect(() =>
+      appendAudit('a.md', [{ ...reviewed, action: 'fixed' as unknown as 'fix' }], fs),
+    ).toThrow(/`action`/)
+    for (const action of ['converged', 'fix', 'escalate'] as const)
+      expect(appendAudit('a.md', [{ ...reviewed, action }], fs).written).toBe(1)
+  })
+
+  it('leaves every other record shape untouched — only a COMPLETED review owes an action', () => {
+    const fs = new InMemoryAuditFs()
+    expect(
+      appendAudit(
+        'a.md',
+        [
+          { id: '441', run: 'r1', phase: 'review', outcome: 'timed-out' },
+          { id: '441', run: 'r1', phase: 'implement', outcome: 'completed' },
+        ],
+        fs,
+      ).written,
+    ).toBe(2)
+  })
 })
 
 describe('resume', () => {
@@ -860,6 +932,37 @@ describe('resume', () => {
     expect(plan.redispatch).toEqual(['review'])
     expect(plan.round).toBe(1)
     expect(plan.note).toContain('re-enters at `review`')
+  })
+
+  it('reads a completed review carrying NO action as an open cycle, never as converged', () => {
+    // The read half of the same loss, and the one that survives a hand-edited or older audit
+    // line the write check never saw. Before: redispatch [], skipped [implement, pr, review],
+    // halted false — the card advances to the merge gate on a review whose fixes were never
+    // applied. `converged` is now the only spelling that closes the cycle.
+    const actionless = [
+      { run: 'r1', id: '441', phase: 'implement', outcome: 'completed' },
+      { run: 'r1', id: '441', phase: 'pr', outcome: 'completed', prNumber: 9 },
+      { run: 'r1', id: '441', phase: 'review', outcome: 'completed', round: 1 },
+    ]
+      .map(r => JSON.stringify(r))
+      .join('\n')
+    const plan = resumePlan('441', reconstructState(actionless, { run: 'r1' })['441'])
+    expect(plan.redispatch).toEqual(['review'])
+    expect(plan.skipped).not.toContain('review')
+    expect(plan.note).toContain('re-enters at `review`')
+  })
+
+  it('closes the cycle on `converged`, and only on it', () => {
+    const converged = [
+      { run: 'r1', id: '441', phase: 'implement', outcome: 'completed' },
+      { run: 'r1', id: '441', phase: 'pr', outcome: 'completed', prNumber: 9 },
+      { run: 'r1', id: '441', phase: 'review', outcome: 'completed', action: 'converged' },
+    ]
+      .map(r => JSON.stringify(r))
+      .join('\n')
+    const plan = resumePlan('441', reconstructState(converged, { run: 'r1' })['441'])
+    expect(plan.redispatch).toEqual([])
+    expect(plan.skipped).toEqual(['implement', 'pr', 'review'])
   })
 
   it('halts a card whose review cycle escalated to a human', () => {
@@ -1078,6 +1181,41 @@ describe('the command surface', () => {
     )
     expect(code).toBe(1)
     expect(JSON.parse(out).error).toContain('working_path')
+  })
+
+  it('rejects an unknown key inside `ceilings` — the surplus dispatch is charged to real cards', () => {
+    // `{"dependencyAllowed":5,"policyMax":5,"harnessCieling":2}` exited 0 with
+    // {"cap":5,"boundBy":"dependency"}: the harness's ceiling of 2 vanished, 1b.2 dispatched 5
+    // concurrent subagents into a harness that allows 2, the surplus came back
+    // `not-started`/`died` and were charged to their cards as failed phases — and the AC7 line
+    // the skill prints named the wrong binding limit.
+    const { code, out } = main(
+      ['cap'],
+      JSON.stringify({ ceilings: { dependencyAllowed: 5, policyMax: 5, harnessCieling: 2 } }),
+    )
+    expect(code).toBe(1)
+    expect(JSON.parse(out).error).toContain('harnessCieling')
+    expect(
+      JSON.parse(
+        main(
+          ['cap'],
+          JSON.stringify({ ceilings: { dependencyAllowed: 5, policyMax: 5, harnessCeiling: 2 } }),
+        ).out,
+      ),
+    ).toMatchObject({ cap: 2, boundBy: 'harness' })
+  })
+
+  it('rejects an unknown key inside `probe` — a misspelling silently demotes the run', () => {
+    // A misspelled `harnessCeling` bound tier 1 with `harnessCeiling: null`; a misspelled
+    // `externalDriverAvailable` demoted an available tier-2 run to tier-3 degraded.
+    for (const probe of [
+      { tools: V1_TOOLS, harnessCeling: 2 },
+      { tools: ['shell'], externalDriverAvailble: true },
+    ]) {
+      const { code, out } = main(['bind'], JSON.stringify({ probe }))
+      expect(code).toBe(1)
+      expect(JSON.parse(out).error).toContain('unknown key')
+    }
   })
 
   it('rejects an unknown command and non-JSON stdin', () => {

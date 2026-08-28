@@ -67,7 +67,7 @@ describe('containment — the vendor surface lives in the map and nowhere else',
       const bounding = realization.bounding
       if (!bounding) continue
       declared.add(bounding.concurrencyKey.split('.').pop() as string)
-      Object.values(bounding.waitTimeoutKeys).forEach(k =>
+      Object.values(bounding.waitTimeoutKeys ?? {}).forEach(k =>
         declared.add(k.split('.').pop() as string),
       )
     }
