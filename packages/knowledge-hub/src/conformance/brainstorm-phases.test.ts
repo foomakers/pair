@@ -828,6 +828,14 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     // with the dataset copy still green. Both copies are measured now, the MIRROR is the binding one, and
     // the budget was NOT raised to absorb it: brainstorm's Notes restatements were
     // disclosed away (they duplicated the preamble, Parametrization and Phase 3).
+    // #251 review round 10 (Questions): this branch's profile delta left the mirror
+    // at 28,643 B — 29 B of headroom, so the NEXT unrelated PR would have paid for a
+    // disclosure split it did not come for (a one-word clarification, or `pair
+    // update` re-expanding one `/skill` reference, is already over). The split was
+    // taken here instead and the budget again NOT raised: the Parametrization
+    // paragraph restating parametrization.md's own precedence prose, and the Notes
+    // bullet restating the three sibling pointers already carried by their own
+    // sections. Mirror 28,643 → 27,979 B.
     const BUDGET_BYTES = 28 * 1024
     for (const v of VARIANTS) {
       const size = Buffer.byteLength(v.content, 'utf-8')

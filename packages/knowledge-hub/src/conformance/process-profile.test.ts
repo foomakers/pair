@@ -5,7 +5,7 @@ import {
   parseStepCatalogue,
   parseProcessProfiles,
   collectHowToGuides,
-  collectProcessSkillDirs,
+  collectAllSkillDirs,
   checkStepCatalogue,
   checkStepMarkers,
   checkStepMarkersInMirror,
@@ -45,6 +45,12 @@ const SKILLS_DIR = join(DATASET, '.skills')
 const HOW_TO_DIR = join(KB, 'how-to')
 const WOW_TEMPLATE = join(DATASET, '.pair/adoption/tech/way-of-working.md')
 const CONVENTIONS_README = join(AI_DEV, 'skill-conventions/README.md')
+/** The PARENT index — the navigational entry point for the whole guideline family. */
+const AI_DEV_README = join(AI_DEV, 'README.md')
+const AI_DEV_README_MIRROR = join(
+  HUB,
+  '../../.pair/knowledge/guidelines/technical-standards/ai-development/README.md',
+)
 
 const NEXT_DATASET = join(SKILLS_DIR, 'next/SKILL.md')
 const MIRROR_SKILLS_DIR = join(HUB, '../../.claude/skills')
@@ -81,7 +87,7 @@ describe('step catalogue — the unit of the profile is the step, not its repres
     const entries = parseStepCatalogue(catalogueSource)
     const errors = checkStepCatalogue(entries, {
       howToGuides: collectHowToGuides(HOW_TO_DIR),
-      skillDirs: collectProcessSkillDirs(SKILLS_DIR),
+      skillDirs: collectAllSkillDirs(SKILLS_DIR),
     })
     expect(errors).toEqual([])
   })
@@ -344,6 +350,21 @@ describe('direct-invocation gate — written once as a convention, referenced ev
     expect(read(CONVENTIONS_README)).toContain('process-profile-gate.md')
   })
 
+  // Round 10 Minor: the indexing convention was followed at the INNER level and
+  // dropped at the outer one. The ai-development README enumerates every sibling in
+  // its directory, so this branch's two new files were invisible from the only
+  // navigational index at that level — and AC8's manual-path reader is precisely
+  // the one who browses guidelines instead of running skills. Both copies, so the
+  // mirror cannot drift either.
+  it.each([
+    ['root', AI_DEV_README_MIRROR],
+    ['dataset', AI_DEV_README],
+  ])('the two new guideline files are listed in the %s ai-development index', (_, index) => {
+    const listing = read(index)
+    expect(listing).toContain('process-profiles.md')
+    expect(listing).toContain('step-catalogue.md')
+  })
+
   it('gates DIRECT invocation: warn that the step is disabled, then confirm', () => {
     const lower = gateSource.toLowerCase()
     expect(lower).toMatch(/direct(ly)? invok|direct invocation/)
@@ -370,13 +391,40 @@ describe('direct-invocation gate — written once as a convention, referenced ev
   // skills carries. `checkOneStepMarker` only requires the marker plus a pointer
   // anywhere in the dir, so a 13th, differently-worded delta would land green and
   // the convention would drift from the corpus it governs. Pinned to the real one.
-  it('prescribes the delta the corpus actually ships, not a paraphrase of it', () => {
-    const marker = '<!-- process-step: id=refine-story -->'
-    const snippet = /```markdown\n([\s\S]*?)```/.exec(gateSource)?.[1]?.trim()
-    const skill = read(join(SKILLS_DIR, 'process/refine-story/SKILL.md'))
-    const from = skill.indexOf(marker)
-    expect(from).toBeGreaterThan(-1)
-    expect(snippet).toBe(skill.slice(from, skill.indexOf('\n## ', from)).trim())
+  // Round 10 Minor: ONE snippet was pinned, and the section said "nothing else is
+  // per-skill" — but the corpus ships TWO delta shapes. A step skill in an
+  // `$approval` family (`assess-`, `map-`) must carry the `auto=halt` marker on
+  // that same line, because "asks for confirmation" matches APPROVAL_ROUND_PATTERNS;
+  // an author copying the first shape into a family skill gets three
+  // `skills:conformance` errors off a delta they followed literally. Both shapes are
+  // pinned, in the order the section presents them.
+  const DELTA_VARIANTS: Array<[string, string, string]> = [
+    ['non-family', 'process/refine-story/SKILL.md', '<!-- process-step: id=refine-story -->'],
+    [
+      '`$approval` family',
+      'capability/map-subdomains/SKILL.md',
+      '<!-- process-step: id=define-subdomains -->',
+    ],
+  ]
+
+  it.each(DELTA_VARIANTS.map(([label], i) => [label, i] as [string, number]))(
+    'prescribes the %s delta the corpus actually ships, not a paraphrase of it',
+    (_, i) => {
+      const [, file, marker] = DELTA_VARIANTS[i] as [string, string, string]
+      const snippet = [...gateSource.matchAll(/```markdown\n([\s\S]*?)```/g)][i]?.[1]?.trim()
+      const skill = read(join(SKILLS_DIR, file))
+      const from = skill.indexOf(marker)
+      expect(from).toBeGreaterThan(-1)
+      expect(snippet).toBe(skill.slice(from, skill.indexOf('\n## ', from)).trim())
+    },
+  )
+
+  it('says the family variant carries the approval-round marker and the `$approval` row', () => {
+    const section = gateSource.slice(gateSource.indexOf('## What stays in the skill'))
+    expect(section).toContain('<!-- approval-round: kind=gate; auto=halt -->')
+    expect(section).toContain('`$approval`')
+    expect(section).toContain('approval-rounds.md')
+    expect(section).toMatch(/assess-/)
   })
 })
 

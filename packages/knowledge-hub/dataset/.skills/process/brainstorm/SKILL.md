@@ -43,7 +43,7 @@ Executable form of the **`brainstorm`** step. Gate and composer rule: [degradati
 
 ## Parametrization (level · orientation · writer)
 
-Deduction inputs, in precedence order: **argument > tags > issue type**. The type decides the level **and** the phase-3 writer; tags decide the orientation. **Most specific row wins**, and the tag row is a **modifier**, not a competing row: it flips the orientation and adds `/map-contexts`, leaving level and writer to the base row. Every invocation matches **exactly one base row** — a type row, the **fallback row** (a `$root` with no recognized type label), or the no-`$root` row — so the triple is never left unresolved. It is always **stated up-front** as a proposal the developer can override.
+Deduction inputs, in precedence order: **argument > tags > issue type**. Every invocation matches **exactly one base row**, so the triple is never left unresolved, and it is always **stated up-front** as a proposal the developer can override.
 
 > **The matrix is normative and lives in [parametrization.md](parametrization.md)** — one row per `$root` signal, with the phase-2 capability, the phase-3 writer and the parent it receives, plus the rationale for the fallback row and for keying the writer on type rather than level. **Step 0 item 4 reads it on every run**; never resolve the triple from memory.
 
@@ -160,6 +160,5 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 ## Notes
 
 - **Composes, never re-derives**: the interview is `/grill`'s, the domain placement `/map-*`'s, the writes `/plan-epics`/`/plan-stories`' (which own the to-issues triage). Brainstorm owns the phase order and the level/orientation parametrization only (D24).
-- **Branch-specific reference lives beside the skill**, per progressive disclosure: the normative deduction matrix and its rationale in [parametrization.md](parametrization.md), the per-phase resume list in [resume.md](resume.md). The algorithm here stays the path every run walks.
 - **The PRD is never modified** — R3.4: discovery writes to the backlog and to domain context files; product-vision changes are surfaced as a `/specify-prd` recommendation.
 - **Modifies PM tool state** (phase 3, via the composed plan-* skills) **and adoption files** (phase 2, context map + domain catalogs).
