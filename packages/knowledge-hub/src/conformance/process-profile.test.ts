@@ -459,17 +459,6 @@ describe('composers name the profile AT the composition site, not only in their 
     return [...clause.matchAll(/`([a-z][a-z0-9-]+)`/g)].map(m => m[1] as string)
   }
 
-  // Round 11 Major: the assertion was ONE clause anywhere before the degradation
-  // section — so `/bootstrap`, which declares three composed steps, satisfied it
-  // with its two `map-*` beats while Phase 0 Step 0.1 still read "**Act** (missing
-  // or template): Compose `/specify-prd`." A `custom` project that whitelists
-  // `bootstrap` without `specify-prd` (legal, reported-not-fatal per AC9) got a
-  // full interactive PRD-authoring session — a step it declared it does not run —
-  // with no prompt and no note. Per composed step id now, not per file.
-  const perComposedStep = composers.flatMap(([label, content]) =>
-    composedIds(content).map(id => [`${label} → ${id}`, content, id] as [string, string, string]),
-  )
-
   /**
    * Every accepted spelling of a catalogued executable, in the `## Composed Skills`
    * table's first cell — the dataset form and the installed one, mapped through the
@@ -522,6 +511,61 @@ describe('composers name the profile AT the composition site, not only in their 
       .filter((id): id is string => id !== undefined)
     return [...new Set(ids)]
   }
+
+  /**
+   * The catalogued steps a skill's ALGORITHM actually composes — every catalogued
+   * executable named as the object of a composition verb in the text before
+   * `## Graceful Degradation`.
+   *
+   * Round 13 Minor: round 12 stopped the delta from de-scoping the guard alone by
+   * cross-checking it against `## Composed Skills` — but both are DECLARATIONS by
+   * the same author in the same file, editable in one pass. Deleting
+   * `define-subdomains` from `/bootstrap`'s `composer of` clause AND deleting its
+   * `` | `/map-subdomains` | Capability | … | `` table row (dataset AND mirror —
+   * two edits, no third) left this file at `Tests 147 passed`, all green, DOWN
+   * from 149: the two cases for that beat ceased to exist and nothing reads the
+   * count. A third edit then gutted the Phase-3.5.1 beat to decide on installation
+   * alone and still landed green, reintroducing the round-11 failure — a `custom`
+   * project whitelisting `bootstrap` without `define-subdomains` (legal: AC9 is
+   * report-don't-repair) gets subdomain mapping performed on a project that
+   * declared it does no DDD, with no prompt and no note.
+   *
+   * The algorithm is not a third declaration of the same claim: after those two
+   * edits the beat still literally reads "Compose `/map-subdomains`", so the step
+   * stays in scope and the third edit reddens. Dropping the composition FROM the
+   * algorithm is not a de-scoping — it is the skill ceasing to compose that step.
+   */
+  const COMPOSITION = /compos\w*[^.;:\n—]{0,60}/gi
+  const composedFromAlgorithm = (content: string): string[] => {
+    const cut = content.indexOf('## Graceful Degradation')
+    const ids = new Set<string>()
+    for (const [phrase] of content.slice(0, cut === -1 ? undefined : cut).matchAll(COMPOSITION)) {
+      for (const [cell, id] of STEP_BY_CELL) if (phrase.includes(cell)) ids.add(id)
+    }
+    return [...ids]
+  }
+
+  // Round 11 Major: the assertion was ONE clause anywhere before the degradation
+  // section — so `/bootstrap`, which declares three composed steps, satisfied it
+  // with its two `map-*` beats while Phase 0 Step 0.1 still read "**Act** (missing
+  // or template): Compose `/specify-prd`." A `custom` project that whitelists
+  // `bootstrap` without `specify-prd` (legal, reported-not-fatal per AC9) got a
+  // full interactive PRD-authoring session — a step it declared it does not run —
+  // with no prompt and no note. Per composed step id now, not per file.
+  //
+  // Round 13: that per-id list is the UNION of the three sources — the delta, the
+  // table and the algorithm — so no single declaration can shrink it.
+  const perComposedStep = composers.flatMap(([label, content]) => {
+    const self = label.split(' ')[1] as string
+    const ids = [
+      ...new Set([
+        ...composedIds(content),
+        ...composedFromTable(content),
+        ...composedFromAlgorithm(content),
+      ]),
+    ].filter(id => id !== self)
+    return ids.map(id => [`${label} → ${id}`, content, id] as [string, string, string])
+  })
 
   it('every composed id a delta declares is a catalogued step', () => {
     const ids = new Set(entries.map(e => e.id))
