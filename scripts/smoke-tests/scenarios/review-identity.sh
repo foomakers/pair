@@ -672,6 +672,55 @@ else
   excluded "the extracted bot-user kind is accepted by the exclusion check" \
     "$(extract_kind "$TMP_DIR/wow-bot.md")" acme-review-bot
 fi
+
+# ==============================================================================
+# The per-run APP HEALTH PROBES are EXECUTED here, not grepped.
+# ==============================================================================
+# ROUND 9. Two probes claimed more than they tested.
+#   Probe 1 said "the credential authenticates AND the identity is scoped to THIS repo" and
+#   tested `.total_count` only. An installation token is valid for the INSTALLATION, which
+#   is org-wide: on a repo the App was never installed on the endpoint still answers 200,
+#   health passes, the whole review runs, and the FIRST host write 404s.
+#   Probe 3 read the PR author under "it catches the provisioning mistake before any host
+#   write" and compared it to nothing — while the bot-user twin gates on it. One App used
+#   as both PR publisher (`<app-slug>[bot]`) and reviewer therefore passed health and then
+#   HALTed mid-write on every review it ever ran.
+# Run the shipped lines with a stubbed `gh`, rather than asserting their text.
+AUTH_PROBE="$(awk '/# 1\. AUTH_OK/{f=1} f&&/# 2\. PERMS_OK/{exit} f' "$GITHUB_GUIDE")"
+AUTHOR_PROBE="$(awk "/# 3\. The identity must not be the PR/{f=1} f&&/^[[:space:]]*\`\`\`$/{exit} f" "$GITHUB_GUIDE")"
+app_auth_ok() { # app_auth_ok <repo> <repos in the installation, newline separated>
+  # shellcheck disable=SC2034  # REPO is consumed by the shipped lines under eval
+  local REPO="$1" INSTALL_REPOS="$2" AUTH_OK=
+  gh() { printf '%s\n' "$INSTALL_REPOS"; }
+  eval "$AUTH_PROBE" || true
+  unset -f gh
+  printf '%s' "$AUTH_OK"
+}
+app_author_perms() { # app_author_perms <app-slug> <pr author> — PERMS_OK after probe 3
+  # shellcheck disable=SC2034  # PR is consumed by the shipped lines under eval
+  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1
+  gh() { printf '%s\n' "$AUTHOR"; }
+  eval "$AUTHOR_PROBE" || true
+  unset -f gh
+  printf '%s' "$PERMS_OK"
+}
+if [ -z "$AUTH_PROBE" ] || [ -z "$AUTHOR_PROBE" ]; then
+  log_fail "the step-6 App health probes are no longer extractable — the probes are untestable"
+  FAILED=1
+else
+  check "App AUTH probe: this repo IS in the installation ⇒ healthy" 1 \
+    "$(app_auth_ok acme/pair "$(printf 'acme/pair\nacme/other\n')")"
+  check "App AUTH probe: the App was never installed on THIS repo ⇒ NOT healthy" 0 \
+    "$(app_auth_ok acme/late "$(printf 'acme/pair\nacme/other\n')")"
+  check "App AUTH probe: a prefix match is not membership" 0 \
+    "$(app_auth_ok acme/pair "$(printf 'acme/pair-website\n')")"
+  check "App author probe: an unrelated author leaves the identity healthy" 1 \
+    "$(app_author_perms acme-review rucka)"
+  check "App author probe: the App itself opened the PR ⇒ NOT healthy" 0 \
+    "$(app_author_perms acme-review 'acme-review[bot]')"
+  check "App author probe: the slug unknown ⇒ unknown health ⇒ NOT healthy" 0 \
+    "$(app_author_perms '' rucka)"
+fi
 audit "ADR-018 amendment records adoption + what is NOT changed" "$ADR" \
   'Amendment (2026-08-28)' 'light_auto_approve_allowed' 'user.type == "User"' \
   'resolve_pr_state' 'review-identity.sh'

@@ -577,6 +577,36 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     // and the value the row offers is the one step 7 mandates, spelled the same way
     expect(REVIEW).toMatch(/Review: NOT SUBMITTED — <host error>/)
   })
+
+  // REGRESSION (review round 9). The same class as the `Review:` row above, one row down.
+  // Step 5.4 step 3 and Graceful Degradation BOTH mandate `pair-review: NOT PUBLISHED —
+  // advisory` and both say CONTINUE, not HALT (session mode, an agent token without
+  // `repo:status`, or a host with no statuses API) — while the `Check:` row enumerated only
+  // success | failure | pending, every one of which asserts a `pair-review` check EXISTS on
+  // the head commit. The agent renders the report from the Output Format block and writes
+  // `Check: pair-review → success — published as commit status` on a head that carries no
+  // such check: a green REQUIRED check that was never published, read by a human — and by
+  // the supervisor loop keying on this row — as merge-satisfied.
+  it('the Check row enumerates the NOT PUBLISHED outcome Step 5.4 mandates', () => {
+    const row = REVIEW.slice(REVIEW.indexOf('├── Check:'), REVIEW.indexOf('├── Light row:'))
+    expect(row).toContain('NOT PUBLISHED — advisory')
+    // spelled exactly as the step that mandates it spells it
+    expect(REVIEW).toMatch(/pair-review: NOT PUBLISHED — advisory/)
+  })
+
+  // REGRESSION (review round 9). Step 4 read `<self-authored>` by comparing the PR author
+  // against the acting account and then exempted the App path in the same breath — "an App
+  // installation is never a PR author". It can be: an App opens pull requests as
+  // `<app-slug>[bot]`, which is how Dependabot appears in `.author.login`. On the exempted
+  // path the agent left `self_authored` unset, the identity-mode default is deliberately
+  // NOT-self-authored, so `identity_verdict_event` returned REQUEST_CHANGES and GitHub
+  // answered `422 Can not request changes on your own pull request` — a mid-write HALT on
+  // EVERY review of a project that provisioned ONE App as both PR publisher and reviewer.
+  it('identity mode compares authorship for an App identity too — no exemption', () => {
+    expect(REVIEW).not.toMatch(/an App installation is never a PR author/)
+    // the App's acting login is derivable, and the skill says how
+    expect(REVIEW).toMatch(/<app-slug>\[bot\]/)
+  })
 })
 
 describe('publish-pr — the same adapter governs ITS host writes (AC1, AC4)', () => {
@@ -779,9 +809,46 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     // `gh api user` answers 403 for an installation token (it is not associated with a
     // user), so using it as the first probe fails a correctly-provisioned App and HALTs
     // every review on a setup that is in fact fine.
-    expect(GITHUB_GUIDE).toMatch(/gh api \/installation\/repositories --jq '\.total_count'/)
+    expect(GITHUB_GUIDE).toMatch(/gh api \/installation\/repositories/)
     expect(GITHUB_GUIDE).toMatch(/`gh api user` does NOT work/)
     expect(GITHUB_GUIDE).toMatch(/403 Resource not accessible by integration/)
+  })
+
+  // REGRESSION (review round 9). The probe's own comment claimed "the credential
+  // authenticates AND the identity is scoped to THIS repo" while the code tested
+  // `.total_count` only — reachability, never membership. An installation token is valid
+  // for the INSTALLATION (org-wide), so the endpoint answers 200 in a repository the App
+  // was never installed on: health passed, the whole review executed, and the FIRST host
+  // write 404'd into the mid-write HALT with a diagnostic blaming a revoked grant.
+  it('AC4 — the AUTH probe tests MEMBERSHIP of this repo, not reachability', () => {
+    expect(GITHUB_GUIDE).toMatch(
+      /gh api \/installation\/repositories --paginate --jq '\.repositories\[\]\.full_name'/,
+    )
+    expect(GITHUB_GUIDE).toMatch(/grep -qx "\$REPO" && AUTH_OK=1/)
+    expect(GITHUB_GUIDE).not.toMatch(
+      /gh api \/installation\/repositories --jq '\.total_count' >\/dev\/null 2>&1 && AUTH_OK=1/,
+    )
+  })
+
+  // REGRESSION (review round 9). Probe 3 assigned `PR_AUTHOR` under the comment "it
+  // catches the provisioning mistake before any host write" and then compared it to
+  // nothing — a dead assignment, while the bot-user twin gates on it. And the MANDATORY
+  // "must not open pull requests" rule lived under the *Bot user* heading only, so an
+  // adopter following the RECOMMENDED App path never met it. One App used as both PR
+  // publisher and reviewer therefore passed health and HALTed mid-write on every review.
+  it('AC4 — the App author probe GATES, and the setup rule covers both forms', () => {
+    expect(GITHUB_GUIDE).toMatch(/\[ "\$PR_AUTHOR" = "\$\{APP_SLUG:-\}\[bot\]" \] && PERMS_OK=0/)
+    // the slug is obtainable: `GET /app` is a JWT endpoint, so step 4 captures it
+    expect(GITHUB_GUIDE).toMatch(/APP_SLUG=/)
+    // and the rule is stated where BOTH forms read it, above the App section
+    const shared = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('### Dedicated review identity'),
+      GITHUB_GUIDE.indexOf('#### GitHub App (recommended)'),
+    )
+    expect(shared).toMatch(
+      /the identity must NOT be an account that opens pull requests in this repository/,
+    )
+    expect(shared).toMatch(/<app-slug>\[bot\]/)
   })
 
   it('AC4 — the guide separates the setup probes from the per-run health check', () => {
