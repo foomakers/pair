@@ -714,13 +714,32 @@ else
     "$(app_auth_ok acme/late "$(printf 'acme/pair\nacme/other\n')")"
   check "App AUTH probe: a prefix match is not membership" 0 \
     "$(app_auth_ok acme/pair "$(printf 'acme/pair-website\n')")"
+  # ROUND 10. `grep -qx "$REPO"` read $REPO as a BASIC REGEX. Repo names routinely carry a
+  # `.`, so `acme/pair.js` matched the listed `acme/pairXjs` ⇒ membership asserted on a repo
+  # the App was never installed on, straight back into the mid-write 404.
+  check "App AUTH probe: a regex metachar in the repo name is not membership" 0 \
+    "$(app_auth_ok 'acme/pair.js' "$(printf 'acme/pairXjs\n')")"
   check "App author probe: an unrelated author leaves the identity healthy" 1 \
     "$(app_author_perms acme-review rucka)"
-  check "App author probe: the App itself opened the PR ⇒ NOT healthy" 0 \
+  # ROUND 10. The round-9 gate compared against `<slug>[bot]` ONLY, while the probe reads the
+  # author with `gh pr view --json author` — GraphQL, which renders a Bot actor as
+  # `app/<slug>`. Measured: `gh pr view 14276 --repo cli/cli --json author -q .author.login`
+  # ⇒ `app/dependabot`; `gh api repos/cli/cli/pulls/14276 --jq .user.login` ⇒
+  # `dependabot[bot]`. One shape only ⇒ the gate never fired on the path it guards.
+  check "App author probe: the App opened the PR, GraphQL shape ⇒ NOT healthy" 0 \
+    "$(app_author_perms acme-review 'app/acme-review')"
+  check "App author probe: the App opened the PR, REST shape ⇒ NOT healthy" 0 \
     "$(app_author_perms acme-review 'acme-review[bot]')"
   check "App author probe: the slug unknown ⇒ unknown health ⇒ NOT healthy" 0 \
     "$(app_author_perms '' rucka)"
 fi
+# ROUND 10. `pair-review` became DUAL-FORM (check run on `app`, commit status otherwise) and
+# the form is resolved independently at publish time and at review time — so switching
+# `Review identity` with PRs already open leaves TWO producers on one required context.
+audit "the guide covers the identity SWITCH with pull requests already open" "$GITHUB_GUIDE" \
+  'CHANGING `Review identity`' 'one required context' 'superseded by the pair-review check run'
+audit "publish-pr carries the one-producer transition rule" "$PUBLISH_PR" 'producer per required context'
+audit "review Step 5.4 carries the one-producer transition rule" "$REVIEW" 'producer per required context'
 audit "ADR-018 amendment records adoption + what is NOT changed" "$ADR" \
   'Amendment (2026-08-28)' 'light_auto_approve_allowed' 'user.type == "User"' \
   'resolve_pr_state' 'review-identity.sh'

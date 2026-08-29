@@ -277,11 +277,24 @@ still the design; this amendment layers a credential resolution step and one ado
   (the host answers 422) rather than silent, and Step 5.3's read-back now has a defined action: a review the
   read does not show is `Review: NOT SUBMITTED`, the resolved check is **not** published, and the pending one
   stays in place. **The rule covers both forms and is now a health input, not only a verdict degradation**: a
-  GitHub App authors pull requests as `<app-slug>[bot]` (how Dependabot appears), so "an App is never a PR
-  author" was false and the one-credential setup — one App opening the PR and reviewing it — would have HALTed
-  mid-write on every review it ever ran. The per-run probe compares the acting principal against the PR author
-  on **both** paths and answers *not healthy* ⇒ `halt` **before any host write**; the COMMENT degradation stays
-  as the in-flow fail-safe for a host adapter that runs no such probe or whose authorship read failed.
+  GitHub App authors pull requests, so "an App is never a PR author" was false and the one-credential setup —
+  one App opening the PR and reviewing it — would have HALTed mid-write on every review it ever ran. The
+  per-run probe compares the acting principal against the PR author on **both** paths and answers *not healthy*
+  ⇒ `halt` **before any host write**; the COMMENT degradation stays as the in-flow fail-safe for a host adapter
+  that runs no such probe or whose authorship read failed. **The comparison carries two login shapes, not one**:
+  `gh` renders one Bot actor as `app/<app-slug>` through GraphQL (`gh pr view --json author`) and as
+  `<app-slug>[bot]` through REST (`.user.login`). A gate written against a single shape is inert on the path
+  that emits the other — measured on a public App-authored PR, `gh pr view 14276 --repo cli/cli --json author
+  -q .author.login` ⇒ `app/dependabot` while `gh api repos/cli/cli/pulls/14276 --jq .user.login` ⇒
+  `dependabot[bot]` — so the containment above is only real because both are compared.
+- **One producer per required context, including across a `Review identity` switch.** `pair-review` is now
+  dual-form (check run on `app`, commit status otherwise) and the form is resolved *independently* by
+  `/pair-capability-publish-pr` at PR creation and by `/pair-process-review` at Step 5.4. A pull request opened
+  under one value and reviewed under another would therefore carry two independent records for one required
+  context — the stale one cleared by nothing — and a merge that may stay blocked on it. The rule the ADR already
+  applied to `pair-explicit-approval` extends here: **drain** the open pull requests before changing
+  `Review identity` (the exit that always works), or supersede the outgoing form on the head with the same
+  conclusion (needs `statuses: write` on the App going one way, the retired App's own token going the other).
 - **The idempotency skip covers the publication acts only.** Step 5.3 submits a *fresh* native review on every
   re-invocation, so a re-review on an unchanged head is a new identity action: skipping from Step 5.4 straight
   past Step 5.4b would leave an identity `APPROVE` with no paired audit comment and no `Light row:` line — the
