@@ -134,7 +134,18 @@ describe('step markers — every executable representation declares its step id'
   it('uses a declared marker, not a prose window', () => {
     // Same contract shape as the approval-round marker: attachment is line
     // identity, so a reworded section cannot silently widen the check.
-    expect(STEP_MARKER.source).toContain('process-step')
+    //
+    // Round 7 Minor: this asserted `STEP_MARKER.source` contained the literal
+    // 'process-step' — true of a correct marker AND of a broken one (drop the
+    // `id=` capture, widen `[a-z0-9-]+` to `.*`: both stay green). Asserted on
+    // behaviour instead; each of the three cases below fails under one of those
+    // edits.
+    expect(STEP_MARKER.exec('<!-- process-step: id=refine-story -->')?.[1]).toBe('refine-story')
+    expect(STEP_MARKER.test('This step carries a process-step marker for refine-story.')).toBe(
+      false,
+    )
+    expect(STEP_MARKER.test('<!-- process-step: refine-story -->')).toBe(false)
+    expect(STEP_MARKER.test('<!-- process-step: id=Refine Story -->')).toBe(false)
   })
 })
 
@@ -172,6 +183,16 @@ describe('profile schema — built-in profiles and their normative error cases',
   // Round 3 Minor: the two remaining shapes of the widening hole. Both are
   // normative rules a reader executes, so both are stated in the schema rather
   // than left as behaviour only the reference resolver knows about.
+  // Round 7 Questions: the reference resolver's HALT arm used to carry the full
+  // catalogue as `enabled`, so a caller reading it without checking `halts` got
+  // the whole process back. The type no longer offers one — and the prose readers
+  // are held to the same rule, since `/next` resolves the profile by reading this.
+  it('states that a HALT yields NO step set — neither `default` nor an empty one', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/no step set/)
+    expect(lower).toMatch(/never continue on `?default`?/)
+  })
+
   it('states that the section is exactly ONE, at heading level `##`', () => {
     const lower = profilesSource.toLowerCase()
     expect(lower).toMatch(/more than once|declared twice|second .*section/)
@@ -330,6 +351,44 @@ describe('direct-invocation gate — written once as a convention, referenced ev
   })
 })
 
+// Round 7 Minor: AC7 and the convention put the check on the COMPOSING skill,
+// before composing (process-profile-gate.md). `brainstorm` states that at its
+// composition sites; the other four composers stated it only in their top delta,
+// while their algorithms kept deciding on installation ALONE. An executor
+// following refine-story's numbered algorithm under `poc` composes
+// `/map-subdomains` and runs DDD mapping on a project that declared it does none
+// — the one path that reaches DDD mapping under `poc`, since `/next` has no
+// cascade row for it (epic #204 AC4).
+describe('composers name the profile AT the composition site, not only in their delta', () => {
+  const CLAUSE = /disabled by the project['’]s \[process profile\]/
+  const copies = (name: string): Array<[string, string]> => [
+    [`dataset ${name}`, read(join(SKILLS_DIR, `process/${name}/SKILL.md`))],
+    [`mirror ${name}`, read(join(MIRROR_SKILLS_DIR, `pair-process-${name}/SKILL.md`))],
+  ]
+  const composers = ['refine-story', 'plan-tasks', 'plan-epics', 'bootstrap'].flatMap(copies)
+
+  it.each(composers)('%s: states it in the ALGORITHM, at the composition beat', (_, content) => {
+    const cut = content.indexOf('## Graceful Degradation')
+    expect(cut).toBeGreaterThan(-1)
+    // Before the degradation section ⇒ inside the numbered algorithm, where the
+    // executor decides whether to compose.
+    expect(content.slice(0, cut)).toMatch(CLAUSE)
+  })
+
+  it.each(composers)('%s: states it in the graceful-degradation entry too', (_, content) => {
+    const section = sectionBetween(content, '## Graceful Degradation', '\n## ')
+    expect(section).toMatch(CLAUSE)
+  })
+
+  // The precedent this mirrors — kept in the same test so removing one side of
+  // the pair is visible.
+  it('brainstorm keeps its own composition-site statement', () => {
+    const degradation = read(join(SKILLS_DIR, 'process/brainstorm/degradation.md'))
+    expect(degradation).toMatch(/process profile/i)
+    expect(degradation.toLowerCase()).toContain('before composing')
+  })
+})
+
 describe('way-of-working — the `## Process Profile` adoption section', () => {
   const template = read(WOW_TEMPLATE)
 
@@ -389,6 +448,12 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     expect(section.toLowerCase()).toMatch(/unknown (step )?id/)
   })
 
+  it.each(sources)('%s: a HALT yields no step set, not `default` (round 7)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/no step set/)
+    expect(section.toLowerCase()).toMatch(/never continue on `?default`?/)
+  })
+
   it.each(sources)('%s: HALTs on a duplicated or mis-levelled section', (_, content) => {
     const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
     expect(section.toLowerCase()).toMatch(/more than one `?## process profile`?/)
@@ -432,6 +497,24 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     expect(section.toLowerCase()).toMatch(/minimal fix/)
     // Flagged, never silently repaired.
     expect(section.toLowerCase()).toMatch(/never silently|not silently/)
+  })
+
+  // Round 7 Minor: Step 3 carried an explicit "every row below is subject to the
+  // enabled step set" reminder and Step 2 carried none, though Step 0.5 says the
+  // set is carried into Steps 2–5 and rows 1–2 map to `specify-prd`/`bootstrap`.
+  // The contrast invited the reading that only Step 3's rows are filtered — a
+  // `custom` profile omitting `specify-prd` on a template PRD would then be
+  // proposed `/specify-prd`, a step the project explicitly disabled (AC4).
+  it.each(sources)('%s: repeats the profile filter under BOTH cascade tables', (_, content) => {
+    for (const [step, until] of [
+      ['### Step 2: Cascade', '\n### Step 3'],
+      ['### Step 3: Cascade', '\n### Step 4'],
+    ]) {
+      const section = sectionBetween(content, step as string, until as string)
+      expect(section, `${step} states no profile filter`).toMatch(/Profile filter/)
+      expect(section.toLowerCase()).toMatch(/step 0\.5/)
+      expect(section.toLowerCase()).toMatch(/skipped|never proposed/)
+    }
   })
 
   it.each(sources)('%s: maps its cascade rows to step ids as data', (_, content) => {

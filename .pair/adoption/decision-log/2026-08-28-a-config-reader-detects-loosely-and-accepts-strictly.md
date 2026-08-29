@@ -77,12 +77,20 @@ Both HALT. The level check is a **separate scan**, deliberately not a widening o
 
 **The manual path is governed at its own entrypoint.** `AGENTS.md`'s "Without skills" flow carries a profile step before "identify your task", and `checkManualPathEntrypoint` asserts it — on the SECTION, not the file, since a mention parked in an appendix is not an entrypoint.
 
+**A HALT yields NO step set — the resolution is a discriminated union** (round 7). Every HALT path returned `{profile: 'default', enabled: <the whole catalogue>, halts, warnings: []}`. Both callers read `halts` first, so nothing was broken — but the TYPE made this module's own worst failure representable: a caller reading `resolution.enabled` without checking `resolution.halts` gets the full 12-step process on a project whose declaration was unreadable, which is precisely the silent widening every HALT message in the file argues against. `ProfileResolution` is now `ResolvedProfile { ok: true, profile, enabled, warnings } | HaltedProfile { ok: false, halts }`, and callers surface problems through `profileProblems(resolution)`. The same rule reaches the prose readers: a HALT stops the run, it does not continue on `default`.
+
+**A file the gate names as checked is read as what it IS** (round 7). `checkShippedProfileProse` resolved the shipped adoption template as a whole document, but this repo's own `.pair/adoption/tech/way-of-working.md` — the file `/next` reads when run here — was in the example-sweep list and nowhere else, and its `## Process Profile` section carries no fenced example, so ZERO checks applied to it while the PASS line named it. Verified: `` - `profile`: `pocc` `` under that heading printed `PASS — 44 skills conformant`, exit 0, while every `/next` run here would HALT on `unknown process profile \`pocc\``. Both way-of-working files now go through`resolveProcessProfile`as declarations (`PROFILE_DECLARATION_FILES`), in addition to the example sweep. A docs`.mdx` page stays example-only: its prose is not a declaration anyone resolves.
+
+**A documentation TABLE row is not a declaration, and must not become one** (round 7). The off-marker rule's comment claimed the `| profile | … |` table row as a shape it catches; the pattern is `^`-anchored on the key and requires a `:` immediately after it, so it never did — and it must not, because the shipped adoption template and the KB schema both document the two keys in a table inside or beside the section, and matching that row would HALT the shipped template. The exclusion is now stated and pinned by a unit case.
+
 ## Alternatives Considered
 
 - **Keep the strict single regex and document the shape harder**: rejected. The mis-shaped line came from copying the file's own table; prose cannot beat a shape a reader already produced, and the failure is silent by construction.
 - **Accept an unbackticked value** (loose acceptance): rejected. It makes the grammar guessable rather than declared, and re-opens "is `poc.` a profile name?" for every value.
 - **Assert the mirror by byte-equality only** (leave it to `skill-md-mirror`): rejected. That guard is directional dataset→mirror equality; it catches a *drifted* copy, not a hand-edited one that both guards read as legitimate content — and the marker is the thing the profile hangs on.
 - **A follow-up card for the manual path**: rejected by the story's own AC8 and success metric ("a project with no skills installed gets the same profile behaviour through the how-to path").
+- **Return `enabled: []` on the HALT path** instead of the union (round 7): rejected. It only trades the widening for the NARROWING direction — the one this file already calls the worse of the two, because a removed step is indistinguishable from a step not being due. There is no honest step set behind an unreadable declaration, so the type stops offering one; the test file's flat view reports `profile`/`enabled` as `null` on a HALT, and every halt case asserts that.
+- **Resolve the docs `.mdx` pages as declarations too** (round 7): rejected. A documentation page's prose is a declaration nobody resolves; only its fenced examples are, and those the sweep already covers. Reading the pages as documents would report their illustrative text as this project's profile.
 
 ## Consequences
 
@@ -102,6 +110,9 @@ Both HALT. The level check is a **separate scan**, deliberately not a widening o
 - A docs edit that retitles a fence, or one that shortens a whitelist on the website, is now a red gate rather than a shape CI certifies and readers copy.
 - A team whose linter forbids a 130-column line is told to exempt the line, not silently given a shorter process: the schema and the adoption template both state that a key is one line however long, and wrapping it HALTs.
 - Commenting a section out is a supported way to park a previous profile; an unterminated fence or comment anywhere in way-of-working.md now stops the run instead of resolving the file from a truncated view.
+- A future caller of `resolveProcessProfile` cannot consume a step set from a halted resolution: the halted arm does not have one, so the compiler rejects the read rather than a reviewer catching it.
+- A profile typo in **this repo's own** way-of-working is a red gate, not a green one followed by a HALT at the next `/next`. Verified: `` - `profile`: `pocc` `` under the section → `FAIL — 1 violation / ../../.pair/adoption/tech/way-of-working.md: unknown process profile \`pocc\` …`, exit 1 (it printed`PASS`, exit 0, before).
+- The four composers that reach DDD mapping — `refine-story`, `plan-tasks`, `plan-epics`, `bootstrap` — name the profile at the composition beat itself and in their graceful-degradation entry, as `brainstorm` already did. An executor following the numbered algorithm under `poc` no longer composes `/map-subdomains` on a project that declared it does no DDD mapping.
 
 ## Adoption Impact
 

@@ -63,7 +63,7 @@ A fence closes on a run of the **same character, at least as long as the one tha
 
 ## Error cases — all normative, none inferred
 
-A profile misread does not surface as an error a user sees; it silently removes a step from every suggestion, which looks exactly like that step not being due yet. Every case below therefore **HALTs** rather than narrowing quietly.
+A profile misread does not surface as an error a user sees; it silently removes a step from every suggestion, which looks exactly like that step not being due yet. Every case below therefore **HALTs** rather than narrowing quietly. A HALT resolves to **no step set at all**: stop and report — never continue on `default` (that re-enables the whole process) and never on an empty set (that disables it).
 
 | Case                                        | Outcome                                                                                                       |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
