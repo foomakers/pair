@@ -42,13 +42,14 @@ An identity approval **still does not satisfy the 🔴 explicit human approval**
 | Identity form | Account type on the reviews API | What excludes it |
 | --- | --- | --- |
 | App installation | `"Bot"` | the account-type clause. Automatic, nothing to configure. |
-| Machine **user** account | `"User"` — an ordinary user | its **login**. You must provision it (`REVIEW_IDENTITY_LOGIN`); until you do, that account's approval satisfies the 🔴 gate exactly like a human's. |
+| Machine **user** account | `"User"` — an ordinary user | its **login**. You must provision it as a **repository variable** (`REVIEW_IDENTITY_LOGIN`) — the gate job reads it from there, so exporting it in your shell or CI environment does not arm the clause; until the variable is set, that account's approval satisfies the 🔴 gate exactly like a human's. |
 
 <Callout type="warn">
   **A machine user is not a "Bot" to the API.** Only a host App types as `"Bot"`. If you run the
-  bot-account form, the login exclusion is the whole containment — so the flow treats an identity
-  whose login is not provisioned as **unusable** and halts, rather than reviewing with the 🔴 gate
-  silently open.
+  bot-account form, the login exclusion is the whole containment — so the flow reads the repository
+  variable back on every run and treats an identity whose login is not provisioned there (or which
+  names a different account) as **unusable**, halting rather than reviewing with the 🔴 gate silently
+  open.
 </Callout>
 
 That the identity cannot grant the human gate is deliberate rather than an oversight: it buys a native verdict and per-identity auditability, not the right to sign for a person. A `risk:red` pull request still needs a **second human account**, exactly as before. The two mechanisms stay side by side — the identity signs the ordinary review, a human signs the 🔴 one.

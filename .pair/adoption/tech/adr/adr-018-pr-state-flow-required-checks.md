@@ -305,8 +305,9 @@ still the design; this amendment layers a credential resolution step and one ado
   past Step 5.4b would leave an identity `APPROVE` with no paired audit comment and no `Light row:` line — the
   reason no longer reconstructable from the PR, which is the property the audit exists to guarantee.
 - **The PR-state synthesis is unconditional.** `resolve_pr_state` is called once per review, in its own step,
-  in **all three modes and for every verdict** — Step 5.4 publishes exactly one `pr-state:*` label on every run,
-  so the call can never be nested inside the (identity-only, APPROVED-only) APPROVE-authority step.
+  in **both modes that continue (`session` and `identity`) and for every verdict** — `halt` ends the review
+  before any host write, so it is not a third case. Step 5.4 publishes exactly one `pr-state:*` label on every
+  run, so the call can never be nested inside the (identity-only, APPROVED-only) APPROVE-authority step.
 - **`resolve_pr_state`'s table is untouched.** No row is added, removed, or reordered; the light row is a
   **sibling** function that consumes its output. A green/yellow PR still reaches `ready-to-merge` and a human
   still merges — the light row changes *who supplies the host's required approving review*, never what the

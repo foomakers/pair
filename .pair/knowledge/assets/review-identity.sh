@@ -62,8 +62,12 @@
 #   # HEALTH IS COMPUTED ON THIS RUN, from the host guide's per-run, artifact-free probes
 #   # (AUTH_OK: the credential authenticated and is scoped to this repository; PERMS_OK:
 #   # the required grants were observed). It is never a remembered setup result.
-#   IDENTITY_HEALTHY="$(review_identity_health "$IDENTITY_KIND" "$AUTH_OK" "$PERMS_OK" \
-#     "${REVIEW_IDENTITY_LOGIN:-}")"
+#   # $RV: the identity's login READ BACK FROM THE HOST on this run, from the same
+#   # configuration store the job evaluating the 🔴 predicate resolves it from (on GitHub a
+#   # repository variable — see the implementation guide). NEVER the caller's ambient
+#   # environment: a login set only in the agent's shell satisfies this precondition while
+#   # the gate's clause compares against the empty string and matches every account.
+#   IDENTITY_HEALTHY="$(review_identity_health "$IDENTITY_KIND" "$AUTH_OK" "$PERMS_OK" "$RV")"
 #   MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
 #   [ "$MODE" = halt ] && exit 1
 #   # APPROVE only when the light row authorized it (pr-state.sh light_auto_approve_allowed):
@@ -144,10 +148,18 @@ review_identity_kind_ok() {
 #                          arm. A spelling this function does not accept would make a
 #                          correctly provisioned bot user a NOT-healthy identity and HALT
 #                          every review on that repository.
-#   review_identity_login: the identity's account login, as provisioned to the job that
-#                          evaluates `human_approval_jq_filter` (on GitHub: the repository
-#                          variable `REVIEW_IDENTITY_LOGIN`, read into the environment of
-#                          the `pair-explicit-approval` job)
+#   review_identity_login: the identity's account login AS THE JOB THAT EVALUATES
+#                          `human_approval_jq_filter` WILL SEE IT — on GitHub the repository
+#                          variable `REVIEW_IDENTITY_LOGIN`, which the
+#                          `pair-explicit-approval` job reads as
+#                          `${{ vars.REVIEW_IDENTITY_LOGIN }}`. The caller must READ IT BACK
+#                          from the host on this run, never pass its own ambient environment
+#                          variable of the same name: an operator who exports the login but
+#                          never sets the repository variable would satisfy the precondition
+#                          here while the gate's clause compares against the empty string —
+#                          `.user.login != ""` is true for every account, so the bot's own
+#                          approval would satisfy the 🔴 HUMAN gate. Passing what the gate
+#                          cannot see is exactly the state this check exists to refuse.
 #
 # Exit 0 = the identity is MECHANICALLY excluded from the 🔴 explicit-human-approval
 # predicate. Exit 1 = it is NOT, with the missing piece on stderr; the caller must then

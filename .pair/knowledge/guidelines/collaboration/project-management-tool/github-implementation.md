@@ -846,11 +846,24 @@ Recommended because it is the only form that unlocks the Checks API, and because
    #    review. A bot-user identity is a plain User and compares literally on both paths.
    #    $APP_SLUG comes from step 4: `GET /app` is a JWT endpoint, so the installation
    #    token cannot read it here. Unknown slug ⇒ unknown health ⇒ not healthy.
+   #    IT PRINTS ITS OWN REASON. This probe encodes a THIRD, distinct failure while
+   #    reusing $PERMS_OK — the flag that means "the required grants were OBSERVED". A
+   #    silent zero therefore makes `review_identity_health` emit the grant-shaped
+   #    diagnostic ("the identity's required permissions were not observed on this run"),
+   #    which points the operator of the one-credential pipeline — the likeliest
+   #    misconfiguration, and the one this probe exists for — at App grants that are
+   #    correct, with nothing in the trail naming authorship.
    PR_AUTHOR="$(gh pr view "$PR" --json author -q .author.login)"
    case "$PR_AUTHOR" in
-     "app/${APP_SLUG:-}" | "${APP_SLUG:-}[bot]") PERMS_OK=0 ;;
+     "app/${APP_SLUG:-}" | "${APP_SLUG:-}[bot]")
+       echo "review-identity: the identity ($PR_AUTHOR) is this pull request's AUTHOR — not a grant problem. See § Dedicated review identity, MANDATORY for BOTH forms: the review identity must not be an account that opens pull requests in this repository." >&2
+       PERMS_OK=0
+       ;;
    esac
-   [ -z "${APP_SLUG:-}" ] && PERMS_OK=0
+   if [ -z "${APP_SLUG:-}" ]; then
+     echo "review-identity: \$APP_SLUG is unset, so the author comparison could not run — unknown authorship is unknown health. Capture the slug at mint time (step 4: GET /app is a JWT endpoint)." >&2
+     PERMS_OK=0
+   fi
    ```
 
    **A `403`/`422` met MID-WRITE is a HALT, not a fallback.** These probes make that rare, not impossible (a grant can be revoked between the probe and the write). If any identity write in the flow is refused, report it against the artifact that failed, stop, and point at this section — never retry with the session token, and never publish `pair-review` as though the review had landed.
@@ -907,10 +920,17 @@ Recommended because it is the only form that unlocks the Checks API, and because
    #    result. The adapter folds in the exclusion precondition and answers 1 or 0;
    #    unknown is never healthy, so a repository that skipped step 6 gets `halt`, not a
    #    silent session fallback.
+   #    THE LOGIN ARGUMENT IS $RV — the value the per-run probe READ BACK from the
+   #    repository variable, which is what `${{ vars.REVIEW_IDENTITY_LOGIN }}` resolves to
+   #    in the `pair-explicit-approval` job. Passing an ambient `$REVIEW_IDENTITY_LOGIN`
+   #    here would let a set-in-the-shell-only login satisfy the exclusion precondition
+   #    while the gate's clause stays inert (see the bot-user probe below). On the App path
+   #    the argument is not read at all — an App is excluded by account type — so `$RV`
+   #    being empty there is correct and harmless.
    IDENTITY_HEALTHY=0
    if [ "$IDENTITY_CONFIGURED" = 1 ]; then
      IDENTITY_HEALTHY="$(review_identity_health "$IDENTITY_KIND" "${AUTH_OK:-0}" \
-       "${PERMS_OK:-0}" "${REVIEW_IDENTITY_LOGIN:-}")"
+       "${PERMS_OK:-0}" "${RV:-}")"
    fi
 
    MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
@@ -945,15 +965,33 @@ The section's MANDATORY rule applies here in full — this account must not open
 
 ```bash
 ACTING="$(gh api user --jq .login)"                                   # 200 ⇒ PAT valid
+# THE LOGIN COMES FROM THE REPOSITORY VARIABLE, READ BACK ON THIS RUN — never from the
+# agent's ambient environment. The 🔴 clause this health check exists to arm is evaluated
+# in the `pair-explicit-approval` workflow from `${{ vars.REVIEW_IDENTITY_LOGIN }}` (below),
+# so the variable is the ONLY value that can make the clause fire. Gating on an exported
+# `$REVIEW_IDENTITY_LOGIN` instead would pass health on a repository where `gh variable set`
+# was never run (or where the login was stored as a SECRET, or scoped to an Environment
+# this `pull_request_target` job does not use): the flow would run as `identity` while the
+# gate resolved the variable to the empty string, making the clause `.user.login != ""` —
+# true for EVERY account — so an APPROVED review by the bot on a `risk:red` head would
+# satisfy the explicit HUMAN approval. Read the variable, or the identity is not healthy.
+RV="$(gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN" --jq .value 2>/dev/null || true)"
 AUTH_OK=0
-[ -n "$ACTING" ] && [ "$ACTING" = "${REVIEW_IDENTITY_LOGIN:-}" ] && AUTH_OK=1
-# The login must MATCH the provisioned variable: the 🔴 exclusion clause names that login,
-# so an identity acting under a different account is not the one being excluded.
+[ -n "$ACTING" ] && [ -n "$RV" ] && [ "$ACTING" = "$RV" ] && AUTH_OK=1
+# The acting login must MATCH the provisioned variable: the 🔴 exclusion clause names that
+# login, so an identity acting under a different account is not the one being excluded.
 PERM="$(gh api "repos/$REPO/collaborators/$ACTING/permission" --jq .permission)"
 PERMS_OK=0
 case "$PERM" in write | admin) PERMS_OK=1 ;; esac
 # And the identity must not be this PR's author (the MANDATORY rule for both forms, above).
-[ "$ACTING" = "$(gh pr view "$PR" --json author -q .author.login)" ] && PERMS_OK=0
+# It PRINTS ITS OWN REASON before zeroing the flag: `PERMS_OK` means "the required grants
+# were observed", so a silent zero here makes `review_identity_health` emit the grant-shaped
+# diagnostic for an authorship problem — sending the operator to re-inspect permissions that
+# are correct, with nothing in the trail naming the actual cause.
+if [ "$ACTING" = "$(gh pr view "$PR" --json author -q .author.login)" ]; then
+  echo "review-identity: the identity ($ACTING) is this pull request's AUTHOR — not a grant problem. See § Dedicated review identity, MANDATORY for BOTH forms: the review identity must not be an account that opens pull requests in this repository." >&2
+  PERMS_OK=0
+fi
 ```
 
 Neither probe writes anything. A classic PAT's scopes are also readable from the `X-OAuth-Scopes` response header (`gh api -i user`); a fine-grained PAT exposes none, which is why the write grant is proved once at setup and a `403`/`422` met **mid-write is a HALT** — reported against the artifact that failed, never retried with the session token.
@@ -966,7 +1004,7 @@ gh variable set REVIEW_IDENTITY_LOGIN --body "$BOT_LOGIN"     # repo variable, r
 gh variable get REVIEW_IDENTITY_LOGIN                          # verify: must echo the bot's login
 ```
 
-That variable is the health input `review_identity_exclusion_ok user "$REVIEW_IDENTITY_LOGIN"` checks: **unset ⇒ the identity is not healthy ⇒ `resolve_identity_mode` yields `halt`**, and no review is written at all. Keeping the bot out of the repository's human-reviewer set is still good hygiene, but it is no longer the containment — the login clause is. The App form needs none of this because it types as `"Bot"`.
+That **repository variable** — not an exported shell/CI environment variable of the same name — is the health input `review_identity_exclusion_ok user "$RV"` checks, where `$RV` is the value the per-run probe above read back with `gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN"`. **Unset ⇒ the identity is not healthy ⇒ `resolve_identity_mode` yields `halt`**, and no review is written at all. Reading it back per run is what makes that sentence true: the clause it arms lives in the `pair-explicit-approval` job and resolves `${{ vars.REVIEW_IDENTITY_LOGIN }}`, so a login that exists only in the agent's environment leaves the gate comparing against the empty string while health reports green. A variable that is present but names a **different** account fails the probe for the same reason — the excluded login must be the one acting. Keeping the bot out of the repository's human-reviewer set is still good hygiene, but it is no longer the containment — the login clause is. The App form needs none of this because it types as `"Bot"`.
 
 #### Failure modes, and what each one does
 
@@ -980,7 +1018,7 @@ That variable is the health input `review_identity_exclusion_ok user "$REVIEW_ID
 | Configured, health unknown (the per-run probes of step 6 not run, network error) | `halt` | Fail-safe: unknown is not healthy. `review_identity_health` answers `0` for any probe outcome that is not exactly `1`. |
 | Configured, and the identity **is the pull request's author** | `halt` — the per-run probe catches it (App: probe 3, against **both** login shapes, `app/<app-slug>` and `<app-slug>[bot]`; bot user: the `ACTING` comparison) | A provisioning error, caught **before any host write**: the identity must not open pull requests here. Where a host adapter runs no such probe, or the authorship read failed, the in-flow fail-safe still holds — `identity_verdict_event` returns **COMMENT**, so the verdict is published in full with its token leading the body while the native event (including the light row's APPROVE) is unobtainable on that PR. |
 | A grant revoked between the probe and the write (`403`/`422` mid-write) | — | **HALT** on the refused write, reported against the artifact that failed. Never retried with the session token, and `pair-review` is never published as though the review had landed. |
-| Configured as `bot-user`, `REVIEW_IDENTITY_LOGIN` not provisioned | `halt` | `review_identity_exclusion_ok` fails, so the identity is not healthy. Deliberately a HALT and not a warning: this is the one misconfiguration that would let a machine account satisfy the 🔴 explicit **human** approval. |
+| Configured as `bot-user`, `REVIEW_IDENTITY_LOGIN` not provisioned **as a repository variable** — absent, stored as a secret, scoped to an unused Environment, or naming another account (an exported env var of the same name does **not** count: the probe reads the variable back from the host) | `halt` | `review_identity_exclusion_ok` fails, so the identity is not healthy. Deliberately a HALT and not a warning: this is the one misconfiguration that would let a machine account satisfy the 🔴 explicit **human** approval — the gate job resolves `${{ vars.REVIEW_IDENTITY_LOGIN }}` to the empty string and its clause matches every account. |
 
 Do not "fall back to the session token so the review still runs". A review recorded against the maintainer's account, that the maintainer did not perform, is a worse outcome than a stopped review — and it is exactly the misattribution a dedicated identity exists to prevent.
 

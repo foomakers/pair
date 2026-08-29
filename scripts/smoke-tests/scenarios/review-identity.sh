@@ -332,6 +332,21 @@ blocks "tagged, declaration flag malformed"             "$LIGHT_LABELS" yes   gr
 blocks "declared but PR carries no light tag"           "risk:green user story" 1 green ready-to-merge
 blocks "declared, a label merely CONTAINING 'light'"    "risk:green lightweight" 1 green ready-to-merge
 blocks "declared, no labels at all"                     "" 1 green ready-to-merge
+# ROUND 12. Code-host label NAMES may themselves contain spaces (`good first issue`,
+# `help wanted`), so collapsing every shape to spaces made `ui: light theme` — a label
+# many UI projects already carry — indistinguishable from the `light` TAG: a risk:green PR
+# carrying only it reached APPROVE, and the audit comment named a `Tag: light` the PR does
+# not carry. The two UNAMBIGUOUS shapes are now matched as WHOLE FIELDS.
+blocks "declared, a MULTI-WORD label containing 'light' (line form)" \
+  "$(printf 'risk:green\nui: light theme\n')" 1 green ready-to-merge
+blocks "declared, a MULTI-WORD label containing 'light' (comma form)" \
+  "risk:green,ui: light theme" 1 green ready-to-merge
+blocks "declared, 'not light' as one whole label (line form)" \
+  "$(printf 'risk:green\nnot light\n')" 1 green ready-to-merge
+yields "declared + tagged alongside a multi-word sibling (line form)" \
+  "$(printf 'risk:green\nui: light theme\nlight\n')" 1 green ready-to-merge
+yields "declared + tagged, comma form with padding around the field" \
+  "risk:green, light , user story" 1 green ready-to-merge
 
 # Most restrictive wins: light never bypasses the 🔴 gate, and never invents a tier.
 blocks "declared + tagged + 🔴 (light never applies at red)" "risk:red light" 1 red ready-to-merge
@@ -578,8 +593,17 @@ audit "github guide carries the per-host setup (App recommended + bot user)" "$G
   'Dedicated review identity' 'GitHub App' 'bot user' 'pull_requests: write' 'checks: write'
 audit "way-of-working template declares the Review identity key" "$WOW_TEMPLATE" \
   'Review identity' 'none'
-audit "the state synthesis is an unconditional step, reachable in session mode" "$REVIEW" \
-  'in \*\*all three modes and for every verdict\*\*'
+# ROUND 12. "all three modes" was false for one of the three it enumerated: `halt` ends the
+# review in step 1 of the same list ("No host write happens on this path"), so the
+# synthesis cannot run there. The claim it needs to make is the one about NESTING.
+audit "the state synthesis is unconditional across the modes that CONTINUE" "$REVIEW" \
+  'in \*\*both modes that continue (`session` and `identity`) and for every verdict\*\*'
+if grep -q 'all three modes and for every verdict' "$REVIEW"; then
+  log_fail "review still claims the synthesis runs in halt mode, which ends the review"
+  FAILED=1
+else
+  log_succ "no surface claims the synthesis runs in halt mode"
+fi
 
 # ==============================================================================
 # The shipped ADOPTION-KIND EXTRACTION is EXECUTED here, not grepped.
@@ -700,9 +724,16 @@ app_author_perms() { # app_author_perms <app-slug> <pr author> — PERMS_OK afte
   # shellcheck disable=SC2034  # PR is consumed by the shipped lines under eval
   local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1
   gh() { printf '%s\n' "$AUTHOR"; }
-  eval "$AUTHOR_PROBE" || true
+  eval "$AUTHOR_PROBE" 2>/dev/null || true
   unset -f gh
   printf '%s' "$PERMS_OK"
+}
+app_author_reason() { # app_author_reason <app-slug> <pr author> — probe 3's OWN stderr
+  # shellcheck disable=SC2034  # PR is consumed by the shipped lines under eval
+  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1
+  gh() { printf '%s\n' "$AUTHOR"; }
+  eval "$AUTHOR_PROBE" 2>&1 >/dev/null || true
+  unset -f gh
 }
 if [ -z "$AUTH_PROBE" ] || [ -z "$AUTHOR_PROBE" ]; then
   log_fail "the step-6 App health probes are no longer extractable — the probes are untestable"
@@ -732,7 +763,117 @@ else
     "$(app_author_perms acme-review 'acme-review[bot]')"
   check "App author probe: the slug unknown ⇒ unknown health ⇒ NOT healthy" 0 \
     "$(app_author_perms '' rucka)"
+  # ROUND 12. Probe 3 encodes a THIRD, distinct failure ("the identity is this PR's
+  # author") by zeroing PERMS_OK — the flag that means "the required grants were
+  # OBSERVED". `review_identity_health` then emits the grant-shaped diagnostic
+  # ("the identity's required permissions were not observed on this run"), so the operator
+  # of the one-credential pipeline the guide calls the likeliest misconfiguration
+  # re-inspects the App's `pull_requests`/`checks` grants, finds them correct, and has
+  # nothing in the trail naming authorship. The probe must say why it fired.
+  AUTHOR_REASON="$(app_author_reason acme-review 'app/acme-review')"
+  if printf '%s' "$AUTHOR_REASON" | grep -qi 'author'; then
+    log_succ "App author probe names AUTHORSHIP as its own reason, not a missing grant"
+  else
+    log_fail "App author probe fires SILENTLY — health blames the grants: '$AUTHOR_REASON'"
+    FAILED=1
+  fi
+  check "App author probe: an unrelated author prints no reason" "" \
+    "$(app_author_reason acme-review rucka)"
 fi
+
+# ==============================================================================
+# The per-run BOT-USER health probe is EXECUTED here, not grepped.
+# ==============================================================================
+# ROUND 12 (Major). The bot-user probe's `ACTING` comparison read
+# `${REVIEW_IDENTITY_LOGIN:-}` — the AGENT'S AMBIENT ENVIRONMENT — while the clause it is
+# meant to arm is evaluated in the `pair-explicit-approval` workflow from the REPOSITORY
+# VARIABLE (`vars.REVIEW_IDENTITY_LOGIN`). Nothing verified the two agree. An operator who
+# exports the login in the shell/CI env but never runs `gh variable set` (or sets it as a
+# SECRET, or scopes it to an Environment the `pull_request_target` job does not use) gets a
+# HEALTHY identity, the flow runs as `identity`, and the gate job resolves the variable to
+# the empty string — so the shipped predicate's clause becomes `.user.login != ""`, true
+# for every account, and an APPROVED review cast by the bot outside the flow (the
+# maintainer using the bot PAT, a supervisor loop, a second automation) SATISFIES the
+# explicit HUMAN approval on a `risk:red` head. The variable is now the health input.
+BOT_PROBE="$(awk '/^ACTING="\$\(gh api user/{f=1} f&&/^```$/{exit} f' "$GITHUB_GUIDE")"
+bot_probe() { # bot_probe <acting login> <repo-variable value> <pr author> [permission]
+  # shellcheck disable=SC2034  # REPO/PR are consumed by the shipped lines under eval
+  local REPO=acme/pair PR=1 ACTING= AUTH_OK= PERMS_OK= PERM= RV=
+  local _acting="$1" _var="$2" _author="$3" _perm="${4:-write}"
+  gh() {
+    case "$*" in
+    "api user --jq .login") printf '%s\n' "$_acting" ;;
+    *actions/variables/REVIEW_IDENTITY_LOGIN*)
+      [ -n "$_var" ] || return 1
+      printf '%s\n' "$_var"
+      ;;
+    *collaborators*) printf '%s\n' "$_perm" ;;
+    *) printf '%s\n' "$_author" ;;
+    esac
+  }
+  eval "$BOT_PROBE" 2>/dev/null || true
+  unset -f gh
+  printf '%s:%s' "$AUTH_OK" "$PERMS_OK"
+}
+bot_probe_reason() { # bot_probe_reason <acting> <repo-variable> <pr author> — the stderr
+  # shellcheck disable=SC2034
+  local REPO=acme/pair PR=1 ACTING= AUTH_OK= PERMS_OK= PERM= RV=
+  local _acting="$1" _var="$2" _author="$3" _perm=write
+  gh() {
+    case "$*" in
+    "api user --jq .login") printf '%s\n' "$_acting" ;;
+    *actions/variables/REVIEW_IDENTITY_LOGIN*)
+      [ -n "$_var" ] || return 1
+      printf '%s\n' "$_var"
+      ;;
+    *collaborators*) printf '%s\n' "$_perm" ;;
+    *) printf '%s\n' "$_author" ;;
+    esac
+  }
+  eval "$BOT_PROBE" 2>&1 >/dev/null || true
+  unset -f gh
+}
+if [ -z "$BOT_PROBE" ]; then
+  log_fail "the bot-user per-run health probe is no longer extractable — it is untestable"
+  FAILED=1
+else
+  check "bot probe: the repo VARIABLE names the acting account ⇒ healthy" 1:1 \
+    "$(bot_probe acme-bot acme-bot rucka)"
+  # THE EXPLOIT, verbatim: the env var is exported and correct, the repository variable was
+  # never set. Health must be 0 — the gate-side clause is inert in exactly this state.
+  check "bot probe: variable UNSET but the AMBIENT env var matches ⇒ NOT healthy" 0:1 \
+    "$(REVIEW_IDENTITY_LOGIN=acme-bot bot_probe acme-bot '' rucka)"
+  check "bot probe: the variable names a DIFFERENT account ⇒ NOT healthy" 0:1 \
+    "$(bot_probe acme-bot other-bot rucka)"
+  check "bot probe: the PAT does not authenticate ⇒ NOT healthy" 0:1 \
+    "$(bot_probe '' acme-bot rucka)"
+  check "bot probe: read-only collaborator ⇒ grants not observed" 1:0 \
+    "$(bot_probe acme-bot acme-bot rucka read)"
+  check "bot probe: the identity IS the PR author ⇒ not usable" 1:0 \
+    "$(bot_probe acme-bot acme-bot acme-bot)"
+  BOT_AUTHOR_REASON="$(bot_probe_reason acme-bot acme-bot acme-bot)"
+  if printf '%s' "$BOT_AUTHOR_REASON" | grep -qi 'author'; then
+    log_succ "bot probe names AUTHORSHIP as its own reason, not a missing grant"
+  else
+    log_fail "bot author check fires SILENTLY: '$BOT_AUTHOR_REASON'"
+    FAILED=1
+  fi
+fi
+# The health input the guide's publication snippet passes must be the value READ BACK from
+# the repository variable, never the ambient environment.
+audit "the per-run probe READS the repository variable" "$GITHUB_GUIDE" \
+  'actions/variables/REVIEW_IDENTITY_LOGIN'
+audit "the health call is fed that read-back value" "$GITHUB_GUIDE" '"${RV:-}")"'
+if grep -q '"\${REVIEW_IDENTITY_LOGIN:-}"' "$GITHUB_GUIDE"; then
+  log_fail "the guide still feeds health from the AMBIENT REVIEW_IDENTITY_LOGIN env var"
+  FAILED=1
+else
+  log_succ "no ambient REVIEW_IDENTITY_LOGIN reaches the health input"
+fi
+audit "both skills name the repository variable as the login's source" "$REVIEW" \
+  'repository variable'
+audit "publish-pr names the repository variable as the login's source" "$PUBLISH_PR" \
+  'repository variable'
 # ROUND 10. `pair-review` became DUAL-FORM (check run on `app`, commit status otherwise) and
 # the form is resolved independently at publish time and at review time — so switching
 # `Review identity` with PRs already open leaves TWO producers on one required context.
