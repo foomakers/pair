@@ -123,27 +123,36 @@ light_auto_approve_allowed() {
   fi
 
   # WHOLE-LABEL match: `lightweight` is not `light`. What "whole" can mean depends on the
-  # SHAPE of the read, and only two of the three shapes carry the boundaries:
-  #   one name per LINE (`-q '.labels[].name'`) and COMMA-separated — a field is a whole
-  #   label name, spaces included, so `ui: light theme` is one label and never the tag.
-  #   SPACE-JOINED (`-q '[.labels[].name] | join(" ")'`) — LEGACY and irrecoverably
-  #   AMBIGUOUS: a code-host label NAME may itself contain spaces (`good first issue`,
-  #   `help wanted`), so nothing in the joined string distinguishes the `light` TAG from a
-  #   label merely containing that word. It is still accepted, because callers pass it, but
-  #   it is no longer what the skills document: prefer the line form, which is exact.
-  local matched=0 line
+  # SHAPE of the read, and each shape carries ITS OWN delimiter — never another shape's:
+  #   one name per LINE (`-q '.labels[].name'`) — EXACT for every label name, because a
+  #   code-host name cannot contain a newline. Split on newlines ALONE: a name may legally
+  #   contain a COMMA (`theme, light`), and translating commas here would cut one whole
+  #   name into two fields and match the tag against a fragment nobody applied.
+  #   COMMA-separated — a field is a whole label name, spaces included, so `ui: light theme`
+  #   is one label and never the tag. Exact only for names FREE OF COMMAS: once the host
+  #   joined the names with commas, a name containing one is indistinguishable from two
+  #   labels, the same way the space-joined shape below loses names containing spaces.
+  #   NO DELIMITER AT ALL — the shape a ONE-label line read produces (`ui: light theme`),
+  #   and the shape the LEGACY space-joined read (`-q '[.labels[].name] | join(" ")'`)
+  #   produces for every PR. It is matched as ONE whole trimmed field, and therefore FAILS
+  #   CLOSED: `light` alone still matches, `ui: light theme` is a no-op, and the joined
+  #   `risk:green light` is a no-op too. That last one is the deliberate cost: a code-host
+  #   label NAME may itself contain spaces (`good first issue`, `help wanted`), so the
+  #   joined shape is irrecoverably AMBIGUOUS — nothing in it distinguishes the `light` TAG
+  #   from a label merely containing the word — and an ambiguous input must never authorize
+  #   an APPROVE. Pass the line form, which is exact; the joined form is accepted only in
+  #   the degenerate single-label case where it IS the line form.
+  local matched=0 line fields=""
   case "$labels" in
-  *$'\n'* | *,*)
-    while IFS= read -r line; do
-      line="${line#"${line%%[![:space:]]*}"}" # trim leading blanks
-      line="${line%"${line##*[![:space:]]}"}" # trim trailing blanks
-      [ "$line" = light ] && matched=1
-    done <<<"${labels//,/$'\n'}"
-    ;;
-  *)
-    case " $labels " in *" light "*) matched=1 ;; esac
-    ;;
+  *$'\n'*) fields="$labels" ;;
+  *,*) fields="${labels//,/$'\n'}" ;;
+  *) fields="$labels" ;;
   esac
+  while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}" # trim leading blanks
+    line="${line%"${line##*[![:space:]]}"}" # trim trailing blanks
+    [ "$line" = light ] && matched=1
+  done <<<"$fields"
   if [ "$matched" != 1 ]; then
     echo "pr-state: the pull request does not carry the 'light' tag — no auto-approval" >&2
     return 1

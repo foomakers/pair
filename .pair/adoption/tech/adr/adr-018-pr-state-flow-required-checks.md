@@ -320,7 +320,11 @@ still the design; this amendment layers a credential resolution step and one ado
   only to `identity`-configured-but-broken: a missing permission or an invalid credential stops the flow with a
   pointer to the host guide's *Dedicated review identity* section, and **never** silently falls back to the
   session user — a review silently attributed to the human whose token happened to be loaded is worse than a
-  stopped review.
+  stopped review. It also binds only a phase that **actually performs an identity host write**: where the phase
+  would write nothing as the identity (PR publication under `Review enforcement: disabled`, which produces no
+  `pair-review` record there), there is no misattribution to prevent, so the unusable identity is **reported and
+  the phase continues**. Otherwise an enforcement-disabled project — the default — could not open a pull request
+  at all while its identity was half-provisioned.
 - **Host mechanics stay in the implementation guide** (R2.12): GitHub App vs bot user, permissions, install and
   credential storage live in `github-implementation.md`; the skills and the adapter name no host.
 
