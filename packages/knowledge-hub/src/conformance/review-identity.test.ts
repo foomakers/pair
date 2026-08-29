@@ -660,6 +660,41 @@ describe('publish-pr — the same adapter governs ITS host writes (AC1, AC4)', (
   it('reports the identity on its own output row', () => {
     expect(PUBLISH_PR).toMatch(/├── Identity:/)
   })
+
+  // REGRESSION (review round 11). Phase 5 step 3 resolved identity health and HALTed BEFORE
+  // step 4 read `Review enforcement` (default `disabled`). With enforcement disabled this
+  // phase performs NO identity host write at all — step 4's own text is "publish nothing
+  // here" — yet a failed health probe aborted everything downstream anyway.
+  // FAILURE: project `acme` sets `Review identity: app` and leaves `Review enforcement:
+  // disabled` (the default; branch protection typically lands after the identity work). The
+  // App private key lives in the CI secret store, the agent runs on a maintainer's laptop,
+  // so the JWT→installation-token exchange cannot run ⇒ AUTH_OK unset ⇒
+  // review_identity_health ⇒ 0 ⇒ resolve_identity_mode 1 0 ⇒ halt. The PR is created and
+  // marked ready-for-review, then the flow stops: no `pr-state:to-be-reviewed` label (the PR
+  // is invisible in the board view pr-states.md drives) and NO REVIEW DISPATCH — on every
+  // story, indefinitely, for a credential that would not have written anything here. The
+  // review re-resolves the identity at its own Step 5.4, where the writes happen, so halting
+  // at publish time protects nothing. AC4 scopes the HALT to "when any identity action is
+  // attempted"; with enforcement disabled none is.
+  it('the identity HALT is scoped to a phase that actually writes as the identity', () => {
+    const step3 = PUBLISH_PR.slice(
+      PUBLISH_PR.indexOf('3. **Act — resolve WHO writes'),
+      PUBLISH_PR.indexOf('4. **Act — register the check as pending'),
+    )
+    // the enforcement value is read BEFORE the halt decision, not after it in step 4
+    expect(step3).toMatch(/Review enforcement/)
+    // and the disabled branch continues to the label + the dispatch instead of halting
+    expect(step3).toMatch(/no identity write in this phase/)
+    expect(step3).toMatch(/continue to steps 5 and 6/)
+    // the HALT entry carries the same scope, and the degradation lists the continue case
+    const halt = PUBLISH_PR.slice(PUBLISH_PR.indexOf('## HALT Conditions'))
+    const entry = halt.slice(halt.indexOf('dedicated review identity is configured but unusable'))
+    expect(entry.slice(0, 1400)).toMatch(/Review enforcement/)
+    const degradation = PUBLISH_PR.slice(PUBLISH_PR.indexOf('## Graceful Degradation'))
+    expect(degradation).toMatch(/unusable and `Review enforcement` is `disabled`/)
+    // the output row enumerates the value that case reports
+    expect(PUBLISH_PR).toMatch(/├── Identity:.*Review enforcement disabled/)
+  })
 })
 
 describe('pr-states.md — the model carries the identity and the light row (AC1, AC3)', () => {
@@ -932,6 +967,43 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     // and both publishers carry the rule, since both resolve the form independently
     expect(PUBLISH_PR).toMatch(/producer per required context/)
     expect(REVIEW).toMatch(/producer per required context/)
+  })
+
+  // REGRESSION (review round 11). The transition rule's SECOND exit 403s as documented, so
+  // it silently fails to clear the stale record it exists to clear. Step 4 mints the
+  // installation token with an EXPLICIT `permissions` payload, and an installation access
+  // token carries ONLY the requested subset — the guide's own note says GitHub 422s a
+  // permission the installation lacks, which makes the payload, not the grant, the authority
+  // for what the token can do. Nothing in the App registration list or in step 4 ever
+  // requested `statuses`.
+  // FAILURE: project `acme` runs `Review identity: none` with PR #100 open, whose head
+  // carries a PENDING COMMIT STATUS named `pair-review` from publish-pr. It provisions an
+  // App, sets `Review identity: app` and takes the supersede exit, granting
+  // `Commit statuses: write` exactly as the snippet said. The review mints GH_TOKEN
+  // (pull_requests/checks/contents only), publishes the `pair-review` CHECK RUN, then runs
+  // the supersede arm ⇒ `403 Resource not accessible by integration`. The stale pending
+  // status survives; where branch protection honours it, #100 is permanently unmergeable
+  // with a manual POST /statuses as the only exit — the outcome the rule was added to prevent.
+  it('AC4 — the supersede exit names the MINT permission it needs, not only the App grant', () => {
+    const shared = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('### Dedicated review identity'),
+      GITHUB_GUIDE.indexOf('#### GitHub App (recommended)'),
+    )
+    // the snippet states the payload change, not just the registration grant
+    expect(shared).toMatch(/"statuses":"write"/)
+    expect(shared).toMatch(/permissions` payload/)
+    // and why requesting it unconditionally is not the answer
+    expect(shared).toMatch(/422/)
+    // the App permission list cross-references it as conditional on that exit
+    const appSetup = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('#### GitHub App (recommended)'),
+      GITHUB_GUIDE.indexOf('5. **Verify ONCE, at setup**'),
+    )
+    expect(appSetup).toMatch(/`statuses: write`/)
+    expect(appSetup).toMatch(/conditional, NOT part of the baseline/)
+    expect(appSetup).toMatch(/supersede/)
+    // and the mint payload itself says the subset it requests is the limit
+    expect(appSetup).toMatch(/token carries ONLY this subset/)
   })
 
   it('the probe snippet is self-contained and declares the artifacts it leaves', () => {

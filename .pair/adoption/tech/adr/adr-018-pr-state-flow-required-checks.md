@@ -294,7 +294,12 @@ still the design; this amendment layers a credential resolution step and one ado
   context — the stale one cleared by nothing — and a merge that may stay blocked on it. The rule the ADR already
   applied to `pair-explicit-approval` extends here: **drain** the open pull requests before changing
   `Review identity` (the exit that always works), or supersede the outgoing form on the head with the same
-  conclusion (needs `statuses: write` on the App going one way, the retired App's own token going the other).
+  conclusion. The supersede exit is the conditional one: going `none`/`bot-user` ➝ `app` it needs
+  `statuses: write` **granted on the App AND requested in the installation-token mint payload** — the token
+  carries only the subset that payload asks for, so the grant alone leaves the `POST /statuses` at
+  `403` and the stale pending status uncleared — and it must be added only while taking that exit, since
+  requesting an ungranted permission `422`s the mint for every run. Going `app` ➝ anything it needs the retired
+  App's own token. Both conditions are why **drain** is the normative exit.
 - **The idempotency skip covers the publication acts only.** Step 5.3 submits a *fresh* native review on every
   re-invocation, so a re-review on an unchanged head is a new identity action: skipping from Step 5.4 straight
   past Step 5.4b would leave an identity `APPROVE` with no paired audit comment and no `Light row:` line — the
