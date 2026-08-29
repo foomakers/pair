@@ -1420,6 +1420,16 @@ function checkStepDelta(
 const GATE_UNATTENDED_CLAUSE = /auto=halt/
 
 /**
+ * The fourth rule of the convention, added with round 12's report filter and left
+ * unbound in the installed copy: a completion report's `Next:` line obeys the
+ * profile too. Deleting the paragraph from the installed file printed
+ * `PASS — 44 skills conformant`; the same deletion in the dataset copy reddens
+ * (`process-profile.test.ts`, "states the rule once, in the convention"). The pair
+ * mirrors that dataset-side assertion, so the four clauses are bound in BOTH copies.
+ */
+const GATE_REPORT_CLAUSES: RegExp[] = [/`Next:` line/, /never names a step the profile disables/]
+
+/**
  * The installed convention read as CONTENT, not as a path that happens to exist.
  *
  * Same obligation `checkStepDelta` puts on each skill, applied to the file those
@@ -1439,6 +1449,13 @@ export function checkInstalledGateConvention(content: string): string[] {
       `${INSTALLED_GATE_CONVENTION_FILE}: no longer resolves the gate for an UNATTENDED run ` +
         `(\`auto=halt\`) — with the clause gone a \`$approval: auto\` run reaching a disabled step ` +
         `has no instruction anywhere, and the natural default is to run it (run \`pair update\`)`,
+    )
+  }
+  if (!GATE_REPORT_CLAUSES.every(c => c.test(content))) {
+    errors.push(
+      `${INSTALLED_GATE_CONVENTION_FILE}: no longer states that a completion report's ` +
+        `\`Next:\` line obeys the profile — an author adding a step skill follows the installed ` +
+        `pointer, so a rule this file stops stating is read by nobody (run \`pair update\`)`,
     )
   }
   return errors
@@ -1682,12 +1699,24 @@ export const WOW_PROFILE_SECTION = 'Process Profile'
  * The trailing run of `#` is CommonMark's CLOSED ATX form (`## Process Profile ##`),
  * decoration in the same sense — and unstripped it made the heading unmatched,
  * hence the section unread and unreported.
+ *
+ * Round 13 Minor: only TRAILING decoration was stripped, so the same widening
+ * survived one notch wider — LEADING decoration (`## 🎯 Process Profile`, the house
+ * style of `AGENTS.md`'s own `## 🎯 Quick Start Process`; `## 1. Process Profile`)
+ * and INTERNAL separators (`## Process  Profile`, `## Process-Profile` — the
+ * spelling the story's own statement uses) each left the heading unmatched, the
+ * section unread, and the project silently back on all 12 steps.
  */
 function normalizeHeading(heading: string): string {
   return heading
     .replace(/\s+#+\s*$/, '')
     .replace(/\s*\([^)]*\)\s*$/, '')
-    .replace(/[*_`]/g, '')
+    .replace(/[*`]/g, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/^[^a-zA-Z0-9]+/, '')
+    .replace(/^\d+[.)]\s*/, '')
+    .replace(/^[^a-zA-Z0-9]+/, '')
+    .replace(/\s+/g, ' ')
     .replace(/[:.\s]+$/, '')
     .trim()
     .toLowerCase()

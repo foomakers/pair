@@ -1713,6 +1713,27 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
     expect(errors).not.toContain('DIRECT')
   })
 
+  // Round 13 Minor: round 12 bound three clauses of this file and added a FOURTH
+  // rule to the convention in the same commit — the completion-report filter —
+  // without binding it. Deleting that paragraph from the installed copy left
+  // `pnpm skills:conformance` at `PASS — 44 skills conformant`, exit 0, its banner
+  // still naming `installed gate convention` as validated, while the identical
+  // deletion in the DATASET copy reddens. This repo dogfoods pair: an author
+  // adding a 13th step skill follows the installed pointer, reads a convention
+  // that no longer states the rule, and ships an unfiltered `Next:` line.
+  it('fails when the installed gate convention drops the completion-report filter', () => {
+    const rel = `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`
+    const without = (DEFAULTS[rel] as string)
+      .split('\n')
+      .filter(l => !l.startsWith('**A completion report that names a next skill'))
+      .join('\n')
+    expect(without).not.toBe(DEFAULTS[rel])
+    const errors = check({ [rel]: without }).join('\n')
+    expect(errors).toContain('Next:')
+    expect(errors).not.toContain('DIRECT')
+    expect(errors).not.toContain('auto=halt')
+  })
+
   it('fails CLOSED when the installed gate convention is missing', () => {
     const rel = `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`
     expect(check({ [rel]: null }).join('\n')).toContain('not found')
@@ -2115,8 +2136,33 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
+  // Round 13 Minor: the same widening one notch wider — only TRAILING decoration
+  // was stripped, so LEADING decoration and INTERNAL separators left the heading
+  // unmatched and the section unread. Each of these four resolved to `default`
+  // with all 12 steps, zero halts and zero warnings — byte-identical to writing
+  // nothing — while `## 🎯 Quick Start Process` / `## 📋 Available Tasks` are this
+  // corpus's own house style in the very files the gate reads.
+  it.each([
+    ['a leading emoji', '## 🎯 Process Profile'],
+    ['a leading numbering', '## 1. Process Profile'],
+    ['a doubled internal space', '## Process  Profile'],
+    ['a hyphen separator', '## Process-Profile'],
+  ])('reads a heading written with %s as the section', (_, heading) => {
+    const r = resolve(`${heading}\n\n- \`profile\`: \`poc\`\n`)
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
   it('does NOT swallow a differently-named heading that merely starts the same', () => {
     const r = resolve('## Process Profile Gate\n\n- `profile`: `poc`\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // The equality survives the wider normalization: an internal separator collapses,
+  // an extra WORD does not.
+  it('does NOT swallow a hyphen-separated heading that names a different section', () => {
+    const r = resolve('## Process-Profile-Gate\n\n- `profile`: `poc`\n')
     expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })
