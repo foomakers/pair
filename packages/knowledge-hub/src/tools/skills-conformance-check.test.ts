@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -34,7 +34,9 @@ import {
   checkShippedProfileProse,
   resolveProcessProfile,
   parseWowProfileSection,
+  profileProblems,
   WOW_TEMPLATE_FILE,
+  REPO_WOW_FILE,
 } from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
@@ -1344,6 +1346,35 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     expect(checkFiles({ [file]: page }).join('\n')).toContain('none of its prerequisites')
     expect(checkFiles({ [file]: page }).join('\n')).toContain(file)
   })
+
+  // Round 7 Minor: the sweep read this repo's own way-of-working for FENCED
+  // examples ONLY, and its `## Process Profile` section carries none — so the
+  // one thing that matters about that file (the declaration `/next` resolves
+  // when run here) was checked by nothing, while the gate's PASS line named the
+  // file as checked. A `pocc` typo shipped green and HALTed every `/next`.
+  it.each([
+    ['the shipped adoption template', WOW_TEMPLATE_FILE],
+    ['this repo’s own way-of-working', REPO_WOW_FILE],
+  ])('resolves %s as a DECLARATION, not only as a bag of examples', (_, file) => {
+    const declared = '# Way of Working\n\n## Process Profile\n\n- `profile`: `pocc`\n'
+    const errors = checkFiles({ [file]: declared }).join('\n')
+    expect(errors).toContain('unknown process profile `pocc`')
+    expect(errors).toContain(file)
+  })
+
+  it('reports a declared-profile WARNING from this repo’s own way-of-working too', () => {
+    const declared =
+      '# Way of Working\n\n## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`\n'
+    expect(checkFiles({ [REPO_WOW_FILE]: declared }).join('\n')).toContain(
+      'none of its prerequisites',
+    )
+  })
+
+  it('passes on this repo’s own way-of-working as committed', () => {
+    const repoWow = join(__dirname, '../..', REPO_WOW_FILE)
+    expect(existsSync(repoWow)).toBe(true)
+    expect(checkFiles({ [REPO_WOW_FILE]: readFileSync(repoWow, 'utf-8') })).toEqual([])
+  })
 })
 
 describe('checkProcessProfiles', () => {
@@ -1422,8 +1453,68 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     { id: 'implement', howTo: null, executable: '/implement', requires: ['plan-stories'] },
   ]
   const builtIns = { default: '*' as const, poc: ['brainstorm', 'plan-stories', 'implement'] }
-  const resolve = (wow: string) =>
-    resolveProcessProfile(parseWowProfileSection(wow), entries, builtIns)
+
+  /**
+   * A flat VIEW of the resolution union, for assertions only.
+   *
+   * `profile` and `enabled` exist on the readable arm alone (round 7 Questions),
+   * so the view reports them as `null` on a HALT — every halt case below asserts
+   * that null, which is the pin that a halted resolution hands out no step set.
+   * Production callers never see this shape: they narrow on `ok`, or read
+   * `profileProblems`.
+   */
+  const resolve = (
+    wow: string,
+  ): {
+    profile: string | null
+    enabled: string[] | null
+    halts: string[]
+    warnings: string[]
+  } => {
+    const r = resolveProcessProfile(parseWowProfileSection(wow), entries, builtIns)
+    return {
+      profile: r.ok ? r.profile : null,
+      enabled: r.ok ? r.enabled : null,
+      halts: r.ok ? [] : r.halts,
+      warnings: r.ok ? r.warnings : [],
+    }
+  }
+
+  /**
+   * A HALT hands out NO step set — not the full catalogue (the widening this
+   * module exists to prevent), not an empty one (the narrowing the schema calls
+   * the worse direction). Asserted at every halt case below.
+   */
+  const expectNoStepSet = (r: { profile: string | null; enabled: string[] | null }): void => {
+    expect(r.profile).toBeNull()
+    expect(r.enabled).toBeNull()
+  }
+
+  // The type-level half of the same finding: the union offers no `enabled` to
+  // read from a halted resolution, so the widening cannot be written at all.
+  it('a HALTED resolution carries no step set — the arm does not have one', () => {
+    const r = resolveProcessProfile(
+      parseWowProfileSection('## Process Profile\n\n- `profile`: `pocc`\n'),
+      entries,
+      builtIns,
+    )
+    expect(r.ok).toBe(false)
+    expect(Object.keys(r).sort()).toEqual(['halts', 'ok'])
+    expect(profileProblems(r)).toHaveLength(1)
+  })
+
+  it('a READABLE resolution surfaces its warnings through the same accessor', () => {
+    const r = resolveProcessProfile(
+      parseWowProfileSection(
+        '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`\n',
+      ),
+      entries,
+      builtIns,
+    )
+    expect(r.ok).toBe(true)
+    expect(profileProblems(r)).toHaveLength(1)
+    expect(profileProblems(r)[0]).toContain('minimal fix')
+  })
 
   it('no section ⇒ `default` ⇒ every step, no halt, no warning (AC1)', () => {
     const r = resolve('# Way of Working\n\n## Quality Gates\n\n- something\n')
@@ -1464,8 +1555,8 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `whitelist`:\n')
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('misconfiguration')
-    // Fail-safe: the run reports rather than silently disabling the whole process.
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    // The run reports; it neither disables the whole process nor re-enables it.
+    expectNoStepSet(r)
   })
 
   it('an unknown step id HALTs listing the valid ids (AC5)', () => {
@@ -1513,8 +1604,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('`profile`')
     // The message hands back the schema shape rather than naming a state.
     expect(r.halts[0]).toContain('- `profile`: `poc`')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('HALTs on a `profile` line with no backticks at all', () => {
@@ -1588,8 +1678,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('heading level')
     expect(r.halts[0]).toContain('## Process Profile')
     // Still not read as the section — but no longer silently.
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('HALTs on a mis-levelled heading even when a valid `##` section also exists', () => {
@@ -1620,8 +1709,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     )
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('more than once')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('counts a DECORATED second heading as the same section, not a different one', () => {
@@ -1652,7 +1740,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     )
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`whitelist`')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('HALTs when a bare id sits BETWEEN two backticked ones', () => {
@@ -1700,8 +1788,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `poc` (not `custom`)\n')
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`profile`')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   // Round 4 Major: the KEY level, between the two the earlier rounds closed. A
@@ -1716,8 +1803,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`profile`')
     expect(r.halts[0]).toContain('more than once')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('HALTs when `whitelist` is declared on two lines of the same section', () => {
@@ -1775,14 +1861,28 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve(`## Process Profile\n\n${line}\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`profile`')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('HALTs on a bullet-less `whitelist` key too', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `custom`\n`whitelist`: `implement`\n')
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('`whitelist`')
+  })
+
+  // Round 7 Minor: the off-marker comment claimed a `| `profile` | … |` table row
+  // as a shape it catches. It does not — and MUST not: the shipped adoption
+  // template and the KB schema both document the two keys in a table inside or
+  // beside the section, so catching that row would HALT the shipped template.
+  // A table row is documentation; only a bullet or a bare backticked key declares.
+  it('does not read a documentation TABLE row as a declaration', () => {
+    const r = resolve(
+      '## Process Profile\n\n| Key | Value |\n| --- | --- |\n' +
+        '| `profile` | `poc` |\n| `whitelist` | step ids |\n',
+    )
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expect(r.halts).toEqual([])
   })
 
   it('does not read PROSE mentioning the key as a declaration', () => {
@@ -1853,8 +1953,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve(`## Process Profile\n\n- Configuration:\n${indent}- \`profile\`: \`poc\`\n`)
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('does not accept')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('still reads a key nested under a bullet by TWO spaces', () => {
@@ -1898,8 +1997,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('SETEXT')
     expect(r.halts[0]).toContain('## Process Profile')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('does not read a `---` after unrelated prose as a setext profile heading', () => {
@@ -1920,8 +2018,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     )
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('ONE line')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('HALTs on a value line that ends on a dangling separator', () => {
@@ -2004,8 +2101,7 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve('## Intro\n\n```text\nblah\n\n## Process Profile\n\n- `profile`: `poc`\n')
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('UNTERMINATED')
-    expect(r.profile).toBe('default')
-    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expectNoStepSet(r)
   })
 
   it('HALTs on an unterminated HTML comment for the same reason', () => {

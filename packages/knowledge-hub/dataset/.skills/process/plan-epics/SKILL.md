@@ -100,8 +100,8 @@ Executable form of the **`plan-epics`** step, and a composer of `define-subdomai
 
 ### Step 3.5: Domain Mapping (scoped)
 
-1. **Check**: Is `/map-subdomains` installed, and has the caller **already placed or confirmed this scope in this run** — declared in-band as `$domain-placed`?
-2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping. If `$domain-placed` names the **same capability areas** the approved breakdown covers — the caller's own domain step either composed `/map-subdomains` on them or confirmed a placement already recorded (e.g. `/brainstorm` phase 2, **either** branch of its Check/Skip, so a fresh-session resume qualifies too) → **confirm that placement and proceed to Step 4; do not re-compose** `/map-subdomains`: the same scope is mapped once per run, and the developer approves **one** subdomain-catalog delta, not two.
+1. **Check**: Is `/map-subdomains` installed and `define-subdomains` enabled by the project's process profile, and has the caller **already placed or confirmed this scope in this run** — declared in-band as `$domain-placed`?
+2. **Skip**: If not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) → skip with a note and proceed to Step 4 without domain mapping (a composed disabled step never prompts). If `$domain-placed` names the **same capability areas** the approved breakdown covers — the caller's own domain step either composed `/map-subdomains` on them or confirmed a placement already recorded (e.g. `/brainstorm` phase 2, **either** branch of its Check/Skip, so a fresh-session resume qualifies too) → **confirm that placement and proceed to Step 4; do not re-compose** `/map-subdomains`: the same scope is mapped once per run, and the developer approves **one** subdomain-catalog delta, not two.
 3. **Act**: Otherwise compose `/map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/bootstrap`-only).
 4. **Verify**: Subdomain catalog delta (if any) approved by developer. Epic creation always proceeds to Step 4 regardless of the domain-mapping outcome.
 
@@ -156,7 +156,7 @@ EPICS COMPLETE:
 
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/write-issue` not installed / PM tool not accessible → produce epic documents, ask developer to create manually) for the standard scenarios. Additional cases:
 
-- If `/map-subdomains` is not installed, skip Step 3.5 with a warning — epic creation proceeds without domain mapping.
+- If `/map-subdomains` is not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), skip Step 3.5 with a note — epic creation proceeds without domain mapping.
 - If bounded contexts are not defined, proceed with PRD and initiative analysis only.
 
 ## Notes

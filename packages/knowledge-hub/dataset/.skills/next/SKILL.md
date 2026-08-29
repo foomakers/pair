@@ -127,7 +127,7 @@ A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-
 
 1. **No `## Process Profile` section** → the profile is `default`: **every** catalogued step is enabled and the whole cascade below runs **unchanged**, exactly as it did before profiles existed. This is the overwhelmingly common case; skip straight to Step 1.
 2. **`profile: default` / `poc`** → the built-in step set from the schema. **`profile: custom`** → the declared `whitelist`.
-3. **Validate, and HALT rather than narrow quietly** — a misread profile does not surface as an error a user sees, it removes a step from every suggestion, which looks exactly like that step not being due yet:
+3. **Validate, and HALT rather than narrow quietly** — a misread profile does not surface as an error a user sees, it removes a step from every suggestion, which looks exactly like that step not being due yet. **A HALT resolves to no step set at all** — stop and report, never continue on `default` and never on an empty set:
    - **unknown profile name** → **HALT**, listing the known profiles (`default`, `poc`, `custom`);
    - **unknown step id** in the whitelist → **HALT**, listing the valid ids from the catalogue. Deliberately a *different* message from the one above: a typo in a step id and a profile that does not exist are not the same mistake, and one generic message sends the reader to the wrong file. A typo must never resolve to "disabled";
    - **no `whitelist` key** under `custom` → **HALT**: `custom` requires one. Deliberately a different message from the next line — "you wrote none" is not "you wrote an empty one", and one message sends the reader hunting for a line their file does not have;
@@ -184,6 +184,8 @@ Read the following files and classify each as **populated** or **template**:
 | --- | --------------------------------------------------------- | ----------------- | -------------------------------- |
 | 1   | PRD.md is template                                        | `/specify-prd`    | Product vision must come first   |
 | 2   | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap`      | Project needs foundational setup |
+
+**Profile filter**: both rows above are subject to the enabled step set resolved in Step 0.5 (row 1 → `specify-prd`, row 2 → `bootstrap`) — a row whose step is disabled is skipped, never proposed, and evaluation continues at the next row. Stated here as well as under Step 3 because the filter is not a Step 3 rule: Step 0.5 carries the set into Steps 2–5.
 
 If any of the above matched, output the suggestion and stop.
 

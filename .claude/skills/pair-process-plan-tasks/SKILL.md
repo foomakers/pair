@@ -70,8 +70,8 @@ Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-
 
 ### Step 2.5: Context Mapping (scoped)
 
-1. **Check**: Is `/pair-capability-map-contexts` installed?
-2. **Skip**: If not installed → warn and proceed to Step 3 without context mapping.
+1. **Check**: Is `/pair-capability-map-contexts` installed, and is `define-bounded-contexts` enabled by the project's process profile?
+2. **Skip**: If not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) → skip with a note and proceed to Step 3 without context mapping. A composed disabled step never prompts.
 3. **Act**: Compose `/pair-capability-map-contexts` with `$scope` set to the bounded contexts/services touched by this story (from Step 2's mapping) — not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only.
 4. **Verify**: Bounded context catalog delta (if any) approved by developer. Task breakdown always proceeds to Step 3 regardless of the context-mapping outcome.
 
@@ -165,6 +165,7 @@ TASK BREAKDOWN COMPLETE:
 
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the task breakdown content, ask developer to update manually) for the standard scenarios. Additional cases:
 
+- **`/pair-capability-map-contexts` not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)** (Step 2.5): the task breakdown is still produced; context mapping is skipped with a note, never a HALT.
 - If adoption files (architecture, tech-stack, bounded contexts) are not found, skip technical context alignment and warn.
 
 ## Notes

@@ -68,6 +68,8 @@ const PROCESS_PROFILES_FILE =
   'dataset/.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md'
 const HOW_TO_DIR = 'dataset/.pair/knowledge/how-to'
 export const WOW_TEMPLATE_FILE = 'dataset/.pair/adoption/tech/way-of-working.md'
+/** This repo's OWN adoption file — the one `/next` resolves when run here. */
+export const REPO_WOW_FILE = '../../.pair/adoption/tech/way-of-working.md'
 const AGENTS_FILE = 'dataset/AGENTS.md'
 // The installed skills mirror, relative to the knowledge-hub package root.
 const MIRROR_SKILLS_DIR = join('..', '..', '.claude', 'skills')
@@ -89,8 +91,25 @@ const PROFILE_PROSE_FILES = [
   WOW_TEMPLATE_FILE,
   '../../apps/website/content/docs/concepts/adoption-files.mdx',
   '../../apps/website/content/docs/reference/pair-next.mdx',
-  '../../.pair/adoption/tech/way-of-working.md',
+  REPO_WOW_FILE,
 ]
+
+/**
+ * The shipped way-of-working files read as DECLARATIONS — the whole document
+ * through the real resolver, not merely swept for fenced examples.
+ *
+ * Round 7 Minor: only the template was read this way. This repo's own adoption
+ * file was in the sweep list above and nowhere else, and its `## Process Profile`
+ * section carries no fenced example — so ZERO checks applied to the one thing
+ * that matters about it. `` - `profile`: `pocc` `` under that heading shipped
+ * `PASS — 44 skills conformant`, exit 0, while every `/next` run in this repo
+ * HALTed on `unknown process profile \`pocc\``. A file the PASS line names as
+ * checked is read as what it is: a declaration.
+ *
+ * A docs `.mdx` page is deliberately NOT here — its prose is not a declaration
+ * anyone resolves, only its fenced examples are, and those the sweep covers.
+ */
+const PROFILE_DECLARATION_FILES = [WOW_TEMPLATE_FILE, REPO_WOW_FILE]
 
 const KB_PROSE_FILES = [
   'dataset/.pair/knowledge/way-of-working.md',
@@ -1694,9 +1713,19 @@ const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
  * The key must be BACKTICKED here, unlike on a bullet: without a list marker that is
  * the only signal separating a declaration from a sentence mentioning the key. Such
  * a line is DETECTED (it lands in `unreadable`, and HALTs) rather than skipped as
- * invisible text — skipping it is the silent widening one more time, and both shapes
- * are plausible reads of the schema (the `| profile | … |` table row, and a numbered
- * list of "the two keys").
+ * invisible text — skipping it is the silent widening one more time, and the shape is
+ * a plausible read of the schema: a numbered list of "the two keys", or the key
+ * copied out of a fenced example without carrying its bullet along.
+ *
+ * A documentation TABLE row (`| \`profile\` | \`poc\` | … |`) is deliberately NOT
+ * matched, and provably cannot be: the pattern is `^`-anchored on the key and wants a
+ * `:` immediately after it, while a table row opens on `|` and separates its cells
+ * with `|`. That exclusion is load-bearing rather than incidental — the shipped
+ * adoption template and the KB schema both document these keys in a table inside or
+ * beside the section, so matching that row would make the shipped template HALT and
+ * the gate go red on its own files. A table row is documentation, never a declaration
+ * (pinned by a unit case). Round 7 Minor: this comment used to claim the table row as
+ * a motivating shape the pattern covers — it never did, and must not.
  */
 const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/
 
@@ -1877,15 +1906,41 @@ function recordKeyLine(keys: SectionKeys, declared: ProfileKeyLine, indented: bo
   else keys.whitelist = values
 }
 
-export interface ProfileResolution {
+/** A declaration this reader COULD read — the only arm that carries a step set. */
+export interface ResolvedProfile {
+  ok: true
   /** The profile actually in force (`default` when nothing is declared). */
   profile: string
   /** Enabled step ids — the whole catalogue under `default`. */
   enabled: string[]
-  /** Conditions that must stop the run: a typo must never silently disable a step. */
-  halts: string[]
   /** Inconsistencies reported with their minimal fix, never silently repaired. */
   warnings: string[]
+}
+
+/**
+ * A declaration this reader could NOT read. It carries **no** step set, and that
+ * is the point of the split.
+ *
+ * Round 7 Questions: every HALT path used to return `enabled: allIds` alongside
+ * its messages. Today's callers all read `halts` first, so nothing was broken —
+ * but the TYPE made this module's own worst failure representable: a caller
+ * reading `resolution.enabled` without checking `resolution.halts` got the whole
+ * 12-step process on a project whose declaration was unreadable, which is the
+ * silent WIDENING every HALT message here argues against. Returning `[]` instead
+ * would only trade it for the narrowing direction. There is no honest step set
+ * behind an unreadable declaration, so the union does not offer one.
+ */
+export interface HaltedProfile {
+  ok: false
+  /** Conditions that must stop the run: a typo must never silently disable a step. */
+  halts: string[]
+}
+
+export type ProfileResolution = ResolvedProfile | HaltedProfile
+
+/** Everything a caller must surface about a resolution: its HALTs, or its warnings. */
+export function profileProblems(resolution: ProfileResolution): string[] {
+  return resolution.ok ? resolution.warnings : resolution.halts
 }
 
 /** A `whitelist` with no `profile`: it applies to `custom` alone, so it never binds. */
@@ -1967,16 +2022,11 @@ export function resolveProcessProfile(
 ): ProfileResolution {
   const allIds = entries.map(e => e.id)
   const known = [...Object.keys(builtIns), 'custom']
-  const halt = (...messages: string[]): ProfileResolution => ({
-    profile: 'default',
-    enabled: allIds,
-    halts: messages,
-    warnings: [],
-  })
-  const resolved = (profile: string, enabled: string[]): ProfileResolution => ({
+  const halt = (...messages: string[]): HaltedProfile => ({ ok: false, halts: messages })
+  const resolved = (profile: string, enabled: string[]): ResolvedProfile => ({
+    ok: true,
     profile,
     enabled,
-    halts: [],
     warnings: prerequisiteWarnings(enabled, entries),
   })
 
@@ -1987,7 +2037,7 @@ export function resolveProcessProfile(
   if (!declaration.present || declaration.profile === null) {
     if (declaration.present && declaration.whitelist !== null)
       return halt(WHITELIST_WITHOUT_PROFILE)
-    return { profile: 'default', enabled: allIds, halts: [], warnings: [] }
+    return { ok: true, profile: 'default', enabled: allIds, warnings: [] }
   }
 
   const name = declaration.profile
@@ -2013,8 +2063,8 @@ export function resolveProcessProfile(
 function resolveCustomWhitelist(
   whitelist: string[] | null,
   allIds: string[],
-  halt: (message: string) => ProfileResolution,
-  resolved: (profile: string, enabled: string[]) => ProfileResolution,
+  halt: (message: string) => HaltedProfile,
+  resolved: (profile: string, enabled: string[]) => ResolvedProfile,
 ): ProfileResolution {
   // NO key at all and an EMPTY one are two different mistakes, exactly as an
   // unknown step id and an unknown profile name are: one sends the reader to write
@@ -2161,16 +2211,15 @@ export function checkShippedProfileProse(
   builtIns: Record<string, ProfileWhitelist>,
 ): string[] {
   const errors: string[] = []
-  const wowPath = join(proseRoot, WOW_TEMPLATE_FILE)
-  if (existsSync(wowPath)) {
+  for (const file of PROFILE_DECLARATION_FILES) {
+    const path = join(proseRoot, file)
+    if (!existsSync(path)) continue
     const wow = resolveProcessProfile(
-      parseWowProfileSection(readFileSync(wowPath, 'utf-8')),
+      parseWowProfileSection(readFileSync(path, 'utf-8')),
       entries,
       builtIns,
     )
-    for (const problem of [...wow.halts, ...wow.warnings]) {
-      errors.push(`${WOW_TEMPLATE_FILE}: ${problem}`)
-    }
+    for (const problem of profileProblems(wow)) errors.push(`${file}: ${problem}`)
   }
 
   for (const file of PROFILE_PROSE_FILES) {
@@ -2185,9 +2234,7 @@ export function checkShippedProfileProse(
       // `default` accepts no whitelist at all, so the label contradicted the
       // message and pointed a maintainer at the wrong fence.
       const at = `worked example #${i + 1} (\`${declaration.profile ?? 'no profile'}\`)`
-      for (const problem of [...r.halts, ...r.warnings]) {
-        errors.push(`${file}: ${at}: ${problem}`)
-      }
+      for (const problem of profileProblems(r)) errors.push(`${file}: ${at}: ${problem}`)
     })
   }
   return errors
@@ -2247,7 +2294,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, shipped way-of-working template + every shipped worked example (KB schema, adoption template, docs site, this repo's own way-of-working), manual-path entrypoint)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint)`,
     )
     process.exit(0)
   } else {
