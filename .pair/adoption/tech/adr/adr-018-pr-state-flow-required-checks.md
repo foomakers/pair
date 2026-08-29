@@ -304,6 +304,17 @@ still the design; this amendment layers a credential resolution step and one ado
   re-invocation, so a re-review on an unchanged head is a new identity action: skipping from Step 5.4 straight
   past Step 5.4b would leave an identity `APPROVE` with no paired audit comment and no `Light row:` line — the
   reason no longer reconstructable from the PR, which is the property the audit exists to guarantee.
+- **The audit comment follows the review, and the HALT does not undo the review.** Every input the comment
+  renders (action, tag, declaration, tier, state) is resolved before the review is submitted, so the order is a
+  choice: the comment is posted **after** because it attributes an action that has happened, and the reverse
+  order would leave a permanent comment claiming an `APPROVE` the host may then refuse (`422` self-authored,
+  `403` mid-write) on a PR carrying no such review. The residual the chosen order carries, recorded rather than
+  assumed away: the two writes are both HALT-bound and seconds apart, and a `403` on the second does not roll
+  the first back — an `identity`-mode `APPROVE` authorized by the light row stays on a `ready-to-merge` PR with
+  no paired audit comment, mergeable with no human action wherever `required_approving_review_count >= 1`. It is
+  **loud, not silent**: the run HALTs and reports it as the fifth `Light row:` value
+  (`audit comment NOT POSTED (<host error>) — HALT, the APPROVE stands`), the one documented exception to
+  "every identity review is paired with its audit comment".
 - **The PR-state synthesis is unconditional.** `resolve_pr_state` is called once per review, in its own step,
   in **both modes that continue (`session` and `identity`) and for every verdict** — `halt` ends the review
   before any host write, so it is not a third case. Step 5.4 publishes exactly one `pr-state:*` label on every
