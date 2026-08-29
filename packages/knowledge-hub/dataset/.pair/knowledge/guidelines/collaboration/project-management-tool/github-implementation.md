@@ -853,20 +853,31 @@ Recommended because it is the only form that unlocks the Checks API, and because
    #    which points the operator of the one-credential pipeline — the likeliest
    #    misconfiguration, and the one this probe exists for — at App grants that are
    #    correct, with nothing in the trail naming authorship.
-   PR_AUTHOR="$(gh pr view "$PR" --json author -q .author.login)"
-   case "$PR_AUTHOR" in
-     "app/${APP_SLUG:-}" | "${APP_SLUG:-}[bot]")
-       echo "review-identity: the identity ($PR_AUTHOR) is this pull request's AUTHOR — not a grant problem. See § Dedicated review identity, MANDATORY for BOTH forms: the review identity must not be an account that opens pull requests in this repository." >&2
-       PERMS_OK=0
-       ;;
-   esac
+   #    AN UNREADABLE AUTHOR IS NOT "NOT THE AUTHOR". If the read fails (network, a wrong
+   #    $PR, a token that cannot read the pull request) $PR_AUTHOR is empty, the `case`
+   #    matches neither shape, and a silent pass would let the one-credential pipeline —
+   #    the likeliest misconfiguration, and the one this probe exists for — reach the
+   #    native review and meet `422 Can not request changes on your own pull request`
+   #    mid-write, the expensive diagnosis this probe promises to prevent. Unknown
+   #    authorship is unknown health, exactly as an unset $APP_SLUG is below.
+   if ! PR_AUTHOR="$(gh pr view "$PR" --json author -q .author.login)" || [ -z "$PR_AUTHOR" ]; then
+     echo "review-identity: the pull request's author could not be read, so the author comparison could not run — unknown authorship is unknown health. Not a grant problem: check \$PR and the token's access to this pull request." >&2
+     PERMS_OK=0
+   else
+     case "$PR_AUTHOR" in
+       "app/${APP_SLUG:-}" | "${APP_SLUG:-}[bot]")
+         echo "review-identity: the identity ($PR_AUTHOR) is this pull request's AUTHOR — not a grant problem. See § Dedicated review identity, MANDATORY for BOTH forms: the review identity must not be an account that opens pull requests in this repository." >&2
+         PERMS_OK=0
+         ;;
+     esac
+   fi
    if [ -z "${APP_SLUG:-}" ]; then
      echo "review-identity: \$APP_SLUG is unset, so the author comparison could not run — unknown authorship is unknown health. Capture the slug at mint time (step 4: GET /app is a JWT endpoint)." >&2
      PERMS_OK=0
    fi
    ```
 
-   **A `403`/`422` met MID-WRITE is a HALT, not a fallback.** These probes make that rare, not impossible (a grant can be revoked between the probe and the write). If any identity write in the flow is refused, report it against the artifact that failed, stop, and point at this section — never retry with the session token, and never publish `pair-review` as though the review had landed.
+   **A `403`/`422` met MID-WRITE is a HALT, not a fallback.** These probes make that rare, not impossible (a grant can be revoked between the probe and the write). If any identity write in the flow is refused, report it against the artifact that failed, stop, and point at this section — never retry with the session token, and never publish `pair-review` as though the review had landed. **The one exception is the `pair-review` publication itself**: a refusal there is reported `pair-review: NOT PUBLISHED — advisory` and the flow continues (the consumer skills' Graceful Degradation), since the verdict still lives in the native review and enforcement is simply advisory until publication works.
 
 7. **Publish `pair-review` as a check run** on the App path (the commit-status form stays exactly as documented above for every other path):
 
@@ -910,11 +921,19 @@ Recommended because it is the only form that unlocks the Checks API, and because
    #     configured. So the vocabulary is checked by the adapter (one source, no drift with
    #     `review_identity_exclusion_ok` / `pair_review_publication_mode`), and only a
    #     genuinely ABSENT key becomes `none`.
-   if ! review_identity_kind_ok "$IDENTITY_KIND"; then
-     if [ "$IDENTITY_KEY_PRESENT" = 1 ]; then
+   #     ORDER THE CHECK ON PRESENCE, not on the value. On the DEFAULT path — the key
+   #     genuinely absent, every project that has not opted in — the extraction is empty,
+   #     and calling the validator with it prints its own HALT-flavoured diagnostic
+   #     ("`empty` is not a Review identity value … HALT and fix the key") before the
+   #     fallback assigns `none`: an alarming, contradicted line in the trail of every
+   #     review and every publish on a correctly configured repository, naming a key the
+   #     project deliberately does not have. The validator is for a key that IS there.
+   if [ "$IDENTITY_KEY_PRESENT" = 1 ]; then
+     if ! review_identity_kind_ok "$IDENTITY_KIND"; then
        echo "review-identity: $WOW carries a 'Review identity' key whose value does not parse — configured-but-unusable, HALT (never 'none'). Write it as the shipped bullet: - **Review identity**: \`app\` — see this section." >&2
        exit 1
      fi
+   else
      IDENTITY_KIND=none
    fi
    # 2. IDENTITY_CONFIGURED — 1 for any value other than `none`.
@@ -1014,7 +1033,15 @@ case "$PERM" in write | admin) PERMS_OK=1 ;; esac
 # were observed", so a silent zero here makes `review_identity_health` emit the grant-shaped
 # diagnostic for an authorship problem — sending the operator to re-inspect permissions that
 # are correct, with nothing in the trail naming the actual cause.
-if [ "$ACTING" = "$(gh pr view "$PR" --json author -q .author.login)" ]; then
+# AN UNREADABLE AUTHOR IS NOT "NOT THE AUTHOR" either: a failed or empty read used to
+# compare unequal and pass, so the one-credential pipeline (the bot publishes the PR and is
+# declared `Review identity: bot-user`) plus a transient author read resolved HEALTHY and
+# HALTed mid-review on the host's `422 Can not request changes on your own pull request`.
+# Unknown authorship is unknown health, and it names itself like every other cause here.
+if ! PR_AUTHOR="$(gh pr view "$PR" --json author -q .author.login)" || [ -z "$PR_AUTHOR" ]; then
+  echo "review-identity: the pull request's author could not be read, so the author comparison could not run — unknown authorship is unknown health. Not a grant problem: 'gh api user' answered '$ACTING'. Check \$PR and this PAT's access to the pull request." >&2
+  PERMS_OK=0
+elif [ "$ACTING" = "$PR_AUTHOR" ]; then
   echo "review-identity: the identity ($ACTING) is this pull request's AUTHOR — not a grant problem. See § Dedicated review identity, MANDATORY for BOTH forms: the review identity must not be an account that opens pull requests in this repository." >&2
   PERMS_OK=0
 fi
