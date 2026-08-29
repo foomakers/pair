@@ -1297,7 +1297,15 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
   })
 
   it('FAILS when the template’s `poc` example names a profile that does not exist', () => {
-    const corrupted = shippedTemplate.replace('- `profile`: `poc`', '- `profile`: `pocc`')
+    // Anchored on the FENCE, not on the bare key line: the template's prose
+    // mentions the same line, and a first-occurrence replace corrupted that
+    // sentence instead of the worked example — leaving the example intact and the
+    // test green whatever the gate did (found while adding the round-9 case bullet
+    // one line above it).
+    const corrupted = shippedTemplate.replace(
+      /```text\n- `profile`: `poc`\n```/,
+      '```text\n- `profile`: `pocc`\n```',
+    )
     expect(corrupted).not.toBe(shippedTemplate)
     expect(check(corrupted).join('\n')).toContain('unknown process profile')
   })
@@ -1957,6 +1965,76 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
 
   it('leaves a blockquoted key inside a fence an example', () => {
     const r = resolve('## Process Profile\n\n```text\n> - `profile`: `poc`\n```\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 9 Minor: key detection was CASE-SENSITIVE while the HEADING one level up
+  // is not — so `- `Profile`: `poc`` was read by nothing and reported by nothing:
+  // `default`, all 12 catalogue steps, zero halts, zero warnings, byte-identical to
+  // writing nothing. The heading immediately above the key is Title Case
+  // (`## Process Profile`), so mirroring its case into the key is the same class of
+  // author error as copying the table's bare key spelling, which this reader already
+  // handles. Case belongs to DETECTION (the key's spelling), which is loose; the
+  // VALUE stays strict, so `` `POC` `` still HALTs as an unknown profile.
+  it.each([
+    ['Title Case', 'Profile'],
+    ['upper case', 'PROFILE'],
+    ['mixed case', 'pRoFiLe'],
+  ])('reads a `profile` key spelled in %s as the key', (_, spelling) => {
+    const r = resolve(`## Process Profile\n\n- \`${spelling}\`: \`poc\`\n`)
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  // The second arm of the same finding, and the worse one: the key WAS invisible,
+  // so `custom` HALTed with "declares no `whitelist`" about a line visibly in the
+  // file — the very anti-pattern the schema writes down ("one message sends the
+  // reader hunting for a line their file does not have").
+  it('reads a case-variant `whitelist` key rather than HALTing about a line that is there', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n- `Whitelist`: `implement`\n')
+    expect(r.halts).toEqual([])
+    expect(r.enabled).toEqual(['implement'])
+  })
+
+  it('counts a case-variant repeat of a key as the SAME key declared twice', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n- `Profile`: `custom`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expectNoStepSet(r)
+  })
+
+  // Detection is case-insensitive on the rejected shapes too — otherwise a
+  // case-variant key on an off-marker or inside a blockquote reopens the same
+  // silent widening one shape lower down. The HALT names the CANONICAL spelling.
+  it.each([
+    ['no bullet at all', '`Profile`: `poc`'],
+    ['an ordered-list marker', '1. `PROFILE`: `poc`'],
+    ['a blockquote', '> - `Profile`: `poc`'],
+  ])('HALTs on a case-variant key written with %s', (_, line) => {
+    const r = resolve(`## Process Profile\n\n${line}\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expect(r.halts[0]).not.toContain('`Profile`')
+    expectNoStepSet(r)
+  })
+
+  // The asymmetry the split rests on, pinned in both directions: the KEY's case is
+  // detection (loose), the VALUE's is acceptance (strict).
+  it('still HALTs on a case-variant VALUE — acceptance stays strict', () => {
+    const r = resolve('## Process Profile\n\n- `Profile`: `POC`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('unknown process profile `POC`')
+    expectNoStepSet(r)
+  })
+
+  // A case-variant key must not turn a documentation table row into a declaration
+  // either: the shipped template and the KB schema head their column `Key`, and
+  // `| \`Profile\` | \`poc\` |` is as writable as the lowercase row already ruled out.
+  it('still reads a case-variant documentation TABLE row as documentation', () => {
+    const r = resolve(
+      '## Process Profile\n\n| Key | Value |\n| --- | --- |\n| `Profile` | `poc` |\n',
+    )
     expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })

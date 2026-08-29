@@ -253,6 +253,18 @@ describe('profile schema — built-in profiles and their normative error cases',
     expect(lower).toMatch(/documentation is never configuration|no declaration, and no halt/)
   })
 
+  // Round 9: the key's SPELLING is case-insensitive, its VALUE is not. Undocumented,
+  // the rule was also unimplemented — `- `Profile`: `poc`` resolved to `default` with
+  // all twelve steps and nothing reported, while the heading one line above it is
+  // matched case-insensitively for exactly the reason stated there.
+  it('states that a key is detected whatever its CASE, and its value is not', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/case-insensitiv|whatever its case|regardless of case/)
+    // In the error table, as its own row — and the one row whose outcome is not a HALT.
+    expect(profilesSource).toMatch(/CASE[^|]*\|\s*\*\*read/)
+    expect(lower).toMatch(/value|`poc`/)
+  })
+
   it('states that a step id repeated in a whitelist HALTs rather than being deduped', () => {
     expect(profilesSource).toMatch(/MORE THAN ONCE\*\* in a whitelist[^|]*\|\s*\*\*HALT/)
     expect(profilesSource.toLowerCase()).toMatch(/never deduped|not deduped/)
@@ -439,6 +451,14 @@ describe('way-of-working — the `## Process Profile` adoption section', () => {
     expect(lower).toMatch(/twice/)
   })
 
+  // Round 9: the template's own key column is headed `Key` in Title Case, which is
+  // where the mirrored spelling comes from — so the case rule is stated where it is
+  // read.
+  it('tells an author the key is read whatever its case, and the value is not', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    expect(section.toLowerCase()).toMatch(/case-insensitiv|whatever its case|regardless of case/)
+  })
+
   it('points at the KB schema rather than restating it', () => {
     const section = sectionBetween(template, '## Process Profile', '\n## ')
     expect(section).toContain('process-profiles.md')
@@ -522,6 +542,15 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     const lower = section.toLowerCase()
     expect(lower).toMatch(/blockquote/)
     expect(lower).toMatch(/table row/)
+  })
+
+  // Round 9: the executing reader carries the same rule — a case-variant KEY is the
+  // key, a case-variant VALUE is not the value.
+  it.each(sources)('%s: reads a key whatever its case, and a value strictly', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/case-insensitiv|whatever its case|regardless of case/)
+    expect(lower).toMatch(/`profile`|`whitelist`/)
   })
 
   it.each(sources)('%s: HALTs on a step id named more than once', (_, content) => {

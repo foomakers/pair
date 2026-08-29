@@ -1703,8 +1703,18 @@ export function profileSectionProblems(content: string): string[] {
  * so `+ \`profile\`: \`poc\`` — a valid list item in the exact shape the schema
  * prescribes — resolved to `default` with every step re-enabled, zero halts, zero
  * warnings: byte-identical to writing nothing.
+ *
+ * The key's CASE is part of its spelling, so it belongs to detection and the match
+ * is case-insensitive (round 9 Minor; the canonical spelling is restored in
+ * `readProfileKeyLine`, so nothing downstream ever sees a variant). Without the
+ * flag `- \`Profile\`: \`poc\`` was read by nothing and reported by nothing —
+ * `default`, all twelve steps, byte-identical to writing nothing — while the
+ * HEADING one line above it is matched case-insensitively for exactly this reason,
+ * and is itself Title Case (`## Process Profile`), which is where the mirrored
+ * spelling comes from. The VALUE stays strict: `` `POC` `` still HALTs as an
+ * unknown profile name.
  */
-const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
+const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/i
 
 /**
  * A key written with a marker this reader does not accept — no bullet at all, or an
@@ -1726,8 +1736,12 @@ const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
  * the gate go red on its own files. A table row is documentation, never a declaration
  * (pinned by a unit case). Round 7 Minor: this comment used to claim the table row as
  * a motivating shape the pattern covers — it never did, and must not.
+ *
+ * Case-insensitive for the same reason as the accepted shape: detection must not
+ * stop at the key's spelling, or a case variant slips through one shape lower down
+ * into the same silent `default`.
  */
-const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/
+const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/i
 
 /**
  * A key written inside a BLOCKQUOTE, with or without a list marker of its own.
@@ -1749,7 +1763,7 @@ const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitel
  * separating a declaration from a sentence about the key.
  */
 const WOW_PROFILE_KEY_BLOCKQUOTED =
-  /^[ \t]*(?:>[ \t]*)+(?:[-*+][ \t]*|\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/
+  /^[ \t]*(?:>[ \t]*)+(?:[-*+][ \t]*|\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/i
 
 /** An indented code block: four spaces (or a tab) of indent, CommonMark's third form. */
 const INDENTED_CODE = /^(?: {4}|\t)/
@@ -1812,16 +1826,30 @@ interface ProfileKeyLine {
  */
 const DANGLING_SEPARATOR = /[,;]\s*$/
 
+/**
+ * The key as this module names it, whatever case the author spelled it in.
+ *
+ * Detection is case-insensitive (round 9), so the capture may read `Profile`; every
+ * consumer downstream — the duplicate-key COUNTER, the `custom`/`whitelist` checks,
+ * every HALT message — compares and prints the canonical lowercase spelling. Two
+ * lines spelling the same key differently are therefore the same key declared twice,
+ * not two keys.
+ */
+function canonicalKey(captured: string): ProfileKeyLine['key'] {
+  return captured.toLowerCase() as ProfileKeyLine['key']
+}
+
 /** What a single line of the section declares, or `null` when it declares nothing. */
 function readProfileKeyLine(line: string): ProfileKeyLine | null {
   const key = WOW_PROFILE_KEY.exec(line)
   if (!key) {
     const rejected = WOW_PROFILE_KEY_OFF_MARKER.exec(line) ?? WOW_PROFILE_KEY_BLOCKQUOTED.exec(line)
-    return rejected ? { key: rejected[1] as ProfileKeyLine['key'], values: null } : null
+    return rejected ? { key: canonicalKey(rejected[1] as string), values: null } : null
   }
+  const name = canonicalKey(key[1] as string)
   const rest = key[2] as string
   if (DANGLING_SEPARATOR.test(rest)) {
-    return { key: key[1] as ProfileKeyLine['key'], values: null, spilled: true }
+    return { key: name, values: null, spilled: true }
   }
   const values = backticked(rest)
   // What the value grammar did NOT consume: backticked spans and the separators
@@ -1829,7 +1857,7 @@ function readProfileKeyLine(line: string): ProfileKeyLine | null {
   // Checking the RESIDUE rather than `values.length === 0` is what catches a
   // PARTIALLY readable line — the one a hand-edit actually produces.
   const residue = rest.replace(/`[^`]*`/g, '').replace(/[,\s]+/g, '')
-  if (key[1] === 'profile') {
+  if (name === 'profile') {
     // A detected `profile` line with no readable value is never "no profile": that
     // is the silent widening. More than one backticked token is equally unreadable:
     // taking `values[0]` let `- `profile`: `poc` (not `custom`)` resolve to `poc`
