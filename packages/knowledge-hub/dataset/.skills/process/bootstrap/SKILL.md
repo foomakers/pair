@@ -59,7 +59,7 @@ One entry point, two resolution depths. Quick mode is **additive**: a second res
 1. **Check**: Does [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) exist and is it populated (not a template)?
    - A file is a template if it contains `[Product/feature name]` or `[Creation date]`.
 2. **Skip** (populated PRD): Extract project name and key constraints. Move to Phase 1.
-3. **Act** (missing or template): Compose `/specify-prd`.
+3. **Act** (missing or template): Is `specify-prd` **disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)**? Disabled → treat exactly as `/specify-prd` not installed (Graceful Degradation below: HALT at Phase 0, pointing at how-to-01), never a prompt. Otherwise compose `/specify-prd`.
    - Wait for PRD approval before proceeding.
 4. **Verify**: PRD exists and is populated. If not → **HALT**.
 

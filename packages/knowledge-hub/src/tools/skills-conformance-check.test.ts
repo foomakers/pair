@@ -28,6 +28,7 @@ import {
   checkStepCatalogue,
   checkStepMarkers,
   checkStepMarkersInMirror,
+  checkInstalledProfileCorpus,
   checkManualPathEntrypoint,
   extractProfileExamples,
   checkProcessProfiles,
@@ -1044,48 +1045,129 @@ describe('checkStepMarkers', () => {
 
   const entries = [{ id: 'review', howTo: null, executable: '/review', requires: [] as string[] }]
 
+  // The two behavioural clauses of the shipped delta (process-profile-gate.md,
+  // "What stays in the skill") — the sentence an executor actually reads.
+  const CLAUSES =
+    "A **direct** invocation while a step is disabled by the project's profile warns and asks " +
+    'for confirmation; a **composed** one never prompts — it degrades exactly as a step that is ' +
+    'not installed. No section ⇒ no-op.'
+  const delta = (id: string, body = `${CLAUSES} See [gate](process-profile-gate.md).`): string =>
+    `## Process Profile\n\n<!-- process-step: id=${id} -->\n\n${body}\n`
+
   it('passes when the executable declares its id and points at the convention', () => {
-    writeSkill(
-      'process/review',
-      '<!-- process-step: id=review -->\nSee [gate](process-profile-gate.md).\n',
-    )
+    writeSkill('process/review', delta('review'))
     writeSkill('capability/estimate', 'No marker here.\n')
     expect(checkStepMarkers(entries, root)).toEqual([])
   })
 
   it('fails when the executable declares no marker', () => {
-    writeSkill('process/review', 'See [gate](process-profile-gate.md).\n')
+    writeSkill('process/review', `## Process Profile\n\n${CLAUSES} [gate](process-profile-gate.md)`)
     expect(checkStepMarkers(entries, root).join('\n')).toContain('declares no')
   })
 
   it('fails when the declared id disagrees with the catalogue', () => {
-    writeSkill(
-      'process/review',
-      '<!-- process-step: id=implement -->\nSee [gate](process-profile-gate.md).\n',
-    )
+    writeSkill('process/review', delta('implement'))
     expect(checkStepMarkers(entries, root).join('\n')).toContain('maps `/review` to step `review`')
   })
 
   it('fails when neither the skill nor a disclosed sibling points at the gate convention', () => {
-    writeSkill('process/review', '<!-- process-step: id=review -->\nNothing else.\n')
+    writeSkill('process/review', delta('review', 'Nothing else.'))
     expect(checkStepMarkers(entries, root).join('\n')).toContain('points at skill-conventions/')
   })
 
   it('accepts the convention pointer in a DISCLOSED SIBLING (progressive disclosure)', () => {
     // A skill under a byte budget keeps the marker in its entrypoint and discloses
     // its half of the convention to the sibling that already owns that topic.
-    writeSkill('process/review', '<!-- process-step: id=review -->\nSee [more](more.md).\n')
-    writeFileSync(join(root, 'process/review', 'more.md'), 'See [gate](process-profile-gate.md).\n')
+    writeSkill('process/review', delta('review', 'See [more](more.md).'))
+    writeFileSync(
+      join(root, 'process/review', 'more.md'),
+      `${CLAUSES} See [gate](process-profile-gate.md).\n`,
+    )
     expect(checkStepMarkers(entries, root)).toEqual([])
   })
 
   it('fails when an UNCATALOGUED skill carries a marker', () => {
-    writeSkill(
-      'process/review',
-      '<!-- process-step: id=review -->\nSee [gate](process-profile-gate.md).\n',
-    )
+    writeSkill('process/review', delta('review'))
     writeSkill('capability/estimate', '<!-- process-step: id=estimate -->\n')
     expect(checkStepMarkers(entries, root).join('\n')).toContain('is not a catalogued step')
+  })
+
+  // Round 11 Minor: the marker and a `process-profile-gate.md` string anywhere in
+  // the dir were the whole per-skill obligation, so the BEHAVIOURAL sentence — the
+  // only part an executor reads — could be deleted from ten of the twelve deltas
+  // with every gate green (only `refine-story` and `map-subdomains` were pinned,
+  // byte-for-byte, by `process-profile.test.ts`).
+  it('fails when the delta drops the DIRECT warn-and-confirm clause', () => {
+    writeSkill(
+      'process/review',
+      delta(
+        'review',
+        'A **composed** invocation never prompts — it degrades exactly as a step that is not ' +
+          'installed. See [gate](process-profile-gate.md).',
+      ),
+    )
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('never states the DIRECT')
+  })
+
+  it('fails when the delta drops the COMPOSED never-prompt clause', () => {
+    writeSkill(
+      'process/review',
+      delta(
+        'review',
+        "A **direct** invocation while a step is disabled by the project's profile warns and " +
+          'asks for confirmation. See [gate](process-profile-gate.md).',
+      ),
+    )
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('never states the COMPOSED')
+  })
+
+  it('fails when the skill carries the marker but no `## Process Profile` section at all', () => {
+    writeSkill(
+      'process/review',
+      `<!-- process-step: id=review -->\n\n${CLAUSES} [gate](process-profile-gate.md)\n`,
+    )
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('`## Process Profile` section')
+  })
+
+  it('does NOT let the linked CONVENTION itself satisfy the clauses (it is one level up)', () => {
+    // `../../../.pair/knowledge/**/process-profile-gate.md` states both clauses;
+    // resolving through it would make every delta pass by carrying a link.
+    mkdirSync(join(root, 'conv'), { recursive: true })
+    writeFileSync(join(root, 'conv', 'process-profile-gate.md'), `${CLAUSES}\n`)
+    writeSkill('process/review', delta('review', 'See [gate](../../conv/process-profile-gate.md).'))
+    expect(checkStepMarkers(entries, root).join('\n')).toContain('never states the DIRECT')
+  })
+})
+
+// The same finding, run against the file the reviewer corrupted: the REAL
+// `/implement` delta with its behavioural sentence deleted, leaving the marker and
+// the bare pointer — the exact shape that printed `PASS — 44 skills conformant`.
+describe('checkStepMarkers — the REAL /implement delta, stripped', () => {
+  const root = mkdtempSync(join(tmpdir(), 'step-delta-real-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  const real = readFileSync(
+    join(__dirname, '../..', 'dataset/.skills/process/implement/SKILL.md'),
+    'utf-8',
+  )
+  const entries = [
+    { id: 'implement', howTo: null, executable: '/implement', requires: [] as string[] },
+  ]
+  const corpusWith = (content: string): string => {
+    const dir = mkdtempSync(join(root, 'corpus-'))
+    mkdirSync(join(dir, 'process/implement'), { recursive: true })
+    writeFileSync(join(dir, 'process/implement', 'SKILL.md'), content)
+    return dir
+  }
+
+  it('the shipped delta passes', () => {
+    expect(checkStepMarkers(entries, corpusWith(real))).toEqual([])
+  })
+
+  it('the same file with the delta sentence deleted fails', () => {
+    const stripped = real.replace(/A \*\*direct\*\* invocation[\s\S]*?No section ⇒ no-op\. /, '')
+    expect(stripped).not.toBe(real)
+    expect(checkStepMarkers(entries, corpusWith(stripped)).join('\n')).toContain('never states the')
   })
 })
 
@@ -1109,7 +1191,11 @@ describe('checkStepMarkersInMirror', () => {
     write(base, dir, 'SKILL.md', `---\nname: x\ndescription: "x"\n---\n${body}`)
 
   const entries = [{ id: 'review', howTo: null, executable: '/review', requires: [] as string[] }]
-  const good = '<!-- process-step: id=review -->\nSee [gate](process-profile-gate.md).\n'
+  const CLAUSES =
+    "A **direct** invocation while a step is disabled by the project's profile warns and asks " +
+    'for confirmation; a **composed** one never prompts — it degrades exactly as a step that is ' +
+    'not installed. No section ⇒ no-op.'
+  const good = `## Process Profile\n\n<!-- process-step: id=review -->\n\n${CLAUSES} See [gate](process-profile-gate.md).\n`
 
   it('passes when the mirror carries the same marker and a gate pointer', () => {
     skill(dataset, 'process/review', good)
@@ -1131,8 +1217,17 @@ describe('checkStepMarkersInMirror', () => {
 
   it('accepts the gate pointer disclosed to a mirrored SIBLING', () => {
     skill(dataset, 'process/review', good)
-    skill(mirror, 'pair-process-review', '<!-- process-step: id=review -->\nSee [more](more.md).\n')
-    write(mirror, 'pair-process-review', 'more.md', 'See [gate](process-profile-gate.md).\n')
+    skill(
+      mirror,
+      'pair-process-review',
+      '## Process Profile\n\n<!-- process-step: id=review -->\n\nSee [more](more.md).\n',
+    )
+    write(
+      mirror,
+      'pair-process-review',
+      'more.md',
+      `${CLAUSES} See [gate](process-profile-gate.md).\n`,
+    )
     expect(checkStepMarkersInMirror(entries, dataset, mirror)).toEqual([])
   })
 })
@@ -1474,6 +1569,119 @@ describe('checkProcessProfiles', () => {
     expect(errors).toContain('enables no step')
     expect(errors).toContain('misconfiguration')
   })
+})
+
+// Round 11 Major: the gate bound the DATASET copies of the three files the feature
+// rests on and left the GENERATED ones — the copies `/next`, every step skill and
+// every human actually read at runtime — ungoverned. Deleting the `brainstorm` row
+// from `.pair/knowledge/**/step-catalogue.md`, typo-ing `poc`'s first whitelist id
+// in the installed `process-profiles.md`, or replacing the manual-flow profile step
+// in the root `AGENTS.md`/`CLAUDE.md` each printed `PASS — 44 skills conformant`.
+// Fixtures are the REAL files, corrupted exactly as the reviewer corrupted them.
+describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
+  const REPO = join(__dirname, '../..')
+  const SKILLS = join(REPO, 'dataset/.skills')
+  const INSTALLED_KB = '.pair/knowledge/guidelines/technical-standards/ai-development'
+  const DATASET_KB = `dataset/${INSTALLED_KB}`
+
+  const real = (rel: string): string => readFileSync(join(REPO, rel), 'utf-8')
+  const datasetCatalogue = real(`${DATASET_KB}/step-catalogue.md`)
+  const datasetProfiles = real(`${DATASET_KB}/process-profiles.md`)
+  const entries = parseStepCatalogue(datasetCatalogue)
+  const builtIns = parseProcessProfiles(datasetProfiles)
+
+  const DEFAULTS: Record<string, string> = {
+    [`${DATASET_KB}/step-catalogue.md`]: datasetCatalogue,
+    [`${DATASET_KB}/process-profiles.md`]: datasetProfiles,
+    [`../../${INSTALLED_KB}/step-catalogue.md`]: real(`../../${INSTALLED_KB}/step-catalogue.md`),
+    [`../../${INSTALLED_KB}/process-profiles.md`]: real(
+      `../../${INSTALLED_KB}/process-profiles.md`,
+    ),
+    '../../AGENTS.md': real('../../AGENTS.md'),
+    '../../CLAUDE.md': real('../../CLAUDE.md'),
+  }
+
+  const boxes: string[] = []
+  afterAll(() => {
+    for (const b of boxes) rmSync(b, { recursive: true, force: true })
+  })
+
+  const check = (overrides: Record<string, string | null>): string[] => {
+    const box = mkdtempSync(join(tmpdir(), 'installed-corpus-'))
+    boxes.push(box)
+    const root = join(box, 'repo', 'packages', 'knowledge-hub')
+    for (const [rel, content] of Object.entries({ ...DEFAULTS, ...overrides })) {
+      if (content === null) continue
+      const path = join(root, rel)
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, content)
+    }
+    return checkInstalledProfileCorpus(SKILLS, root, entries, builtIns)
+  }
+
+  it('passes on the real installed copies', () => {
+    expect(check({})).toEqual([])
+  })
+
+  it('fails when the installed catalogue LOST a step the dataset ships', () => {
+    const rel = `../../${INSTALLED_KB}/step-catalogue.md`
+    const without = (DEFAULTS[rel] as string)
+      .split('\n')
+      .filter(l => !l.startsWith('| `brainstorm`'))
+      .join('\n')
+    expect(check({ [rel]: without }).join('\n')).toContain('brainstorm')
+  })
+
+  it('fails when an installed `requires` cell drifts from the dataset', () => {
+    const rel = `../../${INSTALLED_KB}/step-catalogue.md`
+    const drifted = (DEFAULTS[rel] as string).replace(
+      /^(\| `review`.*\| )`implement`/m,
+      '$1`plan-tasks`',
+    )
+    expect(drifted).not.toBe(DEFAULTS[rel])
+    expect(check({ [rel]: drifted }).join('\n')).toContain('requires')
+  })
+
+  it('fails when an installed executable is left UNTRANSFORMED', () => {
+    const rel = `../../${INSTALLED_KB}/step-catalogue.md`
+    const untransformed = (DEFAULTS[rel] as string).replace(
+      '`/pair-process-review`',
+      '`/review`            ',
+    )
+    expect(untransformed).not.toBe(DEFAULTS[rel])
+    expect(check({ [rel]: untransformed }).join('\n')).toContain('/pair-process-review')
+  })
+
+  it('fails on a typo in an installed built-in whitelist', () => {
+    const rel = `../../${INSTALLED_KB}/process-profiles.md`
+    // `poc`'s FIRST whitelist id, in the built-in table (the reviewer's corruption).
+    const typo = (DEFAULTS[rel] as string).replace(
+      /^(\| `poc`\s*\|\s*)`specify-prd`/m,
+      '$1`spcify-prd`',
+    )
+    expect(typo).not.toBe(DEFAULTS[rel])
+    expect(check({ [rel]: typo }).join('\n')).toContain('process-profiles.md')
+  })
+
+  it('fails CLOSED when an installed governed file is missing', () => {
+    const rel = `../../${INSTALLED_KB}/step-catalogue.md`
+    expect(check({ [rel]: null }).join('\n')).toContain('not found')
+  })
+
+  it.each(['AGENTS.md', 'CLAUDE.md'])(
+    'fails when the root %s manual flow stops naming the profile',
+    file => {
+      const rel = `../../${file}`
+      const gutted = (DEFAULTS[rel] as string).replace(
+        /^3\. \*\*Check the process profile\*\*.*$/m,
+        '3. **Check something else**: nothing to see here',
+      )
+      expect(gutted).not.toBe(DEFAULTS[rel])
+      const errors = check({ [rel]: gutted }).join('\n')
+      expect(errors).toContain(file)
+      expect(errors).toContain('Process Profile')
+    },
+  )
 })
 
 describe('runChecks — the catalogue is required, not optional', () => {
@@ -2374,5 +2582,27 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     const r = resolve('## Intro\n\n<!-- parked\n\n## Process Profile\n\n- `profile`: `poc`\n')
     expect(r.halts).toHaveLength(1)
     expect(r.halts[0]).toContain('UNTERMINATED')
+  })
+
+  // Round 11 Minor: the section ended only at the next LEVEL-2 heading, so a level-1
+  // one did not terminate it and every key under that `#` was read as still inside
+  // `## Process Profile` — reported as "declares `profile` more than once (2 lines)"
+  // about a section that visibly carries one, sending the author looking for a
+  // duplicate that is not there.
+  it('ends the section at a LEVEL-1 heading too, not only at the next level-2 one', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `poc`\n\n# Other\n\n- `profile`: `custom`\n',
+    )
+    expect(r.halts).toEqual([])
+    expect(r.profile).toBe('poc')
+    expect(r.enabled).toEqual(['brainstorm', 'plan-stories', 'implement'])
+  })
+
+  // The other half of the same predicate, unchanged on purpose (documented at the
+  // level-check HALT): an `###` sub-heading is legitimately INSIDE a section.
+  it('keeps a `###` sub-heading inside the section', () => {
+    const r = resolve('## Process Profile\n\n### The keys\n\n- `profile`: `poc`\n')
+    expect(r.halts).toEqual([])
+    expect(r.profile).toBe('poc')
   })
 })

@@ -75,6 +75,25 @@ const AGENTS_FILE = 'dataset/AGENTS.md'
 const MIRROR_SKILLS_DIR = join('..', '..', '.claude', 'skills')
 
 /**
+ * The GENERATED copies of the same three files — the ones `/next`, every step skill
+ * and every human actually resolve at runtime.
+ *
+ * Round 11 Major: the gate bound the dataset SOURCE of all three and left these
+ * ungoverned, contradicting the rule `checkStepMarkersInMirror` already states for
+ * skills ("the dataset copy is the SOURCE; the mirror is the copy an assistant
+ * actually loads, so it is the binding one"). A half-run `pair update` or a hand
+ * edit gave a `poc` project a HALT on every run (`unknown step id`) or an
+ * ungoverned step, with `skills:conformance` green and its PASS banner naming
+ * these very files as validated.
+ */
+const INSTALLED_KB_ROOT = join('..', '..', '.pair', 'knowledge')
+const INSTALLED_AI_DEV = `${INSTALLED_KB_ROOT}/guidelines/technical-standards/ai-development`
+const INSTALLED_STEP_CATALOGUE_FILE = `${INSTALLED_AI_DEV}/step-catalogue.md`
+const INSTALLED_PROCESS_PROFILES_FILE = `${INSTALLED_AI_DEV}/process-profiles.md`
+/** The root entrypoints a reader with NO skills installed follows (AC8). */
+const ROOT_MANUAL_PATH_FILES = [join('..', '..', 'AGENTS.md'), join('..', '..', 'CLAUDE.md')]
+
+/**
  * Every shipped surface carrying a WORKED EXAMPLE of a profile declaration, read
  * through the real resolver.
  *
@@ -1026,19 +1045,25 @@ export const STEP_GATE_CONVENTION = 'process-profile-gate.md'
  * terminator — so the real declaration was never read and the file silently
  * resolved to `default`. That cross-reference style is in use in the very files
  * this parses (way-of-working: "exactly like `## Git Workflow` above").
+ *
+ * A section STARTS at level 2 and ENDS at level 2 **or level 1**, and the asymmetry
+ * is the point. Round 11 Minor: a `#` heading did not terminate, so everything under
+ * a later top-level section was read as still inside this one — a key there was
+ * reported as "`profile` declared more than once (2 lines)", sending the author to
+ * look for a duplicate inside a section that visibly has none. `###`+ stays INSIDE
+ * (documented at the mis-levelled-heading HALT): a sub-heading is part of its
+ * section, a level-1 heading is a document division above it.
  */
 function sectionOfWhere(content: string, matches: (heading: string) => boolean): string | null {
   const { lines, inFence } = scanProfileDocument(content)
-  const headingAt = (i: number): string | undefined => {
+  const headingAt = (i: number, re: RegExp): string | undefined => {
     if (inFence[i]) return undefined
-    return ATX_LEVEL_TWO.test(lines[i] as string)
-      ? (lines[i] as string).replace(ATX_LEVEL_TWO, '').trim()
-      : undefined
+    return re.test(lines[i] as string) ? (lines[i] as string).replace(re, '').trim() : undefined
   }
 
   let start = -1
   for (let i = 0; i < lines.length; i++) {
-    const h = headingAt(i)
+    const h = headingAt(i, ATX_LEVEL_TWO)
     if (h !== undefined && matches(h)) {
       start = i
       break
@@ -1048,7 +1073,7 @@ function sectionOfWhere(content: string, matches: (heading: string) => boolean):
 
   let end = lines.length
   for (let i = start + 1; i < lines.length; i++) {
-    if (headingAt(i) !== undefined) {
+    if (headingAt(i, ATX_LEVEL_ONE_OR_TWO) !== undefined) {
       end = i
       break
     }
@@ -1301,6 +1326,73 @@ function pointsAtGateConvention(skillsDir: string, dir: string): boolean {
   )
 }
 
+/**
+ * The two BEHAVIOURAL clauses of the delta (process-profile-gate.md, "What stays
+ * in the skill") — the sentence an executor actually reads, as opposed to the
+ * marker, which is what the machine reads.
+ *
+ * Round 11 Minor: the per-skill obligation was the marker plus the string
+ * `process-profile-gate.md` anywhere in the dir, and the sentence itself was pinned
+ * byte-for-byte for two of the twelve (`refine-story`, `map-subdomains`) in
+ * `process-profile.test.ts`. Deleting the whole delta sentence from
+ * `/implement` — dataset AND mirror — left `PASS — 44 skills conformant` and 107
+ * green conformance tests, with the skill's only instruction gone. Matched as
+ * CLAUSES, not as the snippet byte-for-byte: the corpus ships three legitimate
+ * shapes (plain, `$approval`-family, and `brainstorm`'s disclosed half), and a
+ * check that accepts one wording forces the other two to lie.
+ */
+const DELTA_CLAUSES: Array<[string, RegExp[]]> = [
+  ['DIRECT', [/\bdirect\b/i, /\bwarn/i, /confirm|halt/i]],
+  [
+    'COMPOSED',
+    [/compos/i, /never prompts?|never a prompt|no prompt|without prompting/i, /not installed/i],
+  ],
+]
+
+/**
+ * The text the delta obligation is resolved over: the skill's `## Process Profile`
+ * section plus every markdown file it discloses BESIDE it.
+ *
+ * A link that climbs out of the skill dir (`../../../.pair/knowledge/**`) is
+ * excluded on purpose — the convention itself states both clauses, so resolving
+ * through it would let any skill satisfy the check by carrying the pointer it
+ * already has to carry.
+ */
+function deltaText(skillsDir: string, dir: string, content: string): string | null {
+  const section = sectionOfWhere(content, isWowProfileHeading)
+  if (section === null) return null
+  const disclosed = [...section.matchAll(/\]\(([^)#\s]+\.md)\)/g)]
+    .map(m => m[1] as string)
+    .filter(p => !p.startsWith('/') && !p.split('/').includes('..'))
+    .map(p => join(skillsDir, ...dir.split('/'), ...p.split('/')))
+    .filter(existsSync)
+    .map(p => readFileSync(p, 'utf-8'))
+  return [section, ...disclosed].join('\n')
+}
+
+/** The delta half of one skill's obligation: the section, and what it must say. */
+function checkStepDelta(
+  skillsDir: string,
+  dir: string,
+  content: string,
+  entry: StepEntry,
+): string[] {
+  const delta = deltaText(skillsDir, dir, content)
+  if (delta === null) {
+    return [
+      `${dir}/SKILL.md: represents step \`${entry.id}\` but carries no \`## ${WOW_PROFILE_SECTION}\` ` +
+        `section — the marker's own section is where the gate delta lives ` +
+        `(skill-conventions/${STEP_GATE_CONVENTION})`,
+    ]
+  }
+  return DELTA_CLAUSES.filter(([, clauses]) => !clauses.every(c => c.test(delta))).map(
+    ([which]) =>
+      `${dir}/SKILL.md: its \`## ${WOW_PROFILE_SECTION}\` delta never states the ${which} rule — ` +
+      `the marker tells the machine which step this is, the sentence tells the executor what to ` +
+      `do when it is disabled (skill-conventions/${STEP_GATE_CONVENTION})`,
+  )
+}
+
 /** One skill's marker obligations, resolved against the catalogue. */
 function checkOneStepMarker(
   skillsDir: string,
@@ -1340,6 +1432,7 @@ function checkOneStepMarker(
         `and referenced, never re-implemented per skill`,
     )
   }
+  errors.push(...checkStepDelta(skillsDir, dir, content, entry))
   return errors
 }
 
@@ -1468,11 +1561,11 @@ const MANUAL_FLOW_HEADING = 'Quick Start Process'
  * anywhere. Asserted on the SECTION, not the file: a mention parked in an appendix
  * is not an entrypoint.
  */
-export function checkManualPathEntrypoint(content: string): string[] {
+export function checkManualPathEntrypoint(content: string, label = 'AGENTS.md'): string[] {
   const section = sectionOfWhere(content, h => h.includes(MANUAL_FLOW_HEADING))
   if (section === null) {
     return [
-      `AGENTS.md: no \`## ${MANUAL_FLOW_HEADING}\` section — the manual (no-skills) path has no ` +
+      `${label}: no \`## ${MANUAL_FLOW_HEADING}\` section — the manual (no-skills) path has no ` +
         `entrypoint to govern`,
     ]
   }
@@ -1486,7 +1579,7 @@ export function checkManualPathEntrypoint(content: string): string[] {
     .filter(([needle]) => !section.includes(needle))
     .map(
       ([needle, why]) =>
-        `AGENTS.md: the ${MANUAL_FLOW_HEADING} manual flow never ${why} (\`${needle}\`) — a ` +
+        `${label}: the ${MANUAL_FLOW_HEADING} manual flow never ${why} (\`${needle}\`) — a ` +
         `project with no skills installed would follow a how-to guide for a disabled step`,
     )
 }
@@ -1590,8 +1683,11 @@ export interface ProfileDeclaration {
  */
 const ATX_HEADING = /^ {0,3}(#{1,6})[ \t]+(.*)$/
 
-/** The level-2 half of the same rule, used where only `##` starts/ends a section. */
+/** The level-2 half of the same rule, used where only `##` starts a section. */
 const ATX_LEVEL_TWO = /^ {0,3}##[ \t]+/
+
+/** What ENDS a level-2 section: the next one, or the level-1 heading above them. */
+const ATX_LEVEL_ONE_OR_TWO = /^ {0,3}#{1,2}[ \t]+/
 
 /** A setext underline: the CommonMark heading form this reader does NOT accept. */
 const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/
@@ -2351,6 +2447,124 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
   const builtIns = parseProcessProfiles(readFileSync(profilesPath, 'utf-8'))
   errors.push(...checkProcessProfiles(builtIns, entries))
   errors.push(...checkShippedProfileProse(proseRoot, entries, builtIns))
+  errors.push(...checkInstalledProfileCorpus(skillsDir, proseRoot, entries, builtIns))
+  return errors
+}
+
+/** One drifted cell of the installed catalogue, reported in the reader's terms. */
+function catalogueDrift(id: string, what: string, dataset: string, installed: string): string[] {
+  return dataset === installed
+    ? []
+    : [
+        `${INSTALLED_STEP_CATALOGUE_FILE}: step \`${id}\` ${what} is \`${installed}\` in the copy ` +
+          `every reader resolves and \`${dataset}\` in the dataset — the runtime copy is not the ` +
+          `governed one (run \`pair update\`)`,
+      ]
+}
+
+/**
+ * The installed catalogue must be the dataset's, cell for cell — with executables
+ * compared through the REAL `pair update` name transform (`/review` installs as
+ * `/pair-process-review`), never re-implemented here.
+ */
+function compareInstalledCatalogue(
+  dataset: StepEntry[],
+  installed: StepEntry[],
+  skillsDir: string,
+): string[] {
+  const dirs = new Map(collectAllSkillDirs(skillsDir).map(d => [commandOf(d), d]))
+  const byId = new Map(installed.map(e => [e.id, e]))
+  const errors: string[] = []
+  for (const entry of dataset) {
+    const there = byId.get(entry.id)
+    if (there === undefined) {
+      errors.push(
+        `${INSTALLED_STEP_CATALOGUE_FILE}: the installed copy declares no step \`${entry.id}\` — ` +
+          `a step absent from the catalogue every reader resolves is ungoverned there, and no ` +
+          `profile can name it (run \`pair update\`)`,
+      )
+      continue
+    }
+    byId.delete(entry.id)
+    const dir = entry.executable === null ? undefined : dirs.get(entry.executable)
+    const executable = dir === undefined ? entry.executable : `/${installedSkillDir(dir)}`
+    errors.push(...catalogueDrift(entry.id, 'executable', `${executable}`, `${there.executable}`))
+    errors.push(...catalogueDrift(entry.id, 'how-to guide', `${entry.howTo}`, `${there.howTo}`))
+    errors.push(
+      ...catalogueDrift(entry.id, 'requires', entry.requires.join(', '), there.requires.join(', ')),
+    )
+  }
+  for (const id of byId.keys()) {
+    errors.push(
+      `${INSTALLED_STEP_CATALOGUE_FILE}: the installed copy declares step \`${id}\`, which the ` +
+        `dataset does not ship — the runtime copy is not the governed one (run \`pair update\`)`,
+    )
+  }
+  return errors
+}
+
+/** The built-in profiles, name for name and whitelist for whitelist. */
+function compareInstalledProfiles(
+  dataset: Record<string, ProfileWhitelist>,
+  installed: Record<string, ProfileWhitelist>,
+): string[] {
+  const show = (w: ProfileWhitelist | undefined): string =>
+    w === undefined ? 'absent' : w === '*' ? '*' : w.join(', ')
+  const names = [...new Set([...Object.keys(dataset), ...Object.keys(installed)])].sort()
+  return names
+    .filter(name => show(dataset[name]) !== show(installed[name]))
+    .map(
+      name =>
+        `${INSTALLED_PROCESS_PROFILES_FILE}: built-in profile \`${name}\` enables ` +
+        `\`${show(installed[name])}\` in the copy every reader resolves and ` +
+        `\`${show(dataset[name])}\` in the dataset (run \`pair update\`)`,
+    )
+}
+
+/** A generated copy the gate binds and cannot find: never a skip. */
+function missingInstalledFile(file: string): string {
+  return (
+    `${file}: bound by the profile gate but not found — this is the copy every reader resolves ` +
+    `at runtime, so its absence is a step corpus nobody can govern, not a no-op`
+  )
+}
+
+/**
+ * The GENERATED copies, bound to the dataset the same way the skills mirror is.
+ *
+ * Gated on the installed KB tree existing at all: an adopting project's
+ * knowledge-hub has none of it, and `runChecks` is also driven over synthetic
+ * corpora in unit tests. Present ⇒ each governed file inside it is REQUIRED, so a
+ * renamed or half-installed one fails closed instead of reading as clean.
+ */
+export function checkInstalledProfileCorpus(
+  skillsDir: string,
+  proseRoot: string,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): string[] {
+  if (!existsSync(join(proseRoot, INSTALLED_KB_ROOT))) return []
+
+  const errors: string[] = []
+  const read = (file: string): string | null => {
+    const path = join(proseRoot, file)
+    if (existsSync(path)) return readFileSync(path, 'utf-8')
+    errors.push(missingInstalledFile(file))
+    return null
+  }
+
+  const catalogue = read(INSTALLED_STEP_CATALOGUE_FILE)
+  if (catalogue !== null) {
+    errors.push(...compareInstalledCatalogue(entries, parseStepCatalogue(catalogue), skillsDir))
+  }
+  const profiles = read(INSTALLED_PROCESS_PROFILES_FILE)
+  if (profiles !== null) {
+    errors.push(...compareInstalledProfiles(builtIns, parseProcessProfiles(profiles)))
+  }
+  for (const file of ROOT_MANUAL_PATH_FILES) {
+    const content = read(file)
+    if (content !== null) errors.push(...checkManualPathEntrypoint(content, basename(file)))
+  }
   return errors
 }
 
@@ -2472,7 +2686,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles)`,
     )
     process.exit(0)
   } else {
