@@ -241,6 +241,23 @@ describe('profile schema — built-in profiles and their normative error cases',
     expect(profilesSource.toLowerCase()).toMatch(/sublist/)
   })
 
+  // Round 8: the two shapes the schema had no position on. A blockquoted key was
+  // read as neither a declaration nor a problem — the silent widening — while the
+  // table-row exclusion it must be distinguished from was enforced in code and
+  // stated nowhere. Both directions are written down here, together, because the
+  // rule is the distinction and not either half.
+  it('states that a key inside a BLOCKQUOTE HALTs, and a table row does not', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(profilesSource).toMatch(/BLOCKQUOTE[^|]*\|\s*\*\*HALT/)
+    expect(lower).toMatch(/table row/)
+    expect(lower).toMatch(/documentation is never configuration|no declaration, and no halt/)
+  })
+
+  it('states that a step id repeated in a whitelist HALTs rather than being deduped', () => {
+    expect(profilesSource).toMatch(/MORE THAN ONCE\*\* in a whitelist[^|]*\|\s*\*\*HALT/)
+    expect(profilesSource.toLowerCase()).toMatch(/never deduped|not deduped/)
+  })
+
   it('states the CommonMark fence-length rule', () => {
     expect(profilesSource.toLowerCase()).toMatch(/at least as long/)
   })
@@ -410,6 +427,18 @@ describe('way-of-working — the `## Process Profile` adoption section', () => {
     expect(section).toMatch(/whitelist/)
   })
 
+  // Round 8: this template is itself read as a declaration by the gate, and it
+  // documents the two keys in a TABLE — so the shape it must not treat as a
+  // declaration is one of its own, and the shape it must HALT on is one an author
+  // could plausibly write two lines below. Both are stated where they are read.
+  it('tells an author that a blockquoted key HALTs and a table row is documentation', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/blockquote/)
+    expect(lower).toMatch(/table/)
+    expect(lower).toMatch(/twice/)
+  })
+
   it('points at the KB schema rather than restating it', () => {
     const section = sectionBetween(template, '## Process Profile', '\n## ')
     expect(section).toContain('process-profiles.md')
@@ -483,6 +512,23 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     expect(lower).toMatch(/setext/)
     expect(lower).toMatch(/line endings|crlf/)
     expect(lower).toMatch(/code-block forms|examples rather than declarations/)
+  })
+
+  // Round 8: the executing reader carries the same two rules — the blockquote
+  // HALTs, the documentation table row does not, and a repeated step id is never
+  // deduped away.
+  it.each(sources)('%s: HALTs on a blockquoted key but not on a table row', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/blockquote/)
+    expect(lower).toMatch(/table row/)
+  })
+
+  it.each(sources)('%s: HALTs on a step id named more than once', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/named more than once|more than once in the whitelist/)
+    expect(lower).toMatch(/never deduped|not deduped/)
   })
 
   it.each(sources)('%s: HALTs on an empty custom whitelist (AC10)', (_, content) => {
