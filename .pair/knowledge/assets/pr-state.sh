@@ -124,10 +124,21 @@ light_auto_approve_allowed() {
 
   # WHOLE-LABEL match: `lightweight` is not `light`. What "whole" can mean depends on the
   # SHAPE of the read, and each shape carries ITS OWN delimiter — never another shape's:
-  #   one name per LINE (`-q '.labels[].name'`) — EXACT for every label name, because a
-  #   code-host name cannot contain a newline. Split on newlines ALONE: a name may legally
-  #   contain a COMMA (`theme, light`), and translating commas here would cut one whole
-  #   name into two fields and match the tag against a fragment nobody applied.
+  #   one name per LINE (`-q '.labels[].name'`) — EXACT for every label name whenever the
+  #   string ACTUALLY carries a newline: ≥2 labels, or ONE label whose trailing newline the
+  #   caller preserved. A code-host name cannot contain a newline, so that split never cuts
+  #   a name. Split on newlines ALONE: a name may legally contain a COMMA (`theme, light`),
+  #   and translating commas here would cut one whole name into two fields and match the
+  #   tag against a fragment nobody applied.
+  #   RESIDUAL, single label + a comma in its NAME. `LABELS="$(gh pr view <n> --json labels
+  #   -q '.labels[].name')"` strips the trailing newline, so a PR carrying the ONE label
+  #   `theme, light` reaches this function as `theme, light` with NO newline, takes the
+  #   comma branch below and matches on the fragment `light`. Nothing in that string says
+  #   whether the comma delimits two names or belongs to one — the same irrecoverable
+  #   ambiguity as the joined shape. It is not reachable through this row today (a sub-🔴
+  #   tier needs a `risk:*` label, hence a second field and a newline), but a caller that
+  #   supplies the tier from another source meets it: preserve the trailing newline and the
+  #   LINE branch is taken, which is exact.
   #   COMMA-separated — a field is a whole label name, spaces included, so `ui: light theme`
   #   is one label and never the tag. Exact only for names FREE OF COMMAS: once the host
   #   joined the names with commas, a name containing one is indistinguishable from two

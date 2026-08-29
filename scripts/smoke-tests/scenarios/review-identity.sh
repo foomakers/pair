@@ -45,6 +45,7 @@ GITHUB_GUIDE="$DATASET/.pair/knowledge/guidelines/collaboration/project-manageme
 REVIEW="$DATASET/.skills/process/review/SKILL.md"
 PUBLISH_PR="$DATASET/.skills/capability/publish-pr/SKILL.md"
 WOW_TEMPLATE="$DATASET/.pair/adoption/tech/way-of-working.md"
+MERGE_STEP="$DATASET/.skills/process/implement/post-review-merge.md"
 ADR="$REPO_ROOT/.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md"
 RISK_MATRIX="$REPO_ROOT/.pair/adoption/tech/risk-matrix.md"
 
@@ -82,7 +83,7 @@ blocks() { # blocks <description> <labels> <declared> <tier> <state>
 }
 
 for f in "$IDENTITY" "$EVALUATOR" "$TIER_RESOLVER" "$GUIDELINE" "$GITHUB_GUIDE" "$REVIEW" \
-  "$PUBLISH_PR" "$WOW_TEMPLATE" "$ADR" "$RISK_MATRIX"; do
+  "$PUBLISH_PR" "$MERGE_STEP" "$WOW_TEMPLATE" "$ADR" "$RISK_MATRIX"; do
   assert_file "$f" || exit 1
 done
 
@@ -378,6 +379,17 @@ blocks "declared, the LEGACY space-joined shape (ambiguous ⇒ never approves)" 
   "risk:green light" 1 green ready-to-merge
 yields "declared, the tag as the only label (no delimiter, padded)" \
   "  light  " 1 green ready-to-merge
+# ROUND 14. The comma branch is reachable from the LINE read the asset calls EXACT: a PR
+# carrying the ONE label `theme, light` renders as that string with NO newline (command
+# substitution strips the trailing one), so it takes the comma branch, is cut into
+# `theme` + `light` and matches on a fragment nobody applied. Both shapes are pinned: the
+# newline-preserving one is exact, the stripped one is the documented residual.
+ONE_COMMA_NAME='theme, light
+'
+blocks "one comma-carrying label name WITH its trailing newline ⇒ the LINE branch, exact" \
+  "$ONE_COMMA_NAME" 1 green ready-to-merge
+yields "one comma-carrying label name, newline STRIPPED ⇒ documented residual (comma branch)" \
+  "theme, light" 1 green ready-to-merge
 
 # Most restrictive wins: light never bypasses the 🔴 gate, and never invents a tier.
 blocks "declared + tagged + 🔴 (light never applies at red)" "$LIGHT_RED" 1 red ready-to-merge
@@ -534,6 +546,30 @@ JSON
   # And the human path is untouched by the new clause.
   check "a human non-author approval still counts with the identity login set" 1 \
     "$(count_in "$FIXTURE" "$HEAD" pr-author acme-review-bot)"
+  # ROUND 14. The clause is armed by an ENVIRONMENT variable, and only the CI job was ever
+  # told to populate it (`vars.REVIEW_IDENTITY_LOGIN`). The AGENT evaluates the same filter
+  # in Step 5.3 step 2, Step 5.4 step 5 and /implement's post-review merge precondition; in
+  # a shell where it is UNSET the clause reads `.user.login != ""` — true for every account
+  # — so the bot's own APPROVED review (`type: "User"`, cast outside the flow) satisfies the
+  # 🔴 human gate, `resolve_pr_state` answers `ready-to-merge` and `merge_allowed` passes.
+  # UNSET is not the same as set-to-something-else: this asserts the exploit, not a typo.
+  count_unexported() { # count_unexported <fixture> <head> <author>
+    env -u REVIEW_IDENTITY_LOGIN HEAD_SHA="$2" PR_AUTHOR="$3" jq -r "$FILTER" "$1" | grep -c . || true
+  }
+  check "the login clause is INERT when the variable is not exported (the defect)" 1 \
+    "$(count_unexported "$MACHINE_FIXTURE" "$HEAD" some-author)"
+  UNEXPORTED_APPROVALS="$(count_unexported "$MACHINE_FIXTURE" "$HEAD" some-author)"
+  check "…and an unexported filter takes a 🔴 PR to ready-to-merge on a machine approval" \
+    ready-to-merge \
+    "$(resolve_pr_state pass approved red "$([ "$UNEXPORTED_APPROVALS" -ge 1 ] && echo 1 || echo 0)" 2>/dev/null)"
+  # So every AGENT-side evaluation site must mandate the export. The CI job is a different
+  # process and only exists where `Review enforcement` is enabled and protection applied.
+  audit "review Step 5.3 step 2 mandates exporting the login into the evaluating shell" \
+    "$REVIEW" 'REVIEW_IDENTITY_LOGIN` is EXPORTED' 'login clause is inert without it'
+  audit "review Step 5.4 step 5 scopes the login exclusion to an exported variable" \
+    "$REVIEW" 'was exported into the shell that evaluated the filter'
+  audit "the author-side merge precondition mandates the same export" \
+    "$MERGE_STEP" 'REVIEW_IDENTITY_LOGIN` EXPORTED' 'login clause is inert without it'
 else
   log_warn "🔴-predicate assertions skipped — jq not installed"
 fi
@@ -723,6 +759,27 @@ else
     >"$TMP_DIR/wow-prose3.md"
   check "PROSE with the phrase FOLLOWED BY A COLON mid-sentence ⇒ none (never a HALT)" none \
     "$(extract_kind "$TMP_DIR/wow-prose3.md" 2>/dev/null)"
+  # ROUND 14. On the DEFAULT path — the key genuinely absent, i.e. every project that has
+  # not opted in — the read called `review_identity_kind_ok ""` before the fallback assigned
+  # `none`, so the validator printed its HALT-flavoured diagnostic ("'empty' is not a Review
+  # identity value … HALT and fix the key") on EVERY review and EVERY publish of a correctly
+  # configured repository: an alarming, contradicted line naming a key the project
+  # deliberately does not have, against the flow's own `Identity: session`. The check is now
+  # ordered on the PRESENCE flag, so the absent key produces `none` and NOTHING on stderr.
+  kind_stderr() { extract_kind "$1" 2>&1 >/dev/null; }
+  for f in wow-absent wow-prose wow-prose2 wow-prose3; do
+    check "the absent key is silent — no diagnostic on the default path ($f)" "" \
+      "$(kind_stderr "$TMP_DIR/$f.md")"
+  done
+  check "this repo's OWN way-of-working (the default) resolves none, silently" "" \
+    "$(kind_stderr "$REPO_ROOT/.pair/adoption/tech/way-of-working.md")"
+  # ...and the present-but-unparseable key still speaks, loudly.
+  if printf '%s' "$(kind_stderr "$TMP_DIR/wow-nobold.md")" | grep -q 'does not parse'; then
+    log_succ "a PRESENT but unparseable key still names itself before the HALT"
+  else
+    log_fail "the present-but-unparseable HALT lost its diagnostic"
+    FAILED=1
+  fi
   # The adapter owns the vocabulary the guide validates against.
   for k in app user bot-user none; do
     review_identity_kind_ok "$k" 2>/dev/null ||
@@ -764,18 +821,27 @@ app_auth_ok() { # app_auth_ok <repo> <repos in the installation, newline separat
   unset -f gh
   printf '%s' "$AUTH_OK"
 }
+# `__fail__` as the author makes the stubbed read EXIT NON-ZERO (a 404/network failure);
+# the empty string makes it succeed with no login. Both are "the author is unknown".
+app_gh_stub() {
+  gh() {
+    [ "$AUTHOR" = __fail__ ] &&
+      { echo "gh: could not resolve to a PullRequest (HTTP 404)" >&2; return 1; }
+    printf '%s\n' "$AUTHOR"
+  }
+}
 app_author_perms() { # app_author_perms <app-slug> <pr author> — PERMS_OK after probe 3
-  # shellcheck disable=SC2034  # PR is consumed by the shipped lines under eval
-  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1
-  gh() { printf '%s\n' "$AUTHOR"; }
+  # shellcheck disable=SC2034  # PR/PR_AUTHOR are consumed by the shipped lines under eval
+  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1 PR_AUTHOR=
+  app_gh_stub
   eval "$AUTHOR_PROBE" 2>/dev/null || true
   unset -f gh
   printf '%s' "$PERMS_OK"
 }
 app_author_reason() { # app_author_reason <app-slug> <pr author> — probe 3's OWN stderr
-  # shellcheck disable=SC2034  # PR is consumed by the shipped lines under eval
-  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1
-  gh() { printf '%s\n' "$AUTHOR"; }
+  # shellcheck disable=SC2034  # PR/PR_AUTHOR are consumed by the shipped lines under eval
+  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1 PR_AUTHOR=
+  app_gh_stub
   eval "$AUTHOR_PROBE" 2>&1 >/dev/null || true
   unset -f gh
 }
@@ -823,6 +889,23 @@ else
   fi
   check "App author probe: an unrelated author prints no reason" "" \
     "$(app_author_reason acme-review rucka)"
+  # ROUND 14. An UNREADABLE author was treated as "not the author": the `case` matched
+  # neither shape, PERMS_OK stayed 1 and health resolved 1 — while the sibling
+  # unknown-input arm ($APP_SLUG unset) correctly zeroes it. The one-credential pipeline
+  # plus a transient author read then reached the native review and met the host's
+  # `422 Can not request changes on your own pull request`: a mid-write HALT with the
+  # check left pending, the exact outcome this probe promises to prevent.
+  check "App author probe: the author read FAILED ⇒ unknown authorship ⇒ NOT healthy" 0 \
+    "$(app_author_perms acme-review __fail__)"
+  check "App author probe: the author read returned EMPTY ⇒ NOT healthy" 0 \
+    "$(app_author_perms acme-review '')"
+  UNREADABLE_REASON="$(app_author_reason acme-review __fail__)"
+  if printf '%s' "$UNREADABLE_REASON" | grep -qi "author could not be read"; then
+    log_succ "the unreadable author names ITSELF, not a missing grant"
+  else
+    log_fail "the unreadable author fires silently or blames the grants: '$UNREADABLE_REASON'"
+    FAILED=1
+  fi
 fi
 
 # ==============================================================================
@@ -842,7 +925,7 @@ fi
 BOT_PROBE="$(awk '/^ACTING="\$\(gh api user/{f=1} f&&/^```$/{exit} f' "$GITHUB_GUIDE")"
 bot_probe() { # bot_probe <acting login> <repo-variable value> <pr author> [permission]
   # shellcheck disable=SC2034  # REPO/PR are consumed by the shipped lines under eval
-  local REPO=acme/pair PR=1 ACTING= AUTH_OK= PERMS_OK= PERM= RV=
+  local REPO=acme/pair PR=1 ACTING= AUTH_OK= PERMS_OK= PERM= RV= PR_AUTHOR=
   local _acting="$1" _var="$2" _author="$3" _perm="${4:-write}"
   gh() {
     case "$*" in
@@ -856,7 +939,13 @@ bot_probe() { # bot_probe <acting login> <repo-variable value> <pr author> [perm
       printf '%s\n' "$_var"
       ;;
     *collaborators*) printf '%s\n' "$_perm" ;;
-    *) printf '%s\n' "$_author" ;;
+    *)
+      # `__fail__`: the author read itself FAILS (404/network). The empty string is the
+      # other unknown-author shape — a successful read that returns no login.
+      [ "$_author" = __fail__ ] &&
+        { echo "gh: could not resolve to a PullRequest (HTTP 404)" >&2; return 1; }
+      printf '%s\n' "$_author"
+      ;;
     esac
   }
   eval "$BOT_PROBE" 2>/dev/null || true
@@ -865,7 +954,7 @@ bot_probe() { # bot_probe <acting login> <repo-variable value> <pr author> [perm
 }
 bot_probe_reason() { # bot_probe_reason <acting> <repo-variable> <pr author> — the stderr
   # shellcheck disable=SC2034
-  local REPO=acme/pair PR=1 ACTING= AUTH_OK= PERMS_OK= PERM= RV=
+  local REPO=acme/pair PR=1 ACTING= AUTH_OK= PERMS_OK= PERM= RV= PR_AUTHOR=
   local _acting="$1" _var="$2" _author="$3" _perm=write
   gh() {
     case "$*" in
@@ -879,7 +968,13 @@ bot_probe_reason() { # bot_probe_reason <acting> <repo-variable> <pr author> —
       printf '%s\n' "$_var"
       ;;
     *collaborators*) printf '%s\n' "$_perm" ;;
-    *) printf '%s\n' "$_author" ;;
+    *)
+      # `__fail__`: the author read itself FAILS (404/network). The empty string is the
+      # other unknown-author shape — a successful read that returns no login.
+      [ "$_author" = __fail__ ] &&
+        { echo "gh: could not resolve to a PullRequest (HTTP 404)" >&2; return 1; }
+      printf '%s\n' "$_author"
+      ;;
     esac
   }
   eval "$BOT_PROBE" 2>&1 >/dev/null || true
@@ -939,6 +1034,23 @@ else
     log_succ "bot probe names AUTHORSHIP as its own reason, not a missing grant"
   else
     log_fail "bot author check fires SILENTLY: '$BOT_AUTHOR_REASON'"
+    FAILED=1
+  fi
+  # ROUND 14. Same defect as the App probe, and this arm had no unknown-input handling at
+  # all: a FAILED author read compared unequal to $ACTING and passed. The one-credential
+  # pipeline the section calls the likeliest misconfiguration (`acme-bot` publishes the PR
+  # AND is declared `Review identity: bot-user`) plus a transient read then resolved
+  # healthy, mode `identity`, and the host refused the review with `422 Can not request
+  # changes on your own pull request` — a mid-write HALT, check left pending, no review.
+  check "bot probe: the author read FAILED ⇒ unknown authorship ⇒ not usable" 1:0 \
+    "$(bot_probe acme-bot acme-bot __fail__)"
+  check "bot probe: the author read returned EMPTY ⇒ not usable" 1:0 \
+    "$(bot_probe acme-bot acme-bot '')"
+  BOT_UNREADABLE_REASON="$(bot_probe_reason acme-bot acme-bot __fail__)"
+  if printf '%s' "$BOT_UNREADABLE_REASON" | grep -qi "author could not be read"; then
+    log_succ "the bot probe's unreadable author names ITSELF, not a missing grant"
+  else
+    log_fail "the bot probe's unreadable author fires silently: '$BOT_UNREADABLE_REASON'"
     FAILED=1
   fi
 fi

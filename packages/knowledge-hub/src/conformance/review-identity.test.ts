@@ -666,7 +666,7 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     const step = REVIEW.slice(REVIEW.indexOf('### Step 5.3'), REVIEW.indexOf('### Step 5.4b'))
     expect(step).toMatch(/is not one of them/i)
     expect(step).toMatch(/written by the \*\*session token\*\*/)
-    expect(step).toMatch(/The rule is scoped to the three writes the identity performs/)
+    expect(step).toMatch(/The rule is scoped to two of the three writes the identity performs/)
     expect(step).toMatch(/with the session token in every mode/i)
     // and the label's refusal stays the documented non-blocking case, not a HALT
     expect(step).toMatch(/pr-state label: not applied/)
@@ -1534,5 +1534,146 @@ describe('docs site — the feature is documented where readers look', () => {
   it('scopes the comment-form verdict to self-review, not to the whole default mode', () => {
     expect(DOCS_PAGE).toMatch(/when the account running the flow authored the pull request/i)
     expect(DOCS_PAGE).toMatch(/reviewing someone else's pull request/i)
+  })
+})
+
+describe('review round 14 — the fixes for the fourteenth review of PR #466', () => {
+  const MERGE_STEP = read(join(DATASET, '.skills/process/implement/post-review-merge.md'))
+
+  // REGRESSION (review round 14, Major). `human_approval_jq_filter`'s login clause is armed
+  // by an ENVIRONMENT variable, and only ONE of its two consumers was ever told to populate
+  // it: the CI job (`REVIEW_IDENTITY_LOGIN: ${{ vars.REVIEW_IDENTITY_LOGIN }}`). The AGENT
+  // evaluates the same filter at review Step 5.3 step 2, Step 5.4 step 5 and /implement's
+  // post-review merge precondition, in a shell where nothing exports it — so the clause
+  // reads `.user.login != ""`, true for every account, and a `bot-user` identity's own
+  // APPROVED review (type "User", cast outside the flow) counts as the non-author HUMAN
+  // approval: `resolve_pr_state` answers ready-to-merge, `merge_allowed` passes, and a
+  // risk:red PR merges with zero human approval. Measured on the shipped filter, one
+  // APPROVED review by `acme-bot` plus one by `human`, HEAD_SHA=abc PR_AUTHOR=rucka:
+  //   variable UNSET      -> qualifying review ids `1 2`  (the bot's own approval counts)
+  //   variable=acme-bot   -> qualifying review ids `2`
+  // The CI job catches it only where `Review enforcement: enabled` AND branch protection is
+  // applied — not the default, and not pair's own current state.
+  it('every AGENT-side evaluation of the filter mandates exporting REVIEW_IDENTITY_LOGIN', () => {
+    const synth = REVIEW.slice(
+      REVIEW.indexOf('2. **Act — synthesize the PR state, once, here**'),
+      REVIEW.indexOf('3. **Act — resolve whether an APPROVING review is authorized**'),
+    )
+    expect(synth).toMatch(/`REVIEW_IDENTITY_LOGIN` is EXPORTED/)
+    expect(synth).toMatch(/actions\/variables\/REVIEW_IDENTITY_LOGIN/)
+    expect(synth).toMatch(/login clause is inert without it/i)
+    // and the parenthetical that claimed the exclusion unconditionally now scopes it
+    expect(REVIEW).toMatch(/was exported into the shell that evaluated the filter/)
+    // the author-side merge path evaluates the same filter and carries the same mandate
+    expect(MERGE_STEP).toMatch(/`REVIEW_IDENTITY_LOGIN` EXPORTED/)
+    expect(MERGE_STEP).toMatch(/actions\/variables\/REVIEW_IDENTITY_LOGIN/)
+    expect(MERGE_STEP).toMatch(/login clause is inert without it/i)
+    // the behavioral half is executed in smoke: the filter, unexported, on the bot fixture
+    expect(SMOKE).toMatch(/env -u REVIEW_IDENTITY_LOGIN/)
+    expect(SMOKE).toMatch(/the login clause is INERT when the variable is not exported/)
+  })
+
+  // REGRESSION (review round 14, Minor). Two mandated behaviors for ONE event: Step 5.3
+  // step 1 listed the `pair-review` publication among the writes whose mid-write 403/422 is
+  // a HALT, while Step 5.4 step 3 and Graceful Degradation both mandate
+  // `pair-review: NOT PUBLISHED — advisory` and CONTINUE. Concrete: identity mode, App
+  // path, `checks: write` revoked after the probe — the native review lands, the check-run
+  // POST answers 403, and an implementer picks either rule, so two runs of the same flow on
+  // the same event produce different artifacts (one PR labelled + reported, one stopped
+  // with neither). The author's intent is on record as CONTINUE.
+  it('the mid-write HALT excludes the pair-review publication, in both skills', () => {
+    const step = REVIEW.slice(REVIEW.indexOf('### Step 5.3'), REVIEW.indexOf('### Step 5.4b'))
+    expect(step).toMatch(/two of the three writes the identity performs/)
+    expect(step).toMatch(/advisory-continue exception/)
+    // the enumeration no longer names the publication among the HALT-bound writes
+    expect(step).not.toMatch(/scoped to the three writes the identity performs/)
+    // and the review's own HALT-conditions entry carries the same carve-out
+    expect(REVIEW).toMatch(/on the review or the audit comment \(a refused `pair-review`/)
+    // publish-pr repeats the pair verbatim; its step 3 and HALT entry are scoped too
+    expect(PUBLISH_PR).toMatch(
+      /except the `pair-review` publication itself, the documented advisory-continue case/,
+    )
+    expect(PUBLISH_PR).toMatch(/other than the `pair-review` publication/)
+    // …and the host guide's generic statement of the same rule names the exception
+    expect(GITHUB_GUIDE).toMatch(/The one exception is the `pair-review` publication itself/)
+  })
+
+  // REGRESSION (review round 14, Minor). The comma branch splits a label NAME that legally
+  // contains a comma, on input that arrived through the LINE read the same comment calls
+  // exact. `LABELS="$(gh pr view <n> --json labels -q '.labels[].name')"` for a PR carrying
+  // ONE label named `theme, light` strips the trailing newline, so the string reaches the
+  // comma branch, is cut into `theme` + `light`, matches, and the identity signs a native
+  // APPROVE with an audit comment naming a `Tag: light` the PR does not carry. Measured,
+  // declared + green + ready-to-merge: `"theme, light"` -> exit 0, `$'theme, light\n'` ->
+  // exit 1. Not reachable through this row today (a sub-red tier needs a `risk:*` label,
+  // hence a second field and a newline), so what is fixed is the false exactness claim and
+  // the latent trap; both shapes are now pinned in smoke.
+  it('the LINE-form exactness claim is scoped, and the comma-in-a-name residual is stated', () => {
+    expect(EVALUATOR).toMatch(/whenever the\n\s*#\s*string ACTUALLY carries a newline/)
+    expect(EVALUATOR).toMatch(/RESIDUAL, single label \+ a comma in its NAME/)
+    expect(EVALUATOR).toMatch(/strips the trailing newline/)
+    // the unqualified claim the finding measured against is gone
+    expect(EVALUATOR).not.toMatch(/EXACT for every label name, because a/)
+    // and both shapes are EXECUTED against the real asset
+    expect(SMOKE).toMatch(/one comma-carrying label name WITH its trailing newline/)
+    expect(SMOKE).toMatch(/newline STRIPPED ⇒ documented residual/)
+  })
+
+  // REGRESSION (review round 14, Minor). Both authorship probes treated an UNREADABLE
+  // author as "not the author", while the sibling unknown-input arm ($APP_SLUG unset) in
+  // the same block does the opposite. Concrete: `acme-bot` publishes the PR and is declared
+  // `Review identity: bot-user` (the misconfiguration the section calls likeliest), plus a
+  // transient failure of `gh pr view --json author` — health resolved 1, mode `identity`,
+  // and the host refused the native review with `422 Can not request changes on your own
+  // pull request`: a mid-write HALT with the check left pending and no review submitted,
+  // the exact outcome the probe promises to prevent before any host write.
+  it('an unreadable PR author is unknown health, on both probes', () => {
+    const app = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf("# 3. The identity must not be the PR's own AUTHOR"),
+      GITHUB_GUIDE.indexOf('**A `403`/`422` met MID-WRITE is a HALT'),
+    )
+    expect(app).toMatch(
+      /if ! PR_AUTHOR="\$\(gh pr view "\$PR" --json author -q \.author\.login\)" \|\| \[ -z "\$PR_AUTHOR" \]; then/,
+    )
+    expect(app).toMatch(/author could not be read/)
+    expect(app).toMatch(/unknown authorship is unknown health/)
+    // the bot-user twin had no unknown arm at all
+    const bot = GITHUB_GUIDE.slice(GITHUB_GUIDE.indexOf('ACTING="$(gh api user'))
+    expect(bot).toMatch(
+      /if ! PR_AUTHOR="\$\(gh pr view "\$PR" --json author -q \.author\.login\)" \|\| \[ -z "\$PR_AUTHOR" \]; then/,
+    )
+    expect(bot).toMatch(/unknown authorship is unknown health/)
+    // the silent comparison the finding measured is gone
+    expect(GITHUB_GUIDE).not.toMatch(/if \[ "\$ACTING" = "\$\(gh pr view "\$PR" --json author/)
+    // and both are EXECUTED under a stub whose author read fails
+    expect(SMOKE).toMatch(/App author probe: the author read FAILED/)
+    expect(SMOKE).toMatch(/bot probe: the author read FAILED/)
+  })
+
+  // REGRESSION (review round 14, Minor). On the DEFAULT path — the `Review identity` key
+  // genuinely absent, every project that has not opted in — `IDENTITY_KIND` is empty, so
+  // `review_identity_kind_ok ""` was called and its stderr fired before the fallback
+  // assigned `none`: "'empty' is not a Review identity value … HALT and fix the key, never
+  // treat it as 'none'". Every review and every publish on an unconfigured repository
+  // therefore emitted a HALT-flavoured diagnostic naming a key the project deliberately
+  // does not have, contradicting its own `Identity: session` on the one path the design
+  // calls the zero-configuration default.
+  it('the kind validator runs only when the key is present', () => {
+    const read1c = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('# 1c. PRESENT BUT UNPARSEABLE IS NOT `none`'),
+      GITHUB_GUIDE.indexOf('# 2. IDENTITY_CONFIGURED'),
+    )
+    // presence is the OUTER condition; the validator is inside it
+    expect(read1c).toMatch(
+      /if \[ "\$IDENTITY_KEY_PRESENT" = 1 \]; then\n\s*if ! review_identity_kind_ok "\$IDENTITY_KIND"; then/,
+    )
+    expect(read1c).toMatch(/else\n\s*IDENTITY_KIND=none\n\s*fi/)
+    expect(read1c).toMatch(/ORDER THE CHECK ON PRESENCE/)
+    // the value-first order the finding measured is gone
+    expect(read1c).not.toMatch(
+      /if ! review_identity_kind_ok "\$IDENTITY_KIND"; then\n\s*if \[ "\$IDENTITY_KEY_PRESENT" = 1 \]/,
+    )
+    // and the silence is EXECUTED, not asserted: the shipped lines against real fixtures
+    expect(SMOKE).toMatch(/no diagnostic on the default path/)
   })
 })
