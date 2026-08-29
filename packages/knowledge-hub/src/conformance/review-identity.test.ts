@@ -607,6 +607,20 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     // the App's acting login is derivable, and the skill says how
     expect(REVIEW).toMatch(/<app-slug>\[bot\]/)
   })
+
+  // REGRESSION (review round 10). Step 4 instructed the agent to read the author with
+  // `gh pr view --json author -q .author.login` and told it that for an App "that login is
+  // <app-slug>[bot] ... exactly how Dependabot appears in .author.login". It is not: that
+  // read is GraphQL and answers `app/<slug>` (measured — `gh pr view 14276 --repo cli/cli
+  // --json author -q .author.login` ⇒ `app/dependabot`, while `gh api
+  // repos/cli/cli/pulls/14276 --jq .user.login` ⇒ `dependabot[bot]`). An agent following the
+  // instruction computed `self_authored=0` on a PR the identity DID author ⇒ REQUEST_CHANGES
+  // ⇒ `422 Can not request changes on your own pull request`.
+  it('the acting-login comparison names the shape each API actually returns', () => {
+    expect(REVIEW).toMatch(/app\/<app-slug>/)
+    expect(REVIEW).toMatch(/GraphQL/)
+    expect(REVIEW).not.toMatch(/exactly how Dependabot appears in `\.author\.login`/)
+  })
 })
 
 describe('publish-pr — the same adapter governs ITS host writes (AC1, AC4)', () => {
@@ -824,10 +838,16 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(GITHUB_GUIDE).toMatch(
       /gh api \/installation\/repositories --paginate --jq '\.repositories\[\]\.full_name'/,
     )
-    expect(GITHUB_GUIDE).toMatch(/grep -qx "\$REPO" && AUTH_OK=1/)
     expect(GITHUB_GUIDE).not.toMatch(
       /gh api \/installation\/repositories --jq '\.total_count' >\/dev\/null 2>&1 && AUTH_OK=1/,
     )
+    // REGRESSION (review round 10). `grep -qx` reads `$REPO` as a BASIC REGEX. Repository
+    // names routinely contain `.`, so `$REPO=acme/pair.js` matches a listed `acme/pairXjs`
+    // (measured: `printf 'acme/pairXjs\n' | grep -qx 'acme/pair.js'` exits 0, `grep -Fqx`
+    // does not) ⇒ membership asserted on a repository the App was never installed on, and
+    // the FIRST host write 404s into the mid-write HALT this probe exists to rule out.
+    expect(GITHUB_GUIDE).toMatch(/grep -Fqx "\$REPO" && AUTH_OK=1/)
+    expect(GITHUB_GUIDE).not.toMatch(/grep -qx "\$REPO"/)
   })
 
   // REGRESSION (review round 9). Probe 3 assigned `PR_AUTHOR` under the comment "it
@@ -837,7 +857,21 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
   // adopter following the RECOMMENDED App path never met it. One App used as both PR
   // publisher and reviewer therefore passed health and HALTed mid-write on every review.
   it('AC4 — the App author probe GATES, and the setup rule covers both forms', () => {
-    expect(GITHUB_GUIDE).toMatch(/\[ "\$PR_AUTHOR" = "\$\{APP_SLUG:-\}\[bot\]" \] && PERMS_OK=0/)
+    // REGRESSION (review round 10). The round-9 gate was `[ "$PR_AUTHOR" =
+    // "${APP_SLUG:-}[bot]" ]` against an author read with `gh pr view --json author`. That
+    // read goes through GraphQL, where gh renders a Bot actor as `app/<slug>`; `<slug>[bot]`
+    // is the REST shape (`.user.login`). MEASURED:
+    //   gh pr view 14276 --repo cli/cli --json author -q .author.login  ⇒ app/dependabot
+    //   gh api repos/cli/cli/pulls/14276 --jq .user.login               ⇒ dependabot[bot]
+    // The comparison could therefore never be true and the gate was inert: a project using
+    // ONE App both to publish PRs and as `Review identity: app` passed health, ran the whole
+    // review, and got `422 Can not request changes on your own pull request` on the last
+    // step — every review discarded mid-write. Both shapes are compared now.
+    expect(GITHUB_GUIDE).toMatch(
+      /"app\/\$\{APP_SLUG:-\}" \| "\$\{APP_SLUG:-\}\[bot\]"\) PERMS_OK=0 ;;/,
+    )
+    expect(GITHUB_GUIDE).toMatch(/GraphQL and answers\s+#\s+`app\/<slug>`/)
+    expect(GITHUB_GUIDE).toMatch(/app\/dependabot/)
     // the slug is obtainable: `GET /app` is a JWT endpoint, so step 4 captures it
     expect(GITHUB_GUIDE).toMatch(/APP_SLUG=/)
     // and the rule is stated where BOTH forms read it, above the App section
@@ -871,6 +905,33 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     // pair-review was already published — the case the HALT exists to prevent
     expect(GITHUB_GUIDE).toMatch(/pull_requests: WRITE/)
     expect(GITHUB_GUIDE).toMatch(/gh api "repos\/\$REPO\/issues\/comments\/\$CID" -X DELETE/)
+  })
+
+  // REGRESSION (review round 10). This story made `pair-review` DUAL-FORM — a check run on
+  // an `app` identity, a commit status otherwise — resolved independently by publish-pr at
+  // PR creation and by review Step 5.4 later. Nothing reconciled the two forms on one head.
+  // FAILURE: PR #100 is published while `Review identity: none`, so its head carries a
+  // PENDING COMMIT STATUS named `pair-review`; the team then provisions an App and sets
+  // `Review identity: app`; the review of #100 publishes a `success` CHECK RUN of the same
+  // name. One required context, two independent records, and the stale pending status is
+  // cleared by nothing in the flow — if branch protection honours it, #100 is permanently
+  // unmergeable with a manual POST /repos/{owner}/{repo}/statuses/{sha} as the only exit.
+  // The guide already stated this rule for the sibling context `pair-explicit-approval`
+  // ("One producer per required context") and nowhere for this one.
+  it('AC4 — switching `Review identity` with PRs open keeps one producer per context', () => {
+    const shared = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('### Dedicated review identity'),
+      GITHUB_GUIDE.indexOf('#### GitHub App (recommended)'),
+    )
+    expect(shared).toMatch(/CHANGING `Review identity`/)
+    expect(shared).toMatch(/one required context/)
+    // both exits are documented, and the recovery write is a concrete command
+    expect(shared).toMatch(/[Dd]rain/)
+    expect(shared).toMatch(/gh api "repos\/\$REPO\/statuses\/\$HEAD_SHA"/)
+    expect(shared).toMatch(/superseded by the pair-review check run/)
+    // and both publishers carry the rule, since both resolve the form independently
+    expect(PUBLISH_PR).toMatch(/producer per required context/)
+    expect(REVIEW).toMatch(/producer per required context/)
   })
 
   it('the probe snippet is self-contained and declares the artifacts it leaves', () => {
@@ -1021,6 +1082,26 @@ describe('ADR-018 — the amendment records adoption AND the non-changes (AC6)',
 
   it('is honest about what is NOT yet verified on a live host (T11)', () => {
     expect(ADR_018).toMatch(/not\*\* yet observed on a live host|T11/)
+  })
+
+  // REGRESSION (review round 10). The amendment asserted the App-authorship containment as
+  // shipped while naming only the REST login shape, matching a probe that compared the
+  // GraphQL read against it and could never fire.
+  it('names both login shapes in the App-authorship containment', () => {
+    expect(ADR_018).toMatch(/app\/<app-slug>/)
+    expect(ADR_018).toMatch(/<app-slug>\[bot\]/)
+  })
+
+  // REGRESSION (review round 10). `pair-review` is dual-form as of this amendment, and the
+  // form is resolved INDEPENDENTLY by publish-pr (at PR creation) and by review Step 5.4.
+  // A PR opened under `Review identity: none` carries a PENDING COMMIT STATUS named
+  // `pair-review`; switch the project to `app` and the review of that same PR publishes a
+  // CHECK RUN of the same name — two independent producers on one required context, with
+  // the stale pending status cleared by nothing. If branch protection honours it the PR is
+  // permanently unmergeable, recoverable only by a manual POST /statuses/{sha}.
+  it('records the one-producer rule for a Review identity switch with PRs open', () => {
+    expect(ADR_018).toMatch(/one producer/i)
+    expect(ADR_018).toMatch(/drain/i)
   })
 
   it('records the adoption impact of the amendment', () => {
