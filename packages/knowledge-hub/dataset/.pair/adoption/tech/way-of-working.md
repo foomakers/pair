@@ -89,6 +89,8 @@ Optional. **Which process steps this project runs.** **Omitted by default**: pai
 - A **disabled** step is never proposed by `/next`; invoked directly it warns and asks for confirmation; reached as a composition it is skipped exactly like a skill that is not installed. See [process-profile gate](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 - An unknown profile name, an unknown step id and an **empty** whitelist all **HALT** — a typo must never silently disable a step, and an empty whitelist is a misconfiguration, not "everything disabled".
 - Each key is **one line, however long**: a value wrapped onto a second line **HALTs** rather than being read up to the wrap (the ids after it would vanish from every suggestion with nothing reported). If a line-length lint rule objects, exempt the line — do not wrap it.
+- Naming the same step id **twice** in one whitelist **HALTs** as well: it is never deduped in silence, since a repeat is as likely an unfinished edit as a harmless one.
+- **Declare, don't quote.** A key is a plain list item at the top level of this section. On a **blockquote** line (one opening with `>`, even carrying an otherwise perfect key) it **HALTs** — that is a decorated declaration, not a quotation. Inside the **table above** it is neither read nor reported: a table row documents the keys, and documentation is never configuration.
 
 Example — a proof-of-concept team:
 

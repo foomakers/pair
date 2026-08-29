@@ -1566,6 +1566,36 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('`plan-stories`')
   })
 
+  // Round 8 Minor: a repeated id was neither deduped nor reported. The SAME KEY on
+  // two lines HALTs one level up ("only the last is read"), and two values on a
+  // `profile` line HALT — but the same authoring mistake INSIDE a whitelist value
+  // was silently accepted: one typo produced two byte-identical warnings and an
+  // `enabled` list carrying the id twice, so any consumer counting "N steps
+  // enabled" over-counted. HALTing rather than deduping is what the duplicate-key
+  // precedent does, and a repeated id is genuinely ambiguous — the second name may
+  // be a copy-paste that was never edited into the step actually meant.
+  it('a whitelist repeating a step id HALTs naming it, never dedupes it in silence', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`, `implement`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`implement`')
+    expect(r.halts[0]).toContain('once')
+    expect(r.warnings).toEqual([])
+    expectNoStepSet(r)
+  })
+
+  it('names every repeated id once, whatever the repeat count', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n' +
+        '- `whitelist`: `brainstorm`, `implement`, `brainstorm`, `implement`, `brainstorm`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`brainstorm`')
+    expect(r.halts[0]).toContain('`implement`')
+    expect(r.halts[0].match(/`brainstorm`/g)).toHaveLength(1)
+  })
+
   it('an unknown profile name HALTs listing the known profiles — a different message (AC5)', () => {
     const r = resolve('## Process Profile\n\n- `profile`: `pocc`\n')
     expect(r.halts).toHaveLength(1)
@@ -1882,6 +1912,52 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     )
     expect(r.profile).toBe('default')
     expect(r.enabled).toEqual(entries.map(e => e.id))
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 8 Questions: a key inside a BLOCKQUOTE matched neither the accepted-shape
+  // regex (`^\s*[-*+]`, and `>` is not whitespace) nor the off-marker one
+  // (`^[ \t]*`), so the whole declaration was invisible text — `default`, all 12
+  // steps, zero halts, zero warnings, byte-identical to writing nothing. That is the
+  // silent WIDENING direction every other off-shape here HALTs on. The blockquote is
+  // ruled the opposite way from the table row on purpose: a table row is the shape
+  // the shipped template and the KB schema use to DOCUMENT the keys, while
+  // `> - \`profile\`: \`poc\`` is a decorated declaration nothing in this corpus
+  // writes as documentation.
+  it.each([
+    ['a bulleted key inside a blockquote', '> **Note**: PoC subset.\n>\n> - `profile`: `poc`'],
+    ['a bare backticked key inside a blockquote', '> `profile`: `poc`'],
+    ['a key inside a nested blockquote', '>> - `profile`: `poc`'],
+  ])('HALTs on %s instead of resolving to `default`', (_, block) => {
+    const r = resolve(`## Process Profile\n\n${block}\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expect(r.halts[0]).toContain('blockquote')
+    expectNoStepSet(r)
+  })
+
+  it('HALTs on a blockquoted `whitelist` key too', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n\n> - `whitelist`: `implement`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`whitelist`')
+    expect(r.halts[0]).toContain('blockquote')
+  })
+
+  // The other arm of the same rule: a blockquote OPENS a block, so blockquoted
+  // prose right under a key line is not the second half of a wrapped value. Before
+  // the blockquote was modelled at all, `isSpilledValueLine` read it as a lazy
+  // continuation and HALTed on a perfectly readable declaration.
+  it('does not read blockquoted PROSE under a key line as a spilled value', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n> Note: PoC subset.\n')
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('leaves a blockquoted key inside a fence an example', () => {
+    const r = resolve('## Process Profile\n\n```text\n> - `profile`: `poc`\n```\n')
+    expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })
 

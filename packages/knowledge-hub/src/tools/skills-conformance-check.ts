@@ -1729,12 +1729,41 @@ const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/
  */
 const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/
 
+/**
+ * A key written inside a BLOCKQUOTE, with or without a list marker of its own.
+ *
+ * Round 8 Questions: `>` is not whitespace, so such a line matched neither of the two
+ * patterns above — `> - \`profile\`: \`poc\`` under the section heading resolved to
+ * `default` with all twelve steps, zero halts and zero warnings, byte-identical to
+ * writing nothing. That is the silent WIDENING every other off-shape here HALTs on,
+ * and the shape is a plausible one: a note-styled declaration, or a key copied out of
+ * a quoted snippet.
+ *
+ * It is ruled the OPPOSITE way from the table row above, deliberately. The table row
+ * is the shape the shipped template and the KB schema use to DOCUMENT these keys, so
+ * matching it would HALT the files the gate reads; a blockquoted key is written
+ * nowhere in this corpus as documentation (`grep -rn "^> [-*+] " .pair/adoption` and
+ * the dataset copy: zero hits), so treating it as an author's decorated declaration
+ * costs nothing and closes the widening. The key must be BACKTICKED, for the same
+ * reason as the off-marker pattern: inside a quotation that is the only signal
+ * separating a declaration from a sentence about the key.
+ */
+const WOW_PROFILE_KEY_BLOCKQUOTED =
+  /^[ \t]*(?:>[ \t]*)+(?:[-*+][ \t]*|\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/
+
 /** An indented code block: four spaces (or a tab) of indent, CommonMark's third form. */
 const INDENTED_CODE = /^(?: {4}|\t)/
 
+/** A blockquote line: a block of its own, and never a declaration site. */
+const BLOCKQUOTE = /^[ \t]*>/
+
 /** Does this line declare a key at all — in an accepted shape or a rejected one? */
 function isProfileKeyLine(line: string): boolean {
-  return WOW_PROFILE_KEY.test(line) || WOW_PROFILE_KEY_OFF_MARKER.test(line)
+  return (
+    WOW_PROFILE_KEY.test(line) ||
+    WOW_PROFILE_KEY_OFF_MARKER.test(line) ||
+    WOW_PROFILE_KEY_BLOCKQUOTED.test(line)
+  )
 }
 
 /** A new list item — the next block, never a continuation of the previous one. */
@@ -1749,11 +1778,21 @@ const THEMATIC_BREAK = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/
  * A non-blank line that starts no block of its own is a lazy continuation of the
  * preceding paragraph in CommonMark — which, after a key line, is the second half of
  * a wrapped value. Anything that opens a block (a bullet, a heading, a thematic
- * break) is not, and a blank line has already ended the paragraph.
+ * break, a blockquote) is not, and a blank line has already ended the paragraph.
+ *
+ * The blockquote is the other arm of the round 8 blockquote rule: a `>` line
+ * interrupts a paragraph in CommonMark, so a note written under a key line is a
+ * quotation, not the tail of a wrapped value — reading it as one HALTed a perfectly
+ * readable declaration. A blockquoted KEY still HALTs: the key scan runs first.
  */
 function isSpilledValueLine(line: string): boolean {
   if (line.trim() === '') return false
-  return !LIST_ITEM.test(line) && !ATX_HEADING.test(line) && !THEMATIC_BREAK.test(line)
+  return (
+    !LIST_ITEM.test(line) &&
+    !ATX_HEADING.test(line) &&
+    !THEMATIC_BREAK.test(line) &&
+    !BLOCKQUOTE.test(line)
+  )
 }
 
 /** One declaration line, as data: which key, and its values or `null` if unreadable. */
@@ -1777,8 +1816,8 @@ const DANGLING_SEPARATOR = /[,;]\s*$/
 function readProfileKeyLine(line: string): ProfileKeyLine | null {
   const key = WOW_PROFILE_KEY.exec(line)
   if (!key) {
-    const offMarker = WOW_PROFILE_KEY_OFF_MARKER.exec(line)
-    return offMarker ? { key: offMarker[1] as ProfileKeyLine['key'], values: null } : null
+    const rejected = WOW_PROFILE_KEY_OFF_MARKER.exec(line) ?? WOW_PROFILE_KEY_BLOCKQUOTED.exec(line)
+    return rejected ? { key: rejected[1] as ProfileKeyLine['key'], values: null } : null
   }
   const rest = key[2] as string
   if (DANGLING_SEPARATOR.test(rest)) {
@@ -1953,7 +1992,9 @@ function unreadableShapeHalt(keys: string[]): string {
   return (
     `\`## ${WOW_PROFILE_SECTION}\` declares ${keys.map(k => `\`${k}\``).join(' and ')} in a shape ` +
     `this reader does not accept — keys and values are backticked list items, at the top level ` +
-    `of the section and indented by no more than three spaces: \`- \`profile\`: \`poc\`\`, and ` +
+    `of the section, indented by no more than three spaces and never inside a blockquote (a ` +
+    `quotation is documentation, like the table this schema documents the keys in, so a key ` +
+    `written there configures nothing): \`- \`profile\`: \`poc\`\`, and ` +
     `under \`custom\` \`- \`whitelist\`: \`implement\`, \`review\`\``
   )
 }
@@ -2059,7 +2100,33 @@ export function resolveProcessProfile(
   return resolveCustomWhitelist(declaration.whitelist, allIds, halt, resolved)
 }
 
-/** The `custom` arm: its three HALTs, then the resolution. */
+/**
+ * The HALT for a step id named twice in one whitelist, or `null` when there is none.
+ *
+ * Round 8 Minor: a repeat was neither deduped nor reported. It HALTs rather than
+ * being normalized away for two reasons. It is the SAME mistake that HALTs one level
+ * up when it is the KEY that repeats ("only the last is read"), and the one two
+ * values on a `profile` line HALT on — accepting it inside the value alone would make
+ * this reader's strictness depend on which rung of the declaration the typo landed
+ * on. And it is genuinely ambiguous: `` `implement`, `implement` `` is as plausibly a
+ * copy-paste never edited into the step actually meant as it is a harmless repeat, so
+ * deduping picks one reading and hides the other. Left unread it also corrupted what
+ * the resolution HANDS OUT — the id appeared twice in `enabled`, its prerequisite
+ * warning was emitted twice byte for byte, and every "N steps enabled" count
+ * over-counted.
+ */
+function repeatedWhitelistHalt(whitelist: string[]): string | null {
+  const repeated = [...new Set(whitelist.filter((id, i) => whitelist.indexOf(id) !== i))]
+  if (repeated.length === 0) return null
+  return (
+    `step id(s) ${repeated.map(r => `\`${r}\``).join(', ')} named more than once in the custom ` +
+    `whitelist — name each step once. A repeat is read as an edit that was never finished ` +
+    `(the second name may have been meant to be a different step), and it makes every count ` +
+    `of the enabled set wrong`
+  )
+}
+
+/** The `custom` arm: its four HALTs, then the resolution. */
 function resolveCustomWhitelist(
   whitelist: string[] | null,
   allIds: string[],
@@ -2090,6 +2157,8 @@ function resolveCustomWhitelist(
         `valid ids: ${allIds.map(i => `\`${i}\``).join(', ')}`,
     )
   }
+  const repeated = repeatedWhitelistHalt(whitelist)
+  if (repeated !== null) return halt(repeated)
   return resolved('custom', whitelist)
 }
 
