@@ -26,7 +26,7 @@ The section carries two keys, in the same shape as the file's other optional sec
 | `profile`   | `default` \| `poc` \| `custom` | Which step set is in force.                                                        |
 | `whitelist` | catalogue step ids            | The enabled steps. **Required with `custom`, and invalid with anything else.**     |
 
-Both keys are **backticked list items, and so are their values** — copy a fenced example above verbatim, not the bare key spellings the table uses. The reader detects a key **loosely** (a bolded or unbackticked key is still a declaration) and accepts its value **strictly**: that split is what makes a mis-shaped line a HALT instead of a silent `default`.
+Both keys are **backticked list items, and so are their values** — copy a fenced example above verbatim, not the bare key spellings the table uses. The reader detects a key **loosely** (a bolded or unbackticked key is still a declaration, **whatever its case** — `` - `Profile`: `poc` `` declares the same thing) and accepts its value **strictly**: that split is what makes a mis-shaped line a HALT instead of a silent `default`. The key's **case** sits on the detection side for the same reason the heading's does, and the value's does not: `` - `profile`: `POC` `` HALTs as an unknown profile name.
 
 Each key is **one line**, on a `-`, `*` or `+` list item — the three CommonMark bullets, and no others. Declaring the same key **twice** in one section HALTs (only the last would be read, so the earlier value would take effect nowhere), and so does a key written with **no bullet at all** or with an **ordered-list** marker (`1.`, `1)`): both are plausible reads of the table above, and passing over such a line as prose resolves the section to `default` — the widening direction again.
 
@@ -65,7 +65,7 @@ A fence closes on a run of the **same character, at least as long as the one tha
 
 ## Error cases — all normative, none inferred
 
-A profile misread does not surface as an error a user sees; it silently removes a step from every suggestion, which looks exactly like that step not being due yet. Every case below therefore **HALTs** rather than narrowing quietly. A HALT resolves to **no step set at all**: stop and report — never continue on `default` (that re-enables the whole process) and never on an empty set (that disables it).
+A profile misread does not surface as an error a user sees; it silently removes a step from every suggestion, which looks exactly like that step not being due yet. Every case below the reader cannot read therefore **HALTs** rather than narrowing quietly (the two it can read say so in their own row). A HALT resolves to **no step set at all**: stop and report — never continue on `default` (that re-enables the whole process) and never on an empty set (that disables it).
 
 | Case                                        | Outcome                                                                                                       |
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -75,6 +75,7 @@ A profile misread does not surface as an error a user sees; it silently removes 
 | **`custom` with no `whitelist` key**        | **HALT** — `custom` requires one. A *different* message from the row below: "you wrote none" is not "you wrote an empty one", and one message sends the reader hunting for a line their file does not have. |
 | **Empty custom whitelist**                  | **HALT** — read as a **misconfiguration**, never as "everything disabled".                                      |
 | **A key in a shape the reader rejects** (`- profile: poc`, value unbackticked) | **HALT**, restating the schema shape. Detection of the key is loose (bold, missing backticks); acceptance of the VALUE is strict — otherwise an unreadable line resolves to `default` and **widens** the profile to the whole process, silently. |
+| **A key spelled in another CASE** (`` - `Profile`: `poc` ``) | **read as the key** — case is part of the key's *spelling*, so it is detected like every other decoration, and the canonical name is what the messages use. Not a HALT: the heading one line above is Title Case, so mirroring it into the key is the same author error as copying the table's bare spellings. Unread, `` - `Profile`: `poc` `` resolved to `default` with all twelve steps and nothing reported, and `` - `Whitelist`: … `` produced the "declares no `whitelist`" HALT about a line visibly in the file. |
 | **A PARTIALLY backticked whitelist** (`` - `whitelist`: `implement`, review ``) | **HALT** — the whole line, not the readable half. Accepting the backticked ids and dropping the bare ones removes a step from every suggestion with **nothing reported**: the narrowing direction, which no user sees. Readability is decided on the RESIDUE — backticked spans and separators removed, anything left means the line is not readable. |
 | **More than one value on a `profile` line** (`` - `profile`: `poc` (not `custom`) ``) | **HALT** — a profile is one name. Taking the first token silently discarded the rest of the line. |
 | **The same key declared TWICE** in one section | **HALT**, naming the key. Only the last line was read, so the earlier declaration took effect nowhere — and the outcome was **order-dependent**: `custom` then `poc` resolved in silence, `poc` then `custom` tripped the built-in/whitelist HALT instead. |
@@ -92,7 +93,7 @@ A profile misread does not surface as an error a user sees; it silently removes 
 
 The first two are deliberately **two different messages**. A typo in a step id and a profile name that does not exist are **not the same mistake** — one is "you meant a step that exists", the other is "you meant a profile that does not" — and a single generic message would send the reader looking in the wrong file.
 
-The last row is the one non-HALT: the configuration is readable, so the run continues and reports, e.g.
+Two rows do not HALT, and differently: a case-variant key is simply **read** (nothing to report — the declaration is honoured), while the last row is **read and reported**, because the configuration is readable but inconsistent, e.g.
 
 ```text
 `plan-stories` is enabled but none of its prerequisites are — minimal fix: enable
