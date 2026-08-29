@@ -823,24 +823,33 @@ app_auth_ok() { # app_auth_ok <repo> <repos in the installation, newline separat
 }
 # `__fail__` as the author makes the stubbed read EXIT NON-ZERO (a 404/network failure);
 # the empty string makes it succeed with no login. Both are "the author is unknown".
+# ROUND 16. The stub also models the CWD: an unpinned `gh pr view <n>` resolves the PR
+# against whatever repository `origin` points at, and the probe runs from an agent
+# worktree (`../pair-worktrees/<id>`) or a parent directory whose origin is NOT $REPO.
+# Only a call carrying `--repo "$REPO"` reaches THIS repository's pull request; anything
+# else answers the unrelated author of the foreign repo's PR of the same number.
 app_gh_stub() {
   gh() {
+    case "$*" in
+    *"--repo $REPO"*) : ;;
+    *) printf 'unrelated-human\n'; return 0 ;;
+    esac
     [ "$AUTHOR" = __fail__ ] &&
       { echo "gh: could not resolve to a PullRequest (HTTP 404)" >&2; return 1; }
     printf '%s\n' "$AUTHOR"
   }
 }
 app_author_perms() { # app_author_perms <app-slug> <pr author> — PERMS_OK after probe 3
-  # shellcheck disable=SC2034  # PR/PR_AUTHOR are consumed by the shipped lines under eval
-  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1 PR_AUTHOR=
+  # shellcheck disable=SC2034  # PR/PR_AUTHOR/REPO are consumed by the shipped lines under eval
+  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1 PR_AUTHOR= REPO=acme/pair
   app_gh_stub
   eval "$AUTHOR_PROBE" 2>/dev/null || true
   unset -f gh
   printf '%s' "$PERMS_OK"
 }
 app_author_reason() { # app_author_reason <app-slug> <pr author> — probe 3's OWN stderr
-  # shellcheck disable=SC2034  # PR/PR_AUTHOR are consumed by the shipped lines under eval
-  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1 PR_AUTHOR=
+  # shellcheck disable=SC2034  # PR/PR_AUTHOR/REPO are consumed by the shipped lines under eval
+  local APP_SLUG="$1" AUTHOR="$2" PERMS_OK=1 PR=1 PR_AUTHOR= REPO=acme/pair
   app_gh_stub
   eval "$AUTHOR_PROBE" 2>&1 >/dev/null || true
   unset -f gh
@@ -899,6 +908,16 @@ else
     "$(app_author_perms acme-review __fail__)"
   check "App author probe: the author read returned EMPTY ⇒ NOT healthy" 0 \
     "$(app_author_perms acme-review '')"
+  # ROUND 16 (Minor). The read was UNPINNED (`gh pr view "$PR" --json author`) while every
+  # other host call in the slab pins `$REPO`. Run from a cwd whose `origin` is another
+  # repository — pair's own orchestrator runs skills from `../pair-worktrees/<id>`, and an
+  # agent harness may invoke from a parent directory — `gh pr view 466` resolves PR 466 of
+  # THAT repo and answers an unrelated author. NOT symmetric with a failed read: a read
+  # that FAILS is caught (PERMS_OK=0); a read that SUCCEEDS against the wrong repository
+  # silently passes, so the one-credential pipeline reaches the native review and dies on
+  # `422 Can not request changes on your own pull request` mid-write.
+  check "App author probe: the author read is PINNED to \$REPO ⇒ self-authorship caught" 0 \
+    "$(app_author_perms acme-review 'app/acme-review')"
   UNREADABLE_REASON="$(app_author_reason acme-review __fail__)"
   if printf '%s' "$UNREADABLE_REASON" | grep -qi "author could not be read"; then
     log_succ "the unreadable author names ITSELF, not a missing grant"
@@ -939,13 +958,17 @@ bot_probe() { # bot_probe <acting login> <repo-variable value> <pr author> [perm
       printf '%s\n' "$_var"
       ;;
     *collaborators*) printf '%s\n' "$_perm" ;;
-    *)
+    *"--repo $REPO"*)
       # `__fail__`: the author read itself FAILS (404/network). The empty string is the
       # other unknown-author shape — a successful read that returns no login.
       [ "$_author" = __fail__ ] &&
         { echo "gh: could not resolve to a PullRequest (HTTP 404)" >&2; return 1; }
       printf '%s\n' "$_author"
       ;;
+    # ROUND 16. An UNPINNED `gh pr view <n>` resolves the PR against whatever `origin`
+    # the cwd has — an agent worktree or a parent directory, not necessarily $REPO — and
+    # answers the unrelated author of THAT repo's PR of the same number.
+    *) printf 'unrelated-human\n' ;;
     esac
   }
   eval "$BOT_PROBE" 2>/dev/null || true
@@ -968,13 +991,17 @@ bot_probe_reason() { # bot_probe_reason <acting> <repo-variable> <pr author> —
       printf '%s\n' "$_var"
       ;;
     *collaborators*) printf '%s\n' "$_perm" ;;
-    *)
+    *"--repo $REPO"*)
       # `__fail__`: the author read itself FAILS (404/network). The empty string is the
       # other unknown-author shape — a successful read that returns no login.
       [ "$_author" = __fail__ ] &&
         { echo "gh: could not resolve to a PullRequest (HTTP 404)" >&2; return 1; }
       printf '%s\n' "$_author"
       ;;
+    # ROUND 16. An UNPINNED `gh pr view <n>` resolves the PR against whatever `origin`
+    # the cwd has — an agent worktree or a parent directory, not necessarily $REPO — and
+    # answers the unrelated author of THAT repo's PR of the same number.
+    *) printf 'unrelated-human\n' ;;
     esac
   }
   eval "$BOT_PROBE" 2>&1 >/dev/null || true
@@ -1046,6 +1073,15 @@ else
     "$(bot_probe acme-bot acme-bot __fail__)"
   check "bot probe: the author read returned EMPTY ⇒ not usable" 1:0 \
     "$(bot_probe acme-bot acme-bot '')"
+  # ROUND 16 (Minor). Same unpinned read as the App twin: every other host call in this
+  # snippet pins `$REPO` (`gh api "repos/$REPO/collaborators/..."`,
+  # `gh api "repos/$REPO/actions/variables/..."`), the authorship probe did not. From a
+  # worktree whose `origin` is another repository the read SUCCEEDS against the wrong PR,
+  # `[ "$ACTING" = "$PR_AUTHOR" ]` finds no match, PERMS_OK stays 1, health resolves
+  # `identity`, and the one-credential misconfiguration this probe exists to catch reaches
+  # the native review and dies on the host's `422` mid-write.
+  check "bot probe: the author read is PINNED to \$REPO ⇒ self-authorship caught" 1:0 \
+    "$(bot_probe acme-bot acme-bot acme-bot)"
   BOT_UNREADABLE_REASON="$(bot_probe_reason acme-bot acme-bot __fail__)"
   if printf '%s' "$BOT_UNREADABLE_REASON" | grep -qi "author could not be read"; then
     log_succ "the bot probe's unreadable author names ITSELF, not a missing grant"

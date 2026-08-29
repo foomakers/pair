@@ -42,6 +42,7 @@ const GITHUB_GUIDE = read(
 )
 const REVIEW = read(join(DATASET, '.skills/process/review/SKILL.md'))
 const PUBLISH_PR = read(join(DATASET, '.skills/capability/publish-pr/SKILL.md'))
+const SETUP_GATES = read(join(DATASET, '.skills/capability/setup-gates/SKILL.md'))
 const WOW_TEMPLATE = read(join(DATASET, '.pair/adoption/tech/way-of-working.md'))
 const ROOT_WOW = read(join(REPO, '.pair/adoption/tech/way-of-working.md'))
 const ADR_018 = read(join(REPO, '.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md'))
@@ -1611,6 +1612,19 @@ describe('review round 14 — the fixes for the fourteenth review of PR #466', (
     // the behavioral half is executed in smoke: the filter, unexported, on the bot fixture
     expect(SMOKE).toMatch(/env -u REVIEW_IDENTITY_LOGIN/)
     expect(SMOKE).toMatch(/the login clause is INERT when the variable is not exported/)
+    // REGRESSION (review round 16, Minor). The FOURTH evaluator is the CI job, and the skill
+    // that GENERATES it enumerated exactly three properties that must survive generation
+    // "unmodified" (trusted ref, head-SHA pinning, pending-first) — the env thread was not
+    // among them, so an agent generating the job "from the host guide's template" reads the
+    // omitted line as optional config while three neighbours are called out as load-bearing.
+    // Same defect class, same measured outcome as the three agent-side sites above.
+    const bullet = SETUP_GATES.slice(
+      SETUP_GATES.indexOf('- **`pair-explicit-approval`**'),
+      SETUP_GATES.indexOf('- Also state the **approval count**'),
+    )
+    expect(bullet).toMatch(/unmodified in four respects/)
+    expect(bullet).toMatch(/REVIEW_IDENTITY_LOGIN: \$\{\{ vars\.REVIEW_IDENTITY_LOGIN \}\}/)
+    expect(bullet).toMatch(/`\.user\.login != ""`/)
   })
 
   // REGRESSION (review round 14, Minor). Two mandated behaviors for ONE event: Step 5.3
@@ -1673,14 +1687,14 @@ describe('review round 14 — the fixes for the fourteenth review of PR #466', (
       GITHUB_GUIDE.indexOf('**A `403`/`422` met MID-WRITE is a HALT'),
     )
     expect(app).toMatch(
-      /if ! PR_AUTHOR="\$\(gh pr view "\$PR" --json author -q \.author\.login\)" \|\| \[ -z "\$PR_AUTHOR" \]; then/,
+      /if ! PR_AUTHOR="\$\(gh pr view "\$PR" --repo "\$REPO" --json author -q \.author\.login\)" \|\| \[ -z "\$PR_AUTHOR" \]; then/,
     )
     expect(app).toMatch(/author could not be read/)
     expect(app).toMatch(/unknown authorship is unknown health/)
     // the bot-user twin had no unknown arm at all
     const bot = GITHUB_GUIDE.slice(GITHUB_GUIDE.indexOf('ACTING="$(gh api user'))
     expect(bot).toMatch(
-      /if ! PR_AUTHOR="\$\(gh pr view "\$PR" --json author -q \.author\.login\)" \|\| \[ -z "\$PR_AUTHOR" \]; then/,
+      /if ! PR_AUTHOR="\$\(gh pr view "\$PR" --repo "\$REPO" --json author -q \.author\.login\)" \|\| \[ -z "\$PR_AUTHOR" \]; then/,
     )
     expect(bot).toMatch(/unknown authorship is unknown health/)
     // the silent comparison the finding measured is gone
@@ -1715,5 +1729,72 @@ describe('review round 14 — the fixes for the fourteenth review of PR #466', (
     )
     // and the silence is EXECUTED, not asserted: the shipped lines against real fixtures
     expect(SMOKE).toMatch(/no diagnostic on the default path/)
+  })
+})
+
+describe('review round 16 — the fixes for the sixteenth review of PR #466', () => {
+  // REGRESSION (review round 16, Minor). Both per-run authorship probes read the PR author
+  // with an UNPINNED `gh pr view "$PR" --json author`, while every other host call in the
+  // same two snippets pins the repository (`gh api /installation/repositories`,
+  // `gh api "repos/$REPO/collaborators/..."`, `gh api "repos/$REPO/actions/variables/..."`).
+  // CONCRETE: the probe runs from a cwd whose `origin` is a DIFFERENT repository — pair's
+  // own orchestrator runs skills from `../pair-worktrees/<id>`, and a harness may invoke
+  // from a parent directory — so `gh pr view 466` resolves PR 466 of THAT repo and returns
+  // an unrelated author. The `case` / `[ "$ACTING" = "$PR_AUTHOR" ]` comparison finds no
+  // match, PERMS_OK stays 1, health resolves `identity`, and the one-credential
+  // misconfiguration the probe exists to catch reaches the native review and dies on
+  // `422 Can not request changes on your own pull request` mid-write. NOT symmetric with a
+  // failed read: a read that FAILS is handled (PERMS_OK=0); a read that SUCCEEDS against the
+  // wrong repository silently passes.
+  it('both authorship probes pin the author read to $REPO', () => {
+    expect(GITHUB_GUIDE).not.toMatch(/gh pr view "\$PR" --json author/)
+    const pinned = GITHUB_GUIDE.match(
+      /gh pr view "\$PR" --repo "\$REPO" --json author -q \.author\.login/g,
+    )
+    expect(pinned).toHaveLength(2)
+    // the behavioral half is EXECUTED in smoke: the shipped lines under a stub whose
+    // unpinned read resolves a foreign repository's PR and answers `unrelated-human`
+    expect(SMOKE).toMatch(/App author probe: the author read is PINNED to \\\$REPO/)
+    expect(SMOKE).toMatch(/bot probe: the author read is PINNED to \\\$REPO/)
+  })
+
+  // REGRESSION (review round 16, Minor). The idempotency contract had no item for the audit
+  // comment, and its one sentence about comment artifacts was false in `identity` mode:
+  // "The report is always the review body, never a separate comment — so no duplicate
+  // comment artifact is created." But Step 5.4 step 2 narrows the already-published skip to
+  // "steps 3-5 only" so it lands on Step 5.4b, and Step 5.3 step 6 submits a FRESH native
+  // review every time — so Step 5.4b step 1 posts a fresh audit comment every time.
+  // CONCRETE: `identity` mode, adoption declares `light`, PR carries `light`, tier green,
+  // state ready-to-merge; three re-invocations on an unchanged head leave three byte-
+  // identical audit comments while a maintainer reading §5 is told the opposite.
+  it('the idempotency contract carries the audit comment, and §5 is scoped to the report', () => {
+    const idem = REVIEW.slice(
+      REVIEW.indexOf('## Idempotent Re-invocation'),
+      REVIEW.indexOf('## Graceful Degradation'),
+    )
+    expect(idem).toMatch(/Identity audit comment/)
+    expect(idem).toMatch(/re-posted on \*\*every\*\* re-invocation, deliberately/)
+    // the unqualified claim the finding measured is gone; the surviving one names the report
+    expect(idem).not.toMatch(/so no duplicate comment artifact is created/)
+    expect(idem).toMatch(/the report creates no duplicate comment artifact/)
+  })
+
+  // REGRESSION (review round 16, Minor). The `action` vocabulary passed to
+  // `identity_audit_comment` had no token for an unresolved verdict, though both shipped
+  // assets carry explicit fail-safe arms for one (`identity_verdict_event`'s `*` arm ⇒
+  // COMMENT; `review_check_conclusion` ⇒ pending). A COMMENT-form review by the identity
+  // lands, so it IS an identity action and "the audit is not optional" — but its `action`
+  // matched none of the three definitions and the agent had to invent the token, turning a
+  // deterministic projection into an improvised one. Step 5.4b step 2's fourth value models
+  // the case explicitly ("CHANGES-REQUESTED, or any unresolved verdict"), so the two steps
+  // disagreed about whether an unresolved verdict is a modelled case.
+  it('the audit action vocabulary covers an unresolved verdict', () => {
+    const step1 = REVIEW.slice(
+      REVIEW.indexOf('1. **Act — audit, on every identity action'),
+      REVIEW.indexOf("2. **Act — report the row's outcome"),
+    )
+    expect(step1).toMatch(/or an unresolved verdict\*\* — both published as a COMMENT-form review/)
+    // and the executed fail-safe it names is real: an unresolved verdict yields COMMENT
+    expect(SMOKE).toMatch(/identity \+ unknown verdict ⇒ COMMENT/)
   })
 })

@@ -860,7 +860,7 @@ Recommended because it is the only form that unlocks the Checks API, and because
    #    native review and meet `422 Can not request changes on your own pull request`
    #    mid-write, the expensive diagnosis this probe promises to prevent. Unknown
    #    authorship is unknown health, exactly as an unset $APP_SLUG is below.
-   if ! PR_AUTHOR="$(gh pr view "$PR" --json author -q .author.login)" || [ -z "$PR_AUTHOR" ]; then
+   if ! PR_AUTHOR="$(gh pr view "$PR" --repo "$REPO" --json author -q .author.login)" || [ -z "$PR_AUTHOR" ]; then
      echo "review-identity: the pull request's author could not be read, so the author comparison could not run — unknown authorship is unknown health. Not a grant problem: check \$PR and the token's access to this pull request." >&2
      PERMS_OK=0
    else
@@ -1038,7 +1038,7 @@ case "$PERM" in write | admin) PERMS_OK=1 ;; esac
 # declared `Review identity: bot-user`) plus a transient author read resolved HEALTHY and
 # HALTed mid-review on the host's `422 Can not request changes on your own pull request`.
 # Unknown authorship is unknown health, and it names itself like every other cause here.
-if ! PR_AUTHOR="$(gh pr view "$PR" --json author -q .author.login)" || [ -z "$PR_AUTHOR" ]; then
+if ! PR_AUTHOR="$(gh pr view "$PR" --repo "$REPO" --json author -q .author.login)" || [ -z "$PR_AUTHOR" ]; then
   echo "review-identity: the pull request's author could not be read, so the author comparison could not run — unknown authorship is unknown health. Not a grant problem: 'gh api user' answered '$ACTING'. Check \$PR and this PAT's access to the pull request." >&2
   PERMS_OK=0
 elif [ "$ACTING" = "$PR_AUTHOR" ]; then
