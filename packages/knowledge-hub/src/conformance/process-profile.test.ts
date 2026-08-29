@@ -13,6 +13,7 @@ import {
   checkProcessProfiles,
   STEP_MARKER,
 } from '../tools/skills-conformance-check'
+import { installedSkillDir } from '../tools/skill-md-mirror'
 import { sectionBetween } from './test-utils'
 
 // Conformance guard for story #251: a `## Process Profile` section in
@@ -442,7 +443,9 @@ describe('composers name the profile AT the composition site, not only in their 
     [`dataset ${name}`, read(join(SKILLS_DIR, `process/${name}/SKILL.md`))],
     [`mirror ${name}`, read(join(MIRROR_SKILLS_DIR, `pair-process-${name}/SKILL.md`))],
   ]
-  const composers = ['refine-story', 'plan-tasks', 'plan-epics', 'bootstrap'].flatMap(copies)
+  const COMPOSER_NAMES = ['refine-story', 'plan-tasks', 'plan-epics', 'bootstrap']
+  const composers = COMPOSER_NAMES.flatMap(copies)
+  const entries = parseStepCatalogue(catalogueSource)
 
   /**
    * The composed step ids a composer DECLARES, read from its own delta rather than
@@ -467,7 +470,58 @@ describe('composers name the profile AT the composition site, not only in their 
     composedIds(content).map(id => [`${label} → ${id}`, content, id] as [string, string, string]),
   )
 
-  const entries = parseStepCatalogue(catalogueSource)
+  /**
+   * Every accepted spelling of a catalogued executable, in the `## Composed Skills`
+   * table's first cell — the dataset form and the installed one, mapped through the
+   * REAL `pair update` transform rather than a prefix regex.
+   */
+  const STEP_BY_CELL = new Map<string, string>(
+    entries.flatMap(e => {
+      if (e.executable === null) return []
+      const dir = collectAllSkillDirs(SKILLS_DIR).find(
+        d => d.split('/').pop() === e.executable?.slice(1),
+      )
+      const cells = [`\`${e.executable}\``]
+      if (dir !== undefined) cells.push(`\`/${installedSkillDir(dir)}\``)
+      return cells.map(c => [c, e.id] as [string, string])
+    }),
+  )
+
+  /**
+   * The catalogued steps a skill composes, read from its `## Composed Skills` table
+   * — the SAME fact declared twice in one file, independently of the delta line.
+   *
+   * Round 12 Minor: `composedIds` derives the guard's subject list from the very
+   * line under test, so shrinking the claim shrank the guard with it, silently.
+   * Rewriting `plan-tasks`' delta to "a composer of the context-mapping
+   * capability" and gutting its Step 2.5 beat (dataset AND mirror) left
+   * `pnpm skills:conformance` at `PASS — 44 skills conformant`, exit 0, and this
+   * file at `Tests 112 passed` — DOWN from 114, because the two `it.each` cases
+   * for `plan-tasks` ceased to exist and nothing reads the count. A `custom`
+   * project whitelisting `plan-tasks` without `define-bounded-contexts` (legal:
+   * `plan-tasks` requires `refine-story`, and AC9 is report-don't-repair) then
+   * gets bounded-context mapping performed on a project that declared it does no
+   * DDD, with no prompt and no note.
+   *
+   * Only a `Skill`-headed table is a composition: the two `/map-*` capabilities
+   * head theirs `Caller` — who composes THEM — and reading those rows would invert
+   * the relation.
+   */
+  const composedFromTable = (content: string): string[] => {
+    const from = content.indexOf('\n## Composed Skills')
+    if (from === -1) return []
+    const to = content.indexOf('\n## ', from + 1)
+    const rows = content
+      .slice(from, to === -1 ? undefined : to)
+      .split('\n')
+      .filter(l => l.startsWith('|'))
+    if (!/^\|\s*Skill\s*\|/.test(rows[0] ?? '')) return []
+    const ids = rows
+      .slice(2)
+      .map(r => STEP_BY_CELL.get((r.split('|')[1] ?? '').trim()))
+      .filter((id): id is string => id !== undefined)
+    return [...new Set(ids)]
+  }
 
   it('every composed id a delta declares is a catalogued step', () => {
     const ids = new Set(entries.map(e => e.id))
@@ -487,6 +541,36 @@ describe('composers name the profile AT the composition site, not only in their 
     expect(blocks.some(b => b.includes(needle) && CLAUSE.test(b))).toBe(true)
   })
 
+  // The two halves of the round-12 fix: a per-FILE floor (a composer whose delta
+  // stops naming ids de-scopes itself to zero, not to "nothing to check"), and the
+  // cross-check that the delta covers what the file's own Composed Skills table
+  // says it composes (so dropping ONE id of two fails as well).
+  it.each(composers)('%s: its delta still names composed step ids', (_, content) => {
+    expect(composedIds(content).length).toBeGreaterThan(0)
+  })
+
+  it.each(composers)('%s: its delta covers every catalogued step its table names', (_, content) => {
+    const fromTable = composedFromTable(content)
+    expect(fromTable.length).toBeGreaterThan(0)
+    const declared = new Set(composedIds(content))
+    for (const id of fromTable) expect(declared.has(id), `undeclared: ${id}`).toBe(true)
+  })
+
+  // …and the list of composers itself is derived from the corpus, so a 13th
+  // composer cannot be added without either entering this guard or being named
+  // here. `brainstorm` is the one documented exception: its delta and its
+  // composition beats are disclosed to `degradation.md` under a byte budget (ADL
+  // 2026-08-28), and the test below pins that half.
+  it('the composer list is the corpus’s, not this file’s', () => {
+    const stepDirs = collectAllSkillDirs(SKILLS_DIR).filter(d =>
+      entries.some(e => e.executable === `/${d.split('/').pop()}`),
+    )
+    const found = stepDirs
+      .filter(d => composedFromTable(read(join(SKILLS_DIR, d, 'SKILL.md'))).length > 0)
+      .map(d => d.split('/').pop() as string)
+    expect(new Set(found)).toEqual(new Set([...COMPOSER_NAMES, 'brainstorm']))
+  })
+
   it.each(composers)('%s: states it in the graceful-degradation entry too', (_, content) => {
     const section = sectionBetween(content, '## Graceful Degradation', '\n## ')
     expect(section).toMatch(CLAUSE)
@@ -498,6 +582,74 @@ describe('composers name the profile AT the composition site, not only in their 
     const degradation = read(join(SKILLS_DIR, 'process/brainstorm/degradation.md'))
     expect(degradation).toMatch(/process profile/i)
     expect(degradation.toLowerCase()).toContain('before composing')
+  })
+})
+
+/**
+ * Round 12 Minor: three surfaces were governed — `/next`'s cascade + fallback,
+ * direct invocation (the gate), composition (the composing skill's beat) — and a
+ * fourth was not: the completion report a step prints, which names the next skill
+ * in prose and was filtered by nothing.
+ *
+ * Concrete case, on a configuration this branch itself ships as a worked example:
+ * `custom` with `specify-prd, plan-initiatives, plan-epics, plan-stories,
+ * refine-story, plan-tasks, implement, review` — every prerequisite satisfied,
+ * `define-subdomains` / `define-bounded-contexts` excluded (the flagship "we do no
+ * DDD" case). `/plan-initiatives` is ENABLED there, so it runs with no warning at
+ * all and its report ended `└── Next: /map-subdomains (scoped to this initiative)
+ * or /plan-epics` — an enabled skill telling the project to run a DDD step it
+ * declared it does not run. `/next`'s Step 5 fallback, the same prose-names-a-skill
+ * shape, got an explicit "never name a disabled step" rule; the reports did not.
+ *
+ * Derived from the corpus, not from a list: any step skill whose Output Format
+ * names a catalogued executable on its `Next:` line owes the filter sentence.
+ */
+describe('a completion report names no disabled step, exactly as `/next` Step 5', () => {
+  const entries = parseStepCatalogue(catalogueSource)
+  const FILTER = /`Next:` line[^\n]*\[process profile\]/
+  const executables = entries.flatMap(e => {
+    if (e.executable === null) return []
+    const dir = collectAllSkillDirs(SKILLS_DIR).find(
+      d => d.split('/').pop() === e.executable?.slice(1),
+    )
+    return dir === undefined ? [e.executable] : [e.executable, `/${installedSkillDir(dir)}`]
+  })
+
+  /** A `Next:` line inside `## Output Format` that names a catalogued step. */
+  const namesAStep = (content: string): boolean => {
+    const from = content.indexOf('\n## Output Format')
+    if (from === -1) return false
+    const to = content.indexOf('\n## ', from + 1)
+    return content
+      .slice(from, to === -1 ? undefined : to)
+      .split('\n')
+      .filter(l => l.includes('Next:'))
+      .some(l => executables.some(x => l.includes(x)))
+  }
+
+  const reporters = collectAllSkillDirs(SKILLS_DIR)
+    .filter(d => entries.some(e => e.executable === `/${d.split('/').pop()}`))
+    .flatMap(d => [
+      [`dataset ${d}`, read(join(SKILLS_DIR, d, 'SKILL.md'))] as [string, string],
+      [`mirror ${d}`, read(join(MIRROR_SKILLS_DIR, installedSkillDir(d), 'SKILL.md'))] as [
+        string,
+        string,
+      ],
+    ])
+    .filter(([, content]) => namesAStep(content))
+
+  it('finds the reports that name a catalogued step at all', () => {
+    expect(reporters.length).toBeGreaterThan(0)
+  })
+
+  it.each(reporters)('%s: filters its `Next:` line by the profile', (_, content) => {
+    expect(content).toMatch(FILTER)
+  })
+
+  it('states the rule once, in the convention', () => {
+    const section = gateSource.slice(gateSource.indexOf('## What stays in the skill'))
+    expect(section).toMatch(/`Next:` line/)
+    expect(section).toMatch(/never names a step the profile disables/)
   })
 })
 

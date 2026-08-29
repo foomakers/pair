@@ -137,6 +137,8 @@ BRAINSTORM COMPLETE:
 └── Next:        [/refine-story on the first Draft story | /plan-stories on the first Draft epic (initiative-root discovery stops at epics)]
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## HALT Conditions
 
 - **`$root` not found** (Step 0) — the id does not resolve to an issue; report it and stop, never guess a root.

@@ -161,6 +161,8 @@ STORIES COMPLETE:
 └── Next:     /refine-story
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## HALT Conditions
 
 - **No epics in Todo state** (Step 1) — nothing to break down.

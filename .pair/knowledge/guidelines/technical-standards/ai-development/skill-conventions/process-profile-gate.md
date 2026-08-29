@@ -57,4 +57,6 @@ A **composed** invocation never prompts — it degrades exactly as a step that i
 
 Copy the first shape into a family skill and `skills:conformance` reports three errors on a delta followed exactly as prescribed: an unqualified approval round on that line, a missing `$approval` argument row, and a missing pointer to `approval-rounds.md`.
 
+**A completion report that names a next skill applies the same filter.** The `Next:` line a step prints is prose naming skills, exactly as `/pair-next`'s Step 5 fallback is: it never names a step the profile disables — drop it from the line, and when nothing enabled is left the line names no skill. Unfiltered, an **enabled** step tells the project to run one it declared it does not run, and the only thing left to catch that is the named skill's own direct gate, after the suggestion has been made.
+
 Nothing else is per-skill. The step ids, the profiles and the error cases all live in the two KB files this points at, so a change to the schema is one edit, not twelve.

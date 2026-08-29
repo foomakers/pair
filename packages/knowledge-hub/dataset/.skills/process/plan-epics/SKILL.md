@@ -145,6 +145,8 @@ EPICS COMPLETE:
 └── Next:       /plan-stories
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## HALT Conditions
 
 - **Bootstrap incomplete** (Step 0) — PM tool and tech context required.
