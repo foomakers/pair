@@ -707,7 +707,14 @@ Only a GitHub **App** types as `"Bot"`. A bot _user_ is an ordinary account: wit
   # are the section's shared variables. Run this ONLY on the enablement transition.
   if [ "$(pair_review_publication_mode "$MODE" "$IDENTITY_KIND")" = checks-api ]; then
     # `none`/`bot-user` ➝ `app`: a commit status from the earlier publish would stay pending
-    # forever. Needs `statuses: write` on the App — grant it only if you take this path.
+    # forever. TWO changes, not one, and both are needed: `Commit statuses: write` on the App
+    # registration (step 1) AND `"statuses":"write"` added to step 4's `permissions` payload.
+    # An installation access token carries ONLY the subset that payload requests, so with the
+    # grant alone this POST answers `403 Resource not accessible by integration`, the stale
+    # pending status survives, and the pull request this rule exists to unblock stays blocked.
+    # Make both changes ONLY while taking this exit: step 4 requests `permissions` explicitly
+    # and GitHub 422s a permission the installation was never granted, so asking for
+    # `statuses` before granting it breaks the mint — i.e. every review, not just this one.
     gh api "repos/$REPO/statuses/$HEAD_SHA" -X POST -f context='pair-review' \
       -f state="$STATE" -f description='superseded by the pair-review check run'
   else
@@ -730,6 +737,7 @@ Recommended because it is the only form that unlocks the Checks API, and because
    - `checks: write` — publish `pair-review` as a check run
    - `contents: read` — read the branch under review
    - `metadata: read` (mandatory for every App)
+   - `statuses: write` — **conditional, NOT part of the baseline**: required only by the **supersede** exit of the enablement-transition rule above (clearing the pending `pair-review` **commit status** an earlier `none`/`bot-user` publish left on an open head). Grant it **and** add `"statuses":"write"` to step 4's `permissions` payload **together** — the grant alone is inert, since the token carries only what that payload requests. Take the **drain** exit and neither is needed; add the payload entry without the grant and the mint 422s on every run.
    - Do **not** grant `administration` — the identity must not be able to edit branch protection.
 2. **Install** it on the repository (Settings → GitHub Apps → Install), and note the installation id.
 3. **Store the credential** per the [security guidelines](../../quality-assurance/security/security-guidelines.md): the App's private key is a secret and **never enters the repository** — no `.pem` committed, no key in an adoption file, no key in a skill argument. Put it in the project's secret store (GitHub Actions secret, or the local secret manager the project already uses) and reference it by name. The repository's deterministic secret scan (D24) is the backstop, not the policy.
@@ -750,6 +758,11 @@ Recommended because it is the only form that unlocks the Checks API, and because
    # `permissions` is requested EXPLICITLY: GitHub answers 422 when the installation was
    # never granted one of them, which makes the exchange itself the run-time write-grant
    # probe (step 6) — a read-only grant then fails at mint time, not mid-review.
+   # It cuts both ways: the token carries ONLY this subset, so a permission granted on the
+   # App but absent HERE is not in the token and its first write 403s. The baseline below is
+   # exactly what the flow writes; the supersede exit of the enablement-transition rule is
+   # the one documented addition — append `"statuses":"write"` while taking that exit, and
+   # only once the App holds the grant (an ungranted request 422s the mint for every run).
    TOKEN_JSON="$(curl -sS -X POST \
      -H "Authorization: Bearer $JWT" -H 'Accept: application/vnd.github+json' \
      -d '{"permissions":{"pull_requests":"write","checks":"write","contents":"read"}}' \
@@ -765,7 +778,7 @@ Recommended because it is the only form that unlocks the Checks API, and because
    export APP_SLUG
    ```
 
-   The token is short-lived by design: mint it per run, never store it. Inside a workflow the same explicit request is `permission-pull-requests: write` + `permission-checks: write` + `permission-contents: read` on `actions/create-github-app-token@v1`, and the step fails the same way when a grant is missing; that action also exposes the slug as its `app-slug` output, which is `$APP_SLUG` on that path.
+   The token is short-lived by design: mint it per run, never store it. Inside a workflow the same explicit request is `permission-pull-requests: write` + `permission-checks: write` + `permission-contents: read` on `actions/create-github-app-token@v1` (plus `permission-statuses: write` **only** while taking the supersede exit, matching the payload above), and the step fails the same way when a grant is missing; that action also exposes the slug as its `app-slug` output, which is `$APP_SLUG` on that path.
 
 5. **Verify ONCE, at setup** — the probes that can only be answered by WRITING. A read probe cannot prove a write grant, and a `403` discovered later lands mid-flow, after `pair-review` was already published. Every probe below runs with that installation token, and none of them runs per review (step 6 is the per-run health check):
 
