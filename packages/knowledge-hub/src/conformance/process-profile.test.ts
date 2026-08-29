@@ -444,12 +444,47 @@ describe('composers name the profile AT the composition site, not only in their 
   ]
   const composers = ['refine-story', 'plan-tasks', 'plan-epics', 'bootstrap'].flatMap(copies)
 
-  it.each(composers)('%s: states it in the ALGORITHM, at the composition beat', (_, content) => {
+  /**
+   * The composed step ids a composer DECLARES, read from its own delta rather than
+   * listed here — a composer that starts composing a step is covered the day its
+   * delta says so.
+   */
+  const composedIds = (content: string): string[] => {
+    const line = content.split('\n').find(l => l.includes('composer of')) ?? ''
+    const after = line.slice(line.indexOf('composer of'))
+    const clause = after.slice(0, after.indexOf('. ') + 1)
+    return [...clause.matchAll(/`([a-z][a-z0-9-]+)`/g)].map(m => m[1] as string)
+  }
+
+  // Round 11 Major: the assertion was ONE clause anywhere before the degradation
+  // section — so `/bootstrap`, which declares three composed steps, satisfied it
+  // with its two `map-*` beats while Phase 0 Step 0.1 still read "**Act** (missing
+  // or template): Compose `/specify-prd`." A `custom` project that whitelists
+  // `bootstrap` without `specify-prd` (legal, reported-not-fatal per AC9) got a
+  // full interactive PRD-authoring session — a step it declared it does not run —
+  // with no prompt and no note. Per composed step id now, not per file.
+  const perComposedStep = composers.flatMap(([label, content]) =>
+    composedIds(content).map(id => [`${label} → ${id}`, content, id] as [string, string, string]),
+  )
+
+  const entries = parseStepCatalogue(catalogueSource)
+
+  it('every composed id a delta declares is a catalogued step', () => {
+    const ids = new Set(entries.map(e => e.id))
+    expect(perComposedStep.length).toBeGreaterThan(0)
+    for (const [label, , id] of perComposedStep) expect(ids.has(id), label).toBe(true)
+  })
+
+  it.each(perComposedStep)('%s: states it in the ALGORITHM, at that beat', (_, content, id) => {
     const cut = content.indexOf('## Graceful Degradation')
     expect(cut).toBeGreaterThan(-1)
-    // Before the degradation section ⇒ inside the numbered algorithm, where the
-    // executor decides whether to compose.
-    expect(content.slice(0, cut)).toMatch(CLAUSE)
+    // The beat is the `##`/`###` block that composes the step: the executable's
+    // name (the mirror prefixes it, hence the bare form) and the clause must be in
+    // the SAME block, so a clause parked at another step's beat does not count.
+    const needle = (entries.find(e => e.id === id)?.executable ?? '').replace('/', '')
+    expect(needle).not.toBe('')
+    const blocks = content.slice(0, cut).split(/^#{2,4} /m)
+    expect(blocks.some(b => b.includes(needle) && CLAUSE.test(b))).toBe(true)
   })
 
   it.each(composers)('%s: states it in the graceful-degradation entry too', (_, content) => {
