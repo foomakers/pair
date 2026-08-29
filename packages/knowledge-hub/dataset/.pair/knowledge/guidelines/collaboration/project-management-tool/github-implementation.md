@@ -878,10 +878,16 @@ Recommended because it is the only form that unlocks the Checks API, and because
    # 1. IDENTITY_KIND — the `Review identity` value in adoption, forwarded VERBATIM. The
    #    read is TWO questions, deliberately: is the key THERE, and does its value PARSE.
    WOW=.pair/adoption/tech/way-of-working.md
-   # 1a. PRESENCE — anchored to a KEY at the START OF A LINE (optional list/bold decoration,
-   #     the phrase, then a colon). Format-agnostic about DECORATION on purpose, since the
-   #     HALT below hangs off this answer and must fire for any shape an adopter hand-wrote
-   #     the key in — but NOT format-agnostic about POSITION: a bare `grep -qi 'Review
+   # 1a. PRESENCE — anchored to a KEY at the START OF A LINE, with the DECORATIONS an
+   #     adopter plausibly hand-writes it in ENUMERATED, since the HALT below hangs off this
+   #     answer: blockquote markers (`>`, repeatable), an ATX heading (`#`..`######`), a list
+   #     bullet (`-`/`*`), bold markers, in that order, any of them omitted. So all of
+   #     `- **Review identity**: app`, `* Review identity: app`, `## Review identity: app`
+   #     and `> - **Review identity**: app` answer PRESENT. A shape outside this set reads as
+   #     ABSENT ⇒ `none` ⇒ `session` — the silent session-token fallback this read exists to
+   #     prevent — so extend the class rather than assume it covers whatever an adopter
+   #     wrote. It is NOT format-agnostic about
+   #     POSITION: a bare `grep -qi 'Review
    #     identity'` matches PROSE ("we use no dedicated review identity — reviews run with
    #     the session token"), and a phrase-then-colon match that is not line-anchored still
    #     matches prose mid-sentence ("A note on review identity: we deliberately run none").
@@ -891,7 +897,7 @@ Recommended because it is the only form that unlocks the Checks API, and because
    #     `- Review identity: app` (no bold) and `**Review identity**: bot-user` (no bullet)
    #     are line-leading, colon-terminated keys.
    IDENTITY_KEY_PRESENT=0
-   grep -qiE '^[[:space:]]*[-*]?[[:space:]]*\*{0,2}Review identity\*{0,2}[[:space:]]*:' "$WOW" && IDENTITY_KEY_PRESENT=1
+   grep -qiE '^[[:space:]]*(>[[:space:]]*)*(#{1,6}[[:space:]]*)?[-*]?[[:space:]]*\*{0,2}Review identity\*{0,2}[[:space:]]*:' "$WOW" && IDENTITY_KEY_PRESENT=1
    # 1b. VALUE — the shipped form is a markdown BULLET with bold markers and a backticked
    #     value (`- **Review identity**: `app` — ...`), so strip bullet, bold and backticks
    #     and keep the bare kind. An expression anchored at `^Review identity:` matches nothing.
@@ -956,6 +962,7 @@ A second GitHub **user** account, invited to the repository with **write** acces
 - `Pull requests: write` (`pull_requests: write`) — the native review and the audit comment
 - `Commit statuses: write` (`repo:status` on a classic PAT) — publish `pair-review` as a commit status
 - `Contents: read`
+- `Variables: read` (`actions_variables:read` on a fine-grained PAT; covered by `repo` on a classic one) — the only grant here that no WRITE needs, and it is **required**: the per-run health probe below reads `REVIEW_IDENTITY_LOGIN` back from the repository variables **with this token**. The `gh variable set`/`gh variable get` further down runs under the MAINTAINER's token, so provisioning succeeds without it and the gap surfaces only at review time — the read answers `403 Resource not accessible by personal access token`, health resolves `0`, and every review and every publish on the repository HALTs with the setup otherwise complete
 
 Same secret rule: the PAT lives in the secret store, never in the repository. It costs a seat on paid plans and it does **not** unlock the Checks API (that is App-only), so `pair_review_publication_mode` keeps it on the commit-status form. A user token _is_ associated with a user, so here `gh api user --jq '.login, .type'` is the right probe (expect `"User"`).
 
@@ -975,11 +982,30 @@ ACTING="$(gh api user --jq .login)"                                   # 200 ⇒ 
 # gate resolved the variable to the empty string, making the clause `.user.login != ""` —
 # true for EVERY account — so an APPROVED review by the bot on a `risk:red` head would
 # satisfy the explicit HUMAN approval. Read the variable, or the identity is not healthy.
-RV="$(gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN" --jq .value 2>/dev/null || true)"
+# The read needs `Variables: read` on this PAT (the grant list above) — the one grant no
+# WRITE needs, so a PAT provisioned for the writes alone answers 403 HERE and nowhere else.
+# ITS EXIT STATUS IS CAPTURED, never swallowed with `|| true`: a REFUSED read (403, grant
+# missing), an UNSET variable (404) and a genuinely dead credential would otherwise all
+# collapse into AUTH_OK=0, and `review_identity_health` would then report "the identity's
+# credential did not authenticate on this run" about a credential that answered 200 one
+# line above — sending the operator to re-issue a PAT that is fine while the actual cause
+# (a missing read grant, or a variable never set) appears nowhere in the trail. Each cause
+# PRINTS ITS OWN REASON before zeroing the flag, the rule the authorship check below follows.
 AUTH_OK=0
-[ -n "$ACTING" ] && [ -n "$RV" ] && [ "$ACTING" = "$RV" ] && AUTH_OK=1
-# The acting login must MATCH the provisioned variable: the 🔴 exclusion clause names that
-# login, so an identity acting under a different account is not the one being excluded.
+RV=""
+if [ -z "$ACTING" ]; then
+  : # No login: the PAT itself did not authenticate. This is the ONE case health's own
+    # auth diagnostic fits, so let it speak — nothing to add here.
+elif ! RV="$(gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN" --jq .value 2>/dev/null)"; then
+  RV=""
+  echo "review-identity: REVIEW_IDENTITY_LOGIN could not be READ BACK from the repository variables — 403 ⇒ this PAT lacks 'Variables: read' (add it; see the grant list in § Dedicated review identity, Bot user), 404 ⇒ the variable was never set (run 'gh variable set REVIEW_IDENTITY_LOGIN' below). Not a credential failure: 'gh api user' answered '$ACTING'. The 🔴 exclusion clause is inert without this variable, so the identity is NOT healthy." >&2
+elif [ "$ACTING" != "$RV" ]; then
+  # The acting login must MATCH the provisioned variable: the 🔴 exclusion clause names that
+  # login, so an identity acting under a different account is not the one being excluded.
+  echo "review-identity: the acting account '$ACTING' is not the login REVIEW_IDENTITY_LOGIN names ('$RV') — the 🔴 exclusion clause excludes THAT login, so this identity is not the one being excluded. Not a credential failure: 'gh api user' answered 200. Fix the variable, or run the identity under the account it names." >&2
+else
+  AUTH_OK=1
+fi
 PERM="$(gh api "repos/$REPO/collaborators/$ACTING/permission" --jq .permission)"
 PERMS_OK=0
 case "$PERM" in write | admin) PERMS_OK=1 ;; esac
@@ -1019,6 +1045,7 @@ That **repository variable** — not an exported shell/CI environment variable o
 | Configured, and the identity **is the pull request's author** | `halt` — the per-run probe catches it (App: probe 3, against **both** login shapes, `app/<app-slug>` and `<app-slug>[bot]`; bot user: the `ACTING` comparison) | A provisioning error, caught **before any host write**: the identity must not open pull requests here. Where a host adapter runs no such probe, or the authorship read failed, the in-flow fail-safe still holds — `identity_verdict_event` returns **COMMENT**, so the verdict is published in full with its token leading the body while the native event (including the light row's APPROVE) is unobtainable on that PR. |
 | A grant revoked between the probe and the write (`403`/`422` mid-write) | — | **HALT** on the refused write, reported against the artifact that failed. Never retried with the session token, and `pair-review` is never published as though the review had landed. |
 | Configured as `bot-user`, `REVIEW_IDENTITY_LOGIN` not provisioned **as a repository variable** — absent, stored as a secret, scoped to an unused Environment, or naming another account (an exported env var of the same name does **not** count: the probe reads the variable back from the host) | `halt` | `review_identity_exclusion_ok` fails, so the identity is not healthy. Deliberately a HALT and not a warning: this is the one misconfiguration that would let a machine account satisfy the 🔴 explicit **human** approval — the gate job resolves `${{ vars.REVIEW_IDENTITY_LOGIN }}` to the empty string and its clause matches every account. |
+| Configured as `bot-user`, the variable **provisioned correctly** but the identity's PAT lacks `Variables: read` | `halt` | The per-run read answers `403` under the BOT's token while `gh variable get` succeeded under the maintainer's, so the setup looks complete and every review halts. The probe reports the refused **read** (`Variables: read` / the variable never set) instead of letting it surface as a credential failure — the credential answered `200` on the line above. Add the grant; it is in the list under _Bot user_. |
 
 Do not "fall back to the session token so the review still runs". A review recorded against the maintainer's account, that the maintainer did not perform, is a worse outcome than a stopped review — and it is exactly the misattribution a dedicated identity exists to prevent.
 

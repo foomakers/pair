@@ -415,7 +415,10 @@ describe('the bot-user health input is the REPOSITORY VARIABLE, not ambient stat
     expect(GITHUB_GUIDE).toContain(
       'gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN" --jq .value',
     )
-    expect(GITHUB_GUIDE).toMatch(/\[ -n "\$RV" \] && \[ "\$ACTING" = "\$RV" \] && AUTH_OK=1/)
+    // AUTH_OK is 1 only on the arm where the read SUCCEEDED and named the acting account.
+    expect(GITHUB_GUIDE).toMatch(
+      /elif \[ "\$ACTING" != "\$RV" \]; then[\s\S]{0,600}\nelse\n {2}AUTH_OK=1/,
+    )
   })
 
   it('the health call is fed that read-back value, and no ambient env var survives', () => {
@@ -430,6 +433,94 @@ describe('the bot-user health input is the REPOSITORY VARIABLE, not ambient stat
       expect(skill).toMatch(/repository variable `REVIEW_IDENTITY_LOGIN`/)
       expect(skill).toMatch(/read back on this run|read back from the host/)
     }
+  })
+
+  // REGRESSION (review round 13, Major). Round 12 made the per-run probe READ the
+  // repository variable back with the BOT'S OWN PAT — but the form's provisioning list
+  // grants only `Pull requests: write`, `Commit statuses: write` and `Contents: read`, and
+  // `GET /repos/{owner}/{repo}/actions/variables/{name}` needs the `Variables` permission.
+  // The `gh variable set` / `gh variable get` of the setup step runs under the MAINTAINER's
+  // token, so provisioning succeeds and the gap appears only at review time: the read
+  // answers 403, `|| true` swallowed it, `RV` was empty ⇒ AUTH_OK=0 ⇒ health 0 ⇒ HALT on
+  // EVERY review and EVERY publish of a repository that is otherwise correctly set up —
+  // with the guide's own pointer sending the operator to a permission list that does not
+  // name the missing grant.
+  it('the bot-user PAT list grants the READ the per-run probe performs', () => {
+    const list = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('#### Bot user (alternative)'),
+      GITHUB_GUIDE.indexOf('**Per-run health, artifact-free**'),
+    )
+    expect(list).toContain('Pull requests: write')
+    expect(list).toContain('Commit statuses: write')
+    expect(list).toMatch(/`Variables: read`/)
+  })
+
+  // Second defect in the same lines: an unreadable variable (403, no grant), an unset one
+  // (404) and a genuinely dead credential all collapsed into AUTH_OK=0, so health printed
+  // "the identity's credential did not authenticate on this run" about a credential that
+  // answered 200 one line above. Each cause must print its OWN reason before zeroing the
+  // flag — the same rule round 12 applied to the authorship checks.
+  it('the read failure is separated from the auth failure and names itself', () => {
+    expect(GITHUB_GUIDE).not.toMatch(
+      /RV="\$\(gh api "repos\/\$REPO\/actions\/variables\/REVIEW_IDENTITY_LOGIN" --jq \.value 2>\/dev\/null \|\| true\)"/,
+    )
+    expect(GITHUB_GUIDE).toMatch(
+      /elif ! RV="\$\(gh api "repos\/\$REPO\/actions\/variables\/REVIEW_IDENTITY_LOGIN" --jq \.value 2>\/dev\/null\)"; then/,
+    )
+    // the refused/unset read owns a diagnostic that names the grant and the variable
+    const reason = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('could not be READ BACK'),
+      GITHUB_GUIDE.indexOf('could not be READ BACK') + 700,
+    )
+    expect(reason).toContain('Variables: read')
+    expect(reason).toContain('gh variable set REVIEW_IDENTITY_LOGIN')
+    expect(reason).toMatch(/not a credential failure/i)
+  })
+
+  // The failure-mode table sends the operator somewhere: the `bot-user` row must name the
+  // read grant too, or the table repeats the omission that produced the permanent HALT.
+  it('the failure-mode table names the missing read grant as a cause', () => {
+    const row = GITHUB_GUIDE.slice(
+      GITHUB_GUIDE.indexOf('| Configured as `bot-user`'),
+      GITHUB_GUIDE.indexOf('| Configured as `bot-user`') + 1400,
+    )
+    expect(row).toContain('Variables: read')
+  })
+
+  it('the smoke matrix covers a REFUSED read on an authenticated credential', () => {
+    expect(SMOKE).toMatch(/variable read REFUSED/i)
+  })
+})
+
+// REGRESSION (review round 13, Minor). Round 12's back-reference was missed: Step 5.4
+// step 5 still described the Step 5.3 step 2 call as "run in every mode and for every
+// verdict" one screen after :286 was corrected to "both modes that continue". `halt` IS
+// one of the three modes and Step 5.3 step 1 ends the review on it, so the two sentences
+// assert opposite properties of the same step in a normative document where a step's
+// reachability per mode is load-bearing.
+describe('review — the synthesis reachability claim is stated once, and identically', () => {
+  it('no line in the review skill claims the synthesis runs in every mode', () => {
+    expect(REVIEW).not.toContain('run in every mode and for every verdict')
+    expect(REVIEW).not.toContain('all three modes and for every verdict')
+  })
+
+  it('the Step 5.4 back-reference matches the Step 5.3 wording', () => {
+    expect(REVIEW).toMatch(
+      /its own unconditional step, run in both modes that continue and for every verdict/,
+    )
+  })
+})
+
+// REGRESSION (review round 13, Minor). This PR renumbered Phase 5 (identity resolution
+// became step 3), and the HALT's blast radius was stated twice with different bounds:
+// the phase body says "steps 4–6 simply do not run", the HALT Conditions bullet said
+// "everything from step 3 on is skipped" — step 3 being the identity resolution that
+// PRODUCED the HALT, so a literal reader cannot tell whether the HALT is reachable.
+describe('publish-pr — the HALT blast radius is bounded identically in both statements', () => {
+  it('the HALT Conditions bullet names steps 4–6, like the phase body', () => {
+    expect(PUBLISH_PR).toContain('steps 4–6 simply do not run')
+    expect(PUBLISH_PR).toMatch(/steps 4–6 do not run: the check registration/)
+    expect(PUBLISH_PR).not.toContain('everything from step 3 on is skipped')
   })
 })
 
@@ -535,10 +626,51 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     expect(REVIEW).toContain(`gh pr view <number> --json labels -q '.labels[].name'`)
     expect(REVIEW).toMatch(/legacy|ambiguous/i)
     // whole-FIELD matching for the two unambiguous shapes; the space split is the fallback
-    expect(EVALUATOR).toMatch(/\*\$'\\n'\* \| \*,\*\)/)
     expect(EVALUATOR).toMatch(/\[ "\$line" = light \]/)
     expect(EVALUATOR).toMatch(/legacy/i)
     expect(EVALUATOR).toMatch(/one name per LINE/i)
+    // REGRESSION (review round 13). The two shapes were ONE case arm that translated
+    // commas into newlines before splitting — so a comma inside a single label NAME
+    // (`theme, light`, the same taxonomy shape as round 12's `ui: light theme`) was read
+    // as two whole fields on the LINE form, the shape both skills document as EXACT.
+    // A risk:green PR carrying only that label matched, and the identity signed a native
+    // APPROVE off a label nobody applied as a tag. Each shape splits on its OWN delimiter.
+    expect(EVALUATOR).not.toMatch(/\*\$'\\n'\* \| \*,\*\)/)
+    expect(EVALUATOR).toMatch(/\*\$'\\n'\*\) fields="\$labels" ;;/)
+    expect(EVALUATOR).toMatch(/\*,\*\) fields="\$\{labels\/\/,\/\$'\\n'\}" ;;/)
+    // and the comment no longer claims the comma form is exact for every name
+    expect(EVALUATOR).toMatch(/free of commas/i)
+    // REGRESSION (review round 13). A string carrying NEITHER delimiter fell through to a
+    // SPACE-SUBSTRING matcher — which is exactly what the LINE read emits for a PR carrying
+    // ONE label, the shape the asset itself calls exact: `light_auto_approve_allowed
+    // "ui: light theme" 1 green ready-to-merge` exited 0 (APPROVE). The no-delimiter case is
+    // now ONE whole trimmed field, failing closed; the space-substring arm is gone.
+    expect(EVALUATOR).not.toMatch(/case " \$labels " in \*" light "\*\)/)
+    expect(EVALUATOR).toMatch(/\*\) fields="\$labels" ;;/)
+    expect(EVALUATOR).toMatch(/FAILS[\s#]{0,12}CLOSED/i)
+    // the skill states the joined shape fails closed rather than being "still accepted"
+    expect(REVIEW).not.toMatch(/is still accepted as a \*\*legacy\*\* input/)
+    expect(REVIEW).toMatch(/fails closed/i)
+    // and the smoke scenario EXECUTES both no-delimiter directions
+    expect(SMOKE).toMatch(/ONE multi-word label containing 'light', no delimiter/)
+    expect(SMOKE).toMatch(/the LEGACY space-joined shape \(ambiguous ⇒ never approves\)/)
+  })
+
+  // REGRESSION (review round 13). Step 5.3's enumeration of the identity's host writes
+  // ("the review, the check, the audit comment") omitted Step 5.4's `pr-state:*` label
+  // write, which is also a host write in that range: the actor was unspecified, and if the
+  // identity wrote it, the GitHub App baseline (no `issues` grant) makes `POST
+  // /repos/{o}/{r}/issues/{n}/labels` answer 403 — colliding two shipped rules on ONE event,
+  // "a 403/422 mid-write is a HALT" against the pre-existing "the label is non-blocking".
+  it('names the label write actor and scopes the mid-write HALT to the identity writes', () => {
+    const step = REVIEW.slice(REVIEW.indexOf('### Step 5.3'), REVIEW.indexOf('### Step 5.4b'))
+    expect(step).toMatch(/is not one of them/i)
+    expect(step).toMatch(/written by the \*\*session token\*\*/)
+    expect(step).toMatch(/The rule is scoped to the three writes the identity performs/)
+    expect(step).toMatch(/with the session token in every mode/i)
+    // and the label's refusal stays the documented non-blocking case, not a HALT
+    expect(step).toMatch(/pr-state label: not applied/)
+    expect(GITHUB_GUIDE).toMatch(/pr-state label: not applied/)
   })
 
   it('reports the identity mode and the light-row outcome in the output block', () => {
@@ -753,6 +885,26 @@ describe('pr-states.md — the model carries the identity and the light row (AC1
   it('defines the three modes and no fourth', () => {
     expect(GUIDELINE).toMatch(/Dedicated review identity/)
     for (const mode of ['`session`', '`identity`', '`halt`']) expect(GUIDELINE).toContain(mode)
+  })
+
+  // REGRESSION (review round 13). Both model surfaces stated the halt rule ABSOLUTELY
+  // ("configured but unusable … the flow HALTs"), while publish-pr Phase 5 step 3 carves out
+  // `halt` + `Review enforcement: disabled` — the default everywhere — as NOT a HALT. The
+  // carve-out existed only in the consumer skill, so a host adapter or a second consumer
+  // written from the model halts EVERY publish on an enforcement-disabled project with a
+  // half-provisioned identity: it cannot open a pull request at all.
+  it('scopes the HALT to a phase that performs an identity host write', () => {
+    const row = GUIDELINE.split('\n').find(l => l.startsWith('| `halt` |'))
+    expect(row).toBeDefined()
+    expect(row).toMatch(/binds a phase that actually performs an identity host write/i)
+    expect(row).toMatch(/Review enforcement/)
+    expect(row).toMatch(/reports the identity as unusable|reports .*unusable/i)
+    expect(row).toMatch(/continues/i)
+    // and the ADR amendment carries the same clause, not just the consumer skill
+    expect(ADR_018).toMatch(/actually performs an identity host write/i)
+    expect(ADR_018).toMatch(/Review enforcement: `?disabled`?/)
+    // the consumer skill it was reconciled with is unchanged in intent
+    expect(PUBLISH_PR).toMatch(/writes \*\*nothing\*\* as the identity/)
   })
 
   it('AC6 — states the one-line 🔴 rule verbatim enough to be unmissable', () => {
@@ -1109,9 +1261,20 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     // publication on that repository HALTs, pointing the adopter at a key they never wrote.
     // Anchor at the start of the line, past optional list/bold decoration — the two shapes
     // the design MUST HALT on are line-leading keys and classify identically.
+    // REGRESSION (review round 13). The class admitted ONLY `-`/`*` before the phrase while
+    // the comment claimed to be "agnostic about DECORATION", so `## Review identity: app`
+    // and `> - **Review identity**: app` answered present=0. The extraction is empty on
+    // those shapes too, so the key read as genuinely ABSENT ⇒ `none` ⇒ mode `session`: the
+    // review, and where the host counts it the APPROVE, written with the SESSION token on a
+    // repository that DID configure an identity — with no HALT. Blockquote and ATX-heading
+    // decoration are now in the class, and the accepted shapes are ENUMERATED in the comment
+    // instead of claimed universal. Both new shapes are EXECUTED by the smoke scenario.
     expect(pub).toMatch(
-      /^\s+grep -qiE '\^\[\[:space:\]\]\*\[-\*\]\?\[\[:space:\]\]\*\\\*\{0,2\}Review identity/m,
+      /^\s+grep -qiE '\^\[\[:space:\]\]\*\(>\[\[:space:\]\]\*\)\*\(#\{1,6\}\[\[:space:\]\]\*\)\?\[-\*\]\?\[\[:space:\]\]\*\\\*\{0,2\}Review identity/m,
     )
+    expect(GITHUB_GUIDE).not.toMatch(/Format-agnostic about DECORATION/)
+    expect(SMOKE).toMatch(/the key as an ATX HEADING ⇒ HALT/)
+    expect(SMOKE).toMatch(/the key inside a BLOCKQUOTE ⇒ HALT/)
     // the two superseded forms survive only inside the comment explaining why they were wrong
     expect(pub).not.toMatch(/^\s+grep -qi 'Review identity' "\$WOW"/m)
     expect(pub).not.toMatch(/^\s+grep -qiE '\(\^\|\[\^\[:alnum:\]\]\)/m)

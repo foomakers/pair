@@ -313,9 +313,14 @@ check "session mode ⇒ commit status (today's documented form)" commit-status \
 # The full matrix: light (declared+tagged / tagged-undeclared / untagged / declared
 # -untagged) x tier (green/yellow/red/untagged) x synthesis (merge-enabling or not).
 # ==============================================================================
-LIGHT_LABELS="risk:green light"
+# ROUND 13. The fixtures carry the LINE form — the shape `gh pr view <n> --json labels
+# -q '.labels[].name'` produces and the only one the helper treats as exact. The
+# space-joined `join(" ")` shape now fails closed (see the round-13 block below).
+LIGHT_LABELS="$(printf 'risk:green\nlight')"
+LIGHT_YELLOW="$(printf 'risk:yellow\nlight')"
+LIGHT_RED="$(printf 'risk:red\nlight')"
 yields "declared + tagged + 🟢 + ready-to-merge"        "$LIGHT_LABELS" 1 green  ready-to-merge
-yields "declared + tagged + 🟡 + ready-to-merge"        "risk:yellow light" 1 yellow ready-to-merge
+yields "declared + tagged + 🟡 + ready-to-merge"        "$LIGHT_YELLOW" 1 yellow ready-to-merge
 # Comma-separated label lists are the other common host rendering.
 yields "declared + tagged (comma-separated labels)"     "risk:green,light,user story" 1 green ready-to-merge
 # ROUND 4. NEWLINE-separated is the third, and it is what the NATURAL host read produces
@@ -329,8 +334,8 @@ blocks "tagged but adoption declares NO light family"   "$LIGHT_LABELS" 0 green 
 blocks "tagged, declaration flag absent entirely"       "$LIGHT_LABELS" '' green ready-to-merge
 blocks "tagged, declaration flag malformed"             "$LIGHT_LABELS" yes   green ready-to-merge
 # The label must be the light tag itself, not a substring of another label.
-blocks "declared but PR carries no light tag"           "risk:green user story" 1 green ready-to-merge
-blocks "declared, a label merely CONTAINING 'light'"    "risk:green lightweight" 1 green ready-to-merge
+blocks "declared but PR carries no light tag"           "$(printf 'risk:green\nuser story')" 1 green ready-to-merge
+blocks "declared, a label merely CONTAINING 'light'"    "$(printf 'risk:green\nlightweight')" 1 green ready-to-merge
 blocks "declared, no labels at all"                     "" 1 green ready-to-merge
 # ROUND 12. Code-host label NAMES may themselves contain spaces (`good first issue`,
 # `help wanted`), so collapsing every shape to spaces made `ui: light theme` — a label
@@ -347,9 +352,35 @@ yields "declared + tagged alongside a multi-word sibling (line form)" \
   "$(printf 'risk:green\nui: light theme\nlight\n')" 1 green ready-to-merge
 yields "declared + tagged, comma form with padding around the field" \
   "risk:green, light , user story" 1 green ready-to-merge
+# ROUND 13. A code-host label NAME may legally contain a COMMA (`theme, light` — the same
+# two-word taxonomy shape as `ui: light theme`, with a comma instead of a space). The LINE
+# form is the shape both skills document as EXACT and is the read the review performs where
+# the row can authorize an APPROVE, so it must split on NEWLINES ALONE: translating commas
+# first cut one whole name into `theme` + `light`, matched, and signed a native APPROVE —
+# on a repo with `required_approving_review_count >= 1` that PR became mergeable with no
+# human action, off a label nobody applied as a classification tag.
+blocks "declared, a COMMA-carrying label name (line form)" \
+  "$(printf 'risk:green\ntheme, light\n')" 1 green ready-to-merge
+yields "declared + tagged alongside a comma-carrying sibling (line form)" \
+  "$(printf 'risk:green\ntheme, light\nlight\n')" 1 green ready-to-merge
+# The COMMA form cannot distinguish them — commas ARE its delimiters — which is precisely
+# why the skills document the line form as the read to use where an APPROVE is at stake.
+yields "comma form is exact only for names free of commas (documented ambiguity)" \
+  "risk:green,theme, light" 1 green ready-to-merge
+# ROUND 13. A string carrying NEITHER delimiter used to fall through to a SPACE-SUBSTRING
+# match, so `ui: light theme` — the exact output of the LINE read for a PR carrying that ONE
+# label, i.e. the shape the asset calls "exact" — reached APPROVE, and so did the whole
+# space-joined `risk:green light`. The no-delimiter case is now ONE whole trimmed field,
+# which fails CLOSED: the tag alone still matches, everything else is a no-op.
+blocks "declared, ONE multi-word label containing 'light', no delimiter" \
+  "ui: light theme" 1 green ready-to-merge
+blocks "declared, the LEGACY space-joined shape (ambiguous ⇒ never approves)" \
+  "risk:green light" 1 green ready-to-merge
+yields "declared, the tag as the only label (no delimiter, padded)" \
+  "  light  " 1 green ready-to-merge
 
 # Most restrictive wins: light never bypasses the 🔴 gate, and never invents a tier.
-blocks "declared + tagged + 🔴 (light never applies at red)" "risk:red light" 1 red ready-to-merge
+blocks "declared + tagged + 🔴 (light never applies at red)" "$LIGHT_RED" 1 red ready-to-merge
 blocks "declared + tagged + UNTAGGED tier (fail-safe red)"   "light" 1 '' ready-to-merge
 blocks "declared + tagged + malformed tier (fail-safe red)"  "light" 1 banana ready-to-merge
 
@@ -371,19 +402,19 @@ compose() { # compose <labels> <declared> <gates> <verdict> <approval>
   fi
 }
 check "composed: 🟢 light, green gates, approved review"   approve \
-  "$(compose "risk:green light" 1 pass approved 0)"
+  "$(compose "$LIGHT_LABELS" 1 pass approved 0)"
 check "composed: 🟢 light, RED gates (gate is the first filter)" "no-op:to-be-reviewed" \
-  "$(compose "risk:green light" 1 fail approved 0)"
+  "$(compose "$LIGHT_LABELS" 1 fail approved 0)"
 check "composed: 🟢 light, review pending"                 "no-op:to-be-reviewed" \
-  "$(compose "risk:green light" 1 pass pending 0)"
+  "$(compose "$LIGHT_LABELS" 1 pass pending 0)"
 check "composed: 🟢 light, changes-requested"              "no-op:not-approved" \
-  "$(compose "risk:green light" 1 pass changes-requested 0)"
+  "$(compose "$LIGHT_LABELS" 1 pass changes-requested 0)"
 check "composed: 🔴 light, everything green, human approved" "no-op:ready-to-merge" \
-  "$(compose "risk:red light" 1 pass approved 1)"
+  "$(compose "$LIGHT_RED" 1 pass approved 1)"
 check "composed: untagged + light (fail-safe red), approved" "no-op:to-be-reviewed" \
   "$(compose "light" 1 pass approved 0)"
 check "composed: 🟢 light on a repo with NO declaration"   "no-op:ready-to-merge" \
-  "$(compose "risk:green light" 0 pass approved 0)"
+  "$(compose "$LIGHT_LABELS" 0 pass approved 0)"
 
 # The shipped table is regression surface: identical inputs, identical outputs.
 check "regression: 🟢 gates green + approved"   ready-to-merge "$(resolve_pr_state pass approved green 0 2>/dev/null)"
@@ -419,7 +450,7 @@ if light_auto_approve_allowed "$LIGHT_LABELS" 0 green ready-to-merge 2>&1 | grep
 else
   log_fail "undeclared no-op does not name '## Tag Projection'"; FAILED=1
 fi
-if light_auto_approve_allowed "risk:red light" 1 red ready-to-merge 2>&1 | grep -qi 'human'; then
+if light_auto_approve_allowed "$LIGHT_RED" 1 red ready-to-merge 2>&1 | grep -qi 'human'; then
   log_succ "🔴 no-op names the human-approval requirement"
 else
   log_fail "🔴 no-op does not name the human-approval requirement"; FAILED=1
@@ -531,19 +562,19 @@ event_for() { # event_for <labels> <declared> <gates> <verdict> <approval>
   identity_verdict_event identity "$4" "$auth" 2>/dev/null
 }
 check "event: 🟢 light, declared, all green ⇒ APPROVE (the row's own review)" APPROVE \
-  "$(event_for "risk:green light" 1 pass approved 0)"
+  "$(event_for "$LIGHT_LABELS" 1 pass approved 0)"
 check "event: 🟢 light TAGGED but UNDECLARED ⇒ COMMENT, not APPROVE" COMMENT \
-  "$(event_for "risk:green light" 0 pass approved 0)"
+  "$(event_for "$LIGHT_LABELS" 0 pass approved 0)"
 check "event: 🟡 approved, NO light tag ⇒ COMMENT (this is the Major-finding regression)" COMMENT \
   "$(event_for "risk:yellow" 1 pass approved 0)"
 check "event: 🟢 approved, no light tag, declared family ⇒ COMMENT" COMMENT \
   "$(event_for "risk:green" 1 pass approved 0)"
 check "event: 🔴 light, human approved, ready-to-merge ⇒ COMMENT (light never at red)" COMMENT \
-  "$(event_for "risk:red light" 1 pass approved 1)"
+  "$(event_for "$LIGHT_RED" 1 pass approved 1)"
 check "event: 🟢 light declared but gates RED ⇒ COMMENT" COMMENT \
-  "$(event_for "risk:green light" 1 fail approved 0)"
+  "$(event_for "$LIGHT_LABELS" 1 fail approved 0)"
 check "event: changes-requested is ungated ⇒ REQUEST_CHANGES" REQUEST_CHANGES \
-  "$(event_for "risk:green light" 1 pass changes-requested 0)"
+  "$(event_for "$LIGHT_LABELS" 1 pass changes-requested 0)"
 # DOCUMENTATION guard (not behavioral — the behavior is the matrix above): the flow
 # surfaces must not describe an auto-approval that is not qualified by 'light'.
 for doc in "$REVIEW" "$PUBLISH_PR"; do
@@ -658,6 +689,19 @@ else
     "$(extract_kind "$TMP_DIR/wow-absent.md" 2>/dev/null)"
   halts_on_kind "the key without the BOLD markers ⇒ HALT" "$TMP_DIR/wow-nobold.md"
   halts_on_kind "the key without the leading BULLET ⇒ HALT" "$TMP_DIR/wow-nobullet.md"
+  # ROUND 13. The presence class admitted only `-`/`*` before the phrase, so an adopter who
+  # wrote the key as an ATX HEADING or inside a BLOCKQUOTE answered present=0. The extraction
+  # is empty on those shapes too, so the key was judged genuinely ABSENT ⇒ IDENTITY_KIND=none
+  # ⇒ mode `session`: the review (and, where the host counts it, the APPROVE) written with
+  # the SESSION token on a repository that DID configure an identity, with no HALT — the very
+  # failure the two-question read exists to close, reached through a decoration the guide
+  # claimed to cover. Both shapes now answer PRESENT and therefore HALT.
+  printf -- '## Review identity: app\n' >"$TMP_DIR/wow-heading.md"
+  printf -- '> - **Review identity**: app\n' >"$TMP_DIR/wow-quote.md"
+  printf -- '###### Review identity: bot-user\n' >"$TMP_DIR/wow-heading6.md"
+  halts_on_kind "the key as an ATX HEADING ⇒ HALT (never a silent 'none')" "$TMP_DIR/wow-heading.md"
+  halts_on_kind "the key inside a BLOCKQUOTE ⇒ HALT (never a silent 'none')" "$TMP_DIR/wow-quote.md"
+  halts_on_kind "the key as a level-6 heading ⇒ HALT" "$TMP_DIR/wow-heading6.md"
   # ROUND 6. PRESENCE was a bare `grep -qi 'Review identity'` over the WHOLE file, so any
   # PROSE occurrence of the phrase set IDENTITY_KEY_PRESENT=1 and the empty extraction
   # then HALTed instead of resolving `none`. A project that runs no identity, deletes the
@@ -804,6 +848,10 @@ bot_probe() { # bot_probe <acting login> <repo-variable value> <pr author> [perm
     case "$*" in
     "api user --jq .login") printf '%s\n' "$_acting" ;;
     *actions/variables/REVIEW_IDENTITY_LOGIN*)
+      # `__403__`: the read is REFUSED (the PAT lacks `Variables: read`) while the
+      # credential itself is fine — distinct from `''`, the variable being unset (404).
+      [ "$_var" = __403__ ] &&
+        { echo "gh: Resource not accessible by personal access token (HTTP 403)" >&2; return 1; }
       [ -n "$_var" ] || return 1
       printf '%s\n' "$_var"
       ;;
@@ -823,6 +871,10 @@ bot_probe_reason() { # bot_probe_reason <acting> <repo-variable> <pr author> —
     case "$*" in
     "api user --jq .login") printf '%s\n' "$_acting" ;;
     *actions/variables/REVIEW_IDENTITY_LOGIN*)
+      # `__403__`: the read is REFUSED (the PAT lacks `Variables: read`) while the
+      # credential itself is fine — distinct from `''`, the variable being unset (404).
+      [ "$_var" = __403__ ] &&
+        { echo "gh: Resource not accessible by personal access token (HTTP 403)" >&2; return 1; }
       [ -n "$_var" ] || return 1
       printf '%s\n' "$_var"
       ;;
@@ -847,6 +899,37 @@ else
     "$(bot_probe acme-bot other-bot rucka)"
   check "bot probe: the PAT does not authenticate ⇒ NOT healthy" 0:1 \
     "$(bot_probe '' acme-bot rucka)"
+  # ROUND 13 (Major). The read round 12 added is performed with the BOT'S OWN PAT, and the
+  # form's grant list did not include the `Variables` permission — so a project that
+  # provisioned exactly what the guide listed, invited the account and ran
+  # `gh variable set` as the MAINTAINER (whose token can) got `403` on the read at REVIEW
+  # time, swallowed by `|| true`, RV empty ⇒ AUTH_OK=0 ⇒ halt on EVERY review and EVERY
+  # publish, permanently, on a correctly configured repository. The missing-grant path is
+  # a SUCCESSFUL `gh api user` with a REFUSED variable read — no prior fixture had it.
+  check "bot probe: variable read REFUSED (403, no Variables: read) ⇒ NOT healthy" 0:1 \
+    "$(bot_probe acme-bot __403__ rucka)"
+  # And the credential is NOT what failed: the diagnostic must say so itself, or health's
+  # "did not authenticate" line sends the operator to re-issue a PAT that answered 200.
+  READ_REASON="$(bot_probe_reason acme-bot __403__ rucka)"
+  if printf '%s' "$READ_REASON" | grep -q 'Variables: read'; then
+    log_succ "the refused read names the missing grant as its own reason"
+  else
+    log_fail "the refused variable read fires SILENTLY: '$READ_REASON'"
+    FAILED=1
+  fi
+  if printf '%s' "$READ_REASON" | grep -qi 'not a credential failure'; then
+    log_succ "the refused read states the credential is not the cause"
+  else
+    log_fail "the refused read does not exonerate the credential: '$READ_REASON'"
+    FAILED=1
+  fi
+  MISMATCH_REASON="$(bot_probe_reason acme-bot other-bot rucka)"
+  if printf '%s' "$MISMATCH_REASON" | grep -q 'other-bot'; then
+    log_succ "a variable naming a DIFFERENT account names itself, not the credential"
+  else
+    log_fail "the mismatch fires silently: '$MISMATCH_REASON'"
+    FAILED=1
+  fi
   check "bot probe: read-only collaborator ⇒ grants not observed" 1:0 \
     "$(bot_probe acme-bot acme-bot rucka read)"
   check "bot probe: the identity IS the PR author ⇒ not usable" 1:0 \
@@ -863,6 +946,9 @@ fi
 # the repository variable, never the ambient environment.
 audit "the per-run probe READS the repository variable" "$GITHUB_GUIDE" \
   'actions/variables/REVIEW_IDENTITY_LOGIN'
+# ...and the form's PAT must be granted that read, or the probe 403s on every run.
+audit "the bot-user PAT list grants the read the probe performs" "$GITHUB_GUIDE" \
+  'Variables: read'
 audit "the health call is fed that read-back value" "$GITHUB_GUIDE" '"${RV:-}")"'
 if grep -q '"\${REVIEW_IDENTITY_LOGIN:-}"' "$GITHUB_GUIDE"; then
   log_fail "the guide still feeds health from the AMBIENT REVIEW_IDENTITY_LOGIN env var"
