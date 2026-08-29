@@ -720,11 +720,21 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     // action) and identity mode + an unresolved verdict match none of them: Step 5.3 step 3
     // never runs, so there is no unmet condition to name and the verdict was not a COMMENT.
     // A blocking review therefore had to fabricate one of the three.
+    // REGRESSION (review round 15). The four values covered every case in which BOTH
+    // HALT-bound identity writes succeed. They do not cover the window between them:
+    // `identity` mode, sub-red, light declared and carried, state `ready-to-merge` — Step
+    // 5.3 step 5 submits the native APPROVE (the PR is now mergeable with no human action
+    // wherever required_approving_review_count >= 1), and if the audit comment of Step
+    // 5.4b step 1 then meets a 403 the run HALTs with the APPROVE NOT rolled back. The
+    // report had no value for an APPROVE whose audit comment never landed, so it had to
+    // render `approved — … + audit comment posted`, asserting an artifact the PR does not
+    // carry — the exact pairing Step 5.4b's Verify asserts and AC5 requires.
     const values = [
       'n-a — no identity (session mode)',
       'n-a — no approving verdict (row not consulted)',
       'not-authorized — <unmet condition>, verdict submitted as COMMENT',
       'approved — native APPROVE by the identity + audit comment posted',
+      'approved — native APPROVE by the identity, audit comment NOT POSTED (<host error>) — HALT, the APPROVE stands',
     ]
     const step = REVIEW.slice(REVIEW.indexOf('### Step 5.4b'), REVIEW.indexOf('### Step 5.5'))
     const output = REVIEW.slice(REVIEW.indexOf('├── Light row:'), REVIEW.indexOf('├── Tier req.:'))
@@ -741,6 +751,36 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     expect(step).toMatch(
       /row not consulted\)`\*\* — `identity` mode with a verdict that is not APPROVED/,
     )
+  })
+
+  // REGRESSION (review round 15). Two HALT-bound identity writes run review-then-comment
+  // and the HALT does not undo the first: a 403 on the audit comment leaves an
+  // auto-approved, merge-ready PR carrying an identity APPROVE with NO audit comment.
+  // The order is a CHOICE (every input the comment renders is resolved before the review
+  // is submitted), and the residual it carries was stated nowhere — unlike the
+  // `pair-review` publication and `pr-state:*` label residuals, both named explicitly.
+  it('the audit-comment order is justified and its residual is stated and reported', () => {
+    const step53 = REVIEW.slice(REVIEW.indexOf('### Step 5.3'), REVIEW.indexOf('### Step 5.4:'))
+    const step54b = REVIEW.slice(REVIEW.indexOf('### Step 5.4b'), REVIEW.indexOf('### Step 5.5'))
+    // the order is named as deliberate, with the reason the reverse order is worse
+    expect(step53).toMatch(/precedes Step 5\.4b's audit comment, deliberately/)
+    expect(step53).toMatch(/the order is a choice, not a dependency/)
+    // and the residual it buys is stated, not left for the reader to derive
+    expect(step53).toMatch(/does \*\*not\*\* roll the first back/)
+    expect(step53).toMatch(/required_approving_review_count >= 1/)
+    // the audit write names itself as the second HALT-bound write and where to report it
+    expect(step54b).toMatch(/second\*\* of the two HALT-bound identity writes/)
+    expect(step54b).toMatch(/has \*\*already landed\*\*/)
+    // the pairing invariant carries its one exception instead of being violable in silence
+    expect(step54b).toMatch(/paired with its audit comment — \*\*except\*\*/)
+    // the HALT entry no longer claims an unqualified "before any host write" for a write
+    // that was interrupted mid-flight
+    const halt = REVIEW.slice(REVIEW.indexOf('## HALT Conditions'), REVIEW.indexOf('On HALT:'))
+    expect(halt).toMatch(/before any further host write/)
+    expect(halt).toMatch(/already landed is not rolled back/)
+    // and the decision + residual are recorded where the other two residuals are
+    expect(ADR_018).toMatch(/HALT does not undo the review/)
+    expect(ADR_018).toMatch(/audit comment NOT POSTED/)
   })
 
   // REGRESSION (review round 8). Step 5.3 step 7 made `Review: NOT SUBMITTED — <host error>`
