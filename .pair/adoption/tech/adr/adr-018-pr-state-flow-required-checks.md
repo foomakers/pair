@@ -239,13 +239,16 @@ still the design; this amendment layers a credential resolution step and one ado
   `pair_review_publication_mode` accept), and only a genuinely absent key becomes `none`. Both consumer surfaces
   enumerate every entry point, `review_identity_exclusion_ok` included, since a host adapter wired from a list
   that omits it lets a bot-user identity with no `REVIEW_IDENTITY_LOGIN` resolve to `identity`.
-  **Presence is anchored to the key SHAPE — the phrase, then a colon — not to the bare phrase.** A
+  **Presence is anchored to a KEY AT THE START OF A LINE — optional list/bold decoration, the phrase, then a
+  colon — not to the bare phrase and not to the phrase-then-colon anywhere in a line.** A
   `grep -qi 'Review identity'` over the whole adoption file also matches *prose*, so a project that runs no
   identity, deletes the key and keeps one explanatory sentence ("we use no dedicated review identity — reviews
   run with the session token") is read as configured, extracts nothing, and HALTs every review and every publish
-  — being told to declare an identity it deliberately has not got. The anchored form still fires on both
+  — being told to declare an identity it deliberately has not got. Requiring the colon narrows that but does not
+  close it: an unanchored `(^|[^[:alnum:]])` match still fires mid-sentence ("A note on review identity: we
+  deliberately run none"), with the same permanent-outage outcome. The **line**-anchored form still fires on both
   unparseable shapes the design must HALT on (`- Review identity: app`, `**Review identity**: bot-user`), which
-  are colon-terminated keys.
+  are line-leading, colon-terminated keys.
 - **`healthy` is COMPUTED PER RUN, by `review_identity_health`, and the health probes are split in two.** It is
   the single signal separating `identity` from `halt`, and it shipped with no runtime source at all: the host
   guide's publication snippet carried an inert `PROBES_PASSED=0  # set to 1 by whatever ran step 5's probes`

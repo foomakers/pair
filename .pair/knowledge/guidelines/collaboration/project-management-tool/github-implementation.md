@@ -789,16 +789,20 @@ Recommended because it is the only form that unlocks the Checks API, and because
    # 1. IDENTITY_KIND — the `Review identity` value in adoption, forwarded VERBATIM. The
    #    read is TWO questions, deliberately: is the key THERE, and does its value PARSE.
    WOW=.pair/adoption/tech/way-of-working.md
-   # 1a. PRESENCE — anchored to the KEY SHAPE (the phrase, then a colon), not to the bare
-   #     phrase. Format-agnostic about DECORATION on purpose, since the HALT below hangs off
-   #     this answer and must fire for any shape an adopter hand-wrote the key in — but a
-   #     bare `grep -qi 'Review identity'` also matches PROSE ("we use no dedicated review
-   #     identity — reviews run with the session token"), and an empty extraction would then
-   #     HALT every review on a project that deliberately runs none. It still catches both
-   #     unparseable shapes the design must HALT on: `- Review identity: app` (no bold) and
-   #     `**Review identity**: bot-user` (no bullet) are colon-terminated keys.
+   # 1a. PRESENCE — anchored to a KEY at the START OF A LINE (optional list/bold decoration,
+   #     the phrase, then a colon). Format-agnostic about DECORATION on purpose, since the
+   #     HALT below hangs off this answer and must fire for any shape an adopter hand-wrote
+   #     the key in — but NOT format-agnostic about POSITION: a bare `grep -qi 'Review
+   #     identity'` matches PROSE ("we use no dedicated review identity — reviews run with
+   #     the session token"), and a phrase-then-colon match that is not line-anchored still
+   #     matches prose mid-sentence ("A note on review identity: we deliberately run none").
+   #     Either way the extraction is empty and the HALT below fires on a project that
+   #     configured nothing — a permanent review outage pointing at a key it never wrote.
+   #     The line anchor still catches both unparseable shapes the design must HALT on:
+   #     `- Review identity: app` (no bold) and `**Review identity**: bot-user` (no bullet)
+   #     are line-leading, colon-terminated keys.
    IDENTITY_KEY_PRESENT=0
-   grep -qiE '(^|[^[:alnum:]])\*{0,2}Review identity\*{0,2}[[:space:]]*:' "$WOW" && IDENTITY_KEY_PRESENT=1
+   grep -qiE '^[[:space:]]*[-*]?[[:space:]]*\*{0,2}Review identity\*{0,2}[[:space:]]*:' "$WOW" && IDENTITY_KEY_PRESENT=1
    # 1b. VALUE — the shipped form is a markdown BULLET with bold markers and a backticked
    #     value (`- **Review identity**: `app` — ...`), so strip bullet, bold and backticks
    #     and keep the bare kind. An expression anchored at `^Review identity:` matches nothing.
@@ -912,8 +916,7 @@ When a repository declares the `light` family in `## Tag Projection` (`tech/risk
 
 Two containments are worth stating on the host page, because this is where someone will try to shortcut them:
 
-- **The declaration is the gate, not the label.** A hand-applied `light` label on a repository that declares no `light` projection triggers nothing. Do not add the label family to the repository "so the flow can use it" — provisioning a label is not declaring a projection.
-- **Residual, once you HAVE declared it: `light` becomes a merge-authorizing capability, so access-control it.** The declaration contains the mis-tagging abuse only on repositories that never opted in. On one that did — and that sets `required_approving_review_count >= 1` — anyone with **write or triage** access can label their own PR `light` + `risk:green`, and the identity's approving review then satisfies the host rule with no second human. Nothing in the flow verifies **who** applied the label. Treat it as a permissioned action, not a hint: apply `light` only from classification (the refinement/review skills), and restrict manual application — GitHub has no per-label ACL, so the practical controls are keeping write access small and auditing label events (`gh api "repos/$REPO/issues/$PR/events" --jq '.[] | select(.event=="labeled")'`), or requiring a `CODEOWNERS`-reviewed classification change. The 🔴 gate is unaffected either way (`light` is inert at red).
+- **The declaration is the gate, not the label.** A hand-applied `light` label on a repository that declares no `light` projection triggers nothing. Do not add the label family to the repository "so the flow can use it" — provisioning a label is not declaring a projection. **That containment is conditional, and the residual belongs with it:** it holds only on repositories that never opted in. On one that HAS declared the family — and that sets `required_approving_review_count >= 1` — anyone with **write or triage** access can label their own PR `light` + `risk:green`, and the identity's approving review then satisfies the host rule with no second human. Nothing in the flow verifies **who** applied the label, so `light` becomes a **merge-authorizing capability** and declaring the family means access-controlling it: apply `light` only from classification (the refinement/review skills), and restrict manual application — GitHub has no per-label ACL, so the practical controls are keeping write access small and auditing label events (`gh api "repos/$REPO/issues/$PR/events" --jq '.[] | select(.event=="labeled")'`), or requiring a `CODEOWNERS`-reviewed classification change. The 🔴 gate is unaffected either way (`light` is inert at red).
 - **It never touches 🔴.** `required_approving_review_count` is a _host_ rule; `pair-explicit-approval` is the pair rule, and it still demands a human. A `light` label on a `risk:red` PR is inert.
 
 ### Provision the `pr-state:*` labels (once per repository)

@@ -558,6 +558,25 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
       /row not consulted\)`\*\* — `identity` mode with a verdict that is not APPROVED/,
     )
   })
+
+  // REGRESSION (review round 8). Step 5.3 step 7 made `Review: NOT SUBMITTED — <host error>`
+  // a MANDATORY second value of the `Review:` report row (the read-back shows no review by
+  // the resolved actor ⇒ the write was refused), but the Output Format block — the literal
+  // rendering contract — still enumerated exactly one. An agent rendering the report from
+  // the block therefore asserts "Submitted as native review body" on the very run the
+  // read-back proved nothing landed: the same false green the read-back was added to
+  // prevent, relocated from the check row to the report row. The trailing absolute is
+  // false too — in identity mode Step 5.4b posts a REQUIRED audit comment on every action,
+  // so what is absent is a separate VERDICT comment, not every comment.
+  it('the Review row enumerates both submission outcomes, like its siblings', () => {
+    const row = REVIEW.slice(REVIEW.indexOf('├── Review:'), REVIEW.indexOf('├── Identity:'))
+    expect(row).toContain('NOT SUBMITTED — <host error>')
+    expect(row).toContain('no separate VERDICT comment')
+    // the absolute the mandatory Step 5.4b audit comment falsifies is gone
+    expect(row).not.toMatch(/native review body — no separate comment/)
+    // and the value the row offers is the one step 7 mandates, spelled the same way
+    expect(REVIEW).toMatch(/Review: NOT SUBMITTED — <host error>/)
+  })
 })
 
 describe('publish-pr — the same adapter governs ITS host writes (AC1, AC4)', () => {
@@ -690,6 +709,33 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     expect(GITHUB_GUIDE).toMatch(/It never touches 🔴/i)
   })
 
+  // REGRESSION (review round 8). "Two containments are worth stating" was followed by
+  // THREE bullets, the middle one labelled `Residual, once you HAVE declared it` — the
+  // thing the containments explicitly do NOT cover. An adopter counting three under a
+  // heading promising two reads the residual as a third containment, i.e. as reassurance,
+  // and the one item in the section that demands an action outside pair (access-control
+  // the `light` label before opting in) is the one that gets skipped. pr-states.md already
+  // folds the residual INTO the declaration bullet; the host page must match.
+  it('the containment enumeration matches its announced count', () => {
+    const idx = GITHUB_GUIDE.indexOf('containments are worth stating on the host page')
+    expect(idx).toBeGreaterThan(-1)
+    const block = GITHUB_GUIDE.slice(
+      idx,
+      GITHUB_GUIDE.indexOf('### Provision the `pr-state:*` labels'),
+    )
+    expect(GITHUB_GUIDE).toMatch(/^Two containments are worth stating on the host page/m)
+    expect(block.match(/^- \*\*/gm)?.length, 'two announced, two bullets').toBe(2)
+    // the residual is no longer a peer bullet contradicting the count
+    expect(block).not.toMatch(/^- \*\*Residual, once you HAVE declared it/m)
+    // …and it is not lost either: it lives inside the declaration bullet, as in pr-states.md
+    const declaration = block.slice(
+      block.indexOf('- **The declaration is the gate'),
+      block.indexOf('- **It never touches 🔴'),
+    )
+    expect(declaration).toMatch(/merge-authorizing/)
+    expect(declaration).toMatch(/write or triage/i)
+  })
+
   // REGRESSION (review round 2). "Adoption is the gate" contains the mis-tagging abuse
   // only on repositories that did NOT declare the family. On one that HAS — and that sets
   // required_approving_review_count >= 1 — any write/triage collaborator can label their
@@ -803,10 +849,22 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     // outage, with a HALT telling it to declare an identity it deliberately has not got.
     // The probe is anchored to the KEY SHAPE — phrase, then colon — and both prose shapes
     // are EXECUTED against it by the smoke scenario.
-    expect(pub).toMatch(/^\s+grep -qiE '\(\^\|\[\^\[:alnum:\]\]\)\\\*\{0,2\}Review identity/m)
-    // the bare form survives only inside the comment explaining why it was wrong
+    // REGRESSION (review round 8). The round-6 anchor `(^|[^[:alnum:]])` matched the phrase
+    // ANYWHERE in a line, so a colon-bearing SENTENCE — "A note on review identity: we
+    // deliberately run none, reviews use the session token." — answered PRESENT on a
+    // project that configured nothing. The extraction is empty, `review_identity_kind_ok ''`
+    // fails, and the IDENTITY_KEY_PRESENT=1 branch exits 1: every review and every PR
+    // publication on that repository HALTs, pointing the adopter at a key they never wrote.
+    // Anchor at the start of the line, past optional list/bold decoration — the two shapes
+    // the design MUST HALT on are line-leading keys and classify identically.
+    expect(pub).toMatch(
+      /^\s+grep -qiE '\^\[\[:space:\]\]\*\[-\*\]\?\[\[:space:\]\]\*\\\*\{0,2\}Review identity/m,
+    )
+    // the two superseded forms survive only inside the comment explaining why they were wrong
     expect(pub).not.toMatch(/^\s+grep -qi 'Review identity' "\$WOW"/m)
+    expect(pub).not.toMatch(/^\s+grep -qiE '\(\^\|\[\^\[:alnum:\]\]\)/m)
     expect(SMOKE).toMatch(/PROSE mentioning the phrase, no key ⇒ none \(never a HALT\)/)
+    expect(SMOKE).toMatch(/PROSE with the phrase FOLLOWED BY A COLON mid-sentence ⇒ none/)
     expect(pub).toMatch(/^\s+if ! review_identity_kind_ok "\$IDENTITY_KIND"; then$/m)
     expect(pub).toMatch(/if \[ "\$IDENTITY_KEY_PRESENT" = 1 \]; then[\s\S]{0,400}exit 1/)
     // and the negative variants are EXECUTED by the smoke scenario, both directions
