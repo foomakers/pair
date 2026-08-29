@@ -1597,6 +1597,9 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
     [`../../${INSTALLED_KB}/process-profiles.md`]: real(
       `../../${INSTALLED_KB}/process-profiles.md`,
     ),
+    [`../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`]: real(
+      `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`,
+    ),
     '../../AGENTS.md': real('../../AGENTS.md'),
     '../../CLAUDE.md': real('../../CLAUDE.md'),
   }
@@ -1665,6 +1668,53 @@ describe('checkInstalledProfileCorpus — the copies a reader resolves', () => {
 
   it('fails CLOSED when an installed governed file is missing', () => {
     const rel = `../../${INSTALLED_KB}/step-catalogue.md`
+    expect(check({ [rel]: null }).join('\n')).toContain('not found')
+  })
+
+  // Round 12 Major, corruption 2: the CELLS of the installed profile schema were
+  // bound and the PROSE around them was not, so a typo inside its `custom` worked
+  // example was reported by nothing — while the identical typo in the DATASET copy
+  // failed the gate. This repo dogfoods pair: its agents and developers read
+  // `.pair/knowledge/**`, and a reader who copies that example into
+  // `way-of-working.md` HALTs on every subsequent `/next` run.
+  it('fails on a typo in a worked example of the INSTALLED profile schema', () => {
+    const rel = `../../${INSTALLED_KB}/process-profiles.md`
+    const typo = (DEFAULTS[rel] as string).replace(
+      '- `whitelist`: `specify-prd`',
+      '- `whitelist`: `spcify-prd`',
+    )
+    expect(typo).not.toBe(DEFAULTS[rel])
+    const errors = check({ [rel]: typo }).join('\n')
+    expect(errors).toContain('worked example')
+    expect(errors).toContain('spcify-prd')
+  })
+
+  // Round 12 Major: the third governed file of the same feature was not bound at
+  // all. All twelve installed step skills point at it, and it is the only home of
+  // the prompt wording, "proceed silently", the HALT carve-out and `auto=halt`.
+  it('fails when the installed gate convention is reduced to a placeholder', () => {
+    const rel = `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`
+    const errors = check({ [rel]: '# Process Profile Gate\n\nTODO\n' }).join('\n')
+    expect(errors).toContain('DIRECT')
+    expect(errors).toContain('COMPOSED')
+    expect(errors).toContain('auto=halt')
+  })
+
+  // The narrow half of the same corruption: everything else intact, only the
+  // unattended resolution gone. No delta carries it, so nothing else can report it
+  // — and an unattended `/pair-loop` reaching a disabled step then has no
+  // instruction anywhere and the natural default is to run it.
+  it('fails when the installed gate convention drops the `auto=halt` resolution', () => {
+    const rel = `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`
+    const without = (DEFAULTS[rel] as string).replaceAll('auto=halt', 'auto=proceed')
+    expect(without).not.toBe(DEFAULTS[rel])
+    const errors = check({ [rel]: without }).join('\n')
+    expect(errors).toContain('auto=halt')
+    expect(errors).not.toContain('DIRECT')
+  })
+
+  it('fails CLOSED when the installed gate convention is missing', () => {
+    const rel = `../../${INSTALLED_KB}/skill-conventions/process-profile-gate.md`
     expect(check({ [rel]: null }).join('\n')).toContain('not found')
   })
 

@@ -1035,6 +1035,26 @@ export const STEP_MARKER = /<!--\s*process-step:\s*id=([a-z0-9-]+)\s*-->/
 export const STEP_GATE_CONVENTION = 'process-profile-gate.md'
 
 /**
+ * The INSTALLED copy of that convention — the third governed file of this feature,
+ * and the one all twelve installed step skills point at by path.
+ *
+ * It is where everything the one-line delta does NOT say lives: the prompt
+ * wording, "enabled ⇒ proceed silently, byte for byte", the `$approval: auto` ⇒
+ * `auto=halt` resolution for unattended runs, the HALT-cases carve-out and the
+ * required-vs-optional composition rule.
+ *
+ * Round 12 Major: the installed catalogue and profile schema were bound cell for
+ * cell and this one was not bound at all. Reducing it to
+ * `# Process Profile Gate\n\nTODO` shipped `PASS — 44 skills conformant`, exit 0,
+ * with the banner naming the convention as validated — while an executor
+ * following the pointer found `TODO`, and an unattended `/pair-loop` reaching a
+ * disabled step had no `auto=halt` instruction left anywhere, so the natural
+ * default is to proceed: it runs, silently and repeatedly, a step the project
+ * declared it does not run.
+ */
+const INSTALLED_GATE_CONVENTION_FILE = `${INSTALLED_AI_DEV}/skill-conventions/${STEP_GATE_CONVENTION}`
+
+/**
  * Everything under the first `## ` heading line matching `matches`, up to the next
  * `## ` heading line — `null` when no such heading exists.
  *
@@ -1391,6 +1411,37 @@ function checkStepDelta(
       `the marker tells the machine which step this is, the sentence tells the executor what to ` +
       `do when it is disabled (skill-conventions/${STEP_GATE_CONVENTION})`,
   )
+}
+
+/**
+ * The one clause the twelve deltas CANNOT carry and only the convention states:
+ * the unattended resolution of the confirmation round (`kind=gate`, `auto=halt`).
+ */
+const GATE_UNATTENDED_CLAUSE = /auto=halt/
+
+/**
+ * The installed convention read as CONTENT, not as a path that happens to exist.
+ *
+ * Same obligation `checkStepDelta` puts on each skill, applied to the file those
+ * skills delegate to — so the corpus cannot end up with twelve pointers into a
+ * document that no longer says anything, plus the `auto=halt` clause, which is
+ * the one instruction NO delta carries and therefore has no second home.
+ */
+export function checkInstalledGateConvention(content: string): string[] {
+  const errors = DELTA_CLAUSES.filter(([, clauses]) => !clauses.every(c => c.test(content))).map(
+    ([which]) =>
+      `${INSTALLED_GATE_CONVENTION_FILE}: no longer states the ${which} rule — every installed ` +
+      `step skill points here for it, so what this file stops saying is written nowhere else ` +
+      `(run \`pair update\`)`,
+  )
+  if (!GATE_UNATTENDED_CLAUSE.test(content)) {
+    errors.push(
+      `${INSTALLED_GATE_CONVENTION_FILE}: no longer resolves the gate for an UNATTENDED run ` +
+        `(\`auto=halt\`) — with the clause gone a \`$approval: auto\` run reaching a disabled step ` +
+        `has no instruction anywhere, and the natural default is to run it (run \`pair update\`)`,
+    )
+  }
+  return errors
 }
 
 /** One skill's marker obligations, resolved against the catalogue. */
@@ -2556,15 +2607,58 @@ export function checkInstalledProfileCorpus(
   const catalogue = read(INSTALLED_STEP_CATALOGUE_FILE)
   if (catalogue !== null) {
     errors.push(...compareInstalledCatalogue(entries, parseStepCatalogue(catalogue), skillsDir))
+    errors.push(
+      ...profileExampleErrors(INSTALLED_STEP_CATALOGUE_FILE, catalogue, entries, builtIns),
+    )
   }
   const profiles = read(INSTALLED_PROCESS_PROFILES_FILE)
   if (profiles !== null) {
     errors.push(...compareInstalledProfiles(builtIns, parseProcessProfiles(profiles)))
+    // Round 12 Major: the CELLS of this copy were bound and the PROSE around them
+    // was not. A `custom` worked example reading `` `spcify-prd` `` here was
+    // reported by nothing, while the identical typo in the dataset copy failed the
+    // gate — and this repo dogfoods pair, so its agents and developers read
+    // `.pair/knowledge/**`, not `dataset/**`. A reader copying that example into
+    // `way-of-working.md` HALTs on every subsequent `/next` run.
+    errors.push(
+      ...profileExampleErrors(INSTALLED_PROCESS_PROFILES_FILE, profiles, entries, builtIns),
+    )
   }
+  const convention = read(INSTALLED_GATE_CONVENTION_FILE)
+  if (convention !== null) errors.push(...checkInstalledGateConvention(convention))
   for (const file of ROOT_MANUAL_PATH_FILES) {
     const content = read(file)
     if (content !== null) errors.push(...checkManualPathEntrypoint(content, basename(file)))
   }
+  return errors
+}
+
+/**
+ * Every worked example a governed document carries, resolved through the REAL
+ * resolver — the check that makes a shipped example a promise rather than prose.
+ *
+ * Path-based, so it applies unchanged to a DATASET copy and to its INSTALLED one:
+ * `pair update` renames executables, never step ids, and an example declares step
+ * ids.
+ */
+function profileExampleErrors(
+  file: string,
+  content: string,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): string[] {
+  const errors: string[] = []
+  extractProfileExamples(content).forEach((example, i) => {
+    const declaration = parseWowProfileSection(example)
+    const r = resolveProcessProfile(declaration, entries, builtIns)
+    // Labelled by POSITION and by the profile the example DECLARES, never by
+    // `r.profile`: every HALT path resolves to the fallback `default`, so a
+    // corrupted `custom` example used to be reported as a `default` one — and
+    // `default` accepts no whitelist at all, so the label contradicted the
+    // message and pointed a maintainer at the wrong fence.
+    const at = `worked example #${i + 1} (\`${declaration.profile ?? 'no profile'}\`)`
+    for (const problem of profileProblems(r)) errors.push(`${file}: ${at}: ${problem}`)
+  })
   return errors
 }
 
@@ -2617,17 +2711,7 @@ export function checkShippedProfileProse(
       if (!PROFILE_DECLARATION_FILES.includes(file)) errors.push(missingGovernedFile(file))
       continue
     }
-    extractProfileExamples(readFileSync(path, 'utf-8')).forEach((example, i) => {
-      const declaration = parseWowProfileSection(example)
-      const r = resolveProcessProfile(declaration, entries, builtIns)
-      // Labelled by POSITION and by the profile the example DECLARES, never by
-      // `r.profile`: every HALT path resolves to the fallback `default`, so a
-      // corrupted `custom` example used to be reported as a `default` one — and
-      // `default` accepts no whitelist at all, so the label contradicted the
-      // message and pointed a maintainer at the wrong fence.
-      const at = `worked example #${i + 1} (\`${declaration.profile ?? 'no profile'}\`)`
-      for (const problem of profileProblems(r)) errors.push(`${file}: ${at}: ${problem}`)
-    })
+    errors.push(...profileExampleErrors(file, readFileSync(path, 'utf-8'), entries, builtIns))
   }
   return errors
 }
@@ -2686,7 +2770,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles incl. their worked examples, installed gate convention)`,
     )
     process.exit(0)
   } else {

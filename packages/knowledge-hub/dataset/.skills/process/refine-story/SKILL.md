@@ -199,6 +199,8 @@ STORY REFINEMENT COMPLETE:
 └── Next:     /plan-tasks to create task breakdown
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## HALT Conditions
 
 - **No Draft stories in backlog** (Step 0) — nothing to refine.

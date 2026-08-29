@@ -143,6 +143,8 @@ SUBDOMAIN PLACEMENT COMPLETE:
 └── Next:       /map-contexts (scoped to the same items)
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## Edge Cases and Error Handling
 
 - **Scope resolves to nothing** — report "no domain impact", caller proceeds without HALT.
