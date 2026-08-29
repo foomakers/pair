@@ -37,6 +37,8 @@ import {
   profileProblems,
   WOW_TEMPLATE_FILE,
   REPO_WOW_FILE,
+  PROFILE_PROSE_FILES,
+  PROFILE_DECLARATION_FILES,
 } from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
@@ -1277,8 +1279,22 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
     }
     return root
   }
+  // Round 10 Minor: a governed file that is absent is an ERROR now, not a skip, so
+  // every box is seeded with a clean copy of all five and each test overrides the
+  // one it is about.
+  const GOVERNED_DEFAULTS: Record<string, string> = {
+    ...Object.fromEntries(PROFILE_PROSE_FILES.map(f => [f, '# doc\n\nNo worked example.\n'])),
+    ...Object.fromEntries(
+      PROFILE_DECLARATION_FILES.map(f => [f, '## Process Profile\n\n- `profile`: `poc`\n']),
+    ),
+    [WOW_TEMPLATE_FILE]: shippedTemplate,
+  }
   const checkFiles = (files: Record<string, string>): string[] =>
-    checkShippedProfileProse(proseRootWithFiles(files), entries, builtIns)
+    checkShippedProfileProse(
+      proseRootWithFiles({ ...GOVERNED_DEFAULTS, ...files }),
+      entries,
+      builtIns,
+    )
   const check = (template: string): string[] => checkFiles({ [WOW_TEMPLATE_FILE]: template })
   afterAll(() => {
     for (const r of roots) rmSync(r, { recursive: true, force: true })
@@ -1286,6 +1302,34 @@ describe('checkShippedProfileProse — the shipped TEMPLATE’s worked examples'
 
   it('passes on the template as shipped', () => {
     expect(check(shippedTemplate)).toEqual([])
+  })
+
+  // Round 10 Minor: both loops did `if (!existsSync(path)) continue`, so a governed
+  // file that was MISSING or RENAMED was silently not checked while the CLI printed
+  // a PASS banner naming it as validated — zero errors being the same observable
+  // result as "all five validated clean". Two of the five reach outside the package
+  // into the docs site, so any reorganisation there dropped a page out of the gate
+  // with no signal. A guard that answers "nothing to check" when its input is gone
+  // is indistinguishable from one that passes (approval-rounds.md, "fail closed,
+  // everywhere").
+  it('reports a governed file that is MISSING instead of skipping it', () => {
+    const errors = checkShippedProfileProse(proseRootWithFiles({}), entries, builtIns)
+    for (const file of new Set([...PROFILE_DECLARATION_FILES, ...PROFILE_PROSE_FILES])) {
+      expect(errors.some(e => e.startsWith(`${file}: `) && e.includes('not found'))).toBe(true)
+    }
+  })
+
+  it('reports a RENAMED docs page — the one the gate cannot see move', () => {
+    const page = '../../apps/website/content/docs/reference/pair-next.mdx'
+    const relocated = Object.fromEntries(
+      Object.entries(GOVERNED_DEFAULTS).map(([rel, body]) => [
+        rel === page ? '../../apps/website/docs/reference/pair-next.mdx' : rel,
+        body,
+      ]),
+    )
+    const errors = checkShippedProfileProse(proseRootWithFiles(relocated), entries, builtIns)
+    expect(errors.join('\n')).toContain(`${page}: `)
+    expect(errors.join('\n')).toContain('not found')
   })
 
   // The concrete failure the gate used to certify: one character in the template's
@@ -1966,6 +2010,74 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   it('leaves a blockquoted key inside a fence an example', () => {
     const r = resolve('## Process Profile\n\n```text\n> - `profile`: `poc`\n```\n')
     expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // Round 10 Minor: the two REJECTED-marker patterns required the key to be
+  // BACKTICKED while the ACCEPTED-bullet one does not, so each error axis HALTed
+  // alone and their INTERSECTION was invisible. `1. profile: poc` and
+  // `> - profile: poc` resolved to `{ok:true, profile:'default', enabled:[all 12],
+  // warnings:[]}` — byte-identical to writing nothing, the silent WIDENING. The
+  // stated reason for requiring backticks is that "without a list marker that is
+  // the only signal separating a declaration from a sentence"; `1.` IS a list
+  // marker and `> -` carries a bullet, so the requirement over-reached exactly
+  // where its own rationale does not. The unbackticked VALUE is the shape the
+  // schema's documentation TABLE suggests — the case the accepted-bullet pattern
+  // was loosened for in the first place.
+  it.each([
+    ['an ordered-list marker', '1. profile: poc'],
+    ['an ordered-list paren marker', '1) profile: poc'],
+    ['a bold ordered-list key', '1. **profile**: poc'],
+  ])('HALTs on an UNBACKTICKED `profile` key written with %s', (_, line) => {
+    const r = resolve(`## Process Profile\n\n${line}\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expectNoStepSet(r)
+  })
+
+  it.each([
+    ['a bulleted key inside a blockquote', '> - profile: poc'],
+    ['an ordered key inside a blockquote', '> 1. profile: poc'],
+    ['a bulleted key inside a nested blockquote', '>> - profile: poc'],
+  ])('HALTs on an UNBACKTICKED `profile` key written as %s', (_, line) => {
+    const r = resolve(`## Process Profile\n\n${line}\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`profile`')
+    expect(r.halts[0]).toContain('blockquote')
+    expectNoStepSet(r)
+  })
+
+  // Asserted on the SHAPE halt, not merely on the key name: unread, this line left
+  // `custom` with no whitelist at all, so the run HALTed anyway — with "declares no
+  // `whitelist`" about a line visibly in the file, the anti-pattern the schema's own
+  // table writes down.
+  it('HALTs on an unbackticked ordered `whitelist` key as an unreadable SHAPE', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `custom`\n\n1. whitelist: implement\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('`whitelist`')
+    expect(r.halts[0]).toContain('a shape this reader does not accept')
+  })
+
+  // The line the requirement was actually drawn for stays where it was: with no
+  // list marker of any kind, the backticks are the only thing separating a
+  // declaration from a sentence that happens to open on the word.
+  it.each([
+    ['a marker-less unbackticked key', 'profile: poc'],
+    ['a marker-less unbackticked key inside a blockquote', '> profile: poc'],
+  ])('does not read %s as a declaration', (_, line) => {
+    const r = resolve(`## Process Profile\n\n${line}\n`)
+    expect(r.profile).toBe('default')
+    expect(r.enabled).toEqual(entries.map(e => e.id))
+    expect(r.halts).toEqual([])
+  })
+
+  // The third, weaker shape of the same class: the bullet and the backticks are
+  // both there, padded inside the ticks. Detected on the accepted pattern (the
+  // marker is present and the value is readable), so it RESOLVES rather than
+  // HALTs — before, it was neither.
+  it('accepts a bulleted key whose backticks are padded', () => {
+    const r = resolve('## Process Profile\n\n- ` profile `: `poc`\n')
+    expect(r.profile).toBe('poc')
     expect(r.halts).toEqual([])
   })
 

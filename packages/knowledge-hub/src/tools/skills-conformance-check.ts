@@ -86,7 +86,7 @@ const MIRROR_SKILLS_DIR = join('..', '..', '.claude', 'skills')
  * Each is swept only when present (`existsSync`), so an adopting project's
  * knowledge-hub — which has none of them — checks exactly what it ships.
  */
-const PROFILE_PROSE_FILES = [
+export const PROFILE_PROSE_FILES = [
   PROCESS_PROFILES_FILE,
   WOW_TEMPLATE_FILE,
   '../../apps/website/content/docs/concepts/adoption-files.mdx',
@@ -109,7 +109,7 @@ const PROFILE_PROSE_FILES = [
  * A docs `.mdx` page is deliberately NOT here — its prose is not a declaration
  * anyone resolves, only its fenced examples are, and those the sweep covers.
  */
-const PROFILE_DECLARATION_FILES = [WOW_TEMPLATE_FILE, REPO_WOW_FILE]
+export const PROFILE_DECLARATION_FILES = [WOW_TEMPLATE_FILE, REPO_WOW_FILE]
 
 const KB_PROSE_FILES = [
   'dataset/.pair/knowledge/way-of-working.md',
@@ -1137,8 +1137,18 @@ export function collectHowToGuides(howToDir: string): string[] {
 /**
  * Every skill directory in the corpus, as `<category>/<name>` (or the bare
  * `<name>` meta skill) — the same entry granularity `collectSkillFiles` walks.
+ *
+ * CAPABILITY skills are included on purpose, and both callers depend on it: two of
+ * the twelve catalogued steps — `define-subdomains` and `define-bounded-contexts`,
+ * the flagship `poc` case — have capability executables (`/map-subdomains`,
+ * `/map-contexts`). Narrowing this to `process/**` would make
+ * `checkStepMarkersInMirror` miss them on its `byCommand` lookup and `continue`
+ * past both, silently dropping the mirror marker guard for exactly those two, and
+ * would blind `checkCatalogueOrphans` to every capability step in both directions.
+ * Round 10 Minor: the function was called `collectProcessSkillDirs`, so honouring
+ * its name was a one-line "fix" away from that.
  */
-export function collectProcessSkillDirs(skillsDir: string): string[] {
+export function collectAllSkillDirs(skillsDir: string): string[] {
   return collectSkillFiles(skillsDir).map(f => relative(skillsDir, dirname(f)).split(sep).join('/'))
 }
 
@@ -1372,7 +1382,7 @@ export function checkStepMarkersInMirror(
   skillsDir: string,
   mirrorDir: string,
 ): string[] {
-  const byCommand = new Map(collectProcessSkillDirs(skillsDir).map(d => [commandOf(d), d]))
+  const byCommand = new Map(collectAllSkillDirs(skillsDir).map(d => [commandOf(d), d]))
 
   const errors: string[] = []
   for (const entry of entries) {
@@ -1713,18 +1723,45 @@ export function profileSectionProblems(content: string): string[] {
  * and is itself Title Case (`## Process Profile`), which is where the mirrored
  * spelling comes from. The VALUE stays strict: `` `POC` `` still HALTs as an
  * unknown profile name.
+ *
+ * The padding inside the ticks belongs to detection too (round 10 Minor):
+ * `- \` profile \`: \`poc\`` is a bullet carrying a backticked key and a backticked
+ * value, and it matched nothing — `default`, all twelve steps, zero halts.
  */
-const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/i
+const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?[ \t]*(profile|whitelist)[ \t]*`?\**\s*:(.*)$/i
+
+/**
+ * The key itself as the two REJECTED-marker patterns below spell it, with the
+ * backticks OPTIONAL — used only where a LIST MARKER has already been matched,
+ * since the marker is the signal the backticks otherwise stand in for.
+ */
+const KEY_LOOSE = '\\**`?[ \\t]*(profile|whitelist)[ \\t]*`?\\**[ \\t]*:'
+
+/** The same key with the backticks REQUIRED — for the genuinely marker-less line. */
+const KEY_BACKTICKED = '\\**`[ \\t]*(profile|whitelist)[ \\t]*`\\**[ \\t]*:'
+
+/** An ordered-list marker (`1.` / `1)`) or a bullet, with its trailing space. */
+const ORDERED_MARKER = '\\d+[.)][ \\t]*'
+const ANY_MARKER = `(?:[-*+]|\\d+[.)])[ \\t]*`
 
 /**
  * A key written with a marker this reader does not accept — no bullet at all, or an
  * ordered-list one (`1.` / `1)`).
  *
- * The key must be BACKTICKED here, unlike on a bullet: without a list marker that is
- * the only signal separating a declaration from a sentence mentioning the key. Such
- * a line is DETECTED (it lands in `unreadable`, and HALTs) rather than skipped as
- * invisible text — skipping it is the silent widening one more time, and the shape is
- * a plausible read of the schema: a numbered list of "the two keys", or the key
+ * The key must be BACKTICKED only on the MARKER-LESS line: with nothing opening a
+ * list item, the ticks are the sole signal separating a declaration from a sentence
+ * mentioning the key. Behind an ordered marker they are not required (round 10
+ * Minor) — `1.` IS a list marker, the very signal the requirement stood in for, and
+ * requiring both made each error axis HALT alone while their INTERSECTION was
+ * invisible: `1. profile: poc` resolved to `{ok:true, profile:'default',
+ * enabled:[all 12], warnings:[]}`, byte-identical to writing nothing, though
+ * `- profile: poc` and `1. \`profile\`: \`poc\`` each HALTed. The unbackticked value
+ * is not an exotic typo either: it is the shape the schema's own documentation TABLE
+ * suggests, the case the accepted-bullet pattern was loosened for to begin with.
+ *
+ * Such a line is DETECTED (it lands in `unreadable`, and HALTs) rather than skipped
+ * as invisible text — skipping it is the silent widening one more time, and the shape
+ * is a plausible read of the schema: a numbered list of "the two keys", or the key
  * copied out of a fenced example without carrying its bullet along.
  *
  * A documentation TABLE row (`| \`profile\` | \`poc\` | … |`) is deliberately NOT
@@ -1741,7 +1778,10 @@ const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?(profile|whitelist)`?\**\s*:(.*)$/i
  * stop at the key's spelling, or a case variant slips through one shape lower down
  * into the same silent `default`.
  */
-const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/i
+const WOW_PROFILE_KEY_OFF_MARKER = new RegExp(
+  `^[ \\t]*(?:${ORDERED_MARKER}${KEY_LOOSE}|${KEY_BACKTICKED})`,
+  'i',
+)
 
 /**
  * A key written inside a BLOCKQUOTE, with or without a list marker of its own.
@@ -1758,18 +1798,35 @@ const WOW_PROFILE_KEY_OFF_MARKER = /^[ \t]*(?:\d+[.)][ \t]*)?\**`(profile|whitel
  * matching it would HALT the files the gate reads; a blockquoted key is written
  * nowhere in this corpus as documentation (`grep -rn "^> [-*+] " .pair/adoption` and
  * the dataset copy: zero hits), so treating it as an author's decorated declaration
- * costs nothing and closes the widening. The key must be BACKTICKED, for the same
- * reason as the off-marker pattern: inside a quotation that is the only signal
- * separating a declaration from a sentence about the key.
+ * costs nothing and closes the widening. The backticks follow the same rule as on the
+ * off-marker pattern (round 10 Minor): required when the quoted line carries no list
+ * marker of its own, optional behind one. `> - profile: poc` used to satisfy neither
+ * axis and so tripped neither — `default`, all twelve steps, zero halts — while
+ * `- profile: poc` and `> - \`profile\`: \`poc\`` each HALTed.
  */
-const WOW_PROFILE_KEY_BLOCKQUOTED =
-  /^[ \t]*(?:>[ \t]*)+(?:[-*+][ \t]*|\d+[.)][ \t]*)?\**`(profile|whitelist)`\**[ \t]*:/i
+const WOW_PROFILE_KEY_BLOCKQUOTED = new RegExp(
+  `^[ \\t]*(?:>[ \\t]*)+(?:${ANY_MARKER}${KEY_LOOSE}|${KEY_BACKTICKED})`,
+  'i',
+)
 
 /** An indented code block: four spaces (or a tab) of indent, CommonMark's third form. */
 const INDENTED_CODE = /^(?: {4}|\t)/
 
 /** A blockquote line: a block of its own, and never a declaration site. */
 const BLOCKQUOTE = /^[ \t]*>/
+
+/**
+ * The key name a REJECTED-marker line declares, or `null` when it declares none.
+ *
+ * Each of the two patterns is an alternation of "marker + loose key" and "no marker +
+ * backticked key", so the name lands in group 1 or group 2 depending on which arm
+ * matched; only one is ever defined.
+ */
+function rejectedKeyName(line: string): string | null {
+  const m = WOW_PROFILE_KEY_OFF_MARKER.exec(line) ?? WOW_PROFILE_KEY_BLOCKQUOTED.exec(line)
+  if (m === null) return null
+  return (m[1] ?? m[2]) as string
+}
 
 /** Does this line declare a key at all — in an accepted shape or a rejected one? */
 function isProfileKeyLine(line: string): boolean {
@@ -1843,8 +1900,8 @@ function canonicalKey(captured: string): ProfileKeyLine['key'] {
 function readProfileKeyLine(line: string): ProfileKeyLine | null {
   const key = WOW_PROFILE_KEY.exec(line)
   if (!key) {
-    const rejected = WOW_PROFILE_KEY_OFF_MARKER.exec(line) ?? WOW_PROFILE_KEY_BLOCKQUOTED.exec(line)
-    return rejected ? { key: canonicalKey(rejected[1] as string), values: null } : null
+    const rejected = rejectedKeyName(line)
+    return rejected === null ? null : { key: canonicalKey(rejected), values: null }
   }
   const name = canonicalKey(key[1] as string)
   const rest = key[2] as string
@@ -2269,7 +2326,7 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
   const errors = [
     ...checkStepCatalogue(entries, {
       howToGuides: collectHowToGuides(join(proseRoot, HOW_TO_DIR)),
-      skillDirs: collectProcessSkillDirs(skillsDir),
+      skillDirs: collectAllSkillDirs(skillsDir),
     }),
     ...checkStepMarkers(entries, skillsDir),
   ]
@@ -2297,10 +2354,27 @@ export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): st
   return errors
 }
 
+/** A governed file the gate names as checked and cannot find: never a skip. */
+function missingGovernedFile(file: string): string {
+  return (
+    `${file}: governed by the profile gate but not found — restore the file, or update ` +
+    `\`PROFILE_DECLARATION_FILES\` / \`PROFILE_PROSE_FILES\` if it moved on purpose`
+  )
+}
+
 /**
  * The shipped adoption TEMPLATE and every worked EXAMPLE, read through the real
  * resolver — a template carrying a section no reader accepts, or an example that
  * resolves with a warning, teaches the wrong shape to every project that copies it.
+ *
+ * Round 10 Minor: both loops skipped an absent path, so a governed file that was
+ * MISSING or RENAMED was not checked and the CLI still printed the PASS banner that
+ * names all five as validated — zero errors being observationally identical to "all
+ * five clean". Two of the five reach outside the package into the docs site, so a
+ * docs-site reorganisation dropped a page out of the gate with no signal and its
+ * worked examples were free to drift. Fail closed instead (approval-rounds.md: "a
+ * guard that answers 'nothing to check' when it cannot parse its input is
+ * indistinguishable from a guard that passes").
  */
 export function checkShippedProfileProse(
   proseRoot: string,
@@ -2310,7 +2384,10 @@ export function checkShippedProfileProse(
   const errors: string[] = []
   for (const file of PROFILE_DECLARATION_FILES) {
     const path = join(proseRoot, file)
-    if (!existsSync(path)) continue
+    if (!existsSync(path)) {
+      errors.push(missingGovernedFile(file))
+      continue
+    }
     const wow = resolveProcessProfile(
       parseWowProfileSection(readFileSync(path, 'utf-8')),
       entries,
@@ -2321,7 +2398,11 @@ export function checkShippedProfileProse(
 
   for (const file of PROFILE_PROSE_FILES) {
     const path = join(proseRoot, file)
-    if (!existsSync(path)) continue
+    if (!existsSync(path)) {
+      // A file already reported by the declaration loop is not reported twice.
+      if (!PROFILE_DECLARATION_FILES.includes(file)) errors.push(missingGovernedFile(file))
+      continue
+    }
     extractProfileExamples(readFileSync(path, 'utf-8')).forEach((example, i) => {
       const declaration = parseWowProfileSection(example)
       const r = resolveProcessProfile(declaration, entries, builtIns)

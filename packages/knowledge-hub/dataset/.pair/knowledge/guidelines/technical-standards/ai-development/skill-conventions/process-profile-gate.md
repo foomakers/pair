@@ -45,4 +45,16 @@ Executable form of the **`refine-story`** step, and a composer of `define-subdom
 
 Substitute the skill's own step id in the marker and in the sentence, and its own composed step ids (drop that clause when it composes none).
 
+**One clause is per-FAMILY, not per-skill.** A step skill whose directory name is in an `$approval` signal family (`assess-`, `map-`) exposes the signal, so the line that asks for confirmation *is* an approval round: it appends the `$approval: auto` clause and the round marker, and the skill carries an `$approval` argument row pointing at [approval rounds](approval-rounds.md). Two of the twelve shipped deltas are this variant — both `map-*`, for the `define-subdomains` and `define-bounded-contexts` steps — and this one is quoted from `/map-subdomains` verbatim, pinned by the same conformance test:
+
+```markdown
+<!-- process-step: id=define-subdomains -->
+
+Executable form of the **`define-subdomains`** step. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; under `$approval: auto` there is nobody to answer, so the run **HALTs**. <!-- approval-round: kind=gate; auto=halt -->
+
+A **composed** invocation never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
+```
+
+Copy the first shape into a family skill and `skills:conformance` reports three errors on a delta followed exactly as prescribed: an unqualified approval round on that line, a missing `$approval` argument row, and a missing pointer to `approval-rounds.md`.
+
 Nothing else is per-skill. The step ids, the profiles and the error cases all live in the two KB files this points at, so a change to the schema is one edit, not twelve.
