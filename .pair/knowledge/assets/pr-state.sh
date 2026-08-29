@@ -72,10 +72,12 @@ resolve_pr_state() {
 }
 
 # light_auto_approve_allowed <pr_labels> <light_declared> <tier> <state>
-#   pr_labels      : the pull request's label NAMES (TAGS ONLY), space-, comma- or
-#                    newline-separated — the three shapes a host's label read produces
-#                    (on GitHub: `gh pr view <n> --json labels -q '[.labels[].name]|join(" ")'`
-#                    and the bare `-q '.labels[].name'`, which emits one per line)
+#   pr_labels      : the pull request's label NAMES (TAGS ONLY). PREFER one name per LINE
+#                    (on GitHub: `gh pr view <n> --json labels -q '.labels[].name'`) or
+#                    comma-separated: both delimit whole names, so a label whose NAME
+#                    contains a space (`good first issue`) stays one label. The
+#                    space-joined shape (`-q '[.labels[].name]|join(" ")'`) is accepted as
+#                    a LEGACY input and is AMBIGUOUS by construction — see the match below.
 #   light_declared : 1 when the project's adoption declares the `light` family in
 #                    `## Tag Projection` (tech/risk-matrix.md); anything else ⇒ not declared
 #   tier           : green | yellow | red | <anything else ⇒ red (fail-safe)>
@@ -120,17 +122,32 @@ light_auto_approve_allowed() {
     return 1
   fi
 
-  # Whole-label match: `lightweight` is not `light`. Commas AND newlines are normalised to
-  # spaces because a host's label read produces all three shapes — normalising only commas
-  # would refuse every correctly tagged PR whose caller used the natural one-name-per-line
-  # read, and the stderr below would then deny a `light` tag the PR visibly carries.
-  case " ${labels//[$'\n',]/ } " in
-  *" light "*) ;;
+  # WHOLE-LABEL match: `lightweight` is not `light`. What "whole" can mean depends on the
+  # SHAPE of the read, and only two of the three shapes carry the boundaries:
+  #   one name per LINE (`-q '.labels[].name'`) and COMMA-separated — a field is a whole
+  #   label name, spaces included, so `ui: light theme` is one label and never the tag.
+  #   SPACE-JOINED (`-q '[.labels[].name] | join(" ")'`) — LEGACY and irrecoverably
+  #   AMBIGUOUS: a code-host label NAME may itself contain spaces (`good first issue`,
+  #   `help wanted`), so nothing in the joined string distinguishes the `light` TAG from a
+  #   label merely containing that word. It is still accepted, because callers pass it, but
+  #   it is no longer what the skills document: prefer the line form, which is exact.
+  local matched=0 line
+  case "$labels" in
+  *$'\n'* | *,*)
+    while IFS= read -r line; do
+      line="${line#"${line%%[![:space:]]*}"}" # trim leading blanks
+      line="${line%"${line##*[![:space:]]}"}" # trim trailing blanks
+      [ "$line" = light ] && matched=1
+    done <<<"${labels//,/$'\n'}"
+    ;;
   *)
-    echo "pr-state: the pull request does not carry the 'light' tag — no auto-approval" >&2
-    return 1
+    case " $labels " in *" light "*) matched=1 ;; esac
     ;;
   esac
+  if [ "$matched" != 1 ]; then
+    echo "pr-state: the pull request does not carry the 'light' tag — no auto-approval" >&2
+    return 1
+  fi
 
   if explicit_approval_required "$tier"; then
     echo "pr-state: tier '${tier:-unknown}' requires an explicit human approval — light applies below red only, and never bypasses that rule" >&2

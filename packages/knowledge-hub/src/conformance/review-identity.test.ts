@@ -386,9 +386,50 @@ describe('review — resolves WHO acts, then submits (AC1, AC4)', () => {
     expect(authority).toBeGreaterThan(-1)
     // the synthesis comes FIRST and carries no mode/verdict scope of its own
     expect(synthesis).toBeLessThan(authority)
-    expect(step53).toMatch(/in \*\*all three modes and for every verdict\*\*/)
+    // REGRESSION (review round 12). It said "all three modes", which is false for `halt`:
+    // step 1 of this same list ends that mode ("No host write happens on this path") and
+    // the HALT Conditions bullet stops the review outright. The load-bearing claim is that
+    // the call is NOT nested inside the identity-only, APPROVED-only authority step.
+    expect(step53).toMatch(
+      /in \*\*both modes that continue \(`session` and `identity`\) and for every verdict\*\*/,
+    )
+    expect(step53).not.toContain('all three modes and for every verdict')
     // the `session` skip belongs to the authority step, never to the synthesis
     expect(step53).toMatch(/In `session` mode skip this entirely: `approve-authorized = 0`/)
+  })
+})
+
+// REGRESSION (review round 12, Major). The story's security-critical containment — a
+// bot-user identity is excluded from the 🔴 human-approval predicate ONLY by its login,
+// and an unprovisioned login makes it not-healthy ⇒ HALT — was asserted on five surfaces
+// while the check meant to enforce it read the WRONG thing: `review_identity_health` was
+// fed `${REVIEW_IDENTITY_LOGIN:-}` from the AGENT'S AMBIENT ENVIRONMENT, whereas the
+// clause it arms is evaluated in the `pair-explicit-approval` workflow from the REPOSITORY
+// VARIABLE (`vars.REVIEW_IDENTITY_LOGIN`). Export the env var without `gh variable set`
+// (or set a SECRET instead, or scope the variable to an Environment the
+// `pull_request_target` job does not use) and health computed HEALTHY while the gate-side
+// clause read the empty string — `.user.login != ""`, true for every account — so an
+// APPROVED review by the bot on a `risk:red` head satisfied the explicit HUMAN approval.
+describe('the bot-user health input is the REPOSITORY VARIABLE, not ambient state', () => {
+  it('the per-run probe reads the variable back and gates AUTH_OK on it', () => {
+    expect(GITHUB_GUIDE).toContain(
+      'gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN" --jq .value',
+    )
+    expect(GITHUB_GUIDE).toMatch(/\[ -n "\$RV" \] && \[ "\$ACTING" = "\$RV" \] && AUTH_OK=1/)
+  })
+
+  it('the health call is fed that read-back value, and no ambient env var survives', () => {
+    expect(GITHUB_GUIDE).toContain('"${RV:-}")"')
+    expect(GITHUB_GUIDE).not.toContain('"${REVIEW_IDENTITY_LOGIN:-}"')
+    // the adapter's own usage example must not model the ambient read either
+    expect(ADAPTER).not.toContain('"${REVIEW_IDENTITY_LOGIN:-}")"')
+  })
+
+  it('both skills name the same source for the <login> they pass', () => {
+    for (const skill of [REVIEW, PUBLISH_PR]) {
+      expect(skill).toMatch(/repository variable `REVIEW_IDENTITY_LOGIN`/)
+      expect(skill).toMatch(/read back on this run|read back from the host/)
+    }
   })
 })
 
@@ -406,7 +447,7 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
     expect(REVIEW).toMatch(
       /identity_verdict_event <mode> <verdict> <approve-authorized> <self-authored>/,
     )
-    expect(REVIEW).toMatch(/light_auto_approve_allowed[\s\S]{0,400}approve-authorized/)
+    expect(REVIEW).toMatch(/light_auto_approve_allowed[\s\S]{0,1200}approve-authorized/)
     expect(REVIEW).toMatch(/APPROVED \+ not authorized\*\* ⇒ `event = COMMENT`/)
     // and every auto-approval mention in the skill is qualified by "light"
     for (const line of REVIEW.split('\n').filter(l => /auto-approv/i.test(l))) {
@@ -482,11 +523,22 @@ describe('review — the light row is wired, gated and audited (AC2, AC3, AC5)',
   // and the helper normalised commas but not newlines — so the natural
   // `gh pr view --json labels -q '.labels[].name'` read silently refused every correctly
   // tagged PR, with a stderr denying a `light` tag the PR visibly carries.
-  it('the skill names the concrete label read, and the helper accepts all three shapes', () => {
-    expect(REVIEW).toContain(`gh pr view <number> --json labels -q '[.labels[].name] | join(" ")'`)
-    expect(REVIEW).toMatch(/normalises spaces, commas and newlines/)
-    expect(EVALUATOR).toContain(`case " \${labels//[$'\\n',]/ } " in`)
-    expect(EVALUATOR).toMatch(/newline-separated/)
+  // REGRESSION (review round 12). Collapsing newlines AND commas into spaces made the
+  // space-joined read the skill documented as PRIMARY lossy: a code-host label NAME may
+  // itself contain spaces (`good first issue`, `help wanted`), so a single label named
+  // `ui: light theme` was indistinguishable from the `light` TAG. On a repository that
+  // declared the family and sets `required_approving_review_count >= 1`, a risk:green PR
+  // carrying only that label reached `ready-to-merge`, the identity signed a native
+  // APPROVE, and the audit comment named a `Tag: light` the PR does not carry.
+  it('the skill names the UNAMBIGUOUS label read, and the helper matches whole fields', () => {
+    // one name per line is now the documented primary read
+    expect(REVIEW).toContain(`gh pr view <number> --json labels -q '.labels[].name'`)
+    expect(REVIEW).toMatch(/legacy|ambiguous/i)
+    // whole-FIELD matching for the two unambiguous shapes; the space split is the fallback
+    expect(EVALUATOR).toMatch(/\*\$'\\n'\* \| \*,\*\)/)
+    expect(EVALUATOR).toMatch(/\[ "\$line" = light \]/)
+    expect(EVALUATOR).toMatch(/legacy/i)
+    expect(EVALUATOR).toMatch(/one name per LINE/i)
   })
 
   it('reports the identity mode and the light-row outcome in the output block', () => {
@@ -903,7 +955,7 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
     // review, and got `422 Can not request changes on your own pull request` on the last
     // step — every review discarded mid-write. Both shapes are compared now.
     expect(GITHUB_GUIDE).toMatch(
-      /"app\/\$\{APP_SLUG:-\}" \| "\$\{APP_SLUG:-\}\[bot\]"\) PERMS_OK=0 ;;/,
+      /"app\/\$\{APP_SLUG:-\}" \| "\$\{APP_SLUG:-\}\[bot\]"\)[\s\S]{0,400}?PERMS_OK=0/,
     )
     expect(GITHUB_GUIDE).toMatch(/GraphQL and answers\s+#\s+`app\/<slug>`/)
     expect(GITHUB_GUIDE).toMatch(/app\/dependabot/)
@@ -1195,6 +1247,11 @@ describe('ADR-018 — the amendment records adoption AND the non-changes (AC6)',
     // and the amendment records why `session` mode is NOT uniformly a comment-form review
     expect(ADR_018).toMatch(/the comment form is the self-review case, not the mode/)
     expect(ADR_018).toMatch(/The PR-state synthesis is unconditional/)
+    // ROUND 12: "all three modes" is false for `halt`, which ends the review before any
+    // host write. The bullet's real claim is that the call is not nested in the
+    // identity-only, APPROVED-only authority step.
+    expect(ADR_018).not.toContain('all three modes and for every verdict')
+    expect(ADR_018).toContain('both modes that continue (`session` and `identity`)')
     expect(ADR_018).toContain('identity_verdict_event')
   })
 
