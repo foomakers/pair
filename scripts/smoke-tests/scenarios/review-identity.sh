@@ -647,6 +647,14 @@ else
     "$(extract_kind "$TMP_DIR/wow-prose.md" 2>/dev/null)"
   check "PROSE, second shape ⇒ none" none \
     "$(extract_kind "$TMP_DIR/wow-prose2.md" 2>/dev/null)"
+  # ROUND 8. The round-6 anchor `(^|[^[:alnum:]])` was not a LINE anchor: it matched the
+  # phrase-then-colon anywhere in a line, so an ordinary sentence that happens to introduce
+  # the topic with a colon answered PRESENT on a project running the zero-configuration
+  # default — and the empty extraction then HALTed every review and every PR publication.
+  printf -- 'A note on review identity: we deliberately run none, reviews use the session token.\n' \
+    >"$TMP_DIR/wow-prose3.md"
+  check "PROSE with the phrase FOLLOWED BY A COLON mid-sentence ⇒ none (never a HALT)" none \
+    "$(extract_kind "$TMP_DIR/wow-prose3.md" 2>/dev/null)"
   # The adapter owns the vocabulary the guide validates against.
   for k in app user bot-user none; do
     review_identity_kind_ok "$k" 2>/dev/null ||
