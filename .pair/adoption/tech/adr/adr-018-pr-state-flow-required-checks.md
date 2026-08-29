@@ -276,7 +276,12 @@ still the design; this amendment layers a credential resolution step and one ado
   default would collapse every identity verdict to COMMENT and delete the feature). A wrong guess there is loud
   (the host answers 422) rather than silent, and Step 5.3's read-back now has a defined action: a review the
   read does not show is `Review: NOT SUBMITTED`, the resolved check is **not** published, and the pending one
-  stays in place.
+  stays in place. **The rule covers both forms and is now a health input, not only a verdict degradation**: a
+  GitHub App authors pull requests as `<app-slug>[bot]` (how Dependabot appears), so "an App is never a PR
+  author" was false and the one-credential setup — one App opening the PR and reviewing it — would have HALTed
+  mid-write on every review it ever ran. The per-run probe compares the acting principal against the PR author
+  on **both** paths and answers *not healthy* ⇒ `halt` **before any host write**; the COMMENT degradation stays
+  as the in-flow fail-safe for a host adapter that runs no such probe or whose authorship read failed.
 - **The idempotency skip covers the publication acts only.** Step 5.3 submits a *fresh* native review on every
   re-invocation, so a re-review on an unchanged head is a new identity action: skipping from Step 5.4 straight
   past Step 5.4b would leave an identity `APPROVE` with no paired audit comment and no `Light row:` line — the

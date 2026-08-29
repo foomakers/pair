@@ -695,6 +695,8 @@ A **dedicated review identity** is a second principal — a GitHub App installat
 
 Only a GitHub **App** types as `"Bot"`. A bot _user_ is an ordinary account: without the login clause its approving review satisfies `pair-explicit-approval` exactly like a human's, and a `risk:red` PR with green gates and an APPROVED verdict would reach `ready-to-merge` with no human involvement at all. That is why `Review identity: bot-user` **requires** `REVIEW_IDENTITY_LOGIN` (below), why `review_identity_exclusion_ok` treats a bot-user identity without it as **not healthy** (⇒ `halt`), and why this is a mechanism rather than a rule stated in prose. With it in place, adopting an identity never relaxes the 🔴 rule and a `risk:red` pull request still needs a second human account (ADR-018, amendment 2026-08-28). Two mechanisms live side by side deliberately — the identity signs the ordinary review, a human signs the 🔴 one.
 
+**MANDATORY for BOTH forms — the identity must NOT be an account that opens pull requests in this repository.** Provision a **separate** principal for reviewing, even where an automation already runs under a machine account. This is not a bot-user-only rule: a GitHub App authors pull requests as `<app-slug>[bot]` — the login shape Dependabot appears under — so the cheapest setup, ONE credential for the whole unattended pipeline — the agent that opens the pull request and the review flow alike — hits the rule exactly as a shared bot user does. GitHub rejects a self-authored review action (`422 Can not request changes on your own pull request`), so an identity that is also the PR author cannot deliver the verdict as a review at all: `identity_verdict_event` degrades it to the COMMENT form, and the native APPROVE the light row would authorize is unobtainable on every PR that account opened. The concrete cases are an unattended-delivery project that implements and publishes as `acme-bot` and then declares `Review identity: bot-user` pointing at the same `acme-bot`, and the same project with one App named as both publisher and `Review identity: app`. **Each form's per-run health probe checks it** — the App path in step 6 probe 3 (`<app-slug>[bot]` against the PR author), the bot-user path in its `ACTING` comparison — so the misconfiguration is a `halt` before any host write rather than a `422` discovered mid-review.
+
 #### GitHub App (recommended)
 
 Recommended because it is the only form that unlocks the Checks API, and because an App installation token is scoped to the repository rather than to a person's whole account.
@@ -730,9 +732,16 @@ Recommended because it is the only form that unlocks the Checks API, and because
      "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens")"
    GH_TOKEN="$(printf '%s' "$TOKEN_JSON" | jq -r '.token // empty')"
    export GH_TOKEN                                   # every `gh` call below uses this
+   # The App's own SLUG, captured here because `GET /app` is a JWT endpoint (the
+   # installation token answers 403). It is what the App authors pull requests as —
+   # `<slug>[bot]` — so step 6's probe 3 needs it to check the identity is not this PR's
+   # author. Capture it now or that probe cannot run.
+   APP_SLUG="$(curl -sS -H "Authorization: Bearer $JWT" -H 'Accept: application/vnd.github+json' \
+     https://api.github.com/app | jq -r '.slug // empty')"
+   export APP_SLUG
    ```
 
-   The token is short-lived by design: mint it per run, never store it. Inside a workflow the same explicit request is `permission-pull-requests: write` + `permission-checks: write` + `permission-contents: read` on `actions/create-github-app-token@v1`, and the step fails the same way when a grant is missing.
+   The token is short-lived by design: mint it per run, never store it. Inside a workflow the same explicit request is `permission-pull-requests: write` + `permission-checks: write` + `permission-contents: read` on `actions/create-github-app-token@v1`, and the step fails the same way when a grant is missing; that action also exposes the slug as its `app-slug` output, which is `$APP_SLUG` on that path.
 
 5. **Verify ONCE, at setup** — the probes that can only be answered by WRITING. A read probe cannot prove a write grant, and a `403` discovered later lands mid-flow, after `pair-review` was already published. Every probe below runs with that installation token, and none of them runs per review (step 6 is the per-run health check):
 
@@ -761,8 +770,15 @@ Recommended because it is the only form that unlocks the Checks API, and because
    # 1. AUTH_OK — the credential authenticates AND the identity is scoped to THIS repo.
    #    `gh api user` does NOT work here: an installation token is not associated with a
    #    user and answers `403 Resource not accessible by integration`.
+   #    MEMBERSHIP, not reachability: the token is scoped to the INSTALLATION, which is
+   #    org-wide, so `/installation/repositories` answers 200 in a repository the App was
+   #    never installed on. Testing `.total_count` there passes health, runs the whole
+   #    review, and 404s on the FIRST host write — into the mid-write HALT, with a
+   #    diagnostic blaming a revoked grant. `$REPO` (the section's shared variable,
+   #    `owner/repo`) must appear in the list.
    AUTH_OK=0
-   gh api /installation/repositories --jq '.total_count' >/dev/null 2>&1 && AUTH_OK=1
+   gh api /installation/repositories --paginate --jq '.repositories[].full_name' 2>/dev/null |
+     grep -qx "$REPO" && AUTH_OK=1
 
    # 2. PERMS_OK — the grants, observed WITHOUT writing: step 4's exchange IS the
    #    write-grant probe, because it requested `permissions` explicitly and GitHub 422s
@@ -772,9 +788,16 @@ Recommended because it is the only form that unlocks the Checks API, and because
      [ "$(printf '%s' "$TOKEN_JSON" | jq -r '.permissions.pull_requests')" = write ] &&
      [ "$(printf '%s' "$TOKEN_JSON" | jq -r '.permissions.checks')" = write ] && PERMS_OK=1
 
-   # 3. The identity must not be the PR's own AUTHOR (see the setup rule under Bot user).
-   #    Artifact-free, and it catches the provisioning mistake before any host write.
+   # 3. The identity must not be the PR's own AUTHOR (the MANDATORY rule for both forms,
+   #    above). An App CAN author pull requests — as `<app-slug>[bot]`, the login shape
+   #    Dependabot appears under — so this is CHECKED here, never assumed away. Reading
+   #    the author and not comparing it would leave the one-App setup (same credential
+   #    publishes the PR and reviews it) to fail on the first write instead.
+   #    $APP_SLUG comes from step 4: `GET /app` is a JWT endpoint, so the installation
+   #    token cannot read it here. Unknown slug ⇒ unknown health ⇒ not healthy.
    PR_AUTHOR="$(gh pr view "$PR" --json author -q .author.login)"
+   [ "$PR_AUTHOR" = "${APP_SLUG:-}[bot]" ] && PERMS_OK=0
+   [ -z "${APP_SLUG:-}" ] && PERMS_OK=0
    ```
 
    **A `403`/`422` met MID-WRITE is a HALT, not a fallback.** These probes make that rare, not impossible (a grant can be revoked between the probe and the write). If any identity write in the flow is refused, report it against the artifact that failed, stop, and point at this section — never retry with the session token, and never publish `pair-review` as though the review had landed.
@@ -863,7 +886,7 @@ A second GitHub **user** account, invited to the repository with **write** acces
 
 Same secret rule: the PAT lives in the secret store, never in the repository. It costs a seat on paid plans and it does **not** unlock the Checks API (that is App-only), so `pair_review_publication_mode` keeps it on the commit-status form. A user token _is_ associated with a user, so here `gh api user --jq '.login, .type'` is the right probe (expect `"User"`).
 
-**MANDATORY for this form — the identity must NOT be an account that opens pull requests in this repository.** Provision a **separate** account for reviewing, even where an automation already runs under a machine account. GitHub rejects a self-authored review action (`422 Can not request changes on your own pull request`), so an identity that is also the PR author cannot deliver the verdict as a review at all: `identity_verdict_event` degrades it to the COMMENT form, and the native APPROVE the light row would authorize is unobtainable on every PR that account opened. The concrete case is an unattended-delivery project that implements and publishes as `acme-bot` and then declares `Review identity: bot-user` pointing at the same `acme-bot` — health passes, the mode resolves `identity`, and every verdict silently loses its native event.
+The section's MANDATORY rule applies here in full — this account must not open pull requests in this repository — and the last line of the probe below is what enforces it.
 
 **Per-run health, artifact-free** (this form's equivalent of the App path's step 6 — the `healthy` input, computed on every run):
 
@@ -876,7 +899,7 @@ AUTH_OK=0
 PERM="$(gh api "repos/$REPO/collaborators/$ACTING/permission" --jq .permission)"
 PERMS_OK=0
 case "$PERM" in write | admin) PERMS_OK=1 ;; esac
-# And the identity must not be this PR's author (the rule above).
+# And the identity must not be this PR's author (the MANDATORY rule for both forms, above).
 [ "$ACTING" = "$(gh pr view "$PR" --json author -q .author.login)" ] && PERMS_OK=0
 ```
 
@@ -902,7 +925,7 @@ That variable is the health input `review_identity_exclusion_ok user "$REVIEW_ID
 | Configured, credential invalid / expired | `halt` | **HALT** with a pointer back to this section. Never a session-user fallback. |
 | Configured, a permission missing (`403` on a probe) | `halt` | Same — the setup is incomplete, and acting as the human whose token is loaded would misattribute the review. |
 | Configured, health unknown (the per-run probes of step 6 not run, network error) | `halt` | Fail-safe: unknown is not healthy. `review_identity_health` answers `0` for any probe outcome that is not exactly `1`. |
-| Configured, and the identity **is the pull request's author** | `identity` (health is unaffected) | The host rejects a self-authored review action, so `identity_verdict_event` returns **COMMENT** — the verdict is published in full, with its token leading the body, and the native event (including the light row's APPROVE) is unobtainable on that PR. Not a HALT: the judgment still lands and `pair-review` still carries it. Fix the setup — the identity must not open pull requests here. |
+| Configured, and the identity **is the pull request's author** | `halt` — the per-run probe catches it (App: probe 3, `<app-slug>[bot]`; bot user: the `ACTING` comparison) | A provisioning error, caught **before any host write**: the identity must not open pull requests here. Where a host adapter runs no such probe, or the authorship read failed, the in-flow fail-safe still holds — `identity_verdict_event` returns **COMMENT**, so the verdict is published in full with its token leading the body while the native event (including the light row's APPROVE) is unobtainable on that PR. |
 | A grant revoked between the probe and the write (`403`/`422` mid-write) | — | **HALT** on the refused write, reported against the artifact that failed. Never retried with the session token, and `pair-review` is never published as though the review had landed. |
 | Configured as `bot-user`, `REVIEW_IDENTITY_LOGIN` not provisioned | `halt` | `review_identity_exclusion_ok` fails, so the identity is not healthy. Deliberately a HALT and not a warning: this is the one misconfiguration that would let a machine account satisfy the 🔴 explicit **human** approval. |
 
