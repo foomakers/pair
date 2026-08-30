@@ -61,13 +61,17 @@ export const GUIDE_COUNT_RE =
 export const LINK_RE = /\]\((\/docs[^)\s]*)\)/g
 export const HREF_RE = /href="(\/docs[^"]*)"/g
 
-// Repo-file citations: the docs site cites decision records / KB files by GitHub
-// blob URL (`[ADR-021](https://github.com/foomakers/pair/blob/main/.pair/...md)`).
-// Nothing validated them: LINK_RE/HREF_RE only see `/docs/...`, and the kb-validate
-// link-checker's roots are `packages/knowledge-hub/dataset` and `.pair/knowledge`
-// — neither contains `apps/website/content/docs`. A mistyped record filename shipped
-// as a 404 no gate could see.
-export const REPO_BLOB_RE = /https:\/\/github\.com\/foomakers\/pair\/blob\/main\/([^)\s"'`]+)/g
+// Repo-file citations: the docs site cites decision records / KB files / source dirs
+// by GitHub URL (`[ADR-021](https://github.com/foomakers/pair/blob/main/.pair/...md)`,
+// `.../tree/main/apps/pair-cli`). Nothing validated them: LINK_RE/HREF_RE only see
+// `/docs/...`, and the kb-validate link-checker's roots are
+// `packages/knowledge-hub/dataset` and `.pair/knowledge` — neither contains
+// `apps/website/content/docs`. A mistyped record filename shipped as a 404 no gate
+// could see. All three path-serving spellings are matched (`blob` for a file view,
+// `tree` for a directory, `raw` for the file bytes); matching only `blob` left the
+// same 404 reachable one URL form away.
+export const REPO_BLOB_RE =
+  /https:\/\/github\.com\/foomakers\/pair\/(?:blob|tree|raw)\/main\/([^)\s"'`]+)/g
 
 // --- Filesystem helpers ---
 
@@ -187,7 +191,7 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
   return errors
 }
 
-/** Check 5b: every `blob/main/<path>` citation resolves to a real file in the repo. */
+/** Check 5b: every `{blob,tree,raw}/main/<path>` citation resolves to a real repo path. */
 export function findDeadRepoLinks(content: string, rel: string, root: string): string[] {
   const errors: string[] = []
   for (const m of content.matchAll(REPO_BLOB_RE)) {
