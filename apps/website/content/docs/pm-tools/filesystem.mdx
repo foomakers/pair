@@ -3,6 +3,14 @@ title: Filesystem
 description: Configure pair to manage work items as Markdown files in your repository — zero external dependencies.
 ---
 
+## Why this tracker exists
+
+Every other option on this page starts with an account. Sign up, create a workspace, provision an API key, wire an MCP server — and only then can pair file your first story. That is a reasonable price for a team. It is a poor one for a developer trying pair out on a Saturday, for anyone working offline, and for an air-gapped environment where "create an account" is not a step that exists.
+
+The filesystem tracker removes the account. Your backlog is Markdown in your repository; an item's **status is the directory it sits in**, so a transition is a `git mv` and your board history is your commit history. Nothing to provision, nothing to reach over the network, and no second system that can disagree with your code about what shipped.
+
+That choice has one consequence worth stating up front, because it decides how you configure the rest of your project: **a directory of Markdown files hosts no pull requests.** pair used to read a single `pm-tool` field for both backlog work and code work, which quietly assumed the tracker also owned your repository — true on GitHub, false here. So a filesystem project is a two-tool project by construction: declare a [code host](/docs/concepts/code-host) alongside it (per ADR-018) and pair routes item state to the files and branch/PR/review work to that host. Skip the declaration and pair stops with a setup pointer before its first PR operation, rather than routing a pull request at a folder.
+
 ## Configuration
 
 Add these lines to `.pair/adoption/tech/way-of-working.md`:
