@@ -121,6 +121,72 @@ human_approval_jq_filter() {
   printf '%s' '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR) | .id'
 }
 
+# --- The solo-maintainer approval token (#398) --------------------------------
+#
+# THE ALTERNATIVE satisfaction path for D10, never a replacement for the one above.
+# A repository with a single human account cannot produce a NON-AUTHOR approving
+# review — the code host rejects an approval on your own pull request — so the 🔴
+# rule was unsatisfiable there, not merely inconvenient. The token is what a solo
+# maintainer applies instead: a comment carrying the command AND the head SHA.
+#
+# What it guarantees, in the words the design settled on: **explicit human
+# confirmation, not independent review**. There is no second pair of eyes on a
+# single-account repository and this text never pretends otherwise. What it does
+# provide is exactly three properties:
+#   1. deliberateness — merging a 🔴 change takes a distinct, explicit act,
+#   2. an audit trail — who approved, when, on which head SHA,
+#   3. invalidation on change — a force-push moves the head and voids the token,
+#      exactly like a review-based approval.
+# Forgery-resistance is NOT among them while the agent runs on the maintainer's own
+# credentials: host-side the agent and the human ARE the same actor, so no
+# server-side check can separate them. That becomes achievable only with a dedicated
+# agent identity (#218). Recorded in ADR-018 rather than assumed away.
+#
+# The consumer evaluates the review path FIRST and only falls back to this one.
+
+# human_token_approval_select — the ONE predicate both projections below are built
+# from, so the count the gate acts on and the audit line it publishes cannot drift.
+#
+#   Input : a REST `GET /repos/{owner}/{repo}/issues/{n}/comments` payload (an array),
+#           read FRESH from the API — an edited/deleted comment must stop counting,
+#           and a webhook payload is a snapshot. Read ALL pages (`--paginate`).
+#   Env   : HEAD_SHA (the only commit branch protection evaluates).
+#
+# Every field it decides on is asserted by the HOST, never by the applier:
+#   `.user.type`               — "User" excludes Bot and Organization accounts,
+#   `.performed_via_github_app`— non-null when an App posted it on a user's behalf,
+#                                so an app-attributed comment is rejected too,
+#   `.author_association`      — anyone with READ access can comment on a public
+#                                repository, so write-level association is the
+#                                authorization, not the mere ability to type,
+#   `.user.login`/`.created_at`— the audit trail.
+# The BODY is read for the command and the head SHA only — never for an actor: a
+# comment claiming to be someone else changes nothing.
+#
+# The `(env.HEAD_SHA|length)==40` guard is load-bearing: with an unset HEAD_SHA the
+# match would degrade into "any /approve", i.e. an unbound token. Fail-safe: nothing.
+human_token_approval_select() {
+  printf '%s' '.[] | select((env.HEAD_SHA|length)==40 and .user.type=="User" and (.performed_via_github_app|not) and (.author_association|IN("OWNER","MEMBER","COLLABORATOR")) and ((.body // "") | test("(^|\\s)/approve[ \\t]+" + env.HEAD_SHA + "(\\s|$)")))'
+}
+
+# human_token_approval_jq_filter — one line per qualifying comment id; count them
+# (`| grep -c .`), exactly like the review filter above.
+human_token_approval_jq_filter() {
+  printf '%s%s' "$(human_token_approval_select)" ' | .id'
+}
+
+# human_token_approval_actor_jq_filter — the audit line for the published status
+# description: WHO confirmed, on WHICH head, WHEN — all three host-asserted.
+human_token_approval_actor_jq_filter() {
+  printf '%s%s' "$(human_token_approval_select)" ' | "\(.user.login) approved head \(env.HEAD_SHA) at \(.created_at)"'
+}
+
+# solo_approval_token_body <head-sha> — the exact comment body a maintainer posts.
+# Generated from one text so the docs, the tests and the adopter cannot drift.
+solo_approval_token_body() {
+  printf '/approve %s' "${1:-}"
+}
+
 # review_check_conclusion <verdict> — maps a review verdict onto the conclusion the
 # REQUIRED `pair-review` check must carry on the code host (R5.7):
 #   approved               ⇒ success

@@ -212,7 +212,7 @@ fi
 # --- Round 2: the approval job is an AUTHORIZATION control, so its code must come
 # from the base ref and its verdict must land on the commit protection reads. ---
 audit "approval job runs from a trusted ref + posts a head-pinned status" "$GITHUB_GUIDE" \
-  'pull_request_target:' 'ref: \${{ github.event.pull_request.base.sha }}' \
+  'pull_request_target:' 'ref: \${{ github.event.pull_request.base.sha' \
   'persist-credentials: false' 'statuses: write' 'cancel-in-progress: true' \
   "statuses/\\\$HEAD_SHA" "context='pair-explicit-approval'"
 if grep -Eq '^  pull_request:[[:space:]]*$' "$GITHUB_GUIDE"; then
@@ -408,6 +408,84 @@ else
 fi
 audit "the host evidence table states what kind of artifact it is" "$GITHUB_GUIDE" \
   'point-in-time' 're-running the ordering steps'
+
+# --- Story #398: the solo-maintainer approval token, executed against a fixture -
+# The token is the ALTERNATIVE satisfaction path for 🔴 on a repository that cannot
+# produce a non-author human review. Its predicate decides authorization, so it is
+# executed here — offline, deterministic — exactly like the review predicate above.
+COMMENTS_FIXTURE="$REPO_ROOT/scripts/smoke-tests/fixtures/github-pr-comments.json"
+assert_file "$COMMENTS_FIXTURE" || exit 1
+audit "comment fixture carries the host-asserted fields the token filter reads" "$COMMENTS_FIXTURE" \
+  '"author_association"' '"performed_via_github_app"' '"type"' '"login"'
+audit "the token predicate ships in the evaluator, not as doc prose" "$EVALUATOR" \
+  'human_token_approval_jq_filter' 'human_token_approval_actor_jq_filter' \
+  'solo_approval_token_body' 'author_association' 'performed_via_github_app' \
+  'confirmation, not independent review'
+if command -v jq >/dev/null 2>&1; then
+  # Same discipline as the review filter above: the predicate under test is the
+  # SHIPPED text, sourced from pr-state.sh, pushed through the same
+  # `jq … | grep -c .` pipeline the documented job uses — no transliteration.
+  TOKEN_FILTER="$(human_token_approval_jq_filter)"
+  ACTOR_FILTER="$(human_token_approval_actor_jq_filter)"
+  TOKEN_HEAD='cc1fba122f0c912ba01288fe90ab2632e7e41057'
+  count_tokens() { # count_tokens <head-sha>
+    HEAD_SHA="$1" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" | grep -c . || true
+  }
+  # AC1: a human maintainer's token on the current head satisfies the check. The
+  # fixture also holds a Bot token, an App-attributed token, a drive-by reader's
+  # token, a stale one and a withdrawn one — exactly one comment may count.
+  check "token accepted for a human maintainer on the current head" 1 \
+    "$(count_tokens "$TOKEN_HEAD")"
+  # AC3: a force-push moves the head; no comment names the new one, so the token is void.
+  check "token void after a force-push (head no longer named)" 0 \
+    "$(count_tokens 2222222222222222222222222222222222222222)"
+  # AC5 + Technical Risks row 1: neither a Bot actor, nor a body that CLAIMS a human
+  # actor, nor an App-attributed comment can satisfy it — the actor is host-asserted.
+  BOT_TOKENS="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
+    grep -c '3237609004\|3237609005\|3237609009' || true)"
+  check "bot / app-attributed / actor-claiming tokens rejected" 0 "$BOT_TOKENS"
+  # A repository read grants comment rights to anyone: association is the authorization.
+  OUTSIDER="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
+    grep -c '3237609006' || true)"
+  check "a drive-by reader's token is rejected (no write association)" 0 "$OUTSIDER"
+  # Removed-then-re-added: the CURRENT body is what counts, so a withdrawn token stops counting.
+  WITHDRAWN="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
+    grep -c '3237609007' || true)"
+  check "a withdrawn (edited-away) token no longer counts" 0 "$WITHDRAWN"
+  # Never satisfiable with an unset head: an empty HEAD_SHA must not degrade to "any token".
+  check "an unset head SHA accepts nothing (fail-safe)" 0 "$(count_tokens '')"
+  # AC2 audit trail: who approved, on which head, when — read from the host fields.
+  check "the audit line names the host-asserted actor" \
+    "solo-maintainer approved head $TOKEN_HEAD at 2026-08-28T10:00:00Z" \
+    "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE")"
+  # AC4 regression: the review-based path is unchanged by the token's arrival.
+  check "review path still counts the human non-author approval" 1 \
+    "$(HEAD_SHA=cc1fba122f0c912ba01288fe90ab2632e7e41057 PR_AUTHOR=pr-author \
+      jq -r "$(human_approval_jq_filter)" \
+      "$REPO_ROOT/scripts/smoke-tests/fixtures/github-pr-reviews.json" | grep -c . || true)"
+  # The token body a maintainer is told to post is generated from ONE shipped text.
+  check "the documented token body is generated, not hand-copied" \
+    "/approve $TOKEN_HEAD" "$(solo_approval_token_body "$TOKEN_HEAD")"
+else
+  log_warn "token-filter assertions skipped — jq not installed (fixture shape still asserted)"
+fi
+# The job must try the REVIEW path first and only then the token (AC4: never a
+# replacement), paginate the comments query, and keep the producer pin.
+audit "the job wires the token as the alternative, after the review path" "$GITHUB_GUIDE" \
+  'human_token_approval_jq_filter' 'api --paginate "repos/\$REPO/issues/\$PR/comments"' \
+  'solo-maintainer' 'confirmation, not independent review'
+REVIEW_QUERY_LINE="$(grep -n 'pulls/\$PR/reviews' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
+TOKEN_QUERY_LINE="$(grep -n 'issues/\$PR/comments' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
+if [ -n "$REVIEW_QUERY_LINE" ] && [ -n "$TOKEN_QUERY_LINE" ] &&
+  [ "$REVIEW_QUERY_LINE" -lt "$TOKEN_QUERY_LINE" ]; then
+  log_succ "the review path is evaluated before the token path (review stays preferred)"
+else
+  log_fail "the token path is not subordinate to the review path (AC4)"; FAILED=1
+fi
+audit "pr-states.md describes the token honestly for solo adopters" "$GUIDELINE" \
+  'confirmation, not independent review' '/approve'
+audit "ADR-018 records the guarantee, the limit and the #218 dependency" "$ADR" \
+  'confirmation, not independent review' '#218' 'shared credentials' 'dedicated identity'
 
 if [ "$FAILED" -ne 0 ]; then
   log_fail "$TEST_NAME had failures"; exit 1

@@ -150,10 +150,13 @@ describe('pr-states.md — the PR state flow model (#234)', () => {
 
   // --- review round 1 on PR #390 ---
 
-  it('states plainly that a 🔴 merge needs a SECOND human account (the author cannot approve)', () => {
+  // Updated by #398: the review path still needs a second human account — what changed
+  // is that a solo repository now has a *named, weaker* alternative instead of nothing.
+  it('states plainly that the REVIEW path needs a SECOND human account (the author cannot approve)', () => {
     expect(GUIDELINE).toMatch(/second human/i)
-    expect(GUIDELINE).not.toMatch(/what a solo maintainer satisfies deliberately/i)
     expect(GUIDELINE).toMatch(/solo[\s\S]{0,400}(cannot|impossible|no 🔴)/i)
+    // and never sells the solo fallback as the same thing
+    expect(GUIDELINE).not.toMatch(/token[\s\S]{0,60}(is|counts as|means) independent review/i)
   })
 
   it('maps 🟡’s "reviewer approval" onto the pair review explicitly (no two readings)', () => {
@@ -395,7 +398,11 @@ describe('pair-explicit-approval runs from a TRUSTED ref (round 2)', () => {
   })
 
   it('pins the checkout to the BASE sha, never to the PR head, and disables credentials', () => {
-    expect(GITHUB_GUIDE).toMatch(/ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/)
+    // #398 added an `issue_comment` trigger, whose payload carries no `pull_request`
+    // object — hence the API-resolved BASE fallback. Still the base, never the head.
+    expect(GITHUB_GUIDE).toMatch(
+      /ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha(\s*\|\|\s*steps\.pr\.outputs\.base)?\s*\}\}/,
+    )
     expect(GITHUB_GUIDE).not.toMatch(
       /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)\s*\}\}/,
     )
@@ -587,7 +594,7 @@ describe('BOTH merge paths carry the synthesis precondition (round 3)', () => {
   })
 })
 
-describe('the deferred solo-maintainer token is citable everywhere it is deferred (round 3)', () => {
+describe('the solo-maintainer token is citable everywhere it is referenced (round 3)', () => {
   it('cites #398 in the model, the ADR, the docs page and this repo’s way-of-working', () => {
     expect(GUIDELINE).toContain('#398')
     expect(ADR_018).toContain('#398')
@@ -597,6 +604,130 @@ describe('the deferred solo-maintainer token is citable everywhere it is deferre
 
   it('drops the "does not exist in this flow" phrasing in favour of the tracked issue', () => {
     expect(GUIDELINE).not.toMatch(/it does not exist in this flow/)
+  })
+})
+
+// --- story #398: the solo-maintainer explicit-approval token -------------------
+// A repository with one human account cannot produce the non-author approving review
+// the 🔴 rule asks for, so the rule was unusable there. The token is an ALTERNATIVE
+// satisfaction path — deliberate, auditable, head-bound — and explicitly NOT
+// independent review. The authorization-relevant part is that the actor is resolved
+// from host-asserted fields, never from the body the applier writes.
+
+describe('the token predicate ships in the evaluator (#398)', () => {
+  it('exposes the token entry points next to the review predicate it does not replace', () => {
+    for (const fn of [
+      'human_token_approval_jq_filter',
+      'human_token_approval_actor_jq_filter',
+      'solo_approval_token_body',
+    ]) {
+      expect(EVALUATOR).toContain(fn)
+    }
+    // AC4 regression: the review predicate is untouched — still APPROVED, on the
+    // current head, by a human who is not the author.
+    expect(EVALUATOR).toContain(
+      '.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR',
+    )
+  })
+
+  it('AC2 — resolves the actor from host-asserted fields, never from the applier’s body', () => {
+    expect(EVALUATOR).toMatch(/\.user\.type=="User"/)
+    expect(EVALUATOR).toMatch(/performed_via_github_app/)
+    expect(EVALUATOR).toMatch(/author_association/)
+    // the body is read for the COMMAND + the SHA only, never for an actor field
+    expect(EVALUATOR).not.toMatch(/\.body[\s\S]{0,120}(login|actor|user\.type)/)
+  })
+
+  it('AC2/AC3 — the token is bound to the current head SHA and never satisfiable unbound', () => {
+    expect(EVALUATOR).toMatch(/env\.HEAD_SHA/)
+    // an unset/short HEAD_SHA must not degrade the predicate into "any /approve"
+    expect(EVALUATOR).toMatch(/\(env\.HEAD_SHA\|length\)==40/)
+  })
+
+  it('AC5 — bots and app-attributed comments are excluded by construction', () => {
+    expect(EVALUATOR).toMatch(/[Bb]ot/)
+    expect(EVALUATOR).toMatch(/performed_via_github_app\|not/)
+  })
+
+  it('states the guarantee in the settled words, inside the executable projection', () => {
+    expect(EVALUATOR).toMatch(/confirmation, not independent review/)
+  })
+
+  it('builds both projections from ONE predicate text (count + audit line cannot drift)', () => {
+    expect(EVALUATOR).toMatch(/human_token_approval_select/)
+  })
+})
+
+describe('the host job wires the token as the ALTERNATIVE path (#398)', () => {
+  it('AC1 — the job succeeds on either a human non-author review OR an accepted token', () => {
+    expect(GITHUB_GUIDE).toMatch(/human_token_approval_jq_filter/)
+    expect(GITHUB_GUIDE).toMatch(/issues\/\$PR\/comments/)
+  })
+
+  it('AC4 — the review path is queried first; the token is only the fallback', () => {
+    const reviewAt = GITHUB_GUIDE.indexOf('pulls/$PR/reviews')
+    const tokenAt = GITHUB_GUIDE.indexOf('issues/$PR/comments')
+    expect(reviewAt).toBeGreaterThan(-1)
+    expect(tokenAt).toBeGreaterThan(reviewAt)
+    expect(GITHUB_GUIDE).toMatch(/(preferred|primary|only if|fallback)[\s\S]{0,400}token/i)
+  })
+
+  it('paginates the comments query — a token on page 2 is not "no token"', () => {
+    expect(GITHUB_GUIDE).toMatch(/--paginate[^\n]*issues\/\$PR\/comments/)
+  })
+
+  it('keeps the authorization properties: trusted ref, head-pinned status, producer pin', () => {
+    expect(GITHUB_GUIDE).toMatch(
+      /ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha(\s*\|\|\s*steps\.pr\.outputs\.base)?\s*\}\}/,
+    )
+    // the fallback is the resolved BASE of the same PR — never the head, on any trigger
+    expect(GITHUB_GUIDE).not.toMatch(/ref:[^\n]*steps\.pr\.outputs\.head/)
+    expect(GITHUB_GUIDE).toMatch(/"context":\s*"pair-explicit-approval",\s*"app_id"/)
+    expect(GITHUB_GUIDE).toMatch(/statuses\/\$HEAD_SHA[\s\S]{0,400}pair-explicit-approval/)
+  })
+
+  it('re-evaluates on the comment event, otherwise the token never reaches the check', () => {
+    expect(GITHUB_GUIDE).toMatch(/issue_comment:/)
+  })
+
+  it('tells the adopter exactly what to post, and what it does NOT mean', () => {
+    expect(GITHUB_GUIDE).toMatch(/\/approve <head-sha>|\/approve \$HEAD_SHA/)
+    expect(GITHUB_GUIDE).toMatch(/confirmation, not independent review/)
+  })
+})
+
+describe('the docs claim exactly what the token provides (#398)', () => {
+  it('AC8 — pr-states.md names the three properties and the one it does not have', () => {
+    expect(GUIDELINE).toMatch(/deliberate/i)
+    expect(GUIDELINE).toMatch(/audit/i)
+    expect(GUIDELINE).toMatch(/confirmation, not independent review/)
+    expect(GUIDELINE).toMatch(/\/approve/)
+  })
+
+  it('AC6 — the ADR records the forgery-resistance limit and the #218 dependency', () => {
+    expect(ADR_018).toMatch(/confirmation, not independent review/)
+    expect(ADR_018).toMatch(/#218/)
+    expect(ADR_018).toMatch(/forgery-resistance/i)
+    // the grep-verifiable per-identity statement the DoD asks for, literally
+    expect(ADR_018).toMatch(
+      /shared credentials[\s\S]{0,600}dedicated identity|dedicated identity[\s\S]{0,600}shared credentials/i,
+    )
+  })
+
+  it('AC7 — the tier REQUIREMENT is untouched: quality-model §4 and D10 still demand it', () => {
+    expect(QUALITY_MODEL).toMatch(/explicit approval required/i)
+    // the token changes how the rule is satisfied, never what it demands
+    expect(ADR_018).toMatch(/satisfaction path|how the rule is satisfied/i)
+    expect(ADR_018).not.toMatch(/🔴 no longer requires|drops the explicit-approval requirement/i)
+  })
+
+  it('AC8 — the deferral wording is gone everywhere it used to point at #398', () => {
+    for (const doc of [GUIDELINE, ADR_018, ROOT_WOW]) {
+      expect(doc).toContain('#398')
+    }
+    expect(GUIDELINE).not.toMatch(/deliberately not part of this flow/)
+    expect(ADR_018).not.toMatch(/intentionally absent here rather than\s*\n?\s*half-specified/)
+    expect(DOCS_PAGE).toMatch(/\/approve/)
   })
 })
 

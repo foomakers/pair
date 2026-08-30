@@ -639,7 +639,7 @@ GitHub mechanics for the two pair checks the [PR state flow](pr-states.md) requi
 | Check | Published by | Semantics |
 | --- | --- | --- |
 | `pair-review` | `/review`, as a **commit status** (registered `pending` at PR creation by `/publish-pr`) | `success` on APPROVED, `failure` on CHANGES-REQUESTED, `pending` when the review has not produced a decision (never ran, crashed, timed out) |
-| `pair-explicit-approval` | a workflow job (below), also as a **commit status pinned to the PR head SHA** | `success` when the tier does not require explicit approval, or when a **human** approving review exists on the current head; `failure` at 🔴 without one |
+| `pair-explicit-approval` | a workflow job (below), also as a **commit status pinned to the PR head SHA** | `success` when the tier does not require explicit approval, when a **human non-author** approving review exists on the current head, or — the fallback for a repository that cannot produce one — when a **human maintainer posted the approval token** `/approve <head-sha>` on the current head ([solo-maintainer token](#the-solo-maintainer-approval-token-single-account-repositories)); `failure` at 🔴 without either |
 
 Both are **required status checks** — a `pending` or absent required check blocks the merge on GitHub exactly like a failing one, which is what makes the review unskippable (R5.7).
 
@@ -705,7 +705,7 @@ If the POST is refused (`403`/`404` — token without `repo:status`), enforcemen
 
 ### `pair-explicit-approval` job (🔴 only, auto-passes below)
 
-Reads the `risk:*` label only (D18, fail-safe red) and asserts a **human** approval — the pair review's own submission never satisfies it, and `dismiss_stale_reviews` keeps it from surviving a force-push.
+Reads the `risk:*` label only (D18, fail-safe red) and asserts a **human** approval — the pair review's own submission never satisfies it, and `dismiss_stale_reviews` keeps it from surviving a force-push. Two paths satisfy it: a **non-author human approving review** (primary, and the only one that is independent review), or, where the repository has a single human account, the **approval token** described in § [The solo-maintainer approval token](#the-solo-maintainer-approval-token-single-account-repositories).
 
 Five properties are load-bearing and easy to get wrong; all five are encoded in the template below, and the first four were **verified on a live repository** (§ Verified on a throwaway repository).
 
@@ -726,11 +726,17 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled]
   pull_request_review:
     types: [submitted, dismissed]
+  # The solo-maintainer token lives in a PR comment, so the gate must re-evaluate
+  # when one is posted, edited or deleted — otherwise the token never reaches the
+  # check. `edited`/`deleted` are what makes withdrawing a token effective.
+  issue_comment:
+    types: [created, edited, deleted]
 
 # Only the NEWEST evaluation may publish (property 4): two label mutations seconds
 # apart race, and a stale run must never overwrite the current verdict.
 concurrency:
-  group: pair-explicit-approval-${{ github.event.pull_request.number }}
+  # `issue_comment` carries `issue`, NOT `pull_request` — same PR, other payload.
+  group: pair-explicit-approval-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true
 
 # Least privilege. `statuses: write` is what lets the job pin its verdict to the PR
@@ -738,37 +744,58 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+  issues: read # a PR conversation comment IS an issue comment (the token path)
   statuses: write
 
 jobs:
   # NOT named `pair-explicit-approval` (property 3): the required context is the
   # head-pinned commit status this job posts, and one context = one producer.
   explicit-approval-gate:
+    # `issue_comment` fires on plain issues too; only pull requests have a gate.
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request != null
     runs-on: ubuntu-latest
     steps:
       # PENDING FIRST (property 5), before anything that can fail or be cancelled:
       # a run that dies later must not leave a previous `success` standing. No
-      # checkout needed — this step only writes the blocking placeholder.
-      - env:
+      # checkout needed — this step resolves the head and writes the blocking
+      # placeholder, nothing else. On `issue_comment` the payload carries `issue`,
+      # NOT `pull_request`, so the three fields come from the API there (one read;
+      # still no PR code is fetched or executed).
+      - id: pr
+        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          PAYLOAD_HEAD: ${{ github.event.pull_request.head.sha }}
+          PAYLOAD_BASE: ${{ github.event.pull_request.base.sha }}
+          PAYLOAD_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
+          set -euo pipefail
+          HEAD_SHA="$PAYLOAD_HEAD" BASE_SHA="$PAYLOAD_BASE" AUTHOR="$PAYLOAD_AUTHOR"
+          if [ -z "$HEAD_SHA" ]; then
+            PR_JSON="$(gh pr view "$PR" --repo "$REPO" --json headRefOid,baseRefOid,author)"
+            HEAD_SHA="$(printf '%s' "$PR_JSON" | jq -r .headRefOid)"
+            BASE_SHA="$(printf '%s' "$PR_JSON" | jq -r .baseRefOid)"
+            AUTHOR="$(printf '%s' "$PR_JSON" | jq -r .author.login)"
+          fi
+          { echo "head=$HEAD_SHA"; echo "base=$BASE_SHA"; echo "author=$AUTHOR"; } >>"$GITHUB_OUTPUT"
           gh api "repos/$REPO/statuses/$HEAD_SHA" -X POST \
             -f state='pending' -f context='pair-explicit-approval' \
             -f description='evaluating tier + human approval on this head'
       - uses: actions/checkout@v4
         with:
           # TRUSTED REF — the base commit, never the PR head. This is what makes the
-          # two sourced functions untamperable from the pull request's side.
-          ref: ${{ github.event.pull_request.base.sha }}
+          # sourced functions untamperable from the pull request's side. The fallback
+          # is the API-resolved BASE of the same PR (the `issue_comment` payload has
+          # no `pull_request` object) — still never the head.
+          ref: ${{ github.event.pull_request.base.sha || steps.pr.outputs.base }}
           persist-credentials: false
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          PR_AUTHOR: ${{ steps.pr.outputs.author }}
+          HEAD_SHA: ${{ steps.pr.outputs.head }}
         run: |
           set -euo pipefail
           source .pair/knowledge/assets/tier-resolve.sh   # tags only, no criteria
@@ -797,8 +824,29 @@ jobs:
             if [ "${APPROVALS:-0}" -ge 1 ]; then
               DESC="explicit human approval recorded on the current head"
             else
-              STATE=failure
-              DESC="risk:red — needs an explicit human approval on the current head (D10)"
+              # FALLBACK ONLY (#398), reached exclusively when the review path above
+              # found nothing — so a two-human repository never pays this API call and
+              # its behaviour is unchanged. The token is the alternative for a
+              # single-account repository, never a replacement: it is explicit human
+              # confirmation, not independent review.
+              # Same discipline as above: the predicate is `human_token_approval_jq_filter`
+              # from the sourced pr-state.sh, so job and tests read ONE text. It accepts
+              # only a comment whose HOST-ASSERTED actor is a human (`user.type`), not an
+              # App (`performed_via_github_app`), with write-level `author_association`
+              # (anyone with read access can comment), carrying `/approve <HEAD_SHA>`.
+              # `--paginate`: on a long PR the token can sit past page 1.
+              COMMENTS="$(gh api --paginate "repos/$REPO/issues/$PR/comments")"
+              TOKENS="$(printf '%s' "$COMMENTS" |
+                jq -r "$(human_token_approval_jq_filter)" | grep -c . || true)"
+              if [ "${TOKENS:-0}" -ge 1 ]; then
+                # The audit trail: who confirmed, on which head, when — host fields only.
+                AUDIT="$(printf '%s' "$COMMENTS" |
+                  jq -r "$(human_token_approval_actor_jq_filter)" | tail -1)"
+                DESC="$AUDIT — confirmation, not independent review"
+              else
+                STATE=failure
+                DESC="risk:red — needs a non-author human approval, or $(solo_approval_token_body "$HEAD_SHA") posted by a human maintainer (D10)"
+              fi
             fi
           fi
           # Pin the context to the PR head commit (property 2). Publish BEFORE failing
@@ -814,6 +862,33 @@ jobs:
 - **Forks.** With `pull_request_target` the workflow runs in the **base** repository's context with a write-capable `GITHUB_TOKEN`, which is only safe because this job **never checks out or executes head-ref code** — the checkout is pinned to `base.sha` and no step runs anything from the PR. Never add a step here that builds, installs, or runs the PR's code; put that in the ordinary `pull_request` gate pipeline, which has a read-only token on forks. Conversely, a plain `pull_request` run from a fork gets a **read-only** token and could not `POST` the status at all — another reason for the target trigger.
 - **Base-branch assets.** `tier-resolve.sh` and `pr-state.sh` are sourced from the base commit, so they must already exist on the base branch: the workflow is added and observed **before** protection is applied (ordering below), and a PR that only _introduces_ those assets cannot satisfy the context on its own.
 - **Projects that refuse `pull_request_target` entirely** (a common blanket policy) get the same guarantee by keeping the plain `pull_request` trigger and writing the projections **inline** in the job body — `resolve_tier` / `explicit_approval_required` are a handful of `case` lines and `human_approval_jq_filter` is one string — with no checkout step at all, so there is nothing from the PR's tree to tamper with. The cost is a second copy of the projection, which must then be kept in sync with the shipped assets (a conformance grep is the usual mitigation).
+
+### The solo-maintainer approval token (single-account repositories)
+
+At 🔴 the primary path is a **non-author human approving review**, and GitHub rejects an approving review from the PR author. On a single-maintainer repository that path is not inconvenient, it is **impossible** — so before this token the only options were a second human account or dropping the context and keeping the 🔴 rule advisory. The token is the third: the maintainer posts, on the pull request,
+
+```text
+/approve <head-sha>
+```
+
+— the exact body [`solo_approval_token_body`](../../../assets/pr-state.sh) generates, e.g. `/approve $(gh pr view "$PR" --json headRefOid -q .headRefOid)`. The `issue_comment` trigger re-runs the job, which accepts it only when **every** field it decides on is one the **host** asserts:
+
+| Field read | Why it is the host's, not the applier's |
+| --- | --- |
+| `.user.type == "User"` | GitHub sets the account type; a Bot or an Organization can never satisfy it (a comment body claiming to be a human changes nothing) |
+| `.performed_via_github_app == null` | a comment an App posted **on a user's behalf** is attributed here, and is rejected — the human must post it themselves |
+| `.author_association ∈ {OWNER, MEMBER, COLLABORATOR}` | anyone with **read** access can comment on a public repository, so the ability to type is not the authorization; the association is |
+| `/approve <HEAD_SHA>` in `.body` | the only thing taken from the body is the command and the head it names — a token naming another commit is not a token for this one |
+
+Consequences that follow from that shape, all of them intentional:
+
+- **A force-push voids it.** The new head is a different SHA and no comment names it, so the context goes back to `failure` — the same head-scoped semantics as a review-based approval. Re-apply the token on the new head.
+- **A withdrawn token stops counting.** The job reads the comments **fresh** from the API on every evaluation, so an edited-away or deleted `/approve` line is simply no longer there. Only the current state of the current head counts.
+- **The review path always wins where it exists.** The job queries the reviews endpoint first and only falls back to the comments query, so a two-human repository behaves byte-for-byte as before and pays no extra API call.
+
+**What it proves — and what it does not.** It is **explicit human confirmation, not independent review**. On a single-account repository there is no second pair of eyes, and this document does not pretend otherwise. What the token adds over an advisory rule is exactly three properties — **deliberateness** (a distinct, explicit act, not a reflex merge), an **audit trail** (who, when, on which head SHA — published in the status description), and **invalidation on change**. It is **not forgery-resistant** while the agent runs on the maintainer's own credentials: host-side the agent and the human are the same actor, so nothing server-side can tell them apart, and an agent holding that token could post the comment itself. That becomes achievable only with a dedicated agent identity ([#218](https://github.com/foomakers/pair/issues/218)) — see ADR-018 § Amendment (the adopting project's own decision record).
+
+**Residual, stated rather than assumed away.** The pending-first property (5) resolves the head from the API on an `issue_comment` event; if that single read fails, the step aborts and the **previous** status stands. For a comment event the previous status is an earlier evaluation of the _same_ head, so the exposure is narrow — a token withdrawn while the re-evaluation dies leaves a `success` standing until the next event (any push, label change or review re-evaluates). A tier raise, the case property 5 exists for, arrives as a `labeled` event whose payload carries the head SHA, so it never depends on that read.
 
 ### Branch protection payload
 
@@ -870,9 +945,17 @@ Applying branch protection **before** the two contexts ever report makes every P
    ```
 
 3. **Observe the approval-time re-run** — this is the failure mode the head-pinned status exists for. Submit a review on that PR (any `pull_request_review` submission triggers the job), then re-run the same command and confirm the `pair-explicit-approval` context re-reports **on the same head SHA** with an updated timestamp. If it were left to the workflow run's own check, the re-run would land on the base branch's commit and the PR would stay blocked _after_ the human approval — the same "permanently unmergeable" trap, one step later. Also confirm the `pair-review` context still reflects the latest verdict on that head.
-4. **Protect**: `PUT` the payload above with those contexts, keeping `enforce_admins: false`; flip it to `true` only after one PR has merged through the new rule.
+4. **Observe the token path** (only if the repository has a single human account) — on a `risk:red` PR, post `/approve <head-sha>` as the maintainer and confirm the context flips to `success` with the audit description; then force-push and confirm it returns to `failure` on the new head:
 
-**Second human account prerequisite.** At 🔴 the job demands a **non-author** human approving review, and GitHub rejects an approving review from the PR author. On a **single-maintainer** repository no 🔴 PR can therefore satisfy it: either keep the `pair-explicit-approval` context out of the required list there, or add a second human reviewer account. See [pr-states.md](pr-states.md) § Edge cases.
+   ```bash
+   gh pr comment "$PR" --body "/approve $HEAD_SHA"
+   gh api "repos/$REPO/commits/$HEAD_SHA/status" \
+     --jq '.statuses[] | select(.context=="pair-explicit-approval") | "\(.state) — \(.description)"'
+   ```
+
+5. **Protect**: `PUT` the payload above with those contexts, keeping `enforce_admins: false`; flip it to `true` only after one PR has merged through the new rule.
+
+**Second human account, or the token.** At 🔴 the job's primary path demands a **non-author** human approving review, and GitHub rejects an approving review from the PR author, so a **single-maintainer** repository cannot produce one. Such a repository has two honest options: add a second human reviewer account (which keeps _independent review_), or use the [solo-maintainer approval token](#the-solo-maintainer-approval-token-single-account-repositories) (which gives _explicit human confirmation_ and nothing more). Keeping the context out of the required list — the 🔴 rule advisory — remains the third, and is now the one to justify rather than the default. See [pr-states.md](pr-states.md) § Edge cases.
 
 ### Verified on a throwaway repository (2026-07-30)
 
@@ -890,7 +973,7 @@ The recipe above is not a design sketch: every branch of it was executed end-to-
 | PR shipping a neutered `explicit_approval_required` **and** an `exit 0` in the job body | context still `failure`, merge still blocked — the base-pinned checkout ignores the PR's version. With the pre-fix `pull_request` + default-checkout form the same tamper published `pair-explicit-approval=success — tier red — explicit approval not required` |
 | direct push to the protected branch | rejected — `Changes must be made through a pull request` |
 
-Two things remain **unverified by construction** and stay documented rather than claimed: a _successful_ 🔴 path (it needs a second human account to approve — see below), and any fork-specific behaviour (the sandbox had no forks). The producer pin (`checks[].app_id`), the companion workflow-permission settings and the pending-first step were added **after** that session and are likewise **not** in the table.
+Two things remain **unverified by construction** and stay documented rather than claimed: a _successful_ 🔴 path (it needs a second human account to approve — see below), and any fork-specific behaviour (the sandbox had no forks). The producer pin (`checks[].app_id`), the companion workflow-permission settings, the pending-first step and the **solo-maintainer token path** were added **after** that session and are likewise **not** in the table. The token's predicate is asserted offline against a committed comments fixture (`scripts/smoke-tests/fixtures/github-pr-comments.json`), and its live behaviour is re-verified the same durable way as everything else here — by running **ordering step 4** on the adopting repository.
 
 **What this table is.** A **point-in-time observation** on a disposable repository, retained as prose: the sandbox was deleted, so no run URL, PR number or API dump is re-checkable, and the table is not evidence a reader can audit. It is re-verified the only durable way — by **re-running the ordering steps above on the adopting repository** (steps 2 and 3 reproduce the two rows that matter most: both contexts on the head SHA, and the approval-time re-run). Treat any row that contradicts what your own repository does as stale, not as authority.
 

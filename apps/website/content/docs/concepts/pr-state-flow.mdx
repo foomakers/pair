@@ -56,13 +56,25 @@ Because it is an *authorization* check, two implementation properties are non-ne
 The review is dispatched to that clean-context subagent with a bounded instruction: produce the verdict and the checks, **never merge**. Merging stays a human act at every tier.
 
 <Callout type="warn">
-  **A 🔴 merge needs a second human account.** GitHub rejects an approving review from the PR author,
-  so on a single-maintainer repository no 🔴 PR can satisfy `pair-explicit-approval`. Either add a
-  second human reviewer account, or deliberately keep that context out of the required list there and
-  accept that the 🔴 human-approval rule is advisory (recorded, not silently dropped). At 🟡 there is
-  no such constraint: the pair review itself *is* the reviewer approval the quality model asks for.
-  A solo-maintainer approval token (a verified human token instead of a second account) is tracked as
-  [pair#398](https://github.com/foomakers/pair/issues/398).
+  **A 🔴 merge needs a second human account — or the solo-maintainer token.** GitHub rejects an
+  approving review from the PR author, so on a single-maintainer repository no 🔴 PR can satisfy
+  `pair-explicit-approval` *through the review path*. The alternative is an approval token: the
+  maintainer posts `/approve <head-sha>` on the PR, and the job accepts it only after resolving the
+  actor server-side — a human account, not an app, with write-level association — and binding it to the
+  current head, so a force-push voids it. At 🟡 there is no such constraint: the pair review itself *is*
+  the reviewer approval the quality model asks for.
+</Callout>
+
+<Callout type="info">
+  **Read the token for exactly what it is: explicit human confirmation, not independent review.** On a
+  single-account repository there is no second pair of eyes, and pretending otherwise would make the 🔴
+  tier a ceremony. What the token buys is deliberateness (a distinct, explicit act), an audit trail
+  (who, when, on which head SHA) and invalidation on change. It is **not** forgery-resistant while the
+  agent runs on the maintainer's own credentials — host-side they are the same actor — which becomes
+  achievable only with a dedicated agent identity
+  ([pair#218](https://github.com/foomakers/pair/issues/218)). Where a second human exists, the review
+  path stays primary. The tier requirement itself is unchanged: this is a way to satisfy it, not a
+  relaxation of it ([pair#398](https://github.com/foomakers/pair/issues/398)).
 </Callout>
 
 ## Labels are a view; checks are the authority

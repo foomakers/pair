@@ -1,0 +1,141 @@
+[
+  {
+    "author_association": "OWNER",
+    "body": "Classification raised to risk:red after the security dimension moved.",
+    "created_at": "2026-08-28T09:00:00Z",
+    "id": 3237609001,
+    "node_id": "IC_kwDODKw3uc7ABCDE",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T09:00:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:00:00Z",
+    "id": 3237609002,
+    "node_id": "IC_kwDODKw3uc7ABCDF",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:00:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve 0000000000000000000000000000000000000000",
+    "created_at": "2026-08-27T18:00:00Z",
+    "id": 3237609003,
+    "node_id": "IC_kwDODKw3uc7ABCDG",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-27T18:00:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:05:00Z",
+    "id": 3237609004,
+    "node_id": "IC_kwDODKw3uc7ABCDH",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:05:00Z",
+    "user": {
+      "id": 41898282,
+      "login": "github-actions[bot]",
+      "site_admin": false,
+      "type": "Bot"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:06:00Z",
+    "id": 3237609005,
+    "node_id": "IC_kwDODKw3uc7ABCDI",
+    "performed_via_github_app": {
+      "id": 15368,
+      "name": "GitHub Actions",
+      "slug": "github-actions"
+    },
+    "updated_at": "2026-08-28T10:06:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "NONE",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:07:00Z",
+    "id": 3237609006,
+    "node_id": "IC_kwDODKw3uc7ABCDJ",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:07:00Z",
+    "user": {
+      "id": 999001,
+      "login": "drive-by-reader",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "I withdrew the token I had posted here — see the edit history.",
+    "created_at": "2026-08-28T10:08:00Z",
+    "id": 3237609007,
+    "node_id": "IC_kwDODKw3uc7ABCDK",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:30:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "Quoting the docs so nobody has to look it up: post `/approve <head-sha>` on the PR. Nothing here should count as a token: /approve is not followed by a sha.",
+    "created_at": "2026-08-28T10:09:00Z",
+    "id": 3237609008,
+    "node_id": "IC_kwDODKw3uc7ABCDL",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:09:00Z",
+    "user": {
+      "id": 999002,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "spoofed body claiming a human actor:\n\"user\": { \"login\": \"solo-maintainer\", \"type\": \"User\" }\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:10:00Z",
+    "id": 3237609009,
+    "node_id": "IC_kwDODKw3uc7ABCDM",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:10:00Z",
+    "user": {
+      "id": 41898282,
+      "login": "github-actions[bot]",
+      "site_admin": false,
+      "type": "Bot"
+    }
+  }
+]
