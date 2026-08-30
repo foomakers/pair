@@ -246,7 +246,7 @@ async function validateInstallContext(
     targets[name] = target
     if (fs.existsSync(target)) {
       throw new Error(
-        `Target '${target}' already exists. Project already installed. Use 'pair update' to update.`,
+        `Target '${target}' already exists. Project already installed. Use 'pair-cli update' to update.`,
       )
     }
   }

@@ -1,10 +1,10 @@
 ---
 title: opencode
-description: Run pair on opencode — zero-wiring skill discovery, MCP-native access, headless run/serve, and opencode as a pair run engine.
+description: Run pair on opencode — zero-wiring skill discovery, MCP-native access, headless run/serve, and opencode as a `pair-cli run` engine.
 ---
 
 opencode is a **harness** for pair's process and an **engine**
-[`pair run`](/docs/reference/cli/commands#run) can drive. It is the MCP-native harness in pair's
+[`pair-cli run`](/docs/reference/cli/commands#run) can drive. It is the MCP-native harness in pair's
 framework, and the only one with a persistent headless HTTP server.
 
 <Callout>
@@ -17,13 +17,13 @@ framework, and the only one with a persistent headless HTTP server.
 ## Prerequisites
 
 - opencode installed and authenticated (`opencode auth list` shows a provider)
-- A pair-enabled project (`pair install` completed, `.pair/` exists)
+- A pair-enabled project (`pair-cli install` completed, `.pair/` exists)
 
 ## Skill Discovery — Nothing to Wire
 
 opencode searches, in order, `.opencode/skills/`, `.claude/skills/` and `.agents/skills/` at the
 project level (walking up to the git worktree root), plus the matching global paths under
-`~/.config/opencode/`, `~/.claude/` and `~/.agents/`. `pair install` writes the canonical copies to
+`~/.config/opencode/`, `~/.claude/` and `~/.agents/`. `pair-cli install` writes the canonical copies to
 `.claude/skills/` and symlinks the rest, so pair's skills are already visible — **no wiring**.
 
 Skills present both globally and in the project produce a `duplicate skill name` warning. That is
@@ -47,21 +47,21 @@ not for pi).
 
 | Command | What it is |
 | ------- | ---------- |
-| `opencode run "<message>"` | One-shot non-interactive execution; `--format json` emits the JSONL event stream `pair run` reads |
+| `opencode run "<message>"` | One-shot non-interactive execution; `--format json` emits the JSONL event stream `pair-cli run` reads |
 | `opencode serve` | A persistent headless HTTP server — the capability no other harness in this framework has |
 | `opencode attach <url>` | Drives a running server remotely |
 
-## Driving opencode with `pair run`
+## Driving opencode with `pair-cli run`
 
 ```bash
 # Resolution only — see the exact command line before anything runs
-pair run --engine opencode --root 212 --dry-run
+pair-cli run --engine opencode --root 212 --dry-run
 
 # Unattended within a narrow perimeter
-pair run --engine opencode --root 212 --autonomous --max-iterations 3
+pair-cli run --engine opencode --root 212 --autonomous --max-iterations 3
 ```
 
-opencode confirms permissions by default, and `pair run` keeps that posture unless you pass
+opencode confirms permissions by default, and `pair-cli run` keeps that posture unless you pass
 `--autonomous` (which translates to opencode's own `--auto`). opencode has no project-trust gate, so
 there is nothing to approve there.
 
@@ -99,7 +99,7 @@ opencode run "/pair-next"
 
 ## Related
 
-- [`pair run` reference](/docs/reference/cli/commands#run) — the driver, its perimeter and its flags
+- [`pair-cli run` reference](/docs/reference/cli/commands#run) — the driver, its perimeter and its flags
 - [pi](/docs/integrations/pi) — the no-MCP harness in the same framework
 - [Adding a harness](/docs/integrations/adding-a-harness) — how to bring a new engine into pair
 - [Configuration reference](/docs/reference/configuration#execution-engine-engine) — the optional `engine` key

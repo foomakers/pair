@@ -193,7 +193,9 @@ function validateUpdateContext(
     return fs.existsSync(target)
   })
   if (!hasTarget) {
-    throw new Error("No installed targets found. Project not installed. Use 'pair install' first.")
+    throw new Error(
+      "No installed targets found. Project not installed. Use 'pair-cli install' first.",
+    )
   }
 }
 

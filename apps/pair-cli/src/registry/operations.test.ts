@@ -36,7 +36,7 @@ describe('registry operations', () => {
   })
 
   // ── Mirror cleanup runs on THIS path, not only in the library (#426) ────────
-  // The recursion landed in content-ops but `pair update` never called it: the registry
+  // The recursion landed in content-ops but `pair-cli update` never called it: the registry
   // copy falls through to `copyDirHelper`, a pure source->dest copy that deletes nothing.
   // Four unit tests passed by calling `handleMirrorCleanup` directly, which is how the
   // defect came to be believed fixed. These go through `doCopyAndUpdateLinks` — the
@@ -134,7 +134,7 @@ describe('registry operations', () => {
   })
 
   // The wire above is the destructive one, so the failure mode that matters is tested HERE
-  // and not only on the helper: during `pair update`, a source subdirectory that cannot be
+  // and not only on the helper: during `pair-cli update`, a source subdirectory that cannot be
   // READ (EACCES/EPERM/EIO/EMFILE, or one that becomes unreadable mid-run) must never be
   // read as "the dataset retired everything under it" — that would delete the installed
   // subtree out of the adopter's working tree, whose only recovery is their VCS.

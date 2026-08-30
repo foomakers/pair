@@ -5,7 +5,7 @@ import type { KbIdentity } from '../identity'
  *
  * A KB is knowledge, not a configured project — `adoption` (and the project-level
  * `github`/`agents` registries) are deliberately absent. Registry `source` paths
- * match the source layout `pair package --layout source` and `pair install
+ * match the source layout `pair-cli package --layout source` and `pair-cli install
  * --source` already expect, so the scaffold output needs zero install special-casing.
  */
 export function renderPairConfig(identity: KbIdentity): string {

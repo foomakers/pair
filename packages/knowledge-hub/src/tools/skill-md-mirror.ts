@@ -4,7 +4,7 @@
  * Every root `.claude/skills/**\/*.md` — each skill's `SKILL.md` and every
  * sub-doc / `references/*` its directory contributes — is GENERATED from its
  * canonical dataset source under `packages/knowledge-hub/dataset/.skills/`
- * by `pair update`. Rather than re-implement that transform, these helpers run
+ * by `pair-cli update`. Rather than re-implement that transform, these helpers run
  * the REAL copy pipeline — `copyDirectoryWithTransforms` with the exact
  * `{ flatten: true, flattenDepth: 2, prefix: 'pair' }` options
  * `apps/pair-cli/config.json` declares for the `skills` registry — over an
@@ -39,14 +39,14 @@
  * faithfully-wrong (see `installedArtifactPath`).
  *
  * ACCEPTED RESIDUAL — orphans (decided in #384's review): because the guard is
- * directional and `pair update` copies with behavior 'overwrite' (no
+ * directional and `pair-cli update` copies with behavior 'overwrite' (no
  * mirror-delete), a sub-doc DELETED from the dataset but left behind in
  * `.claude/skills/<skill>/` is neither asserted nor cleaned, and agents keep
  * reading it. Detecting it would need a non-directional check (root `.md` under
  * `installedSkillDir(datasetDir)` with no dataset source) that must exempt
  * root-only skills like `agent-browser`; that inversion is deliberately NOT in
  * this guard, whose contract is "every dataset artifact is faithfully
- * mirrored". Regenerating deletions belongs to `pair update`, not here.
+ * mirrored". Regenerating deletions belongs to `pair-cli update`, not here.
  */
 import { readdirSync, readFileSync } from 'fs'
 import { join, relative, sep, posix } from 'path'
@@ -88,7 +88,7 @@ export function skillCopySyncOptions(): ReturnType<typeof defaultSyncOptions> &
 const SKILL_FILE = 'SKILL.md'
 
 // Virtual (in-memory) dataset layout that FAITHFULLY mirrors the real
-// `pair update` skills-registry paths, not just a convenient shallow layout.
+// `pair-cli update` skills-registry paths, not just a convenient shallow layout.
 // The real run uses datasetRoot = baseTarget = repo root and a DEEP source
 // (`packages/knowledge-hub/dataset/.skills`), so its `sourceContentRoot`
 // (= dirname of the source-relative path) is non-trivial and the link
@@ -163,7 +163,7 @@ export function installedSkillDir(datasetSkillDir: string): string {
 }
 
 /**
- * Every markdown artifact the dataset contributes through the `pair update`
+ * Every markdown artifact the dataset contributes through the `pair-cli update`
  * transform — each skill's `SKILL.md` AND its sub-docs (today
  * `process/review/merge-and-cascade.md` & siblings) — as sorted
  * dataset-relative posix paths.
@@ -216,7 +216,7 @@ export function installedArtifactPath(datasetArtifact: string): string {
 }
 
 /**
- * Runs the REAL `pair update` copy pipeline over an in-memory clone of the
+ * Runs the REAL `pair-cli update` copy pipeline over an in-memory clone of the
  * dataset. No parallel transform logic — a bug in the production pipeline
  * surfaces in the guard instead of being masked.
  */
@@ -231,7 +231,7 @@ async function runCopyPipeline(tree: DatasetTree): Promise<InMemoryFileSystemSer
     fileService,
     srcPath: VIRTUAL_SRC,
     destPath: VIRTUAL_DEST,
-    // Deep source + repo-root dataset root, exactly as the real `pair update`
+    // Deep source + repo-root dataset root, exactly as the real `pair-cli update`
     // resolves them: this makes `sourceContentRoot` non-trivial so the
     // link-rewriter's `reRootTarget` branch runs (see VIRTUAL_* note above).
     source: VIRTUAL_SOURCE_REL,
@@ -396,10 +396,10 @@ export function diffSkillMd(expected: string, actual: string): string {
 
 /**
  * Asserts one root mirror artifact — a `SKILL.md` or any sub-doc the same
- * `pair update` transform generates — equals the real pipeline output.
+ * `pair-cli update` transform generates — equals the real pipeline output.
  * Throws LOUDLY, naming the offending artifact by its DATASET-relative path
  * (its canonical identity), pointing at the generated root path, and giving the
- * `pair update` regenerate hint, when the mirror is missing (AC4) or has
+ * `pair-cli update` regenerate hint, when the mirror is missing (AC4) or has
  * drifted (AC2). This is the guard's assertion helper, kept in a tested
  * production module (per the "gate & tooling code in tested modules" ADL) so
  * both the real on-disk guard and the drift-injection tests drive the same
@@ -420,13 +420,13 @@ export function assertRootArtifactMatches(
   if (actual === undefined) {
     throw new Error(
       `Root mirror missing for dataset artifact '${datasetArtifact}': ` +
-        `${rootPath} does not exist. Run 'pair update' to regenerate it.`,
+        `${rootPath} does not exist. Run 'pair-cli update' to regenerate it.`,
     )
   }
   if (actual !== expected) {
     throw new Error(
       `Root mirror for dataset artifact '${datasetArtifact}' has drifted from its dataset ` +
-        `source transform. Run 'pair update' to regenerate ${rootPath}.\n` +
+        `source transform. Run 'pair-cli update' to regenerate ${rootPath}.\n` +
         `--- expected (dataset → real transform)\n` +
         `+++ actual (root mirror on disk)\n` +
         `${diffSkillMd(expected, actual)}`,

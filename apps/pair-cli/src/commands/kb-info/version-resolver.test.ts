@@ -254,7 +254,7 @@ describe('resolveCurrentVersion - git source', () => {
 
   it('does NOT read the repository root package.json — the install side cannot mirror it', async () => {
     // Git KB whose root carries only package.json {version:'3.0.0'} and no manifest.json.
-    // Reporting 3.0.0 as "current" dead-ends the user: `pair install --url <same git url>`
+    // Reporting 3.0.0 as "current" dead-ends the user: `pair-cli install --url <same git url>`
     // records from the cache slot (manifest.json absent, `<slot>/../package.json` never
     // exists), writes NO marker, and every later kb-info prints "installed version unknown"
     // against a current 3.0.0 — forever, with no hint that a manifest.json is the cure.

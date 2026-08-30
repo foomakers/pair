@@ -111,7 +111,7 @@ describe('handleKbCacheCommand', () => {
 
 /**
  * US-395 round 18 — the cache is machine-wide BY DEFINITION, so `prune` in project B runs
- * while project A's `pair install` is halfway through the same directory.
+ * while project A's `pair-cli install` is halfway through the same directory.
  * `cache-manager.sweepOrphanedStages` already refuses to touch a stage whose pid is alive.
  * Prune classified every stage and every `.bak` as garbage from the NAME alone, so it would
  * `rm -rf` A's extraction mid-flight and, worse, the `.bak` that is A's only way back —

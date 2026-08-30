@@ -7,7 +7,7 @@
  *
  * DELTA-ONLY (D21): the block exists purely to DEVIATE from the schema default, so a
  * repository with no `pair.config.json` at all resolves an engine and runs (AC12), and
- * `pair install` keeps writing nothing — nothing needs to be written for the default to
+ * `pair-cli install` keeps writing nothing — nothing needs to be written for the default to
  * apply. Its absence is a valid state and never a warning.
  *
  * The known engine ids are INJECTED rather than imported: the config layer is below the

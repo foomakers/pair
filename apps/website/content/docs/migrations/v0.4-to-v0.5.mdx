@@ -1,9 +1,9 @@
 ---
 title: "v0.4 → v0.5: Canonical States + Domain Modeling"
-description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, the map-subdomains/map-contexts process-to-capability rename, the classification / risk-matrix capability, and mirror cleanup on `pair update`.
+description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, the map-subdomains/map-contexts process-to-capability rename, the classification / risk-matrix capability, and mirror cleanup on `pair-cli update`.
 ---
 
-This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain-modeling capability rename, the classification / risk-matrix capability, and the one change in this jump that **deletes files**: mirror cleanup on `pair update`.
+This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain-modeling capability rename, the classification / risk-matrix capability, and the one change in this jump that **deletes files**: mirror cleanup on `pair-cli update`.
 
 Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243) · [Classification & risk matrix (#233)](https://github.com/foomakers/pair/issues/233) · [Mirror cleanup on the CLI path (#393)](https://github.com/foomakers/pair/issues/393)
 
@@ -46,7 +46,7 @@ Full schema and the worked n-m example (Example 2b): `.pair/knowledge/guidelines
 
 ### Skill renames: map-subdomains, map-contexts (process → capability)
 
-`/map-subdomains` and `/map-contexts` move from `.skills/process/` to `.skills/capability/`. Installed command names change accordingly: `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`, `/pair-process-map-contexts` → `/pair-capability-map-contexts` (unprefixed dataset names `/map-subdomains`/`/map-contexts` are unchanged). This is a knowledge-base change — `pair update` picks it up automatically, no `.pair/adoption/` edit needed for the rename itself. The only thing worth checking is whether *your own* adoption docs (way-of-working.md, custom guidelines) reference the old prefixed command names or the old `.skills/process/map-*` paths literally.
+`/map-subdomains` and `/map-contexts` move from `.skills/process/` to `.skills/capability/`. Installed command names change accordingly: `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`, `/pair-process-map-contexts` → `/pair-capability-map-contexts` (unprefixed dataset names `/map-subdomains`/`/map-contexts` are unchanged). This is a knowledge-base change — `pair-cli update` picks it up automatically, no `.pair/adoption/` edit needed for the rename itself. The only thing worth checking is whether *your own* adoption docs (way-of-working.md, custom guidelines) reference the old prefixed command names or the old `.skills/process/map-*` paths literally.
 
 Existing `adoption/product/subdomain/*.md` and `adoption/tech/boundedcontext/*.md` files created under the old process-skill flow remain valid as-is — no forced migration. A `Volatility` field (subdomains) or relationship-strength assessment (bounded contexts) is added lazily, the next time that entry falls inside a future scoped run — never backfilled in bulk.
 
@@ -58,11 +58,11 @@ To turn the matrix into **chromatic tags** on your cards and PRs (`risk:green|ye
 
 Full model — dimensions, tiers, tag projection, and the `tech/risk-matrix.md` schema — in [Quality Model](/docs/reference/quality-model).
 
-### `pair update` now deletes what the Knowledge Base no longer ships
+### `pair-cli update` now deletes what the Knowledge Base no longer ships
 
 **This is the only change in this jump that removes files. Read it before your next update.**
 
-Until v0.4, `pair update` only ever *wrote*: it copied the Knowledge Base over your project and left everything else where it was. A file the KB had retired upstream stayed installed forever. pair's own repository carried two how-to guides for ~5 months after they were dropped from the dataset — still listed in `.pair/llms.txt`, so agents kept being pointed at guidance the KB no longer shipped.
+Until v0.4, `pair-cli update` only ever *wrote*: it copied the Knowledge Base over your project and left everything else where it was. A file the KB had retired upstream stayed installed forever. pair's own repository carried two how-to guides for ~5 months after they were dropped from the dataset — still listed in `.pair/llms.txt`, so agents kept being pointed at guidance the KB no longer shipped.
 
 From v0.5, the registries declared as **mirrors** clean up after themselves, at every depth of the tree:
 
@@ -118,7 +118,7 @@ only if not already done, and report what you skipped.
      `/pair-capability-map-contexts`, and `.skills/capability/map-*`
      respectively.
    - If none found, do nothing — this is the common case, since the rename
-     is picked up automatically on `pair update`.
+     is picked up automatically on `pair-cli update`.
 
 3. (Optional — classification tags) pair now scores a risk matrix on every
    story and PR automatically; no file is required. If you want chromatic
@@ -129,7 +129,7 @@ only if not already done, and report what you skipped.
    until then the matrix is written without tags. Skip if
    `tech/risk-matrix.md` already exists.
 
-4. (Mirror cleanup) From v0.5, `pair update` DELETES files under
+4. (Mirror cleanup) From v0.5, `pair-cli update` DELETES files under
    `.pair/knowledge/` and `.github/agents/` that the Knowledge Base no longer
    ships — including files this project added there itself. Do the snapshot
    BEFORE the next update runs.
@@ -141,8 +141,8 @@ only if not already done, and report what you skipped.
       already exists, leave its contents exactly as they are — it is the
       pre-update state, and re-copying after an update would overwrite the only
       evidence of what was removed.
-   c. Ask the operator to run their usual pair update (`pair update` /
-      `pair-cli update`) and to tell you when it has finished. Do not install or
+   c. Ask the operator to run their usual `pair-cli update` and to tell you
+      when it has finished. Do not install or
       invoke pair yourself if it is not already available, and do not delete
       anything under `.pair/knowledge/` or `.github/agents/` on your own.
    d. Once the update has run, list every file that exists in the snapshot and

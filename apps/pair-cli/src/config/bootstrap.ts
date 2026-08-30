@@ -19,7 +19,7 @@ function diag(message: string): void {
  * LIVE since US-395 round 17 — it was dead code for the whole life of the feature.
  * `cli.ts`'s `preAction` hook guarded on `thisCommand === prog`, which Commander makes
  * always true (a program-level hook is invoked as `callback(hookedCommand, actionCommand)`),
- * so nothing here ever executed on a real `pair <command>`. Reviving it means:
+ * so nothing here ever executed on a real `pair-cli <command>`. Reviving it means:
  * - `--no-kb` skips the pre-flight fetch again, so it is no longer a no-op;
  * - `--url` together with `--no-kb` is REJECTED, where the dead pre-flight silently accepted
  *   it — at the hook now (`runKbPreflight`), because a NAMED source makes the pre-flight skip

@@ -344,7 +344,7 @@ describe('US-395: the program-level --url reaches the command', () => {
     vi.restoreAllMocks()
   })
 
-  it('pair update --url <mirror> updates from the mirror, not from the local dataset', async () => {
+  it('pair-cli update --url <mirror> updates from the mirror, not from the local dataset', async () => {
     const { runCli } = await import('./cli.js')
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -412,11 +412,11 @@ describe('US-395 round 14: the global --log-level actually takes effect', () => 
    * The `--log-level`/`--verbose` handling used to sit BELOW the pre-flight guards in the
    * `preAction` hook, and the first of those guards (`thisCommand === prog`) is always true
    * — Commander invokes a program-level hook as `(hookedCommand, actionCommand)`, so
-   * `thisCommand` IS the program for every subcommand. The result: `pair <cmd> --log-level
+   * `thisCommand` IS the program for every subcommand. The result: `pair-cli <cmd> --log-level
    * debug` silently did nothing, and the only level ever applied was the module-level
    * default. It is a program-level flag, so it must apply to EVERY command.
    */
-  it('pair --log-level debug applies the level before the command runs', async () => {
+  it('pair-cli --log-level debug applies the level before the command runs', async () => {
     const { runCli } = await import('./cli.js')
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -446,7 +446,7 @@ describe('US-395 round 14: the global --log-level actually takes effect', () => 
   })
 })
 
-describe('US-395 round 18: `pair --help` describes what --no-kb actually does', () => {
+describe('US-395 round 18: `pair-cli --help` describes what --no-kb actually does', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
@@ -663,7 +663,7 @@ describe('US-395 rounds 19+21: the KB pre-flight never fetches a KB the command 
    * The `--url` hole in the round-19 suite: it covered `--source`, `--offline`,
    * `--list-targets` and `--no-kb`, and `--url` is the ONE named-source form declared on the
    * PROGRAM rather than on the subcommand. `actionCommand.opts()` therefore never carries it
-   * (verified with commander@11: for both `pair install --url X` and `pair --url X install`,
+   * (verified with commander@11: for both `pair-cli install --url X` and `pair-cli --url X install`,
    * `url` lands on the program's opts and `cmd.opts()` is `{}`), so the skip predicate could
    * not observe it and the pre-flight warmed a slot the command then re-fetched — 2 full
    * archive downloads per remote `install|update --url`.

@@ -2,13 +2,13 @@
 export const kbCacheCommandMetadata = {
   name: 'kb-cache',
   description: 'Inspect and prune the shared KB cache under ~/.pair/kb',
-  usage: 'pair kb-cache [list|prune] [options]',
+  usage: 'pair-cli kb-cache [list|prune] [options]',
   examples: [
-    'pair kb-cache                      # same as list',
-    'pair kb-cache list                 # every slot: kind, label, size',
-    'pair kb-cache list --json          # machine-readable inventory',
-    'pair kb-cache prune --dry-run      # what prune WOULD remove',
-    'pair kb-cache prune                # remove the stale slots',
+    'pair-cli kb-cache                      # same as list',
+    'pair-cli kb-cache list                 # every slot: kind, label, size',
+    'pair-cli kb-cache list --json          # machine-readable inventory',
+    'pair-cli kb-cache prune --dry-run      # what prune WOULD remove',
+    'pair-cli kb-cache prune                # remove the stale slots',
   ],
   options: [
     { flags: '[action]', description: 'list (default) or prune' },

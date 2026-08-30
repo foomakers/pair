@@ -108,7 +108,7 @@ describe('parseUpdateCommand', () => {
 
 /**
  * US-395 review round 12 — same rule as install: a program-level `--url` names the source
- * when the command names none, so `pair update --url <mirror>` updates from the mirror
+ * when the command names none, so `pair-cli update --url <mirror>` updates from the mirror
  * instead of silently updating from the official KB.
  */
 describe('US-395: the program-level --url names the source when --source does not', () => {

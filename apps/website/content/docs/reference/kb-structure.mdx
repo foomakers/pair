@@ -9,7 +9,7 @@ The `.pair/` directory is the root of pair's Knowledge Base. It contains all gui
 
 ```text
 .pair/
-├── knowledge/                    # Upstream guidelines (updated by `pair update`)
+├── knowledge/                    # Upstream guidelines (updated by `pair-cli update`)
 │   ├── getting-started.md
 │   ├── skills-guide.md
 │   ├── way-of-working.md
@@ -72,7 +72,7 @@ The `.pair/` directory is the root of pair's Knowledge Base. It contains all gui
 
 ### `knowledge/` — Upstream Guidelines
 
-Contains all opinionated defaults from the pair KB. These files are **updated by `pair update`** and should not be edited directly — your changes would be overwritten.
+Contains all opinionated defaults from the pair KB. These files are **updated by `pair-cli update`** and should not be edited directly — your changes would be overwritten.
 
 - **`how-to/`** — Step-by-step guides for each phase of the development lifecycle (PRD creation through code review)
 - **`guidelines/`** — Technical standards organized by domain (collaboration, quality, code design)
@@ -80,7 +80,7 @@ Contains all opinionated defaults from the pair KB. These files are **updated by
 
 ### `adoption/` — Your Decisions
 
-Contains project-specific decisions that **override** knowledge-layer defaults. These files are **never overwritten** by `pair update`.
+Contains project-specific decisions that **override** knowledge-layer defaults. These files are **never overwritten** by `pair-cli update`.
 
 - **`product/PRD.md`** — Your Product Requirements Document
 - **`product/subdomain/`** — DDD subdomain definitions for your domain
@@ -93,12 +93,12 @@ Contains project-specific decisions that **override** knowledge-layer defaults. 
 
 ### `working/` — Operational Area (D14)
 
-Holds state produced **during** execution — checkpoints and reports — not knowledge. Outside every asset registry by design: `pair install` and `pair update` never create, modify, or delete anything under it.
+Holds state produced **during** execution — checkpoints and reports — not knowledge. Outside every asset registry by design: `pair-cli install` and `pair-cli update` never create, modify, or delete anything under it.
 
 - **`checkpoints/`** — Resumable state for multi-task flows (e.g. an interrupted `/implement` run)
 - **`reports/<category>/`** — Generated reports, grouped by category (e.g. quality, monitoring)
 
-Neither subdirectory is scaffolded by `pair install` — a skill creates them on demand the first time it writes a checkpoint or report. The path defaults to `.pair/working` and can be overridden with `working_path` in `config.json` (see [Configuration Reference](/docs/reference/configuration#working-area-override)); `pair validate-config` rejects any registry whose target overlaps with it, default or overridden.
+Neither subdirectory is scaffolded by `pair-cli install` — a skill creates them on demand the first time it writes a checkpoint or report. The path defaults to `.pair/working` and can be overridden with `working_path` in `config.json` (see [Configuration Reference](/docs/reference/configuration#working-area-override)); `pair-cli validate-config` rejects any registry whose target overlaps with it, default or overridden.
 
 **Reports come in two shapes.** A **one-shot audit** is keyed by its run date (`reports/security/<YYYY-MM-DD>-audit.md`). A **panel** is a recurring, period-scoped report (`reports/cost/2026-07-cost-panel.md`) whose filename carries a **period key** — `YYYY-MM`, `YYYY-Wnn`, or `YYYY-MM-DD_YYYY-MM-DD`: re-running for the same period updates that one file **in place** (one file per period, no duplicates), a headline sits at the top with breakdowns collapsed, an empty period still produces a panel saying so, and an unwritable reports area degrades to presenting the panel inline. The in-place update has one exception — **coverage never regresses**: if the panel already on disk processed more items than the current run did, it is kept (the run reports its shortfall in its own output instead), so a partial re-run can never overwrite a fuller panel's figures. One convention for every periodic report — see [`working-area.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/working-area.md).
 
@@ -108,7 +108,7 @@ Neither subdirectory is scaffolded by `pair install` — a skill creates them on
 
 ## Update Behavior
 
-| Directory | `pair update` behavior | Safe to edit? |
+| Directory | `pair-cli update` behavior | Safe to edit? |
 | --------- | ---------------------- | ------------- |
 | `knowledge/` | Mirror (overwritten) | No |
 | `adoption/` | Add (new files only) | Yes |

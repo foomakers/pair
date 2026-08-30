@@ -70,7 +70,7 @@ name — each half is checked after every symlink on the path is followed:
   need a cycle guard — `self -> .` is contained as well. Ship a directory of content as a
   real directory, not as a link to one.
 
-So a KB cannot make `pair install` copy files from elsewhere on your machine into your
+So a KB cannot make `pair-cli install` copy files from elsewhere on your machine into your
 repository, and a registry ships only what physically lives under it. A link like
 `.pair/knowledge/shared -> ../../shared-guidelines` is **not** installed even though its
 target is inside the KB: the target is outside the `knowledge` registry's source. Put
@@ -101,9 +101,9 @@ Four further guards apply to layer 2, and only to it:
   because the source's version of that registry was never merged beneath yours.
 
 Layer 2 applies only to a **named** source (`--source`, `--git`, `--url`), and it applies
-to `pair install` and `pair update` alike — an update that did not read the declaration
+to `pair-cli install` and `pair-cli update` alike — an update that did not read the declaration
 would re-install the same content under the CLI's default names, leaving both copies
-behind. The default KB path resolves exactly as before. `pair package` ships the KB's `pair.config.json` in
+behind. The default KB path resolves exactly as before. `pair-cli package` ships the KB's `pair.config.json` in
 the release ZIP, so a KB installed from its published artifact declares exactly what the
 same KB installed from a directory or a git clone declares.
 
@@ -248,9 +248,9 @@ Notes:
 
 ## Working Area Override
 
-`.pair/working/` (checkpoints, reports) is operational data, not knowledge. It is protected simply by **never being a registry target**: `pair install`/`pair update` only touch paths inside a configured registry, so a directory that is not a registry `source` or `target` is never created, modified, or deleted (D14). There is no runtime carve-out — instead, `pair validate-config` **rejects** any config whose registry `target` would overlap the working area. See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
+`.pair/working/` (checkpoints, reports) is operational data, not knowledge. It is protected simply by **never being a registry target**: `pair-cli install`/`pair-cli update` only touch paths inside a configured registry, so a directory that is not a registry `source` or `target` is never created, modified, or deleted (D14). There is no runtime carve-out — instead, `pair-cli validate-config` **rejects** any config whose registry `target` would overlap the working area. See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
 
-Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it. The value must be a **project-relative** path (relative to the project root, like `asset_registries` targets); an absolute `working_path` is rejected by `pair validate-config`:
+Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it. The value must be a **project-relative** path (relative to the project root, like `asset_registries` targets); an absolute `working_path` is rejected by `pair-cli validate-config`:
 
 ```json
 {
@@ -259,12 +259,12 @@ Override the default path with a top-level `working_path` field, a sibling of `a
 }
 ```
 
-When set, the override path — not `.pair/working` — is the reserved path that no registry `target` may overlap, checked by `pair validate-config`.
+When set, the override path — not `.pair/working` — is the reserved path that no registry `target` may overlap, checked by `pair-cli validate-config`.
 
 ## Link Validation
 
 A top-level `link_validation` field, a sibling of `asset_registries`, tunes how
-`pair kb-validate` treats relative markdown links whose target is **missing**:
+`pair-cli kb-validate` treats relative markdown links whose target is **missing**:
 
 ```json
 {
@@ -291,7 +291,7 @@ matching the same target as soon as it is linked from a deeper file.
 
 The section is read from the config of the **KB being validated** — `<--path>/pair.config.json`,
 falling back to `<--path>/config.json` when there is no `pair.config.json`, the same config the
-registries are resolved from — so validating `pair kb-validate --path ./my-kb` uses
+registries are resolved from — so validating `pair-cli kb-validate --path ./my-kb` uses
 `./my-kb/pair.config.json` (or `./my-kb/config.json`), not the config of the directory you run the
 command in.
 
@@ -301,7 +301,7 @@ Full semantics and glob syntax:
 ## Execution Engine (`engine`)
 
 A top-level `engine` field, a sibling of `asset_registries`, names the agent process
-[`pair run`](/docs/reference/cli/commands#run) drives:
+[`pair-cli run`](/docs/reference/cli/commands#run) drives:
 
 ```json
 {
@@ -323,7 +323,7 @@ The block is **optional and delta-only**. Precedence, strongest first:
 | `engine.id` in `pair.config.json` | the schema default | Committed project preference |
 | Schema default (`claude`) | — | A repository with **no** `pair.config.json` runs from this |
 
-`pair run` prints the resolved engine, the exact command line and the level it came from before
+`pair-cli run` prints the resolved engine, the exact command line and the level it came from before
 it executes anything.
 
 <Callout type="warn">
@@ -338,8 +338,8 @@ it executes anything.
 Validate your config with:
 
 ```bash
-pair validate-config
-pair validate-config --config ./custom-config.json
+pair-cli validate-config
+pair-cli validate-config --config ./custom-config.json
 ```
 
 ### What Gets Validated

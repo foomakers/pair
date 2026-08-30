@@ -115,7 +115,7 @@ export function describeParallelism(policy: AutomationPolicy): string {
     return `Parallelism: 1 (policy: ${policy.maxParallelism})`
   }
   return (
-    `Parallelism: policy declares max ${policy.maxParallelism}, but a single \`pair run\` process ` +
+    `Parallelism: policy declares max ${policy.maxParallelism}, but a single \`pair-cli run\` process ` +
     `drives 1 card at a time — run multiple driver processes for concurrency (the batch decision ` +
     `remains pair-loop's)`
   )

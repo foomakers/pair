@@ -1,14 +1,14 @@
 export const updateMetadata = {
   name: 'update',
   description: 'Update documentation and assets from Knowledge Base source',
-  usage: 'pair update [target] [options]',
+  usage: 'pair-cli update [target] [options]',
   examples: [
-    'pair update                                     # Update from default source',
-    'pair update --source https://example.com/kb.zip # Update from remote URL',
-    'pair update --source /absolute/path/to/kb      # Update from local directory',
-    'pair update --source ./relative/kb             # Update from relative path',
-    'pair update --offline --source /local/kb       # Update offline mode',
-    'pair update --list-targets                     # List available targets',
+    'pair-cli update                                     # Update from default source',
+    'pair-cli update --source https://example.com/kb.zip # Update from remote URL',
+    'pair-cli update --source /absolute/path/to/kb      # Update from local directory',
+    'pair-cli update --source ./relative/kb             # Update from relative path',
+    'pair-cli update --offline --source /local/kb       # Update offline mode',
+    'pair-cli update --list-targets                     # List available targets',
   ],
   options: [
     { flags: '[target]', description: 'Target folder (omit to use defaults from config)' },

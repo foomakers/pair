@@ -69,7 +69,7 @@ describe('KB Installer', () => {
    * It is not merely a concurrency window: `resume-manager.shouldResume()` decides to resume
    * from the existence and SIZE of `<staging>.partial` alone, with no binding to the URL
    * that produced those bytes, and then issues `Range: bytes=<n>-` against the NEW url. An
-   * interrupted official download followed by `pair install --url https://acme…/kb.zip` at
+   * interrupted official download followed by `pair-cli install --url https://acme…/kb.zip` at
    * the same CLI version would append the acme body onto the official KB's bytes and
    * finalize the hybrid as one archive.
    */
@@ -432,7 +432,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
   })
 
   it('should handle ZIP with single root directory containing KB structure and return cachePath', async () => {
-    // Arrange - Simulates ZIP created by `pair package` which has .zip-temp/ root
+    // Arrange - Simulates ZIP created by `pair-cli package` which has .zip-temp/ root
     const version = '0.2.0'
     const zipPath = '/path/kb.zip'
 

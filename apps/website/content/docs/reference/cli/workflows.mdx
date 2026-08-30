@@ -89,30 +89,30 @@ Create and verify KB packages for distribution:
 
 ```bash
 # Package KB for distribution
-pair package --name "My KB" --version "1.0.0" -o dist/kb-v1.0.0.zip
+pair-cli package --name "My KB" --version "1.0.0" -o dist/kb-v1.0.0.zip
 
 # Verify package integrity before distribution
-pair kb-verify dist/kb-v1.0.0.zip
+pair-cli kb-verify dist/kb-v1.0.0.zip
 
 # Verify package with JSON output (CI/CD)
-pair kb-verify dist/kb-v1.0.0.zip --json
+pair-cli kb-verify dist/kb-v1.0.0.zip --json
 ```
 
 **Complete Distribution Workflow:**
 
 ```bash
 # 1. Validate KB structure
-pair kb-validate
+pair-cli kb-validate
 
 # 2. Package KB with metadata
-pair package \
+pair-cli package \
   --name "Production KB" \
   --version "2.1.0" \
   --author "DevOps Team" \
   -o dist/kb-prod-v2.1.0.zip
 
 # 3. Verify package integrity
-pair kb-verify dist/kb-prod-v2.1.0.zip
+pair-cli kb-verify dist/kb-prod-v2.1.0.zip
 
 # 4. Distribute package (upload to release, internal server, etc.)
 # ... distribution steps ...
@@ -125,20 +125,20 @@ pair kb-verify dist/kb-prod-v2.1.0.zip
 wget https://releases.example.com/kb-v1.0.0.zip
 
 # Verify integrity before installing
-pair kb-verify kb-v1.0.0.zip
+pair-cli kb-verify kb-v1.0.0.zip
 
 # If verification passes, install
-pair install --source kb-v1.0.0.zip
+pair-cli install --source kb-v1.0.0.zip
 ```
 
 **Interactive Package Creation:**
 
 ```bash
 # Use guided prompts for metadata entry
-pair package --interactive
+pair-cli package --interactive
 
 # Pre-fill some fields, edit others interactively
-pair package --interactive --name "my-kb" --version 2.0.0
+pair-cli package --interactive --name "my-kb" --version 2.0.0
 ```
 
 Interactive mode resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`). Each field can be accepted or overridden. A preview is shown before confirmation.
@@ -147,31 +147,31 @@ Interactive mode resolves smart defaults from `package.json`, `git config`, and 
 
 ```bash
 # Create package with org metadata
-pair package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,ISO27001" --distribution private
+pair-cli package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,ISO27001" --distribution private
 
 # Use org template for defaults (.pair/org-template.json)
-pair package --org
+pair-cli package --org
 ```
 
 **Inspect Package Metadata:**
 
 ```bash
 # View package info
-pair kb-info dist/kb-v1.0.0.zip
+pair-cli kb-info dist/kb-v1.0.0.zip
 
 # View as JSON
-pair kb-info dist/kb-v1.0.0.zip --json
+pair-cli kb-info dist/kb-v1.0.0.zip --json
 ```
 
 **Common Scenarios:**
 
-- **Pre-distribution check**: Always run `pair kb-verify` before publishing packages
+- **Pre-distribution check**: Always run `pair-cli kb-verify` before publishing packages
 - **Post-download validation**: Verify downloaded packages with `kb-verify` before installation
 - **CI/CD integration**: Use `--json` flag for automated verification in pipelines
 - **Security audit**: Checksum verification detects tampering or corruption
 - **Interactive packaging**: Use `--interactive` for guided metadata entry with smart defaults
 - **Org packaging**: Use `--org` with `--org-name` for organizational metadata in manifest
-- **Package inspection**: Use `pair kb-info <path>` to view package metadata without extracting
+- **Package inspection**: Use `pair-cli kb-info <path>` to view package metadata without extracting
 
 ---
 
@@ -183,28 +183,28 @@ For complete documentation, see the [CLI Commands Reference](/docs/reference/cli
 
 ```bash
 # Install all assets with defaults
-pair install
+pair-cli install
 
 # Update existing assets
-pair update
+pair-cli update
 
 # Validate and fix KB links
-pair update-link
+pair-cli update-link
 
 # List available registries
-pair install --list-targets
+pair-cli install --list-targets
 
 # Validate KB structure and links
-pair kb-validate
+pair-cli kb-validate
 
 # Validate configuration
-pair validate-config
+pair-cli validate-config
 
 # Package KB for distribution
-pair package -o dist/kb.zip
+pair-cli package -o dist/kb.zip
 
 # Verify KB package integrity
-pair kb-verify kb-package.zip
+pair-cli kb-verify kb-package.zip
 
 # Get help for any command
 pair <command> --help

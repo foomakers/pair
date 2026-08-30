@@ -53,7 +53,7 @@ A raw `SKILL.md` file contains relative links, short skill names, and category-b
 
 ### Pipeline Stages
 
-The pipeline runs during `pair install` and `pair update`:
+The pipeline runs during `pair-cli install` and `pair-cli update`:
 
 **Stage 1: Copy with naming transforms**
 
@@ -230,7 +230,7 @@ The relative-link rewriter (Stage 3) gets this for free: it walks a real markdow
 
 ### The Problem
 
-`pair update` re-derives skill bodies from source on every run, so a rename (e.g. a prefix change in `pair.config.json`) always produces the correct *new* skill files. But two kinds of content are **not** re-derived from source every run:
+`pair-cli update` re-derives skill bodies from source on every run, so a rename (e.g. a prefix change in `pair.config.json`) always produces the correct *new* skill files. But two kinds of content are **not** re-derived from source every run:
 
 - Files copied with `add` behavior (e.g. adoption docs) — never overwritten once they exist, so a stale reference baked in during an earlier install (`/pair-next`) is never revisited by a plain copy-and-rewrite pass.
 - Anything a previous run wrote using the *old* prefix, where the current config only knows the *new* one.
@@ -271,7 +271,7 @@ Reclassified so they can be invoked scoped by any planning/refinement skill, not
 | `$scope` | Optional (`all` default, or `single`) | Required — items/areas the caller touched; `all` is bootstrap-only |
 | No DDD artifacts | Prerequisite check HALTs | Falls back to "system areas" (services/modules) — no HALT |
 
-No code change is required in `apps/pair-cli` — the `skills` registry (`config.json`) is category-agnostic; moving a skill between `process/` and `capability/` in the dataset is picked up automatically by the flatten+prefix transform on the next `pair install`/`pair update`.
+No code change is required in `apps/pair-cli` — the `skills` registry (`config.json`) is category-agnostic; moving a skill between `process/` and `capability/` in the dataset is picked up automatically by the flatten+prefix transform on the next `pair-cli install`/`pair-cli update`.
 
 ## Related
 

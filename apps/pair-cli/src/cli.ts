@@ -102,7 +102,7 @@ export async function runCli(
   )
   program.addHelpText(
     'afterAll',
-    `\n  Run ${chalk.dim('pair <command> --help')} for detailed usage of a specific command.\n`,
+    `\n  Run ${chalk.dim('pair-cli <command> --help')} for detailed usage of a specific command.\n`,
   )
 
   runDiagnostics(fsService)
@@ -234,12 +234,12 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
     const unknownArgs = cmd.args
     if (unknownArgs.length > 0) {
       throw new Error(
-        `Unknown command: ${unknownArgs[0]}\n\n  Run pair --help to see available commands.`,
+        `Unknown command: ${unknownArgs[0]}\n\n  Run pair-cli --help to see available commands.`,
       )
     }
-    console.log(`  ${chalk.dim('Run')} pair --help ${chalk.dim('to see available commands.')}`)
+    console.log(`  ${chalk.dim('Run')} pair-cli --help ${chalk.dim('to see available commands.')}`)
     console.log(
-      `  ${chalk.dim('Run')} pair install --list-targets ${chalk.dim('to see asset registries.')}\n`,
+      `  ${chalk.dim('Run')} pair-cli install --list-targets ${chalk.dim('to see asset registries.')}\n`,
     )
   })
 }
@@ -249,7 +249,7 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
  *
  * It runs BEFORE any pre-flight guard, deliberately: it is a program-level flag, so it must
  * take effect for every command — including the ones the pre-flight allow-list skips. It used to live
- * BELOW those guards, so `pair <cmd> --log-level debug` silently did nothing and the only
+ * BELOW those guards, so `pair-cli <cmd> --log-level debug` silently did nothing and the only
  * level ever applied was the module-level default (US-395 review round 14). A command-level
  * `--log-level` (`package`, `update-link`) is applied later in that handler and still wins.
  */
@@ -289,8 +289,8 @@ function applyGlobalLogLevel(prog: Command): void {
  *
  * It must be fed the MERGED option set — the same value the parsers see through
  * `namedSource` — not the action command's alone. `--url` is declared on the PROGRAM, so
- * `actionCommand.opts()` never carries it (commander@11: for both `pair install --url X` and
- * `pair --url X install`, `url` lands on the program's opts and the subcommand's are `{}`), and
+ * `actionCommand.opts()` never carries it (commander@11: for both `pair-cli install --url X` and
+ * `pair-cli --url X install`, `url` lands on the program's opts and the subcommand's are `{}`), and
  * with the command's set alone this predicate could not see a named remote source: the
  * pre-flight warmed `external/url-…` and the command re-fetched the same archive into the same
  * slot — 2 full downloads per remote `install|update --url` in a released layout. Same

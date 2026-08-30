@@ -22,12 +22,12 @@ const ROOT_CLAUDE_SKILLS = join(REPO_ROOT, '.claude/skills')
 
 /**
  * On-disk root mirror of a dataset artifact, or `undefined` ONLY when it is
- * genuinely absent (which the guard reports as "missing → run `pair update`").
+ * genuinely absent (which the guard reports as "missing → run `pair-cli update`").
  *
  * A copy that EXISTS but cannot be read (EACCES, a directory in its place) is a
  * different failure with a different fix: it is rethrown naming the path and the
  * underlying cause, never collapsed into `undefined` — which would mislabel it
- * as missing and hand the developer a hint (`pair update`) that cannot fix an
+ * as missing and hand the developer a hint (`pair-cli update`) that cannot fix an
  * EACCES. `read` is injectable so that branch is actually covered by a test.
  *
  * PLACEMENT (deliberate, and the reason it differs from its sibling): the
@@ -53,7 +53,7 @@ const rootMirrorContent = (
     throw new Error(
       `Root mirror for dataset artifact '${datasetArtifact}' EXISTS at ${p} but is ` +
         `unreadable: ${(err as Error).message}. Fix the file/permissions — ` +
-        `'pair update' cannot regenerate over an unreadable path.`,
+        `'pair-cli update' cannot regenerate over an unreadable path.`,
     )
   }
 }
@@ -72,7 +72,7 @@ const captureThrownMessage = (fn: () => void): string => {
  * Data-driven mirror-equality guard: for EVERY markdown artifact the dataset
  * contributes — each skill's `SKILL.md` AND every sub-doc under a skill dir —
  * asserts the root `.claude/skills/<transformed path>` is byte-for-byte the real
- * `pair update` copy-pipeline transform of its dataset source. The case list is
+ * `pair-cli update` copy-pipeline transform of its dataset source. The case list is
  * derived from the dataset at collection time, so a newly added skill or
  * sub-doc is covered automatically with no test edit (AC1/AC3) — never a
  * hardcoded list and never a count.
@@ -180,7 +180,7 @@ describe('directional guard ignores root-only artifacts with no dataset source',
 })
 
 /**
- * Missing vs unreadable are DISTINCT failures with distinct fixes: `pair update`
+ * Missing vs unreadable are DISTINCT failures with distinct fixes: `pair-cli update`
  * regenerates a missing copy, but cannot fix an EACCES. The root-copy read must
  * therefore never collapse "unreadable" into "missing" (nor, worse, into a pass).
  */
@@ -188,7 +188,7 @@ describe('root-copy read distinguishes a missing copy from an unreadable one', (
   it('reports an EXISTING but unreadable root copy as unreadable, never as missing', () => {
     // The catch branch of the root-copy read: an EACCES (or a dir in its place)
     // must fail with its path and cause, not be swallowed into `undefined` and
-    // mislabelled "does not exist. Run 'pair update'".
+    // mislabelled "does not exist. Run 'pair-cli update'".
     const artifact = 'next/SKILL.md'
     const rootPath = join(ROOT_CLAUDE_SKILLS, installedArtifactPath(artifact))
     expect(existsSync(rootPath)).toBe(true) // precondition: it DOES exist
@@ -208,10 +208,10 @@ describe('root-copy read distinguishes a missing copy from an unreadable one', (
 
 /**
  * SKILL_COPY_OPTS is a local copy of the `skills` asset-registry knobs in
- * apps/pair-cli/config.json (what `pair update` actually uses). Pin it so a
+ * apps/pair-cli/config.json (what `pair-cli update` actually uses). Pin it so a
  * registry change (e.g. prefix `pair` -> `p`) fails HERE — correctly attributed
  * — instead of the guard silently computing the wrong root path and blaming the
- * mirror / `pair update` (finding: hardcoded duplication of the config).
+ * mirror / `pair-cli update` (finding: hardcoded duplication of the config).
  *
  * `behavior` is pinned too, via the RESOLVED options the guard actually runs
  * (`skillCopySyncOptions`): a registry flip to 'mirror' would otherwise leave the
@@ -240,7 +240,7 @@ describe('SKILL_COPY_OPTS stays pinned to the pair-cli skills registry', () => {
     expect(SKILL_COPY_OPTS.prefix).toBe(registry.prefix)
     // #407: the entry granularity is part of the transform, so it is pinned too —
     // otherwise the guard would derive sibling `-references` paths the real
-    // `pair update` no longer produces.
+    // `pair-cli update` no longer produces.
     expect(SKILL_COPY_OPTS.flattenDepth).toBe(registry.flattenDepth)
     // the guard reads the dataset from the registry's declared source dir (.skills)
     expect(DATASET_SKILLS.endsWith(registry.source)).toBe(true)
@@ -455,7 +455,7 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
 
   it('FAILS loudly when the root mirror is missing (AC4)', () => {
     expect(() => assertRootArtifactMatches(SKILL, expected, undefined)).toThrow(
-      /missing[\s\S]*pair update/,
+      /missing[\s\S]*pair-cli update/,
     )
   })
 })
@@ -572,11 +572,11 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     expect(() => assertRootArtifactMatches(SUB, sub, drifted)).toThrow(/drifted/)
   })
 
-  it('FAILS loudly when the sub-doc root copy is missing, pointing at pair update (AC4)', () => {
+  it('FAILS loudly when the sub-doc root copy is missing, pointing at pair-cli update (AC4)', () => {
     const message = captureThrownMessage(() =>
       assertRootArtifactMatches(SUB, mirror.byDatasetPath.get(SUB)!, undefined),
     )
-    expect(message).toMatch(/missing[\s\S]*pair update/)
+    expect(message).toMatch(/missing[\s\S]*pair-cli update/)
     expect(message).toContain(SUB)
     expect(message).toContain(SUB_ROOT)
   })

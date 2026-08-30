@@ -64,7 +64,7 @@ Also on the documentation website. Contains the full text content of every publi
 
 ### 3. Project-Local — `.pair/llms.txt`
 
-Generated locally when you run `pair install` or `pair update`. Summarizes the installed Knowledge Base: adoption files, guidelines, how-to guides, and skills. This gives an AI assistant a map of your project's pair setup without scanning the entire `.pair/` directory.
+Generated locally when you run `pair-cli install` or `pair-cli update`. Summarizes the installed Knowledge Base: adoption files, guidelines, how-to guides, and skills. This gives an AI assistant a map of your project's pair setup without scanning the entire `.pair/` directory.
 
 ```text
 # pair
@@ -102,7 +102,7 @@ The project-local `.pair/llms.txt` is referenced from `AGENTS.md`, so AI coding 
 | Event | What regenerates |
 |-------|-----------------|
 | Site build (CI/CD) | `/llms.txt` and `/llms-full.txt` — extracted from MDX content at build time |
-| `pair install` | `.pair/llms.txt` — generated from installed KB content |
-| `pair update` | `.pair/llms.txt` — regenerated to reflect updated KB |
+| `pair-cli install` | `.pair/llms.txt` — generated from installed KB content |
+| `pair-cli update` | `.pair/llms.txt` — regenerated to reflect updated KB |
 
 Site routes are statically generated at build time — no runtime processing required, compatible with Vercel's free tier.
