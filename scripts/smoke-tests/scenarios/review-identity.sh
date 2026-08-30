@@ -222,32 +222,33 @@ fi
 # AC3/AC6 — `review_identity_exclusion_ok`: the identity must be MECHANICALLY excluded
 # from the 🔴 predicate before it is allowed to act at all.
 # ==============================================================================
-excluded() { # excluded <description> <kind> <login>
-  if review_identity_exclusion_ok "$2" "$3" 2>/dev/null; then
+excluded() { # excluded <description> <kind> <login> <acting>
+  if review_identity_exclusion_ok "$2" "$3" "$4" 2>/dev/null; then
     log_succ "$1 => excluded"
   else
     log_fail "$1: expected excluded, got NOT excluded"; FAILED=1
   fi
 }
-not_excluded() { # not_excluded <description> <kind> <login>
-  if review_identity_exclusion_ok "$2" "$3" 2>/dev/null; then
+not_excluded() { # not_excluded <description> <kind> <login> <acting>
+  if review_identity_exclusion_ok "$2" "$3" "$4" 2>/dev/null; then
     log_fail "$1: expected NOT excluded, got excluded"; FAILED=1
   else
     log_succ "$1 => not excluded (identity is not healthy)"
   fi
 }
-excluded     "App identity — user.type is \"Bot\", the type clause covers it" app ''
-excluded     "bot-user identity WITH its login provisioned"                    user acme-review-bot
-not_excluded "bot-user identity with NO login provisioned"                     user ''
-not_excluded "identity of unknown kind (fail-safe: assume not excluded)"       banana acme-review-bot
-not_excluded "identity kind absent entirely"                                   '' ''
+excluded     "App identity — user.type is \"Bot\", the type clause covers it" app '' ''
+excluded     "bot-user identity WITH its login provisioned"                    user acme-review-bot acme-review-bot
+not_excluded "bot-user identity with NO login provisioned"                     user '' acme-review-bot
+not_excluded "bot-user identity under a DIFFERENT acting account"              user acme-review-bot acme-review-bot-2
+not_excluded "identity of unknown kind (fail-safe: assume not excluded)"       banana acme-review-bot acme-review-bot
+not_excluded "identity kind absent entirely"                                   '' '' ''
 # THE VOCABULARY THE SKILLS ACTUALLY PASS. `/pair-process-review` Step 5.3 reads
 # `Review identity:` from way-of-working and forwards that LITERAL as <kind>; adoption
 # spells the machine-account form `bot-user`, not `user`. A kind the adapter does not
 # accept is a not-healthy identity ⇒ every review on a correctly provisioned bot-user
 # repository would HALT forever. Both spellings must resolve identically.
-excluded     "bot-user (the ADOPTION literal) WITH its login provisioned"      bot-user acme-review-bot
-not_excluded "bot-user (the ADOPTION literal) with NO login provisioned"       bot-user ''
+excluded     "bot-user (the ADOPTION literal) WITH its login provisioned"      bot-user acme-review-bot acme-review-bot
+not_excluded "bot-user (the ADOPTION literal) with NO login provisioned"       bot-user '' acme-review-bot
 # ==============================================================================
 # AC4 (ROUND 6) — `healthy` HAS A RUNTIME SOURCE. `resolve_identity_mode`'s second
 # argument is the single signal separating `identity` from `halt`, and nothing computed
@@ -269,13 +270,15 @@ check "app + probes NOT RUN (arguments absent) ⇒ not healthy"         0 \
 check "app + malformed probe outcome ⇒ not healthy (fail-safe)"       0 \
   "$(review_identity_health app maybe 1 '' 2>/dev/null)"
 check "bot-user + probes green + login provisioned ⇒ healthy"         1 \
-  "$(review_identity_health bot-user 1 1 acme-review-bot 2>/dev/null)"
+  "$(review_identity_health bot-user 1 1 acme-review-bot acme-review-bot 2>/dev/null)"
+check "bot-user + a different acting login ⇒ not healthy (🔴 gate excludes the wrong account)" 0 \
+  "$(review_identity_health bot-user 1 1 acme-review-bot acme-review-bot-2 2>/dev/null)"
 check "bot-user + probes green, login UNSET ⇒ not healthy (🔴 gate open)" 0 \
-  "$(review_identity_health bot-user 1 1 '' 2>/dev/null)"
+  "$(review_identity_health bot-user 1 1 '' acme-review-bot 2>/dev/null)"
 check "user (short form) + probes green + login ⇒ healthy"            1 \
-  "$(review_identity_health user 1 1 acme-review-bot 2>/dev/null)"
+  "$(review_identity_health user 1 1 acme-review-bot acme-review-bot 2>/dev/null)"
 check "unknown kind, probes green ⇒ not healthy"                      0 \
-  "$(review_identity_health banana 1 1 acme-review-bot 2>/dev/null)"
+  "$(review_identity_health banana 1 1 acme-review-bot acme-review-bot 2>/dev/null)"
 check "nothing passed at all ⇒ not healthy"                           0 \
   "$(review_identity_health 2>/dev/null)"
 # End to end: the health answer is what `resolve_identity_mode` consumes.
@@ -290,7 +293,7 @@ else
   log_fail "not-healthy reason does not name the failed probe: $HEALTH_MSG"; FAILED=1
 fi
 
-EXCL_MSG="$(review_identity_exclusion_ok user '' 2>&1 >/dev/null)"
+EXCL_MSG="$(review_identity_exclusion_ok user '' '' 2>&1 >/dev/null)"
 if printf '%s' "$EXCL_MSG" | grep -q 'REVIEW_IDENTITY_LOGIN'; then
   log_succ "the not-excluded reason names the variable that must be provisioned"
 else
@@ -795,7 +798,7 @@ else
   check "the extracted App kind routes to the Checks API" checks-api \
     "$(pair_review_publication_mode identity "$(extract_kind "$TMP_DIR/wow-app.md")" 2>/dev/null)"
   excluded "the extracted bot-user kind is accepted by the exclusion check" \
-    "$(extract_kind "$TMP_DIR/wow-bot.md")" acme-review-bot
+    "$(extract_kind "$TMP_DIR/wow-bot.md")" acme-review-bot acme-review-bot
 fi
 
 # ==============================================================================
@@ -1097,7 +1100,7 @@ audit "the per-run probe READS the repository variable" "$GITHUB_GUIDE" \
 # ...and the form's PAT must be granted that read, or the probe 403s on every run.
 audit "the bot-user PAT list grants the read the probe performs" "$GITHUB_GUIDE" \
   'Variables: read'
-audit "the health call is fed that read-back value" "$GITHUB_GUIDE" '"${RV:-}")"'
+audit "the health call is fed that read-back value and the identity that acts" "$GITHUB_GUIDE" '"${RV:-}" "${ACTING:-}")"'
 if grep -q '"\${REVIEW_IDENTITY_LOGIN:-}"' "$GITHUB_GUIDE"; then
   log_fail "the guide still feeds health from the AMBIENT REVIEW_IDENTITY_LOGIN env var"
   FAILED=1
