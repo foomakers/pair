@@ -69,10 +69,13 @@ The review is dispatched to that clean-context subagent with a bounded instructi
 
 <Callout type="warn">
   **The token is opt-in, and it is not a self-approval shortcut.** Set the repository variable
-  `PAIR_SOLO_APPROVAL_TOKEN` to `true` only where the repository genuinely cannot produce a second
-  human — that declaration is what lets the PR author's own token count. Leave it unset (the default,
-  and the right setting for every multi-person repository) and the token carries the same author
-  exclusion the review path carries: a 🔴 PR can never be satisfied by its own author.
+  `PAIR_SOLO_APPROVAL_TOKEN` to `true` (compared case-insensitively) only where the repository
+  genuinely cannot produce a second human — that declaration is what lets the PR author's own token
+  count. Leave it unset (the default, and the right setting for every multi-person repository) and the
+  token carries the same author exclusion the review path carries: a 🔴 PR can never be satisfied by
+  its own author. Forgot to set it and posted the token anyway? The published status says so by name —
+  `token posted by the PR author; set PAIR_SOLO_APPROVAL_TOKEN=true if this repo has one human` —
+  rather than telling you to post the token you just posted.
 </Callout>
 
 <Callout type="info">

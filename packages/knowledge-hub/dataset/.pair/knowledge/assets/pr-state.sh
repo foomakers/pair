@@ -150,10 +150,12 @@ human_approval_jq_filter() {
 #      command + the author exclusion (unless the repository opted in as single-human),
 #   2. `token_approver_login` — a SERVER-SIDE read of the actor's repository
 #      permission, because `author_association` is not push access.
-# A rejection at stage 2 is REPORTED as such (`token_denied_desc`): "no token was
-# posted", "the token's author is not write-level" and "the permission lookup could
-# not answer" are three different things to tell a maintainer, and collapsing them
-# into one description tells someone who just posted a valid token to post one.
+# A rejection is REPORTED as the rejection it is (`token_denied_desc`): "no token was
+# posted", "the token's author is not write-level", "the permission lookup could not
+# answer" and "the token is the PR author's and the single-human opt-in is not set"
+# (`token_blocked_by_author_exclusion`, the one rejection that happens at stage 1) are
+# four different things to tell a maintainer, and collapsing them into one description
+# tells someone who just posted a valid token to post one.
 
 # human_token_approval_select — the ONE predicate all three projections below are
 # built from, so the count the gate acts on and the audit line it publishes cannot
@@ -192,6 +194,14 @@ human_approval_jq_filter() {
 # carries (`.user.login != env.PR_AUTHOR`), so a 🔴 PR can never be self-satisfied by
 # its own author. With an empty PR_AUTHOR and the opt-in off, nothing counts.
 #
+# The opt-in is compared CASE-INSENSITIVELY, with surrounding whitespace ignored: its
+# value is typed into a free-text box (GitHub's Actions → Variables), and a
+# case-sensitive `== "true"` made `True`/`TRUE` declare nothing while looking set —
+# indistinguishable, on the PR, from never having created the variable. Only that one
+# word opts in: `1`, `yes` and `on` are NOT the declaration, and the exclusion stays.
+# A declaration that silently did nothing is the failure mode this comparison removes;
+# a stricter parse would only move it.
+#
 # The `test("^[0-9a-f]{40}$")` guard on HEAD_SHA is load-bearing twice over: an unset
 # HEAD_SHA would degrade the match into "any /approve" (an unbound token), and the
 # value is CONCATENATED INTO A REGEX, so a non-hex 40-character string of
@@ -203,17 +213,36 @@ human_approval_jq_filter() {
 # comment — approve the PR and be published as its approver. Indented code blocks and
 # inline-backtick mentions are rejected by the same anchor.
 #
-# FENCED blocks are NOT covered by that anchor and are stripped BEFORE it is applied.
-# A ``` (or ~~~) fence puts its content at column 0 of its own line, so a maintainer
-# writing "here is how you approve:" with the command in a fence — the shape this very
-# guide uses to show the adopter the token, and the shape GitHub's UI produces for a
-# copyable command — would otherwise approve the PR and be published as its approver
-# while the same comment says "do not run it yet". Stripping keeps the ODD-indexed
-# segments out (`.key % 2 == 0` are the regions outside the fences); an UNCLOSED fence
-# swallows everything after it, which is both what GitHub renders and the fail-safe
-# direction. A genuine token before or after a fence still matches.
+# TWO REGIONS ARE REMOVED BEFORE THAT ANCHOR IS APPLIED, because the anchor cannot see
+# them and GitHub renders neither as a live command:
+#   HTML COMMENTS (`<!-- … -->`, across lines) — INVISIBLE in the rendered comment. A
+#     token hidden in one is a token no reader can see, published in the audit line
+#     under its author's name. An UNCLOSED `<!--` swallows the rest of the body, the
+#     same fail-safe direction the fences take.
+#   FENCED regions — a ``` (or ~~~) fence puts its content at column 0 of its own line,
+#     so a maintainer writing "here is how you approve:" with the command in a fence —
+#     the shape this very guide uses to show the adopter the token, and the shape
+#     GitHub's UI produces for a copyable command — would otherwise approve the PR and
+#     be published as its approver while the same comment says "do not run it yet".
+# The fence split is LINE-ANCHORED (`(^|\n) {0,3}```[^\n]*`, up to CommonMark's three
+# leading spaces, consuming the info string) rather than a bare `split("```")`, and the
+# surviving segments are rejoined with `""`, never `"\n"`. Both details are defects
+# this shape closes, not style: a bare parity split treated an INLINE ```gh``` span as
+# a fence and the `"\n"` join then MANUFACTURED a line boundary the raw body does not
+# have, so a mid-line mention after an inline code span approved; and a token glued to
+# a closing fence (```` ```/approve <sha> ````) counted as "outside", though a closing
+# fence may not carry trailing content, so GitHub leaves the fence OPEN and renders the
+# token as code. `.key % 2 == 0` keeps the regions outside the fences; an UNCLOSED
+# fence swallows everything after it, which is both what GitHub renders and the
+# fail-safe direction. A genuine token before or after a fence still matches.
+#
+# RESIDUAL, named rather than claimed away: this is a targeted strip, not a CommonMark
+# parser. A fence indented FOUR or more spaces (inside a list item, say) is not
+# recognised as a fence — but its content is indented too, and the anchor forbids
+# leading whitespace, so the token inside it is rejected anyway. Say "outside fenced
+# regions and HTML comments", never "outside every code block".
 human_token_approval_select() {
-  printf '%s' '.[] | select(((env.HEAD_SHA // "") | test("^[0-9a-f]{40}$")) and .user.type=="User" and (.performed_via_github_app|not) and (.author_association|IN("OWNER","MEMBER","COLLABORATOR")) and (if env.SOLO_APPROVAL_TOKEN=="true" then true else ((env.PR_AUTHOR // "") != "" and .user.login != env.PR_AUTHOR) end) and ((.body // "") | split("```") | to_entries | map(select(.key % 2 == 0) | .value) | join("\n") | split("~~~") | to_entries | map(select(.key % 2 == 0) | .value) | join("\n") | test("(^|\\n)/approve[ \\t]+" + env.HEAD_SHA + "[ \\t\\r]*(\\n|$)")))'
+  printf '%s' '.[] | select(((env.HEAD_SHA // "") | test("^[0-9a-f]{40}$")) and .user.type=="User" and (.performed_via_github_app|not) and (.author_association|IN("OWNER","MEMBER","COLLABORATOR")) and (if ((env.SOLO_APPROVAL_TOKEN // "") | ascii_downcase | gsub("\\s";"")) == "true" then true else ((env.PR_AUTHOR // "") != "" and .user.login != env.PR_AUTHOR) end) and ((.body // "") | gsub("<!--(.|\\n)*?-->";"") | gsub("<!--(.|\\n)*$";"") | split("(^|\\n) {0,3}```[^\\n]*";"") | to_entries | map(select(.key % 2 == 0) | .value) | join("") | split("(^|\\n) {0,3}~~~[^\\n]*";"") | to_entries | map(select(.key % 2 == 0) | .value) | join("") | test("(^|\\n)/approve[ \\t]+" + env.HEAD_SHA + "[ \\t\\r]*(\\n|$)")))'
 }
 
 # human_token_approval_jq_filter — one line per candidate comment id; count them
@@ -301,21 +330,49 @@ token_approver_login() {
   return 2
 }
 
+# token_blocked_by_author_exclusion <pr-author> <forced-candidate-login>… — the
+# FOURTH state, and the stage-1 twin of the stage-2 failure `token_denied_desc` exists
+# for. With the opt-in unset, the PR AUTHOR's own token is dropped by stage 1: it never
+# reaches the permission read, the candidate list is empty and `token_approver_login`
+# exits 1 — i.e. the gate publishes "nothing was posted" to the one person who did post
+# it, on the only repository shape the token exists for. The maintainer re-posts, gets
+# the byte-identical line, has no second account, and the variable that would lift the
+# exclusion is named NOWHERE on the pull request.
+#
+# The caller re-runs stage 1 with the opt-in FORCED on (`SOLO_APPROVAL_TOKEN=true jq -r
+# "$(human_token_approval_login_jq_filter)"`) and passes the logins that yields here.
+# Answering 0 means: a token WAS posted and the author exclusion is the only thing that
+# dropped it. Fail-safe: an empty/unresolved <pr-author> matches nothing, so a failed
+# author resolution can never be reported as a self-approval.
+token_blocked_by_author_exclusion() {
+  local author="${1:-}" login
+  shift 2>/dev/null || true
+  [ -n "$author" ] || return 1
+  for login in "$@"; do
+    [ "$login" = "$author" ] || continue
+    return 0
+  done
+  return 1
+}
+
 # token_denied_desc <token_approver_login-exit-code> <head-sha> <candidate-login> —
 # the commit-status `description` for a 🔴 PR the token did NOT satisfy. One text per
 # STATE, never one text for all of them: telling a maintainer who just posted a valid
 # token to "post /approve <sha>" is the failure this function exists to prevent — they
 # re-post, get the same line, and nothing on the PR distinguishes "you did not post
-# one" from "yours could not be authorized". All three forms fit the API's 140-char
-# `description` cap at the worst-case 39-character login.
+# one" from "yours could not be authorized" or "yours was yours". All four forms fit
+# the API's 140-char `description` cap at the worst-case 39-character login.
 # <candidate-login> is the FIRST stage-1 candidate and is named only in the
 # permission-denied form, where it is the actor the verdict is about. The
 # lookup-failure form names no one on purpose: the lookup that failed is not
-# necessarily the first candidate's, and the run log has the exact API error.
+# necessarily the first candidate's, and the run log has the exact API error. Code 4
+# (`token_blocked_by_author_exclusion`) names the VARIABLE instead of a login: the
+# author already knows who they are, and the variable is the thing they cannot guess.
 token_denied_desc() {
   case "${1:-}" in
   2) printf 'risk:red — token from %s not authorized: repository permission is not write-level (D10)' "${3:-a candidate}" ;;
   3) printf 'risk:red — a token was posted but could not be authorized: permission lookup failed, see the run log (D10)' ;;
+  4) printf 'risk:red — token posted by the PR author; set PAIR_SOLO_APPROVAL_TOKEN=true if this repo has one human (D10)' ;;
   *) printf 'risk:red — needs a non-author human approval, or %s posted by a human maintainer (D10)' "$(solo_approval_token_body "${2:-}")" ;;
   esac
 }

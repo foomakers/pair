@@ -257,5 +257,65 @@
       "site_admin": false,
       "type": "User"
     }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "looks good to me\n<!--\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n-->\nnothing to see here.",
+    "created_at": "2026-08-28T11:21:00Z",
+    "id": 3237609018,
+    "node_id": "IC_kwDODKw3uc7A09018",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:21:00Z",
+    "user": {
+      "id": 609018,
+      "login": "hidden-commenter",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "how do you approve?\nthe command is ```gh```/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:22:00Z",
+    "id": 3237609019,
+    "node_id": "IC_kwDODKw3uc7A09019",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:22:00Z",
+    "user": {
+      "id": 609019,
+      "login": "inline-spanner",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "```\nexample\n```/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:23:00Z",
+    "id": 3237609020,
+    "node_id": "IC_kwDODKw3uc7A09020",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:23:00Z",
+    "user": {
+      "id": 609020,
+      "login": "glue-fencer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "<!-- reviewed offline with the maintainer -->\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:24:00Z",
+    "id": 3237609021,
+    "node_id": "IC_kwDODKw3uc7A09021",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:24:00Z",
+    "user": {
+      "id": 609021,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
   }
 ]

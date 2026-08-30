@@ -260,14 +260,20 @@ highest tier decorative.
   executable projection, no transliteration) accepts a comment only on host-asserted fields:
   `.user.type == "User"` (no Bot, no Organization), `.performed_via_github_app == null` (an App posting
   on a human's behalf is rejected), `.author_association ∈ {OWNER, MEMBER, COLLABORATOR}`, and the
-  command **owning its line, outside every code fence** — `(^|\n)/approve <40-hex head SHA>` with no
-  leading whitespace, applied to the body with all fenced regions (triple-backtick and `~~~`) stripped
-  first. The anchor alone covers `>`-prefixed quote-replies, 4-space-indented blocks and inline backticks; it
-  does **not** cover a fence, which puts the command at column 0 of its own line — the shape a
-  maintainer produces when they paste the command to *explain* it, and the shape this ADR and the
-  implementation guide both use to show it. Without the strip, that comment approved the PR and its
-  author was published as the approver. Only the command and the SHA come from the body; a body
-  claiming to be someone else changes nothing.
+  command **owning its line, outside fenced regions and HTML comments** — `(^|\n)/approve <40-hex head
+  SHA>` with no leading whitespace, applied to the body with fenced regions (triple-backtick and `~~~`)
+  and `<!-- … -->` comments stripped first. The anchor alone covers `>`-prefixed quote-replies,
+  4-space-indented blocks and inline backticks; it does **not** cover a fence, which puts the command at
+  column 0 of its own line — the shape a maintainer produces when they paste the command to *explain*
+  it, and the shape this ADR and the implementation guide both use to show it — nor an HTML comment,
+  which renders as nothing at all, so a token no reader can see would name its author as the approver.
+  Without those strips, both comments approved the PR. The fence strip is **line-anchored** and rejoins
+  with `""`: the first form of it was a backtick-parity `split("```")` joined with `"\n"`, which read an
+  inline ` ```gh``` ` span as a fence and then manufactured the line boundary that made a mid-line
+  mention count. Stated at the strength of the mechanism and no higher — it is a targeted strip, not a
+  CommonMark parser, so the residual is named in the guide's Stage 1 table (a fence indented four or
+  more spaces is not recognised; its content is indented too, so the anchor rejects the token anyway).
+  Only the command and the SHA come from the body; a body claiming to be someone else changes nothing.
   Stage 2 (`token_approver_login` / `token_permission_sufficient`) reads
   `GET /repos/{owner}/{repo}/collaborators/{login}/permission` and requires `admin`/`maintain`/`write`.
   **The association is a pre-filter, not the authorization** — and stating it that way is a correction,
@@ -300,17 +306,35 @@ highest tier decorative.
   first and wins wherever an approval exists. It reaches the token branch whenever that query returns
   zero, which is the state of **every** 🔴 PR before its first review: a ten-person repository pays the
   comments query and one permission read per candidate there too, and a non-author write-level human's
-  token satisfies 🔴 on it. An earlier draft of this bullet claimed the opposite — that a two-human
-  repository was untouched and paid nothing extra — which was false and contradicted the opt-in table
-  above it.
-- **A comment event must never cancel an in-flight evaluation.** `concurrency` is evaluated at RUN
-  level, before any job `if:`, so the body filter that keeps discussion traffic from spending Actions
-  minutes cannot keep it from killing a running evaluation: the cancelled run publishes nothing, the
-  cancelling run is skipped, and the required context stays `pending` — the permanently-unmergeable
-  trap property 5 exists to prevent, on a thread chatty enough to re-cancel. The group therefore
-  cancels in progress only for non-`issue_comment` events (`cancel-in-progress:
-  ${{ github.event_name != 'issue_comment' }}`); a token or withdrawal run **queues** behind the
-  evaluation it would otherwise kill.
+  token satisfies 🔴 on it. An earlier draft of this bullet claimed the opposite, which was false and
+  contradicted the opt-in table above it.
+- **A comment run belongs in its own concurrency group, not merely a non-cancelling one.**
+  `concurrency` is evaluated at RUN level, before any job `if:`, so the body filter that keeps
+  discussion traffic from spending Actions minutes cannot keep a comment run out of the group. Sharing
+  one group breaks in **both** directions and `cancel-in-progress: ${{ github.event_name !=
+  'issue_comment' }}` fixes only one: the comment run stops killing a running evaluation, but it is
+  still **cancellABLE**, because GitHub cancels a group's PENDING run whenever a newer run queues into
+  it. A `/approve` waiting behind a `synchronize` evaluation is therefore dropped by the next ordinary
+  comment on the thread — it never executes, and the status left standing is the evaluation's `needs a
+  non-author human approval…`, with a valid token unread on the PR and re-dropped by every further
+  comment. The group is keyed by comment id for `issue_comment`
+  (`…-${{ github.event_name == 'issue_comment' && github.event.comment.id || 'eval' }}`), so a token
+  run neither cancels nor is cancelled, while `edited`/`deleted` of the SAME comment share its key and
+  the newest state of that comment still wins. What remains is a publication race in the fail-safe
+  direction, recorded in the guide's § Residual: a concurrent evaluation that read the comments before
+  the token was posted can overwrite the token's `success` with a `failure` — blocked, never merged,
+  and cleared by any subsequent event.
+- **Every refusal states which refusal it is, at BOTH stages.** The stage-2 collapse (below) had a
+  stage-1 twin: with the opt-in unset, the PR author's own token is dropped by stage 1, so the
+  candidate list is empty and the gate published the byte-identical "no token was posted" — to the one
+  person who did post one, on the only repository shape the token exists for, with the variable that
+  would lift the exclusion named nowhere on the PR. When the candidate list is empty the job re-runs
+  stage 1 with the opt-in forced on (`token_blocked_by_author_exclusion`) and, if the author's token is
+  what the exclusion dropped, publishes `token posted by the PR author; set
+  PAIR_SOLO_APPROVAL_TOKEN=true if this repo has one human`. The opt-in is also compared
+  case-insensitively with whitespace ignored, because it is typed into a free-text Actions Variables
+  box and a `True` that silently declared nothing was indistinguishable, on the PR, from never having
+  set it.
 - **A stage-2 failure is reported as a stage-2 failure.** The permission read can 403 (the collaborators
   endpoint is not covered by the job's four `permissions:` entries), 5xx or rate-limit. Folding those
   onto `none` made the published description byte-identical to "no token was posted", so a maintainer
@@ -375,17 +399,23 @@ anti-accident and not an authorization control.
 - 🔴 is usable on a single-account repository, at a **named, weaker** guarantee — the failure mode this
   amendment exists to prevent is not a bug but a false sense of security.
 - **The token costs one extra API read per candidate actor**, on the fallback path only: the
-  collaborators permission endpoint, called only after stage 1 found a candidate, so a two-human
-  repository (which never leaves the review path) and every 🟢/🟡 PR pay nothing.
-- One more event triggers the job (`issue_comment`), **body-filtered on `created`** so that ordinary
-  discussion traffic neither spends Actions minutes nor — with `cancel-in-progress` — cancels an
-  in-flight evaluation; `edited`/`deleted` stay unfiltered, because a withdrawal no longer contains the
-  command and is precisely the event that must re-evaluate. The payload carries `issue` and not
-  `pull_request`; head/base/author are resolved from the API there. Residual, recorded: if that single
-  read fails, the pending-first step aborts and the *previous* status for that same head stands, so a
-  token withdrawn during a dying evaluation stays satisfied until the next event. A tier raise — the
-  case the pending-first property exists for — arrives as a `labeled` event carrying the head SHA and
-  never depends on that read.
+  collaborators permission endpoint, called only after stage 1 found a candidate. 🟢/🟡 PRs never reach
+  it — the gate auto-passes below 🔴. A 🔴 PR does reach it whenever the reviews query returns zero,
+  which includes a repository with two humans before its first review (see § Decision, "the review path
+  stays primary — but 'primary' is not 'free'"); the read is bounded by the fallback path, not by the
+  repository's headcount.
+- One more event triggers the job (`issue_comment`), **body-filtered on `created`** so that an ordinary
+  comment CREATED spends no Actions minutes; `edited`/`deleted` stay unfiltered, because a withdrawal no
+  longer contains the command and is precisely the event that must re-evaluate. That exemption has a
+  price, recorded rather than hidden: editing or deleting *any* comment on *any* PR runs the job in
+  full, including the pending-first flip that makes the required context merge-blocking until the
+  evaluation completes — so a typo fix on a 🟢 PR whose evaluation then dies leaves it blocked until the
+  next event. Fail-safe direction, and narrowing it would need per-comment state the payload does not
+  carry. The payload carries `issue` and not `pull_request`; head/base/author are resolved from the API
+  there. Residual, recorded: if that single read fails, the pending-first step aborts and the *previous*
+  status for that same head stands, so a token withdrawn during a dying evaluation stays satisfied until
+  the next event. A tier raise — the case the pending-first property exists for — arrives as a `labeled`
+  event carrying the head SHA and never depends on that read.
 - Verification follows the existing split: the predicate is executed against a committed comments
   fixture in `scripts/smoke-tests/scenarios/pr-state-flow.sh`; the content invariants (including this
   amendment's wording) are asserted in `packages/knowledge-hub/src/conformance/pr-state-flow.test.ts`.

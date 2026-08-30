@@ -422,7 +422,7 @@ audit "comment fixture carries the host-asserted fields the token filter reads" 
 audit "the token predicate ships in the evaluator, not as doc prose" "$EVALUATOR" \
   'human_token_approval_jq_filter' 'human_token_approval_actor_jq_filter' \
   'human_token_approval_login_jq_filter' 'token_approver_login' 'token_permission_sufficient' \
-  'token_denied_desc' 'TOKEN_PERMISSION_UNKNOWN' \
+  'token_denied_desc' 'TOKEN_PERMISSION_UNKNOWN' 'token_blocked_by_author_exclusion' \
   'solo_approval_token_body' 'author_association' 'performed_via_github_app' \
   'confirmation, not independent review'
 if command -v jq >/dev/null 2>&1; then
@@ -447,13 +447,13 @@ if command -v jq >/dev/null 2>&1; then
     HEAD_SHA="$head" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
       grep -c "$(printf '%s\\|' "$@" | sed 's/\\|$//')" || true
   }
-  # AC1: human maintainers' tokens on the current head are candidates. Four qualify
+  # AC1: human maintainers' tokens on the current head are candidates. Five qualify
   # with the author exclusion live — `solo-maintainer` (OWNER), `second-human`
-  # (COLLABORATOR) twice, once plain and once after a CLOSED fence — plus
-  # `org-member-readonly`, whom only the SERVER-SIDE permission read below can reject.
-  # The Bot, App-attributed, drive-by, stale, withdrawn, quoted, indented, FENCED and
-  # author tokens must all be absent.
-  check "tokens accepted for human non-author maintainers on the current head" 4 \
+  # (COLLABORATOR) three times: plain, after a CLOSED fence, and after an HTML comment
+  # — plus `org-member-readonly`, whom only the SERVER-SIDE permission read below can
+  # reject. The Bot, App-attributed, drive-by, stale, withdrawn, quoted, indented,
+  # FENCED, HTML-commented and author tokens must all be absent.
+  check "tokens accepted for human non-author maintainers on the current head" 5 \
     "$(count_tokens "$TOKEN_HEAD")"
   # AC3: a force-push moves the head; no comment names the new one, so the token is void.
   check "token void after a force-push (head no longer named)" 0 \
@@ -481,6 +481,20 @@ if command -v jq >/dev/null 2>&1; then
   check "the PR author's token counts once the repo declares itself single-human" 1 \
     "$(SOLO_APPROVAL_TOKEN=true HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" \
       "$COMMENTS_FIXTURE" | grep -c '3237609010' || true)"
+  # #472 round 3 — the opt-in is a value typed into a free-text Actions Variables box.
+  # A case-SENSITIVE comparison made `True`/`TRUE` silently declare nothing, which is
+  # indistinguishable on the PR from never having set the variable.
+  for optin in true True TRUE ' true '; do
+    check "opt-in '$optin' declares the repository single-human" 1 \
+      "$(SOLO_APPROVAL_TOKEN="$optin" HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" \
+        "$COMMENTS_FIXTURE" | grep -c '3237609010' || true)"
+  done
+  # …and only that word does. `1`/`yes`/`false` are NOT the opt-in: the exclusion stays.
+  for notoptin in 1 yes false ''; do
+    check "opt-in '${notoptin:-<unset>}' keeps the author exclusion live" 0 \
+      "$(SOLO_APPROVAL_TOKEN="$notoptin" HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" \
+        "$COMMENTS_FIXTURE" | grep -c '3237609010' || true)"
+  done
   # Major: GitHub's own "Quote reply" (`> /approve <real sha>`) must not approve on
   # the quoter's behalf — 3237609012 explicitly declines in the same comment. Nor may
   # an indented code block or an inline-backtick mention (3237609013).
@@ -506,6 +520,25 @@ if command -v jq >/dev/null 2>&1; then
   # approves on its own line.
   check "a genuine token beside a closed fence still counts" 1 \
     "$(matched_ids "$TOKEN_HEAD" 3237609017)"
+  # --- #472 review round 3 -----------------------------------------------------
+  # Minor: round 2's strip was a backtick-PARITY heuristic, and three shapes GitHub
+  # renders as code (or as nothing at all) still counted — and published their author
+  # in the audit line, which is guarantee property #2.
+  #   3237609018 an HTML comment: INVISIBLE in the rendered comment,
+  #   3237609019 an inline ```gh``` span mid-line: the parity split's join("\n")
+  #              MANUFACTURED a line boundary the raw body does not have,
+  #   3237609020 the token glued to a closing fence: a closing fence may not carry
+  #              trailing content, so GitHub leaves the fence OPEN and renders the
+  #              token as code — the round-2 failure in a malformed-fence variant.
+  check "an HTML-commented, inline-spanned or fence-glued token does not approve" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609018 3237609019 3237609020)"
+  check "…and none of the three is ever published as the approver" "" \
+    "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE" |
+      grep '^hidden-commenter \|^inline-spanner \|^glue-fencer ' || true)"
+  # The paired SUCCESS path: dropping HTML comments must not swallow a genuine token
+  # that merely shares the body with one. 3237609021 does exactly that.
+  check "a genuine token beside an HTML comment still counts" 1 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609021)"
   # Minor: HEAD_SHA is concatenated INTO a regex, so a 40-char metacharacter string
   # must be refused by the `^[0-9a-f]{40}$` guard, not merely by its length.
   check "a 40-character metacharacter 'head' matches nothing" 0 \
@@ -558,13 +591,44 @@ if command -v jq >/dev/null 2>&1; then
     "$(rc_of unreachable-api)"
   check "a write-level candidate still wins past an unanswerable one" second-human \
     "$(token_approver_login fixture_permission unreachable-api second-human 2>/dev/null || true)"
+  # --- #472 review round 3: the STAGE-1 twin of that stage-2 failure ------------
+  # Major: with the opt-in unset, the PR AUTHOR's own token never reaches stage 2 —
+  # stage 1 drops it, CANDIDATES is empty and `token_approver_login` exits 1, i.e. the
+  # byte-identical "nothing was posted" description. The solo maintainer who has not
+  # yet run `gh variable set PAIR_SOLO_APPROVAL_TOKEN` is told to post the token they
+  # just posted, and the variable that would fix it is named NOWHERE on the PR. The
+  # gate re-runs stage 1 with the opt-in FORCED on and asks whether the author is what
+  # the exclusion dropped.
+  FORCED_CANDIDATES="$(SOLO_APPROVAL_TOKEN=true HEAD_SHA="$TOKEN_HEAD" \
+    jq -r "$LOGIN_FILTER" "$COMMENTS_FIXTURE" | awk '!seen[$0]++')"
+  # shellcheck disable=SC2086
+  if token_blocked_by_author_exclusion pr-author $FORCED_CANDIDATES; then
+    log_succ "the author's own token is recognised as blocked by the exclusion, not absent"
+  else
+    log_fail "the author's token must be detectable as blocked by the author exclusion"; FAILED=1
+  fi
+  if token_blocked_by_author_exclusion pr-author solo-maintainer second-human; then
+    log_fail "a token from someone else must NOT be reported as the author's"; FAILED=1
+  else
+    log_succ "a token from someone else is not reported as the author's"
+  fi
+  if token_blocked_by_author_exclusion '' pr-author; then
+    log_fail "an unresolved PR author must never match a candidate (fail-safe)"; FAILED=1
+  else
+    log_succ "an unresolved PR author matches nothing (fail-safe)"
+  fi
   DESC_NONE="$(token_denied_desc 1 "$TOKEN_HEAD" '')"
   DESC_PERM="$(token_denied_desc 2 "$TOKEN_HEAD" org-member-readonly)"
   DESC_ERR="$(token_denied_desc 3 "$TOKEN_HEAD" unreachable-api)"
+  DESC_AUTHOR="$(token_denied_desc 4 "$TOKEN_HEAD" pr-author)"
   check "the 'no token posted' description still tells the maintainer what to post" \
     "risk:red — needs a non-author human approval, or /approve $TOKEN_HEAD posted by a human maintainer (D10)" \
     "$DESC_NONE"
-  for pair_desc in "unauthorized:$DESC_PERM" "lookup-failure:$DESC_ERR"; do
+  case "$DESC_AUTHOR" in
+  *"PR author"*"PAIR_SOLO_APPROVAL_TOKEN"*) log_succ "the author-exclusion description names the cause and the variable that lifts it" ;;
+  *) log_fail "the author-exclusion description must name the author and PAIR_SOLO_APPROVAL_TOKEN: $DESC_AUTHOR"; FAILED=1 ;;
+  esac
+  for pair_desc in "unauthorized:$DESC_PERM" "lookup-failure:$DESC_ERR" "author-exclusion:$DESC_AUTHOR"; do
     if [ "${pair_desc#*:}" = "$DESC_NONE" ]; then
       log_fail "the ${pair_desc%%:*} description is byte-identical to 'no token was posted'"; FAILED=1
     else
@@ -582,7 +646,7 @@ if command -v jq >/dev/null 2>&1; then
   # All three forms are POSTed as a status `description`, capped at 140 characters by
   # the API — over it the POST is refused and the pending placeholder stands.
   LONGEST_LOGIN="$(printf '%039d' 0)"
-  for code in 1 2 3; do
+  for code in 1 2 3 4; do
     D="$(token_denied_desc "$code" "$TOKEN_HEAD" "$LONGEST_LOGIN")"
     if [ "${#D}" -le 140 ]; then
       log_succ "denial description $code fits the 140-char cap at a 39-char login (${#D})"
@@ -634,11 +698,20 @@ audit "the job authorizes the actor server-side and threads the single-human opt
   'SOLO_APPROVAL_TOKEN: \${{ vars.PAIR_SOLO_APPROVAL_TOKEN }}'
 audit "the comment trigger is body-filtered on created, so ordinary comments cost nothing" \
   "$GITHUB_GUIDE" "contains(github.event.comment.body, '/approve')"
-# #472 round 2: `concurrency` is evaluated at RUN level, before any job `if:`, so a
-# comment run would cancel an in-flight evaluation and then be skipped — leaving the
-# required context pending with nothing to publish. Comment runs must QUEUE instead.
-audit "comment-triggered runs queue instead of cancelling an in-flight evaluation" "$GITHUB_GUIDE" \
-  "cancel-in-progress: \${{ github.event_name != 'issue_comment' }}"
+# #472 round 3: `concurrency` is evaluated at RUN level, before any job `if:`, and a
+# newer run queued into a group CANCELS the group's pending run. Making comment runs
+# merely non-cancelling left them cancellABLE: one ordinary "thanks!" ten seconds after
+# a token dropped the token run entirely. A comment run must therefore have its OWN
+# group, keyed by the comment id — it neither cancels nor is cancelled.
+audit "a comment-triggered run gets its own concurrency group, keyed by comment id" "$GITHUB_GUIDE" \
+  "github.event_name == 'issue_comment' && github.event.comment.id"
+if grep -q "cancel-in-progress: \${{ github.event_name != 'issue_comment' }}" "$GITHUB_GUIDE"; then
+  log_fail "comment runs still SHARE the evaluation group — a queued run can drop them"; FAILED=1
+else
+  log_succ "comment runs no longer share the evaluation group"
+fi
+audit "the guide states what an ordinary comment costs per ACTION, not in general" "$GITHUB_GUIDE" \
+  'ordinary comment .*created.* spends no Actions minutes'
 audit "the guide reports a permission-lookup failure as such, not as 'no token'" "$GITHUB_GUIDE" \
   'token_denied_desc' 'TOKEN_PERMISSION_UNKNOWN' 'HTTP 404' 'administration: read'
 if grep -q 'no additional API call\|pays no extra API call' "$GITHUB_GUIDE"; then

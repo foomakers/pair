@@ -622,14 +622,25 @@ describe('the solo-maintainer token is citable everywhere it is referenced (roun
  * like `/\.user\.type=="User"/` is satisfied by the REVIEW predicate this story does
  * not touch, and `/[Bb]ot/` by the prose comment above it — so deleting the bot
  * exclusion from the token predicate left both AC-named tests green.
+ *
+ * Extraction failure is asserted INSIDE a test (round 3), never here: an `expect()`
+ * at module scope turns a reformatted `printf` into a vitest COLLECTION error that
+ * takes every other assertion in this file down with it, reported as an unhandled
+ * assertion rather than as the named guard below.
  */
 const TOKEN_PREDICATE = ((): string => {
   const m = EVALUATOR.match(/human_token_approval_select\(\)\s*\{\s*\n\s*printf\s+'%s'\s+'([^']*)'/)
-  expect(m, 'human_token_approval_select must ship as one printf-ed predicate').not.toBeNull()
-  return (m as RegExpMatchArray)[1] as string
+  return m?.[1] ?? ''
 })()
 
 describe('the token predicate ships in the evaluator (#398)', () => {
+  it('ships as ONE printf-ed predicate — every assertion below reads that line', () => {
+    expect(
+      TOKEN_PREDICATE,
+      'human_token_approval_select must ship as one printf-ed predicate',
+    ).not.toBe('')
+  })
+
   it('exposes the token entry points next to the review predicate it does not replace', () => {
     for (const fn of [
       'human_token_approval_jq_filter',
@@ -670,8 +681,21 @@ describe('the token predicate ships in the evaluator (#398)', () => {
   })
 
   it('excludes the PR author unless the repository declared itself single-human', () => {
-    expect(TOKEN_PREDICATE).toContain('env.SOLO_APPROVAL_TOKEN=="true"')
+    expect(TOKEN_PREDICATE).toContain('env.SOLO_APPROVAL_TOKEN')
     expect(TOKEN_PREDICATE).toContain('.user.login != env.PR_AUTHOR')
+    // Round 3: the opt-in is typed into a free-text Actions Variables box, so a
+    // case-SENSITIVE `== "true"` made `True` declare nothing while looking set.
+    expect(TOKEN_PREDICATE).toContain('ascii_downcase')
+    expect(TOKEN_PREDICATE).not.toContain('env.SOLO_APPROVAL_TOKEN=="true"')
+  })
+
+  it('names the author exclusion as the cause when it is what dropped the token', () => {
+    // Round 3, the stage-1 twin of the stage-2 collapse: with the opt-in unset the
+    // author's own token never reaches stage 2, so the gate published the identical
+    // "no token was posted" line to the one person who had posted one.
+    expect(EVALUATOR).toContain('token_blocked_by_author_exclusion')
+    expect(EVALUATOR).toMatch(/PAIR_SOLO_APPROVAL_TOKEN=true if this repo has one human/)
+    expect(GITHUB_GUIDE).toContain('token_blocked_by_author_exclusion')
   })
 
   it('anchors the command to its own line, so a quote-reply never approves', () => {
@@ -682,15 +706,30 @@ describe('the token predicate ships in the evaluator (#398)', () => {
     expect(TOKEN_PREDICATE).not.toContain(String.raw`(^|\\s)/approve`)
   })
 
-  it('strips FENCED regions before the anchor — a fence puts the command at column 0', () => {
+  it('strips FENCED regions and HTML comments before the anchor', () => {
     // Round 2: the line anchor rejects `> `, 4-space indents and inline backticks,
     // and accepts a ```-fenced command — the shape a maintainer produces to SHOW the
     // token, including in this repo's own guide. Stripping happens before `test(…)`.
-    const stripAt = TOKEN_PREDICATE.indexOf('split("```")')
+    // Round 3: the fence split must be LINE-ANCHORED (a bare `split("```")` read an
+    // inline ```gh``` span as a fence) and rejoin with `""` (joining with `"\n"`
+    // manufactured the line boundary that then made a mid-line mention count); HTML
+    // comments render as nothing at all and must go too.
+    const stripAt = TOKEN_PREDICATE.indexOf('```')
     const testAt = TOKEN_PREDICATE.indexOf('test("(^|\\\\n)/approve')
     expect(stripAt, 'the predicate must strip backtick fences').toBeGreaterThan(-1)
-    expect(TOKEN_PREDICATE, 'and tilde fences too').toContain('split("~~~")')
     expect(stripAt).toBeLessThan(testAt)
+    expect(TOKEN_PREDICATE, 'line-anchored fence split').toContain(
+      String.raw`split("(^|\\n) {0,3}` + '```' + String.raw`[^\\n]*";"")`,
+    )
+    expect(TOKEN_PREDICATE, 'and tilde fences too').toContain(
+      String.raw`split("(^|\\n) {0,3}~~~[^\\n]*";"")`,
+    )
+    expect(TOKEN_PREDICATE, 'HTML comments are invisible when rendered').toContain(
+      String.raw`gsub("<!--(.|\\n)*?-->";"")`,
+    )
+    // a bare parity split, or a "\n" join, is the defect — never reintroduce either
+    expect(TOKEN_PREDICATE).not.toContain('split("```")')
+    expect(TOKEN_PREDICATE).not.toContain(String.raw`join("\n")`)
     // the ODD segments (inside the fences) are the ones dropped
     expect(TOKEN_PREDICATE).toContain('map(select(.key % 2 == 0) | .value)')
   })
@@ -785,17 +824,35 @@ describe('the host job wires the token as the ALTERNATIVE path (#398)', () => {
     expect(GITHUB_GUIDE).toMatch(/confirmation, not independent review/)
   })
 
-  it('lets a comment run QUEUE — `concurrency` outranks the job `if:` (round 2)', () => {
-    // `concurrency` is evaluated at RUN level, before any job condition, so the `if:`
-    // cannot stop a comment event from cancelling an in-flight evaluation; the run
-    // that cancelled it is then skipped and nothing publishes, leaving the required
-    // context pending forever on a chatty thread.
+  it('keys a comment run into its OWN concurrency group (round 3)', () => {
+    // `concurrency` is evaluated at RUN level, before any job condition, and GitHub
+    // cancels a group's PENDING run whenever a newer run queues into it. Making comment
+    // runs merely non-cancelling left them cancellABLE: an ordinary comment posted after
+    // a `/approve` dropped the token run entirely — it never executed, and the standing
+    // status was the earlier evaluation's, with a valid token unread on the PR.
     expect(GITHUB_GUIDE).toMatch(
+      /group: pair-explicit-approval-[^\n]*github\.event_name == 'issue_comment' && github\.event\.comment\.id \|\| 'eval'/,
+    )
+    // the shared-group forms are BOTH defects — neither may return
+    expect(GITHUB_GUIDE).not.toMatch(
       /cancel-in-progress: \$\{\{ github\.event_name != 'issue_comment' \}\}/,
     )
-    expect(GITHUB_GUIDE).not.toMatch(/cancel-in-progress: true/)
+    expect(GITHUB_GUIDE).not.toMatch(
+      /group: pair-explicit-approval-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \}\}\n/,
+    )
     // and the bullet no longer claims an ordinary comment cannot cancel anything
     expect(GITHUB_GUIDE).not.toMatch(/neither spends Actions minutes nor cancels/)
+  })
+
+  it('prices the ordinary comment per ACTION — edited/deleted run the job in full', () => {
+    // The `if:` body-filters only `created`, so the heading claim "an ordinary comment
+    // spends no Actions minutes" was broader than the mechanism: an edit or a delete of
+    // ANY comment on ANY PR runs the job, pending-first flip included, which is a
+    // merge-blocking window opened by a typo fix.
+    expect(GITHUB_GUIDE).toMatch(/ordinary comment _created_ spends no Actions minutes/)
+    expect(GITHUB_GUIDE).not.toMatch(/\*\*An ordinary comment spends no Actions minutes\.\*\*/)
+    expect(GITHUB_GUIDE).toMatch(/_edited_ or _deleted_ one runs the job in full/)
+    expect(GITHUB_GUIDE).toMatch(/pending-first step flips[\s\S]{0,120}merge-blocking/i)
   })
 
   it('reports a permission-lookup failure as itself, not as "no token was posted"', () => {
@@ -809,9 +866,15 @@ describe('the host job wires the token as the ALTERNATIVE path (#398)', () => {
   })
 
   it('stops claiming the token branch is free for a multi-human repository', () => {
+    // Round 2 removed two PHRASINGS of the retracted claim; round 3 found it alive in
+    // ADR § Consequences, reworded ("a two-human repository (which never leaves the
+    // review path) … pay nothing") five bullets below its own correction. Assert the
+    // BEHAVIOUR the claim asserts, not the words the last draft happened to use.
     for (const doc of [GITHUB_GUIDE, ADR_018]) {
       expect(doc).not.toMatch(/pays no (extra|additional) API call/i)
       expect(doc).not.toMatch(/unchanged, byte for byte/i)
+      expect(doc).not.toMatch(/never leaves the review path/i)
+      expect(doc).not.toMatch(/two-human[^.]{0,90}(pay|cost)(s|ing)? nothing/i)
     }
   })
 })

@@ -9,5 +9,8 @@
   "drive-by-reader": "none",
   "fencing-collab": "write",
   "tilde-fencer": "write",
-  "unreachable-api": "lookup-failed"
+  "unreachable-api": "lookup-failed",
+  "hidden-commenter": "write",
+  "inline-spanner": "write",
+  "glue-fencer": "write"
 }
