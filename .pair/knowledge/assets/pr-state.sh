@@ -150,6 +150,10 @@ human_approval_jq_filter() {
 #      command + the author exclusion (unless the repository opted in as single-human),
 #   2. `token_approver_login` — a SERVER-SIDE read of the actor's repository
 #      permission, because `author_association` is not push access.
+# A rejection at stage 2 is REPORTED as such (`token_denied_desc`): "no token was
+# posted", "the token's author is not write-level" and "the permission lookup could
+# not answer" are three different things to tell a maintainer, and collapsing them
+# into one description tells someone who just posted a valid token to post one.
 
 # human_token_approval_select — the ONE predicate all three projections below are
 # built from, so the count the gate acts on and the audit line it publishes cannot
@@ -197,9 +201,19 @@ human_approval_jq_filter() {
 # allowed): GitHub's own "Quote reply" produces `> /approve <sha>`, and a whitespace-
 # tolerant match would let a quoter — who may be explicitly declining in the same
 # comment — approve the PR and be published as its approver. Indented code blocks and
-# inline-backtick mentions are rejected for the same reason.
+# inline-backtick mentions are rejected by the same anchor.
+#
+# FENCED blocks are NOT covered by that anchor and are stripped BEFORE it is applied.
+# A ``` (or ~~~) fence puts its content at column 0 of its own line, so a maintainer
+# writing "here is how you approve:" with the command in a fence — the shape this very
+# guide uses to show the adopter the token, and the shape GitHub's UI produces for a
+# copyable command — would otherwise approve the PR and be published as its approver
+# while the same comment says "do not run it yet". Stripping keeps the ODD-indexed
+# segments out (`.key % 2 == 0` are the regions outside the fences); an UNCLOSED fence
+# swallows everything after it, which is both what GitHub renders and the fail-safe
+# direction. A genuine token before or after a fence still matches.
 human_token_approval_select() {
-  printf '%s' '.[] | select(((env.HEAD_SHA // "") | test("^[0-9a-f]{40}$")) and .user.type=="User" and (.performed_via_github_app|not) and (.author_association|IN("OWNER","MEMBER","COLLABORATOR")) and (if env.SOLO_APPROVAL_TOKEN=="true" then true else ((env.PR_AUTHOR // "") != "" and .user.login != env.PR_AUTHOR) end) and ((.body // "") | test("(^|\\n)/approve[ \\t]+" + env.HEAD_SHA + "[ \\t\\r]*(\\n|$)")))'
+  printf '%s' '.[] | select(((env.HEAD_SHA // "") | test("^[0-9a-f]{40}$")) and .user.type=="User" and (.performed_via_github_app|not) and (.author_association|IN("OWNER","MEMBER","COLLABORATOR")) and (if env.SOLO_APPROVAL_TOKEN=="true" then true else ((env.PR_AUTHOR // "") != "" and .user.login != env.PR_AUTHOR) end) and ((.body // "") | split("```") | to_entries | map(select(.key % 2 == 0) | .value) | join("\n") | split("~~~") | to_entries | map(select(.key % 2 == 0) | .value) | join("\n") | test("(^|\\n)/approve[ \\t]+" + env.HEAD_SHA + "[ \\t\\r]*(\\n|$)")))'
 }
 
 # human_token_approval_jq_filter — one line per candidate comment id; count them
@@ -227,10 +241,19 @@ human_token_approval_actor_jq_filter() {
   printf '%s%s' "$(human_token_approval_select)" ' | "\(.user.login) approved head \(env.HEAD_SHA[0:12]) at \(.created_at)"'
 }
 
+# TOKEN_PERMISSION_UNKNOWN — the value a permission lookup echoes when it could NOT
+# ANSWER (403 on the collaborators surface, a 5xx, a rate limit). It must be distinct
+# from `none`: `none` is a definitive "this login has no permission here", and folding
+# an API failure onto it makes a token that WAS posted and could not be authorized
+# indistinguishable from one that was never posted at all. Both still reject the
+# token — what differs is the description the gate publishes (`token_denied_desc`).
+TOKEN_PERMISSION_UNKNOWN='lookup-failed'
+
 # token_permission_sufficient <permission> — stage 2's decision, isolated so it is
 # executable on its own. Takes the `permission` field of
 # `GET /repos/{owner}/{repo}/collaborators/{login}/permission` and answers whether it
-# is write-level. `read`, `triage`, `none`, an empty value or an API error all fail.
+# is write-level. `read`, `triage`, `none`, an empty value and
+# `$TOKEN_PERMISSION_UNKNOWN` all fail.
 token_permission_sufficient() {
   case "${1:-}" in
   admin | maintain | write) return 0 ;;
@@ -242,8 +265,14 @@ token_permission_sufficient() {
 }
 
 # token_approver_login <lookup-cmd> <candidate-login>... — stage 2. Echoes the FIRST
-# candidate whose SERVER-SIDE repository permission is write-level and exits 0;
-# echoes nothing and exits 1 when none qualifies (including an empty candidate list).
+# candidate whose SERVER-SIDE repository permission is write-level and exits 0.
+# Otherwise it echoes nothing and exits with a code that says WHY, because the three
+# reasons are three different things to tell the maintainer:
+#   1 — no candidate at all (no token was posted), or no lookup command (fail-safe),
+#   2 — candidates existed and every one of them is definitively not write-level,
+#   3 — candidates existed and at least one lookup COULD NOT ANSWER (403/5xx/rate
+#       limit) — the gate must not report that as "no token was posted".
+# Feed the code to `token_denied_desc` so the published description matches the state.
 #
 # <lookup-cmd> is the command answering "what permission does this login hold on this
 # repository": the host job passes a `gh api .../collaborators/<login>/permission`
@@ -251,7 +280,7 @@ token_permission_sufficient() {
 # and the authorization cannot drift between the recipe and what is verified.
 # Fail-safe: no lookup command ⇒ no approver.
 token_approver_login() {
-  local lookup="${1:-}" login perm
+  local lookup="${1:-}" login perm seen=0 unknown=0
   shift 2>/dev/null || true
   if [ -z "$lookup" ]; then
     echo "pr-state: no permission lookup provided — token rejected (fail-safe)" >&2
@@ -259,13 +288,36 @@ token_approver_login() {
   fi
   for login in "$@"; do
     [ -n "$login" ] || continue
+    seen=1
     perm="$("$lookup" "$login" 2>/dev/null || true)"
+    if [ "${perm:-none}" = "$TOKEN_PERMISSION_UNKNOWN" ]; then unknown=1; fi
     if token_permission_sufficient "${perm:-none}"; then
       printf '%s' "$login"
       return 0
     fi
   done
-  return 1
+  [ "$seen" -eq 1 ] || return 1
+  [ "$unknown" -eq 0 ] || return 3
+  return 2
+}
+
+# token_denied_desc <token_approver_login-exit-code> <head-sha> <candidate-login> —
+# the commit-status `description` for a 🔴 PR the token did NOT satisfy. One text per
+# STATE, never one text for all of them: telling a maintainer who just posted a valid
+# token to "post /approve <sha>" is the failure this function exists to prevent — they
+# re-post, get the same line, and nothing on the PR distinguishes "you did not post
+# one" from "yours could not be authorized". All three forms fit the API's 140-char
+# `description` cap at the worst-case 39-character login.
+# <candidate-login> is the FIRST stage-1 candidate and is named only in the
+# permission-denied form, where it is the actor the verdict is about. The
+# lookup-failure form names no one on purpose: the lookup that failed is not
+# necessarily the first candidate's, and the run log has the exact API error.
+token_denied_desc() {
+  case "${1:-}" in
+  2) printf 'risk:red — token from %s not authorized: repository permission is not write-level (D10)' "${3:-a candidate}" ;;
+  3) printf 'risk:red — a token was posted but could not be authorized: permission lookup failed, see the run log (D10)' ;;
+  *) printf 'risk:red — needs a non-author human approval, or %s posted by a human maintainer (D10)' "$(solo_approval_token_body "${2:-}")" ;;
+  esac
 }
 
 # solo_approval_token_body <head-sha> — the exact comment body a maintainer posts.

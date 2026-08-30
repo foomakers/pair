@@ -200,6 +200,51 @@
   },
   {
     "author_association": "COLLABORATOR",
+    "body": "Here is how you approve, for the runbook:\n```\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n```\nDo NOT actually run it yet — I have not reviewed this.",
+    "created_at": "2026-08-28T11:16:00Z",
+    "id": 3237609015,
+    "node_id": "IC_kwDODKw3uc7A09015",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:16:00Z",
+    "user": {
+      "id": 609015,
+      "login": "fencing-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "~~~\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n~~~\nsame thing with tilde fences.",
+    "created_at": "2026-08-28T11:17:00Z",
+    "id": 3237609016,
+    "node_id": "IC_kwDODKw3uc7A09016",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:17:00Z",
+    "user": {
+      "id": 609016,
+      "login": "tilde-fencer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "Ran the suite, output below:\n```\n42 passed\n```\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:18:00Z",
+    "id": 3237609017,
+    "node_id": "IC_kwDODKw3uc7A09017",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:18:00Z",
+    "user": {
+      "id": 609017,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
     "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
     "created_at": "2026-08-28T11:20:00Z",
     "id": 3237609014,

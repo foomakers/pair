@@ -6,5 +6,8 @@
   "quoting-collab": "write",
   "doc-writing-collab": "write",
   "org-member-readonly": "read",
-  "drive-by-reader": "none"
+  "drive-by-reader": "none",
+  "fencing-collab": "write",
+  "tilde-fencer": "write",
+  "unreachable-api": "lookup-failed"
 }

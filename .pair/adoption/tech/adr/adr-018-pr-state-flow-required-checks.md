@@ -260,9 +260,14 @@ highest tier decorative.
   executable projection, no transliteration) accepts a comment only on host-asserted fields:
   `.user.type == "User"` (no Bot, no Organization), `.performed_via_github_app == null` (an App posting
   on a human's behalf is rejected), `.author_association ∈ {OWNER, MEMBER, COLLABORATOR}`, and the
-  command **owning its line** — `(^|\n)/approve <40-hex head SHA>` with no leading whitespace, so
-  GitHub's own `> /approve …` quote-reply cannot approve a PR on the quoter's behalf. Only the command
-  and the SHA come from the body; a body claiming to be someone else changes nothing.
+  command **owning its line, outside every code fence** — `(^|\n)/approve <40-hex head SHA>` with no
+  leading whitespace, applied to the body with all fenced regions (triple-backtick and `~~~`) stripped
+  first. The anchor alone covers `>`-prefixed quote-replies, 4-space-indented blocks and inline backticks; it
+  does **not** cover a fence, which puts the command at column 0 of its own line — the shape a
+  maintainer produces when they paste the command to *explain* it, and the shape this ADR and the
+  implementation guide both use to show it. Without the strip, that comment approved the PR and its
+  author was published as the approver. Only the command and the SHA come from the body; a body
+  claiming to be someone else changes nothing.
   Stage 2 (`token_approver_login` / `token_permission_sufficient`) reads
   `GET /repos/{owner}/{repo}/collaborators/{login}/permission` and requires `admin`/`maintain`/`write`.
   **The association is a pre-filter, not the authorization** — and stating it that way is a correction,
@@ -280,9 +285,38 @@ highest tier decorative.
   it can never be a self-approval shortcut for a repository that *can* produce a second human. The
   opt-in is the executable form of the business rule "the token is a fallback for a configuration that
   cannot produce a second human, not a shortcut for one that can".
-- **The review path stays primary.** The job queries the reviews endpoint first and reaches the token
-  only when that found nothing, so a two-human repository is unchanged, byte for byte, and pays no
-  additional API call.
+- **Why the default is the LOOSE form and not "opt-in unset ⇒ token path unreachable".** Deliberate,
+  and stated because the rule above reads stricter than the code. On a repository that *can* produce
+  independent review, D10 can now also be satisfied by a comment that never appears in the Reviews tab
+  and is never subject to `dismiss_stale_reviews`. Accepted: the security delta is small (the token is
+  head-bound, so a force-push voids it exactly as `dismiss_stale_reviews` would, and stage 2 demands
+  the same write-level permission a reviewer holds); the **visibility** delta is real and is the price.
+  What buys it is one fewer required setting for the adopter the token exists for: the strict form
+  makes the solo maintainer — the only adopter who cannot fall back to a review — depend on a
+  repository variable being set correctly before 🔴 is satisfiable at all, and a mis-set variable there
+  is a silently unmergeable PR rather than a merely looser one. Revisit if the visibility cost ever
+  bites: the strict form is one `if` branch away.
+- **The review path stays primary — but "primary" is not "free".** The job queries the reviews endpoint
+  first and wins wherever an approval exists. It reaches the token branch whenever that query returns
+  zero, which is the state of **every** 🔴 PR before its first review: a ten-person repository pays the
+  comments query and one permission read per candidate there too, and a non-author write-level human's
+  token satisfies 🔴 on it. An earlier draft of this bullet claimed the opposite — that a two-human
+  repository was untouched and paid nothing extra — which was false and contradicted the opt-in table
+  above it.
+- **A comment event must never cancel an in-flight evaluation.** `concurrency` is evaluated at RUN
+  level, before any job `if:`, so the body filter that keeps discussion traffic from spending Actions
+  minutes cannot keep it from killing a running evaluation: the cancelled run publishes nothing, the
+  cancelling run is skipped, and the required context stays `pending` — the permanently-unmergeable
+  trap property 5 exists to prevent, on a thread chatty enough to re-cancel. The group therefore
+  cancels in progress only for non-`issue_comment` events (`cancel-in-progress:
+  ${{ github.event_name != 'issue_comment' }}`); a token or withdrawal run **queues** behind the
+  evaluation it would otherwise kill.
+- **A stage-2 failure is reported as a stage-2 failure.** The permission read can 403 (the collaborators
+  endpoint is not covered by the job's four `permissions:` entries), 5xx or rate-limit. Folding those
+  onto `none` made the published description byte-identical to "no token was posted", so a maintainer
+  whose token could not be authorized was told to post the token they had just posted, with the cause
+  visible only in a workflow log they had no reason to open. `TOKEN_PERMISSION_UNKNOWN` +
+  `token_denied_desc` give the three states three descriptions.
 - **The tier requirement is untouched.** quality-model §4 and D10 still demand explicit human approval
   at 🔴. This amendment changes *how the rule is satisfied*, never what it demands.
 

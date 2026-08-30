@@ -682,6 +682,19 @@ describe('the token predicate ships in the evaluator (#398)', () => {
     expect(TOKEN_PREDICATE).not.toContain(String.raw`(^|\\s)/approve`)
   })
 
+  it('strips FENCED regions before the anchor — a fence puts the command at column 0', () => {
+    // Round 2: the line anchor rejects `> `, 4-space indents and inline backticks,
+    // and accepts a ```-fenced command — the shape a maintainer produces to SHOW the
+    // token, including in this repo's own guide. Stripping happens before `test(…)`.
+    const stripAt = TOKEN_PREDICATE.indexOf('split("```")')
+    const testAt = TOKEN_PREDICATE.indexOf('test("(^|\\\\n)/approve')
+    expect(stripAt, 'the predicate must strip backtick fences').toBeGreaterThan(-1)
+    expect(TOKEN_PREDICATE, 'and tilde fences too').toContain('split("~~~")')
+    expect(stripAt).toBeLessThan(testAt)
+    // the ODD segments (inside the fences) are the ones dropped
+    expect(TOKEN_PREDICATE).toContain('map(select(.key % 2 == 0) | .value)')
+  })
+
   it('makes the server-side permission read the authorization, not the association', () => {
     // `MEMBER` is "in the owning org", not "has push access here" — so the
     // association may only ever be a pre-filter.
@@ -770,6 +783,36 @@ describe('the host job wires the token as the ALTERNATIVE path (#398)', () => {
   it('tells the adopter exactly what to post, and what it does NOT mean', () => {
     expect(GITHUB_GUIDE).toMatch(/\/approve <head-sha>|\/approve \$HEAD_SHA/)
     expect(GITHUB_GUIDE).toMatch(/confirmation, not independent review/)
+  })
+
+  it('lets a comment run QUEUE — `concurrency` outranks the job `if:` (round 2)', () => {
+    // `concurrency` is evaluated at RUN level, before any job condition, so the `if:`
+    // cannot stop a comment event from cancelling an in-flight evaluation; the run
+    // that cancelled it is then skipped and nothing publishes, leaving the required
+    // context pending forever on a chatty thread.
+    expect(GITHUB_GUIDE).toMatch(
+      /cancel-in-progress: \$\{\{ github\.event_name != 'issue_comment' \}\}/,
+    )
+    expect(GITHUB_GUIDE).not.toMatch(/cancel-in-progress: true/)
+    // and the bullet no longer claims an ordinary comment cannot cancel anything
+    expect(GITHUB_GUIDE).not.toMatch(/neither spends Actions minutes nor cancels/)
+  })
+
+  it('reports a permission-lookup failure as itself, not as "no token was posted"', () => {
+    expect(GITHUB_GUIDE).toMatch(/TOKEN_PERMISSION_UNKNOWN/)
+    expect(GITHUB_GUIDE).toMatch(/HTTP 404/)
+    expect(GITHUB_GUIDE).toMatch(/token_denied_desc/)
+    // the collaborators endpoint is not covered by the job's four permissions
+    expect(GITHUB_GUIDE).toMatch(/administration: read/)
+    expect(EVALUATOR).toMatch(/TOKEN_PERMISSION_UNKNOWN/)
+    expect(EVALUATOR).toMatch(/token_denied_desc/)
+  })
+
+  it('stops claiming the token branch is free for a multi-human repository', () => {
+    for (const doc of [GITHUB_GUIDE, ADR_018]) {
+      expect(doc).not.toMatch(/pays no (extra|additional) API call/i)
+      expect(doc).not.toMatch(/unchanged, byte for byte/i)
+    }
   })
 })
 

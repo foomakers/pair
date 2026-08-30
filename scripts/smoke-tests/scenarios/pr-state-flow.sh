@@ -213,7 +213,7 @@ fi
 # from the base ref and its verdict must land on the commit protection reads. ---
 audit "approval job runs from a trusted ref + posts a head-pinned status" "$GITHUB_GUIDE" \
   'pull_request_target:' 'ref: \${{ github.event.pull_request.base.sha' \
-  'persist-credentials: false' 'statuses: write' 'cancel-in-progress: true' \
+  'persist-credentials: false' 'statuses: write' 'cancel-in-progress:' \
   "statuses/\\\$HEAD_SHA" "context='pair-explicit-approval'"
 if grep -Eq '^  pull_request:[[:space:]]*$' "$GITHUB_GUIDE"; then
   log_fail "approval job trigger fell back to plain pull_request (PR ships its own gate)"; FAILED=1
@@ -422,6 +422,7 @@ audit "comment fixture carries the host-asserted fields the token filter reads" 
 audit "the token predicate ships in the evaluator, not as doc prose" "$EVALUATOR" \
   'human_token_approval_jq_filter' 'human_token_approval_actor_jq_filter' \
   'human_token_approval_login_jq_filter' 'token_approver_login' 'token_permission_sufficient' \
+  'token_denied_desc' 'TOKEN_PERMISSION_UNKNOWN' \
   'solo_approval_token_body' 'author_association' 'performed_via_github_app' \
   'confirmation, not independent review'
 if command -v jq >/dev/null 2>&1; then
@@ -446,12 +447,13 @@ if command -v jq >/dev/null 2>&1; then
     HEAD_SHA="$head" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
       grep -c "$(printf '%s\\|' "$@" | sed 's/\\|$//')" || true
   }
-  # AC1: human maintainers' tokens on the current head are candidates. Two qualify
-  # with the author exclusion live — `solo-maintainer` (OWNER) and `second-human`
-  # (COLLABORATOR) — plus `org-member-readonly`, whom only the SERVER-SIDE permission
-  # read below can reject. The Bot, App-attributed, drive-by, stale, withdrawn,
-  # quoted, indented and author tokens must all be absent.
-  check "tokens accepted for human non-author maintainers on the current head" 3 \
+  # AC1: human maintainers' tokens on the current head are candidates. Four qualify
+  # with the author exclusion live — `solo-maintainer` (OWNER), `second-human`
+  # (COLLABORATOR) twice, once plain and once after a CLOSED fence — plus
+  # `org-member-readonly`, whom only the SERVER-SIDE permission read below can reject.
+  # The Bot, App-attributed, drive-by, stale, withdrawn, quoted, indented, FENCED and
+  # author tokens must all be absent.
+  check "tokens accepted for human non-author maintainers on the current head" 4 \
     "$(count_tokens "$TOKEN_HEAD")"
   # AC3: a force-push moves the head; no comment names the new one, so the token is void.
   check "token void after a force-push (head no longer named)" 0 \
@@ -487,6 +489,23 @@ if command -v jq >/dev/null 2>&1; then
   check "…and neither is ever published as the approver" "" \
     "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE" |
       grep '^quoting-collab \|^doc-writing-collab ' || true)"
+  # --- #472 review round 2 -----------------------------------------------------
+  # Major: the line anchor does NOT cover a FENCED block — a fence puts the command at
+  # column 0 of its own line, which is exactly the shape a maintainer produces when
+  # explaining the procedure (and the shape this repo's own guide uses to show it).
+  # 3237609015 fences the REAL head SHA and declines in the same comment; 3237609016
+  # does the same with `~~~`. Both are write-level collaborators, so nothing else in
+  # the two stages would have stopped them.
+  check "a token inside a code fence does not approve (backtick or tilde)" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609015 3237609016)"
+  check "…and no fenced quoter is ever published as the approver" "" \
+    "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE" |
+      grep '^fencing-collab \|^tilde-fencer ' || true)"
+  # The paired SUCCESS path: stripping fences must not swallow a genuine token that
+  # merely sits next to one. 3237609017 pastes a test log in a CLOSED fence and then
+  # approves on its own line.
+  check "a genuine token beside a closed fence still counts" 1 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609017)"
   # Minor: HEAD_SHA is concatenated INTO a regex, so a 40-char metacharacter string
   # must be refused by the `^[0-9a-f]{40}$` guard, not merely by its length.
   check "a 40-character metacharacter 'head' matches nothing" 0 \
@@ -522,6 +541,55 @@ if command -v jq >/dev/null 2>&1; then
     "$(token_approver_login '' solo-maintainer 2>/dev/null || true)"
   check "no candidates ⇒ no approver" "" \
     "$(token_approver_login fixture_permission 2>/dev/null || true)"
+  # --- #472 review round 2: a rejection at stage 2 must say WHICH rejection ------
+  # Major: folding a 403/5xx onto `none` published the byte-identical "no token was
+  # posted" description, so a maintainer whose token could not be authorized was told
+  # to post the token they had just posted. `unreachable-api` maps to the
+  # $TOKEN_PERMISSION_UNKNOWN sentinel in the fixture, i.e. "the lookup could not
+  # answer" — distinct from `drive-by-reader`'s definitive `none`.
+  rc_of() { # rc_of <login>… — token_approver_login's exit code
+    token_approver_login fixture_permission "$@" >/dev/null 2>&1
+    echo $?
+  }
+  check "no candidate at all ⇒ exit 1 (nothing was posted)" 1 "$(rc_of)"
+  check "candidates, none write-level ⇒ exit 2 (definitively unauthorized)" 2 \
+    "$(rc_of org-member-readonly drive-by-reader)"
+  check "an unanswerable permission lookup ⇒ exit 3, never 'no token'" 3 \
+    "$(rc_of unreachable-api)"
+  check "a write-level candidate still wins past an unanswerable one" second-human \
+    "$(token_approver_login fixture_permission unreachable-api second-human 2>/dev/null || true)"
+  DESC_NONE="$(token_denied_desc 1 "$TOKEN_HEAD" '')"
+  DESC_PERM="$(token_denied_desc 2 "$TOKEN_HEAD" org-member-readonly)"
+  DESC_ERR="$(token_denied_desc 3 "$TOKEN_HEAD" unreachable-api)"
+  check "the 'no token posted' description still tells the maintainer what to post" \
+    "risk:red — needs a non-author human approval, or /approve $TOKEN_HEAD posted by a human maintainer (D10)" \
+    "$DESC_NONE"
+  for pair_desc in "unauthorized:$DESC_PERM" "lookup-failure:$DESC_ERR"; do
+    if [ "${pair_desc#*:}" = "$DESC_NONE" ]; then
+      log_fail "the ${pair_desc%%:*} description is byte-identical to 'no token was posted'"; FAILED=1
+    else
+      log_succ "the ${pair_desc%%:*} description is distinguishable from 'no token was posted'"
+    fi
+  done
+  case "$DESC_PERM" in
+  *"org-member-readonly"*"not write-level"*) log_succ "the unauthorized description names the login and the reason" ;;
+  *) log_fail "the unauthorized description must name the login and the reason: $DESC_PERM"; FAILED=1 ;;
+  esac
+  case "$DESC_ERR" in
+  *"a token was posted"*"lookup failed"*) log_succ "the lookup-failure description says a token WAS posted and points at the log" ;;
+  *) log_fail "the lookup-failure description must say a token was posted and name the API failure: $DESC_ERR"; FAILED=1 ;;
+  esac
+  # All three forms are POSTed as a status `description`, capped at 140 characters by
+  # the API — over it the POST is refused and the pending placeholder stands.
+  LONGEST_LOGIN="$(printf '%039d' 0)"
+  for code in 1 2 3; do
+    D="$(token_denied_desc "$code" "$TOKEN_HEAD" "$LONGEST_LOGIN")"
+    if [ "${#D}" -le 140 ]; then
+      log_succ "denial description $code fits the 140-char cap at a 39-char login (${#D})"
+    else
+      log_fail "denial description $code exceeds the 140-char cap (${#D})"; FAILED=1
+    fi
+  done
   # The whole documented decision, end to end, exactly as the job runs it.
   CANDIDATES="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$LOGIN_FILTER" "$COMMENTS_FIXTURE" | awk '!seen[$0]++')"
   # shellcheck disable=SC2086
@@ -566,6 +634,18 @@ audit "the job authorizes the actor server-side and threads the single-human opt
   'SOLO_APPROVAL_TOKEN: \${{ vars.PAIR_SOLO_APPROVAL_TOKEN }}'
 audit "the comment trigger is body-filtered on created, so ordinary comments cost nothing" \
   "$GITHUB_GUIDE" "contains(github.event.comment.body, '/approve')"
+# #472 round 2: `concurrency` is evaluated at RUN level, before any job `if:`, so a
+# comment run would cancel an in-flight evaluation and then be skipped — leaving the
+# required context pending with nothing to publish. Comment runs must QUEUE instead.
+audit "comment-triggered runs queue instead of cancelling an in-flight evaluation" "$GITHUB_GUIDE" \
+  "cancel-in-progress: \${{ github.event_name != 'issue_comment' }}"
+audit "the guide reports a permission-lookup failure as such, not as 'no token'" "$GITHUB_GUIDE" \
+  'token_denied_desc' 'TOKEN_PERMISSION_UNKNOWN' 'HTTP 404' 'administration: read'
+if grep -q 'no additional API call\|pays no extra API call' "$GITHUB_GUIDE"; then
+  log_fail "the guide still claims the token path costs a multi-human repo no API call"; FAILED=1
+else
+  log_succ "the guide no longer claims the token branch is free for a multi-human repo"
+fi
 REVIEW_QUERY_LINE="$(grep -n 'pulls/\$PR/reviews' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
 TOKEN_QUERY_LINE="$(grep -n 'issues/\$PR/comments' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
 if [ -n "$REVIEW_QUERY_LINE" ] && [ -n "$TOKEN_QUERY_LINE" ] &&

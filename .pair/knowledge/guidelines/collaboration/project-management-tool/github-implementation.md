@@ -737,10 +737,23 @@ on:
 concurrency:
   # `issue_comment` carries `issue`, NOT `pull_request` — same PR, other payload.
   group: pair-explicit-approval-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: true
+  # `concurrency` is evaluated at RUN level, BEFORE any job `if:` — so a job condition
+  # cannot stop a comment-triggered run from cancelling an in-flight evaluation. A
+  # comment run therefore QUEUES behind the running one instead of killing it: without
+  # this, a reviewer typing "looks good, one nit" while a `synchronize` evaluation is
+  # resolving cancels it, the new run is then skipped by the `if:` below, nothing
+  # publishes, and the required context stays `pending` — merge blocked with the cause
+  # visible nowhere. Push/label/review runs keep cancelling, which is property 4.
+  cancel-in-progress: ${{ github.event_name != 'issue_comment' }}
 
 # Least privilege. `statuses: write` is what lets the job pin its verdict to the PR
 # head commit (property 2); nothing here ever checks out or executes PR code.
+# PREREQUISITE, verify it in ordering step 4: the token path also reads
+# `GET /repos/{owner}/{repo}/collaborators/{login}/permission`, which is NOT covered by
+# any of the four permissions below — it sits on the repository collaborators surface
+# and, for a classic PAT, needs `repo` + `read:org`. If that read 403s on your
+# repository, add `administration: read` here; the job reports the failure as such
+# instead of as "no token was posted" (`token_denied_desc`), so the log names it.
 permissions:
   contents: read
   pull-requests: read
@@ -753,10 +766,11 @@ jobs:
   explicit-approval-gate:
     # `issue_comment` fires on plain issues too; only pull requests have a gate. And
     # an ordinary discussion comment must not spawn a run: unfiltered, every comment
-    # on every PR (🟢 ones included) costs an API read plus a status rewrite, and with
-    # `cancel-in-progress` chatty threads repeatedly cancel in-flight evaluations.
-    # Only `created` is body-filtered — an `edited`/`deleted` withdrawal no longer
-    # CONTAINS the command, and that is exactly the event that must re-evaluate.
+    # on every PR (🟢 ones included) costs an API read plus a status rewrite. This
+    # `if:` is a COST filter only — it runs after `concurrency`, which is why the
+    # cancellation half is handled up there, not here. Only `created` is body-filtered
+    # — an `edited`/`deleted` withdrawal no longer CONTAINS the command, and that is
+    # exactly the event that must re-evaluate.
     if: >-
       github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request != null &&
@@ -839,11 +853,14 @@ jobs:
             if [ "${APPROVALS:-0}" -ge 1 ]; then
               DESC="explicit human approval recorded on the current head"
             else
-              # FALLBACK ONLY (#398), reached exclusively when the review path above
-              # found nothing — so a two-human repository never pays this API call and
-              # its behaviour is unchanged. The token is the alternative for a
-              # single-account repository, never a replacement: it is explicit human
-              # confirmation, not independent review.
+              # FALLBACK ONLY (#398): the review path is queried FIRST and wins
+              # wherever an approval exists. Where none has been submitted yet — the
+              # state of EVERY 🔴 PR before its first review, on a ten-person repo as
+              # much as a one-person one — this branch runs, so the comments query and
+              # one permission read per candidate are paid there too. The token is the
+              # alternative for a repository that cannot produce a second human, never
+              # a replacement: it is explicit human confirmation, not independent
+              # review.
               # Same discipline as above: the predicate is `human_token_approval_jq_filter`
               # from the sourced pr-state.sh, so job and tests read ONE text. It is
               # STAGE 1 of two: a comment whose HOST-ASSERTED actor is a human
@@ -855,16 +872,33 @@ jobs:
               COMMENTS="$(gh api --paginate "repos/$REPO/issues/$PR/comments")"
               CANDIDATES="$(printf '%s' "$COMMENTS" |
                 jq -r "$(human_token_approval_login_jq_filter)" | awk '!seen[$0]++')"
+              APPROVER= DENIED=1
               # STAGE 2 — the AUTHORIZATION. `author_association` is a pre-filter, not
               # push access: GitHub's MEMBER means "member of the owning organization"
               # and says nothing about permission on THIS repository, so a read-only
               # member of a 500-person org reaches stage 1. Resolve it server-side.
+              # A 404 ("not a collaborator", "not a user") is a definitive `none`. A
+              # 403 / 5xx / rate limit is NOT an answer, and must not be read as one:
+              # echoing `none` there would make a token that WAS posted and could not
+              # be authorized publish the same description as "no token was posted",
+              # telling the maintainer to do the thing they just did. The sentinel
+              # `$TOKEN_PERMISSION_UNKNOWN` keeps the two states apart.
               gh_permission() {
-                gh api "repos/$REPO/collaborators/$1/permission" --jq '.permission' 2>/dev/null || echo none
+                local err out
+                err="$(mktemp)"
+                if out="$(gh api "repos/$REPO/collaborators/$1/permission" --jq '.permission' 2>"$err")"; then
+                  printf '%s' "${out:-none}"
+                elif grep -q 'HTTP 404' "$err"; then
+                  printf 'none'
+                else
+                  cat "$err" >&2
+                  printf '%s' "$TOKEN_PERMISSION_UNKNOWN"
+                fi
+                rm -f "$err"
               }
               # Unquoted on purpose: GitHub logins are `[A-Za-z0-9-]`, never blank-separated.
               # shellcheck disable=SC2086
-              APPROVER="$(token_approver_login gh_permission $CANDIDATES || true)"
+              APPROVER="$(token_approver_login gh_permission $CANDIDATES)" || DENIED=$?
               if [ -n "$APPROVER" ]; then
                 # The audit trail: who confirmed, on which head, when — host fields only,
                 # and only for the actor stage 2 authorized. The head is abbreviated so
@@ -876,7 +910,12 @@ jobs:
                 DESC="$AUDIT — confirmation, not independent review"
               else
                 STATE=failure
-                DESC="risk:red — needs a non-author human approval, or $(solo_approval_token_body "$HEAD_SHA") posted by a human maintainer (D10)"
+                # ONE description per STATE, from the shipped text: "no token was
+                # posted" (exit 1), "its author is not write-level" (2) and "the
+                # permission lookup could not answer" (3) are three different things
+                # to tell the maintainer. `head -1` names the candidate the status
+                # talks about.
+                DESC="$(token_denied_desc "$DENIED" "$HEAD_SHA" "$(printf '%s' "$CANDIDATES" | head -1)")"
               fi
             fi
           fi
@@ -912,9 +951,11 @@ At 🔴 the primary path is a **non-author human approving review**, and GitHub 
 | `.performed_via_github_app == null` | a comment an App posted **on a user's behalf** is attributed here, and is rejected — the human must post it themselves |
 | `.author_association ∈ {OWNER, MEMBER, COLLABORATOR}` | a **pre-filter only** — anyone with read access can comment, so the ability to type is not the authorization. Nor is the association: `MEMBER` means "member of the organization that owns the repository" and says **nothing** about push access here, so a read-only member of a 500-person org passes this line. Stage 2 is what authorizes |
 | `.user.login != <PR author>` | unless the repository opted in as single-human (below) — the review path carries this exclusion and the token must too, or any author on any repository self-satisfies 🔴 |
-| `/approve <HEAD_SHA>` **on a line of its own** | the only thing taken from the body is the command and the head it names. The command must start the line with no leading whitespace: GitHub's "Quote reply" emits `> /approve <sha>`, and a whitespace-tolerant match would let a quoter — possibly declining in the same breath — approve the PR and be published as its approver. Indented code blocks and inline-backtick mentions are rejected for the same reason. `HEAD_SHA` is validated as `^[0-9a-f]{40}$` before it is concatenated into that regex |
+| `/approve <HEAD_SHA>` **on a line of its own, outside every code fence** | the only thing taken from the body is the command and the head it names. The command must start the line with no leading whitespace: GitHub's "Quote reply" emits `> /approve <sha>`, and a whitespace-tolerant match would let a quoter — possibly declining in the same breath — approve the PR and be published as its approver. Indented code blocks and inline-backtick mentions are rejected by that same anchor. **Fenced** blocks (triple-backtick or `~~~`) are not — a fence puts the command at column 0 of its own line — so fenced regions are **stripped before** the anchor is applied: a maintainer pasting the command in a fence to explain it (the shape this section itself uses, and the one GitHub's UI produces for a copyable command) does not approve the PR. `HEAD_SHA` is validated as `^[0-9a-f]{40}$` before it is concatenated into that regex |
 
 **Stage 2 — the authorization.** For each candidate login the job reads `GET /repos/{owner}/{repo}/collaborators/{login}/permission` and requires `admin`, `maintain` or `write` (`token_approver_login` / `token_permission_sufficient` in the shipped asset). `read`, `triage`, `none` and an API error all fail. This — not the association — is what a read-only org member cannot pass.
+
+That endpoint is **not** covered by the job's four `permissions:` entries — it sits on the repository collaborators surface (a classic PAT needs `repo` + `read:org`) — so verify it in **ordering step 4** before relying on the token path, and add `administration: read` if it 403s on your repository. A failure there is reported as a failure: `gh_permission` echoes the `$TOKEN_PERMISSION_UNKNOWN` sentinel rather than `none`, and the published description says `a token was posted but could not be authorized: permission lookup failed, see the run log` instead of `needs … /approve <sha> posted by a human maintainer`. Collapsing the two is what would tell a maintainer who has just posted a valid token to post one, with nothing on the PR to distinguish the states.
 
 **The single-human opt-in.** Nothing in a comment payload says "this repository cannot produce a second human", so the repository declares it: set the repository variable `PAIR_SOLO_APPROVAL_TOKEN` to `true` (Settings → Secrets and variables → Actions → Variables), which the job threads in as `SOLO_APPROVAL_TOKEN`.
 
@@ -927,12 +968,14 @@ Consequences that follow from that shape, all of them intentional:
 
 - **A force-push voids it.** The new head is a different SHA and no comment names it, so the context goes back to `failure` — the same head-scoped semantics as a review-based approval. Re-apply the token on the new head.
 - **A withdrawn token stops counting.** The job reads the comments **fresh** from the API on every evaluation, so an edited-away or deleted `/approve` line is simply no longer there. Only the current state of the current head counts. A quote-reply of a withdrawn token does not resurrect it: `>`-prefixed lines never matched.
-- **The review path always wins where it exists.** The job queries the reviews endpoint first and only falls back to the comments query, so a two-human repository behaves byte-for-byte as before and pays no extra API call.
-- **An ordinary comment costs nothing.** The job's `if:` body-filters the `created` action on `/approve`, so discussion traffic neither spends Actions minutes nor cancels an in-flight evaluation; `edited`/`deleted` stay unfiltered, because a withdrawal no longer contains the command and must still re-evaluate.
+- **The review path is queried first and wins wherever an approval exists.** That is NOT the same as costing a multi-human repository nothing: the token branch is reached whenever the reviews query returns zero, which is the state of **every** 🔴 PR before its first review — a ten-person repository pays the comments query and one permission read per candidate there too, and a non-author write-level human's token satisfies 🔴 on it, with no approving review recorded in the Reviews tab (see the opt-in table above, which states exactly that).
+- **An ordinary comment spends no Actions minutes.** The job's `if:` body-filters the `created` action on `/approve`, so discussion traffic is skipped — a skipped job is free. It does **not** stop the run from being created: `concurrency` is evaluated at run level, before any job condition, which is why comment-triggered runs are given `cancel-in-progress: false` instead (see the `concurrency:` block and § Residual). `edited`/`deleted` stay unfiltered, because a withdrawal no longer contains the command and must still re-evaluate.
 
 **What it proves — and what it does not.** It is **explicit human confirmation, not independent review**. On a single-account repository there is no second pair of eyes, and this document does not pretend otherwise. What the token adds over an advisory rule is exactly three properties — **deliberateness** (a distinct, explicit act, not a reflex merge), an **audit trail** (who, when, on which head SHA — published in the status description), and **invalidation on change**. It is **not forgery-resistant** while the agent runs on the maintainer's own credentials: host-side the agent and the human are the same actor, so nothing server-side can tell them apart, and an agent holding that token could post the comment itself. That becomes achievable only with a dedicated agent identity ([#218](https://github.com/foomakers/pair/issues/218)) — see ADR-018 § Amendment (the adopting project's own decision record).
 
-**Residual, stated rather than assumed away.** The pending-first property (5) resolves the head from the API on an `issue_comment` event; if that single read fails, the step aborts and the **previous** status stands. For a comment event the previous status is an earlier evaluation of the _same_ head, so the exposure is narrow — a token withdrawn while the re-evaluation dies leaves a `success` standing until the next event (any push, label change or review re-evaluates). A tier raise, the case property 5 exists for, arrives as a `labeled` event whose payload carries the head SHA, so it never depends on that read.
+**Residual, stated rather than assumed away.** Comment traffic and `concurrency`: a job `if:` cannot prevent a run from being created, and a run in the group that cancelled in progress would kill an in-flight evaluation before its own job is skipped — leaving the required context `pending`, the run that mattered showing "cancelled" and the run that cancelled it showing "skipped", i.e. the permanently-unmergeable trap property 5 exists to prevent. The `cancel-in-progress: ${{ github.event_name != 'issue_comment' }}` expression is what removes it: a comment run **queues** behind the running evaluation instead. The residual that remains is ordering — a token posted while a `synchronize` evaluation is running is picked up by the queued run, one evaluation later, not by the running one.
+
+The pending-first property (5) resolves the head from the API on an `issue_comment` event; if that single read fails, the step aborts and the **previous** status stands. For a comment event the previous status is an earlier evaluation of the _same_ head, so the exposure is narrow — a token withdrawn while the re-evaluation dies leaves a `success` standing until the next event (any push, label change or review re-evaluates). A tier raise, the case property 5 exists for, arrives as a `labeled` event whose payload carries the head SHA, so it never depends on that read.
 
 ### Branch protection payload
 
@@ -1001,6 +1044,13 @@ Applying branch protection **before** the two contexts ever report makes every P
    ```
 
    On a **multi-human** repository leave the variable unset and confirm the opposite: the author's own `/approve` leaves the context `failure`, while the same comment from a second write-level human flips it to `success`.
+
+   **Verify the permission read the same time.** The token path calls the repository collaborators endpoint, which none of the job's four `permissions:` entries covers. If the description reads `a token was posted but could not be authorized: permission lookup failed`, the job's `GITHUB_TOKEN` cannot call it — add `administration: read` to the workflow's `permissions:` block and re-run. Check it directly with the same token before blaming the token itself:
+
+   ```bash
+   gh api "repos/$REPO/collaborators/$MAINTAINER/permission" --jq '.permission'
+   # expect: admin | maintain | write   (403 here ⇒ the scope, not the token comment)
+   ```
 
 5. **Protect**: `PUT` the payload above with those contexts, keeping `enforce_admins: false`; flip it to `true` only after one PR has merged through the new rule.
 
