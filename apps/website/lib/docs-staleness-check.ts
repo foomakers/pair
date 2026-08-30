@@ -197,7 +197,11 @@ export function findDeadRepoLinks(content: string, rel: string, root: string): s
   for (const m of content.matchAll(REPO_BLOB_RE)) {
     const raw = m[1]
     if (raw === undefined) continue
-    const path = (raw.split('#')[0] ?? '').replace(/[.,;:]+$/, '')
+    // Strip BOTH delimiters: an anchor (`#callers-matrix`) and a query string —
+    // `?plain=1` is GitHub's own spelling for the source view of a rendered markdown
+    // file, and REPO_BLOB_RE's character class captures it. Resolving it literally
+    // would fail the build on a live URL.
+    const path = (raw.split(/[#?]/)[0] ?? '').replace(/[.,;:]+$/, '')
     if (path === '') continue
     if (!existsSync(join(root, path))) {
       errors.push(`Dead repo-file citation in ${rel}: ${path} does not exist in the repo`)
