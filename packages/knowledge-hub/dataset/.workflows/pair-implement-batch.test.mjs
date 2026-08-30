@@ -1002,6 +1002,47 @@ test('the fix step is likewise barred from deferring a finding into a new issue'
   )
 })
 
+test('the fix step sweeps the bounded contract surface before re-review', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }
+  let round = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:')).prompt
+  assert.match(fix, /CONVERGENCE SWEEP/, 'the fixer must make the bounded contract explicit')
+  assert.match(fix, /location is the starting point/i, 'a finding location is not the contract boundary')
+  assert.match(fix, /success\/failure/i, 'paired execution paths are checked together')
+  assert.match(fix, /every distributed representation/i, 'source and shipped representations are checked together')
+  assert.match(fix, /unrelated cleanup/i, 'the sweep stays bounded and is not scope creep')
+  assert.doesNotMatch(fix, /touch ONLY what each finding's location names/, 'line-only scope discipline would recreate the gap')
+})
+
+test('accepted-findings key is collision-free for location and description pairs', async () => {
+  const { result } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: validContract() },
+      review: {
+        verdict: 'Approved',
+        findings: [
+          { location: 'a b', severity: 'Minor', description: 'c', nonActionable: true },
+          { location: 'a', severity: 'Minor', description: 'b c', nonActionable: true },
+        ],
+      },
+    }),
+  })
+
+  assert.equal(result.batch[0].acceptedFindings.length, 2)
+})
+
 // ── A run that drove nothing must not report success ───────────────────────
 // Observed: two workflows were launched concurrently on a saturated machine, every
 // implementer stalled past the supervisor's window, `parallel` returned six nulls,
