@@ -31,6 +31,12 @@ const RISK_MATRIX_ADOPTION = readFileSync(
   join(__dirname, '../../../../.pair/adoption/tech/risk-matrix.md'),
   'utf-8',
 )
+const WEBSITE_DOCS = join(__dirname, '../../../../apps/website/content/docs')
+const GATES_CONFIG_DOC = readFileSync(
+  join(WEBSITE_DOCS, 'reference/quality-gates-configuration.mdx'),
+  'utf-8',
+)
+const QUALITY_MODEL_DOC = readFileSync(join(WEBSITE_DOCS, 'reference/quality-model.mdx'), 'utf-8')
 
 describe('quality-model.md — structure', () => {
   it('has the expected title', () => {
@@ -257,6 +263,25 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       )
     })
 
+    // §6 opens with a three-bullet index of what `tech/risk-matrix.md` may hold, and the
+    // `## Overrides` bullet enumerates the families of key that section carries. Before this
+    // story there were two (threshold tweaks, per-tier reviewer/SLA); `business-impact.trivial-diff`
+    // is neither — it resolves a dimension from diff CONTENT. A reader who scans that index
+    // (the section's own table of contents) and finds nothing about trivial changes concludes
+    // the knob does not exist; the key is then reachable only by reading §6 end-to-end.
+    it(`${label} §6's ## Overrides index names the dimension-resolution family too`, () => {
+      const bullet = content
+        .split('\n')
+        .find(l => l.startsWith('- **`## Overrides`**') || l.startsWith('- **`## Overrides`'))
+      expect(bullet, "§6's `## Overrides` index bullet is missing").toBeDefined()
+      expect(bullet, 'the index bullet must name the new family').toMatch(
+        /business-impact\.trivial-diff/,
+      )
+      // The pre-story families must survive: this is an ADDITION to the enumeration.
+      expect(bullet).toMatch(/threshold/i)
+      expect(bullet).toMatch(/reviewer/i)
+    })
+
     // AC7/AC8(a) — the key and the BR2 definition of "trivial" live in §6's schema.
     it(`${label} §6 documents the key with the definition of trivial spelled out`, () => {
       const s = section(content)
@@ -445,6 +470,21 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       // AC5/BR4 — the override greens Business impact but another dimension's red stands.
       expect(otherRed[4]).toMatch(/green/)
       expect(otherRed[7]).toContain('risk:red')
+      // C's Security red must be DERIVABLE from §3.1, whose Security row is a "heuristic over
+      // touched paths" — a surface that handles secrets, not a document that discusses one.
+      // Stated only as "a `.md` runbook describing credential rotation", the row teaches one
+      // of two wrong things: (i) copy it and any `.md` carrying credential/PII vocabulary
+      // reads Security red, so a typo fix in `docs/security/credential-rotation.md` lands
+      // `risk:red` — the exact over-tiering this story removes; or (ii) apply the path
+      // heuristic literally (a docs path handles no secrets) and C resolves `risk:green`,
+      // contradicting its own tier cell and leaving the never-lowers guarantee unexemplified.
+      // The row has to carry the path premise on its face.
+      expect(otherRed[1], 'example C must state WHY the path heuristic fires (§3.1)').toMatch(
+        /path/i,
+      )
+      expect(otherRed[5], "C's Security cell must attribute the red to the path heuristic").toMatch(
+        /path/i,
+      )
     })
   }
 
@@ -522,6 +562,27 @@ describe('risk-matrix-example.md', () => {
     expect(overrides).toContain('business-impact.trivial-diff')
   })
 
+  // The asset is the text an adopter COPIES into their own `tech/risk-matrix.md` — the exact
+  // use it advertises — so its restatement of branch (a) is a live rule, not an illustration.
+  // Restated unconditionally ("every changed file is `.md`/`.mdx`"), it re-opens the hole §6's
+  // carve-out closed: a later PR editing only `.claude/skills/pair-process-review/SKILL.md`
+  // and its dataset source — flipping the merge rule from "explicit approval required at
+  // risk:red" to "none" — is all-`.md`, so branch (a) holds against the adopter's own
+  // restatement ⇒ trivial ⇒ Business impact green on the diff that rewrites the review gate.
+  // The trailing §6 pointer does not save it: the sentence before it makes an affirmative,
+  // now-false statement of branch (a).
+  it('restates branch (a) WITH the executable-markdown carve-out, like §6', () => {
+    const overrides = RISK_MATRIX_EXAMPLE.split(/^## Overrides$/m)[1] ?? ''
+    const entry = overrides.split('\n').find(l => l.includes('business-impact.trivial-diff'))
+    expect(entry, 'the trivial-diff entry is missing from the example asset').toBeDefined()
+    expect(entry, 'branch (a) must be restated as NON-EXECUTABLE `.md`/`.mdx`').toMatch(
+      /non-executable/,
+    )
+    expect(entry, 'the entry must say branch (b) decides for skill/workflow files').toMatch(
+      /skill|workflow/i,
+    )
+  })
+
   // One section, one syntax: this asset is what a project copies to start its own
   // risk-matrix.md, so a key/value written `key: value`-inside-one-span next to a sibling
   // written `key`: `value` hands adopters two forms for the same construct.
@@ -534,6 +595,34 @@ describe('risk-matrix-example.md', () => {
         /^- `[a-z-]+\.[a-z-]+`: `/,
       )
     }
+  })
+})
+
+// The value of an opt-in knob is entirely in adopters DISCOVERING it. Both website pages
+// that enumerate what `## Overrides` holds listed only the two pre-story families, so a
+// maintainer over-tiering docs PRs reads the catalog page — self-described as "one catalog
+// of every opt-in quality configuration knob", with a row required "when a new opt-in knob
+// ships" — finds nothing about trivial changes, and concludes the knob does not exist.
+describe('website docs enumerate the trivial-diff override family (#438)', () => {
+  it('the quality-gates catalog row for Criticality Table / Overrides names it', () => {
+    const row = GATES_CONFIG_DOC.split('\n').find(l =>
+      l.startsWith('| **Criticality Table / Overrides**'),
+    )
+    expect(row, 'the Criticality Table / Overrides catalog row is missing').toBeDefined()
+    // The WHAT-IT-IS cell specifically — that is the enumeration a maintainer scans to decide
+    // whether the knob exists. Naming the key only in "How to enable" does not answer the
+    // question that sends them away ("is there anything here about trivial changes?").
+    const whatItIs = (row as string).split('|')[2]
+    expect(whatItIs, 'the What-it-is cell must name the new opt-in key').toMatch(
+      /business-impact\.trivial-diff|trivial-diff/,
+    )
+    // Addition, not replacement: the pre-story families stay enumerated.
+    expect(whatItIs).toMatch(/criticality/i)
+    expect(whatItIs).toMatch(/reviewer count/i)
+  })
+
+  it('the quality-model reference page names it in the same enumeration', () => {
+    expect(QUALITY_MODEL_DOC).toMatch(/business-impact\.trivial-diff/)
   })
 })
 
