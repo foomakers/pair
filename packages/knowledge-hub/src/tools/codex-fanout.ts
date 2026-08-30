@@ -301,6 +301,8 @@ export interface Binding {
   readonly announcement: string
   /** Harness ceiling the binding contributes to the cap arithmetic, when observed. */
   readonly harnessCeiling: number | null
+  /** Config key the caller reads when the probe did not report the harness ceiling. */
+  readonly concurrencyKey: string | null
   /**
    * The bound the caller must put on every wait it performs — ALWAYS a number for a
    * `spawn-wait` binding, `null` only where this orchestrator does no waiting.
@@ -362,6 +364,7 @@ function degrade(probe: ProbeObservation): Binding {
     reason: `${DEGRADED_REASON}; ${next}`,
     announcement: `fan-out realization: ${realization} (tier ${tier}) — ${next}`,
     harnessCeiling: null,
+    concurrencyKey: null,
     waitTimeoutMs: null,
     waitTimeoutSource: null,
     waitTimeoutKeys: null,
@@ -369,6 +372,17 @@ function degrade(probe: ProbeObservation): Binding {
 }
 
 type WaitBound = Pick<Binding, 'waitTimeoutMs' | 'waitTimeoutSource' | 'waitTimeoutKeys'>
+type ConcurrencyBound = Pick<Binding, 'harnessCeiling' | 'concurrencyKey'>
+
+function concurrencyBound(def: RealizationDefinition, probe: ProbeObservation): ConcurrencyBound {
+  const bounding = def.bounding
+  if (!bounding) return { harnessCeiling: null, concurrencyKey: null }
+  const reported = probe.harnessCeiling
+  return {
+    harnessCeiling: Number.isInteger(reported) ? (reported as number) : null,
+    concurrencyKey: bounding.concurrencyKey,
+  }
+}
 
 /**
  * The wait bound this binding hands back, for a realization this orchestrator waits on: the
@@ -405,13 +419,13 @@ export function resolveRealization(probe: ProbeObservation): Binding {
   for (const def of HARNESS_SURFACE_MAP) {
     const hit = matchRealization(def, exposed, probe.namespace)
     if (!hit) continue
-    const ceiling = Number.isInteger(probe.harnessCeiling) ? (probe.harnessCeiling as number) : null
     const bound = hit.map(handle => `\`${handle}\``).join('/')
     const reason =
       `probed this session: ${bound} ${hit.length > 1 ? 'are all' : 'is'} exposed ` +
       `(gated by \`${def.gating.featureKey}\`, default ${def.gating.defaultOn ? 'on' : 'off'}; ` +
       `verified against ${def.verifiedAgainst})`
     const waiting = waitBound(def, probe)
+    const concurrency = concurrencyBound(def, probe)
     return {
       tier: def.tier,
       realization: def.id,
@@ -421,7 +435,7 @@ export function resolveRealization(probe: ProbeObservation): Binding {
       announcement:
         `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ` +
         `${def.handles.dispatch}) — bound to ${bound}${waitClause(waiting)}; ${reason}`,
-      harnessCeiling: def.bounding ? ceiling : null,
+      ...concurrency,
       ...waiting,
     }
   }
@@ -757,6 +771,27 @@ export function assertBlind(
 }
 
 /**
+ * A reviewer receives the card verbatim, so an authoring-artifact pointer is just as harmful
+ * in card prose as it is in an attachment. The value is prose rather than a path and is not
+ * normalized; the denied prefix itself is the only unambiguous signal worth rejecting.
+ */
+function assertBlindCardText(card: Card, phase: Phase, workingPath?: string): void {
+  const prefixes = blindDenyPrefixes(workingPath)
+  for (const [field, value] of [
+    ['title', card.title],
+    ['notes', card.notes],
+  ] as const) {
+    if (typeof value !== 'string') continue
+    const denied = prefixes.find(prefix => value.includes(prefix))
+    if (denied)
+      throw new PacketRejected(
+        `codex-fanout: the ${phase} packet's card.${field} contains a pointer under \`${denied}\` — ` +
+          `the ${phase} role is blind to the authoring chain's working artifacts. Rejected before spawn.`,
+      )
+  }
+}
+
+/**
  * Rejects a key nobody declared, instead of dropping it.
  *
  * The party composing these requests is the orchestrating MODEL, so a misplaced or misspelled
@@ -861,7 +896,10 @@ export function buildPacket(request: PacketRequest): ContextPacket {
   assertSingleCard(request.card)
   const findings = resolveFindings(request, contract)
   const attachments = (request.attachments ?? []).map(normalizeAttachment)
-  if (contract.blind) assertBlind(attachments, request.phase, request.workingPath)
+  if (contract.blind) {
+    assertBlind(attachments, request.phase, request.workingPath)
+    assertBlindCardText(request.card, request.phase, request.workingPath)
+  }
   const root = request.worktreeRoot ?? WORKTREE_ROOT_DEFAULT
   return {
     phase: request.phase,
@@ -1329,6 +1367,12 @@ function assertAuditable(record: AuditRecord, index: number): void {
         `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
         `with no id at all is unreadable on resume.`,
     )
+  if (typeof record.run !== 'string' || record.run.trim() === '')
+    throw new Error(
+      `codex-fanout: audit record #${index} has no non-empty string \`run\`. Every card and run ` +
+        `record carries the invocation boundary because resume scopes halts to it; it is never inferred ` +
+        `from a later caller or audit line.`,
+    )
   if (record.phase !== 'review' || record.outcome !== 'completed') return
   if (isReviewAction(record.action)) return
   throw new Error(
@@ -1498,7 +1542,7 @@ function applyRecord(state: CardState, record: AuditRecord, canHalt: boolean): v
   if (canHalt) halt(state, record.phase, haltReason(record))
 }
 
-function parseAudit(auditText: string): AuditRecord[] {
+function parseAudit(auditText: string, requireRun: boolean): AuditRecord[] {
   const records: AuditRecord[] = []
   for (const line of auditText.split('\n')) {
     const trimmed = line.trim()
@@ -1515,6 +1559,13 @@ function parseAudit(auditText: string): AuditRecord[] {
     // an invocation is what tells a later reconstruction which run is current. They are simply
     // never turned into cards.
     if (!record || (record.kind !== 'run' && typeof record.id !== 'string')) continue
+    if (requireRun && (typeof record.run !== 'string' || record.run.trim() === '')) {
+      throw new Error(
+        'codex-fanout: audit record has no non-empty string `run`; resume cannot scope an ' +
+          'unstamped record to the invocation that wrote it, so it refuses the audit instead of ' +
+          "treating an escalation as another run's history.",
+      )
+    }
     records.push(record)
   }
   return records
@@ -1529,7 +1580,7 @@ export function reconstructState(
   auditText: string,
   scope: ResumeScope = {},
 ): Record<string, CardState> {
-  const records = parseAudit(auditText)
+  const records = parseAudit(auditText, typeof scope.run === 'string' && scope.run.trim() !== '')
   const lastRun = records.at(-1)?.run
   const canHalt = (record: AuditRecord): boolean => {
     if (typeof scope.run === 'string') return record.run === scope.run
@@ -1665,6 +1716,11 @@ function packetRequestFrom(req: CommandRequest): PacketRequest {
 }
 
 function runResume(req: CommandRequest): unknown {
+  if (typeof req.run !== 'string' || req.run.trim() === '')
+    throw new Error(
+      'codex-fanout: `resume` requires a non-empty string `run`; it scopes halts to this invocation ' +
+        'and every audit record must carry the same boundary.',
+    )
   const states = reconstructState(req.audit ?? '', req)
   if (typeof req.id === 'string') return resumePlan(req.id, states[req.id])
   return Object.keys(states).map(id => resumePlan(id, states[id]))
@@ -1695,10 +1751,19 @@ function checked<T>(value: T, allowed: readonly string[], where: string): T {
   return value
 }
 
+function checkedCeilings(value: unknown): Ceilings {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    throw new Error(
+      'codex-fanout: `cap` requires a `ceilings` object with `dependencyAllowed` and `policyMax` ' +
+        '(plus optional `harnessCeiling`).',
+    )
+  return checked(value, CEILING_KEYS, 'the ceilings') as Ceilings
+}
+
 /** One handler per command — a table rather than a chain, so adding one adds a row. */
 const HANDLERS: Readonly<Record<Command, (req: CommandRequest) => unknown>> = Object.freeze({
   bind: req => resolveRealization(checked(req.probe ?? {}, PROBE_KEYS, 'the probe')),
-  cap: req => effectiveParallelism(checked(req.ceilings, CEILING_KEYS, 'the ceilings') as Ceilings),
+  cap: req => effectiveParallelism(checkedCeilings(req.ceilings)),
   packet: req => buildPacket(packetRequestFrom(req)),
   collect: req => collectOutcome(req.phase as Phase, req.result, req.schema),
   converge: req => converge(req),

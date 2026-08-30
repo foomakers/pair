@@ -76,7 +76,7 @@ See Decision.
 
 8. **"One lane" is a claim about the review ↔ fix cycle and the audit, not only about the schemas** (added 2026-08-28, #441).
 
-   Two realizations of one capability may differ in dispatch mechanism and in nothing a card can feel. Three properties are therefore fixed for both, and are what a third realization would have to honour too:
+   Two realizations of one capability may differ in dispatch mechanism and in nothing a card can feel. Four properties are therefore fixed for both, and are what a third realization would have to honour too:
 
    - **A fix is owed by findings, never by a phase list.** Actionable findings ⇒ one fix round ⇒ **re-review**; zero actionable findings ⇒ converged and no fixer is spawned; a cap on the rounds ⇒ escalate to a human. A realization that dispatched `implement → pr → review → fix` unconditionally would both spawn a fixer on an approved PR and record a card converged on a review that ran BEFORE the fixes — and under `## Auto-Advance` the second of those merges.
    - **A project-supplied result contract may only TIGHTEN the built-in one.** Where the project has the generated review contract on disk, both realizations validate against it; where the request carrying it is composed by a model, a contract that model can also WIDEN is not a contract.
