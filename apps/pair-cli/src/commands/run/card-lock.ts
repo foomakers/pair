@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, type Stats } from 'fs'
 import { join } from 'path'
 import { isSafeId } from './prompt-safety'
 
@@ -61,35 +61,107 @@ export type CardLockOutcome =
 /** Acquires the card's lock, or reports the holder that already has it. */
 export type LockAcquirer = (request: CardLockRequest) => CardLockOutcome
 
-export const acquireCardLock: LockAcquirer = ({ workingArea, card }) => {
-  // The card id is a PATH SEGMENT here, so it gets the same rule `--root` and `--skill` get. The
-  // parser already applied it; a second check belongs where the path is actually built.
-  if (!isSafeId(card)) {
-    throw new Error(
-      `Cannot lock card '${card}': a card id must be a plain identifier (it is used as a directory name)`,
-    )
+/**
+ * How the acquirer inspects a path its own `mkdir` just refused. `undefined` ⇒ nothing is there.
+ *
+ * A seam, not a filesystem abstraction: the real one is `statSync` and every caller uses it. It is
+ * injectable because this is exactly where the burst's interleaving lands — the holder's `finally`
+ * firing between our `mkdir` and our `stat` — and reproducing that any other way means racing two
+ * processes on a microsecond window.
+ */
+export type PathInspector = (path: string) => Stats | undefined
+
+/**
+ * `stat`, with "it is not there" as an ANSWER rather than an exception.
+ *
+ * ENOENT here is not a failure: it means the lock was released between our create and our probe.
+ * Every other error still throws — a permission failure reported as "free" would hand two triggers
+ * the same card.
+ */
+const inspectPath: PathInspector = path => {
+  try {
+    return statSync(path)
+  } catch (error) {
+    if (isMissing(error)) return undefined
+    throw error
   }
+}
 
-  const directory = join(workingArea, LOCK_DIRECTORY)
-  mkdirSync(directory, { recursive: true })
+export function createCardLockAcquirer(inspect: PathInspector = inspectPath): LockAcquirer {
+  return ({ workingArea, card }) => {
+    // The card id is a PATH SEGMENT here, so it gets the same rule `--root` and `--skill` get. The
+    // parser already applied it; a second check belongs where the path is actually built.
+    if (!isSafeId(card)) {
+      throw new Error(
+        `Cannot lock card '${card}': a card id must be a plain identifier (it is used as a directory name)`,
+      )
+    }
 
-  const path = join(directory, card)
+    const directory = join(workingArea, LOCK_DIRECTORY)
+    mkdirSync(directory, { recursive: true })
+
+    const path = join(directory, card)
+    if (createExclusively(path)) return acquired(path, card)
+
+    const holder = inspect(path)
+    // Nothing is there: the holder released in the window between our create and our probe — the
+    // interleaving a trigger burst produces on a persistent daemon, where the two triggers share
+    // one working area. The lock is FREE, so take it; letting the ENOENT escape would turn a
+    // normal burst into a red job with a filesystem error.
+    if (holder === undefined) return afterHolderVanished(path, card, inspect)
+    return heldBy(path, holder)
+  }
+}
+
+export const acquireCardLock: LockAcquirer = createCardLockAcquirer()
+
+/** One exclusive create: `true` when this caller made the directory, `false` when it already existed. */
+function createExclusively(path: string): boolean {
   try {
     // NOT recursive: with `recursive: true`, mkdir succeeds on an existing directory — which would
     // turn the lock into a no-op and hand every concurrent trigger the same card.
     mkdirSync(path)
+    return true
   } catch (error) {
     if (!isAlreadyExists(error)) throw error
-    // EEXIST also covers "a FILE is sitting where the lock directory goes", which is a broken
-    // working area rather than contention. Reporting that as held would park every dispatch on this
-    // card forever, with nothing to release it.
-    if (!statSync(path).isDirectory()) {
-      throw new Error(`Lock path ${path} exists but is not a directory: the working area is broken`)
-    }
-    const since = heldSince(path)
-    return { kind: 'held', path, ...(since !== undefined && { since }) }
+    return false
   }
+}
 
+/**
+ * The lock vanished between our create and our probe: retry the exclusive create ONCE.
+ *
+ * Once, not in a loop — the retry either wins (the burst resolves, this trigger runs the card) or
+ * loses to the next trigger, and losing is a clean skip, never an error: the card is still tagged,
+ * so the following trigger picks it up. A path that keeps existing for `mkdir` while existing for
+ * nothing else is neither of those — a dangling symlink, or a working area being written by
+ * something else — and that is a broken working area, reported as one.
+ */
+function afterHolderVanished(path: string, card: string, inspect: PathInspector): CardLockOutcome {
+  if (createExclusively(path)) return acquired(path, card)
+  const holder = inspect(path)
+  if (holder === undefined) {
+    throw new Error(
+      `Lock path ${path} exists for mkdir but not for stat (a dangling symlink, or a path being ` +
+        `created and removed under the run): the working area is broken`,
+    )
+  }
+  return heldBy(path, holder)
+}
+
+/** The refusal — or the broken working area the refusal would otherwise hide. */
+function heldBy(path: string, holder: Stats): CardLockOutcome {
+  // EEXIST also covers "a FILE is sitting where the lock directory goes", which is a broken
+  // working area rather than contention. Reporting that as held would park every dispatch on this
+  // card forever, with nothing to release it.
+  if (!holder.isDirectory()) {
+    throw new Error(`Lock path ${path} exists but is not a directory: the working area is broken`)
+  }
+  const since = heldSince(path)
+  return { kind: 'held', path, ...(since !== undefined && { since }) }
+}
+
+function acquired(path: string, card: string): CardLockOutcome {
   // Who holds it and since when — the lock is what an operator inspects after a killed run, and a
   // bare empty directory tells them nothing. Best-effort: the LOCK is the directory, not this file.
   try {
@@ -112,6 +184,10 @@ export const acquireCardLock: LockAcquirer = ({ workingArea, card }) => {
 
 function isAlreadyExists(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === 'EEXIST'
+}
+
+function isMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
 }
 
 /**

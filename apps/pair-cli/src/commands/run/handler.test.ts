@@ -733,5 +733,35 @@ Precedence: auto-refine, auto-dev
       ])
       expect(audit.entries[1]?.line).toContain('outcome=crashed')
     })
+
+    it('keeps the crash visible when the `end` record itself cannot be written', async () => {
+      // Both failures at once: the engine dies AND the audit file is unwritable (a full disk, a
+      // `## Audit Location` pointing somewhere read-only). An unaudited run stays a hard failure —
+      // but an operator handed only `EACCES: permission denied` would be debugging the wrong
+      // machine, so the engine error is carried in the message and kept as the cause.
+      captureLog()
+      const { lock, handler } = deps()
+      const exploding: IterationRunner = () => Promise.reject(new Error('engine exploded'))
+      const crash = new Error('engine exploded')
+
+      const failing = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        {
+          ...handler,
+          runIteration: exploding,
+          appendAudit: (_path, line) => {
+            if (line.includes('event=end')) throw new Error('EACCES: audit file is read-only')
+          },
+        },
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain('engine exploded')
+      expect(String(failing)).toContain('EACCES')
+      expect((failing as Error).cause).toBeInstanceOf(Error)
+      expect(String((failing as Error).cause)).toContain(crash.message)
+      // The lock is still released: a card parked by a double failure is the worst of both.
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
   })
 })

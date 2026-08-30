@@ -8,7 +8,7 @@ const base: PerimeterInput = {
   invocationKind: 'skill',
   // pair-next's posture: the invocation can carry `--filter`. The pair-loop case (it cannot) is
   // exercised explicitly below — that asymmetry is what round 1 finding 1 is about.
-  skillAcceptsFilter: true,
+  filterDelivery: 'argument',
 }
 
 describe('createPerimeter', () => {
@@ -33,10 +33,10 @@ describe('createPerimeter', () => {
     // pair-loop declares no `--filter` — it reads `## Eligibility` itself. Accepting the flag,
     // dropping it, and then PRINTING it as the perimeter is the silent-lie this refusal removes.
     expect(() =>
-      createPerimeter({ ...base, filter: 'risk:green', skillAcceptsFilter: false }),
+      createPerimeter({ ...base, filter: 'risk:green', filterDelivery: 'read-by-skill' }),
     ).toThrow(/--filter cannot be honoured/)
     expect(() =>
-      createPerimeter({ ...base, filter: 'risk:green', skillAcceptsFilter: false }),
+      createPerimeter({ ...base, filter: 'risk:green', filterDelivery: 'read-by-skill' }),
     ).toThrow(/--skill pair-next/)
   })
 
@@ -47,9 +47,34 @@ describe('createPerimeter', () => {
         invocationKind: 'prompt',
         cwdDeclared: true,
         filter: 'risk:green',
-        skillAcceptsFilter: false,
+        filterDelivery: 'none',
       }),
     ).toThrow(/--filter cannot be honoured/)
+  })
+
+  it('drops a policy label no one on this invocation would apply, rather than printing it', () => {
+    // A card routed to `pair-process-refine-story`: the workflow declares no `--filter` AND does
+    // not read `## Eligibility` itself, so the label is neither passed nor applied. Reporting it
+    // as the perimeter would name a boundary nothing enforces — the run is bounded by its card.
+    const perimeter = createPerimeter({
+      ...base,
+      root: '304',
+      eligibility: 'risk:green',
+      filterDelivery: 'none',
+    })
+
+    expect(perimeter.filter).toBeUndefined()
+    expect(perimeter.filterDelivery).toBeUndefined()
+    expect(describePerimeter(perimeter)).toContain('root 304')
+    expect(describePerimeter(perimeter)).not.toContain('risk:green')
+  })
+
+  it('refuses to run such an invocation unscoped — the label is not a perimeter for it', () => {
+    // Without the card there is nothing left: `pair-process-refine-story` with no story argument
+    // selects the highest-priority Draft story on the board, which is the unbounded run AC5 forbids.
+    expect(() =>
+      createPerimeter({ ...base, eligibility: 'risk:green', filterDelivery: 'none' }),
+    ).toThrow(/No work perimeter declared/)
   })
 
   it('reports a policy-read eligibility label as read by the skill, not as a passed filter', () => {
@@ -57,7 +82,7 @@ describe('createPerimeter', () => {
       ...base,
       root: '212',
       eligibility: 'risk:green',
-      skillAcceptsFilter: false,
+      filterDelivery: 'read-by-skill',
     })
 
     expect(perimeter.filter).toBe('risk:green')
@@ -88,7 +113,7 @@ describe('createPerimeter', () => {
         ...base,
         filter: 'risk:green',
         eligibility: 'risk:yellow',
-        skillAcceptsFilter: false,
+        filterDelivery: 'read-by-skill',
       }),
     ).toThrow(/--filter cannot be honoured/)
   })
@@ -149,7 +174,7 @@ describe('describePerimeter', () => {
       root: '212',
       eligibility: 'risk:green',
       requestedCap: 2,
-      skillAcceptsFilter: false,
+      filterDelivery: 'read-by-skill',
     })
 
     expect(describePerimeter(perimeter)).toContain(

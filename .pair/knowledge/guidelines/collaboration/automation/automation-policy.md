@@ -264,11 +264,13 @@ Every dispatch decision — **start**, **skip**, **end** — is appended to the 
 
 A workflow is a **skill that already exists** — the entry point of a composition, resolved against the installed set. There is no workflow registry to keep in sync and no bespoke engine to write: mapping a tag costs one line of adoption. The ones below are the compositions pair ships, and they are the reason the mapping needs no vocabulary of its own.
 
-| Workflow | What a card routed to it gets | A tag teams usually map to it |
-| --- | --- | --- |
-| `pair-loop` | the delivery loop — selects the card, implements it, opens the PR, drives the review/fix rounds, and stops at a review-approved PR (it never merges outside `## Auto-Advance`) | `auto-dev` |
-| `pair-process-refine-story` | the single Draft→Ready path — interview, Given-When-Then criteria, domain mapping, classification | `auto-refine` |
-| `pair-process-plan-tasks` | a refined story broken into implementation tasks, with the dependency graph and the AC-coverage table written back onto the card | `auto-plan` |
+| Workflow | What a card routed to it gets | A tag teams usually map to it | How the dispatched card reaches it |
+| --- | --- | --- | --- |
+| `pair-loop` | the delivery loop — selects the card, implements it, opens the PR, drives the review/fix rounds, and stops at a review-approved PR (it never merges outside `## Auto-Advance`) | `auto-dev` | `--root <card>` |
+| `pair-process-refine-story` | the single Draft→Ready path — interview, Given-When-Then criteria, domain mapping, classification | `auto-refine` | `--story <card>` |
+| `pair-process-plan-tasks` | a refined story broken into implementation tasks, with the dependency graph and the AC-coverage table written back onto the card | `auto-plan` | `--story <card>` |
+
+**A mapping may only name a workflow the dispatcher can hand the card to, and that last column is why.** The dispatched card is the whole subject of the run, and it arrives as an **argument** — under the name that workflow's own `## Arguments` table declares, borrowed and never invented (D18). The three above spell it differently, and the difference is not cosmetic: `pair-process-refine-story` and `pair-process-plan-tasks` both state that **when their `$story` is absent they select the highest-priority story on the board themselves**. So a card handed to one of them under a name it does not declare is a card it never sees — the workflow runs, on a *different* card, while the audit trail and the on-issue `DISPATCH-RECORD:` both name the card that was tagged. A consumer therefore **MUST HALT** on a mapped workflow whose scoping argument it does not know, with an adoption-fix message, rather than dispatch a run it cannot scope — the same fail-fast, whole-board check an uninstalled workflow already gets, and for the same reason: a run nobody is watching must never pick its own subject.
 
 ```markdown
 ## Workflows

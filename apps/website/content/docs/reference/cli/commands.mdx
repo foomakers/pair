@@ -747,7 +747,7 @@ pair run [options]
 | `--engine <id>`                 | Engine to drive: `pi`, `opencode` or `claude`. Precedence: flag > `pair.config.json` > schema default |
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back — a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
-| `--root <id>`                   | Scope root, passed through as `pair-next --root`                                                      |
+| `--root <id>`                   | Scope root, passed on under the resolved skill's own name for it (`--root` for `pair-next`/`pair-loop`, `--story` for the `pair-process-*` workflows) |
 | `--filter <tag>`                | Label filter, for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
 | `--card <id>`                   | Dispatch this card: its tag picks the workflow from `## Workflows`. Not combinable with `--skill`/`--prompt` |
 | `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card`. Empty, absent or unmapped ⇒ nothing runs      |
@@ -809,10 +809,19 @@ Four properties decide what actually happens, and all four fail towards *not run
   is **filesystem-local**: it guards dispatches sharing one working area, so a host that gives every
   job a fresh checkout needs its own concurrency group as the cross-job guard.
 
-Two things HALT instead of guessing: a mapped tag whose workflow is **not installed**, and a card
-carrying **two mapped tags** that no `Precedence:` line covers. Both name the file and the value to
-fix. The first is checked before eligibility and routing, so it stops dispatch for **every** card,
-not only the ones carrying that tag.
+Three things HALT instead of guessing: a mapped tag whose workflow is **not installed**, a mapped
+workflow the dispatcher **cannot hand the card to**, and a card carrying **two mapped tags** that no
+`Precedence:` line covers. All three name the file and the value to fix. The first two are checked
+before eligibility and routing, so they stop dispatch for **every** card, not only the ones carrying
+that tag.
+
+The second is what keeps the trail true. The dispatched card reaches its workflow as an argument
+under that workflow's own name for it — `--root <card>` for `pair-loop`, `--story <card>` for
+`pair-process-refine-story` and `pair-process-plan-tasks` — and those two select the
+highest-priority story on the board when they receive no story at all. A workflow whose scoping
+argument this command does not know would therefore run on a card nobody tagged, while the audit
+line and the `DISPATCH-RECORD:` comment both named the card that *was* tagged: so the mapping is
+refused instead.
 
 Every decision — start, skip, end — is appended to the run's `## Audit Location` file, and the start
 record — only the start — is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own

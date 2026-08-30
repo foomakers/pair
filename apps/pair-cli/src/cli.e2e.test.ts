@@ -292,18 +292,68 @@ auto-dev ⇒ pair-loop
 Precedence: auto-refine, auto-dev
 `
 
-    /** The cards a trigger fires on, with the labels it observed at that moment. */
+    /**
+     * The cards a trigger fires on, with the labels it observed at that moment — and everything
+     * each one must produce.
+     *
+     * The fixture IS the assertion set: `routes` is the prompt the engine must be given (absent ⇒
+     * nothing may spawn, nothing may be recorded on the card) and `trail` is what the audit file
+     * must say about that card. Every check below iterates these rows, so a row added here is a
+     * row checked, and a row whose workflow, scoping argument or skip reason changes fails on its
+     * own row instead of shifting a positional index under an assertion about a different card.
+     */
     const BOARD = [
-      { card: '301', tags: ['auto-dev', 'risk:green'], expect: 'pair-loop' },
-      { card: '302', tags: [], expect: undefined },
-      { card: '303', tags: ['risk:green'], expect: undefined },
+      // pair-loop declares `--iteration` too, and refine-story does not: each invocation carries
+      // exactly the arguments its own `## Arguments` table declares, and nothing else.
+      {
+        card: '301',
+        tags: ['auto-dev', 'risk:green'],
+        routes: '/pair-loop --root 301 --iteration 1',
+        trail: [
+          /event=start card=301 tag=auto-dev workflow=pair-loop/,
+          /event=end card=301 .*outcome=completed/,
+        ],
+      },
+      // 302 is the UNLABELLED card — the state a host adapter renders as an empty `--card-tags`.
+      // It stops at the ELIGIBILITY gate, before its (absent) tags are ever routed: an untagged
+      // card matches no eligibility label either, so the earliest guard is the one that catches it.
+      {
+        card: '302',
+        tags: [],
+        routes: undefined,
+        trail: [/event=skip card=302 reason=ineligible/],
+      },
+      // 303 IS eligible and still runs nothing: eligibility selects, the mapping routes, and there
+      // is no default workflow for a card the mapping does not name.
+      {
+        card: '303',
+        tags: ['risk:green'],
+        routes: undefined,
+        trail: [/event=skip card=303 reason=unmapped/],
+      },
       {
         card: '304',
         tags: ['auto-refine', 'auto-dev', 'risk:green'],
-        expect: 'pair-process-refine-story',
+        // The DECLARED precedence wins over the first mapped tag the card carries — and the card
+        // reaches refine-story as `--story`, the argument that skill declares: `--root 304` is a
+        // scope it never sees, and its Step 0 would then pick the top Draft story on the board.
+        routes: '/pair-process-refine-story --story 304',
+        trail: [/event=start card=304 tag=auto-refine/],
       },
-      { card: '305', tags: ['auto-dev'], expect: undefined },
+      {
+        card: '305',
+        tags: ['auto-dev'],
+        routes: undefined,
+        trail: [/event=skip card=305 reason=ineligible/],
+      },
     ] as const
+
+    type BoardRow = (typeof BOARD)[number]
+    /** The cards the board expects to run, in trigger order — the fixture, read as data. */
+    const routed = BOARD.filter(
+      (row): row is BoardRow & { routes: string } => row.routes !== undefined,
+    )
+    const unrouted = BOARD.filter(row => row.routes === undefined)
 
     const AUDIT = '.pair/working/automation/loop-audit.md'
     const LOCKS = '.pair/working/automation/locks'
@@ -385,41 +435,28 @@ Precedence: auto-refine, auto-dev
     it('runs exactly the two cards the mapping routes, and leaves the trail to prove the other three', async () => {
       for (const { card, tags } of BOARD) expect(await trigger(card, tags)).toBe(0)
 
-      // AC1 — routed cards ran the MAPPED workflow, scoped to their own card.
-      expect(spawned).toHaveLength(2)
-      expect(spawned[0]).toContain('pair-loop')
-      expect(spawned[0]).toContain('--root 301')
-      // The multi-tag card took the DECLARED precedence, not the first mapped tag it carries.
-      expect(spawned[1]).toContain('pair-process-refine-story')
-      expect(spawned[1]).toContain('--root 304')
+      // AC1 — routed cards ran the MAPPED workflow, scoped to their own card, and NOTHING else ran.
+      // Driven off the fixture: every row that declares a route is checked against the prompt the
+      // engine was actually given, in the order the triggers fired.
+      expect(spawned).toEqual(routed.map(row => row.routes))
 
-      // AC2 — the other three ran nothing, each for its own reported reason.
+      // AC2 — every card left the trail its own row declares, and the ones that ran nothing say
+      // WHY. Read off the fixture, so a row added above is a row this checks.
       const trail = auditTrail()
-      expect(trail).toMatch(/event=start card=301 tag=auto-dev workflow=pair-loop/)
-      expect(trail).toMatch(/event=end card=301 .*outcome=completed/)
-      // 302 is the UNLABELLED card — the state a host adapter renders as an empty `--card-tags`.
-      // It stops at the ELIGIBILITY gate, before its (absent) tags are ever routed: an untagged
-      // card matches no eligibility label either, so the earliest guard is the one that catches it.
-      expect(trail).toMatch(/event=skip card=302 reason=ineligible/)
-      // 303 IS eligible and still runs nothing: eligibility selects, the mapping routes, and there
-      // is no default workflow for a card the mapping does not name.
-      expect(trail).toMatch(/event=skip card=303 reason=unmapped/)
-      expect(trail).toMatch(/event=start card=304 tag=auto-refine/)
-      expect(trail).toMatch(/event=skip card=305 reason=ineligible/)
-      // No card was ever routed to a workflow its tags do not name.
-      expect(trail).not.toMatch(/card=30[235] (tag|workflow)=/)
-      expect(trail).not.toMatch(/event=start card=30[235]/)
+      for (const row of BOARD) for (const line of row.trail) expect(trail).toMatch(line)
+      // No card was ever routed to a workflow its tags do not name, and none of them started.
+      for (const { card } of unrouted) {
+        expect(trail).not.toMatch(new RegExp(`card=${card} (tag|workflow)=`))
+        expect(trail).not.toMatch(new RegExp(`event=start card=${card}`))
+      }
 
       // AC3 — the line the host adapter posts on the card exists for the runs that started, and
       // ONLY for those: a card that never ran must not get a comment claiming it did.
       const records = printed.filter(line => line.startsWith('DISPATCH-RECORD:'))
-      expect(records).toHaveLength(2)
-      expect(records[0]).toContain('301')
-      expect(records[1]).toContain('304')
+      expect(records).toEqual(routed.map(row => expect.stringContaining(`card=${row.card}`)))
 
       // Every lock was released: the board is left dispatchable, not parked.
-      expect(existsSync(join(project, LOCKS, '301'))).toBe(false)
-      expect(existsSync(join(project, LOCKS, '304'))).toBe(false)
+      for (const { card } of BOARD) expect(existsSync(join(project, LOCKS, card))).toBe(false)
     })
 
     it('never starts a second run on a card a run already holds (trigger burst)', async () => {
@@ -454,7 +491,12 @@ Precedence: auto-refine, auto-dev
 
       expect(spawned).toHaveLength(0)
       expect(printed.some(line => line.includes('no mapping declared'))).toBe(true)
-      expect(auditTrail()).toMatch(/event=skip card=301 reason=no-mapping-declared/)
+      // EVERY card on the board, not just the one that would otherwise have routed: with no
+      // `## Workflows` section nothing is routable, and each card says so in the trail.
+      const trail = auditTrail()
+      for (const { card } of BOARD) {
+        expect(trail).toMatch(new RegExp(`event=skip card=${card} reason=no-mapping-declared`))
+      }
     })
   })
 })

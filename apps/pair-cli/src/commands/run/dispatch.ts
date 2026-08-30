@@ -1,4 +1,5 @@
 import { policyHalt, POLICY_PATH } from './policy-sections'
+import { scopeParameterFor } from './invocation'
 import type { SkillProbe } from './resolve-skill'
 import type { WorkflowMapping, WorkflowRoute } from './workflow-mapping'
 
@@ -66,10 +67,11 @@ export function decideDispatch(request: DispatchRequest): DispatchDecision {
   if (mapping === undefined) {
     return skip(card, 'no-mapping-declared', `${POLICY_PATH} declares no \`## Workflows\` section`)
   }
-  // Fail-fast, before any per-card decision: a mapping naming a workflow nobody installed is broken
-  // configuration, and finding out only on the card that happens to carry that tag would make the
-  // failure depend on which trigger fired first.
+  // Fail-fast, before any per-card decision: a mapping naming a workflow nobody installed — or one
+  // this driver cannot hand the card to — is broken configuration, and finding out only on the card
+  // that happens to carry that tag would make the failure depend on which trigger fired first.
   assertWorkflowsInstalled(mapping, request.isInstalled)
+  assertWorkflowsScopable(mapping)
 
   if (eligibility === undefined) {
     return skip(
@@ -178,6 +180,32 @@ function assertWorkflowsInstalled(mapping: WorkflowMapping, isInstalled: SkillPr
     policyHalt(
       `\`## Workflows\` maps \`${route.tag}\` to \`${route.workflow}\`, which is not installed — ` +
         `install it with \`pair install\`, or map the tag to a workflow this project has`,
+    )
+  }
+}
+
+/**
+ * A declared workflow the driver cannot SCOPE to the card ⇒ HALT with an adoption-fix message.
+ *
+ * A dispatched card is the whole subject of the run (ADR-024), and it reaches the workflow as an
+ * argument — under the name that workflow's own `## Arguments` table declares. For a workflow the
+ * driver holds no declaration for there is no safe default: an unrecognised argument is not
+ * rejected by an agent, it is ignored, and a skill that picks its own subject when unscoped then
+ * runs on a card nobody tagged while the audit trail and the on-issue record both name the card
+ * that WAS tagged. Refusing the mapping is the only outcome that keeps the trail true.
+ *
+ * Not the same check as `assertWorkflowsInstalled`: a workflow can be installed and still be one
+ * this driver cannot address a card to.
+ */
+function assertWorkflowsScopable(mapping: WorkflowMapping): void {
+  for (const route of mapping.routes) {
+    if (scopeParameterFor(route.workflow) !== undefined) continue
+    policyHalt(
+      `\`## Workflows\` maps \`${route.tag}\` to \`${route.workflow}\`, and this driver has no ` +
+        `declaration of how that workflow names the card it works on — so the dispatched card ` +
+        `could not be passed to it, and the run would pick its own subject. Map the tag to one of ` +
+        `the workflows the catalog names (\`pair-loop\`, \`pair-process-refine-story\`, ` +
+        `\`pair-process-plan-tasks\`), or add \`${route.workflow}\`'s own scoping argument to the driver`,
     )
   }
 }

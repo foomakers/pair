@@ -1038,6 +1038,47 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
     expect(section).toContain('pair-process-plan-tasks')
   })
 
+  /**
+   * The catalog is what a team copies from — `auto-refine ⇒ pair-process-refine-story` appears
+   * verbatim here, in adoption-files.mdx and in the tutorial. A catalogued workflow that the
+   * dispatcher cannot hand the card to is worse than an absent one: the two `pair-process-*` rows
+   * both select the highest-priority story on the board when their `$story` is absent, so a card
+   * passed under a name they do not declare is never seen, while the audit trail and the
+   * `DISPATCH-RECORD:` comment both name the card that WAS tagged.
+   */
+  it.each(policySources)(
+    '%s: names the argument each catalogued workflow receives the card as — the one it declares',
+    (_, content) => {
+      const section = workflowsSection(content)
+      const rows = [
+        ...section.matchAll(/^\| `(pair-[a-z0-9-]+)` \|[^\n]*\| `(--[a-z-]+) <card>` \|/gm),
+      ]
+      // Three rows today; the assertion is that EVERY row carries the column, not how many.
+      expect(rows.length).toBe([...section.matchAll(/^\| `pair-[a-z0-9-]+` \|/gm)].length)
+      expect(rows.length).toBeGreaterThan(2)
+
+      for (const [, workflow, parameter] of rows) {
+        const slug = workflow!.replace(/^pair-/, '')
+        const file = [
+          join(REPO_ROOT, '.claude/skills', workflow!, 'SKILL.md'),
+          join(REPO_ROOT, '.skills', slug, 'SKILL.md'),
+        ].find(candidate => existsSync(candidate))
+        expect(file, `${workflow} is catalogued but has no SKILL.md in this repo`).toBeDefined()
+
+        // `$story` (documentation form) and `--story` (invocation form) are one argument, per the
+        // ADL of 2026-08-28. What must not happen is the catalog naming a third thing.
+        const name = parameter!.replace(/^--/, '')
+        expect(
+          read(file!),
+          `${workflow} does not declare \`${parameter}\` — the catalog promises a scope it cannot receive`,
+        ).toMatch(new RegExp(`\\|\\s*\`(?:\\$|--)${name}\``))
+      }
+
+      // ...and the rule that makes the column load-bearing rather than decorative.
+      expect(section).toMatch(/MUST HALT.*scoping argument|scoping argument it does not know/s)
+    },
+  )
+
   it.each(policySources)(
     '%s: every workflow the catalog names is a skill this repo actually ships',
     (_, content) => {
@@ -1079,7 +1120,6 @@ describe('docs site — tag-driven dispatch is documented where an operator look
 
   it('adoption-files.mdx documents the `## Workflows` section and its opt-in boundary', () => {
     expect(adoptionDocs).toContain('## Workflows')
-    expect(adoptionDocs).toMatch(/six independent sections/)
     expect(adoptionDocs).toMatch(/no mapped tag/)
     expect(adoptionDocs).toMatch(/no mapping declared/)
   })
@@ -1100,15 +1140,26 @@ describe('docs site — tag-driven dispatch is documented where an operator look
     expect(tutorial).toMatch(/pair run --card/)
   })
 
-  it('the tutorial counts the policy file the way the guideline does', () => {
+  it('every surface counts the policy file the way the guideline does', () => {
     // A reader who completed Step 1 believing they have six sections, then told to add "a sixth",
     // cannot tell whether they are adding one or editing one — in the tutorial whose whole subject
-    // is a fail-closed policy file where a mis-declared section HALTs the run.
+    // is a fail-closed policy file where a mis-declared section HALTs the run. The concepts page is
+    // the OTHER end of the same path (Option D links to it for the mapping), so a reader told seven
+    // on one page and six on the other cannot tell which surface is incomplete.
     const [policy] = policySources.map(([, content]) => content)
     const declared = /It specifies (\w+) sections/.exec(policy!)![1]!
-    expect(tutorial).toContain(`${declared[0]!.toUpperCase()}${declared.slice(1)} independent`)
+    const capitalised = `${declared[0]!.toUpperCase()}${declared.slice(1)}`
+
+    expect(tutorial).toContain(`${capitalised} independent`)
     // ...and the section Option D adds is numbered off that same count, not off Step 1's listing.
     expect(tutorial).toContain(`the ${declared}th`)
+
+    expect(adoptionDocs).toContain(`${declared} independent sections`)
+    // Both surfaces omit the same section, so both must say which one and where it is documented —
+    // otherwise the count and the listing disagree with no way to tell why.
+    for (const surface of [tutorial, adoptionDocs]) {
+      expect(surface).toMatch(/`## Harness` \/ `## Model Policy`/)
+    }
   })
 
   it('the tutorial does not sell the per-card lock as the guard on ephemeral runners', () => {

@@ -1,8 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync } from 'fs'
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  writeFileSync,
+  mkdirSync,
+  symlinkSync,
+  statSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { acquireCardLock, LOCK_DIRECTORY } from './card-lock'
+import { acquireCardLock, createCardLockAcquirer, LOCK_DIRECTORY } from './card-lock'
 
 /**
  * Tested against a REAL filesystem, deliberately (see the module's own note and
@@ -91,6 +99,59 @@ describe('acquireCardLock — one run per card', () => {
 
   it('keeps a card id from escaping the lock directory', () => {
     expect(() => acquireCardLock({ workingArea, card: '../../etc' })).toThrow(/card/)
+  })
+
+  /**
+   * The window the finding names: `mkdir` fails EEXIST, the holder's `finally` removes the lock,
+   * and the probe that follows finds nothing. On a persistent daemon — where this lock IS the
+   * guard — that is a normal burst, not a broken working area, and it must never escape as a raw
+   * `ENOENT: … stat '…/automation/locks/217'` out of the trigger.
+   *
+   * The probe is the ONE thing injected: it is where the interleaving happens, and reproducing it
+   * any other way means racing two real processes on a microsecond window. Everything else is the
+   * real function against a real temp directory — the real `mkdir`, the real retry, the real
+   * holder note (ADL 2026-08-30).
+   */
+  describe('the holder releases between the create and the probe', () => {
+    it('acquires the now-free lock instead of throwing ENOENT', () => {
+      const held = granted('217')
+      // Exactly trigger A's `finally`, fired at the instant trigger B probes.
+      const acquire = createCardLockAcquirer(path => {
+        rmSync(path, { recursive: true, force: true })
+        return undefined
+      })
+
+      const second = acquire({ workingArea, card: '217' })
+
+      expect(second.kind).toBe('acquired')
+      expect(existsSync(held.path)).toBe(true)
+    })
+
+    it('reports a clean skip when the next trigger won the retry, still without throwing', () => {
+      const held = granted('217')
+      // The lock was gone when we probed and back before we retried: another trigger holds it now.
+      // Two probes, two instants — the first finds nothing, the second finds the new holder.
+      let probes = 0
+      const acquire = createCardLockAcquirer(path => (probes++ === 0 ? undefined : statSync(path)))
+
+      const second = acquire({ workingArea, card: '217' })
+
+      expect(second).toMatchObject({ kind: 'held', path: held.path })
+    })
+
+    it('names the working area when the REAL probe raises ENOENT, instead of leaking it', () => {
+      // A dangling symlink is the one filesystem state that makes the REAL `statSync` raise the
+      // finding's ENOENT deterministically: `mkdir` sees the link and fails EEXIST, `stat` follows
+      // it to nothing. It is a broken working area rather than contention, so it reports as such —
+      // the point here is that the message names the path instead of being a bare stat failure.
+      const locks = join(workingArea, LOCK_DIRECTORY)
+      mkdirSync(locks, { recursive: true })
+      symlinkSync(join(workingArea, 'nowhere'), join(locks, '217'))
+
+      expect(() => acquireCardLock({ workingArea, card: '217' })).toThrow(
+        /exists for mkdir but not for stat/,
+      )
+    })
   })
 
   it('surfaces a real failure instead of reporting the lock as held', () => {

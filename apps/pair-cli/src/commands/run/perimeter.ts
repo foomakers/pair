@@ -1,3 +1,5 @@
+import type { FilterDelivery } from './invocation'
+
 /**
  * The work perimeter (US-451 T-5) — the containment boundary of an unattended run.
  *
@@ -11,7 +13,14 @@
  */
 
 export interface Perimeter {
-  /** Scope root, passed on with `pair-next`'s own parameter name (ADR-017 §1). */
+  /**
+   * Scope root — the epic, story or dispatched card the run is bounded to.
+   *
+   * Held as a VALUE, never as a spelling: `invocation.ts` renders it under the parameter the
+   * resolved skill declares (`--root` for `pair-loop`/`pair-next`, `--story` for the
+   * `pair-process-*` workflows a mapping can name), because a scope the skill does not recognise
+   * is a run that picks its own card.
+   */
   readonly root?: string
   /** Label filter — from `--filter`, or borrowed from the policy's `## Eligibility`. */
   readonly filter?: string
@@ -33,6 +42,10 @@ export interface Perimeter {
    * Printed, because the two are not interchangeable: reporting a label as passed when the skill
    * is the one applying it is what let a flag look effective while changing nothing (round 1,
    * finding 1). A `--filter` that could only be reported is refused at construction instead.
+   *
+   * There is no third value here: an invocation that would deliver the label by neither route
+   * (`none` — a verbatim prompt, or a workflow scoped to one card) carries **no filter at all**,
+   * so the perimeter holds neither the value nor a delivery for it.
    */
   readonly filterDelivery?: 'argument' | 'read-by-skill'
 }
@@ -54,10 +67,11 @@ export interface PerimeterInput {
   /** A verbatim prompt cannot carry scope parameters — see `createPerimeter`. */
   invocationKind: 'skill' | 'prompt'
   /**
-   * Whether the resolved invocation declares `--filter` (`skillAcceptsFilter` in `invocation.ts`).
-   * False ⇒ an explicit `--filter` is REFUSED rather than reported (round 1, finding 1).
+   * How the resolved invocation would deliver an eligibility label (`filterDeliveryFor` in
+   * `invocation.ts`). Anything but `argument` ⇒ an explicit `--filter` is REFUSED rather than
+   * reported (round 1, finding 1).
    */
-  skillAcceptsFilter: boolean
+  filterDelivery: FilterDelivery
 }
 
 const MISSING_SCOPE_MESSAGE =
@@ -71,8 +85,9 @@ const MISSING_PROMPT_SCOPE_MESSAGE =
 
 const UNHONOURABLE_FILTER_MESSAGE =
   '--filter cannot be honoured by this invocation: the resolved skill declares no --filter ' +
-  '(pair-loop reads `## Eligibility` from .pair/adoption/tech/automation.md itself, and a ' +
-  '--prompt run carries no parameters at all). Accepting it here would print a label the run ' +
+  '(pair-loop reads `## Eligibility` from .pair/adoption/tech/automation.md itself, a workflow ' +
+  'scoped to one card applies no label at all, and a ' +
+  '--prompt run carries no parameters whatsoever). Accepting it here would print a label the run ' +
   'does not apply. Either drop --filter and let the policy decide, pass `--skill pair-next ' +
   '--filter <tag>` to scope the selector directly, or change `## Eligibility` in the policy file.'
 
@@ -109,7 +124,11 @@ export function createPerimeter(input: PerimeterInput): Perimeter {
  *
  * The flag and the policy label are NOT symmetric: the flag asks the driver to pass a parameter,
  * so it can only be accepted by an invocation that declares one; the policy label is read by the
- * skill itself, so it is reported rather than passed and is honoured either way.
+ * skill itself, so it is reported rather than passed — but only by a skill that actually reads it.
+ * On an invocation that would do neither, the label is DROPPED rather than printed: a card routed
+ * to `pair-process-refine-story` is scoped by its card id, and reporting `## Eligibility` as this
+ * run's boundary would name a filter nothing applies (the run then needs a root, or it has no
+ * perimeter at all — which is the refusal below, not a silent unbounded run).
  */
 function resolveFilter(input: PerimeterInput): {
   value?: string
@@ -117,14 +136,14 @@ function resolveFilter(input: PerimeterInput): {
   delivery?: Perimeter['filterDelivery']
 } {
   if (input.filter !== undefined) {
-    if (!input.skillAcceptsFilter) throw new Error(UNHONOURABLE_FILTER_MESSAGE)
+    if (input.filterDelivery !== 'argument') throw new Error(UNHONOURABLE_FILTER_MESSAGE)
     return { value: input.filter, source: '--filter', delivery: 'argument' }
   }
-  if (input.eligibility !== undefined) {
+  if (input.eligibility !== undefined && input.filterDelivery !== 'none') {
     return {
       value: input.eligibility,
       source: 'tech/automation.md',
-      delivery: input.skillAcceptsFilter ? 'argument' : 'read-by-skill',
+      delivery: input.filterDelivery,
     }
   }
   return {}

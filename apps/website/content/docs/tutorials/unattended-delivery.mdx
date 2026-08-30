@@ -269,7 +269,11 @@ pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
 ```
 
 The mapping decides which workflow runs; a card carrying **no mapped tag runs nothing**, and with no
-`## Workflows` section at all the command reports `no mapping declared` and exits cleanly. Only a run
+`## Workflows` section at all the command reports `no mapping declared` and exits cleanly. Map a tag
+only to a workflow from the guideline's catalog (`pair-loop`, `pair-process-refine-story`,
+`pair-process-plan-tasks`): the card is handed over as the argument that workflow declares —
+`--root 217`, or `--story 217` for the two `pair-process-*` ones — and a mapping naming anything
+else HALTs rather than start a run that would pick its own card. Only a run
 *start* is printed as a `DISPATCH-RECORD:` line for your trigger to post back on the card — skips and
 endings stay in the audit file, so a label edit that routes nothing never comments. The ready-made
 GitHub Actions job — three steps, fires on `issues: [labeled]` — is in

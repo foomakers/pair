@@ -4,7 +4,8 @@ import { join } from 'path'
 import {
   buildSkillArgs,
   buildPromptText,
-  skillAcceptsFilter,
+  filterDeliveryFor,
+  scopeParameterFor,
   SKILL_PARAMETERS,
   APPROVAL_DECLARING_SKILLS,
   APPROVAL_PARAMETER,
@@ -54,7 +55,22 @@ describe('buildSkillArgs', () => {
       '--iteration',
       '--predicate',
       '--root',
+      '--story',
     ])
+  })
+
+  it('scopes a catalogued workflow with the argument that workflow declares, not with --root', () => {
+    // The dispatched card reaching `pair-process-refine-story` as `--root 304` is a card the skill
+    // never sees: its Step 0 then selects the highest-priority `Draft` story on the board instead,
+    // while the audit trail and the on-issue record both say card 304 was worked.
+    expect(buildSkillArgs('pair-process-refine-story', { root: '304' })).toEqual(['--story', '304'])
+    expect(buildSkillArgs('pair-process-plan-tasks', { root: '304' })).toEqual(['--story', '304'])
+  })
+
+  it('gives those workflows no --filter either — a single story carries no label selection', () => {
+    expect(
+      buildSkillArgs('pair-process-refine-story', { root: '304', filter: 'risk:green' }),
+    ).toEqual(['--story', '304'])
   })
 
   it('quotes a multi-word borrowed value, as the skill documents it (round 1, finding 2)', () => {
@@ -280,14 +296,139 @@ describe('describeApprovalPosture (AC6 — the dry-run must state the posture)',
   })
 })
 
-describe('skillAcceptsFilter', () => {
-  it('is true only for an invocation that can carry --filter (round 1, finding 1)', () => {
-    expect(skillAcceptsFilter({ kind: 'skill', name: 'pair-next', source: 'cascade' })).toBe(true)
-    expect(skillAcceptsFilter({ kind: 'skill', name: 'pair-loop', source: 'cascade' })).toBe(false)
+describe('filterDeliveryFor', () => {
+  it('says HOW the eligibility label reaches the selection, per invocation (round 1, finding 1)', () => {
+    // Passed as an argument: pair-next declares `--filter`.
+    expect(filterDeliveryFor({ kind: 'skill', name: 'pair-next', source: 'cascade' })).toBe(
+      'argument',
+    )
+    // Read by the skill: pair-loop declares none because it reads `## Eligibility` itself.
+    expect(filterDeliveryFor({ kind: 'skill', name: 'pair-loop', source: 'cascade' })).toBe(
+      'read-by-skill',
+    )
+    // Neither: a workflow scoped to ONE card applies no label at all, so reporting the policy's
+    // label as this run's perimeter would name a boundary nothing applies.
+    expect(
+      filterDeliveryFor({ kind: 'skill', name: 'pair-process-refine-story', source: 'mapping' }),
+    ).toBe('none')
     // An unknown skill gets the frozen pair-next scoping parameters, so it does accept one.
-    expect(skillAcceptsFilter({ kind: 'skill', name: 'my-skill', source: '--skill' })).toBe(true)
+    expect(filterDeliveryFor({ kind: 'skill', name: 'my-skill', source: '--skill' })).toBe(
+      'argument',
+    )
     // A verbatim prompt carries no parameters at all.
-    expect(skillAcceptsFilter({ kind: 'prompt', text: 'go' })).toBe(false)
+    expect(filterDeliveryFor({ kind: 'prompt', text: 'go' })).toBe('none')
+  })
+})
+
+/**
+ * Every parameter name the driver spells, checked against the skills' OWN `## Arguments` tables.
+ *
+ * `SKILL_PARAMETERS` is data about someone else's declaration, and the failure it protects against
+ * is silent by construction: an agent handed an argument its skill never declared does not reject
+ * it, it ignores it — and a workflow that selects its own subject when unscoped (both
+ * `pair-process-*` rows below do, from the highest-priority story on the board) then works a card
+ * nobody dispatched, while `dispatch-audit.ts` and the on-issue `DISPATCH-RECORD:` line both name
+ * the card that WAS dispatched. The same guard the `$approval` family already has, for the
+ * parameter the dispatcher depends on to mean anything at all.
+ */
+describe('SKILL_PARAMETERS matches the corpus that defines it', () => {
+  // apps/pair-cli/src/commands/run -> repo root
+  const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..')
+  const DATASET = join(REPO_ROOT, 'packages/knowledge-hub/dataset')
+  const CATALOG = join(
+    DATASET,
+    '.pair/knowledge/guidelines/collaboration/automation/automation-policy.md',
+  )
+
+  /**
+   * Every skill in the dataset, under the name `pair install` gives its installed directory
+   * (`pair-<path-segments>`): `.skills/process/refine-story` ⇒ `pair-process-refine-story`,
+   * `.skills/loop` ⇒ `pair-loop`.
+   */
+  function skillFiles(): Map<string, string> {
+    const found = new Map<string, string>()
+    const walk = (directory: string, segments: readonly string[]): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const path = join(directory, entry.name)
+        const trail = [...segments, entry.name]
+        const skill = join(path, 'SKILL.md')
+        if (existsSync(skill)) found.set(`pair-${trail.join('-')}`, skill)
+        walk(path, trail)
+      }
+    }
+    walk(join(DATASET, '.skills'), [])
+    if (found.size === 0) throw new Error(`no SKILL.md found under ${DATASET} — the scan is broken`)
+    return found
+  }
+
+  /**
+   * The argument NAMES one SKILL.md declares, stripped of their sigil: `$story` and `--story` are
+   * the documentation form and the invocation form of one argument (ADL 2026-08-28).
+   *
+   * FAIL CLOSED: a file with no `## Arguments` section, or a section this cannot parse, throws
+   * rather than answering "declares nothing" — which would pass every assertion below.
+   */
+  function declaredArguments(file: string): string[] {
+    const source = readFileSync(file, 'utf-8')
+    const heading = /\n## Arguments[^\n]*\n/.exec(source)
+    if (heading === null)
+      throw new Error(`${file} has no \`## Arguments\` section — cannot decide, refusing to`)
+    const rest = source.slice(heading.index + heading[0].length)
+    const end = rest.indexOf('\n## ')
+    const table = end === -1 ? rest : rest.slice(0, end)
+    const names = [...table.matchAll(/^\|\s*`(?:\$|--)([a-z-]+)`/gm)].map(match => match[1]!)
+    if (names.length === 0) throw new Error(`${file}: no argument row parsed out of its table`)
+    return names
+  }
+
+  /** The workflows the KB catalog tells a team it may map a tag to. */
+  function catalogWorkflows(): string[] {
+    const source = readFileSync(CATALOG, 'utf-8')
+    const start = source.indexOf('### The workflows a mapping can name')
+    if (start === -1) throw new Error(`${CATALOG}: the workflow catalog section is gone`)
+    const rest = source.slice(start + 1)
+    const end = rest.search(/\n#{2,3} /)
+    const section = end === -1 ? rest : rest.slice(0, end)
+    const workflows = [...section.matchAll(/^\|\s*`(pair-[a-z-]+)`\s*\|/gm)].map(m => m[1]!)
+    if (workflows.length === 0)
+      throw new Error(`${CATALOG}: no workflow row parsed out of the catalog`)
+    return workflows
+  }
+
+  const files = skillFiles()
+  const fileFor = (skill: string): string => {
+    const file = files.get(skill)
+    if (file === undefined) throw new Error(`${skill} has no SKILL.md in the dataset corpus`)
+    return file
+  }
+  const bare = (parameter: string): string => parameter.replace(/^--/, '')
+
+  it('spells every parameter with the name the skill itself declares', () => {
+    for (const [skill, parameters] of Object.entries(SKILL_PARAMETERS)) {
+      const declared = declaredArguments(fileFor(skill))
+      for (const parameter of Object.values(parameters)) {
+        expect(
+          declared,
+          `${skill} does not declare ${parameter} in its \`## Arguments\` table`,
+        ).toContain(bare(parameter))
+      }
+    }
+  })
+
+  it('can scope every workflow the KB catalog names to the card that was dispatched', () => {
+    const catalogued = catalogWorkflows()
+    // The catalog is the thing a team copies from: `auto-refine ⇒ pair-process-refine-story`
+    // appears verbatim there, in adoption-files.mdx and in the tutorial.
+    expect(catalogued.length).toBeGreaterThan(1)
+    for (const workflow of catalogued) {
+      const parameter = scopeParameterFor(workflow)
+      expect(
+        parameter,
+        `${workflow} is catalogued as mappable but the driver declares no scoping parameter for it — a card routed to it would be dropped from the invocation`,
+      ).toBeDefined()
+      expect(declaredArguments(fileFor(workflow))).toContain(bare(parameter!))
+    }
   })
 })
 

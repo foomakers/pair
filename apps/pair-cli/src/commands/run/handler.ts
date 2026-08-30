@@ -22,7 +22,7 @@ import {
   readAutomationPolicy,
   type AutomationPolicy,
 } from './automation-policy'
-import { buildPromptText, describeApprovalPosture, skillAcceptsFilter } from './invocation'
+import { buildPromptText, describeApprovalPosture, filterDeliveryFor } from './invocation'
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
 import type { IterationResult } from './stream-reader'
@@ -150,8 +150,10 @@ function resolveRun(
       ? { kind: 'skill', name: context.dispatch.workflow, source: 'mapping' }
       : resolveInvocation(config.invocation, context.probe)
   const perimeter = createPerimeter({
-    // A dispatched card IS the run's scope — expressed with `pair-next`'s own `--root`, borrowed
-    // rather than invented (D18). An explicit `--root` still wins: it can only narrow further.
+    // A dispatched card IS the run's scope. Carried here as a VALUE and rendered downstream under
+    // the routed workflow's own parameter name — borrowed, never invented (D18): `--root` for
+    // `pair-loop`, `--story` for `pair-process-refine-story`. An explicit `--root` still wins: it
+    // can only narrow further.
     root: config.scope.root ?? context.dispatch?.card,
     filter: config.scope.filter,
     eligibility: policy.eligibility,
@@ -160,9 +162,9 @@ function resolveRun(
     requestedCap: config.maxIterations,
     policyCap: policy.maxIterations,
     invocationKind: invocation.kind,
-    // Whether `--filter` can be HONOURED depends on the skill the cascade resolved, so the check
-    // has to happen after skill resolution and before any spawn (round 1, finding 1).
-    skillAcceptsFilter: skillAcceptsFilter(invocation),
+    // Whether `--filter` can be HONOURED, and by whom, depends on the skill the cascade resolved,
+    // so the check has to happen after skill resolution and before any spawn (round 1, finding 1).
+    filterDelivery: filterDeliveryFor(invocation),
   })
   const autonomy = resolveAutonomy({
     engine: engine.engine,
@@ -288,7 +290,7 @@ async function driveDispatchedCard(
     // Every start gets an end, including this one. Without it the trail stops at `event=start` and
     // the operator reading it the next morning cannot tell a crashed run from one still in flight —
     // and the lock, released just below, offers no second signal either.
-    record(context, deps, decision, { event: 'end', outcome: 'crashed' })
+    recordCrash(context, deps, decision, error)
     throw error
   } finally {
     acquisition.lock.release()
@@ -312,6 +314,38 @@ async function driveRun(
 
   reportOutcome(outcome)
   return loopExitCode(outcome)
+}
+
+/**
+ * The `end` record a crash owes the trail — written so that neither failure can hide the other.
+ *
+ * `appendAuditLine` THROWS by design ("an unaudited run is not a mode"), so a crash on a working
+ * area whose `## Audit Location` cannot be written raises a SECOND error from inside the handler's
+ * own catch. Fail-closed is the intended posture — the run still fails — but the engine error is
+ * the one an operator needs, and letting a bare `EACCES` replace it sends them to debug the wrong
+ * machine. So the audit failure supersedes the plain rethrow and carries the run error with it:
+ * both in the message, the original kept as `cause`.
+ */
+function recordCrash(
+  context: RunContext,
+  deps: RunHandlerDependencies,
+  decision: DispatchDecision,
+  crash: unknown,
+): void {
+  try {
+    record(context, deps, decision, { event: 'end', outcome: 'crashed' })
+  } catch (auditFailure) {
+    throw new Error(
+      `The run on card ${decision.card} crashed (${describeError(crash)}) and its \`end\` audit ` +
+        `record could not be written (${describeError(auditFailure)}): the trail now stops at ` +
+        `\`event=start\`, so fix the audit destination before reading it as a run still in flight`,
+      { cause: crash },
+    )
+  }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 /**

@@ -143,6 +143,74 @@ Precedence: auto-triage
     ).toThrow(/not installed/)
   })
 
+  it('HALTs on a mapped workflow whose scoping argument the driver cannot spell', () => {
+    // The defect this closes: the workflow IS installed, so the check above passed, and the card
+    // was then handed to it under a scoping parameter nobody verified it declares. An unrecognised
+    // scope does not fail loudly inside the agent — it is ignored, and a workflow that selects its
+    // own subject when unscoped (both `pair-process-*` rows of the KB catalog do) then works a
+    // DIFFERENT card than the one the audit trail and the on-issue `DISPATCH-RECORD:` name.
+    const mapping = readWorkflowMapping(`## Workflows
+
+auto-review ⇒ pair-process-review
+`)
+    const installed = (name: string): boolean =>
+      INSTALLED.has(name) || name === 'pair-process-review'
+
+    let thrown: unknown
+    try {
+      decideDispatch(
+        request({ mapping, tags: ['auto-review', 'risk:green'], isInstalled: installed }),
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(String(thrown)).toMatch(/pair-process-review/)
+    expect(String(thrown)).toMatch(/scop/i)
+    expect(String(thrown)).toMatch(/automation\.md/)
+  })
+
+  it('detects an unscopable workflow before deciding, not only when a card routes to it', () => {
+    const mapping = readWorkflowMapping(`## Workflows
+
+auto-dev ⇒ pair-loop
+auto-review ⇒ pair-process-review
+Precedence: auto-review, auto-dev
+`)
+
+    // This card carries `auto-dev` only — it would route cleanly to pair-loop. The mapping is
+    // broken configuration either way, and which trigger fires first must not decide whether the
+    // board finds out.
+    expect(() =>
+      decideDispatch(
+        request({
+          mapping,
+          tags: ['auto-dev', 'risk:green'],
+          isInstalled: name => INSTALLED.has(name) || name === 'pair-process-review',
+        }),
+      ),
+    ).toThrow(/pair-process-review/)
+  })
+
+  it('routes to every workflow the KB catalog recommends, each under its own scoping argument', () => {
+    // The three rows of `automation-policy.md` § "The workflows a mapping can name": a mapping
+    // copied verbatim out of the guideline must dispatch, not HALT.
+    const mapping = readWorkflowMapping(`## Workflows
+
+auto-refine ⇒ pair-process-refine-story
+auto-plan ⇒ pair-process-plan-tasks
+auto-dev ⇒ pair-loop
+Precedence: auto-refine, auto-plan, auto-dev
+`)
+    const installed = new Set([...INSTALLED, 'pair-process-plan-tasks'])
+
+    expect(
+      decideDispatch(
+        request({ mapping, tags: ['auto-plan', 'risk:green'], isInstalled: n => installed.has(n) }),
+      ),
+    ).toMatchObject({ kind: 'route', workflow: 'pair-process-plan-tasks' })
+  })
+
   it('never falls back to another workflow when the declared one is missing', () => {
     let thrown: unknown
     try {

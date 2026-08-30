@@ -90,7 +90,7 @@ If the file doesn't exist, AI assistants skip the domain check entirely — this
 
 ### automation.md
 
-Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in six independent sections `pair-loop` and `pair run` read. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in.
+Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in seven independent sections `pair-loop` and `pair run` read. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in. Six of them are below; the seventh, `## Harness` / `## Model Policy` (supported engines, per-tier model class), lives in the [guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
 
 ```text
 ## Eligibility
@@ -147,7 +147,8 @@ Three properties are worth knowing before you write one:
 
 - **A card with no mapped tag runs nothing.** There is no default workflow and no fallback — the absence of a route *is* the opt-in boundary.
 - **Absent section ⇒ nothing is routable.** A dispatch reports `no mapping declared` and exits cleanly; that is the shipped default, not an error.
-- **Ambiguity halts, it never guesses.** A workflow that is not installed, or a card carrying two mapped tags with no `Precedence:` covering them, stops the run with a message naming the file and the value to fix.
+- **Ambiguity halts, it never guesses.** A workflow that is not installed, a workflow the dispatcher cannot hand the card to, or a card carrying two mapped tags with no `Precedence:` covering them: each stops the run with a message naming the file and the value to fix.
+- **The card travels as the workflow's own argument.** `pair-loop` takes it as `--root <card>`, `pair-process-refine-story` and `pair-process-plan-tasks` as `--story <card>` — and those two select the highest-priority story on the board when they get no story at all, so a workflow whose scoping argument the dispatcher does not know is refused rather than run on a card nobody tagged.
 
 Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point — [`pair run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run) — which is where the routing happens.
 
