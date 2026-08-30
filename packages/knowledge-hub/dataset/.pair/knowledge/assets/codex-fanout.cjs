@@ -104,9 +104,20 @@ function degrade(probe) {
         reason: `${DEGRADED_REASON}; ${next}`,
         announcement: `fan-out realization: ${realization} (tier ${tier}) — ${next}`,
         harnessCeiling: null,
+        concurrencyKey: null,
         waitTimeoutMs: null,
         waitTimeoutSource: null,
         waitTimeoutKeys: null,
+    };
+}
+function concurrencyBound(def, probe) {
+    const bounding = def.bounding;
+    if (!bounding)
+        return { harnessCeiling: null, concurrencyKey: null };
+    const reported = probe.harnessCeiling;
+    return {
+        harnessCeiling: Number.isInteger(reported) ? reported : null,
+        concurrencyKey: bounding.concurrencyKey,
     };
 }
 function waitBound(def, probe) {
@@ -133,12 +144,12 @@ function resolveRealization(probe) {
         const hit = matchRealization(def, exposed, probe.namespace);
         if (!hit)
             continue;
-        const ceiling = Number.isInteger(probe.harnessCeiling) ? probe.harnessCeiling : null;
         const bound = hit.map(handle => `\`${handle}\``).join('/');
         const reason = `probed this session: ${bound} ${hit.length > 1 ? 'are all' : 'is'} exposed ` +
             `(gated by \`${def.gating.featureKey}\`, default ${def.gating.defaultOn ? 'on' : 'off'}; ` +
             `verified against ${def.verifiedAgainst})`;
         const waiting = waitBound(def, probe);
+        const concurrency = concurrencyBound(def, probe);
         return {
             tier: def.tier,
             realization: def.id,
@@ -147,7 +158,7 @@ function resolveRealization(probe) {
             reason,
             announcement: `fan-out realization: ${def.id} (tier ${def.tier}, ${def.harness}, ` +
                 `${def.handles.dispatch}) — bound to ${bound}${waitClause(waiting)}; ${reason}`,
-            harnessCeiling: def.bounding ? ceiling : null,
+            ...concurrency,
             ...waiting,
         };
     }
@@ -302,6 +313,20 @@ function assertBlind(attachments, phase, workingPath) {
     }
 }
 exports.assertBlind = assertBlind;
+function assertBlindCardText(card, phase, workingPath) {
+    const prefixes = blindDenyPrefixes(workingPath);
+    for (const [field, value] of [
+        ['title', card.title],
+        ['notes', card.notes],
+    ]) {
+        if (typeof value !== 'string')
+            continue;
+        const denied = prefixes.find(prefix => value.includes(prefix));
+        if (denied)
+            throw new PacketRejected(`codex-fanout: the ${phase} packet's card.${field} contains a pointer under \`${denied}\` — ` +
+                `the ${phase} role is blind to the authoring chain's working artifacts. Rejected before spawn.`);
+    }
+}
 function assertKnownKeys(value, allowed, where, make) {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
         return;
@@ -359,8 +384,10 @@ function buildPacket(request) {
     assertSingleCard(request.card);
     const findings = resolveFindings(request, contract);
     const attachments = (request.attachments ?? []).map(normalizeAttachment);
-    if (contract.blind)
+    if (contract.blind) {
         assertBlind(attachments, request.phase, request.workingPath);
+        assertBlindCardText(request.card, request.phase, request.workingPath);
+    }
     const root = request.worktreeRoot ?? WORKTREE_ROOT_DEFAULT;
     return {
         phase: request.phase,
@@ -601,6 +628,10 @@ function assertAuditable(record, index) {
             `\`{"kind":"run", …}\`; everything else names the card it belongs to. Neither is inferred, ` +
             `because a record with an invented id becomes a phantom card owed a full pipeline, and one ` +
             `with no id at all is unreadable on resume.`);
+    if (typeof record.run !== 'string' || record.run.trim() === '')
+        throw new Error(`codex-fanout: audit record #${index} has no non-empty string \`run\`. Every card and run ` +
+            `record carries the invocation boundary because resume scopes halts to it; it is never inferred ` +
+            `from a later caller or audit line.`);
     if (record.phase !== 'review' || record.outcome !== 'completed')
         return;
     if (isReviewAction(record.action))
@@ -702,7 +733,7 @@ function applyRecord(state, record, canHalt) {
     if (canHalt)
         halt(state, record.phase, haltReason(record));
 }
-function parseAudit(auditText) {
+function parseAudit(auditText, requireRun) {
     const records = [];
     for (const line of auditText.split('\n')) {
         const trimmed = line.trim();
@@ -717,12 +748,17 @@ function parseAudit(auditText) {
         }
         if (!record || (record.kind !== 'run' && typeof record.id !== 'string'))
             continue;
+        if (requireRun && (typeof record.run !== 'string' || record.run.trim() === '')) {
+            throw new Error('codex-fanout: audit record has no non-empty string `run`; resume cannot scope an ' +
+                'unstamped record to the invocation that wrote it, so it refuses the audit instead of ' +
+                "treating an escalation as another run's history.");
+        }
         records.push(record);
     }
     return records;
 }
 function reconstructState(auditText, scope = {}) {
-    const records = parseAudit(auditText);
+    const records = parseAudit(auditText, typeof scope.run === 'string' && scope.run.trim() !== '');
     const lastRun = records.at(-1)?.run;
     const canHalt = (record) => {
         if (typeof scope.run === 'string')
@@ -806,6 +842,9 @@ function packetRequestFrom(req) {
     };
 }
 function runResume(req) {
+    if (typeof req.run !== 'string' || req.run.trim() === '')
+        throw new Error('codex-fanout: `resume` requires a non-empty string `run`; it scopes halts to this invocation ' +
+            'and every audit record must carry the same boundary.');
     const states = reconstructState(req.audit ?? '', req);
     if (typeof req.id === 'string')
         return resumePlan(req.id, states[req.id]);
@@ -823,9 +862,15 @@ function checked(value, allowed, where) {
     assertKnownKeys(value, allowed, where, message => new Error(message));
     return value;
 }
+function checkedCeilings(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        throw new Error('codex-fanout: `cap` requires a `ceilings` object with `dependencyAllowed` and `policyMax` ' +
+            '(plus optional `harnessCeiling`).');
+    return checked(value, CEILING_KEYS, 'the ceilings');
+}
 const HANDLERS = Object.freeze({
     bind: req => resolveRealization(checked(req.probe ?? {}, PROBE_KEYS, 'the probe')),
-    cap: req => effectiveParallelism(checked(req.ceilings, CEILING_KEYS, 'the ceilings')),
+    cap: req => effectiveParallelism(checkedCeilings(req.ceilings)),
     packet: req => buildPacket(packetRequestFrom(req)),
     collect: req => collectOutcome(req.phase, req.result, req.schema),
     converge: req => converge(req),

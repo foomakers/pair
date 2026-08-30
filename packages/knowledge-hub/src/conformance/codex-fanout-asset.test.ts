@@ -188,7 +188,7 @@ describe('the shipped asset runs as the skill invokes it', () => {
       '{"kind":"run","run":"r1","realization":"claude-code-workflow","announcement":"bound"}',
       '{"run":"r1","iteration":0,"id":"441","phase":"implement","outcome":"completed"}',
     ].join('\n')
-    const plans = run('resume', { audit }).body as { id: string }[]
+    const plans = run('resume', { audit, run: 'r1' }).body as { id: string }[]
     expect(plans.map(p => p.id)).toEqual(['441'])
   })
 
@@ -238,12 +238,12 @@ describe('the shipped asset runs as the skill invokes it', () => {
 
   it('does not refuse a card forever because an earlier run recorded a failure', () => {
     const audit = [
-      { iteration: 1, id: '441', phase: 'implement', outcome: 'timed-out' },
-      { iteration: 2, id: '441', phase: 'implement', outcome: 'completed' },
+      { run: 'r1', iteration: 1, id: '441', phase: 'implement', outcome: 'timed-out' },
+      { run: 'r1', iteration: 2, id: '441', phase: 'implement', outcome: 'completed' },
     ]
       .map(r => JSON.stringify(r))
       .join('\n')
-    const { body } = run('resume', { audit, id: '441' })
+    const { body } = run('resume', { audit, run: 'r2', id: '441' })
     expect(body).toMatchObject({ halted: false, redispatch: ['pr', 'review'] })
   })
 

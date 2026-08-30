@@ -257,6 +257,17 @@ describe('probe → bind → announce', () => {
     expect(bare.announcement).toContain('wait bound')
   })
 
+  it('returns the declared concurrency key when the probe did not report its ceiling', () => {
+    // A bare Codex v1 session exposes the default-on primitive but does not volunteer its
+    // concurrency limit. Before the binding exposed the map entry's key, 1b.2 forwarded
+    // `null` to `cap`, so max_parallelism could over-dispatch the harness and charge the
+    // surplus cards as failed. The caller needs the key to read the limit before capping.
+    const bare = resolveRealization({ tools: V1_TOOLS })
+    expect(bare.harnessCeiling).toBeNull()
+    expect(bare.concurrencyKey).toBe('agents.max_concurrent_threads_per_session')
+    expect(resolveRealization({ tools: CLAUDE_TOOLS }).concurrencyKey).toBeNull()
+  })
+
   it('keeps the config keys where a generation actually has them, alongside the fallback', () => {
     const v2 = resolveRealization({ tools: V2_TOOLS })
     expect(v2.waitTimeoutKeys?.max).toBeTruthy()
@@ -449,6 +460,19 @@ describe('reviewer blindness is a pre-spawn rejection', () => {
       PacketRejected,
     )
   })
+
+  it.each([
+    ['notes', { ...CARD, notes: 'Resume from .pair/working/checkpoints/441.md' }],
+    ['title', { ...CARD, title: 'Review .pair/working/checkpoints/441.md' }],
+  ] as const)(
+    'rejects a blind review packet whose %s points into the working area',
+    (field, card) => {
+      // The reviewer receives `card` verbatim. Checking only attachments made an author's
+      // checkpoint forbidden in one field and admissible in another, defeating AC5 before spawn.
+      expect(() => buildPacket({ phase: 'review', card })).toThrow(field)
+      expect(() => buildPacket({ phase: 'review', card })).toThrow(PacketRejected)
+    },
+  )
 
   it('accepts a review packet carrying only the story and the diff', () => {
     const packet = buildPacket({
@@ -796,7 +820,13 @@ describe('review ↔ fix convergence', () => {
 })
 
 describe('audit persistence', () => {
-  const record: AuditRecord = { iteration: 0, id: '441', phase: 'implement', outcome: 'completed' }
+  const record: AuditRecord = {
+    run: 'r1',
+    iteration: 0,
+    id: '441',
+    phase: 'implement',
+    outcome: 'completed',
+  }
 
   it('appends one JSON line per record and reads it back', () => {
     const fs = new InMemoryAuditFs()
@@ -840,12 +870,25 @@ describe('audit persistence', () => {
     expect(fs.files.get('a.md')).toBe(auditLine(announcement))
   })
 
+  it('refuses an audit record without the run that resume uses as its isolation boundary', () => {
+    // `run` was prose-only: an escalated review without it was invisible to a later
+    // `resume {run:'r1'}`, which re-reviewed clean and then auto-advanced an escalated PR.
+    // Both record kinds must carry the boundary; neither can infer it after a killed run.
+    const fs = new InMemoryAuditFs()
+    const missingRun: readonly AuditRecord[] = [
+      { kind: 'card', id: '441', phase: 'review', outcome: 'completed', action: 'escalate' },
+      { kind: 'run', realization: 'codex-multi-agent-v1', announcement: 'bound' },
+    ]
+    for (const record of missingRun)
+      expect(() => appendAudit('a.md', [record], fs)).toThrow(/non-empty string `run`/)
+  })
+
   it('refuses a record that names neither a card nor a run — it would be unreadable on resume', () => {
     // Both spellings of the omission were losses: with no `id` the record was silently dropped
     // by `parseAudit`, so the announcement was unreadable on resume; with an invented one
     // (`"run-2026-08-28"`) it materialized as a phantom card owed a full pipeline.
     const fs = new InMemoryAuditFs()
-    expect(() => appendAudit('a.md', [{ iteration: 0, realization: 'x' }], fs)).toThrow(
+    expect(() => appendAudit('a.md', [{ run: 'r1', iteration: 0, realization: 'x' }], fs)).toThrow(
       /names no card `id` and is not marked/,
     )
   })
@@ -978,6 +1021,20 @@ describe('resume', () => {
     expect(resumePlan('441', reconstructState(escalated)['441']).halted).toBe(true)
   })
 
+  it('refuses an unstamped escalation when a caller resumes a named run', () => {
+    // Read-side defence for legacy/manual audit lines: treating this record as another run's
+    // history lets the next clean review auto-advance a PR the previous review escalated.
+    const unstamped = JSON.stringify({
+      kind: 'card',
+      id: '441',
+      phase: 'review',
+      outcome: 'completed',
+      action: 'escalate',
+      round: 3,
+    })
+    expect(() => reconstructState(unstamped, { run: 'r4' })).toThrow(/non-empty string `run`/)
+  })
+
   it('retires a halt once a later record completes the SAME phase', () => {
     // implement timed out at iteration 1 and completed at iteration 2. Reading the audit whole
     // with a halt flag that is never cleared refused the card anyway.
@@ -1061,7 +1118,9 @@ describe('resume', () => {
       '{"run":"r1","iteration":0,"id":"441","phase":"implement","outcome":"completed"}',
     ].join('\n')
     expect(Object.keys(reconstructState(withRun))).toEqual(['441'])
-    const plans = JSON.parse(main(['resume'], JSON.stringify({ audit: withRun })).out) as {
+    const plans = JSON.parse(
+      main(['resume'], JSON.stringify({ audit: withRun, run: 'r1' })).out,
+    ) as {
       id: string
     }[]
     expect(plans.map(p => p.id)).toEqual(['441'])
@@ -1106,7 +1165,8 @@ describe('the command surface', () => {
         main(
           ['resume'],
           JSON.stringify({
-            audit: '{"iteration":0,"id":"441","phase":"pr","outcome":"completed"}',
+            run: 'r1',
+            audit: '{"run":"r1","iteration":0,"id":"441","phase":"pr","outcome":"completed"}',
           }),
         ).out,
       ),
@@ -1203,6 +1263,14 @@ describe('the command surface', () => {
         ).out,
       ),
     ).toMatchObject({ cap: 2, boundBy: 'harness' })
+  })
+
+  it('rejects a cap request missing its ceilings object with a command-level remedy', () => {
+    // `cap {}` did fail, but only after a raw TypeError named no command or missing inputs —
+    // unusable feedback for the model composing the next request.
+    const { code, out } = main(['cap'], '{}')
+    expect(code).toBe(1)
+    expect(JSON.parse(out).error).toMatch(/cap.*ceilings.*dependencyAllowed.*policyMax/i)
   })
 
   it('rejects an unknown key inside `probe` — a misspelling silently demotes the run', () => {
