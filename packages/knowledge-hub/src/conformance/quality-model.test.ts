@@ -58,6 +58,34 @@ const readKb = (root: string, rel: string): string => readFileSync(join(root, re
  */
 const resolveOverrideValue = (line: string): string =>
   line.split(':').slice(1).join(':').trim().split(/\s+/)[0].replace(/`/g, '')
+/**
+ * The branch-(a) carve-out's ENUMERATION, EXECUTED against a real repository path rather
+ * than matched as a source string. The backticked path tokens of the carve-out statement
+ * are read as globs (`**` = any depth, `*` = one segment) anchored at a path boundary, and
+ * a changed file is "covered" when any of them matches — which is exactly the mechanical
+ * test the carve-out promises a classifying agent. Bare extension spans (`` `.md` ``) are
+ * dropped: they are prose about the branch, not members of the enumeration, and reading
+ * one as a glob would swallow every path and make the guard vacuous.
+ *
+ * One implementation, applied to every shipped statement of the carve-out (§6 in both
+ * trees, the example asset an adopter copies, this repo's own declaration), so a class
+ * present in one statement and missing from another fails instead of drifting.
+ */
+const carveOutGlobs = (statement: string): string[] =>
+  [...statement.matchAll(/`([^`]+)`/g)]
+    .map(m => m[1])
+    .filter(token => /(\.mdx?$|\/\*\*$)/.test(token) && !/^\.[a-z]+$/.test(token))
+const ANY_DEPTH = '<<any>>'
+const carveOutCovers = (statement: string, path: string): boolean =>
+  carveOutGlobs(statement).some(glob =>
+    new RegExp(
+      `(^|/)${glob
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replaceAll('**', ANY_DEPTH)
+        .replaceAll('*', '[^/]*')
+        .replaceAll(ANY_DEPTH, '.*')}$`,
+    ).test(path),
+  )
 const WEBSITE_DOCS = join(__dirname, '../../../../apps/website/content/docs')
 const GATES_CONFIG_DOC = readFileSync(
   join(WEBSITE_DOCS, 'reference/quality-gates-configuration.mdx'),
@@ -412,6 +440,79 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(branchA, 'branch (a) must name its own exclusion').toMatch(/executable/i)
     })
 
+    // The third class of machine-resolved markdown pair defines a schema for, and the one
+    // the enumeration still missed: the project's own adoption/policy files under `tech/`,
+    // whose declared VALUES an agent parses and acts on. None is a `SKILL.md`, none is an
+    // always-loaded standing rule set (they are policy config, read on demand), so neither
+    // the globs nor the agent-instruction clause reached them.
+    //
+    // Concrete failure case, on the single-deployable shape the model documents: a PR
+    // changes exactly ONE file, `.pair/adoption/tech/automation.md`, moving `## Eligibility`
+    // from `risk:green` to `risk:yellow` and filling `## Auto-Advance` from `(none)` to the
+    // same tier. Every changed file is `.md`, no enumerated glob matches ⇒ branch (a), the
+    // FIRST arm of the OR, short-circuits ⇒ trivial ⇒ Business impact green even in a Core
+    // subdomain; criticality green (the touched deployable listed Low), Change/diff risk
+    // green (one localized file), Security green ⇒ `risk:green`. That is the tier
+    // `tech/automation.md` itself declares as unattended-run Eligibility, and
+    // `pair-loop/SKILL.md` merges an eligible card's approved PR unattended on the 🟢 gate
+    // set — so the diff that switches unattended auto-merge ON lands in the tier that
+    // auto-merges it. §6's own exclusion list already calls a value change in a
+    // `json`/`yaml`/`toml`/`env` file non-trivial; the identical value change must not be
+    // trivial purely because pair serializes its config as markdown.
+    //
+    // Asserted by EXECUTING the shipped enumeration against real repository paths, not by
+    // matching its prose: a class merely discussed around the list does not pass.
+    it(`${label} carves out the adoption/policy markdown an agent resolves values from`, () => {
+      const bullets = section(content)
+        .split('\n')
+        .filter(l => /^\s*-\s/.test(l))
+      const carveOut = bullets.find(l => /executable/i.test(l) && /skill|workflow/i.test(l))
+      expect(carveOut, 'the branch-(a) carve-out bullet is missing').toBeDefined()
+      for (const machineRead of [
+        '.claude/skills/pair-loop/SKILL.md',
+        'packages/knowledge-hub/dataset/AGENTS.md',
+        '.pair/adoption/tech/automation.md',
+        '.pair/adoption/tech/risk-matrix.md',
+        '.pair/adoption/tech/way-of-working.md',
+      ]) {
+        expect(
+          carveOutCovers(carveOut as string, machineRead),
+          `the carve-out's enumeration does not reach ${machineRead}, so branch (a) short-circuits on it`,
+        ).toBe(true)
+      }
+      // The paired success path: the carve-out must NOT swallow ordinary documentation, or
+      // the override it guards resolves nothing and AC2 (a typo fix greens Business impact)
+      // is dead.
+      for (const prose of [
+        '.pair/knowledge/guidelines/quality-assurance/quality-model.md',
+        'apps/website/content/docs/reference/quality-model.mdx',
+      ]) {
+        expect(
+          carveOutCovers(carveOut as string, prose),
+          `the carve-out swallows ordinary documentation (${prose})`,
+        ).toBe(false)
+      }
+    })
+
+    // The inconsistency visible inside the subsection: the exclusion list declares a value
+    // change in a config/data file non-trivial, and named only the non-markdown
+    // serializations. Markdown-serialized policy is the format pair actually ships its own
+    // config in, so the list has to say so — even though branch (a)'s carve-out is what
+    // makes the case reachable at all (branch (a) short-circuits before this list is read).
+    it(`${label} counts a value change in markdown-serialized config as non-trivial too`, () => {
+      const configBullet = section(content)
+        .split('\n')
+        .find(l => /^\s*-\s/.test(l) && /config\/data file/.test(l))
+      expect(configBullet, "the exclusion list's config/data bullet is missing").toBeDefined()
+      expect(configBullet, 'it must still name the non-markdown serializations').toMatch(
+        /`json`\/`yaml`\/`toml`\/`env`/,
+      )
+      expect(
+        configBullet,
+        'a value change is non-trivial in every serialization EXCEPT the markdown one pair ships its own config in',
+      ).toMatch(/markdown/i)
+    })
+
     // BR2's exclusion list — the cases that look cosmetic and are not. Without them the
     // definition reads as "small diff", which is exactly the subjectivity it exists to kill.
     // Bounded to §6's own subsection ON PURPOSE: anchoring on the first occurrence of the
@@ -679,14 +780,24 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
     // The ENUMERATION inside the bolded clause, not the paragraph around it: a line-wide match
     // stays green when the class is deleted from the enumeration and merely discussed later,
     // which is exactly the shape the shipped rule must not drift into.
-    const enumeration = TRIVIAL_DIFF_ADL.split('**Executable markdown —')[1]?.split(
+    const enumeration = TRIVIAL_DIFF_ADL.split('**Markdown an agent acts on —')[1]?.split(
       'is out of the first branch',
     )[0]
-    expect(enumeration, "the ADL's executable-markdown point is missing").toBeDefined()
+    expect(enumeration, "the ADL's machine-read-markdown point is missing").toBeDefined()
     expect(
       enumeration,
       'the ADL must enumerate the agent-instruction class §6 now carves out',
     ).toMatch(/AGENTS\.md/)
+    for (const machineRead of [
+      '.pair/adoption/tech/automation.md',
+      '.pair/adoption/tech/risk-matrix.md',
+      '.pair/adoption/tech/way-of-working.md',
+    ]) {
+      expect(
+        carveOutCovers(enumeration as string, machineRead),
+        `the ADL's enumeration does not reach ${machineRead}`,
+      ).toBe(true)
+    }
   })
 
   // Point 2 cross-referenced "the executable-markdown carve-out **in point 2**" from inside
@@ -784,6 +895,32 @@ describe('this repo declares the trivial-diff override (#438, AC9)', () => {
     expect(paragraph, 'the declaration must name the agent-instruction class').toMatch(/AGENTS\.md/)
     expect(paragraph).toMatch(/CLAUDE\.md/)
   })
+
+  // The adoption/policy class, on the repo where it is least hypothetical: THIS file is one
+  // of the files the class names, and `tech/automation.md` — whose `## Eligibility` value
+  // `pair-loop` reads to decide what merges unattended — is another. Sliced to the
+  // ENUMERATION span, not the paragraph: the paragraph's failure-case narrative names
+  // `tech/automation.md` too, and a line-wide match would stay green with the class deleted
+  // from the list — the exact drift shape (discussed in prose, absent from the mechanical
+  // enumeration) this guard exists to catch.
+  it('restates the carve-out over the adoption/policy files an agent reads values from', () => {
+    const enumeration = RISK_MATRIX_ADOPTION.split(
+      '**Markdown an agent acts on does not rely on that net**',
+    )[1]?.split('per quality-model §6')[0]
+    expect(enumeration, "the declaration's carve-out clause is missing").toBeDefined()
+    for (const machineRead of [
+      '.pair/adoption/tech/automation.md',
+      '.pair/adoption/tech/risk-matrix.md',
+      '.pair/adoption/tech/way-of-working.md',
+      '.claude/skills/pair-loop/SKILL.md',
+      'AGENTS.md',
+    ]) {
+      expect(
+        carveOutCovers(enumeration as string, machineRead),
+        `this repo's own restatement does not reach ${machineRead}`,
+      ).toBe(true)
+    }
+  })
 })
 
 describe('risk-matrix-example.md', () => {
@@ -830,6 +967,26 @@ describe('risk-matrix-example.md', () => {
     // the copy, and greens Business impact in whatever subdomain it lands.
     expect(entry, 'the copied enumeration must cover agent-instruction files').toMatch(/AGENTS\.md/)
     expect(entry).toMatch(/CLAUDE\.md/)
+    // Same closed-list problem, third class: the adopter's OWN `tech/` policy files, whose
+    // values an agent parses and acts on. Copied without them, a PR that flips
+    // `tech/automation.md`'s `## Eligibility` to the tier `## Auto-Advance` then names is
+    // one `.md` file matching no glob in the copy ⇒ branch (a) ⇒ trivial ⇒ Business impact
+    // green ⇒ `risk:green` — the tier that auto-merges unattended. Executed against real
+    // paths with the same matcher §6 is checked with, so the two statements cannot drift.
+    for (const machineRead of [
+      '.pair/adoption/tech/automation.md',
+      '.pair/adoption/tech/risk-matrix.md',
+      '.pair/adoption/tech/way-of-working.md',
+    ]) {
+      expect(
+        carveOutCovers(entry as string, machineRead),
+        `the copied enumeration does not reach ${machineRead}`,
+      ).toBe(true)
+    }
+    expect(
+      carveOutCovers(entry as string, 'docs/guidelines/checkout.md'),
+      'the copied carve-out swallows ordinary documentation',
+    ).toBe(false)
   })
 
   // The asset advertises itself as the text an adopter COPIES into `tech/risk-matrix.md`, and
@@ -885,6 +1042,13 @@ describe('website docs enumerate the trivial-diff override family (#438)', () =>
     // offers: the interview asks two override questions, neither about trivial-diff.
     const howTo = (row as string).split('|')[5]
     expect(howTo, 'the How-to-enable cell must scope the bootstrap offer').toMatch(/hand-authored/)
+    // The cell also summarises WHAT counts as trivial. Summarised as plain "docs-only" it
+    // tells a maintainer that editing their own `tech/automation.md` — one `.md` file whose
+    // value decides what merges unattended — is trivial, which the KB rule says it is not.
+    expect(
+      whatItIs,
+      'the summary must not sell branch (a) as plain docs-only: it excludes the markdown an agent acts on',
+    ).toMatch(/excluding[\s\S]{0,140}policy files/)
   })
 
   it('the quality-model reference page names it in the same enumeration', () => {
