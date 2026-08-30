@@ -166,7 +166,7 @@ Start: What is your team context?
 #### Benefits:
 
 - Complete control and customization
-- No external dependencies or costs
+- No PM-tool dependency or cost (a `code-host` is still declared — filesystem hosts no pull requests)
 - High privacy and security
 - Offline accessibility
 

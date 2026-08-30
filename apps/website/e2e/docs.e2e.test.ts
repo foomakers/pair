@@ -606,6 +606,30 @@ test('pm tools journey: index → GitHub Projects → Filesystem with content ve
   await expect(main).toContainText('## Git Workflow')
   await expect(main).toContainText('`code-host`: `github`')
   await expect(main).toContainText('backlog/')
+  // A self-hosted/on-prem host is a valid `code-host` — the page recruits air-gapped
+  // readers by name, so Prerequisites must not read as "GitHub account or nothing".
+  await expect(main).toContainText('self-hosted')
+})
+
+// The frontmatter `description` is NOT inert metadata: page.tsx renders it as the
+// <DocsDescription> subtitle under the H1 and emits it as <meta name="description">
+// (the search-result snippet). An unqualified "zero external dependencies" there
+// contradicts the page's own Prerequisites ~30 lines down — the FIRST line a reader
+// or a search engine sees, on precisely the claim ADR-018 makes false for filesystem.
+test('filesystem page subtitle + meta description do not promise zero external dependencies', async ({
+  page,
+}) => {
+  await page.goto('/docs/pm-tools/filesystem')
+
+  const meta = page.locator('head meta[name="description"]')
+  const content = (await meta.getAttribute('content')) ?? ''
+  expect(content).not.toMatch(/zero external dependenc/i)
+  expect(content).toContain('no PM tool account')
+  expect(content).toContain('code-host')
+
+  // The same string is the visible subtitle, so the contradiction is on-page too.
+  await expect(page.locator('main')).toContainText('no PM tool account')
+  await expect(page.locator('main')).not.toContainText(/zero external dependenc/i)
 })
 
 // ============================================================

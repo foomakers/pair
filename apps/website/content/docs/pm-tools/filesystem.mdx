@@ -1,6 +1,6 @@
 ---
 title: Filesystem
-description: Configure pair to manage work items as Markdown files in your repository — zero external dependencies.
+description: Configure pair to manage work items as Markdown files in your repository — no PM tool account (a code-host is still declared).
 ---
 
 ## Why this tracker exists
@@ -32,7 +32,7 @@ Item and state operations go to the files; branch, PR, review and merge operatio
 
 - A pair-enabled project (`pair-cli install` completed)
 - No PM tool account, API key or MCP server — the backlog is files in your repo
-- An account on the code host you declare above (GitHub by default), because that is where branches, PRs and review live
+- An account on the code host you declare above (GitHub by default), because that is where branches, PRs and review live — a self-hosted or on-prem git host is a valid `code-host` too: pair ships a KB implementation guide for GitHub and Azure DevOps only, so for anything else it warns once and proceeds best-effort through that host's own CLI/API, which is never a HALT by itself
 
 This is the **zero-PM-dependency option** — every work item lives in your repository as version-controlled Markdown, and the only external account is the one your pull requests already needed. Ideal for solo developers, offline backlog work, or projects that don't need a separate PM tool.
 
