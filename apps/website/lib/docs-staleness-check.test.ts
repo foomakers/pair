@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { resolve } from 'node:path'
+import { resolve, relative } from 'node:path'
 import {
+  findDeadRepoLinks,
+  walkMdx,
   findSkillCountMismatches,
   findPluginSkillCountMismatches,
   countDeclaredPluginSkills,
@@ -160,6 +162,41 @@ describe('countHowToGuides', () => {
       resolve(REPO_ROOT, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to'),
     )
     expect(n).toBe(9)
+  })
+})
+
+describe('findDeadRepoLinks', () => {
+  // A docs page citing a decision record does it with a GitHub blob URL (the
+  // convention on adding-a-harness.mdx / web-cloud-environments.mdx), and NOTHING
+  // checked those: findDeadLinks only sees `/docs/...`, and the kb-validate
+  // link-checker's roots are `packages/knowledge-hub/dataset` + `.pair/knowledge`,
+  // neither of which contains `apps/website/content/docs`. A mistyped ADR filename
+  // therefore shipped as a 404 nobody could see. Resolved against the real repo tree.
+  const ADR = '.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md'
+
+  it('flags a blob URL whose repo path does not exist', () => {
+    const content = `see [ADR-018](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-018-typo.md)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('adr-018-typo.md')
+  })
+
+  it('passes a blob URL that resolves to a real repo file', () => {
+    const content = `see [ADR-018](https://github.com/foomakers/pair/blob/main/${ADR})`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
+  })
+
+  it('resolves a blob URL carrying an anchor', () => {
+    const content = `[Callers Matrix](https://github.com/foomakers/pair/blob/main/.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities)`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
+  })
+
+  it('every blob citation on the real docs site resolves to a real file', () => {
+    const docsDir = resolve(REPO_ROOT, 'apps/website/content/docs')
+    const errors = walkMdx(docsDir).flatMap(f =>
+      findDeadRepoLinks(readFileSync(f, 'utf-8'), relative(docsDir, f), REPO_ROOT),
+    )
+    expect(errors).toEqual([])
   })
 })
 

@@ -61,6 +61,14 @@ export const GUIDE_COUNT_RE =
 export const LINK_RE = /\]\((\/docs[^)\s]*)\)/g
 export const HREF_RE = /href="(\/docs[^"]*)"/g
 
+// Repo-file citations: the docs site cites decision records / KB files by GitHub
+// blob URL (`[ADR-021](https://github.com/foomakers/pair/blob/main/.pair/...md)`).
+// Nothing validated them: LINK_RE/HREF_RE only see `/docs/...`, and the kb-validate
+// link-checker's roots are `packages/knowledge-hub/dataset` and `.pair/knowledge`
+// — neither contains `apps/website/content/docs`. A mistyped record filename shipped
+// as a 404 no gate could see.
+export const REPO_BLOB_RE = /https:\/\/github\.com\/foomakers\/pair\/blob\/main\/([^)\s"'`]+)/g
+
 // --- Filesystem helpers ---
 
 /** Skill names under a category dir: its subdirs, or the category itself if it's a meta skill (SKILL.md at the category root). */
@@ -174,6 +182,21 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
       if (!validRoutes.has(target)) {
         errors.push(`Dead internal link in ${rel}: ${raw} does not resolve to a docs page`)
       }
+    }
+  }
+  return errors
+}
+
+/** Check 5b: every `blob/main/<path>` citation resolves to a real file in the repo. */
+export function findDeadRepoLinks(content: string, rel: string, root: string): string[] {
+  const errors: string[] = []
+  for (const m of content.matchAll(REPO_BLOB_RE)) {
+    const raw = m[1]
+    if (raw === undefined) continue
+    const path = (raw.split('#')[0] ?? '').replace(/[.,;:]+$/, '')
+    if (path === '') continue
+    if (!existsSync(join(root, path))) {
+      errors.push(`Dead repo-file citation in ${rel}: ${path} does not exist in the repo`)
     }
   }
   return errors
@@ -530,18 +553,21 @@ export function checkCliCommands(
 
 /**
  * Per-file checks — each doc is read once and run through every content-level check:
- * 1 (skill counts), 1b (the plugin transcript), 2b (guide counts), 5 (dead links).
+ * 1 (skill counts), 1b (the plugin transcript), 2b (guide counts), 5 (dead links),
+ * 5b (dead repo-file citations).
  * Extracted from runAllChecks only to keep it under the line ceiling.
  */
 function perFileErrors(params: {
   docsFiles: string[]
   docsDir: string
+  root: string
   skillCount: number
   declaredPluginSkills: number | null
   howToCount: number | null
   validRoutes: Set<string>
 }): string[] {
-  const { docsFiles, docsDir, skillCount, declaredPluginSkills, howToCount, validRoutes } = params
+  const { docsFiles, docsDir, root, skillCount, declaredPluginSkills, howToCount, validRoutes } =
+    params
   const errors: string[] = []
   for (const file of docsFiles) {
     const content = readFileSync(file, 'utf-8')
@@ -552,6 +578,7 @@ function perFileErrors(params: {
     }
     if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
     errors.push(...findDeadLinks(content, rel, validRoutes))
+    errors.push(...findDeadRepoLinks(content, rel, root))
   }
   return errors
 }
@@ -828,6 +855,7 @@ export function runAllChecks(root: string): RunResult {
     ...perFileErrors({
       docsFiles,
       docsDir: DOCS_DIR,
+      root,
       skillCount,
       declaredPluginSkills,
       howToCount,

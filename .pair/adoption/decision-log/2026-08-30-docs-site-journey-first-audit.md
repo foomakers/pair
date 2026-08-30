@@ -38,7 +38,7 @@ Prior art: [2026-07-12-docs-website-ia-restructuring-assessment.md](./2026-07-12
 | — | `tutorials/` | 8 | ✅ | learning-oriented by type; opens on what a tutorial is for and how it differs from a quickstart | n/a |
 | — | `migrations/` | 2 | ✅ | opens on why the section exists (no skill contains migration logic) before the per-version pages | n/a |
 | — | `contributing/` | 7 | ✅ | opens on ways to contribute, audience-framed | n/a |
-| — | `reference/` | 11 | **excluded by design** | opens "Look-up material: complete, factual, no narrative" — see below | n/a |
+| — | `reference/` | 17 (11 top-level + 6 nested under `cli/`, `specs/` — the only section with subdirectories) | **excluded by design** | opens "Look-up material: complete, factual, no narrative" — see below | n/a |
 
 **`reference/` is excluded, not ranked.** Its own index page declares its Diátaxis type in its first line, and a reference page is *supposed* to be lookup-first: a reader arrives knowing what they need. Rewriting it as a journey would make the site worse, not better. This is AC-1's explicit exclusion, recorded here with that rationale so a later pass does not "fix" it.
 
