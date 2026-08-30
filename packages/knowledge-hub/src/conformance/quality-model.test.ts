@@ -23,6 +23,14 @@ const QA_README = readFileSync(
   join(__dirname, '../../dataset/.pair/knowledge/guidelines/quality-assurance/README.md'),
   'utf-8',
 )
+const CLASSIFY_SKILL = readFileSync(
+  join(__dirname, '../../dataset/.skills/capability/classify/SKILL.md'),
+  'utf-8',
+)
+const RISK_MATRIX_ADOPTION = readFileSync(
+  join(__dirname, '../../../../.pair/adoption/tech/risk-matrix.md'),
+  'utf-8',
+)
 
 describe('quality-model.md — structure', () => {
   it('has the expected title', () => {
@@ -193,6 +201,154 @@ describe('quality-model.md — cost monitoring pointer (#281, R6.3/R6.4)', () =>
   }
 })
 
+// #438 — Business impact may resolve green for an objectively trivial change (docs-only,
+// comment/whitespace/formatter-only) regardless of the touched subdomain, but ONLY for a
+// project that declares the key. The KB default stays "subdomain class, full stop" (D21):
+// these assertions pin both halves, because the failure mode of an opt-in override is a
+// later edit quietly promoting it to a default and re-tiering every other project's work.
+describe('quality-model.md — business-impact.trivial-diff override (#438)', () => {
+  for (const [label, content] of [
+    ['dataset', QUALITY_MODEL],
+    ['mirror', QUALITY_MODEL_MIRROR],
+  ] as const) {
+    // AC1 regression guard: the three subdomain→color mappings must survive verbatim, so
+    // the override cannot be introduced by rewriting the default it is meant to sit beside.
+    it(`${label} keeps §3.1's KB default — subdomain class alone — unchanged`, () => {
+      const row = content.split('\n').find(l => l.startsWith('| Business impact |'))
+      expect(row).toBeDefined()
+      expect(row).toMatch(/`generic` subdomain/)
+      expect(row).toMatch(/`supporting` subdomain/)
+      expect(row).toMatch(/`core` subdomain/)
+    })
+
+    // AC7 — §3.1's row points at the override rather than silently absorbing it.
+    it(`${label} §3.1 Business impact row points at the opt-in override`, () => {
+      const row = content.split('\n').find(l => l.startsWith('| Business impact |'))
+      expect(row).toContain('business-impact.trivial-diff')
+    })
+
+    // AC7/AC8(a) — the key and the BR2 definition of "trivial" live in §6's schema.
+    it(`${label} §6 documents the key with the definition of trivial spelled out`, () => {
+      expect(content).toContain('business-impact.trivial-diff: green')
+      expect(content).toMatch(/`\.md`\/`\.mdx`/)
+      expect(content).toMatch(/comment-only/)
+      expect(content).toMatch(/whitespace-only/)
+      expect(content).toMatch(/formatter-output-only/)
+      expect(content).toMatch(/no changed line alters an executable or declarative statement/)
+    })
+
+    // BR2's exclusion list — the cases that look cosmetic and are not. Without them the
+    // definition reads as "small diff", which is exactly the subjectivity it exists to kill.
+    it(`${label} lists what is NOT trivial even when it looks cosmetic`, () => {
+      const notTrivial = content.slice(content.indexOf('business-impact.trivial-diff'))
+      for (const excluded of [
+        'rename',
+        'string-literal',
+        'dependency',
+        'test expectation',
+        'build artifact',
+      ]) {
+        expect(notTrivial.toLowerCase()).toContain(excluded.toLowerCase())
+      }
+    })
+
+    // BR1/AC1 — opt-in wording, stated as such, not merely implied by the example.
+    it(`${label} states the override is opt-in and absent ⇒ today's KB default`, () => {
+      expect(content).toMatch(/opt-in/i)
+      expect(content).toMatch(
+        /business-impact\.trivial-diff[\s\S]{0,2000}?(absent|not declared|undeclared)[\s\S]{0,200}?subdomain class/i,
+      )
+    })
+
+    // BR3 — one non-trivial file or hunk disables the override for the whole item.
+    it(`${label} states the all-or-nothing rule (no per-file granularity)`, () => {
+      expect(content).toMatch(/all-or-nothing/i)
+      expect(content).toMatch(/one non-trivial (file or hunk|hunk or file)/i)
+    })
+
+    // BR5/AC6 — single supported value; anything else warns and is treated as absent.
+    it(`${label} states green is the only accepted value, any other warns and is ignored`, () => {
+      expect(content).toMatch(
+        /only accepted value[\s\S]{0,300}(warn|treated as absent)|warn[\s\S]{0,200}treat(ed)? (it )?as absent/i,
+      )
+    })
+
+    // BR4/AC5 — raises Business impact only; never lowers another dimension or the max.
+    it(`${label} states the override raises green and never lowers the tier`, () => {
+      expect(content).toMatch(
+        /never lowers[\s\S]{0,300}(red|another dimension)|only ever raises[\s\S]{0,200}green/i,
+      )
+      expect(content).toMatch(/refinement floor|confirm-or-raise|never lower/i)
+    })
+
+    // Fail-safe branches: an unreadable diff cannot prove triviality, so the override
+    // must not apply — the opposite default would let a binary/huge diff buy a green.
+    it(`${label} makes an unverifiable diff fail safe (override does not apply)`, () => {
+      expect(content).toMatch(/unreadable|cannot be verified|binary/i)
+    })
+
+    // AC8(b) — the §6 resolution-cascade walkthrough gains its rows.
+    it(`${label} walkthrough table carries the trivial-diff rows`, () => {
+      expect(content).toMatch(/\|[^\n|]*[Tt]rivial diff[^\n|]*declared[^\n|]*\|/)
+      expect(content).toMatch(/\|[^\n|]*[Mm]ixed[^\n|]*\|/)
+      expect(content).toMatch(/Overrides: business-impact\.trivial-diff/)
+    })
+
+    // AC2/AC3/AC5 asserted, not merely documented: hand-traced matrices in the
+    // Worked-Examples style, since BR6 means there is no parser to unit-test.
+    it(`${label} carries worked examples for the trivial, mixed and other-red cases`, () => {
+      const section = content.split(/### Worked examples — the trivial-diff override/)[1]
+      expect(section, 'the worked-example subsection is missing').toBeDefined()
+      const rows = section
+        .split('\n')
+        .filter(l => /^\| [ABC] /.test(l))
+        .map(l => l.split('|').map(c => c.trim()))
+      expect(rows.length, 'expected three hand-traced example rows (A, B, C)').toBe(3)
+
+      // Columns: '', id, criticality, change-risk, business impact, security, coupling, tier, ''
+      const [trivial, mixed, otherRed] = rows
+      // AC2 — all-`.md` diff in a core subdomain: Business impact green, tier green.
+      expect(trivial[4]).toMatch(/green/)
+      expect(trivial[4]).toContain('Overrides: business-impact.trivial-diff')
+      expect(trivial[7]).toContain('risk:green')
+      // AC3 — one non-trivial hunk mixed in: back to the subdomain class (core ⇒ red).
+      expect(mixed[4]).toMatch(/red/)
+      expect(mixed[4]).toMatch(/core subdomain/)
+      expect(mixed[7]).toContain('risk:red')
+      // AC5/BR4 — the override greens Business impact but another dimension's red stands.
+      expect(otherRed[4]).toMatch(/green/)
+      expect(otherRed[7]).toContain('risk:red')
+    })
+  }
+
+  // BR7/D18 — `classify` stays a model-applier: the triviality criteria live in the
+  // quality model, never in the skill. Grep-verifiable, per the story's DoD.
+  it('classify SKILL.md carries no triviality threshold of its own (D18)', () => {
+    for (const criterion of ['comment-only', 'whitespace-only', 'formatter-output', '.mdx']) {
+      expect(CLASSIFY_SKILL, `classify must not own the criterion "${criterion}"`).not.toContain(
+        criterion,
+      )
+    }
+  })
+})
+
+describe('this repo declares the trivial-diff override (#438, AC9)', () => {
+  it('.pair/adoption/tech/risk-matrix.md carries the key under ## Overrides', () => {
+    // Split on the HEADING, not the string: the file's own preamble names
+    // `## Overrides` inline, and splitting on that lands in the preamble.
+    const overrides = RISK_MATRIX_ADOPTION.split(/^## Overrides$/m)[1]
+    expect(overrides, '## Overrides section missing').toBeDefined()
+    expect(overrides).toContain('business-impact.trivial-diff: green')
+  })
+
+  it('states a rationale, in the rule-for-the-classifying-agent style of the siblings', () => {
+    const entry = RISK_MATRIX_ADOPTION.split('- business-impact.trivial-diff: green')[1] ?? ''
+    const paragraph = entry.split(/\n- /)[0]
+    expect(paragraph.length, 'the key is declared with no rationale').toBeGreaterThan(300)
+    expect(paragraph).toMatch(/subdomain/i)
+  })
+})
+
 describe('risk-matrix-example.md', () => {
   it('provides a criticality table with at least one High entry', () => {
     expect(RISK_MATRIX_EXAMPLE).toMatch(/## Criticality Table/)
@@ -201,6 +357,14 @@ describe('risk-matrix-example.md', () => {
 
   it('documents the unknown-service default separately from the file-absent default', () => {
     expect(RISK_MATRIX_EXAMPLE).toMatch(/resolves to High/)
+  })
+
+  // The example asset is the documented adoption starting point, so an override key a
+  // project can only discover by reading §6 is a key most projects never learn exists.
+  it('shows the business-impact.trivial-diff override in its ## Overrides section', () => {
+    const overrides = RISK_MATRIX_EXAMPLE.split(/^## Overrides$/m)[1]
+    expect(overrides).toBeDefined()
+    expect(overrides).toContain('business-impact.trivial-diff')
   })
 })
 
