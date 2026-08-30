@@ -5,6 +5,21 @@ description: Configure pair to manage work items with Linear — setup, the requ
 
 **Linear hosts no code.** It has no repositories, branches or pull requests, so a Linear project always declares a separate **code host** (usually GitHub). This is pair's reference split setup — see [Code host vs PM tool](/docs/concepts/code-host) for the routing rule and cross-linking convention.
 
+## Why Linear is the page that changed pair's design
+
+Linear is the tool that broke the assumption everything else in pair had been built on. Until it arrived, the corpus read one adoption field — `pm-tool` — for two different jobs: backlog work (create an item, read its labels, transition its state) and code work (cut a branch, open a PR, submit a review, merge). GitHub Projects answers both, so the conflation never had to justify itself. Linear answers exactly one, and asking it for a pull request is asking a backlog for something it does not have.
+
+The obvious fix was the wrong one. Linear ships an excellent GitHub app that would have supplied the item↔PR link for free and pushed PR status onto the card. It was **rejected** (per [ADR-018](/docs/concepts/code-host)) for two reasons: it would make a proprietary per-tool integration a hard prerequisite of the framework, so every future tracker would need its own porting story and air-gapped setups could not comply; and it duplicates state across two systems, which is fine until one write fails and there is no owner to reconcile from.
+
+What pair adopted instead is deliberately unglamorous, and it is why this page reads the way it does:
+
+- **One optional field.** Declare `code-host` in `## Git Workflow` and issue/state work routes to Linear while branch/PR/review work routes to GitHub. Projects already on a single tool declare nothing and behave exactly as before.
+- **The cross-link is plain text, both ways.** `Refs: <issue-id>` in the PR body; the PR URL posted back as a **comment** on the Linear issue — a comment, never a body edit, because writing the body would overwrite the story's acceptance criteria. Any tool with a comment field can play.
+- **PR state is never mirrored onto the board.** Look at the Status Transitions table below and you will find a row that does nothing: review. That blank is the decision, not an omission — state lives in one place, so there is nothing to reconcile.
+- **What Linear does not have, pair reports rather than invents.** Linear's default teams ship no "In Review" state; a skill asked to write one says so instead of guessing a nearby column.
+
+The rest of this page is the configuration that model implies. It is longer than the GitHub Projects guide by exactly the amount the split costs: one extra section.
+
 ## Configuration
 
 Add these lines to `.pair/adoption/tech/way-of-working.md`:
