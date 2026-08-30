@@ -664,7 +664,10 @@ Stated plainly rather than assumed away: with neither setting applied, `pair-exp
 ```bash
 REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"   # owner/repo — matches `github.repository`
 PR=<pr-number>
-HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
+# `--repo "$REPO"` like every other call here: unpinned, `gh pr view` resolves the number
+# against the CWD's `origin`, which is not `$REPO` whenever `REPO` was supplied from CI
+# (`github.repository`) or the block runs from an agent worktree.
+HEAD_SHA="$(gh pr view "$PR" --repo "$REPO" --json headRefOid -q .headRefOid)"
 ```
 
 **Token prerequisite (why a commit status, not a check run).** The Checks API (`POST /repos/{owner}/{repo}/check-runs`) is writable **only by a GitHub App installation token**: with an ordinary user token or PAT it answers `403 You must authenticate via a GitHub App`. The skills that publish the verdict (`/pair-capability-publish-pr` Phase 5, `/pair-process-review` Step 5.4) run agent-side with exactly that ordinary token **whenever no dedicated review identity is configured** — the default — so on that path a check run is not an option for them. The **commit-statuses API** accepts the same token and branch protection treats a status **context** as a required check identically. The token needs `repo:status` (classic PAT) / `Commit statuses: write` (fine-grained); inside a workflow that is `permissions: statuses: write`.
@@ -767,6 +770,16 @@ Recommended because it is the only form that unlocks the Checks API, and because
      -H "Authorization: Bearer $JWT" -H 'Accept: application/vnd.github+json' \
      -d '{"permissions":{"pull_requests":"write","checks":"write","contents":"read"}}' \
      "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens")"
+   # SAVE THE SESSION CREDENTIAL FIRST. The `export GH_TOKEN` below replaces it
+   # PROCESS-GLOBALLY, and the flow still needs it: the `pr-state:*` label is written by the
+   # SESSION token in every mode (it is a board view, not one of the identity's three
+   # attributed writes, and the App baseline above does not request the `issues` grant the
+   # labels endpoint needs). Overwrite it unsaved and that write is refused — a refusal the
+   # flow declares NON-BLOCKING, so every review on the App path reports `pr-state label:
+   # not applied` and the board view the labels drive stays permanently empty. Scope the
+   # label write to this variable: `GH_TOKEN=$SESSION_GH_TOKEN gh pr edit …`.
+   SESSION_GH_TOKEN="${GH_TOKEN:-}"
+   export SESSION_GH_TOKEN
    GH_TOKEN="$(printf '%s' "$TOKEN_JSON" | jq -r '.token // empty')"
    export GH_TOKEN                                   # every `gh` call below uses this
    # The App's own SLUG, captured here because `GET /app` is a JWT endpoint (the
@@ -785,7 +798,11 @@ Recommended because it is the only form that unlocks the Checks API, and because
    ```bash
    REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
    PR=<pr-number>                                    # an open PR to probe against
-   HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
+   # PINNED, like the `repos/$REPO/…` calls below: unpinned this reads the CWD's `origin`,
+   # so a `$REPO` supplied from CI (`github.repository`) that differs from the checkout's
+   # origin yields a FOREIGN head SHA and probe 1 answers `422 No commit found for SHA` —
+   # an error the diagnosis below does not cover, met while debugging App setup.
+   HEAD_SHA="$(gh pr view "$PR" --repo "$REPO" --json headRefOid -q .headRefOid)"
 
    # 1. checks: write — leaves a `pair-identity-probe` check run on $HEAD_SHA (see the note below).
    gh api "repos/$REPO/check-runs" -X POST -f name=pair-identity-probe \
@@ -952,10 +969,16 @@ Recommended because it is the only form that unlocks the Checks API, and because
    #    while the gate's clause stays inert (see the bot-user probe below). On the App path
    #    the argument is not read at all — an App is excluded by account type — so `$RV`
    #    being empty there is correct and harmless.
+   #    THE ACTING ARGUMENT IS $ACTING — the login the identity's OWN credential answers
+   #    with on this run (`gh api user --jq .login`, set by the bot-user probe). The adapter
+   #    compares the two on the machine-user form: a provisioned login that names a
+   #    DIFFERENT account (rotated seat, typo in the variable) excludes that other login,
+   #    while the account actually acting stays inside the 🔴 human predicate. Unset ⇒ not
+   #    excluded ⇒ not healthy. On the App path it is not read, like `$RV`.
    IDENTITY_HEALTHY=0
    if [ "$IDENTITY_CONFIGURED" = 1 ]; then
      IDENTITY_HEALTHY="$(review_identity_health "$IDENTITY_KIND" "${AUTH_OK:-0}" \
-       "${PERMS_OK:-0}" "${RV:-}")"
+       "${PERMS_OK:-0}" "${RV:-}" "${ACTING:-}")"
    fi
 
    MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
@@ -1057,7 +1080,7 @@ gh variable set REVIEW_IDENTITY_LOGIN --body "$BOT_LOGIN"     # repo variable, r
 gh variable get REVIEW_IDENTITY_LOGIN                          # verify: must echo the bot's login
 ```
 
-That **repository variable** — not an exported shell/CI environment variable of the same name — is the health input `review_identity_exclusion_ok user "$RV"` checks, where `$RV` is the value the per-run probe above read back with `gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN"`. **Unset ⇒ the identity is not healthy ⇒ `resolve_identity_mode` yields `halt`**, and no review is written at all. Reading it back per run is what makes that sentence true: the clause it arms lives in the `pair-explicit-approval` job and resolves `${{ vars.REVIEW_IDENTITY_LOGIN }}`, so a login that exists only in the agent's environment leaves the gate comparing against the empty string while health reports green. A variable that is present but names a **different** account fails the probe for the same reason — the excluded login must be the one acting. Keeping the bot out of the repository's human-reviewer set is still good hygiene, but it is no longer the containment — the login clause is. The App form needs none of this because it types as `"Bot"`.
+That **repository variable** — not an exported shell/CI environment variable of the same name — is the health input `review_identity_exclusion_ok user "$RV" "$ACTING"` checks, where `$RV` is the value the per-run probe above read back with `gh api "repos/$REPO/actions/variables/REVIEW_IDENTITY_LOGIN"` and `$ACTING` is the login that probe's own credential answered with. **Unset ⇒ the identity is not healthy ⇒ `resolve_identity_mode` yields `halt`**, and no review is written at all. Reading it back per run is what makes that sentence true: the clause it arms lives in the `pair-explicit-approval` job and resolves `${{ vars.REVIEW_IDENTITY_LOGIN }}`, so a login that exists only in the agent's environment leaves the gate comparing against the empty string while health reports green. A variable that is present but names a **different** account fails the probe — and `review_identity_exclusion_ok` itself, which is why it is a contract every host adapter inherits rather than this snippet's own rule — for the same reason: the excluded login must be the one acting. Keeping the bot out of the repository's human-reviewer set is still good hygiene, but it is no longer the containment — the login clause is. The App form needs none of this because it types as `"Bot"`.
 
 #### Failure modes, and what each one does
 

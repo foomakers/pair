@@ -126,6 +126,9 @@ describe('review-identity.sh — the host-agnostic identity adapter (AC1, AC4)',
 describe('review-identity.sh — the identity must be excluded from the 🔴 gate to act (AC3, AC6)', () => {
   it('review_identity_exclusion_ok distinguishes the App form from the bot-USER form', () => {
     expect(ADAPTER).toMatch(/review_identity_exclusion_ok\(\)/)
+    expect(ADAPTER).toContain(
+      'review_identity_exclusion_ok <identity_kind> <review_identity_login> <acting_login>',
+    )
     // app ⇒ excluded by account type, nothing to configure
     expect(ADAPTER).toMatch(/app\)\n\s+# `user\.type == "Bot"`/)
     // user ⇒ excluded ONLY by login, so an unset login is a not-healthy identity
@@ -133,6 +136,12 @@ describe('review-identity.sh — the identity must be excluded from the 🔴 gat
     expect(ADAPTER).toMatch(/Treat this identity as NOT healthy until it is set/)
     // unknown kind is fail-safe NOT excluded
     expect(ADAPTER).toMatch(/fail-safe: not excluded/)
+  })
+
+  it('requires the machine identity that acts to be the login the red gate excludes', () => {
+    expect(ADAPTER).toMatch(/if \[ -z "\$acting" \]; then/)
+    expect(ADAPTER).toMatch(/if \[ "\$login" != "\$acting" \]; then/)
+    expect(ADAPTER).toMatch(/excludes THAT login/)
   })
 
   // REGRESSION (review round 2). The `<identity_kind>` the skills pass is the LITERAL
@@ -193,14 +202,16 @@ describe('review-identity.sh — the identity must be excluded from the 🔴 gat
   // reviewed head with a `pair-identity-probe` check run.
   it('review_identity_health is the runtime source of the health flag', () => {
     expect(ADAPTER).toMatch(/^review_identity_health\(\) \{$/m)
-    expect(ADAPTER).toMatch(/review_identity_health <identity_kind> <auth_ok> <perms_ok>/)
+    expect(ADAPTER).toMatch(
+      /review_identity_health <identity_kind> <auth_ok> <perms_ok> <review_identity_login> <acting_login>/,
+    )
     // the per-run / at-setup split, stated where the function lives
     expect(ADAPTER).toMatch(/PER RUN \(here\)\s+— cheap, artifact-free/)
     expect(ADAPTER).toMatch(/AT SETUP \(once\) — the probes that must WRITE/)
     // unknown is never healthy, and the exclusion precondition cannot be forgotten
     expect(ADAPTER).toMatch(/\[ "\$auth_ok" != "1" \]/)
     expect(ADAPTER).toMatch(/\[ "\$perms_ok" != "1" \]/)
-    expect(ADAPTER).toMatch(/if ! review_identity_exclusion_ok "\$kind" "\$login"; then/)
+    expect(ADAPTER).toMatch(/if ! review_identity_exclusion_ok "\$kind" "\$login" "\$acting"; then/)
     // and the rule that covers what a read probe cannot prove at run time
     expect(ADAPTER).toMatch(/403\/422 met MID-WRITE is a HALT/)
   })
@@ -423,7 +434,7 @@ describe('the bot-user health input is the REPOSITORY VARIABLE, not ambient stat
   })
 
   it('the health call is fed that read-back value, and no ambient env var survives', () => {
-    expect(GITHUB_GUIDE).toContain('"${RV:-}")"')
+    expect(GITHUB_GUIDE).toContain('"${RV:-}" "${ACTING:-}")"')
     expect(GITHUB_GUIDE).not.toContain('"${REVIEW_IDENTITY_LOGIN:-}"')
     // the adapter's own usage example must not model the ambient read either
     expect(ADAPTER).not.toContain('"${REVIEW_IDENTITY_LOGIN:-}")"')
@@ -1257,7 +1268,7 @@ describe('github-implementation.md — per-host setup lives here (AC1, AC4)', ()
       GITHUB_GUIDE.indexOf("6. **Check the identity's health on EVERY run**"),
     )
     expect(probes).toMatch(/PR=<pr-number>/)
-    expect(probes).toMatch(/HEAD_SHA="\$\(gh pr view "\$PR" --json headRefOid/)
+    expect(probes).toMatch(/HEAD_SHA="\$\(gh pr view "\$PR" --repo "\$REPO" --json headRefOid/)
     expect(probes).toMatch(/These probes leave artifacts on a real pull request/)
   })
 

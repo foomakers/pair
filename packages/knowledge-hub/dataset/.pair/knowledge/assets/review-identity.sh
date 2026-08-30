@@ -67,7 +67,9 @@
 #   # repository variable — see the implementation guide). NEVER the caller's ambient
 #   # environment: a login set only in the agent's shell satisfies this precondition while
 #   # the gate's clause compares against the empty string and matches every account.
-#   IDENTITY_HEALTHY="$(review_identity_health "$IDENTITY_KIND" "$AUTH_OK" "$PERMS_OK" "$RV")"
+#   # $ACTING: the login the identity credential itself reports on this run. On a machine
+#   # user it MUST equal $RV; the code-host implementation guide owns that host read.
+#   IDENTITY_HEALTHY="$(review_identity_health "$IDENTITY_KIND" "$AUTH_OK" "$PERMS_OK" "$RV" "$ACTING")"
 #   MODE="$(resolve_identity_mode "$IDENTITY_CONFIGURED" "$IDENTITY_HEALTHY")"
 #   [ "$MODE" = halt ] && exit 1
 #   # APPROVE only when the light row authorized it (pr-state.sh light_auto_approve_allowed):
@@ -140,7 +142,7 @@ review_identity_kind_ok() {
   esac
 }
 
-# review_identity_exclusion_ok <identity_kind> <review_identity_login>
+# review_identity_exclusion_ok <identity_kind> <review_identity_login> <acting_login>
 #   identity_kind        : app | user | bot-user | <anything else ⇒ unknown, fail-safe>
 #                          `bot-user` is the ADOPTION literal (`Review identity: bot-user`
 #                          in way-of-working) and `user` its short form: the skills forward
@@ -160,6 +162,15 @@ review_identity_kind_ok() {
 #                          `.user.login != ""` is true for every account, so the bot's own
 #                          approval would satisfy the 🔴 HUMAN gate. Passing what the gate
 #                          cannot see is exactly the state this check exists to refuse.
+#   acting_login         : the login the identity's own credential reports on this run.
+#                          The code-host implementation guide owns the host-specific read.
+#                          Read on the machine-user arm only. A non-empty login that is not
+#                          this one excludes a DIFFERENT account: the predicate would drop
+#                          `acme-bot` while `acme-bot-2` — the rotated account, or a typo in
+#                          the variable — signs the 🔴 approval as a `"User"` and the PR
+#                          reaches `ready-to-merge` with zero humans. Empty is UNKNOWN, and
+#                          unknown is never excluded: a caller that cannot name the acting
+#                          account cannot establish the match, so the identity is not healthy.
 #
 # Exit 0 = the identity is MECHANICALLY excluded from the 🔴 explicit-human-approval
 # predicate. Exit 1 = it is NOT, with the missing piece on stderr; the caller must then
@@ -171,10 +182,14 @@ review_identity_kind_ok() {
 # type clause does not. For the bot-user form the exclusion is the login clause, and a
 # login clause with nothing to compare against excludes nothing — an unprovisioned
 # `REVIEW_IDENTITY_LOGIN` would leave a machine account able to sign the 🔴 human
-# approval. This function is what makes "the identity is excluded by construction" a
-# checked precondition rather than a claim in prose.
+# approval. Provisioned but naming ANOTHER account is the same hole one step along, so
+# BOTH halves are checked here rather than left to each host's own snippet: the check is
+# the host-agnostic contract a second adapter is wired from, and a host that implements
+# only the non-empty half excludes a login nobody is acting under. This function is what
+# makes "the identity is excluded by construction" a checked precondition rather than a
+# claim in prose.
 review_identity_exclusion_ok() {
-  local kind="${1:-}" login="${2:-}"
+  local kind="${1:-}" login="${2:-}" acting="${3:-}"
 
   case "$kind" in
   app)
@@ -184,11 +199,19 @@ review_identity_exclusion_ok() {
   user | bot-user)
     # Both spellings of the machine-USER form: `bot-user` is what adoption declares and
     # what the skills forward verbatim; `user` is the short form the adapter's own docs use.
-    if [ -n "$login" ]; then
-      return 0
+    if [ -z "$login" ]; then
+      echo "review-identity: a bot-USER identity types as user.type == \"User\" on the reviews API, so the 🔴 predicate's type clause does NOT exclude it. Its login must be provisioned as REVIEW_IDENTITY_LOGIN to the job evaluating human_approval_jq_filter, or the identity could sign the explicit human approval itself. Treat this identity as NOT healthy until it is set — see the code host's implementation guide, section 'Dedicated review identity'." >&2
+      return 1
     fi
-    echo "review-identity: a bot-USER identity types as user.type == \"User\" on the reviews API, so the 🔴 predicate's type clause does NOT exclude it. Its login must be provisioned as REVIEW_IDENTITY_LOGIN to the job evaluating human_approval_jq_filter, or the identity could sign the explicit human approval itself. Treat this identity as NOT healthy until it is set — see the code host's implementation guide, section 'Dedicated review identity'." >&2
-    return 1
+    if [ -z "$acting" ]; then
+      echo "review-identity: the ACTING account was not passed, so the provisioned login ('$login') cannot be shown to be the one acting — unknown is never excluded. Read the acting login under the identity's own credential on this run and pass it as the third argument. See the code host's implementation guide, section 'Dedicated review identity'." >&2
+      return 1
+    fi
+    if [ "$login" != "$acting" ]; then
+      echo "review-identity: REVIEW_IDENTITY_LOGIN names '$login' but the acting account is '$acting' — the 🔴 predicate excludes THAT login, so an approving review by '$acting' still satisfies the explicit HUMAN approval. Fix the variable, or run the identity under the account it names. See the code host's implementation guide, section 'Dedicated review identity'." >&2
+      return 1
+    fi
+    return 0
     ;;
   *)
     echo "review-identity: identity kind '${kind:-unknown}' is unknown — cannot establish that it is excluded from the 🔴 human-approval predicate (fail-safe: not excluded)" >&2
@@ -197,7 +220,7 @@ review_identity_exclusion_ok() {
   esac
 }
 
-# review_identity_health <identity_kind> <auth_ok> <perms_ok> <review_identity_login>
+# review_identity_health <identity_kind> <auth_ok> <perms_ok> <review_identity_login> <acting_login>
 #   auth_ok  : 1 when THIS RUN's credential probe answered 2xx — the token authenticated
 #              AND the identity is scoped to this repository. Anything else (empty, a
 #              probe that was not run, a malformed value) is NOT authenticated.
@@ -206,6 +229,9 @@ review_identity_exclusion_ok() {
 #              with explicit `permissions`, which 422s when the installation lacks one;
 #              for a bot user: the account's repository permission read). Anything else is
 #              NOT granted.
+#   The last two arguments are the exclusion precondition's, forwarded verbatim: the
+#   provisioned login read back from the host, and the login of the account ACTING on this
+#   run. On the machine-user form they must MATCH — see `review_identity_exclusion_ok`.
 #
 # Echoes exactly `1` or `0` — the `healthy` argument of `resolve_identity_mode`, so an
 # unhealthy identity becomes `halt` and never a session fallback. Always exits 0.
@@ -232,7 +258,7 @@ review_identity_exclusion_ok() {
 # The exclusion precondition is folded in deliberately: it is part of "may this identity
 # act at all", so no caller can compute health while forgetting it.
 review_identity_health() {
-  local kind="${1:-}" auth_ok="${2:-}" perms_ok="${3:-}" login="${4:-}"
+  local kind="${1:-}" auth_ok="${2:-}" perms_ok="${3:-}" login="${4:-}" acting="${5:-}"
 
   if [ "$auth_ok" != "1" ]; then
     echo "review-identity: the identity's credential did not authenticate on this run (auth probe='${auth_ok:-not run}') — NOT healthy. Unknown is never healthy: see the code host's implementation guide, section 'Dedicated review identity', for the per-run probes." >&2
@@ -246,7 +272,7 @@ review_identity_health() {
     return 0
   fi
 
-  if ! review_identity_exclusion_ok "$kind" "$login"; then
+  if ! review_identity_exclusion_ok "$kind" "$login" "$acting"; then
     echo "0"
     return 0
   fi
