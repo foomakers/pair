@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /verify-quality, /record-decision, /checkpoint, /publish-pr."
-version: 0.7.3
+version: 0.7.4
 author: Foomakers
 ---
 
@@ -129,7 +129,7 @@ Ask: _"Ready to proceed with implementation?"_
 
    > **Commit strategy for this story:**
    > 1. **Commit per task** (recommended) — develop one task, ask dev, commit, update checkbox, next task. Single PR at end.
-   > 2. **Commit per story** — develop all tasks continuously, then ask dev, commit all, update all checkboxes, single PR.
+   > 2. **Commit per story** — develop all tasks continuously, ticking each checkbox as it completes, then ask dev, commit all, single PR.
 
 4. **Verify**: Strategy is set. Apply consistently for the entire story.
 
@@ -140,9 +140,10 @@ Process tasks **sequentially**, one at a time. For each task:
 ### Step 2.1: Select Next Task
 
 1. **Check**: Scan all tasks in dependency order. Find the first task that is not yet completed.
-   - A task is "completed" if its checklist item is marked ✅ in the story AND (if commit-per-task) the commit exists on the branch.
+   - A task is "completed" if its checklist item is marked ✅ in the story **AND the work it claims is still where this run can see it**: under `commit-per-task`, its commit exists on the branch; under `commit-per-story`, either the story's single commit exists (Step 3.1 already ran) **or** the working tree still carries that task's change. A ✅ with neither is **not** completion evidence — treat the task as **pending and re-attempt it** (re-ticking is a no-op: the patch never unticks).
+   - **Why the `commit-per-story` half is load-bearing.** On that strategy Step 2.8 item 7 ticks _before_ any commit exists, so the tick can outrun the work: 4-task story, `commit-per-story` (Step 1.3 auto-selects it for every single-task story). T1–T3 complete ⇒ three `[x]` on the body and a current checkpoint; the run then HALTs on T4's red gate (Step 2.7) and the worktree is discarded. The next attempt starts from the branch head, which under this strategy carries **zero** commits. Trusting the ✅ alone, this step declares T1–T3 completed and never re-implements them, Step 3.1 commits a T4-only (or empty) tree, and Step 3.3 opens a PR missing three tasks' work over a body showing them done — "reports work that was not done and nothing later contradicts it", the failure [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md) forbids for guess-ticks.
    - A task that **cannot be attempted this iteration** — an unmet dependency, an external blocker, work the developer defers or puts out of scope — is neither a HALT nor a failure: **queue it as `skipped`** with its one-line reason (the vocabulary is [task-progress-feedback.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/task-progress-feedback.md)'s), leave its checklist item unticked, and continue the scan to the next task. `failed` is for a task that was attempted and did not land: a deliberate deferral reported as `failed` misnames it, and one left silent shrinks the iteration's headline count without saying why.
-   - **At most once per invocation.** This scan restarts from the top after every task (item 1 is re-entered from Step 2.8 item 9), so a task that cannot be attempted is reached again on every later pass: a task **already queued as `skipped` this invocation** is passed over **silently** — no second queue entry, no second line. Otherwise a 5-task story blocked on T3 queues it after T2 _and_ after T4, and the one comment reads `Task progress — 6 of 5 tasks this iteration` with T3 listed twice.
+   - **At most once per invocation.** This scan restarts from the top after every task (item 1 is re-entered from Step 2.8 item 9), so a task that cannot be attempted is reached again on every later pass: a task **already queued as `skipped` this invocation** is passed over **silently** — no second queue entry, no second line. Otherwise a 5-task story blocked on T3 queues it after T2 _and_ after T4, and the one comment carries six lines for five tasks — `Task progress — 4 done, 2 skipped of 5 tasks this iteration` — with T3 listed twice.
 2. **Skip**: If no task remains that this iteration can attempt — all completed, or the rest queued as `skipped` — move to Phase 3.
 3. **Act**: Set the active task. Update session state:
 
@@ -222,7 +223,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 ### Step 2.8: Task Completion
 
 1. **Check**: Is the commit strategy `commit-per-task`?
-2. **Skip**: If `commit-per-story`, there is no inter-task confirmation and no commit here — but **still apply item 7 (tick and queue) and item 8** for the task just completed, then go to item 9. The tick-and-queue is not a property of the commit strategy: a 4-task `commit-per-story` story whose gate goes red on T3 (Step 2.7 → HALT) would otherwise queue only the failure, and the body would still show `- [ ] T1`, `- [ ] T2` over finished work — the state where "on task 3 of 4" and "failed on task 2" look identical, which is what this loop exists to end. Step 1.3 auto-selects this strategy for every single-task story, so it is the common path, not an exotic one. (The tick records the task's **work** as done, not a commit: on this strategy the single commit lands at Step 3.1, and Step 2.1's completion check requires a commit only under `commit-per-task`.)
+2. **Skip**: If `commit-per-story`, there is no inter-task confirmation and no commit here — but **still apply item 7 (tick and queue) and item 8** for the task just completed, then go to item 9. The tick-and-queue is not a property of the commit strategy: a 4-task `commit-per-story` story whose gate goes red on T3 (Step 2.7 → HALT) would otherwise queue only the failure, and the body would still show `- [ ] T1`, `- [ ] T2` over finished work — the state where "on task 3 of 4" and "failed on task 2" look identical, which is what this loop exists to end. Step 1.3 auto-selects this strategy for every single-task story, so it is the common path, not an exotic one. (The tick records the task's **work** as done, not a commit: on this strategy the single commit lands at Step 3.1. What the tick does **not** become is standalone completion evidence — Step 2.1 accepts a `commit-per-story` ✅ only while the commit or the working-tree change backs it, so a tick that survives a discarded worktree is re-attempted, not trusted.)
 3. **Act** (BLOCKING): Present task summary and **ask developer for confirmation BEFORE committing**:
 
    ```text
@@ -374,7 +375,7 @@ Implementation stops immediately when:
 - **Quality gate red inside `/publish-pr`** (Step 3.3) — propagates as implement's HALT; no PR side effects (the PR-template-not-found and gate HALTs live in `/publish-pr`)
 - **PR state is not `ready-to-merge`** (Step 4.1) — `merge_allowed` fails: red gate, review not approved/still pending, or 🔴 without an explicit non-author human approval on the current head. Never bypass a required check to merge
 
-On HALT: **flush the task-progress batch first — unless Step 3.1b already flushed it this invocation** (Step 3.1b's rendering, posting and drain rules, unchanged — the run that stopped is the one with the most to report, and a flush reached only on the success path would leave exactly the failed iteration silent; but the Step 3.3 HALTs fire _after_ Step 3.1b has posted, and re-flushing there is the second comment per iteration the guideline forbids), then report the blocker clearly, propose resolution, wait for developer. The failing task is queued as `failed` with its reason, so its checklist item stays unticked.
+On HALT: **flush the task-progress batch first — unless Step 3.1b already flushed it this invocation** (Step 3.1b's rendering, posting and drain rules, unchanged — the run that stopped is the one with the most to report, and a flush reached only on the success path would leave exactly the failed iteration silent; but the Step 3.3 HALTs fire _after_ Step 3.1b has posted, and re-flushing there is the second comment per iteration the guideline forbids), then report the blocker clearly. A HALT after the flush therefore leaves the item's comment reading all-✅ with **nothing on it saying no PR was produced** — by design, not by omission: the batch is a per-task narrative and the run's outcome belongs to the PR's own state and to this skill's output block (see the guideline's batching rules). Do not append a run-outcome comment to compensate, propose resolution, wait for developer. The failing task is queued as `failed` with its reason, so its checklist item stays unticked.
 
 ## Idempotent Re-invocation
 

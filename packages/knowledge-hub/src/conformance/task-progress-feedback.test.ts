@@ -136,6 +136,28 @@ describe('checklist locator — task-ID anchored, never a guess (AC1, T1)', () =
     },
   )
 
+  it('cites the story template as a rendering source only if the template carries one', () => {
+    // The bare `- [ ] T3 — title` row was attributed to "the story template's Task
+    // Breakdown". The template has no `## Task Breakdown` section and no checklist
+    // line at all — so the guideline cited a source of truth that produces nothing.
+    // A maintainer verifying the locator against the named source finds nothing and
+    // may prune the rendering, at which point the locator stops matching the shape
+    // real bodies carry (issue #220's own body uses exactly it). Self-maintaining:
+    // add the section to the template and the citation becomes legal again.
+    const template = read(
+      join(
+        __dirname,
+        '../../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md',
+      ),
+    )
+    const templateCarriesIt = /^##+\s+Task Breakdown/m.test(template)
+    for (const [, load] of guidelineCopies) {
+      const section = sectionOf(load(), '## The task-ID locator').toLowerCase()
+      if (!templateCarriesIt) expect(section).not.toContain('story template')
+      expect(section).toMatch(/hand-written/)
+    }
+  })
+
   it.each(guidelineCopies)('%s: requires exactly one match and never guesses', (_label, load) => {
     const section = sectionOf(load(), '## The task-ID locator')
     const low = section.toLowerCase()
@@ -146,6 +168,26 @@ describe('checklist locator — task-ID anchored, never a guess (AC1, T1)', () =
     expect(low).toMatch(/more than one|ambiguous/)
     expect(low).toContain('never guess-tick')
   })
+})
+
+describe('Definition-of-Done locator — criterion anchored, never a guess (AC1, T1)', () => {
+  it.each(guidelineCopies)(
+    '%s: resolves a DoD box independently of the task-ID locator',
+    (_label, load) => {
+      // Task IDs exist only in `## Task Breakdown`; a DoD checkbox has no ID at all.
+      // "Patch it by the same rule" therefore left an implementer with no way to
+      // choose one of two same-looking DoD boxes. The locator needs its own bounded
+      // section and exact criterion anchor before the shared one-line patch rule applies.
+      const section = sectionOf(load(), '## The Definition-of-Done locator')
+      const low = section.toLowerCase()
+      expect(low).toMatch(/definition[- ]of[- ]done/)
+      expect(low).toMatch(/exact.*criterion|criterion.*exact/)
+      expect(low).toContain('exactly one')
+      expect(low).toMatch(/zero match|no match|not found/)
+      expect(low).toMatch(/more than one|ambiguous/)
+      expect(low).toMatch(/never guess|not.*task.id locator/)
+    },
+  )
 })
 
 describe('tick-only body patch — the only body bytes that change (AC1, T1)', () => {
@@ -235,6 +277,44 @@ describe('batching — one comment per run iteration (AC2, T2)', () => {
       expect(section.toLowerCase()).toContain('one line per task')
       expect(section).toContain('<details>')
       expect(section).toContain('</details>')
+    },
+  )
+
+  it.each(guidelineCopies)(
+    '%s: defines the headline numerator instead of leaving it to an example',
+    (_label, load) => {
+      // `Task progress — N of M tasks this iteration` never said what N counts.
+      // Concrete loss: a run where T1 lands and T2/T3 fail queues three lines and
+      // renders `3 of 4`. The board notification is not expanded — by D22 the
+      // headline IS the whole story for that reader — so "three of four tasks" is
+      // read as three done when exactly one landed: the "on task 3 of 4 and failed
+      // on task 2 look identical" confusion re-created inside the artifact that
+      // exists to end it.
+      const section = sectionOf(load(), BATCHING)
+      expect(section.toLowerCase()).toContain('the headline counts outcomes')
+      // the shape is named, not implied: per-outcome groups, then the breakdown size.
+      expect(section).toMatch(/\d+ done, \d+ failed/)
+      // and no bare `N of M` headline survives anywhere in the section — neither in
+      // the rendered example nor in the dedup rationale, the two places that used
+      // to define the numerator differently for a reader.
+      expect(section).not.toMatch(/Task progress — \d+ of \d+ tasks/)
+    },
+  )
+
+  it.each(guidelineCopies)(
+    '%s: scopes the batch to per-task narrative, not the run outcome',
+    (_label, load) => {
+      // Step 3.1b posts BEFORE the PR hand-off and the HALT preamble suppresses a
+      // second flush, so a run that completes every task and then HALTs inside
+      // Step 3.3 (red gate in /publish-pr, or /publish-pr not installed) leaves
+      // `4 done of 4` + all ✅ on the item and nothing saying no PR was produced.
+      // On the supervised path the loop's card note covers it; on a manual or
+      // unattended path without the loop the board reads as a clean success. That
+      // is a deliberate scope, so it has to be written down where a reader checks.
+      const section = sectionOf(load(), BATCHING)
+      const low = section.toLowerCase()
+      expect(low).toMatch(/per-task narrative|narrative of the tasks/)
+      expect(low).toMatch(/not the run's outcome|never the run outcome|not a run-level/)
     },
   )
 
@@ -398,6 +478,39 @@ describe('wiring — /implement owns both call sites (AC1/AC2, T3)', () => {
     const skip = unemphasize(sliceBetween(step28, /^2\.\s+\*\*Skip\*\*/m, /^3\.\s+\*\*Act\*\*/m))
     expect(skip).toMatch(/commit-per-story/)
     expect(skip.toLowerCase()).toMatch(/item 7|tick and queue/)
+    // ...and the strategy menu upstream must not promise the opposite. An agent
+    // resolving the skill top-down reads Step 1.3's own definition of the strategy
+    // it just selected: "update all checkboxes" at the end defers every tick to
+    // Step 3.1, which is now catch-up-only — so a HALTed 4-task story shows
+    // `- [ ] T1`, `- [ ] T2` over finished work, the exact regression the
+    // assertion above closes at the other end of the file.
+    const step13 = unemphasize(sliceBetween(implement(), /#+\s*Step\s*1\.3:/i, /^## Phase 2:/m))
+    expect(step13.toLowerCase()).not.toMatch(/update all checkboxes/)
+    expect(step13.toLowerCase()).toMatch(/ticking each checkbox/)
+  })
+
+  it('does not accept a commit-per-story tick as completion evidence on its own', () => {
+    // Step 2.8 item 7 now ticks on EVERY strategy, so under `commit-per-story` the
+    // tick lands before any commit exists and becomes the only completion evidence
+    // — on the tracker, while the work is only in an uncommitted worktree.
+    // 4-task story, `commit-per-story` (Step 1.3 auto-selects it for every
+    // single-task story): T1-T3 complete, three `[x]` on the body; the run HALTs on
+    // T4's red gate (Step 2.7) and the batch runner's worktree is discarded. The
+    // next attempt starts from the branch head, which under this strategy carries
+    // ZERO commits. Reading the tick alone, Step 0.0/Step 2.1 declare T1-T3
+    // completed and never re-implement them; Step 3.1 commits a T4-only tree and
+    // Step 3.3 opens a PR missing three tasks' work over a body showing them done
+    // — "reports work that was not done and nothing later contradicts it".
+    const step21 = unemphasize(
+      sliceBetween(implement(), /#+\s*Step\s*2\.1:/i, /#+\s*Step\s*2\.2:/i),
+    )
+    const low = step21.toLowerCase()
+    expect(low).toContain('commit-per-story')
+    // the second witness the tick alone does not provide: the commit, or the change
+    // still present in the working tree.
+    expect(low).toMatch(/working tree/)
+    // and a tick without one is pending work, not completed work.
+    expect(low).toMatch(/re-?attempt/)
   })
 
   it('does not re-queue a task an earlier invocation completed', () => {
@@ -503,6 +616,22 @@ describe('wiring — nobody duplicates the loop (AC2, T3)', () => {
     // Composition-Interface promise below ("neither failure is load-bearing")
     // something an agent executing the numbered steps can actually honour.
     expect(section).toContain('$on-failure: report')
+  })
+
+  it('/write-issue names /implement in the "Composed by" list its description carries', () => {
+    // The description is what a skill-discovery/selection pass reads without opening
+    // the file. `/implement` is the caller that drove a whole Composition Interface
+    // entry AND a new argument (`$on-failure`) into this skill, so leaving it out
+    // hides the only caller that opts out of write mode's HALT semantics at exactly
+    // the layer where someone auditing "who depends on those semantics" looks. Not
+    // a required-only list either: `/publish-pr` composes write-issue as Optional
+    // and is listed — so the omission is drift, not convention.
+    const description =
+      /^description:\s*["'](.*)["']\s*$/m.exec(
+        read(SKILL_DATASET('capability/write-issue/SKILL.md')),
+      )?.[1] ?? ''
+    expect(description).toMatch(/Composed by/)
+    expect(description).toMatch(/\/implement\b/)
   })
 })
 
@@ -702,12 +831,36 @@ describe('the docs site carries the feature (DoD)', () => {
   const docs = (rel: string): string =>
     read(join(__dirname, '../../../../apps/website/content/docs', rel))
 
+  const EXECUTION_ANCHOR =
+    '/docs/developer-journey/execution#progress-feedback-ticks-and-one-comment'
+
   it('lists the guideline in the guidelines catalog', () => {
     expect(docs('reference/guidelines-catalog.mdx')).toContain('task-progress')
+  })
+
+  it('makes the catalog entry reachable, like its siblings in the same cell', () => {
+    // The entry shipped as bare text while all three siblings in the Project
+    // Management Tools cell (canonical states, PR state flow, DoR & DoD) are links.
+    // A reader who finds the feature in the catalog then has no route to the page
+    // this story wrote for it, even though the execution page links back here — the
+    // cross-reference was one-directional.
+    const row = docs('reference/guidelines-catalog.mdx')
+      .split('\n')
+      .find(l => l.includes('task-progress'))
+    expect(row).toBeDefined()
+    expect(row).toContain(`](${EXECUTION_ANCHOR})`)
   })
 
   it('describes the progress feedback on the execution journey page', () => {
     const page = docs('developer-journey/execution.mdx').toLowerCase()
     expect(page).toMatch(/task-progress|progress comment/)
+  })
+
+  it('the heading the catalog link targets exists, so the anchor resolves', () => {
+    // A link to a slug no heading generates is a 404-in-page: the reader lands at
+    // the top of a long journey page with no idea which section was meant.
+    expect(docs('developer-journey/execution.mdx')).toMatch(
+      /^#+\s+Progress Feedback: Ticks and One Comment\s*$/m,
+    )
   })
 })
