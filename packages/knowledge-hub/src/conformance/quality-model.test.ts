@@ -48,6 +48,16 @@ const TEMPLATE_TREES = [
   ['mirror', join(__dirname, '../../../../.pair/knowledge')],
 ] as const
 const readKb = (root: string, rel: string): string => readFileSync(join(root, rel), 'utf-8')
+/**
+ * §6's value rule, EXECUTED rather than paraphrased: the value is the first token after the
+ * colon, with backtick formatting stripped (markdown, not part of the token). One
+ * implementation applied to both guarded declarations — this repo's live `tech/risk-matrix.md`
+ * (plain `key: value` form) and the example asset an adopter copies (`` `key`: `value` `` form)
+ * — so the two artifacts cannot be pinned into two different syntaxes with no rule
+ * reconciling them.
+ */
+const resolveOverrideValue = (line: string): string =>
+  line.split(':').slice(1).join(':').trim().split(/\s+/)[0].replace(/`/g, '')
 const WEBSITE_DOCS = join(__dirname, '../../../../apps/website/content/docs')
 const GATES_CONFIG_DOC = readFileSync(
   join(WEBSITE_DOCS, 'reference/quality-gates-configuration.mdx'),
@@ -378,6 +388,23 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(carveOut, 'the carve-out must state the consequence: not trivial').toMatch(
         /not\*{0,2} trivial/i,
       )
+      // The general clause ("markdown that IS the procedure") is charitable; the ENUMERATION
+      // is what makes the test mechanical, and it named skill/workflow/agent files only. The
+      // repo ships a third class of guarded agent-instruction markdown — `dataset/AGENTS.md`
+      // and the root `AGENTS.md`/`CLAUDE.md` generated from it (mirror-guard.test.ts) — whose
+      // own Quick Rules carry "Tests required" and "NEVER modify code to fix a bug before
+      // creating a test". A PR deleting that line and re-running the mirror changes exactly
+      // three files, all `.md`, none matching an enumerated glob: branch (a) short-circuits ⇒
+      // trivial ⇒ Business impact green even in a Core subdomain. Change/diff risk is green
+      // too (this repo's `change-risk.dataset-mirror-pairs` collapses source+mirrors to one
+      // module), criticality green, security green ⇒ `risk:green` — which `tech/automation.md`
+      // declares as its unattended-run Eligibility, on the diff that removed the test-first
+      // rule. Same failure the skill-file carve-out exists for, one file class over.
+      expect(
+        carveOut,
+        'the carve-out must enumerate the agent-instruction file class, not skills only',
+      ).toMatch(/AGENTS\.md/)
+      expect(carveOut, 'the root instruction mirror must be named too').toMatch(/CLAUDE\.md/)
       // Branch (a) is evaluated first, so the exclusion has to be visible ON it — a
       // carve-out stated only further down is one an agent short-circuits past.
       const branchA = bullets.find(l => /\*\*\(a\)/.test(l))
@@ -421,9 +448,17 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
     })
 
     // BR5/AC6 — single supported value; anything else warns and is treated as absent.
+    // Anchored on the value bullet itself, not on a character window over §6: the window form
+    // was a proximity guard that a longer (correct) bullet breaks and a shorter (wrong) one
+    // could satisfy from two unrelated sentences. The contract is that ONE bullet states both
+    // halves — the single accepted value, and what happens to anything else.
     it(`${label} states green is the only accepted value, any other warns and is ignored`, () => {
-      expect(section(content)).toMatch(
-        /only accepted value[\s\S]{0,300}(warn|treated as absent)|warn[\s\S]{0,200}treat(ed)? (it )?as absent/i,
+      const bullet = section(content)
+        .split('\n')
+        .find(l => /^\s*-\s.*only accepted value/.test(l))
+      expect(bullet, 'the single-accepted-value bullet is missing').toBeDefined()
+      expect(bullet, 'the same bullet must state the fallback for any other value').toMatch(
+        /warn|treated as absent/i,
       )
     })
 
@@ -436,6 +471,17 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(section(content)).toMatch(
         /first token|rationale[^.]{0,120}(may|can) follow|value ends at/i,
       )
+      // The first-token rule read strictly is what makes the example asset's own entry inert:
+      // it writes `` - `business-impact.trivial-diff`: `green` — … ``, so the first token after
+      // the colon is `` `green` `` (backticks included), not `green` — and §6's very next clause
+      // says any other value "is treated as absent: skills warn and fall back to the KB default".
+      // An adopter copying that line verbatim into `tech/risk-matrix.md` (the asset's documented
+      // purpose) has opted in and silently got nothing: every docs PR stays on the subdomain
+      // floor. §6 has to say which characters are markdown and which are the token.
+      expect(
+        section(content),
+        'the value rule must say backtick formatting is not part of the token',
+      ).toMatch(/backtick/i)
     })
 
     // BR4/AC5 — raises Business impact only; never lowers another dimension or the max.
@@ -526,6 +572,26 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(trivial[1], 'example A must state that it changes no rule').toMatch(
         /no rule changed|non-normative|typo/i,
       )
+      // ...and its trace must be reproducible with ONLY the override the subsection preamble
+      // names declared. Scoped "a typo fix in a `.md` guideline plus its guarded markdown
+      // mirror", A's Change/diff-risk green silently assumes a SECOND, unmentioned override:
+      // collapsing a source and its guarded mirror into one module is not a KB default — this
+      // repo had to declare `change-risk.dataset-mirror-pairs` to get it ("counts as touching
+      // ONE module for this dimension, not two"), which only needs saying because the plain
+      // §3.1 reading ("touches multiple modules") returns yellow. An adopter with a docs+mirror
+      // setup who declares only `business-impact.trivial-diff` traces their typo-fix PR against
+      // A, resolves Change/diff risk yellow (two guarded locations, no collapse declared), and
+      // gets tier = max(green, yellow, green, green) = `risk:yellow`, not A's `risk:green`. A is
+      // the ONLY fixture in the subsection reaching green — the "this is what the key is for"
+      // row — so its premise has to be the declared one.
+      expect(
+        trivial[3],
+        "example A's Change/diff risk must be green — it is the fixture that reaches risk:green",
+      ).toMatch(/green/)
+      expect(
+        trivial[1],
+        'example A must not scope in a mirror: that green needs an override the preamble does not declare',
+      ).not.toMatch(/mirror/i)
       // AC3 — one non-trivial hunk mixed in: back to the subdomain class (core ⇒ red).
       expect(mixed[4]).toMatch(/red/)
       expect(mixed[4]).toMatch(/core subdomain/)
@@ -607,6 +673,30 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
     expect(consequence, 'it must name the taxonomy it counts in').toMatch(/dimension-resolution/)
   })
 
+  // Rounds 2-4 established the rule: the durable record must not disagree with the shipped
+  // definition. The carve-out grew a file class, so the ADL's statement of it grows too.
+  it('the ADL states the carve-out over the same file classes the shipped §6 does', () => {
+    // The ENUMERATION inside the bolded clause, not the paragraph around it: a line-wide match
+    // stays green when the class is deleted from the enumeration and merely discussed later,
+    // which is exactly the shape the shipped rule must not drift into.
+    const enumeration = TRIVIAL_DIFF_ADL.split('**Executable markdown —')[1]?.split(
+      'is out of the first branch',
+    )[0]
+    expect(enumeration, "the ADL's executable-markdown point is missing").toBeDefined()
+    expect(
+      enumeration,
+      'the ADL must enumerate the agent-instruction class §6 now carves out',
+    ).toMatch(/AGENTS\.md/)
+  })
+
+  // Point 2 cross-referenced "the executable-markdown carve-out **in point 2**" from inside
+  // point 2 itself: a contributor resolving the reference looks for a separate point and finds
+  // none. It is the one sentence explaining why branch (b) must admit prose-only hunks, in the
+  // record a later contributor reads before extending the schema.
+  it('the ADL does not cross-reference the point the reader is already inside', () => {
+    expect(TRIVIAL_DIFF_ADL).not.toMatch(/carve-out[^.]{0,40}in point 2/)
+  })
+
   // AC2's second half lives in the APPLIER, not only in the model: the matrix `classify`
   // emits must be able to name the override as Business impact's source. Every sibling row
   // of the output template offers an alternation of sources; a single-valued
@@ -681,8 +771,18 @@ describe('this repo declares the trivial-diff override (#438, AC9)', () => {
       l.startsWith('- business-impact.trivial-diff:'),
     )
     expect(line, 'the declaration line is missing').toBeDefined()
-    const value = (line as string).split(':').slice(1).join(':').trim().split(/\s+/)[0]
-    expect(value).toBe('green')
+    expect(resolveOverrideValue(line as string)).toBe('green')
+  })
+
+  // The KB rule and this repo's declaration of it must not drift: §6 carves agent-instruction
+  // markdown out of branch (a), and this line is the text a classifying agent resolves ON THIS
+  // REPO — where the class is not hypothetical (`dataset/AGENTS.md` → root `AGENTS.md`/
+  // `CLAUDE.md`, carrying the test-first rule the whole process depends on).
+  it('restates the carve-out over the agent-instruction files this repo actually ships', () => {
+    const entry = RISK_MATRIX_ADOPTION.split('- business-impact.trivial-diff: green')[1] ?? ''
+    const paragraph = entry.split(/\n- /)[0]
+    expect(paragraph, 'the declaration must name the agent-instruction class').toMatch(/AGENTS\.md/)
+    expect(paragraph).toMatch(/CLAUDE\.md/)
   })
 })
 
@@ -723,6 +823,26 @@ describe('risk-matrix-example.md', () => {
     expect(entry, 'the entry must say branch (b) decides for skill/workflow files').toMatch(
       /skill|workflow/i,
     )
+    // The asset states a strictly CLOSED list, and it is the text adopters copy — so even a
+    // charitable reading of §6's leading clause does not reach the copied rule. It has to
+    // enumerate the agent-instruction class too, or a PR that deletes an always-loaded rule
+    // line (test-first, say) and re-runs its mirror is all-`.md`, unmatched by every glob in
+    // the copy, and greens Business impact in whatever subdomain it lands.
+    expect(entry, 'the copied enumeration must cover agent-instruction files').toMatch(/AGENTS\.md/)
+    expect(entry).toMatch(/CLAUDE\.md/)
+  })
+
+  // The asset advertises itself as the text an adopter COPIES into `tech/risk-matrix.md`, and
+  // it writes the value backticked. Resolved through §6's rule (first token after the colon,
+  // backticks stripped as markdown) it must be the single accepted value — otherwise the
+  // copied declaration is malformed, "treated as absent", and the adopter opts in to nothing.
+  // Asserted with the SAME resolver as the live declaration above, which is what reconciles
+  // the two shipped syntaxes.
+  it('its trivial-diff value resolves to `green` under §6 despite the backticks', () => {
+    const overrides = RISK_MATRIX_EXAMPLE.split(/^## Overrides$/m)[1] ?? ''
+    const entry = overrides.split('\n').find(l => l.includes('business-impact.trivial-diff'))
+    expect(entry, 'the trivial-diff entry is missing from the example asset').toBeDefined()
+    expect(resolveOverrideValue(entry as string)).toBe('green')
   })
 
   // One section, one syntax: this asset is what a project copies to start its own
