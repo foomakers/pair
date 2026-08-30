@@ -689,14 +689,50 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
   })
 
   /**
+   * The Supported Options comparison table answers "does this option make me sign up
+   * for anything?" in one scannable column. A hosts-no-code tracker still requires a
+   * code-host account, so a BARE `No` in External Service is the same unqualified
+   * claim the prose surfaces dropped (ADR-018) — in the highest-traffic form.
+   */
+  it('no hosts-no-code row in the Supported Options table sells a bare "External Service: No"', () => {
+    const page = read(REPO_ROOT, 'apps/website/content/docs/pm-tools/index.mdx')
+    const rows = page
+      .split('\n')
+      .filter(line => /^\|\s*\[/.test(line))
+      .map(line =>
+        line
+          .split('|')
+          .slice(1, -1)
+          .map(cell => cell.trim()),
+      )
+    expect(rows.length, 'Supported Options table not found — has the shape moved?').toBeGreaterThan(
+      0,
+    )
+    const hostsNoCode = rows.filter(cells => /^No\b/i.test(cells[3] ?? ''))
+    expect(hostsNoCode.length, 'no hosts-no-code row found in the table').toBeGreaterThan(0)
+    for (const cells of hostsNoCode) {
+      expect(
+        cells[2],
+        `${cells[0]}: unqualified External Service cell — a code-host account is still required (ADR-018)`,
+      ).not.toMatch(/^No\.?$/i)
+    }
+  })
+
+  /**
    * ADR-018 scopes the no-mirroring rule to "PR states (draft / ready / approved /
    * merged)" and says in the same breath that macrostate transitions ALWAYS happen on
    * the PM tool. A docs page that drops the parenthetical reads as "the board is never
    * written on a PR event", which its own Status Transitions table contradicts one
    * screen down (`Create PR | … status → "In Review"`). Every board-level claim on the
    * docs surface must therefore carry the enumeration.
+   *
+   * The detector matches `never mirrored onto <anything>`, not the literal noun "the
+   * board": a page naturally names its own tracker (`never mirrored onto Linear`,
+   * `never mirrored onto Boards`) and pinning the noun let exactly that phrasing ship
+   * unscoped. Row-scoped mentions with no `onto` (linear.mdx's Review table cell,
+   * `review state is never mirrored`) stay out of scope — the row names the event.
    */
-  it('every "never mirrored onto the board" claim on the docs site is scoped to PR states', () => {
+  it('every "never mirrored onto X" claim on the docs site is scoped to PR states', () => {
     const pages = readdirSync(join(REPO_ROOT, 'apps/website/content/docs/pm-tools'))
       .filter(name => name.endsWith('.mdx'))
       .map(name => `apps/website/content/docs/pm-tools/${name}`)
@@ -704,7 +740,7 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
     let claims = 0
     for (const rel of pages) {
       for (const line of read(REPO_ROOT, rel).split('\n')) {
-        if (!/never mirrored onto the board/i.test(line)) continue
+        if (!/never mirrored onto/i.test(line)) continue
         claims++
         expect(
           line,

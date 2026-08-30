@@ -199,6 +199,24 @@ describe('findDeadRepoLinks', () => {
     expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
   })
 
+  // GitHub's source view for a rendered-markdown file is spelled `?plain=1`, and
+  // REPO_BLOB_RE's character class captures the `?` and everything after it. Without
+  // a query strip the gate resolves the literal `…adr-018-….md?plain=1`, existsSync
+  // says false, and `docs:staleness` fails the build on a URL that is perfectly live —
+  // the same class of false positive the trailing-punctuation strip exists to prevent.
+  it('resolves a blob URL carrying a query string', () => {
+    const content = `see [ADR-018](https://github.com/foomakers/pair/blob/main/${ADR}?plain=1)`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
+  })
+
+  it('still flags a dead path when a query string is present', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-018-typo.md?plain=1)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('adr-018-typo.md')
+    expect(errs[0]).not.toContain('plain=1')
+  })
+
   // `blob/main/` is one of three spellings GitHub serves a repo path under; a
   // `tree/main/<dir>` citation already ships on reference/cli/commands.mdx. Matching
   // only `blob` left every other spelling unchecked — the exact 404 this gate exists
