@@ -13,7 +13,7 @@ This guide provides comprehensive instructions for integrating pair with filesys
 - **Local Control**: All project management files are version-controlled with your code
 - **Hierarchical Organization**: Clear folder structure reflecting Initiative → Epic → User Story → Task hierarchy
 - **Markdown Native**: Human-readable files that integrate naturally with documentation
-- **No External Dependencies**: Works without internet connectivity or external tool configuration
+- **No PM-tool dependency**: the backlog needs no network or external tool — branch/PR/review still route to the `code-host` declared in [Step 1](#step-1-configure-way-of-workingmd), which is **not optional here**
 - **Full Customization**: Complete control over templates and organization structure
 
 ## Prerequisites

@@ -452,6 +452,23 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
       .map(m => m[1])
       .filter(block => /adopted for project management/i.test(block))
 
+  /** Every fenced ```markdown block, whatever it says — the copy-paste surface itself. */
+  const markdownFences = (content: string): string[] =>
+    [...content.matchAll(/```markdown\n([\s\S]*?)```/g)].map(m => m[1])
+
+  /**
+   * Does a snippet DECLARE a code host? Structure, not substring.
+   *
+   * `way-of-working-pm-resolution.md` § Section ownership puts `code-host` inside
+   * `## Git Workflow`, and its step 4 explicitly PERMITS declaring a `code-host` that
+   * names the same tool as `pm-tool` ("treat it exactly as if it were omitted"). So a
+   * hosts-code guide that spelled the explicit-but-equal form, or merely mentioned the
+   * word in a comment inside its snippet, is not wrong — only a guide that ships a
+   * declaration in its copy-paste block stops showing the zero-configuration path.
+   */
+  const declaresCodeHost = (snippet: string): boolean =>
+    /^##\s+Git Workflow\s*$/m.test(snippet) || /^\s*[-*]?\s*`?code-host`?\s*:/m.test(snippet)
+
   for (const { guide, hostsCode } of WOW_SNIPPET_GUIDES) {
     for (const [rootLabel, root] of [
       ['dataset', DATASET],
@@ -459,16 +476,18 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     ] as const) {
       it(`${guide} (${rootLabel}) — the way-of-working snippet ${
         hostsCode
-          ? 'omits code-host (zero-config path)'
+          ? 'ships no `## Git Workflow` declaration (it shows the zero-config path)'
           : 'declares code-host (or the first PR HALTs)'
       }`, () => {
         const snippets = wowSnippets(read(root, `${PM_TOOL_KB}/${guide}`))
         expect(snippets.length, `${guide} has no way-of-working snippet`).toBeGreaterThan(0)
         const snippet = snippets.join('\n')
         if (hostsCode) {
-          // ADR-018: the tool IS the code host, so demanding the field here would
-          // contradict the zero-configuration default.
-          expect(snippet, guide).not.toContain('code-host')
+          // ADR-018: the tool IS the code host, so the SHIPPED snippet must show the
+          // zero-configuration path. Asserted on the declaration, not on the substring:
+          // the explicit-but-equal form is legal per the resolution rule's step 4, and
+          // a prose mention inside the block is not a declaration either.
+          expect(declaresCodeHost(snippet), `${guide}: snippet declares a code host`).toBe(false)
         } else {
           expect(snippet, guide).toMatch(/^##\s+Git Workflow\s*$/m)
           expect(snippet, guide).toContain('`code-host`')
@@ -497,8 +516,15 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
    * be silently unasserted. Read the directory instead of naming files: anything not
    * classified above must prove it has no copy-paste surface at all. Subsumes the
    * github-implementation.md reverse case, which is unclassified by design.
+   *
+   * The unclassified branch asserts NO ```markdown fence at all, not "no fence whose
+   * wording `wowSnippets` recognises". `wowSnippets` keys on the phrase `adopted for
+   * project management`, a convention no gate enforces — a new guide worded `Jira is
+   * the project management tool for this project.` would be invisible to it and ship
+   * an unasserted HALTing snippet. Phrasing-independence is free here:
+   * github-implementation.md carries zero ```markdown fences today.
    */
-  it('every *-implementation.md guide is classified or provably snippet-free (no unasserted door)', () => {
+  it('every *-implementation.md guide is classified or ships NO markdown fence at all (no unasserted door)', () => {
     const classified = new Set(WOW_SNIPPET_GUIDES.map(g => g.guide))
     for (const [rootLabel, root] of [
       ['dataset', DATASET],
@@ -511,8 +537,73 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
       expect(guides, `${rootLabel}`).toEqual(expect.arrayContaining([...classified]))
       for (const guide of guides.filter(g => !classified.has(g))) {
         expect(
-          wowSnippets(read(root, `${PM_TOOL_KB}/${guide}`)),
-          `${guide} (${rootLabel}) ships a way-of-working snippet but is not classified in WOW_SNIPPET_GUIDES — classify it with its hostsCode value`,
+          markdownFences(read(root, `${PM_TOOL_KB}/${guide}`)),
+          `${guide} (${rootLabel}) ships a fenced \`\`\`markdown block but is not classified in WOW_SNIPPET_GUIDES — classify it with its hostsCode value`,
+        ).toEqual([])
+      }
+    }
+  })
+
+  /**
+   * The two predicates the sweep above rests on, executed against realistic guide
+   * text rather than trusted by inspection.
+   */
+  describe('the sweep predicates', () => {
+    const JIRA_SNIPPET_OFF_PHRASE = [
+      '# A guide worded off the `adopted for project management` convention.',
+      '',
+      '```markdown',
+      '# Way of Working',
+      '',
+      '- Jira is the project management tool for this project.',
+      '```',
+    ].join('\n')
+
+    it('markdownFences sees a copy-paste surface that wowSnippets is blind to', () => {
+      expect(wowSnippets(JIRA_SNIPPET_OFF_PHRASE)).toEqual([])
+      expect(markdownFences(JIRA_SNIPPET_OFF_PHRASE)).toHaveLength(1)
+    })
+
+    it('declaresCodeHost is true for a declaration, false for a prose mention', () => {
+      expect(
+        declaresCodeHost('# Way of Working\n\n## Git Workflow\n\n- `code-host`: `github`.'),
+      ).toBe(true)
+      // The explicit-but-equal form the resolution rule permits (step 4) — still a
+      // declaration, so still off the zero-config path a hosts-code guide must show.
+      expect(declaresCodeHost('- `code-host`: `azure-devops`.')).toBe(true)
+      // ...but a mention is not a declaration: this must NOT redden a hosts-code guide.
+      expect(
+        declaresCodeHost(
+          '- Azure DevOps is adopted for project management.\n  It hosts code, so no `code-host` line is needed.',
+        ),
+      ).toBe(false)
+    })
+  })
+
+  /**
+   * The Key Benefits a reader reaches BEFORE Step 1 must not sell away the field
+   * Step 1 makes mandatory: a bullet promising "no external dependencies" invites an
+   * agent applying the guide to treat `## Git Workflow` as inapplicable offline, copy
+   * the snippet without it, and HALT on the project's first PR operation.
+   */
+  const NO_DEP_CLAIM = /(no|zero)\s+external\s+dependenc/i
+
+  it('no hosts-no-code PM surface sells an unqualified "no external dependencies" benefit', () => {
+    const surfaces = [
+      ...WOW_SNIPPET_GUIDES.filter(g => !g.hostsCode).map(g => `${PM_TOOL_KB}/${g.guide}`),
+      `${PM_TOOL_KB}/README.md`,
+    ]
+    for (const [rootLabel, root] of [
+      ['dataset', DATASET],
+      ['installed', REPO_ROOT],
+    ] as const) {
+      for (const rel of surfaces) {
+        const offending = read(root, rel)
+          .split('\n')
+          .filter(line => NO_DEP_CLAIM.test(line))
+        expect(
+          offending,
+          `${rel} (${rootLabel}) claims no external dependencies — a code-host is still required (ADR-018)`,
         ).toEqual([])
       }
     }
@@ -595,6 +686,33 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
     // "host **no code**" — the claim is emphasised in the prose, so allow the
     // bold markers between the verb and the phrase.
     expect(page).toMatch(/(Filesystem|Linear)[\s\S]{0,400}hosts? \*{0,2}no code/i)
+  })
+
+  /**
+   * ADR-018 scopes the no-mirroring rule to "PR states (draft / ready / approved /
+   * merged)" and says in the same breath that macrostate transitions ALWAYS happen on
+   * the PM tool. A docs page that drops the parenthetical reads as "the board is never
+   * written on a PR event", which its own Status Transitions table contradicts one
+   * screen down (`Create PR | … status → "In Review"`). Every board-level claim on the
+   * docs surface must therefore carry the enumeration.
+   */
+  it('every "never mirrored onto the board" claim on the docs site is scoped to PR states', () => {
+    const pages = readdirSync(join(REPO_ROOT, 'apps/website/content/docs/pm-tools'))
+      .filter(name => name.endsWith('.mdx'))
+      .map(name => `apps/website/content/docs/pm-tools/${name}`)
+      .concat('apps/website/content/docs/concepts/code-host.mdx')
+    let claims = 0
+    for (const rel of pages) {
+      for (const line of read(REPO_ROOT, rel).split('\n')) {
+        if (!/never mirrored onto the board/i.test(line)) continue
+        claims++
+        expect(
+          line,
+          `${rel}: unscoped no-mirroring claim — name the PR states (draft / ready / approved / merged) it covers`,
+        ).toMatch(/draft/i)
+      }
+    }
+    expect(claims, 'no no-mirroring claim found at all — has the wording moved?').toBeGreaterThan(0)
   })
 
   it('the Linear guide says who provisions the chromatic risk:/cost: labels', () => {
