@@ -60,9 +60,19 @@ The review is dispatched to that clean-context subagent with a bounded instructi
   approving review from the PR author, so on a single-maintainer repository no 🔴 PR can satisfy
   `pair-explicit-approval` *through the review path*. The alternative is an approval token: the
   maintainer posts `/approve <head-sha>` on the PR, and the job accepts it only after resolving the
-  actor server-side — a human account, not an app, with write-level association — and binding it to the
-  current head, so a force-push voids it. At 🟡 there is no such constraint: the pair review itself *is*
-  the reviewer approval the quality model asks for.
+  actor server-side — a human account, not an app, whose *repository permission* it reads back from the
+  collaborators API as `admin`/`maintain`/`write` — and binding it to the current head, so a force-push
+  voids it. The `author_association` is only a pre-filter: `MEMBER` means "in the owning organization",
+  not "has push access here". At 🟡 there is no such constraint: the pair review itself *is* the
+  reviewer approval the quality model asks for.
+</Callout>
+
+<Callout type="warn">
+  **The token is opt-in, and it is not a self-approval shortcut.** Set the repository variable
+  `PAIR_SOLO_APPROVAL_TOKEN` to `true` only where the repository genuinely cannot produce a second
+  human — that declaration is what lets the PR author's own token count. Leave it unset (the default,
+  and the right setting for every multi-person repository) and the token carries the same author
+  exclusion the review path carries: a 🔴 PR can never be satisfied by its own author.
 </Callout>
 
 <Callout type="info">
@@ -71,8 +81,9 @@ The review is dispatched to that clean-context subagent with a bounded instructi
   tier a ceremony. What the token buys is deliberateness (a distinct, explicit act), an audit trail
   (who, when, on which head SHA) and invalidation on change. It is **not** forgery-resistant while the
   agent runs on the maintainer's own credentials — host-side they are the same actor — which becomes
-  achievable only with a dedicated agent identity
-  ([pair#218](https://github.com/foomakers/pair/issues/218)). Where a second human exists, the review
+  achievable only with a dedicated agent identity shipped as a **GitHub App or Bot account**
+  ([pair#218](https://github.com/foomakers/pair/issues/218)); a machine *user* account holding a PAT
+  looks like a human to the predicate and recovers nothing. Where a second human exists, the review
   path stays primary. The tier requirement itself is unchanged: this is a way to satisfy it, not a
   relaxation of it ([pair#398](https://github.com/foomakers/pair/issues/398)).
 </Callout>

@@ -414,11 +414,14 @@ audit "the host evidence table states what kind of artifact it is" "$GITHUB_GUID
 # produce a non-author human review. Its predicate decides authorization, so it is
 # executed here — offline, deterministic — exactly like the review predicate above.
 COMMENTS_FIXTURE="$REPO_ROOT/scripts/smoke-tests/fixtures/github-pr-comments.json"
+PERMS_FIXTURE="$REPO_ROOT/scripts/smoke-tests/fixtures/github-collaborator-permissions.json"
 assert_file "$COMMENTS_FIXTURE" || exit 1
+assert_file "$PERMS_FIXTURE" || exit 1
 audit "comment fixture carries the host-asserted fields the token filter reads" "$COMMENTS_FIXTURE" \
   '"author_association"' '"performed_via_github_app"' '"type"' '"login"'
 audit "the token predicate ships in the evaluator, not as doc prose" "$EVALUATOR" \
   'human_token_approval_jq_filter' 'human_token_approval_actor_jq_filter' \
+  'human_token_approval_login_jq_filter' 'token_approver_login' 'token_permission_sufficient' \
   'solo_approval_token_body' 'author_association' 'performed_via_github_app' \
   'confirmation, not independent review'
 if command -v jq >/dev/null 2>&1; then
@@ -427,37 +430,120 @@ if command -v jq >/dev/null 2>&1; then
   # `jq … | grep -c .` pipeline the documented job uses — no transliteration.
   TOKEN_FILTER="$(human_token_approval_jq_filter)"
   ACTOR_FILTER="$(human_token_approval_actor_jq_filter)"
+  LOGIN_FILTER="$(human_token_approval_login_jq_filter)"
   TOKEN_HEAD='cc1fba122f0c912ba01288fe90ab2632e7e41057'
+  # The repository under test is MULTI-human by default: the opt-in is unset and the
+  # PR author is `pr-author`, so the author exclusion is live (the single-human
+  # declaration is exercised separately below).
+  PR_AUTHOR=pr-author
+  SOLO_APPROVAL_TOKEN=
+  export PR_AUTHOR SOLO_APPROVAL_TOKEN
   count_tokens() { # count_tokens <head-sha>
     HEAD_SHA="$1" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" | grep -c . || true
   }
-  # AC1: a human maintainer's token on the current head satisfies the check. The
-  # fixture also holds a Bot token, an App-attributed token, a drive-by reader's
-  # token, a stale one and a withdrawn one — exactly one comment may count.
-  check "token accepted for a human maintainer on the current head" 1 \
+  matched_ids() { # matched_ids <head-sha> <id>…  — how many of <id>… the filter matched
+    local head="$1"; shift
+    HEAD_SHA="$head" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
+      grep -c "$(printf '%s\\|' "$@" | sed 's/\\|$//')" || true
+  }
+  # AC1: human maintainers' tokens on the current head are candidates. Two qualify
+  # with the author exclusion live — `solo-maintainer` (OWNER) and `second-human`
+  # (COLLABORATOR) — plus `org-member-readonly`, whom only the SERVER-SIDE permission
+  # read below can reject. The Bot, App-attributed, drive-by, stale, withdrawn,
+  # quoted, indented and author tokens must all be absent.
+  check "tokens accepted for human non-author maintainers on the current head" 3 \
     "$(count_tokens "$TOKEN_HEAD")"
   # AC3: a force-push moves the head; no comment names the new one, so the token is void.
   check "token void after a force-push (head no longer named)" 0 \
     "$(count_tokens 2222222222222222222222222222222222222222)"
   # AC5 + Technical Risks row 1: neither a Bot actor, nor a body that CLAIMS a human
   # actor, nor an App-attributed comment can satisfy it — the actor is host-asserted.
-  BOT_TOKENS="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
-    grep -c '3237609004\|3237609005\|3237609009' || true)"
-  check "bot / app-attributed / actor-claiming tokens rejected" 0 "$BOT_TOKENS"
-  # A repository read grants comment rights to anyone: association is the authorization.
-  OUTSIDER="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
-    grep -c '3237609006' || true)"
-  check "a drive-by reader's token is rejected (no write association)" 0 "$OUTSIDER"
+  check "bot / app-attributed / actor-claiming tokens rejected" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609004 3237609005 3237609009)"
+  # A repository read grants comment rights to anyone, so a NONE association is out.
+  check "a drive-by reader's token is rejected (no repository association)" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609006)"
   # Removed-then-re-added: the CURRENT body is what counts, so a withdrawn token stops counting.
-  WITHDRAWN="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" "$COMMENTS_FIXTURE" |
-    grep -c '3237609007' || true)"
-  check "a withdrawn (edited-away) token no longer counts" 0 "$WITHDRAWN"
+  check "a withdrawn (edited-away) token no longer counts" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609007)"
+  # --- #472 review round 1 -----------------------------------------------------
+  # Critical: without an author exclusion, the PR author self-satisfies 🔴 on ANY
+  # repository — the state of every 🔴 PR before someone reviews it. Comment
+  # 3237609010 is `pr-author`, OWNER, human, on the current head.
+  check "the PR author cannot self-satisfy 🔴 (opt-in OFF)" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609010)"
+  check "…and no audit line names the author as approver" "" \
+    "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE" | grep '^pr-author ' || true)"
+  # The paired success path: the SAME comment counts once the repository has declared
+  # itself single-human — that declaration is what the token is a fallback for.
+  check "the PR author's token counts once the repo declares itself single-human" 1 \
+    "$(SOLO_APPROVAL_TOKEN=true HEAD_SHA="$TOKEN_HEAD" jq -r "$TOKEN_FILTER" \
+      "$COMMENTS_FIXTURE" | grep -c '3237609010' || true)"
+  # Major: GitHub's own "Quote reply" (`> /approve <real sha>`) must not approve on
+  # the quoter's behalf — 3237609012 explicitly declines in the same comment. Nor may
+  # an indented code block or an inline-backtick mention (3237609013).
+  check "a quote-reply of the token does not approve (nor an indented/backticked one)" 0 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609012 3237609013)"
+  check "…and neither is ever published as the approver" "" \
+    "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE" |
+      grep '^quoting-collab \|^doc-writing-collab ' || true)"
+  # Minor: HEAD_SHA is concatenated INTO a regex, so a 40-char metacharacter string
+  # must be refused by the `^[0-9a-f]{40}$` guard, not merely by its length.
+  check "a 40-character metacharacter 'head' matches nothing" 0 \
+    "$(count_tokens '........................................')"
+  check "a 40-character non-hex 'head' matches nothing" 0 \
+    "$(count_tokens 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')"
   # Never satisfiable with an unset head: an empty HEAD_SHA must not degrade to "any token".
   check "an unset head SHA accepts nothing (fail-safe)" 0 "$(count_tokens '')"
-  # AC2 audit trail: who approved, on which head, when — read from the host fields.
-  check "the audit line names the host-asserted actor" \
-    "solo-maintainer approved head $TOKEN_HEAD at 2026-08-28T10:00:00Z" \
-    "$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE")"
+  # --- stage 2: the server-side permission read IS the authorization -------------
+  # Major: `author_association: MEMBER` means "member of the owning organization",
+  # never "has push access on THIS repository". 3237609011 is such a member and
+  # clears stage 1; only the collaborators-permission read rejects it.
+  check "a read-only org MEMBER clears stage 1 (which is why stage 2 exists)" 1 \
+    "$(matched_ids "$TOKEN_HEAD" 3237609011)"
+  fixture_permission() { jq -r --arg l "$1" '.[$l] // "none"' "$PERMS_FIXTURE"; }
+  for lvl in admin maintain write; do
+    if token_permission_sufficient "$lvl" 2>/dev/null; then
+      log_succ "permission '$lvl' authorizes a token"
+    else
+      log_fail "permission '$lvl' must authorize a token"; FAILED=1
+    fi
+  done
+  for lvl in read triage none '' pull bogus; do
+    if token_permission_sufficient "$lvl" 2>/dev/null; then
+      log_fail "permission '${lvl:-<empty>}' must NOT authorize a token"; FAILED=1
+    else
+      log_succ "permission '${lvl:-<empty>}' is refused"
+    fi
+  done
+  check "a read-only org MEMBER is refused by the server-side permission read" "" \
+    "$(token_approver_login fixture_permission org-member-readonly 2>/dev/null || true)"
+  check "no lookup command ⇒ no approver (fail-safe)" "" \
+    "$(token_approver_login '' solo-maintainer 2>/dev/null || true)"
+  check "no candidates ⇒ no approver" "" \
+    "$(token_approver_login fixture_permission 2>/dev/null || true)"
+  # The whole documented decision, end to end, exactly as the job runs it.
+  CANDIDATES="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$LOGIN_FILTER" "$COMMENTS_FIXTURE" | awk '!seen[$0]++')"
+  # shellcheck disable=SC2086
+  APPROVER="$(token_approver_login fixture_permission $CANDIDATES 2>/dev/null || true)"
+  check "the authorized approver is a write-level human, not the read-only member" \
+    solo-maintainer "$APPROVER"
+  # AC2 audit trail: who approved, on which head, when — read from the host fields,
+  # and only for the actor stage 2 authorized.
+  AUDIT="$(HEAD_SHA="$TOKEN_HEAD" jq -r "$ACTOR_FILTER" "$COMMENTS_FIXTURE" |
+    grep "^$APPROVER approved head " | tail -1)"
+  check "the audit line names the host-asserted actor and the head" \
+    "solo-maintainer approved head cc1fba122f0c at 2026-08-28T10:00:00Z" "$AUDIT"
+  # The published `description` is capped at 140 characters by the API: over it, the
+  # POST is refused, `set -euo pipefail` aborts the step and the pending placeholder
+  # stands — a permanently unmergeable 🔴 PR. Check the WORST case, a 39-char login.
+  LONGEST_DESC="$(printf '%039d approved head %.12s at 2026-08-28T10:00:00Z — confirmation, not independent review' \
+    0 "$TOKEN_HEAD")"
+  if [ "${#LONGEST_DESC}" -le 140 ]; then
+    log_succ "the audit description fits the 140-char status cap even at a 39-char login (${#LONGEST_DESC})"
+  else
+    log_fail "the audit description exceeds the 140-char status cap (${#LONGEST_DESC})"; FAILED=1
+  fi
   # AC4 regression: the review-based path is unchanged by the token's arrival.
   check "review path still counts the human non-author approval" 1 \
     "$(HEAD_SHA=cc1fba122f0c912ba01288fe90ab2632e7e41057 PR_AUTHOR=pr-author \
@@ -466,14 +552,20 @@ if command -v jq >/dev/null 2>&1; then
   # The token body a maintainer is told to post is generated from ONE shipped text.
   check "the documented token body is generated, not hand-copied" \
     "/approve $TOKEN_HEAD" "$(solo_approval_token_body "$TOKEN_HEAD")"
+  unset PR_AUTHOR SOLO_APPROVAL_TOKEN
 else
   log_warn "token-filter assertions skipped — jq not installed (fixture shape still asserted)"
 fi
 # The job must try the REVIEW path first and only then the token (AC4: never a
-# replacement), paginate the comments query, and keep the producer pin.
+# replacement), paginate the comments query, authorize server-side, and keep the pin.
 audit "the job wires the token as the alternative, after the review path" "$GITHUB_GUIDE" \
   'human_token_approval_jq_filter' 'api --paginate "repos/\$REPO/issues/\$PR/comments"' \
   'solo-maintainer' 'confirmation, not independent review'
+audit "the job authorizes the actor server-side and threads the single-human opt-in" "$GITHUB_GUIDE" \
+  'collaborators/\$1/permission' 'token_approver_login' \
+  'SOLO_APPROVAL_TOKEN: \${{ vars.PAIR_SOLO_APPROVAL_TOKEN }}'
+audit "the comment trigger is body-filtered on created, so ordinary comments cost nothing" \
+  "$GITHUB_GUIDE" "contains(github.event.comment.body, '/approve')"
 REVIEW_QUERY_LINE="$(grep -n 'pulls/\$PR/reviews' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
 TOKEN_QUERY_LINE="$(grep -n 'issues/\$PR/comments' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
 if [ -n "$REVIEW_QUERY_LINE" ] && [ -n "$TOKEN_QUERY_LINE" ] &&

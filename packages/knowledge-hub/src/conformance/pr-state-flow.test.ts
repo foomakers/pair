@@ -614,11 +614,29 @@ describe('the solo-maintainer token is citable everywhere it is referenced (roun
 // independent review. The authorization-relevant part is that the actor is resolved
 // from host-asserted fields, never from the body the applier writes.
 
+/**
+ * The token PREDICATE ITSELF — the single `printf` line inside
+ * `human_token_approval_select`, not the file that contains it.
+ *
+ * Scoping matters (review round 1): asserted against the whole evaluator, a check
+ * like `/\.user\.type=="User"/` is satisfied by the REVIEW predicate this story does
+ * not touch, and `/[Bb]ot/` by the prose comment above it — so deleting the bot
+ * exclusion from the token predicate left both AC-named tests green.
+ */
+const TOKEN_PREDICATE = ((): string => {
+  const m = EVALUATOR.match(/human_token_approval_select\(\)\s*\{\s*\n\s*printf\s+'%s'\s+'([^']*)'/)
+  expect(m, 'human_token_approval_select must ship as one printf-ed predicate').not.toBeNull()
+  return (m as RegExpMatchArray)[1] as string
+})()
+
 describe('the token predicate ships in the evaluator (#398)', () => {
   it('exposes the token entry points next to the review predicate it does not replace', () => {
     for (const fn of [
       'human_token_approval_jq_filter',
+      'human_token_approval_login_jq_filter',
       'human_token_approval_actor_jq_filter',
+      'token_permission_sufficient',
+      'token_approver_login',
       'solo_approval_token_body',
     ]) {
       expect(EVALUATOR).toContain(fn)
@@ -631,30 +649,69 @@ describe('the token predicate ships in the evaluator (#398)', () => {
   })
 
   it('AC2 — resolves the actor from host-asserted fields, never from the applier’s body', () => {
-    expect(EVALUATOR).toMatch(/\.user\.type=="User"/)
-    expect(EVALUATOR).toMatch(/performed_via_github_app/)
-    expect(EVALUATOR).toMatch(/author_association/)
+    expect(TOKEN_PREDICATE).toContain('.user.type=="User"')
+    expect(TOKEN_PREDICATE).toContain('performed_via_github_app')
+    expect(TOKEN_PREDICATE).toContain('author_association')
     // the body is read for the COMMAND + the SHA only, never for an actor field
-    expect(EVALUATOR).not.toMatch(/\.body[\s\S]{0,120}(login|actor|user\.type)/)
+    expect(TOKEN_PREDICATE).not.toMatch(/\.body[\s\S]{0,120}(login|actor|user\.type)/)
   })
 
   it('AC2/AC3 — the token is bound to the current head SHA and never satisfiable unbound', () => {
-    expect(EVALUATOR).toMatch(/env\.HEAD_SHA/)
-    // an unset/short HEAD_SHA must not degrade the predicate into "any /approve"
-    expect(EVALUATOR).toMatch(/\(env\.HEAD_SHA\|length\)==40/)
+    expect(TOKEN_PREDICATE).toContain('env.HEAD_SHA')
+    // HEAD_SHA is concatenated INTO a regex, so a length check is not enough: 40
+    // metacharacters would make the predicate match any `/approve <40 chars>`.
+    expect(TOKEN_PREDICATE).toContain('test("^[0-9a-f]{40}$")')
+    expect(TOKEN_PREDICATE).not.toMatch(/\(env\.HEAD_SHA\|length\)==40/)
   })
 
   it('AC5 — bots and app-attributed comments are excluded by construction', () => {
-    expect(EVALUATOR).toMatch(/[Bb]ot/)
-    expect(EVALUATOR).toMatch(/performed_via_github_app\|not/)
+    expect(TOKEN_PREDICATE).toContain('.user.type=="User"')
+    expect(TOKEN_PREDICATE).toContain('(.performed_via_github_app|not)')
+  })
+
+  it('excludes the PR author unless the repository declared itself single-human', () => {
+    expect(TOKEN_PREDICATE).toContain('env.SOLO_APPROVAL_TOKEN=="true"')
+    expect(TOKEN_PREDICATE).toContain('.user.login != env.PR_AUTHOR')
+  })
+
+  it('anchors the command to its own line, so a quote-reply never approves', () => {
+    // `(^|\s)…` matched the newline before `> ` in GitHub's own Quote reply output.
+    expect(TOKEN_PREDICATE).toContain(String.raw`test("(^|\\n)/approve`)
+    // no leading-whitespace tolerance either: an indented code block must not approve
+    expect(TOKEN_PREDICATE).toContain(String.raw`(\\n|$)")`)
+    expect(TOKEN_PREDICATE).not.toContain(String.raw`(^|\\s)/approve`)
+  })
+
+  it('makes the server-side permission read the authorization, not the association', () => {
+    // `MEMBER` is "in the owning org", not "has push access here" — so the
+    // association may only ever be a pre-filter.
+    expect(EVALUATOR).toMatch(/admin \| maintain \| write\) return 0/)
+    expect(EVALUATOR).toMatch(/collaborators\/\{login\}\/permission/)
+    expect(EVALUATOR).toMatch(/pre-filter, not the authorization/i)
+  })
+
+  it('bounds the audit line under the 140-char status-description cap', () => {
+    // The full 40-char head put a 24+ character login over the API cap.
+    expect(EVALUATOR).toContain('env.HEAD_SHA[0:12]')
+    expect(EVALUATOR).toMatch(/140/)
   })
 
   it('states the guarantee in the settled words, inside the executable projection', () => {
     expect(EVALUATOR).toMatch(/confirmation, not independent review/)
   })
 
-  it('builds both projections from ONE predicate text (count + audit line cannot drift)', () => {
+  it('builds every projection from ONE predicate text (count + audit line cannot drift)', () => {
     expect(EVALUATOR).toMatch(/human_token_approval_select/)
+    for (const proj of [
+      'human_token_approval_jq_filter',
+      'human_token_approval_login_jq_filter',
+      'human_token_approval_actor_jq_filter',
+    ]) {
+      const body = EVALUATOR.slice(EVALUATOR.indexOf(`${proj}() {`))
+      expect(body.slice(0, 300), `${proj} must be built from the shared select`).toContain(
+        '$(human_token_approval_select)',
+      )
+    }
   })
 })
 
@@ -690,6 +747,26 @@ describe('the host job wires the token as the ALTERNATIVE path (#398)', () => {
     expect(GITHUB_GUIDE).toMatch(/issue_comment:/)
   })
 
+  it('authorizes the actor server-side — the association is only a pre-filter', () => {
+    expect(GITHUB_GUIDE).toMatch(/collaborators\/\$1\/permission/)
+    expect(GITHUB_GUIDE).toMatch(/token_approver_login/)
+    expect(GITHUB_GUIDE).toMatch(/human_token_approval_login_jq_filter/)
+    // the audit line is drawn only for the actor stage 2 authorized
+    expect(GITHUB_GUIDE).toMatch(/grep "\^\$APPROVER approved head "/)
+  })
+
+  it('threads the single-human opt-in, so the author exclusion is live by default', () => {
+    expect(GITHUB_GUIDE).toMatch(/SOLO_APPROVAL_TOKEN: \$\{\{ vars\.PAIR_SOLO_APPROVAL_TOKEN \}\}/)
+    expect(GITHUB_GUIDE).toMatch(/PAIR_SOLO_APPROVAL_TOKEN[\s\S]{0,600}author/i)
+  })
+
+  it('body-filters the created comment, but never the withdrawal events', () => {
+    expect(GITHUB_GUIDE).toMatch(/contains\(github\.event\.comment\.body, '\/approve'\)/)
+    // an edited-away or deleted token no longer CONTAINS the command and must still
+    // re-evaluate, so only `created` may be filtered
+    expect(GITHUB_GUIDE).toMatch(/github\.event\.action != 'created' \|\|/)
+  })
+
   it('tells the adopter exactly what to post, and what it does NOT mean', () => {
     expect(GITHUB_GUIDE).toMatch(/\/approve <head-sha>|\/approve \$HEAD_SHA/)
     expect(GITHUB_GUIDE).toMatch(/confirmation, not independent review/)
@@ -712,6 +789,35 @@ describe('the docs claim exactly what the token provides (#398)', () => {
     expect(ADR_018).toMatch(
       /shared credentials[\s\S]{0,600}dedicated identity|dedicated identity[\s\S]{0,600}shared credentials/i,
     )
+  })
+
+  it('AC6 — and states WHICH shape of #218 recovers it (a machine user account does not)', () => {
+    // The claim only holds for an App/Bot identity: a machine USER account with a
+    // PAT is `user.type == "User"` with no App attribution, so the predicate ACCEPTS
+    // the agent and nothing is recovered.
+    expect(ADR_018).toMatch(/machine user account/i)
+    expect(ADR_018).toMatch(/GitHub App or Bot account/i)
+    expect(ADR_018).toMatch(/deny-list/i)
+    expect(DOCS_PAGE).toMatch(/machine \*?user\*? account/i)
+  })
+
+  it('records the author exclusion and its single-human opt-in as the decision it is', () => {
+    for (const doc of [ADR_018, GITHUB_GUIDE, GUIDELINE, DOCS_PAGE]) {
+      expect(doc).toMatch(/PAIR_SOLO_APPROVAL_TOKEN/)
+    }
+    expect(ADR_018).toMatch(/author exclusion/i)
+    expect(GITHUB_GUIDE).toMatch(/pre-filter/i)
+    expect(GUIDELINE).toMatch(/pre-filter/i)
+  })
+
+  it('corrects the "write-level association" claim on every surface that made it', () => {
+    for (const doc of [EVALUATOR, GITHUB_GUIDE, GUIDELINE, ADR_018, DOCS_PAGE, ROOT_WOW]) {
+      expect(doc).not.toMatch(/write-level association/i)
+      expect(doc).not.toMatch(/write-level `?author_association`?/i)
+    }
+    for (const doc of [GITHUB_GUIDE, GUIDELINE, DOCS_PAGE, ROOT_WOW]) {
+      expect(doc).toMatch(/collaborators API|collaborators\/|admin.*maintain.*write/i)
+    }
   })
 
   it('AC7 — the tier REQUIREMENT is untouched: quality-model §4 and D10 still demand it', () => {

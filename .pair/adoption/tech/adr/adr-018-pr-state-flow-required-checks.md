@@ -255,13 +255,31 @@ highest tier decorative.
   re-application after a push unambiguous; the actor is equally host-asserted on both surfaces, so the
   SHA binding is what decides it. Withdrawal is an edit or a delete, and the job reads the comments
   fresh, so only the current state of the current head counts.
-- **The actor is resolved server-side.** The predicate (`human_token_approval_jq_filter`, shipped in
-  `assets/pr-state.sh` next to the review predicate — one executable projection, no transliteration)
-  accepts a comment only on host-asserted fields: `.user.type == "User"` (no Bot, no Organization),
-  `.performed_via_github_app == null` (an App posting on a human's behalf is rejected), and
-  `.author_association ∈ {OWNER, MEMBER, COLLABORATOR}` — because on a public repository **anyone with
-  read access can comment**, so the ability to type is not the authorization. Only the command and the
-  SHA come from the body; a body claiming to be someone else changes nothing.
+- **The actor is resolved server-side, in two stages that both have to pass.** Stage 1
+  (`human_token_approval_jq_filter`, shipped in `assets/pr-state.sh` next to the review predicate — one
+  executable projection, no transliteration) accepts a comment only on host-asserted fields:
+  `.user.type == "User"` (no Bot, no Organization), `.performed_via_github_app == null` (an App posting
+  on a human's behalf is rejected), `.author_association ∈ {OWNER, MEMBER, COLLABORATOR}`, and the
+  command **owning its line** — `(^|\n)/approve <40-hex head SHA>` with no leading whitespace, so
+  GitHub's own `> /approve …` quote-reply cannot approve a PR on the quoter's behalf. Only the command
+  and the SHA come from the body; a body claiming to be someone else changes nothing.
+  Stage 2 (`token_approver_login` / `token_permission_sufficient`) reads
+  `GET /repos/{owner}/{repo}/collaborators/{login}/permission` and requires `admin`/`maintain`/`write`.
+  **The association is a pre-filter, not the authorization** — and stating it that way is a correction,
+  not a nuance: GitHub's `MEMBER` means "member of the organization that owns the repository" and says
+  nothing about permission on *this* repository, so on a 500-member org a read-only member would
+  otherwise have satisfied 🔴. Only the permission read is authorization.
+- **The author exclusion, and the opt-in that suspends it.** The review predicate carries
+  `.user.login != PR_AUTHOR`; the token carries it too, because without it *any* author on *any*
+  repository self-satisfies 🔴 the moment no review has been submitted yet — which is the state of every
+  🔴 PR before someone reviews it, on a ten-person repository as much as a one-person one. Nothing in a
+  comment payload says "this repository cannot produce a second human", so the repository **declares**
+  it: the variable `PAIR_SOLO_APPROVAL_TOKEN=true`, threaded into the predicate as
+  `SOLO_APPROVAL_TOKEN`. Set, the author's own token counts — the entire point on a one-person repo.
+  Unset (the default), the token is still available but only to a **non-author** write-level human, so
+  it can never be a self-approval shortcut for a repository that *can* produce a second human. The
+  opt-in is the executable form of the business rule "the token is a fallback for a configuration that
+  cannot produce a second human, not a shortcut for one that can".
 - **The review path stays primary.** The job queries the reviews endpoint first and reaches the token
   only when that found nothing, so a two-human repository is unchanged, byte for byte, and pays no
   additional API call.
@@ -288,20 +306,32 @@ Stated in the words the mechanism supports, and no stronger:
   wire** — every field above resolves identically for both, so no server-side check can separate them,
   and an agent holding those credentials can post the `/approve <head-sha>` comment itself. The token
   records *that a deliberate act happened under this identity*, not *that a human performed it*.
-- **Dedicated identity (#218): the same token becomes verifiable.** Once the agent acts as a distinct,
-  non-human identity, its comments carry `.user.type == "Bot"` (or an App attribution) and are rejected
-  by the very predicate above — at which point "applied by a human, not by the agent" is **verified
-  rather than assumed**. #218 is therefore the prerequisite for the security property, not a neighbour
-  of it. Until it ships, an adopter for whom forgery-resistance is the point must keep a second human
-  account, and the token is the honest fallback for everyone else.
+- **Dedicated identity (#218): the same token becomes verifiable — but only in one of #218's possible
+  shapes.** The property is recovered when the agent ships as a **GitHub App or a Bot account**: its
+  comments then carry `.user.type == "Bot"` or an App attribution and are rejected by the very
+  predicate above, at which point "applied by a human, not by the agent" is **verified rather than
+  assumed**. It is **not** recovered when #218 ships the agent as a **machine user account** — a second
+  GitHub user holding a PAT, the cheapest and most common way to give an agent its own identity. There
+  `user.type` is `"User"` and `performed_via_github_app` is `null`, so the predicate **accepts** the
+  agent's `/approve` and the token is exactly as forgeable as it is today; recovering the property in
+  that shape would additionally require an explicit deny-list of the agent's login. #218 is therefore
+  the prerequisite for the security property, but only under that condition — a dedicated identity is
+  not sufficient by itself, the identity must be non-human to the host. Until then, an adopter for whom
+  forgery-resistance is the point must keep a second human account, and the token is the honest
+  fallback for everyone else.
 
 **Grep-verifiable statement, one sentence per identity configuration** (this is the DoD item, kept
 literal so it can be checked with `grep`, not inferred):
 
 - With **shared credentials** (the agent authenticated as the maintainer), the agent **can** apply the
   token and nothing distinguishes it from the human — the token is auditable, not unforgeable.
-- With a **dedicated identity** (#218), the agent **cannot** apply the token: its comments are
-  host-attributed to a Bot or an App and the predicate rejects them — the human act becomes verifiable.
+- With a **dedicated identity** (#218) shipped as a **GitHub App or Bot account**, the agent **cannot**
+  apply the token: its comments are host-attributed to a Bot or an App and the predicate rejects them —
+  the human act becomes verifiable.
+- With a **dedicated identity** shipped as a **machine user account** (a second GitHub user with a
+  PAT), the agent **can** still apply the token: `user.type` is `"User"` and there is no App
+  attribution, so the predicate accepts it — the same forgeability as shared credentials, and it would
+  need an explicit deny-list of the agent login to close.
 
 This is the residual the flow declares rather than hides, in the same spirit as `pair-review` being an
 anti-accident and not an authorization control.
@@ -310,7 +340,13 @@ anti-accident and not an authorization control.
 
 - 🔴 is usable on a single-account repository, at a **named, weaker** guarantee — the failure mode this
   amendment exists to prevent is not a bug but a false sense of security.
-- One more event triggers the job (`issue_comment`), whose payload carries `issue` and not
+- **The token costs one extra API read per candidate actor**, on the fallback path only: the
+  collaborators permission endpoint, called only after stage 1 found a candidate, so a two-human
+  repository (which never leaves the review path) and every 🟢/🟡 PR pay nothing.
+- One more event triggers the job (`issue_comment`), **body-filtered on `created`** so that ordinary
+  discussion traffic neither spends Actions minutes nor — with `cancel-in-progress` — cancels an
+  in-flight evaluation; `edited`/`deleted` stay unfiltered, because a withdrawal no longer contains the
+  command and is precisely the event that must re-evaluate. The payload carries `issue` and not
   `pull_request`; head/base/author are resolved from the API there. Residual, recorded: if that single
   read fails, the pending-first step aborts and the *previous* status for that same head stands, so a
   token withdrawn during a dying evaluation stays satisfied until the next event. A tier raise — the
@@ -324,8 +360,12 @@ anti-accident and not an authorization control.
 ### Adoption Impact (amendment)
 
 - `way-of-working.md`: the single-maintainer line stops reading "a second human account is a
-  prerequisite" and names the token as this repository's available path.
-- KB: `assets/pr-state.sh` gains the token predicate + audit projection; `pr-states.md` gains the two
-  edge-case rows; `github-implementation.md` gains the token section, the `issue_comment` trigger and
-  ordering step 4.
-- Docs site: `concepts/pr-state-flow` states the solo path and its limit.
+  prerequisite" and names the token as this repository's available path — **conditional on setting
+  `PAIR_SOLO_APPROVAL_TOKEN=true` here**, since this repository's PR author and its maintainer are the
+  same person.
+- KB: `assets/pr-state.sh` gains the token predicate + audit projection + the server-side permission
+  stage; `pr-states.md` gains the two edge-case rows; `github-implementation.md` gains the token
+  section, the body-filtered `issue_comment` trigger and ordering step 4.
+- Docs site: `concepts/pr-state-flow` states the solo path, its opt-in and its limit.
+- **New repository setting for adopters**: the Actions variable `PAIR_SOLO_APPROVAL_TOKEN`, unset by
+  default. Leaving it unset is the safe configuration and requires no action.

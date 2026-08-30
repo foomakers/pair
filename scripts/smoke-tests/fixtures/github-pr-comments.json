@@ -137,5 +137,80 @@
       "site_admin": false,
       "type": "Bot"
     }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:00:00Z",
+    "id": 3237609010,
+    "node_id": "IC_kwDODKw3uc7A09010",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:00:00Z",
+    "user": {
+      "id": 609010,
+      "login": "pr-author",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "MEMBER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:05:00Z",
+    "id": 3237609011,
+    "node_id": "IC_kwDODKw3uc7A09011",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:05:00Z",
+    "user": {
+      "id": 609011,
+      "login": "org-member-readonly",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "> /approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n\nI do NOT approve this, just quoting what you posted.",
+    "created_at": "2026-08-28T11:10:00Z",
+    "id": 3237609012,
+    "node_id": "IC_kwDODKw3uc7A09012",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:10:00Z",
+    "user": {
+      "id": 609012,
+      "login": "quoting-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "How the token looks, for the runbook:\n\n    /approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n\n...and inline: `/approve cc1fba122f0c912ba01288fe90ab2632e7e41057`.",
+    "created_at": "2026-08-28T11:15:00Z",
+    "id": 3237609013,
+    "node_id": "IC_kwDODKw3uc7A09013",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:15:00Z",
+    "user": {
+      "id": 609013,
+      "login": "doc-writing-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:20:00Z",
+    "id": 3237609014,
+    "node_id": "IC_kwDODKw3uc7A09014",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:20:00Z",
+    "user": {
+      "id": 609014,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
   }
 ]

@@ -1,0 +1,10 @@
+{
+  "_comment": "GET /repos/{owner}/{repo}/collaborators/{login}/permission — the server-side authorization stage-2 reads. `author_association` is NOT this: `org-member-readonly` is a MEMBER of the owning organization with read-only permission on THIS repository.",
+  "solo-maintainer": "admin",
+  "pr-author": "admin",
+  "second-human": "write",
+  "quoting-collab": "write",
+  "doc-writing-collab": "write",
+  "org-member-readonly": "read",
+  "drive-by-reader": "none"
+}

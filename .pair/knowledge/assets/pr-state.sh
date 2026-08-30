@@ -140,45 +140,132 @@ human_approval_jq_filter() {
 # Forgery-resistance is NOT among them while the agent runs on the maintainer's own
 # credentials: host-side the agent and the human ARE the same actor, so no
 # server-side check can separate them. That becomes achievable only with a dedicated
-# agent identity (#218). Recorded in ADR-018 rather than assumed away.
+# agent identity shipped as a GitHub App or Bot account (#218) — a machine USER
+# account holding a PAT does NOT recover it. Recorded in ADR-018 rather than
+# assumed away.
 #
-# The consumer evaluates the review path FIRST and only falls back to this one.
+# The consumer evaluates the review path FIRST and only falls back to this one, and
+# the token is decided in TWO stages that BOTH have to pass:
+#   1. `human_token_approval_select` — host-asserted comment fields + the head-bound
+#      command + the author exclusion (unless the repository opted in as single-human),
+#   2. `token_approver_login` — a SERVER-SIDE read of the actor's repository
+#      permission, because `author_association` is not push access.
 
-# human_token_approval_select — the ONE predicate both projections below are built
-# from, so the count the gate acts on and the audit line it publishes cannot drift.
+# human_token_approval_select — the ONE predicate all three projections below are
+# built from, so the count the gate acts on and the audit line it publishes cannot
+# drift. It is stage 1 of TWO: a candidate that passes here is not yet authorized —
+# `token_approver_login` must still confirm the actor's repository permission
+# server-side (see below). Neither stage alone decides.
 #
 #   Input : a REST `GET /repos/{owner}/{repo}/issues/{n}/comments` payload (an array),
 #           read FRESH from the API — an edited/deleted comment must stop counting,
 #           and a webhook payload is a snapshot. Read ALL pages (`--paginate`).
-#   Env   : HEAD_SHA (the only commit branch protection evaluates).
+#   Env   : HEAD_SHA            — the only commit branch protection evaluates,
+#           PR_AUTHOR           — the PR's author login (author-exclusion, below),
+#           SOLO_APPROVAL_TOKEN — "true" ONLY on a repository that has declared
+#                                 itself single-human (see the opt-in note below).
 #
 # Every field it decides on is asserted by the HOST, never by the applier:
 #   `.user.type`               — "User" excludes Bot and Organization accounts,
 #   `.performed_via_github_app`— non-null when an App posted it on a user's behalf,
 #                                so an app-attributed comment is rejected too,
-#   `.author_association`      — anyone with READ access can comment on a public
-#                                repository, so write-level association is the
-#                                authorization, not the mere ability to type,
+#   `.author_association`      — a cheap PRE-FILTER, NOT the authorization: GitHub's
+#                                MEMBER means "member of the organization that owns
+#                                the repository" and says nothing about push access
+#                                HERE, so a read-only org member passes this stage.
+#                                What authorizes is the server-side permission read
+#                                in `token_approver_login`,
 #   `.user.login`/`.created_at`— the audit trail.
 # The BODY is read for the command and the head SHA only — never for an actor: a
 # comment claiming to be someone else changes nothing.
 #
-# The `(env.HEAD_SHA|length)==40` guard is load-bearing: with an unset HEAD_SHA the
-# match would degrade into "any /approve", i.e. an unbound token. Fail-safe: nothing.
+# THE AUTHOR EXCLUSION AND ITS OPT-IN. The token exists for a repository that cannot
+# produce a second human; it must never become a self-approval shortcut for one that
+# can. Nothing in a comment payload says "this repository has one human", so the
+# repository declares it: `SOLO_APPROVAL_TOKEN=true` (on GitHub, the repository
+# variable `vars.PAIR_SOLO_APPROVAL_TOKEN`). Default — the variable unset — the token
+# is still available but carries the SAME author exclusion the review predicate above
+# carries (`.user.login != env.PR_AUTHOR`), so a 🔴 PR can never be self-satisfied by
+# its own author. With an empty PR_AUTHOR and the opt-in off, nothing counts.
+#
+# The `test("^[0-9a-f]{40}$")` guard on HEAD_SHA is load-bearing twice over: an unset
+# HEAD_SHA would degrade the match into "any /approve" (an unbound token), and the
+# value is CONCATENATED INTO A REGEX, so a non-hex 40-character string of
+# metacharacters would match anything of the right shape. Fail-safe: nothing counts.
+#
+# The command must own its LINE (`(^|\n)/approve …(\n|$)`, no leading whitespace
+# allowed): GitHub's own "Quote reply" produces `> /approve <sha>`, and a whitespace-
+# tolerant match would let a quoter — who may be explicitly declining in the same
+# comment — approve the PR and be published as its approver. Indented code blocks and
+# inline-backtick mentions are rejected for the same reason.
 human_token_approval_select() {
-  printf '%s' '.[] | select((env.HEAD_SHA|length)==40 and .user.type=="User" and (.performed_via_github_app|not) and (.author_association|IN("OWNER","MEMBER","COLLABORATOR")) and ((.body // "") | test("(^|\\s)/approve[ \\t]+" + env.HEAD_SHA + "(\\s|$)")))'
+  printf '%s' '.[] | select(((env.HEAD_SHA // "") | test("^[0-9a-f]{40}$")) and .user.type=="User" and (.performed_via_github_app|not) and (.author_association|IN("OWNER","MEMBER","COLLABORATOR")) and (if env.SOLO_APPROVAL_TOKEN=="true" then true else ((env.PR_AUTHOR // "") != "" and .user.login != env.PR_AUTHOR) end) and ((.body // "") | test("(^|\\n)/approve[ \\t]+" + env.HEAD_SHA + "[ \\t\\r]*(\\n|$)")))'
 }
 
-# human_token_approval_jq_filter — one line per qualifying comment id; count them
-# (`| grep -c .`), exactly like the review filter above.
+# human_token_approval_jq_filter — one line per candidate comment id; count them
+# (`| grep -c .`), exactly like the review filter above. A non-zero count is a
+# CANDIDATE, not an approval: stage 2 below still has to authorize the actor.
 human_token_approval_jq_filter() {
   printf '%s%s' "$(human_token_approval_select)" ' | .id'
 }
 
+# human_token_approval_login_jq_filter — the candidate actor logins, fed to the
+# server-side permission read that actually authorizes them.
+human_token_approval_login_jq_filter() {
+  printf '%s%s' "$(human_token_approval_select)" ' | .user.login'
+}
+
 # human_token_approval_actor_jq_filter — the audit line for the published status
 # description: WHO confirmed, on WHICH head, WHEN — all three host-asserted.
+# The head is abbreviated to 12 characters ON PURPOSE: the commit status
+# `description` is capped at 140 characters by the API, and the full 40-char form
+# put a login of 24+ characters over that cap, silently truncating the timestamp out
+# of the audit trail. 12 hex characters plus the head-pinned status itself (the
+# status is POSTed on the full SHA) keep the line unambiguous and bounded — worst
+# case, a 39-character login: 129 characters with the fixed suffix.
 human_token_approval_actor_jq_filter() {
-  printf '%s%s' "$(human_token_approval_select)" ' | "\(.user.login) approved head \(env.HEAD_SHA) at \(.created_at)"'
+  printf '%s%s' "$(human_token_approval_select)" ' | "\(.user.login) approved head \(env.HEAD_SHA[0:12]) at \(.created_at)"'
+}
+
+# token_permission_sufficient <permission> — stage 2's decision, isolated so it is
+# executable on its own. Takes the `permission` field of
+# `GET /repos/{owner}/{repo}/collaborators/{login}/permission` and answers whether it
+# is write-level. `read`, `triage`, `none`, an empty value or an API error all fail.
+token_permission_sufficient() {
+  case "${1:-}" in
+  admin | maintain | write) return 0 ;;
+  *)
+    echo "pr-state: repository permission '${1:-none}' is not write-level — token rejected" >&2
+    return 1
+    ;;
+  esac
+}
+
+# token_approver_login <lookup-cmd> <candidate-login>... — stage 2. Echoes the FIRST
+# candidate whose SERVER-SIDE repository permission is write-level and exits 0;
+# echoes nothing and exits 1 when none qualifies (including an empty candidate list).
+#
+# <lookup-cmd> is the command answering "what permission does this login hold on this
+# repository": the host job passes a `gh api .../collaborators/<login>/permission`
+# wrapper, the smoke test passes a fixture reader — so ONE code path decides in both
+# and the authorization cannot drift between the recipe and what is verified.
+# Fail-safe: no lookup command ⇒ no approver.
+token_approver_login() {
+  local lookup="${1:-}" login perm
+  shift 2>/dev/null || true
+  if [ -z "$lookup" ]; then
+    echo "pr-state: no permission lookup provided — token rejected (fail-safe)" >&2
+    return 1
+  fi
+  for login in "$@"; do
+    [ -n "$login" ] || continue
+    perm="$("$lookup" "$login" 2>/dev/null || true)"
+    if token_permission_sufficient "${perm:-none}"; then
+      printf '%s' "$login"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # solo_approval_token_body <head-sha> — the exact comment body a maintainer posts.
