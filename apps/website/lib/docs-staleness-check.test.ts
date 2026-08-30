@@ -241,6 +241,56 @@ describe('checkDocsCommands', () => {
   it('ignores a flag, which is never a command name', () => {
     expect(checkDocsCommands(doc('```bash\npair-cli --version\n```'), commands)).toHaveLength(0)
   })
+
+  // US-449: the published bin is `pair-cli`; `pair` is not installed by any npm install,
+  // so a doc telling the reader to run it is a copy-paste that fails with "command not
+  // found". Before this, the gate matched the literal `pair-cli` prefix only and was
+  // structurally blind to the wrong name — the exact drift it exists to catch.
+  it('flags a bare `pair <cmd>` invocation in a span — the published bin is pair-cli', () => {
+    const errs = checkDocsCommands(doc('Run `pair install` first.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli')
+  })
+
+  it('flags a bare `pair <cmd>` invocation in a fence, even for a real command', () => {
+    const errs = checkDocsCommands(doc('```bash\npair kb-validate\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli kb-validate')
+  })
+
+  it('flags a bare `pair <cmd>` behind a shell prompt', () => {
+    expect(checkDocsCommands(doc('```bash\n$ pair update\n```'), commands)).toHaveLength(1)
+  })
+
+  // The bare-`pair` case reports the binary once — it is not ALSO an unknown-command
+  // error, or every renamed line would be counted twice.
+  it('reports a bare `pair <unknown>` once, not twice', () => {
+    expect(checkDocsCommands(doc('Run `pair init` first.'), commands)).toHaveLength(1)
+  })
+
+  // Why the separator is ONE space and not `\s+`: the PM-tool pages align two columns
+  // under a fenced heading (`pair                    Linear`). A run of whitespace is a
+  // diagram, never an invocation — widening to bare `pair` must not start reading them
+  // as "run `pair Linear`".
+  it('ignores an aligned column in a fenced diagram', () => {
+    const diagram =
+      '```text\npair                    Linear\n─────\nEpic                    Project\n```'
+    expect(checkDocsCommands(doc(diagram), commands)).toHaveLength(0)
+  })
+
+  it('ignores "pair" used as the product name in prose', () => {
+    const prose = 'pair installs bridge files, and pair maps its hierarchy to Linear.'
+    expect(checkDocsCommands(doc(prose), commands)).toHaveLength(0)
+  })
+
+  // A CLOSING FENCE ends with a backtick. The span rule's leading `\s*` used to cross the
+  // newline from it into the paragraph below, reading "pair creates Markdown files" as an
+  // invocation of the (nonexistent) command `creates`. Latent while only `pair-cli`
+  // matched — a paragraph rarely opens with it — and immediate once bare `pair` counts.
+  it('does not let a closing fence reach into the next paragraph', () => {
+    const md = '```text\nEpic → Story\n```\n\npair creates Markdown files from the template.'
+    expect(checkDocsCommands(doc(md), commands)).toHaveLength(0)
+  })
 })
 
 describe('buildValidRoutes', () => {

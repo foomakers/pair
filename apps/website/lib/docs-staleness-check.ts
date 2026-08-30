@@ -433,9 +433,9 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
 }
 
 /**
- * A `pair-cli <word>` INVOCATION, as opposed to the words "pair-cli" in a sentence.
+ * A `<bin> <word>` INVOCATION, as opposed to the words "pair-cli"/"pair" in a sentence.
  *
- * Positional, deliberately, and not a list of prose words to keep extending: `pair-cli`
+ * Positional, deliberately, and not a list of prose words to keep extending: the binary
  * counts as an invocation only at the start of an inline code span or of a fenced line,
  * optionally behind `$ ` or `npx [--no] <pkg>`. That is what separates an instruction
  * from English — "common pair-cli workflows" and "the pair-cli version it invokes" are
@@ -443,9 +443,26 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * not exist. The previous shape kept a PROSE_WORDS allow-list, which is the maintenance
  * pattern where the next false positive is fixed by adding a word rather than by fixing
  * the rule; under the positional rule that list is dead and is gone.
+ *
+ * The BINARY is captured (group 1) rather than pinned to the literal `pair-cli`, because
+ * both spellings are invocations and only one of them exists: `pair` is what the docs
+ * used to say and what no `npm install` ever creates (ADL 2026-08-25 — `pair-cli` is the
+ * canonical name, no alias). Matching `pair-cli` alone made the gate structurally blind
+ * to the very drift it exists to catch (US-449).
+ *
+ * The separator between binary and command is ONE space, not `\s+`: an aligned column of
+ * whitespace is a diagram, never a command. The PM-tool pages map their hierarchy under a
+ * fenced heading (`pair                    Linear`), which `\s+` would read as "run
+ * `pair Linear`".
+ *
+ * The span rule allows only horizontal whitespace after the opening backtick, never `\s*`:
+ * a CLOSING FENCE ends with a backtick too, and `\s*` crossed the newline from it into the
+ * paragraph below — "pair creates Markdown files" read as an invocation of `creates`. The
+ * bug was latent while only `pair-cli` matched (a paragraph rarely opens with it).
  */
-const INVOCATION_PREFIX = String.raw`(?:\$\s*)?(?:npx\s+(?:--no\s+)?@?[\w/.-]+\s+)?pair-cli\s+`
-const SPAN_INVOCATION = new RegExp('`\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
+const PUBLISHED_BIN = 'pair-cli'
+const INVOCATION_PREFIX = String.raw`(?:\$\s*)?(?:npx\s+(?:--no\s+)?@?[\w/.-]+\s+)?(pair-cli|pair) `
+const SPAN_INVOCATION = new RegExp('`[ \\t]*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
 const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
 
 /**
@@ -456,12 +473,14 @@ const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.
 const VERSION_STRING = /^v[\dX]/i
 
 /**
- * Check 4: every `pair-cli <command>` the docs tell a reader to run exists.
+ * Check 4: every invocation the docs tell a reader to run is one that WORKS — the right
+ * binary (`pair-cli`, never a bare `pair`), naming a command that exists.
  *
  * Scoped to the whole docs tree, not just tutorials. That widening is the point: with
  * tutorials only, 21 references to three non-existent commands (`init`, `kb validate`,
  * `kb info`) survived across eight pages — each one telling a reader to run something
- * that fails.
+ * that fails. The wrong-binary case is the same defect one level up: `pair install` is
+ * a real command behind a bin that no install creates.
  */
 export function checkDocsCommands(
   docs: { rel: string; content: string }[],
@@ -469,30 +488,47 @@ export function checkDocsCommands(
 ): string[] {
   const errors: string[] = []
   for (const { rel, content } of docs) {
-    for (const cmd of invokedCommands(content)) {
-      if (commandDirs.includes(cmd) || VERSION_STRING.test(cmd)) continue
-      errors.push(`${rel} tells the reader to run "pair-cli ${cmd}", which is not a command`)
+    for (const { bin, cmd } of invokedCommands(content)) {
+      if (VERSION_STRING.test(cmd)) continue
+      // Wrong binary reported once and on its own: `pair kb-validate` is not ALSO an
+      // unknown command, and `pair init` should not be counted twice.
+      if (bin !== PUBLISHED_BIN) {
+        errors.push(
+          `${rel} tells the reader to run "${bin} ${cmd}", but the published binary is ` +
+            `"${PUBLISHED_BIN}" — write "${PUBLISHED_BIN} ${cmd}"`,
+        )
+        continue
+      }
+      if (commandDirs.includes(cmd)) continue
+      errors.push(`${rel} tells the reader to run "${bin} ${cmd}", which is not a command`)
     }
   }
   return errors
 }
 
-/** The commands a document actually invokes — code spans plus fenced command lines. */
-function invokedCommands(content: string): Set<string> {
-  const found = new Set<string>()
-  for (const m of content.matchAll(SPAN_INVOCATION)) {
-    if (m[1] !== undefined) found.add(m[1])
+/** One `<bin> <cmd>` a document tells the reader to run. */
+interface Invocation {
+  bin: string
+  cmd: string
+}
+
+/** The invocations a document actually makes — code spans plus fenced command lines. */
+function invokedCommands(content: string): Invocation[] {
+  const found = new Map<string, Invocation>()
+  const add = (m: RegExpMatchArray | null): void => {
+    const [, bin, cmd] = m ?? []
+    if (bin !== undefined && cmd !== undefined) found.set(`${bin} ${cmd}`, { bin, cmd })
   }
+  for (const m of content.matchAll(SPAN_INVOCATION)) add(m)
   let inFence = false
   for (const line of content.split('\n')) {
     if (/^\s*```/.test(line)) {
       inFence = !inFence
       continue
     }
-    const m = inFence ? LINE_INVOCATION.exec(line) : null
-    if (m?.[1] !== undefined) found.add(m[1])
+    if (inFence) add(LINE_INVOCATION.exec(line))
   }
-  return found
+  return [...found.values()]
 }
 
 /** Build the set of valid /docs routes from the docs .mdx file list. */
