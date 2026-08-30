@@ -40,6 +40,7 @@ export type DispatchSkipReason =
   | 'automation-off'
   | 'ineligible'
   | 'unmapped'
+  | 'run-in-progress'
 
 export type DispatchDecision =
   | {
@@ -114,6 +115,22 @@ export function describeDispatch(decision: DispatchDecision): string {
 
 function skip(card: string, reason: DispatchSkipReason, detail: string): DispatchDecision {
   return { kind: 'skip', card, reason, detail }
+}
+
+/**
+ * The decision a trigger burst gets: another run holds this card, so this one does nothing.
+ *
+ * Skipped, never queued — the card is still tagged, so the next trigger picks it up on its own. It
+ * is a `skip` like any other so it reports and audits through the same path; the reason it is built
+ * here rather than in `decideDispatch` is that holding a lock is a fact about the filesystem, and
+ * this module deliberately touches none.
+ */
+export function lockedSkip(card: string, lockPath: string): DispatchDecision {
+  return skip(
+    card,
+    'run-in-progress',
+    `another run already holds this card (${lockPath}) — skipped, never queued behind it`,
+  )
 }
 
 /**

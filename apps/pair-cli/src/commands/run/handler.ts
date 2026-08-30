@@ -1,4 +1,4 @@
-import { resolve } from 'path'
+import { join, resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
@@ -26,8 +26,19 @@ import { buildPromptText, describeApprovalPosture, skillAcceptsFilter } from './
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
 import type { IterationResult } from './stream-reader'
-import { decideDispatch, describeDispatch, type DispatchDecision } from './dispatch'
+import { decideDispatch, describeDispatch, lockedSkip, type DispatchDecision } from './dispatch'
 import type { SkillProbe } from './resolve-skill'
+import { acquireCardLock, type LockAcquirer } from './card-lock'
+import {
+  appendAuditLine,
+  auditRecordFor,
+  dispatchRecordLine,
+  renderAuditLine,
+  resolveAuditPath,
+  type AuditAppender,
+  type AuditEvent,
+} from './dispatch-audit'
+import { resolveWorkingPathOverride } from '#registry'
 
 /** Injected so the loop can be driven in tests without spawning an engine. */
 export type IterationRunner = (input: {
@@ -40,6 +51,10 @@ export type IterationRunner = (input: {
 
 export interface RunHandlerDependencies {
   runIteration?: IterationRunner
+  /** The per-card concurrency guard. Injected so a test never touches a real working area. */
+  acquireLock?: LockAcquirer
+  /** The audit writer. Injected for the same reason — the trail is a real file, by design. */
+  appendAudit?: AuditAppender
 }
 
 /**
@@ -78,6 +93,10 @@ interface RunContext {
   probe: SkillProbe
   policy: AutomationPolicy
   dispatch?: DispatchDecision
+  /** `<cwd>/<working_path>` — where the lock lives. */
+  workingArea: string
+  /** `<cwd>/<working_path>/<Audit Location>` — where every dispatch record is appended. */
+  auditPath: string
 }
 
 function resolveContext(config: RunCommandConfig, fs: FileSystemService, cwd: string): RunContext {
@@ -95,7 +114,16 @@ function resolveContext(config: RunCommandConfig, fs: FileSystemService, cwd: st
       isInstalled: probe,
     })
 
-  return { config: loaded.config, probe, policy, ...(dispatch && { dispatch }) }
+  const workingPath = resolveWorkingPathOverride(loaded.config)
+
+  return {
+    config: loaded.config,
+    probe,
+    policy,
+    ...(dispatch && { dispatch }),
+    workingArea: resolve(cwd, workingPath),
+    auditPath: resolveAuditPath(cwd, workingPath, policy.auditLocation),
+  }
 }
 
 /**
@@ -195,6 +223,7 @@ export async function handleRunCommand(
   // answer for every card a team has not explicitly tagged.
   if (context.dispatch?.kind === 'skip') {
     reportSkippedDispatch(context)
+    if (!config.dryRun) record(context, deps, context.dispatch, 'skip')
     return 0
   }
 
@@ -209,17 +238,80 @@ export async function handleRunCommand(
 
   assertEngineAvailable(resolved.engine, createExecutableProbe(fs))
 
+  return resolved.dispatch
+    ? await driveDispatchedCard(resolved, resolved.dispatch, context, config, deps)
+    : await driveRun(resolved, config, deps)
+}
+
+/**
+ * A routed card: locked, audited, driven, released — in that order, and the release is unconditional.
+ *
+ * The lock is taken AFTER every refusal has passed and BEFORE anything spawns, so a run that was
+ * never going to start never parks a card, and a run that does start cannot be joined by the next
+ * trigger in the burst.
+ */
+async function driveDispatchedCard(
+  resolved: ResolvedRun,
+  decision: DispatchDecision,
+  context: RunContext,
+  config: RunCommandConfig,
+  deps: RunHandlerDependencies,
+): Promise<number> {
+  const lock = (deps.acquireLock ?? acquireCardLock)({
+    workingArea: context.workingArea,
+    card: decision.card,
+  })
+  if (lock === undefined) {
+    const skipped = lockedSkip(decision.card, join(context.workingArea, 'automation/locks'))
+    console.log(`  ${describeDispatch(skipped)}`)
+    record(context, deps, skipped, 'skip')
+    return 0
+  }
+
+  try {
+    record(context, deps, decision, 'start')
+    const outcome = await driveRun(resolved, config, deps)
+    record(context, deps, decision, 'end', outcome === 0 ? 'completed' : 'failed')
+    return outcome
+  } finally {
+    lock.release()
+  }
+}
+
+/** The re-invocation loop itself — identical whether the run was dispatched or invoked directly. */
+async function driveRun(
+  resolved: ResolvedRun,
+  config: RunCommandConfig,
+  deps: RunHandlerDependencies,
+): Promise<number> {
   const outcome = await runLoop({
     maxIterations: resolved.perimeter.maxIterations,
     runIteration: context => driveIteration(resolved, config, context, deps),
-    onIteration: record =>
+    onIteration: entry =>
       console.log(
-        `  Iteration ${record.iteration}: ${record.result.outcome} — ${record.result.detail}`,
+        `  Iteration ${entry.iteration}: ${entry.result.outcome} — ${entry.result.detail}`,
       ),
   })
 
   reportOutcome(outcome)
   return loopExitCode(outcome)
+}
+
+/**
+ * Writes one dispatch record: to the audit file, and — for a `start` — to stdout as the line the
+ * trigger's host adapter posts on the card (AC3). Never to the tracker: this process holds no
+ * credentials for one, and that is the property that keeps the core host-agnostic.
+ */
+function record(
+  context: RunContext,
+  deps: RunHandlerDependencies,
+  decision: DispatchDecision,
+  event: AuditEvent,
+  outcome?: string,
+): void {
+  const entry = auditRecordFor(decision, event, ...(outcome !== undefined ? [{ outcome }] : []))
+  ;(deps.appendAudit ?? appendAuditLine)(context.auditPath, renderAuditLine(entry))
+  if (event === 'start') console.log(dispatchRecordLine(entry))
 }
 
 /**

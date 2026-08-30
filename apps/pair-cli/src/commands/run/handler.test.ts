@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { handleRunCommand, type IterationRunner } from './handler'
+import type { LockAcquirer } from './card-lock'
 import { parseRunCommand } from './parser'
 import { POLICY_PATH } from './automation-policy'
 import type { IterationResult } from './stream-reader'
@@ -441,7 +442,9 @@ describe('handleRunCommand — driving the loop', () => {
 })
 
 // US-217 — tag-driven dispatch, end to end through the handler: the trigger's two facts in, a
-// routed workflow (or a logged skip) out, and nothing spawned where nothing was declared.
+// routed workflow (or a logged skip) out, and nothing spawned where nothing was declared. The lock
+// and the audit writer are injected: both are real-filesystem primitives by design (atomic create,
+// atomic append), and they have their own tests against a real temporary directory.
 describe('handleRunCommand — tag-driven dispatch (US-217)', () => {
   const DISPATCH_POLICY = `${POLICY}
 ## Workflows
@@ -457,6 +460,35 @@ Precedence: auto-refine, auto-dev
       [`${cwd}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
     })
 
+  /** Records what was audited, without touching a real working area. */
+  function fakeAudit() {
+    const entries: Array<{ path: string; line: string }> = []
+    return { entries, append: (path: string, line: string) => entries.push({ path, line }) }
+  }
+
+  /** A lock that is either free or already held, and remembers acquire/release ordering. */
+  function fakeLock(held = false) {
+    const events: string[] = []
+    const acquire: LockAcquirer = ({ card }) => {
+      events.push(`acquire:${card}`)
+      if (held) return undefined
+      return { path: `/locks/${card}`, release: () => events.push(`release:${card}`) }
+    }
+    return { events, acquire }
+  }
+
+  function deps(results: IterationResult[] = [ok()], held = false) {
+    const { calls, runner } = fakeRunner(results)
+    const audit = fakeAudit()
+    const lock = fakeLock(held)
+    return {
+      calls,
+      audit,
+      lock,
+      handler: { runIteration: runner, acquireLock: lock.acquire, appendAudit: audit.append },
+    }
+  }
+
   beforeEach(() => vi.stubEnv('PATH', '/bin'))
   afterEach(() => {
     vi.unstubAllEnvs()
@@ -465,12 +497,12 @@ Precedence: auto-refine, auto-dev
 
   it('routes an eligible, tagged card to its mapped workflow and runs it (AC1, AC3)', async () => {
     const output = captureLog()
-    const { calls, runner } = fakeRunner([ok()])
+    const { calls, handler } = deps()
 
     const code = await handleRunCommand(
       parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
       dispatchFs(),
-      { runIteration: runner },
+      handler,
     )
 
     expect(code).toBe(0)
@@ -483,12 +515,12 @@ Precedence: auto-refine, auto-dev
 
   it('picks the workflow the declared precedence names on a card carrying two mapped tags', async () => {
     const output = captureLog()
-    const { calls, runner } = fakeRunner([ok()])
+    const { calls, handler } = deps()
 
     await handleRunCommand(
       parseRunCommand({ card: '217', cardTags: 'auto-dev,auto-refine,risk:green' }),
       dispatchFs(),
-      { runIteration: runner },
+      handler,
     )
 
     expect(output()).toContain('workflow pair-process-refine-story')
@@ -497,39 +529,44 @@ Precedence: auto-refine, auto-dev
 
   it('runs NOTHING on a card carrying no mapped tag, and says why (AC2)', async () => {
     const output = captureLog()
-    const { calls, runner } = fakeRunner([ok()])
+    const { calls, audit, handler } = deps()
 
     const code = await handleRunCommand(
       parseRunCommand({ card: '218', cardTags: 'risk:green' }),
       dispatchFs(),
-      { runIteration: runner },
+      handler,
     )
 
     expect(code).toBe(0)
     expect(calls).toHaveLength(0)
     expect(output()).toContain('no mapped tag')
+    expect(audit.entries[0]?.line).toContain('event=skip')
+    expect(audit.entries[0]?.line).toContain('reason=unmapped')
   })
 
   it('runs nothing on a mapped but ineligible card, and logs the skip (BR3)', async () => {
     const output = captureLog()
-    const { calls, runner } = fakeRunner([ok()])
+    const { calls, audit, handler } = deps()
 
-    await handleRunCommand(parseRunCommand({ card: '219', cardTags: 'auto-dev' }), dispatchFs(), {
-      runIteration: runner,
-    })
+    await handleRunCommand(
+      parseRunCommand({ card: '219', cardTags: 'auto-dev' }),
+      dispatchFs(),
+      handler,
+    )
 
     expect(calls).toHaveLength(0)
     expect(output()).toContain('ineligible')
+    expect(audit.entries[0]?.line).toContain('reason=ineligible')
   })
 
   it('exits cleanly with "no mapping declared" when the adoption declares no workflows (AC4)', async () => {
     const output = captureLog()
-    const { calls, runner } = fakeRunner([ok()])
+    const { calls, handler } = deps()
 
     const code = await handleRunCommand(
       parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
       dispatchFs(POLICY),
-      { runIteration: runner },
+      handler,
     )
 
     expect(code).toBe(0)
@@ -539,29 +576,128 @@ Precedence: auto-refine, auto-dev
 
   it('HALTs before spawning when a mapped workflow is not installed', async () => {
     captureLog()
-    const { calls, runner } = fakeRunner([ok()])
+    const { calls, handler } = deps()
     const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: DISPATCH_POLICY })
 
     await expect(
-      handleRunCommand(parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }), fs, {
-        runIteration: runner,
-      }),
+      handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        fs,
+        handler,
+      ),
     ).rejects.toThrow(/pair-process-refine-story.*not installed/s)
     expect(calls).toHaveLength(0)
   })
 
-  it('resolves and prints the route under --dry-run without spawning anything', async () => {
+  it('resolves and prints the route under --dry-run, spawning nothing and writing nothing', async () => {
     const output = captureLog()
-    const { calls, runner } = fakeRunner([ok()])
+    const { calls, audit, lock, handler } = deps()
 
     await handleRunCommand(
       parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green', dryRun: true }),
       dispatchFs(),
-      { runIteration: runner },
+      handler,
     )
 
     expect(output()).toContain('tag auto-dev ⇒ workflow pair-loop')
     expect(output()).toContain('(from the `## Workflows` mapping)')
     expect(calls).toHaveLength(0)
+    expect(audit.entries).toHaveLength(0)
+    expect(lock.events).toHaveLength(0)
+  })
+
+  describe('the audit trail (AC3)', () => {
+    it('appends start and end records under the resolved audit location', async () => {
+      captureLog()
+      const { audit, handler } = deps()
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(audit.entries.map(entry => entry.path)).toEqual([
+        '/project/.pair/working/automation/loop-audit.md',
+        '/project/.pair/working/automation/loop-audit.md',
+      ])
+      expect(audit.entries[0]?.line).toContain(
+        'event=start card=217 tag=auto-dev workflow=pair-loop',
+      )
+      expect(audit.entries[1]?.line).toContain('event=end')
+      expect(audit.entries[1]?.line).toContain('outcome=completed')
+    })
+
+    it('prints the DISPATCH-RECORD line a host adapter posts on the card', async () => {
+      const output = captureLog()
+      const { handler } = deps()
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(output()).toMatch(/^DISPATCH-RECORD: .*event=start card=217/m)
+    })
+
+    it('records a failed run as such, rather than leaving the trail claiming it started', async () => {
+      captureLog()
+      const { audit, handler } = deps([{ outcome: 'failed', detail: 'no terminal event' }])
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(audit.entries[1]?.line).toContain('outcome=failed')
+    })
+  })
+
+  describe('the concurrency guard (never two runs on one card)', () => {
+    it('skips a dispatch whose card is already locked, and spawns nothing', async () => {
+      const output = captureLog()
+      const { calls, audit, handler } = deps([ok()], true)
+
+      const code = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(code).toBe(0)
+      expect(calls).toHaveLength(0)
+      expect(output()).toContain('run-in-progress')
+      expect(audit.entries[0]?.line).toContain('reason=run-in-progress')
+    })
+
+    it('takes the lock before spawning and releases it after the run', async () => {
+      captureLog()
+      const { lock, handler } = deps()
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
+
+    it('releases the lock even when the run throws — a crash must not park the card', async () => {
+      captureLog()
+      const { lock, handler } = deps()
+      const exploding: IterationRunner = () => Promise.reject(new Error('engine exploded'))
+
+      await expect(
+        handleRunCommand(
+          parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+          dispatchFs(),
+          { ...handler, runIteration: exploding },
+        ),
+      ).rejects.toThrow('engine exploded')
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
   })
 })

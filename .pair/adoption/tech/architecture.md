@@ -38,6 +38,13 @@
 - Canonical target (`.claude/skills/`) receives physical copies; secondary targets receive symlinks.
 - Windows environments fall back to copy mode (symlinks rejected at validation time). See [ADR-005](adr/adr-005-skills-infrastructure.md).
 
+## Unattended Dispatch
+
+- **Tag-driven dispatch is opt-in, per card, and declared in adoption.** `## Workflows` in `tech/automation.md` maps a tag to the workflow (a skill name) that runs on a card carrying it; the tag is an opaque routing key and no classification criterion ever lives in the routing code (D18). A card with no mapped tag runs nothing — there is no default workflow. See [ADR-024](adr/adr-024-tag-driven-dispatch-agnostic-core-host-adapter.md).
+- **The routing core is host-agnostic and credential-free.** It lives in the `pair run` entry point (ADR-021 tier 2) as a pure function over the card, the labels a trigger observed, and the policy; the labels are an INPUT (`--card`/`--card-tags`) supplied by a thin per-host trigger adapter, never fetched by the driver. Adding a code host is a new adapter, never a change to the core.
+- **The audit trail is split accordingly**: every decision is appended to the `## Audit Location` file, and the run-start record is printed as a `DISPATCH-RECORD:` line for the host adapter to post on the card.
+- **Never two runs on one card**: a dispatch takes an exclusive per-card lock under `working_path` before spawning and releases it unconditionally; a trigger burst is skipped and logged, never queued.
+
 ---
 
 All architectural implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).
