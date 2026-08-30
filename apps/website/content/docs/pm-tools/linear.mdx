@@ -18,7 +18,7 @@ What pair adopted instead is deliberately unglamorous, and it is why this page r
 - **PR state is never mirrored onto the board.** Look at the Status Transitions table below and you will find a row whose Linear column says nothing happens: review. It happens entirely on the code host. That "nothing" is the decision, not an omission — state lives in one place, so there is nothing to reconcile.
 - **What Linear does not have, pair reports rather than invents.** Linear's default teams ship no "In Review" state; a skill asked to write one says so instead of guessing a nearby column.
 
-The rest of this page is the configuration that model implies. It is longer than the GitHub Projects guide by exactly the amount the split costs: one extra section.
+The rest of this page is the configuration that model implies, including the one section a single-tool guide has no need for: `## Git Workflow`, where the `code-host` is declared.
 
 ## Configuration
 
@@ -128,5 +128,5 @@ pair creates Linear sub-issues under the epic, sets priority, and assigns them t
 - [Code host vs PM tool](/docs/concepts/code-host) — the split setup, routing rule and cross-linking convention
 - [Canonical states](/docs/concepts/canonical-states) — mapping Linear workflow states to macrostates
 - [PM Tools overview](/docs/pm-tools) — choosing the right tool
-- [Filesystem](/docs/pm-tools/filesystem) — zero-dependency alternative
+- [Filesystem](/docs/pm-tools/filesystem) — zero-PM-dependency alternative (backlog in your repo; still declares a `code-host`)
 - [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option

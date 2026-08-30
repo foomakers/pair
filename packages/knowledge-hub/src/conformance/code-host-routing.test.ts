@@ -491,11 +491,30 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     })
   }
 
-  it('github-implementation.md is the reverse case: no way-of-working snippet to get wrong', () => {
-    // Guards the exclusion above — if a snippet is ever added there it must be
-    // classified in WOW_SNIPPET_GUIDES rather than silently unasserted.
-    for (const root of [DATASET, REPO_ROOT]) {
-      expect(wowSnippets(read(root, `${PM_TOOL_KB}/github-implementation.md`))).toEqual([])
+  /**
+   * Closes the door WOW_SNIPPET_GUIDES leaves open: it is a hand-written list, so a
+   * NEW tracker guide (`jira-implementation.md`, …) shipping a HALTing snippet would
+   * be silently unasserted. Read the directory instead of naming files: anything not
+   * classified above must prove it has no copy-paste surface at all. Subsumes the
+   * github-implementation.md reverse case, which is unclassified by design.
+   */
+  it('every *-implementation.md guide is classified or provably snippet-free (no unasserted door)', () => {
+    const classified = new Set(WOW_SNIPPET_GUIDES.map(g => g.guide))
+    for (const [rootLabel, root] of [
+      ['dataset', DATASET],
+      ['installed', REPO_ROOT],
+    ] as const) {
+      const guides = readdirSync(join(root, PM_TOOL_KB))
+        .filter(name => name.endsWith('-implementation.md'))
+        .sort()
+      expect(guides.length, `${rootLabel}: no PM implementation guides found`).toBeGreaterThan(0)
+      expect(guides, `${rootLabel}`).toEqual(expect.arrayContaining([...classified]))
+      for (const guide of guides.filter(g => !classified.has(g))) {
+        expect(
+          wowSnippets(read(root, `${PM_TOOL_KB}/${guide}`)),
+          `${guide} (${rootLabel}) ships a way-of-working snippet but is not classified in WOW_SNIPPET_GUIDES — classify it with its hostsCode value`,
+        ).toEqual([])
+      }
     }
   })
 })
