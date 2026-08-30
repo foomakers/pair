@@ -2,7 +2,7 @@
 
 How much of the delivery flow a project lets run **unattended** is a project decision, so it lives in an adoption file: the optional `.pair/adoption/tech/automation.md`. This guideline defines that file's schema.
 
-It specifies six sections, landed across two stories and owned one at a time so two stories never claim the same lines of the same file: `## Eligibility` (#216) selects **which cards** an unattended run may pick up at all; `## Harness`/`## Model Policy` (#450) declare supported agent harnesses and per-tier model class; and `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` (#250) are the remaining ADR-017 §6 knobs — which tier may auto-merge, when a run stops, the parallel-batch ceiling, and where the audit trail is written.
+It specifies seven sections, landed across several stories and owned one at a time so two stories never claim the same lines of the same file: `## Eligibility` (#216) selects **which cards** an unattended run may pick up at all; `## Workflows` (#217) maps **a tag to the workflow that runs on a card carrying it**, which is what makes automation opt-in per card; `## Harness`/`## Model Policy` (#450) declare supported agent harnesses and per-tier model class; and `## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location` (#250) are the remaining ADR-017 §6 knobs — which tier may auto-merge, when a run stops, the parallel-batch ceiling, and where the audit trail is written.
 
 **Eligibility selects `which cards`, never which gates.** The per-tier gate/approval policy already exists in [`quality-model.md`](../../quality-assurance/quality-model.md) §4 and is not restated here — auto-advance *enacts* that policy, it does not redefine it. Two sources of truth for the same rule is the failure mode this split exists to prevent.
 
@@ -100,6 +100,7 @@ An **untagged** card — one carrying no `risk:*` label at all — never matches
 | Is the card Ready / in the right state? | The consumer's own selection rules (`pair-next`). Eligibility is a **label** predicate only; state and readiness gating stay where they already live |
 | Auto-advance switch, stop predicate, step defaults, `max_parallelism`, audit location | ADR-017 §6 — the four sections below (`## Auto-Advance`, `## Stop Predicate`, `## Max Parallelism`, `## Audit Location`), landed by the automation loop story (#250) |
 | Which label a card carries | `classify`, via the Tag Projection declaration in `tech/risk-matrix.md` |
+| Which workflow runs on an eligible card | `## Workflows` below — the tag→workflow mapping (#217). Eligibility selects, the mapping routes; neither answers the other's question |
 
 ## Auto-Advance — which tiers may push/merge unattended
 
@@ -197,6 +198,63 @@ automation/loop-audit.md
 ### Unwritable destination ⇒ fail loudly
 
 If the resolved path cannot be created or written, `pair-loop` **MUST HALT the run** rather than proceed unaudited: an unattended run with no audit trail is not an acceptable degraded mode (ADR-017 §6).
+
+## Workflows — which workflow each tag routes to
+
+The **tag→workflow mapping** (#217, R4.4): the declaration that makes automation opt-in **per card** instead of per run. `## Eligibility` above answers *which cards an unattended run may pick up at all*; this section answers *what runs on a card once a trigger fires on it*, keyed by a tag the card carries.
+
+```markdown
+## Workflows
+
+auto-dev ⇒ pair-loop
+auto-refine ⇒ pair-process-refine-story
+Precedence: auto-dev, auto-refine
+```
+
+- **One entry per line, `<tag> ⇒ <workflow>`** — the same `⇒` (U+21D2) `## Stop Predicate` uses, and only that one. An ASCII `=>` is a **HALT** naming the documented spelling, so the same file cannot mean different things to two consumers.
+- **The tag is an OPAQUE routing key** (D18). It is matched against the card's labels with the plain **string equality** `## Eligibility` already uses — no tier arithmetic, no family knowledge, and **no classification criteria anywhere in the routing code**: tags are produced by `classify`, and a workflow only ever *reads* them. That property is grep-verifiable, and it is meant to be.
+- **The workflow is a skill name** — the entry point of a composition of existing skills, never a bespoke engine and never a merit rule. It is resolved against the **installed** skill set, so this file carries no workflow catalog to drift from reality.
+- **`Precedence: <tag>, <tag>, …`** — optional, at most one line, first listed wins. It resolves a card carrying **more than one** mapped tag, and nothing else.
+
+### Untagged ⇒ never. That is the whole opt-in boundary.
+
+A card carrying **no mapped tag never runs**. There is no default workflow, no "fall back to the develop workflow", no implicit route for an unmapped card — a consumer **MUST** skip it and log the skip. The absence of a route is the authorization decision, so widening it is not a convenience: it is the difference between automation on the cards a team named and automation on the backlog.
+
+### Absent section ⇒ no workflow is available
+
+`## Workflows` absent (or the whole optional file absent) ⇒ **no mapping is declared**: nothing can be routed. A dispatch **MUST** report `no mapping declared`, naming the file, and **exit cleanly** — automation is opt-in (D21), so a project that never wrote this section has simply not opted in, and that is never an error and never a default workflow.
+
+**Absent section ≠ empty section**, exactly as under `## Eligibility`: a heading with no entry is a **half-written declaration** ⇒ HALT.
+
+### Eligibility is applied BEFORE routing
+
+The order is normative. A card that does not match `## Eligibility` is **skipped before its tags are looked at at all**, and the skip is **logged**. Routing an ineligible card and relying on a later gate to stop it would put the eligibility filter — the one declaration that keeps business-critical work out of an unattended pipeline — after the decision it exists to bound.
+
+### Not a routable mapping ⇒ HALT
+
+At **read** time, a consumer **MUST HALT** with an adoption-fix message naming the file and the offending value when:
+
+1. the section is present with **no entry line** (a half-written declaration);
+2. a line matches **neither** `<tag> ⇒ <workflow>` **nor** `Precedence: <tag>, …`;
+3. an entry uses `=>` instead of `⇒`;
+4. the **same tag** is declared twice — one card would route to two workflows, and picking one silently is what this HALT prevents;
+5. a **tag** is not usable as a label: longer than the host's label-name cap (**50 characters** on GitHub; another tracker applies its own), carrying a comma or a standalone `AND`/`OR`/`NOT`, opening with a markdown block marker, or containing a character that could turn it into a command fragment once inlined in an agent prompt. These are `## Eligibility`'s own triggers 3–5 plus the content MUST, applied to the same kind of value for the same reasons — one rule set, not a second one;
+6. a **workflow name** is not a plain identifier (it is spliced into an agent invocation *and* used as a path segment when probing whether the skill is installed);
+7. there is **more than one `Precedence:` line**, the line is empty, it repeats a tag, or it names a tag no entry declares — a precedence naming an undeclared tag is dead configuration that reads as a working tie-break;
+8. the file carries **more than one `## Workflows` heading** — counted as rendered markdown at level 2, so an occurrence inside a fenced code block is not one.
+
+At **routing** time — the two rules that need a board and an installed skill set, so they cannot be answered from the file alone:
+
+- **a mapped tag whose workflow is not installed ⇒ HALT** with an adoption-fix message naming the tag, the workflow and the file. Never a silent fall back to another workflow: running a *different* workflow than the one declared is the outcome no operator can debug;
+- **a card carrying two or more mapped tags with no `Precedence:` line — or with none of those tags listed in it — ⇒ HALT**. A silent choice between two declared workflows is precisely what the precedence line exists to prevent, so its absence is a question for a maintainer, not a tie for a consumer to break.
+
+### One run per card — the concurrency guard
+
+A trigger fires on card metadata, and metadata changes in **bursts** (a label added, removed, re-added; a re-run of the same host job). A consumer **MUST** take an **exclusive per-card lock** before it dispatches and release it when the run ends; a second dispatch for a card whose lock is held is **skipped and logged**, never queued behind the first. Two agent runs on one card is the failure mode this guard exists for: they would race on the same branch, the same PR and the same board state.
+
+### The audit trail — and where host credentials are not
+
+Every dispatch decision — **start**, **skip**, **end** — is appended to the run's `## Audit Location` file. The **start** record is *also* emitted on stdout as a single `DISPATCH-RECORD:` line, so the **trigger's host adapter** — the thin, per-host piece that already holds the credentials the trigger runs under — can post it as a comment on the card. The dispatcher core stays **host-agnostic**: it reads tags it was handed, resolves a workflow and writes a file, and never holds a tracker token. Adding a host is a new adapter, never a change to the routing core.
 
 ## Harness and Model Policy
 

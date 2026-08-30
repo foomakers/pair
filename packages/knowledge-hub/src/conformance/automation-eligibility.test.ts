@@ -841,7 +841,7 @@ describe('automation-policy.md — Audit Location section (story #250 T1)', () =
       const auditIdx = content.indexOf('## Audit Location — where the unattended trail is written')
       const section = content.slice(
         auditIdx,
-        content.indexOf('## Harness and Model Policy', auditIdx),
+        content.indexOf('## Workflows — which workflow each tag routes to', auditIdx),
       )
       expect(section).toContain('working_path')
       expect(section).toContain('pair.config.json')
@@ -856,11 +856,131 @@ describe('automation-policy.md — Audit Location section (story #250 T1)', () =
       const auditIdx = content.indexOf('## Audit Location — where the unattended trail is written')
       const section = content.slice(
         auditIdx,
-        content.indexOf('## Harness and Model Policy', auditIdx),
+        content.indexOf('## Workflows — which workflow each tag routes to', auditIdx),
       )
       expect(section).toContain('automation/loop-audit.md')
       expect(section).toMatch(/MUST HALT the run/)
       expect(section.toLowerCase()).toMatch(/not an acceptable degraded mode/)
+    },
+  )
+})
+
+// Story #217 — tag-driven workflows. The mapping is ADOPTION data (`## Workflows`), the tag is an
+// opaque routing key, and every safety property of the feature — untagged never runs, absent
+// section is not an error, eligibility before routing, no silent choice on a multi-tag card, one
+// run per card, an audit trail whose on-issue half belongs to the host adapter — is normative
+// content pinned here rather than left to a reader's memory.
+describe('automation-policy.md — Workflows section (story #217 T1)', () => {
+  const workflowsSection = (content: string): string => {
+    const start = content.indexOf('## Workflows — which workflow each tag routes to')
+    expect(start).toBeGreaterThan(-1)
+    return content.slice(start, content.indexOf('## Harness and Model Policy', start))
+  }
+
+  it.each(policySources)(
+    '%s: the declaration is `<tag> ⇒ <workflow>`, one per line',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toContain('## Workflows\n\nauto-dev ⇒ pair-loop')
+      expect(section).toMatch(/One entry per line/)
+      expect(section).toMatch(/U\+21D2/)
+      expect(section).toMatch(/ASCII `=>`/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: the tag is an opaque routing key, matched by string equality (D18)',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/OPAQUE routing key/)
+      expect(section).toContain('D18')
+      expect(section).toMatch(/string equality/)
+      expect(section).toMatch(/no classification criteria anywhere in the routing code/i)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: the workflow is a skill name resolved against the installed set',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/workflow is a skill name/)
+      expect(section).toMatch(/composition of existing skills/)
+      expect(section).toMatch(/installed/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: untagged ⇒ never, with no default workflow anywhere',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/Untagged ⇒ never/)
+      expect(section).toMatch(/no default workflow/)
+      expect(section).toMatch(/MUST\*{0,2} skip it and log the skip/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: absent section is opt-out, not an error — exit cleanly',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/no mapping declared/)
+      expect(section).toMatch(/exit cleanly/)
+      expect(section).toMatch(/never an error/)
+      expect(section).toMatch(/Absent section ≠ empty section/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: eligibility is applied BEFORE routing, and the skip is logged',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/Eligibility is applied BEFORE routing/)
+      expect(section).toMatch(/skipped before its tags are looked at/)
+      expect(section).toMatch(/logged/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: unknown workflow and undecidable multi-tag both HALT',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/workflow is not installed ⇒ HALT/)
+      expect(section).toMatch(/Never a silent fall back/)
+      expect(section).toMatch(/two or more mapped tags with no `Precedence:` line/)
+      expect(section).toMatch(/MUST HALT|⇒ HALT/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: one run per card — an exclusive lock, never a queue',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/exclusive per-card lock/)
+      expect(section).toMatch(/skipped and logged/)
+      expect(section).toMatch(/never queued/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: the audit trail keeps host credentials out of the core',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/start.*skip.*end|start\*\*, \*\*skip\*\*, \*\*end/)
+      expect(section).toContain('## Audit Location')
+      expect(section).toMatch(/host adapter/)
+      expect(section).toMatch(/never holds a tracker token/)
+    },
+  )
+
+  it.each(policySources)('%s: the file index names the seventh section', (_, content) => {
+    expect(content).toMatch(/It specifies seven sections/)
+    expect(content).toMatch(/`## Workflows` \(#217\)/)
+  })
+
+  it.each(policySources)(
+    '%s: eligibility selects, the mapping routes — stated as disjoint',
+    (_, content) => {
+      expect(content).toMatch(/Which workflow runs on an eligible card/)
     },
   )
 })
