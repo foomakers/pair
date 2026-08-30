@@ -31,6 +31,23 @@ const RISK_MATRIX_ADOPTION = readFileSync(
   join(__dirname, '../../../../.pair/adoption/tech/risk-matrix.md'),
   'utf-8',
 )
+const BOOTSTRAP_SKILL = readFileSync(
+  join(__dirname, '../../dataset/.skills/process/bootstrap/SKILL.md'),
+  'utf-8',
+)
+const TRIVIAL_DIFF_ADL = readFileSync(
+  join(
+    __dirname,
+    '../../../../.pair/adoption/decision-log/2026-08-30-business-impact-reads-what-a-trivial-change-does-not-where-it-lives.md',
+  ),
+  'utf-8',
+)
+/** The two shipped trees the classification-matrix templates live in, dataset first. */
+const TEMPLATE_TREES = [
+  ['dataset', join(__dirname, '../../dataset/.pair/knowledge')],
+  ['mirror', join(__dirname, '../../../../.pair/knowledge')],
+] as const
+const readKb = (root: string, rel: string): string => readFileSync(join(root, rel), 'utf-8')
 const WEBSITE_DOCS = join(__dirname, '../../../../apps/website/content/docs')
 const GATES_CONFIG_DOC = readFileSync(
   join(WEBSITE_DOCS, 'reference/quality-gates-configuration.mdx'),
@@ -282,6 +299,29 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(bullet).toMatch(/reviewer/i)
     })
 
+    // The same bullet closed with "Offered by the same `/pair-process-bootstrap` Phase 3.6",
+    // which the widened enumeration made FALSE for the family this story adds: Step 3.6.2
+    // asks two questions (threshold, reviewer/SLA) and never mentions trivial-diff, while
+    // Step 3.6.2 item 2 makes the offer one-shot ("present ⇒ already authored, and never
+    // re-proposed"). An adopter who confirms a threshold key at bootstrap therefore has
+    // `## Overrides` on disk and NO guided path to the new knob, ever — and a maintainer who
+    // trusts §6 and re-runs bootstrap to reach it gets `overrides: already authored` and
+    // concludes the key is unavailable.
+    it(`${label} §6 scopes the Phase 3.6 offer to the families bootstrap actually asks about`, () => {
+      const bullet = content
+        .split('\n')
+        .find(l => l.startsWith('- **`## Overrides`'))
+        ?.trim()
+      expect(bullet, "§6's `## Overrides` index bullet is missing").toBeDefined()
+      expect(bullet, 'the bullet must still name the guided path that does exist').toMatch(
+        /Phase 3\.6/,
+      )
+      expect(
+        bullet,
+        'the dimension-resolution family has no guided path — the bullet must say so',
+      ).toMatch(/hand-authored/)
+    })
+
     // AC7/AC8(a) — the key and the BR2 definition of "trivial" live in §6's schema.
     it(`${label} §6 documents the key with the definition of trivial spelled out`, () => {
       const s = section(content)
@@ -290,7 +330,34 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(s).toMatch(/comment-only/)
       expect(s).toMatch(/whitespace-only/)
       expect(s).toMatch(/formatter-output-only/)
-      expect(s).toMatch(/no changed line alters an executable or declarative statement/)
+      expect(s).toMatch(/alters an executable or declarative statement/)
+    })
+
+    // Branch (b) was a CLOSED enumeration (comment-only / whitespace-only / formatter-only)
+    // with the statement test demoted to a gloss — but the executable-markdown carve-out
+    // hands branch (b) a case the enumeration does not contain and promises an outcome:
+    // "a typo fix in that same file's surrounding prose still is [trivial]". A prose
+    // sentence in `pair-process-review/SKILL.md` is none of the three categories, so one
+    // agent resolves the typo-fix PR NOT trivial (Business impact falls back to `core`,
+    // the PR is tiered exactly as this story exists to stop) while another, reading the
+    // gloss as the test, resolves it trivial ⇒ green. The gloss has to BE the test.
+    it(`${label} branch (b) tests the statement, with the categories as examples`, () => {
+      const bullets = section(content)
+        .split('\n')
+        .filter(l => /^\s*-\s/.test(l))
+      const branchB = bullets.find(l => /\*\*\(b\)/.test(l))
+      expect(branchB, 'branch (b) bullet missing').toBeDefined()
+      expect(branchB, 'branch (b) must lead with the statement test, not an enumeration').toMatch(
+        /\*\*\(b\)[^—]*alters an executable or declarative statement/,
+      )
+      expect(
+        branchB,
+        "branch (b) must admit the prose-only case the carve-out's promise depends on",
+      ).toMatch(/prose-only/)
+      // The three original categories stay — as qualifying examples, not as the gate.
+      expect(branchB).toMatch(/comment-only/)
+      expect(branchB).toMatch(/whitespace-only/)
+      expect(branchB).toMatch(/formatter-output-only/)
     })
 
     // The story's boundary condition, which branch (a) as written does not carry: branch
@@ -498,6 +565,48 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
     }
   })
 
+  // Cross-file: §6's Phase 3.6 claim is checked against the interview that would have to
+  // honour it. If a later story DOES add the third question to Step 3.6.2, this fails and
+  // points at the sentences to widen — the two files can no longer drift apart silently.
+  it('bootstrap Step 3.6.2 really does not ask about the dimension-resolution family', () => {
+    const step = BOOTSTRAP_SKILL.split('### Step 3.6.2')[1]
+    expect(step, 'bootstrap Step 3.6.2 not found').toBeDefined()
+    const body = step.split(/^### /m)[0]
+    expect(
+      /trivial-diff/.test(body),
+      'Step 3.6.2 now offers trivial-diff — §6 and the website may claim the offer again',
+    ).toBe(false)
+  })
+
+  // Phase 3.6's preamble asserts it is the ONLY guided authoring path for `## Overrides`.
+  // True of the two families it asks about, false of the third — and it is the sentence an
+  // adopter reads inside the interview itself.
+  it('Phase 3.6 preamble scopes its `## Overrides` ownership to the families it asks about', () => {
+    const claim = BOOTSTRAP_SKILL.split('\n').find(l => l.includes('no guided authoring path'))
+    expect(claim, "Phase 3.6's ownership claim is missing").toBeDefined()
+    expect(claim, 'the claim must exclude the family the phase never asks about').toMatch(
+      /trivial-diff/,
+    )
+  })
+
+  // The ADL is the durable record a later contributor reads before extending the schema.
+  // It counted the same key two ways — Consequences called `business-impact.*` a "second
+  // family" (key namespaces), Adoption Impact a "third family" (kinds of override) — so a
+  // contributor adding, say, a second dimension-resolution key files it under two different
+  // §6 structures depending on which paragraph they read. The shipped KB uses the
+  // three-kinds sense; the ADL must not contradict it.
+  it('the ADL counts the override families the way the shipped §6 does', () => {
+    expect(TRIVIAL_DIFF_ADL, 'the ADL still calls it a "second family"').not.toMatch(
+      /second family/i,
+    )
+    expect(TRIVIAL_DIFF_ADL).toMatch(/third family/i)
+    const consequence = TRIVIAL_DIFF_ADL.split('\n').find(l =>
+      l.includes('`## Overrides` schema now carries'),
+    )
+    expect(consequence, "the ADL's schema-growth consequence is missing").toBeDefined()
+    expect(consequence, 'it must name the taxonomy it counts in').toMatch(/dimension-resolution/)
+  })
+
   // AC2's second half lives in the APPLIER, not only in the model: the matrix `classify`
   // emits must be able to name the override as Business impact's source. Every sibling row
   // of the output template offers an alternation of sources; a single-valued
@@ -511,6 +620,39 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
     expect(row).toContain('subdomain class')
     expect(row).toContain('Overrides: business-impact.trivial-diff')
   })
+
+  // Same contract, one layer out: `classify` emits the matrix, but the `<details>` block it
+  // is written INTO is owned by two shipped templates — the story body (refinement) and the
+  // code-review body (review). Both carried a single-valued `[subdomain class]` Source cell
+  // while every sibling row offers an alternation. On a repo that declared the key, a
+  // docs-only edit inside a `core` subdomain resolves Business impact green via the override;
+  // the agent filling the template then has exactly one bracketed value available and it is
+  // FALSE (a core subdomain never produces green), so it either asserts the falsehood or
+  // improvises a cell the template does not define — and the provenance of the green becomes
+  // non-uniform across cards. These are the artifacts a human reads at the merge gate.
+  for (const [label, root] of TEMPLATE_TREES) {
+    for (const [file, rel] of [
+      ['user-story', 'guidelines/collaboration/templates/user-story-template.md'],
+      ['code-review', 'guidelines/collaboration/templates/code-review-template.md'],
+    ] as const) {
+      it(`${label} ${file}-template offers the override as a Business impact source`, () => {
+        const row = readKb(root, rel)
+          .split('\n')
+          .find(l => l.startsWith('| Business impact'))
+        expect(row, `${file}-template has no Business impact matrix row`).toBeDefined()
+        expect(row).toContain('subdomain class')
+        expect(row, 'the Source cell must offer the override as the alternative').toContain(
+          'Overrides: business-impact.trivial-diff',
+        )
+        // These tables RENDER (they are inside `<details>`, not a code fence), so the
+        // alternation pipe must be escaped exactly like every sibling row's — an unescaped
+        // one splits the row into an extra column and the matrix stops parsing.
+        expect(row, 'the alternation pipe must be escaped, like the sibling rows').toContain(
+          'subdomain class \\| Overrides',
+        )
+      })
+    }
+  }
 })
 
 describe('this repo declares the trivial-diff override (#438, AC9)', () => {
@@ -619,10 +761,26 @@ describe('website docs enumerate the trivial-diff override family (#438)', () =>
     // Addition, not replacement: the pre-story families stay enumerated.
     expect(whatItIs).toMatch(/criticality/i)
     expect(whatItIs).toMatch(/reviewer count/i)
+    // ...and the How-to-enable cell must not sell Phase 3.6 as a route to a knob it never
+    // offers: the interview asks two override questions, neither about trivial-diff.
+    const howTo = (row as string).split('|')[5]
+    expect(howTo, 'the How-to-enable cell must scope the bootstrap offer').toMatch(/hand-authored/)
   })
 
   it('the quality-model reference page names it in the same enumeration', () => {
     expect(QUALITY_MODEL_DOC).toMatch(/business-impact\.trivial-diff/)
+  })
+
+  // Same page, next sentence: "The last two are offered by `bootstrap`'s Phase 3.6" now
+  // covers the dimension-resolution family too, and bootstrap never asks about it.
+  it('the quality-model reference page scopes the Phase 3.6 offer', () => {
+    const para = QUALITY_MODEL_DOC.split('\n').find(l =>
+      l.includes('up to three independent sections'),
+    )
+    expect(para, 'the Project Overrides paragraph is missing').toBeDefined()
+    expect(para, 'the paragraph must not fold trivial-diff into the bootstrap offer').toMatch(
+      /hand-authored/,
+    )
   })
 })
 
