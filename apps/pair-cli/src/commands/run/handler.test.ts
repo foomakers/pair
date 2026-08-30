@@ -471,11 +471,19 @@ Precedence: auto-refine, auto-dev
     const events: string[] = []
     const acquire: LockAcquirer = ({ card }) => {
       events.push(`acquire:${card}`)
-      if (held) return undefined
-      return { path: `/locks/${card}`, release: () => events.push(`release:${card}`) }
+      if (held) {
+        return { kind: 'held', path: `/locks/${card}`, since: HELD_SINCE }
+      }
+      return {
+        kind: 'acquired',
+        lock: { path: `/locks/${card}`, release: () => events.push(`release:${card}`) },
+      }
     }
     return { events, acquire }
   }
+
+  /** Old enough that no run is plausibly still in flight — the stale-lock case, in one constant. */
+  const HELD_SINCE = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
 
   function deps(results: IterationResult[] = [ok()], held = false) {
     const { calls, runner } = fakeRunner(results)
@@ -672,6 +680,24 @@ Precedence: auto-refine, auto-dev
       expect(audit.entries[0]?.line).toContain('reason=run-in-progress')
     })
 
+    it('reports the holder the acquirer named, and how long it has held the card', async () => {
+      // The path comes from the ACQUIRER, never re-derived at the call site: an operator chasing a
+      // stale lock must be sent to the directory this run actually probed. The age is what tells
+      // them it IS stale — a killed run leaves the lock behind and nothing ever reaps it.
+      const output = captureLog()
+      const { handler } = deps([ok()], true)
+
+      await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        handler,
+      )
+
+      expect(output()).toContain('/locks/217')
+      expect(output()).toMatch(/held 3h \d+m/)
+      expect(output()).toMatch(/stale/)
+    })
+
     it('takes the lock before spawning and releases it after the run', async () => {
       captureLog()
       const { lock, handler } = deps()
@@ -687,7 +713,7 @@ Precedence: auto-refine, auto-dev
 
     it('releases the lock even when the run throws — a crash must not park the card', async () => {
       captureLog()
-      const { lock, handler } = deps()
+      const { lock, audit, handler } = deps()
       const exploding: IterationRunner = () => Promise.reject(new Error('engine exploded'))
 
       await expect(
@@ -698,6 +724,14 @@ Precedence: auto-refine, auto-dev
         ),
       ).rejects.toThrow('engine exploded')
       expect(lock.events).toEqual(['acquire:217', 'release:217'])
+      // ...and the TRAIL says so. A trail that stops at `event=start` reads identically to a run
+      // still in flight, and the released lock leaves no second signal on the filesystem either —
+      // so the operator reading it after an unattended night cannot tell the two apart.
+      expect(audit.entries.map(entry => entry.line)).toEqual([
+        expect.stringContaining('event=start card=217'),
+        expect.stringContaining('event=end card=217'),
+      ])
+      expect(audit.entries[1]?.line).toContain('outcome=crashed')
     })
   })
 })

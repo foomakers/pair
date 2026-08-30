@@ -438,6 +438,13 @@ Precedence: auto-refine, auto-dev
       expect(auditTrail()).toMatch(/event=skip card=301 reason=run-in-progress/)
       // ...and the burst did not leave the card locked for the next trigger.
       expect(existsSync(join(project, LOCKS, '301'))).toBe(false)
+      // The skip names the REAL holder — the directory the run probed, and how long it has held it.
+      // Nothing reaps a lock, so a killed run leaves one behind and every later trigger on the card
+      // skips forever; the age is what tells an operator this skip is not a healthy burst.
+      const skip = printed.find(line => line.includes('run-in-progress'))
+      expect(skip).toContain(join(project, LOCKS, '301'))
+      expect(skip).toContain('held under a minute')
+      expect(skip).toMatch(/stale/)
     })
 
     it('routes nothing at all when the project declares no mapping — the shipped default', async () => {

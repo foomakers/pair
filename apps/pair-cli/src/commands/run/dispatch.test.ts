@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decideDispatch, describeDispatch, type DispatchRequest } from './dispatch'
+import { decideDispatch, describeDispatch, lockedSkip, type DispatchRequest } from './dispatch'
 import { readWorkflowMapping } from './workflow-mapping'
 
 const MAPPING = readWorkflowMapping(`## Workflows
@@ -163,5 +163,47 @@ describe('describeDispatch — every decision is legible before anything spawns'
     expect(line).toContain('217')
     expect(line).toContain('auto-dev')
     expect(line).toContain('pair-loop')
+  })
+})
+
+// The one skip nothing releases on its own: a lock survives the process that took it, so a run
+// killed by SIGKILL, an OOM kill or a host job timeout turns every later trigger on that card into
+// a silent, exit-0 skip. Automation is then off for that card, permanently, with no alert.
+describe('lockedSkip — a held card reports the holder, not just the refusal', () => {
+  const path = '/w/.pair/working/automation/locks/217'
+  const now = new Date('2026-08-30T12:00:00.000Z')
+
+  it('names the directory to remove and how long the holder has had it', () => {
+    const decision = lockedSkip('217', { path, since: '2026-08-30T08:48:00.000Z' }, now)
+
+    expect(decision).toMatchObject({ kind: 'skip', reason: 'run-in-progress' })
+    const line = describeDispatch(decision)
+    expect(line).toContain(path)
+    expect(line).toContain('held 3h 12m')
+    expect(line).toContain('2026-08-30T08:48:00.000Z')
+    expect(line).toMatch(/stale/)
+  })
+
+  it.each([
+    ['a fresh burst', '2026-08-30T11:59:30.000Z', 'held under a minute'],
+    ['minutes', '2026-08-30T11:23:00.000Z', 'held 37m'],
+    ['days', '2026-08-27T09:00:00.000Z', 'held 3d 3h'],
+  ])('renders %s as an age an operator can judge', (_, since, expected) => {
+    expect(describeDispatch(lockedSkip('217', { path, since }, now))).toContain(expected)
+  })
+
+  it('reports the path alone when the holder note said nothing readable', () => {
+    const line = describeDispatch(lockedSkip('217', { path }, now))
+
+    expect(line).toContain(path)
+    expect(line).not.toContain('held ')
+  })
+
+  it('does not render a garbage age from a garbage timestamp', () => {
+    const line = describeDispatch(lockedSkip('217', { path, since: 'not-a-date' }, now))
+
+    expect(line).toContain(path)
+    expect(line).not.toContain('NaN')
+    expect(line).not.toContain('held ')
   })
 })

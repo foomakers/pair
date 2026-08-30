@@ -802,16 +802,20 @@ Four properties decide what actually happens, and all four fail towards *not run
   wrote the section has not opted in, which is the shipped default rather than an error.
 - **Eligibility is applied before routing.** A card that does not carry the `## Eligibility` label is
   skipped before its tags are looked at at all.
-- **One run per card.** The dispatch takes an exclusive **per-card lock** before spawning and
-  releases it afterwards; a second trigger on a locked card is skipped and logged, never queued. A
-  burst of label edits therefore cannot start two agents on the same branch.
+- **One run per card.** The dispatch takes an exclusive **per-card lock** (a directory under
+  `<working_path>/automation/locks/`) before spawning and releases it afterwards; a second trigger on
+  a locked card is skipped and logged, never queued, and the skip prints where the lock is and how
+  long it has been held — a run killed by a signal leaves one behind, and nothing reaps it. The lock
+  is **filesystem-local**: it guards dispatches sharing one working area, so a host that gives every
+  job a fresh checkout needs its own concurrency group as the cross-job guard.
 
 Two things HALT instead of guessing: a mapped tag whose workflow is **not installed**, and a card
 carrying **two mapped tags** that no `Precedence:` line covers. Both name the file and the value to
-fix.
+fix. The first is checked before eligibility and routing, so it stops dispatch for **every** card,
+not only the ones carrying that tag.
 
 Every decision — start, skip, end — is appended to the run's `## Audit Location` file, and the start
-record is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own
+record — only the start — is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own
 host adapter posts as a comment on the card: `pair run` writes files and prints lines, and never
 posts to a tracker. The reference GitHub Actions adapter ships in the knowledge base
 (`collaboration/automation/github-automation.md`).

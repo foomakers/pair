@@ -245,16 +245,20 @@ At **read** time, a consumer **MUST HALT** with an adoption-fix message naming t
 
 At **routing** time — the two rules that need a board and an installed skill set, so they cannot be answered from the file alone:
 
-- **a mapped tag whose workflow is not installed ⇒ HALT** with an adoption-fix message naming the tag, the workflow and the file. Never a silent fall back to another workflow: running a *different* workflow than the one declared is the outcome no operator can debug;
+- **a mapped tag whose workflow is not installed ⇒ HALT** with an adoption-fix message naming the tag, the workflow and the file. Never a silent fall back to another workflow: running a *different* workflow than the one declared is the outcome no operator can debug. The check runs **before** eligibility and routing, so this HALT stops dispatch for **every** card — including cards that are ineligible or carry no mapped tag at all — not only the cards carrying the offending tag. One broken line is broken configuration for the whole board, and that is the point: making the failure surface only on whichever card happens to carry that tag would make it depend on which trigger fired first;
 - **a card carrying two or more mapped tags with no `Precedence:` line — or with none of those tags listed in it — ⇒ HALT**. A silent choice between two declared workflows is precisely what the precedence line exists to prevent, so its absence is a question for a maintainer, not a tie for a consumer to break.
 
 ### One run per card — the concurrency guard
 
 A trigger fires on card metadata, and metadata changes in **bursts** (a label added, removed, re-added; a re-run of the same host job). A consumer **MUST** take an **exclusive per-card lock** before it dispatches and release it when the run ends; a second dispatch for a card whose lock is held is **skipped and logged**, never queued behind the first. Two agent runs on one card is the failure mode this guard exists for: they would race on the same branch, the same PR and the same board state.
 
+**The lock is scoped to ONE working area** (ADR-024): it stops two dispatches that share `working_path` — a persistent daemon, a long-lived runner — and it cannot see a holder on another machine or in another fresh checkout. A host whose jobs get an ephemeral workspace **MUST** put every path that dispatches a card into one host-side concurrency group, because there the group is the only cross-job guard there is.
+
+**A lock has no timeout and nothing reaps it.** A run killed by a signal, an OOM kill or a job timeout leaves the lock behind, and automation is then silently off for that card: every later trigger skips and exits cleanly. A consumer **MUST** therefore report, in the skip, *where* the lock is and *how long* it has been held — the two facts that separate a healthy burst from a stale lock — and the operator surface **MUST** document clearing it.
+
 ### The audit trail — and where host credentials are not
 
-Every dispatch decision — **start**, **skip**, **end** — is appended to the run's `## Audit Location` file. The **start** record is *also* emitted on stdout as a single `DISPATCH-RECORD:` line, so the **trigger's host adapter** — the thin, per-host piece that already holds the credentials the trigger runs under — can post it as a comment on the card. The dispatcher core stays **host-agnostic**: it reads tags it was handed, resolves a workflow and writes a file, and never holds a tracker token. Adding a host is a new adapter, never a change to the routing core.
+Every dispatch decision — **start**, **skip**, **end** — is appended to the run's `## Audit Location` file. The **start** record, and **only** the start record, is *also* emitted on stdout as a single `DISPATCH-RECORD:` line, so the **trigger's host adapter** — the thin, per-host piece that already holds the credentials the trigger runs under — can post it as a comment on the card. A skip and an end stay in the file: a card that gets a comment for every unmapped label edit is unreadable within a day, and an end comment doubles the noise for a fact the trail already holds. The dispatcher core stays **host-agnostic**: it reads tags it was handed, resolves a workflow and writes a file, and never holds a tracker token. Adding a host is a new adapter, never a change to the routing core.
 
 ### The workflows a mapping can name
 

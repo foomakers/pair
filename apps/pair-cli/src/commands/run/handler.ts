@@ -1,4 +1,4 @@
-import { join, resolve } from 'path'
+import { resolve } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import { loadConfigWithOverrides, readEngineDeclaration } from '#config'
@@ -263,12 +263,14 @@ async function driveDispatchedCard(
   deps: RunHandlerDependencies,
 ): Promise<number> {
   const { resolved, decision, context, config } = card
-  const lock = (deps.acquireLock ?? acquireCardLock)({
+  const acquisition = (deps.acquireLock ?? acquireCardLock)({
     workingArea: context.workingArea,
     card: decision.card,
   })
-  if (lock === undefined) {
-    const skipped = lockedSkip(decision.card, join(context.workingArea, 'automation/locks'))
+  if (acquisition.kind === 'held') {
+    // The holder's own path and age, as the acquirer reported them — never re-derived here, so the
+    // message names the directory this run actually probed.
+    const skipped = lockedSkip(decision.card, acquisition)
     console.log(`  ${describeDispatch(skipped)}`)
     record(context, deps, skipped, { event: 'skip' })
     return 0
@@ -282,8 +284,14 @@ async function driveDispatchedCard(
       outcome: outcome === 0 ? 'completed' : 'failed',
     })
     return outcome
+  } catch (error) {
+    // Every start gets an end, including this one. Without it the trail stops at `event=start` and
+    // the operator reading it the next morning cannot tell a crashed run from one still in flight —
+    // and the lock, released just below, offers no second signal either.
+    record(context, deps, decision, { event: 'end', outcome: 'crashed' })
+    throw error
   } finally {
-    lock.release()
+    acquisition.lock.release()
   }
 }
 

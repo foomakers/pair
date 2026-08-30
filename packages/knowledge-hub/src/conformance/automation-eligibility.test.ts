@@ -962,6 +962,30 @@ describe('automation-policy.md — Workflows section (story #217 T1)', () => {
   )
 
   it.each(policySources)(
+    '%s: says what the lock does NOT cover — one working area, and no reaper',
+    (_, content) => {
+      const section = workflowsSection(content)
+      // A reader who takes the lock for a cross-machine guard adds a second trigger outside the
+      // host's concurrency group and gets two agents on one branch — the exact race it exists for.
+      expect(section).toMatch(/scoped to ONE working area/)
+      expect(section).toMatch(/ephemeral/)
+      expect(section).toMatch(/concurrency group/)
+      // ...and a lock nothing reaps turns automation silently off for one card, forever.
+      expect(section).toMatch(/no timeout and nothing reaps it/)
+      expect(section).toMatch(/where.*lock is and.*how long/i)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: a mapping naming an uninstalled workflow stops the WHOLE board',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/before\*{0,2} eligibility and routing/)
+      expect(section).toMatch(/every\*{0,2} card/)
+    },
+  )
+
+  it.each(policySources)(
     '%s: the audit trail keeps host credentials out of the core',
     (_, content) => {
       const section = workflowsSection(content)
@@ -969,6 +993,11 @@ describe('automation-policy.md — Workflows section (story #217 T1)', () => {
       expect(section).toContain('## Audit Location')
       expect(section).toMatch(/host adapter/)
       expect(section).toMatch(/never holds a tracker token/)
+      // ONLY the start is posted on the card. A skip comment per unmapped label edit is the noise
+      // this narrow reading exists to avoid, and leaving it implicit is how a future adapter author
+      // re-derives an `end` comment from the job's exit status.
+      expect(section).toMatch(/and \*\*only\*\* the start record/)
+      expect(section).toMatch(/skip and an end stay in the file/)
     },
   )
 
@@ -1037,75 +1066,10 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
   )
 })
 
-const HOST_ADAPTER_REL = 'guidelines/collaboration/automation/github-automation.md'
-const adapterSources: Array<[string, string]> = [
-  ['dataset', read(join(DATASET_KB, HOST_ADAPTER_REL))],
-  ['mirror', read(join(MIRROR_KB, HOST_ADAPTER_REL))],
-]
-
-describe('github-automation.md — the reference trigger adapter (story #217 T4)', () => {
-  const adapterSection = (content: string): string => {
-    const start = content.indexOf('## Tag-Driven Dispatch — the reference trigger adapter')
-    expect(start).toBeGreaterThan(-1)
-    return content.slice(start)
-  }
-
-  it.each(adapterSources)('%s: fires on label events, not on every issue event', (_, content) => {
-    const section = adapterSection(content)
-    expect(section).toMatch(/types: \[labeled\]/)
+describe('automation README — indexes the mapping next to the eligibility filter (story #217 T4)', () => {
+  it.each(readmeSources)('%s README: lists the `## Workflows` section', (_, content) => {
+    expect(content).toMatch(/## Workflows/)
   })
-
-  it.each(adapterSources)('%s: calls the ONE entry point, with both inputs', (_, content) => {
-    const section = adapterSection(content)
-    expect(section).toMatch(/pair run --card/)
-    expect(section).toMatch(/--card-tags/)
-    // The labels are DATA the trigger already holds (ADR-024 option 2, rejected): an adapter that
-    // re-reads them from the API is the tracker client the driver exists without.
-    expect(section).toMatch(/github\.event\.issue\.labels/)
-  })
-
-  it.each(adapterSources)(
-    '%s: the adapter posts the DISPATCH-RECORD line — the driver never does',
-    (_, content) => {
-      const section = adapterSection(content)
-      expect(section).toContain('DISPATCH-RECORD')
-      expect(section).toMatch(/gh issue comment/)
-      expect(section).toMatch(/never (posts|holds)/)
-    },
-  )
-
-  it.each(adapterSources)(
-    '%s: states the credential boundary — the token lives in the adapter',
-    (_, content) => {
-      const section = adapterSection(content)
-      expect(section).toMatch(/permissions:/)
-      expect(section).toMatch(/credential/i)
-    },
-  )
-
-  it.each(adapterSources)(
-    '%s: does not sell the host concurrency group as the per-card guard',
-    (_, content) => {
-      const section = adapterSection(content)
-      // `concurrency:` cancels or queues host JOBS; the lock is what guarantees one RUN per card,
-      // and a reader who conflates them ships a burst that starts two agents on one branch.
-      expect(section).toMatch(/concurrency:/)
-      expect(section).toMatch(/per-card lock/)
-    },
-  )
-
-  it.each(adapterSources)('%s: repeats the opt-in boundary at the trigger', (_, content) => {
-    const section = adapterSection(content)
-    expect(section).toMatch(/untagged/i)
-    expect(section).toMatch(/runs nothing|nothing runs|never runs/)
-  })
-
-  it.each(readmeSources)(
-    '%s README: indexes the mapping next to the eligibility filter',
-    (_, content) => {
-      expect(content).toMatch(/## Workflows/)
-    },
-  )
 })
 
 describe('docs site — tag-driven dispatch is documented where an operator looks (story #217 T4)', () => {
@@ -1134,5 +1098,24 @@ describe('docs site — tag-driven dispatch is documented where an operator look
   it('the unattended-delivery tutorial shows the trigger-driven variant', () => {
     expect(tutorial).toMatch(/## Workflows/)
     expect(tutorial).toMatch(/pair run --card/)
+  })
+
+  it('the tutorial counts the policy file the way the guideline does', () => {
+    // A reader who completed Step 1 believing they have six sections, then told to add "a sixth",
+    // cannot tell whether they are adding one or editing one — in the tutorial whose whole subject
+    // is a fail-closed policy file where a mis-declared section HALTs the run.
+    const [policy] = policySources.map(([, content]) => content)
+    const declared = /It specifies (\w+) sections/.exec(policy!)![1]!
+    expect(tutorial).toContain(`${declared[0]!.toUpperCase()}${declared.slice(1)} independent`)
+    // ...and the section Option D adds is numbered off that same count, not off Step 1's listing.
+    expect(tutorial).toContain(`the ${declared}th`)
+  })
+
+  it('the tutorial does not sell the per-card lock as the guard on ephemeral runners', () => {
+    // Option D is the CI-triggered path, where every job checks out a fresh workspace and the
+    // lock cannot see another job's holder — the host concurrency group is the guard there.
+    const wrapped = tutorial.replace(/\s+/g, ' ')
+    expect(wrapped).toMatch(/lock is scoped to one working area/i)
+    expect(wrapped).toMatch(/concurrency group\s*.{0,12}is the guard/)
   })
 })

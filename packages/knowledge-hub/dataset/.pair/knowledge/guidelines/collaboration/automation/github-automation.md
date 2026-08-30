@@ -207,10 +207,15 @@ on:
   issues:
     types: [labeled]
 
-# One in-flight job per issue, so a burst of label edits does not fan out into a queue of
-# runners. This is a HOST-side economy, NOT the safety guard: the per-card lock inside
-# `pair run` is what guarantees one run per card, and it holds even when two triggers come
-# from two different workflows, two repositories, or a manual invocation on the box.
+# One in-flight job per issue. On EPHEMERAL runners this group IS the cross-job guard, and
+# `cancel-in-progress: false` is what makes it one: every job checks out a fresh workspace,
+# so the per-card lock `pair run` takes lives in a working area no other job can see, and it
+# can never observe a holder from another runner (ADR-024: the lock is filesystem-local).
+# A second trigger declared OUTSIDE this group — a `workflow_dispatch` button, an
+# `issue_comment` job — therefore starts a second agent on the same card, the same branch
+# and the same PR. Put every path that dispatches a card into THIS group.
+# The per-card lock is the guard within ONE working area: a persistent daemon box, where the
+# bursts it stops are real and the host has no concurrency group at all.
 concurrency:
   group: pair-dispatch-${{ github.event.issue.number }}
   cancel-in-progress: false
@@ -228,6 +233,11 @@ jobs:
 
       - name: Dispatch the card
         id: dispatch
+        # DECLARED, not defaulted. GitHub's implicit shell is `bash -e {0}` — WITHOUT
+        # `pipefail` — so the pipeline below would report `tee`'s status and a HALT inside
+        # `pair run` (an uninstalled workflow, an undecidable multi-tag card) would land as a
+        # green tick. `shell: bash` is what makes GitHub run the step with `-eo pipefail`.
+        shell: bash
         env:
           # The labels the trigger ALREADY observed — passed as data, never re-fetched. An
           # adapter that queries the API for them is the tracker client the driver exists
@@ -240,6 +250,7 @@ jobs:
 
       - name: Record the run on the card
         if: always()
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           CARD: ${{ github.event.issue.number }}
@@ -248,7 +259,13 @@ jobs:
           # because the adapter is what holds a tracker token. No line ⇒ nothing was
           # dispatched (untagged, unmapped or ineligible card) ⇒ nothing to comment.
           record="$(grep '^DISPATCH-RECORD:' dispatch.log || true)"
-          [ -n "$record" ] && gh issue comment "$CARD" --body "$record"
+          # `if`, not `[ -n "$record" ] && …`: under `-e` a trailing compound whose test is
+          # false exits 1, so the silent case — the untagged issue this feature promises
+          # costs nothing — would fail the step and notify a human on every unmapped label
+          # edit on the board.
+          if [ -n "$record" ]; then
+            gh issue comment "$CARD" --body "$record"
+          fi
 ```
 
 ### What the adapter does and does not decide
@@ -261,6 +278,8 @@ jobs:
 | Is another run already on this card? | the per-card lock inside `pair run` |
 | Who tells the humans? | the adapter, by posting the `DISPATCH-RECORD:` line |
 
+**Only a run START is ever posted on the card.** `DISPATCH-RECORD:` is emitted for the `start` event and for nothing else — a skip and an end are appended to the audit file only. That is deliberate and it is the whole reason the comment step needs no filter of its own: a board where every unmapped label edit posted a "nothing happened" comment would be unreadable within a day, and an `end` comment would double every run's noise for a fact the audit trail already holds. An adapter that wants the end on the card reads it from `## Audit Location`; it must not re-derive it from the exit status.
+
 A job `if:` that pre-filters on a label is the one thing worth resisting: it duplicates the mapping in a second place, in a language the dispatcher cannot read, and the two drift on the day someone renames a tag in adoption. Let every labeled event through and let the routing core skip what it should skip — a skip is cheap, reported, and appended to the audit trail.
 
 ### Untagged is not a case the adapter has to handle
@@ -272,6 +291,8 @@ An issue carrying no mapped tag **runs nothing**: the dispatcher reports the ski
 - **Run it once by hand**, on a card you tagged deliberately: `pair run --card <id> --card-tags "<labels>" --dry-run` prints the route, the perimeter and the policy, and spawns nothing.
 - **Scope the token to the repository the cards live in.** The adapter can only ever post where its token reaches; the engine credentials the run itself needs are a separate, and usually much broader, concern.
 - **Watch the audit file** (`## Audit Location`) for the first few cycles: every start, skip and end is there, including the ones the card never shows.
+- **Check the mapping resolves before the first trigger fires.** A `## Workflows` entry naming a workflow nobody installed HALTs the dispatch *before* eligibility and routing, so it stops **every** card on the board, not only cards carrying that tag. That is the intended blast radius — a broken mapping is broken for everyone, and finding out only on the one card that happens to carry the tag would make the failure depend on which trigger fired first — but it means the dry run above is a check on the whole board, not on one card.
+- **Know how to clear a stale lock.** The per-card lock is a directory (`<working_path>/automation/locks/<card>/`) with no timeout and nothing to reap it: a run killed by SIGKILL, an OOM kill or a job timeout leaves it behind, and every later trigger on that card then skips with `run-in-progress` and exits `0` — automation silently off for that one card. The skip line prints the directory and how long it has been held; when no run is alive, `rm -rf` that directory to clear it. On ephemeral runners the workspace is discarded with the job, so this is a **persistent daemon** concern.
 
 ## Implementation Guidelines
 

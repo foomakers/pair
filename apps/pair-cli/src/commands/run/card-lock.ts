@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, statSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { isSafeId } from './prompt-safety'
 
@@ -19,7 +19,13 @@ import { isSafeId } from './prompt-safety'
  * temporary directory.
  */
 
-const LOCK_DIRECTORY = join('automation', 'locks')
+/**
+ * Where the locks live, under the working area. EXPORTED because the caller that reports a declined
+ * acquisition has to name the same directory this module creates: a second literal at the call site
+ * would keep printing the old path the day this one moves, sending an operator chasing a stale lock
+ * to a directory that does not exist.
+ */
+export const LOCK_DIRECTORY = join('automation', 'locks')
 
 export interface CardLock {
   /** The lock directory on disk — printed, so a stale lock is findable without guessing. */
@@ -34,8 +40,26 @@ export interface CardLockRequest {
   readonly card: string
 }
 
-/** Acquires the card's lock, or returns `undefined` when another run already holds it. */
-export type LockAcquirer = (request: CardLockRequest) => CardLock | undefined
+/**
+ * The acquisition, or the holder that refused it.
+ *
+ * A decline carries the holder's `path` and `since` rather than a bare `undefined`: a lock that
+ * outlives its process (SIGKILL, an OOM kill, a host job timeout) leaves nothing to release it, and
+ * a skip that reports only "run-in-progress" is indistinguishable from a healthy burst. The data was
+ * already being written to `holder.json`; this is the path that reads it back.
+ */
+export type CardLockOutcome =
+  | { readonly kind: 'acquired'; readonly lock: CardLock }
+  | {
+      readonly kind: 'held'
+      /** The holder's lock directory — the thing an operator removes to clear a stale one. */
+      readonly path: string
+      /** The holder's `acquiredAt`, when it is readable. Best-effort: the LOCK is the directory. */
+      readonly since?: string | undefined
+    }
+
+/** Acquires the card's lock, or reports the holder that already has it. */
+export type LockAcquirer = (request: CardLockRequest) => CardLockOutcome
 
 export const acquireCardLock: LockAcquirer = ({ workingArea, card }) => {
   // The card id is a PATH SEGMENT here, so it gets the same rule `--root` and `--skill` get. The
@@ -62,7 +86,8 @@ export const acquireCardLock: LockAcquirer = ({ workingArea, card }) => {
     if (!statSync(path).isDirectory()) {
       throw new Error(`Lock path ${path} exists but is not a directory: the working area is broken`)
     }
-    return undefined
+    const since = heldSince(path)
+    return { kind: 'held', path, ...(since !== undefined && { since }) }
   }
 
   // Who holds it and since when — the lock is what an operator inspects after a killed run, and a
@@ -77,11 +102,30 @@ export const acquireCardLock: LockAcquirer = ({ workingArea, card }) => {
   }
 
   return {
-    path,
-    release: () => rmSync(path, { recursive: true, force: true }),
+    kind: 'acquired',
+    lock: {
+      path,
+      release: () => rmSync(path, { recursive: true, force: true }),
+    },
   }
 }
 
 function isAlreadyExists(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === 'EEXIST'
+}
+
+/**
+ * When the holder took the lock, read back off its own note.
+ *
+ * Best-effort in exactly the direction the write is: a holder note that is missing, truncated or
+ * malformed means the age is unknown, never that the lock is free.
+ */
+function heldSince(path: string): string | undefined {
+  try {
+    const holder: unknown = JSON.parse(readFileSync(join(path, 'holder.json'), 'utf-8'))
+    const acquiredAt = (holder as { acquiredAt?: unknown })?.acquiredAt
+    return typeof acquiredAt === 'string' ? acquiredAt : undefined
+  } catch {
+    return undefined
+  }
 }

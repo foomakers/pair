@@ -117,6 +117,12 @@ function skip(card: string, reason: DispatchSkipReason, detail: string): Dispatc
   return { kind: 'skip', card, reason, detail }
 }
 
+/** Who holds a card's lock, as the filesystem reported it — the path, and since when if known. */
+export interface LockHolder {
+  readonly path: string
+  readonly since?: string | undefined
+}
+
 /**
  * The decision a trigger burst gets: another run holds this card, so this one does nothing.
  *
@@ -124,13 +130,40 @@ function skip(card: string, reason: DispatchSkipReason, detail: string): Dispatc
  * is a `skip` like any other so it reports and audits through the same path; the reason it is built
  * here rather than in `decideDispatch` is that holding a lock is a fact about the filesystem, and
  * this module deliberately touches none.
+ *
+ * **The holder's AGE is part of the message**, because a lock has no timeout and nothing reaps it: a
+ * run killed by SIGKILL, an OOM kill or a host job timeout leaves the directory behind, and every
+ * later trigger on that card then skips, exits `0` and looks exactly like a healthy burst. An age
+ * longer than a run can plausibly take is the one signal that separates the two, so it is printed
+ * next to the directory an operator removes to clear it.
  */
-export function lockedSkip(card: string, lockPath: string): DispatchDecision {
+export function lockedSkip(
+  card: string,
+  holder: LockHolder,
+  now: Date = new Date(),
+): DispatchDecision {
+  const age = describeHold(holder.since, now)
   return skip(
     card,
     'run-in-progress',
-    `another run already holds this card (${lockPath}) — skipped, never queued behind it`,
+    `another run already holds this card (${holder.path}${age}) — skipped, never queued behind it; ` +
+      `if no run is alive, that lock is stale: delete the directory to clear it`,
   )
+}
+
+function describeHold(since: string | undefined, now: Date): string {
+  if (since === undefined) return ''
+  const held = now.getTime() - new Date(since).getTime()
+  return Number.isNaN(held) ? '' : `, held ${humanDuration(held)} since ${since}`
+}
+
+function humanDuration(milliseconds: number): string {
+  const minutes = Math.max(0, Math.floor(milliseconds / 60_000))
+  if (minutes < 1) return 'under a minute'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ${minutes % 60}m`
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`
 }
 
 /**
