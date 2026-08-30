@@ -127,6 +127,22 @@ function resolveContext(config: RunCommandConfig, fs: FileSystemService, cwd: st
 }
 
 /**
+ * The run's scope root — the DISPATCHED CARD whenever there is one, and nothing displaces it.
+ *
+ * Carried as a VALUE and rendered downstream under the routed workflow's own parameter name —
+ * borrowed, never invented (D18): `--root` for `pair-loop`, `--story` for
+ * `pair-process-refine-story`. `A dispatched card IS the run's scope` (ADR-024 item 7), so the
+ * parser refuses `--root` alongside `--card` and the two are never both set here. The card is
+ * still read FIRST, because this ordering is what makes the wrong outcome unreachable for a caller
+ * that builds a config without going through the parser: an agent driven over a subtree nobody
+ * locked, while the audit trail, the exclusive lock and the on-issue `DISPATCH-RECORD:` all name
+ * the card that WAS dispatched.
+ */
+function scopeRoot(config: RunCommandConfig, dispatch?: DispatchDecision): string | undefined {
+  return dispatch?.card ?? config.scope.root
+}
+
+/**
  * Everything is resolved BEFORE anything is spawned, and every resolution is printed: engine and
  * the level it came from (AC1), skill and any fallback (AC2), the perimeter (AC5), the autonomy
  * and trust posture (AC6), the borrowed policy and the declared parallelism limit (AC8/AC9).
@@ -150,11 +166,7 @@ function resolveRun(
       ? { kind: 'skill', name: context.dispatch.workflow, source: 'mapping' }
       : resolveInvocation(config.invocation, context.probe)
   const perimeter = createPerimeter({
-    // A dispatched card IS the run's scope. Carried here as a VALUE and rendered downstream under
-    // the routed workflow's own parameter name — borrowed, never invented (D18): `--root` for
-    // `pair-loop`, `--story` for `pair-process-refine-story`. An explicit `--root` still wins: it
-    // can only narrow further.
-    root: config.scope.root ?? context.dispatch?.card,
+    root: scopeRoot(config, context.dispatch),
     filter: config.scope.filter,
     eligibility: policy.eligibility,
     cwd,
@@ -278,8 +290,12 @@ async function driveDispatchedCard(
     return 0
   }
 
+  // Whether the `start` record actually reached the trail — the fact that separates "this run
+  // crashed" from "this run never began", which are the same `catch` and NOT the same report.
+  let started = false
   try {
     record(context, deps, decision, { event: 'start' })
+    started = true
     const outcome = await driveRun(resolved, config, deps)
     record(context, deps, decision, {
       event: 'end',
@@ -290,7 +306,7 @@ async function driveDispatchedCard(
     // Every start gets an end, including this one. Without it the trail stops at `event=start` and
     // the operator reading it the next morning cannot tell a crashed run from one still in flight —
     // and the lock, released just below, offers no second signal either.
-    recordCrash(context, deps, decision, error)
+    recordCrash(context, deps, decision, { crash: error, started })
     throw error
   } finally {
     acquisition.lock.release()
@@ -319,19 +335,36 @@ async function driveRun(
 /**
  * The `end` record a crash owes the trail — written so that neither failure can hide the other.
  *
- * `appendAuditLine` THROWS by design ("an unaudited run is not a mode"), so a crash on a working
- * area whose `## Audit Location` cannot be written raises a SECOND error from inside the handler's
- * own catch. Fail-closed is the intended posture — the run still fails — but the engine error is
- * the one an operator needs, and letting a bare `EACCES` replace it sends them to debug the wrong
- * machine. So the audit failure supersedes the plain rethrow and carries the run error with it:
- * both in the message, the original kept as `cause`.
+ * `appendAuditLine` THROWS by design ("an unaudited run is not a mode"), so a working area whose
+ * `## Audit Location` cannot be written raises a SECOND error from inside the handler's own catch.
+ * Fail-closed is the intended posture — the run still fails — but the engine error is the one an
+ * operator needs, and letting a bare `EACCES` replace it sends them to debug the wrong machine. So
+ * the audit failure supersedes the plain rethrow and carries the run error with it: both in the
+ * message, the original kept as `cause`.
+ *
+ * `started` is what keeps that message TRUE. The `start` record is the first thing written inside
+ * the try, so an unwritable destination makes the start write the very thing that throws — and
+ * reporting that as a crash asserts two things that did not happen: that a run crashed (no engine
+ * process was ever spawned) and that the trail stops at `event=start` (no start line was ever
+ * written; the file may not exist at all). An operator sent to reconcile a run that never happened
+ * against a trail with no record of it debugs the wrong thing twice, so the two cases get two
+ * messages — and when the start never landed there is no point attempting the `end` at the same
+ * unwritable destination.
  */
 function recordCrash(
   context: RunContext,
   deps: RunHandlerDependencies,
   decision: DispatchDecision,
-  crash: unknown,
+  { crash, started }: { crash: unknown; started: boolean },
 ): void {
+  if (!started) {
+    throw new Error(
+      `The dispatch of card ${decision.card} could not be audited ` +
+        `(${describeError(crash)}): nothing was spawned and the trail carries no record of this ` +
+        `run at all, so fix the audit destination before the next trigger fires`,
+      { cause: crash },
+    )
+  }
   try {
     record(context, deps, decision, { event: 'end', outcome: 'crashed' })
   } catch (auditFailure) {

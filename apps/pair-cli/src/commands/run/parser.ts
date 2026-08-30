@@ -148,10 +148,24 @@ function resolveEngineFlag(engine: string | undefined): EngineId | undefined {
  * trimmed. A label carrying a comma is out of support here for the same reason `## Eligibility`
  * HALTs on one: the schema's separator wins, and the fix is to rename or re-project the label.
  *
- * `--skill`/`--prompt` alongside `--card` is REFUSED rather than silently preferred: the mapping is
- * what decides which workflow runs on a dispatched card, and two answers to that question in one
- * command line is exactly the ambiguity the mapping exists to remove.
+ * `--skill`, `--prompt` and `--root` alongside `--card` are REFUSED rather than silently ranked: a
+ * dispatched card is the WHOLE answer to what the run is about — the mapping says which workflow,
+ * and the card itself is the scope that workflow receives (ADR-024 item 7). A second answer to
+ * either half is the ambiguity the mapping exists to remove.
+ *
+ * `--root` is the more dangerous of the three and was the one missing: `--card 217 --root 300`
+ * used to parse, and the run then drove the agent over subtree 300 while the audit trail, the
+ * on-issue `DISPATCH-RECORD:` comment and the exclusive per-card lock all named 217 — card 300
+ * unguarded (its own lock still free, so a second trigger on it starts a second agent on the same
+ * branch) and card 217 credited with work nothing did on it. `--filter` is deliberately NOT
+ * refused: it narrows which cards a selector picks up *within* the run, it does not name a subject.
  */
+const FLAGS_CONFLICTING_WITH_CARD = [
+  ['skill', '--skill'],
+  ['prompt', '--prompt'],
+  ['root', '--root'],
+] as const
+
 function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefined {
   const card = identifierText(options.card, '--card')
   if (card === undefined) {
@@ -160,11 +174,17 @@ function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefin
     }
     return undefined
   }
-  if (options.skill !== undefined || options.prompt !== undefined) {
+  // EVERY conflicting flag is named, not just the first one found: an operator who fixes the flag
+  // the message named and re-runs into a second refusal learns the rule one flag per attempt.
+  const conflicting = FLAGS_CONFLICTING_WITH_CARD.filter(([key]) => options[key] !== undefined).map(
+    ([, flag]) => flag,
+  )
+  if (conflicting.length > 0) {
     throw new Error(
-      '--card cannot be combined with --skill or --prompt: the `## Workflows` mapping in ' +
-        '.pair/adoption/tech/automation.md decides which workflow runs on a dispatched card. ' +
-        'Drop --card to invoke a skill directly.',
+      `--card cannot be combined with ${conflicting.join(' or ')}: a dispatched card is the whole ` +
+        'subject of the run. The `## Workflows` mapping in .pair/adoption/tech/automation.md ' +
+        'decides which workflow runs, and the card itself is the scope it runs on, passed under ' +
+        "that workflow's own name for it. Drop --card to invoke a skill on a scope you choose.",
     )
   }
   return { card, tags: resolveCardTags(options.cardTags) }

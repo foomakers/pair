@@ -254,10 +254,31 @@ describe('parseRunCommand — tag-driven dispatch (US-217)', () => {
     expect(parseRunCommand({ card: '217', cardTags }).dispatch).toEqual({ card: '217', tags: [] })
   })
 
+  // `--root` belongs in this list for the SAME reason `--skill` does, and it is the more dangerous
+  // of the two: `--card 217 --root 300` used to parse, and the run then drove the agent over 300
+  // while the audit trail, the `DISPATCH-RECORD:` comment and the exclusive lock all named 217 —
+  // card 300 unguarded and card 217 credited with work never done on it.
   it.each([
     ['--skill', { card: '217', skill: 'pair-loop' }],
     ['--prompt', { card: '217', prompt: 'do the thing' }],
-  ])('refuses %s alongside --card: the mapping already decides what runs', (_case, options) => {
+    ['--root', { card: '217', root: '300' }],
+  ])('refuses %s alongside --card: the dispatched card is the whole subject', (_case, options) => {
     expect(() => parseRunCommand(options)).toThrow(/--card/)
+  })
+
+  it('names every conflicting flag it was given, not just the first', () => {
+    expect(() => parseRunCommand({ card: '217', root: '300', skill: 'pair-loop' })).toThrow(
+      /--skill or --root/,
+    )
+  })
+
+  // `--filter` is NOT in that list: it narrows WHICH cards a card-scoped selector picks up within
+  // the run, it does not answer "what is this run about", and a dispatched workflow that declares
+  // no `--filter` never receives it anyway.
+  it('still accepts --filter alongside --card', () => {
+    const config = parseRunCommand({ card: '217', cardTags: 'auto-dev', filter: 'risk:green' })
+
+    expect(config.scope.filter).toBe('risk:green')
+    expect(config.scope.root).toBeUndefined()
   })
 })

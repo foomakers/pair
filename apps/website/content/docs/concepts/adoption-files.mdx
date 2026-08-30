@@ -143,12 +143,12 @@ Precedence: auto-dev, auto-refine
 
 **`## Workflows`** — the **tag→workflow mapping**, and the declaration that makes automation opt-in *per card*. One entry per line, `<tag> ⇒ <workflow>`: the tag is a plain label a card may carry (matched by string equality, exactly like `## Eligibility`), and the workflow is the **skill** that runs on it. An optional `Precedence:` line resolves a card carrying two mapped tags — first listed wins.
 
-Three properties are worth knowing before you write one:
+Four properties are worth knowing before you write one:
 
 - **A card with no mapped tag runs nothing.** There is no default workflow and no fallback — the absence of a route *is* the opt-in boundary.
 - **Absent section ⇒ nothing is routable.** A dispatch reports `no mapping declared` and exits cleanly; that is the shipped default, not an error.
-- **Ambiguity halts, it never guesses.** A workflow that is not installed, a workflow the dispatcher cannot hand the card to, or a card carrying two mapped tags with no `Precedence:` covering them: each stops the run with a message naming the file and the value to fix.
-- **The card travels as the workflow's own argument.** `pair-loop` takes it as `--root <card>`, `pair-process-refine-story` and `pair-process-plan-tasks` as `--story <card>` — and those two select the highest-priority story on the board when they get no story at all, so a workflow whose scoping argument the dispatcher does not know is refused rather than run on a card nobody tagged.
+- **Ambiguity halts, it never guesses.** A workflow that is not installed, a workflow outside the guideline's catalog, or a card carrying two mapped tags with no `Precedence:` covering them: each stops the run with a message naming the file and the value to fix.
+- **The card travels as the workflow's own argument.** `pair-loop` takes it as `--root <card>`, `pair-process-refine-story` and `pair-process-plan-tasks` as `--story <card>` — and those two select the highest-priority story on the board when they get no story at all, so a workflow the dispatcher cannot scope to the card is refused rather than run on a card nobody tagged. Those three *are* the mappable set: a skill outside it is refused even when installed, because a dispatch takes the card's lock and posts a record on it, and doing that for a skill that only reports leaves a card claiming work nothing did.
 
 Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point — [`pair run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run) — which is where the routing happens.
 

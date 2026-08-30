@@ -1074,8 +1074,41 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
         ).toMatch(new RegExp(`\\|\\s*\`(?:\\$|--)${name}\``))
       }
 
-      // ...and the rule that makes the column load-bearing rather than decorative.
-      expect(section).toMatch(/MUST HALT.*scoping argument|scoping argument it does not know/s)
+      // ...and the rule that makes the column load-bearing rather than decorative: the table IS
+      // the mappable set, and a workflow outside it HALTs.
+      expect(section).toMatch(/MUST HALT\*\* on a mapped workflow this table does not list/)
+      // The direction a reader gets wrong on their own: knowing how a skill spells its scope is
+      // not what makes a tag allowed to route a card to it (`pair-next` is scopable and unmappable).
+      expect(section).toMatch(/Being scopable is not enough to be mappable/)
+    },
+  )
+
+  /**
+   * The schema bullet and the catalog section must state ONE rule, not two.
+   *
+   * The bullet is where a team writing its first mapping stops reading. Saying only "resolved
+   * against the installed skill set" there licensed `auto-review ⇒ pair-process-review` — an
+   * installed skill, so legal by that sentence — and the next trigger on ANY card, including
+   * untagged and ineligible ones, HALTed the whole board on a mapping the schema had blessed.
+   */
+  it.each(policySources)(
+    '%s: the schema bullet carries the catalog restriction, not just "installed"',
+    (_, content) => {
+      const section = workflowsSection(content)
+      const bullet = /^- \*\*The workflow is a skill name\*\*[^\n]*$/m.exec(section)
+      expect(
+        bullet,
+        'the `## Workflows` schema no longer has a workflow-name bullet',
+      ).not.toBeNull()
+
+      const text = bullet![0]
+      expect(text).toMatch(/installed/)
+      // Both halves, in the bullet itself — a reader who never reaches the catalog section must
+      // not come away thinking any installed skill is mappable.
+      expect(text).toMatch(/catalog|The workflows a mapping can name/)
+      expect(text).toMatch(/refus/i)
+      // ...and the claim this replaced, which the same PR's own code made false.
+      expect(text).not.toMatch(/no workflow catalog/)
     },
   )
 

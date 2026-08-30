@@ -1,5 +1,5 @@
 import { policyHalt, POLICY_PATH } from './policy-sections'
-import { scopeParameterFor } from './invocation'
+import { dispatchScopeParameterFor, DISPATCHABLE_WORKFLOWS } from './invocation'
 import type { SkillProbe } from './resolve-skill'
 import type { WorkflowMapping, WorkflowRoute } from './workflow-mapping'
 
@@ -196,16 +196,23 @@ function assertWorkflowsInstalled(mapping: WorkflowMapping, isInstalled: SkillPr
  *
  * Not the same check as `assertWorkflowsInstalled`: a workflow can be installed and still be one
  * this driver cannot address a card to.
+ *
+ * The mappable set is `DISPATCHABLE_WORKFLOWS` — the KB catalog as data — and NOT every skill the
+ * driver happens to know an argument name for: `pair-next` is scopable by hand and still refused
+ * here, because routing a card to it would take the card's lock and post a `DISPATCH-RECORD:`
+ * comment for a run that only prints a recommendation. The remedy list below is rendered FROM that
+ * set, so the message and the check cannot drift apart.
  */
 function assertWorkflowsScopable(mapping: WorkflowMapping): void {
   for (const route of mapping.routes) {
-    if (scopeParameterFor(route.workflow) !== undefined) continue
+    if (dispatchScopeParameterFor(route.workflow) !== undefined) continue
+    const catalogued = [...DISPATCHABLE_WORKFLOWS].map(workflow => `\`${workflow}\``).join(', ')
     policyHalt(
       `\`## Workflows\` maps \`${route.tag}\` to \`${route.workflow}\`, and this driver has no ` +
         `declaration of how that workflow names the card it works on — so the dispatched card ` +
         `could not be passed to it, and the run would pick its own subject. Map the tag to one of ` +
-        `the workflows the catalog names (\`pair-loop\`, \`pair-process-refine-story\`, ` +
-        `\`pair-process-plan-tasks\`), or add \`${route.workflow}\`'s own scoping argument to the driver`,
+        `the workflows the catalog names (${catalogued}), or add \`${route.workflow}\` to the ` +
+        `catalog with its own scoping argument`,
     )
   }
 }

@@ -6,6 +6,8 @@ import {
   buildPromptText,
   filterDeliveryFor,
   scopeParameterFor,
+  dispatchScopeParameterFor,
+  DISPATCHABLE_WORKFLOWS,
   SKILL_PARAMETERS,
   APPROVAL_DECLARING_SKILLS,
   APPROVAL_PARAMETER,
@@ -416,19 +418,41 @@ describe('SKILL_PARAMETERS matches the corpus that defines it', () => {
     }
   })
 
-  it('can scope every workflow the KB catalog names to the card that was dispatched', () => {
+  /**
+   * SET EQUALITY, not one-way inclusion — the two directions fail differently and both are real.
+   *
+   * catalogued ⊄ dispatchable: a team copies a mapping verbatim out of the guideline and the whole
+   * board HALTs on it. dispatchable ⊄ catalogued: a workflow nothing documents as mappable is
+   * accepted, and a team that maps a tag to it gets the card's exclusive lock taken, an
+   * `event=start … workflow=<x>` audit line and a DISPATCH-RECORD comment on the card, for whatever
+   * that skill happens to do — while the HALT message, the catalog, the tutorial and ADR-024 all
+   * told them it was refused. Only equality holds the documented set and the enforced set together.
+   */
+  it('dispatches exactly the workflows the KB catalog names — no more, no fewer', () => {
     const catalogued = catalogWorkflows()
     // The catalog is the thing a team copies from: `auto-refine ⇒ pair-process-refine-story`
     // appears verbatim there, in adoption-files.mdx and in the tutorial.
     expect(catalogued.length).toBeGreaterThan(1)
-    for (const workflow of catalogued) {
-      const parameter = scopeParameterFor(workflow)
+    expect([...DISPATCHABLE_WORKFLOWS].sort()).toEqual([...catalogued].sort())
+  })
+
+  it('scopes every dispatchable workflow under the name that workflow itself declares', () => {
+    for (const workflow of DISPATCHABLE_WORKFLOWS) {
+      const parameter = dispatchScopeParameterFor(workflow)
       expect(
         parameter,
-        `${workflow} is catalogued as mappable but the driver declares no scoping parameter for it — a card routed to it would be dropped from the invocation`,
+        `${workflow} is dispatchable but the driver declares no scoping parameter for it — a card routed to it would be dropped from the invocation`,
       ).toBeDefined()
       expect(declaredArguments(fileFor(workflow))).toContain(bare(parameter!))
     }
+  })
+
+  it('refuses to scope a dispatch to a skill the catalog does not name, however well it knows it', () => {
+    // `pair-next` has a full `SKILL_PARAMETERS` row (`--skill pair-next --root 212` is a legitimate
+    // hand-driven run) and is still not dispatchable: the argument table answers "how do I spell
+    // this skill's scope", never "may a tag route a card here".
+    expect(scopeParameterFor('pair-next')).toBe('--root')
+    expect(dispatchScopeParameterFor('pair-next')).toBeUndefined()
   })
 })
 

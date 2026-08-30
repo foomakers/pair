@@ -763,5 +763,36 @@ Precedence: auto-refine, auto-dev
       // The lock is still released: a card parked by a double failure is the worst of both.
       expect(lock.events).toEqual(['acquire:217', 'release:217'])
     })
+
+    it('reports an unwritable audit destination as a dispatch that never started, not as a crash', async () => {
+      // The `start` record is the FIRST thing written, so a `## Audit Location` the process cannot
+      // write (read-only mount, wrong ownership on a daemon box) makes the start write the thing
+      // that throws. Reported as a crash it produced two false statements at once: that a run
+      // crashed (no engine process was ever spawned) and that "the trail now stops at
+      // `event=start`" (no start line was ever written — the file may not exist at all), sending
+      // the operator to reconcile a run that never happened against a trail with no record of it.
+      captureLog()
+      const { calls, lock, handler } = deps()
+
+      const failing = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        {
+          ...handler,
+          appendAudit: () => {
+            throw new Error("EACCES: permission denied, open '/ro/loop-audit.md'")
+          },
+        },
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain('EACCES')
+      expect(String(failing)).toContain('nothing was spawned')
+      // The two false claims, named: neither may appear.
+      expect(String(failing)).not.toContain('crashed')
+      expect(String(failing)).not.toContain('event=start')
+      // Nothing ran, and the card is left dispatchable for the next trigger.
+      expect(calls).toHaveLength(0)
+      expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
   })
 })

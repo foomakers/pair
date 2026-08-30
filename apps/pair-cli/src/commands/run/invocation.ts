@@ -72,6 +72,39 @@ export function scopeParameterFor(skill: string): string | undefined {
 }
 
 /**
+ * The workflows a `## Workflows` mapping may name — the KB catalog, as DATA.
+ *
+ * A SEPARATE declaration from `SKILL_PARAMETERS`, not a subset read off it, because the two answer
+ * different questions. The argument table answers "how does this skill spell its scope", and it
+ * carries a `pair-next` row because `--skill pair-next --root 212` is a legitimate hand-driven run.
+ * This set answers "may a tag route a card here", and `pair-next` is not an answer to it: a card
+ * dispatched to it takes the card's exclusive lock, writes `event=start … workflow=pair-next` and
+ * gets a `DISPATCH-RECORD:` comment posted on it, for a run that prints a next-action
+ * recommendation and changes nothing.
+ *
+ * Deriving one from the other is what let those four rows quietly become the mappable set while
+ * every operator surface — the HALT message below, the KB catalog table, the tutorial, ADR-024 —
+ * said three. `invocation.test.ts` asserts set EQUALITY against the catalog table in the dataset,
+ * in both directions: a workflow documented as mappable but missing here HALTs a board on a
+ * mapping copied verbatim out of the guideline, and a workflow here but not in the catalog is
+ * accepted by a driver that every document says refuses it.
+ */
+export const DISPATCHABLE_WORKFLOWS: ReadonlySet<string> = Object.freeze(
+  new Set(['pair-loop', 'pair-process-refine-story', 'pair-process-plan-tasks']),
+)
+
+/**
+ * How a DISPATCHED card reaches this workflow, or `undefined` when a tag may not route to it.
+ *
+ * Both halves matter and both are refusals: a skill outside the catalog, and a catalogued skill the
+ * driver holds no scoping row for. Either way `dispatch.ts` HALTs rather than guessing — see
+ * `scopeParameterFor` for why an unattended run gets no "probably `--root`".
+ */
+export function dispatchScopeParameterFor(skill: string): string | undefined {
+  return DISPATCHABLE_WORKFLOWS.has(skill) ? scopeParameterFor(skill) : undefined
+}
+
+/**
  * A skill this driver has no parameter declaration for still gets the two FROZEN scoping
  * parameters (ADR-017 §1) and nothing else — the perimeter must travel with every invocation
  * (AC5), and inventing arguments for an unknown skill is exactly what BR1 forbids.

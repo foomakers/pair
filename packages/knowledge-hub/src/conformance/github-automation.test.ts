@@ -159,6 +159,25 @@ describe('github-automation.md — the reference trigger adapter (story #217 T4)
     expect(section).toMatch(/untagged/i)
     expect(section).toMatch(/runs nothing|nothing runs|never runs/)
   })
+
+  /**
+   * The document a reader is sent to must not end by telling them it is unfinished.
+   *
+   * This file is a primary operator reference — `commands.mdx`, the unattended-delivery tutorial
+   * and ADR-024 all point here for the trigger adapter — and it ended with a duplicated stub tail:
+   * a concatenated sentence (`…project management.Automation`), then an orphan `## Overview` and a
+   * `## TODO` reading "This document needs to be completed with GitHub automation guidelines". An
+   * adopter who scrolls past the reference workflow they are about to put in production reads
+   * that as the last word on it.
+   */
+  it.each(sources)('%s: carries no unfinished-stub tail', (_, content) => {
+    expect(content).not.toMatch(/## TODO/)
+    expect(content).not.toMatch(/needs to be completed/)
+    // The concatenation that produced it: prose running straight into a heading word.
+    expect(content).not.toMatch(/[a-z]\.[A-Z][a-z]/)
+    // Exactly one `## Overview`-style opener, not a second document glued onto the first.
+    expect([...content.matchAll(/^## Overview$/gm)].length).toBeLessThan(2)
+  })
 })
 
 describe('github-automation.md — the shipped trigger adapter, executed (story #217 T4)', () => {

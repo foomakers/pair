@@ -459,6 +459,32 @@ Precedence: auto-refine, auto-dev
       for (const { card } of BOARD) expect(existsSync(join(project, LOCKS, card))).toBe(false)
     })
 
+    /**
+     * The dispatched card is the ONLY subject a routed run can have — `--root` cannot displace it.
+     *
+     * Before the refusal, `--card 301 --root 300` parsed and drove `/pair-loop --root 300` while the
+     * audit file recorded `card=301` start AND end, the `DISPATCH-RECORD:` line named 301, and the
+     * exclusive lock was taken on 301 — so the agent worked an unguarded subtree (a second trigger
+     * on 300 would have acquired its own free lock and started a second agent on the same branch)
+     * and the trail credited a card nothing ran on. Checked through the registry, because the
+     * refusal has to hold at the entry point a trigger actually calls.
+     */
+    it('refuses --root on a dispatched card, and spawns nothing when it does', async () => {
+      expect(() =>
+        commandRegistry.run.parse({
+          card: '301',
+          cardTags: 'auto-dev,risk:green',
+          root: '300',
+          cwd: project,
+          maxIterations: 1,
+        }),
+      ).toThrow(/--card cannot be combined with --root/)
+
+      expect(spawned).toHaveLength(0)
+      expect(existsSync(join(project, AUDIT))).toBe(false)
+      expect(existsSync(join(project, LOCKS, '301'))).toBe(false)
+    })
+
     it('never starts a second run on a card a run already holds (trigger burst)', async () => {
       // The burst, exactly as a host produces it: the second trigger arrives WHILE the first run is
       // in flight. Re-entering from inside the iteration is what makes the lock the thing under

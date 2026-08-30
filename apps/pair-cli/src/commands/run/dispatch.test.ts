@@ -9,7 +9,7 @@ auto-refine ⇒ pair-process-refine-story
 Precedence: auto-refine, auto-dev
 `)
 
-const INSTALLED = new Set(['pair-loop', 'pair-process-refine-story', 'pair-next'])
+const INSTALLED = new Set(['pair-loop', 'pair-process-refine-story', 'pair-process-plan-tasks'])
 
 function request(overrides: Partial<DispatchRequest> = {}): DispatchRequest {
   return {
@@ -117,8 +117,8 @@ auto-refine ⇒ pair-process-refine-story
 
 auto-dev ⇒ pair-loop
 auto-refine ⇒ pair-process-refine-story
-auto-triage ⇒ pair-next
-Precedence: auto-triage
+auto-tasks ⇒ pair-process-plan-tasks
+Precedence: auto-tasks
 `)
 
     expect(() =>
@@ -190,6 +190,44 @@ Precedence: auto-review, auto-dev
         }),
       ),
     ).toThrow(/pair-process-review/)
+  })
+
+  it('HALTs on `pair-next`, which the driver can scope but the catalog never offers', () => {
+    // The gap between "the driver holds a `--root` row for it" and "a tag may be mapped to it".
+    // `pair-next` has a row in `SKILL_PARAMETERS` because `--skill pair-next --root 212` is a
+    // legitimate hand-driven invocation — but every operator surface (the HALT's own list, the KB
+    // catalog, the tutorial, ADR-024) tells a team the mappable set is three, and `pair-next` only
+    // PRINTS a recommendation: a run routed to it takes the card's exclusive lock, writes
+    // `event=start … workflow=pair-next` and posts a DISPATCH-RECORD comment for work that never
+    // happens. The dispatchable set is its own declaration, not a by-product of the argument table.
+    const mapping = readWorkflowMapping(`## Workflows
+
+auto-triage ⇒ pair-next
+`)
+
+    // INSTALLED, deliberately: the uninstalled-workflow HALT runs first, and a `pair-next` that is
+    // absent would be refused for the wrong reason — the one this test exists for is a workflow
+    // present on the machine and still not routable.
+    let thrown: unknown
+    try {
+      decideDispatch(
+        request({
+          mapping,
+          tags: ['auto-triage', 'risk:green'],
+          isInstalled: name => INSTALLED.has(name) || name === 'pair-next',
+        }),
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(String(thrown)).toMatch(/pair-next/)
+    expect(String(thrown)).toMatch(/scop/i)
+    // The list the message offers is the mappable set, and it does not name the workflow it just
+    // refused — a HALT whose remedy includes the rejected value is not a remedy.
+    expect(String(thrown)).toMatch(
+      /`pair-loop`, `pair-process-refine-story`, `pair-process-plan-tasks`/,
+    )
   })
 
   it('routes to every workflow the KB catalog recommends, each under its own scoping argument', () => {
