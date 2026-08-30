@@ -158,7 +158,10 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
   // (ADL 2026-08-25), and the other two were renamed to `pair-cli` while this drifted.
   it('the remedy names the published binary, so the copy-pasted step exists', () => {
     expect(PRE_PUSH_REMEDY).toContain('pair-cli update')
-    expect(PRE_PUSH_REMEDY).not.toMatch(/[^-]\bpair update/)
+    // Lookbehind, not `[^-]`: a preceding-character class cannot see offset 0, so a future
+    // reorder that OPENS the string with `pair update …` would slip past the pin while
+    // `toContain('pair-cli update')` still passed on a later sentence.
+    expect(PRE_PUSH_REMEDY).not.toMatch(/(?<!-)\bpair update/)
   })
 })
 

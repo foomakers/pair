@@ -58,12 +58,21 @@ describe('commandRegistry', () => {
     const offenders: string[] = []
     for (const key of Object.keys(commandRegistry)) {
       const { metadata } = commandRegistry[key as keyof typeof commandRegistry]
-      const lines: { where: string; text: string }[] = [
-        { where: `${key}.usage`, text: metadata.usage },
-        ...metadata.examples.map((text, i) => ({ where: `${key}.examples[${i}]`, text })),
+      // `usage` is stricter than `examples`: `cli.ts` renders it by STRIPPING the
+      // `<bin> <command> ` prefix Commander prints itself, and falls back to Commander's
+      // generated line when the prefix is absent. Pinning the full prefix here is what
+      // keeps that fallback dead — a `usage` that drifted would otherwise disappear from
+      // `--help` silently instead of failing.
+      const lines: { where: string; text: string; prefix: string }[] = [
+        { where: `${key}.usage`, text: metadata.usage, prefix: `${bin} ${metadata.name} ` },
+        ...metadata.examples.map((text, i) => ({
+          where: `${key}.examples[${i}]`,
+          text,
+          prefix: `${bin} `,
+        })),
       ]
-      for (const { where, text } of lines) {
-        if (!text.startsWith(`${bin} `)) offenders.push(`${where}: ${text}`)
+      for (const { where, text, prefix } of lines) {
+        if (!text.startsWith(prefix)) offenders.push(`${where}: ${text}`)
       }
     }
     expect(offenders).toEqual([])

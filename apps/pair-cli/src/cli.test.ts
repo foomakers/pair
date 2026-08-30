@@ -481,6 +481,79 @@ describe('US-395 round 18: `pair-cli --help` describes what --no-kb actually doe
   })
 })
 
+/**
+ * US-449 AC1 — the `usage` line commander PRINTS, not the one the registry stores.
+ *
+ * Round 2 renamed eleven `metadata.usage` strings and gated them, but nothing ever called
+ * `.usage()` and the program was named `pkg.name`: an npm user running
+ * `pair-cli install --help` read `Usage: @pair/pair-cli install [options]` as the first
+ * line, pasted it, and got `command not found: @pair/pair-cli`. These assert the rendered
+ * text, so the gate and the reader finally see the same string.
+ */
+describe('US-449: the printed Usage line names the published binary', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const renderHelp = async (argv: string[]): Promise<string> => {
+    const { runCli } = await import('./cli.js')
+    let help = ''
+    vi.spyOn(process.stdout, 'write').mockImplementation(chunk => {
+      help += String(chunk)
+      return true
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await runCli(['node', 'pair-cli', ...argv], {
+      fs: new InMemoryFileSystemService({}, '/tmp', '/tmp'),
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+    // Strip SGR colour codes when chalk is enabled. The ESC byte is BUILT, not typed, so
+    // the pattern carries no literal control character and needs no lint suppression.
+    return help.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g'), '')
+  }
+
+  const usageLine = (help: string): string =>
+    help.split('\n').find(line => line.startsWith('Usage:')) ?? ''
+
+  it('top-level --help prints `Usage: pair-cli`', async () => {
+    expect(usageLine(await renderHelp(['--help']))).toBe('Usage: pair-cli [options] [command]')
+  })
+
+  it("a subcommand's --help prints the registry's usage line verbatim", async () => {
+    const { commandRegistry } = await import('./commands/index.js')
+    expect(usageLine(await renderHelp(['install', '--help']))).toBe(
+      `Usage: ${commandRegistry.install.metadata.usage}`,
+    )
+  })
+})
+
+describe('publishedBinName', () => {
+  it('returns the sole bin key', async () => {
+    const { publishedBinName } = await import('./cli.js')
+    expect(publishedBinName({ bin: { 'pair-cli': 'dist/cli.js' } })).toBe('pair-cli')
+  })
+
+  it('refuses a manifest with no bin, or with more than one', async () => {
+    const { publishedBinName } = await import('./cli.js')
+    expect(() => publishedBinName({})).toThrow(/exactly one/)
+    expect(() => publishedBinName({ bin: { a: 'x', b: 'y' } })).toThrow(/exactly one/)
+  })
+})
+
+describe('usageArguments', () => {
+  it('strips the `<bin> <command> ` prefix commander prints itself', async () => {
+    const { usageArguments } = await import('./cli.js')
+    expect(usageArguments('pair-cli install [target] [options]', 'pair-cli', 'install')).toBe(
+      '[target] [options]',
+    )
+  })
+
+  it('yields undefined for a drifted prefix, so no line is ever doubled', async () => {
+    const { usageArguments } = await import('./cli.js')
+    expect(usageArguments('pair install [options]', 'pair-cli', 'install')).toBeUndefined()
+  })
+})
+
 // ── The pre-flight hook must actually fire (US-395) ────────────────────────
 // It did not, for the whole life of the feature: `cli.ts` guarded on
 // `thisCommand === prog`, and Commander invokes a program-level hook as

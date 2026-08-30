@@ -158,15 +158,25 @@ if [ ! -d "$KB_SOURCE_PATH" ]; then
   exit 1
 fi
 
-PAIR_BIN="$SAMPLE_TMP/node_modules/.bin/pair"
+# The package declares exactly ONE bin key, `pair-cli`, so npm links `.bin/pair-cli` and
+# nothing else. This probed `.bin/pair` — a path no install ever creates — so every branch
+# below took its fallback: Test A ran `npx pair-cli`, resolving from the REGISTRY instead of
+# the artifact just installed, Test B printed a warning, the standardized suite was skipped
+# outright, and the script still exited 0. A release gate was green having exercised zero
+# tests against the artifact (US-449).
+PAIR_BIN="$SAMPLE_TMP/node_modules/.bin/pair-cli"
+
+# Hard failure, not a warning: a smoke test that cannot find the binary it just installed has
+# not passed, it has not run. Warning-and-continue is exactly what hid the wrong path.
+if [ ! -x "$PAIR_BIN" ]; then
+  echo "Error: the installed artifact linked no executable at $PAIR_BIN"
+  ls -la "$SAMPLE_TMP/node_modules/.bin" || true
+  exit 1
+fi
 
 # ---- Test A: Install with explicit --source (current behavior) ----
 echo "Test A: pair-cli install --source $KB_SOURCE_PATH"
-if [ -x "$PAIR_BIN" ]; then
-  "$PAIR_BIN" install --source "$KB_SOURCE_PATH"
-else
-  npx pair-cli install --source "$KB_SOURCE_PATH"
-fi
+"$PAIR_BIN" install --source "$KB_SOURCE_PATH"
 echo "Test A passed: npm-based pair-cli install with --source succeeded"
 
 # ---- Test B: Install with default resolution (no --source, no --offline) ----
@@ -176,18 +186,16 @@ DEFAULT_TEST_DIR="$TMPDIR/default-resolution-test"
 mkdir -p "$DEFAULT_TEST_DIR"
 echo "Test B: pair-cli install (default resolution — no --source, no --offline)"
 pushd "$DEFAULT_TEST_DIR" >/dev/null
-if [ -x "$PAIR_BIN" ]; then
-  if "$PAIR_BIN" install 2>&1; then
-    echo "Test B passed: default resolution install succeeded"
-    if [ ! -d ".pair" ]; then
-      echo "Warning: Test B — .pair directory not created despite exit 0"
-    fi
-  else
-    echo "Warning: Test B — default resolution failed (may require published GitHub release)"
-    echo "  This is expected during pre-release CI but should pass in post-release validation"
+if "$PAIR_BIN" install 2>&1; then
+  echo "Test B passed: default resolution install succeeded"
+  if [ ! -d ".pair" ]; then
+    echo "Warning: Test B — .pair directory not created despite exit 0"
   fi
 else
-  echo "Warning: Test B skipped — PAIR_BIN not executable at $PAIR_BIN"
+  # Still tolerated: pre-release CI has no published GitHub release to download from. The
+  # binary-not-found branch that used to sit here is gone — that one was never expected.
+  echo "Warning: Test B — default resolution failed (may require published GitHub release)"
+  echo "  This is expected during pre-release CI but should pass in post-release validation"
 fi
 popd >/dev/null
 
@@ -203,37 +211,34 @@ if [ ! -x "$RUNNER_SCRIPT" ]; then
   chmod +x "$RUNNER_SCRIPT"
 fi
 
-# Locate the installed binary in node_modules
-# It should be at node_modules/.bin/pair (symlink)
-INSTALLED_BIN="$SAMPLE_TMP/node_modules/.bin/pair"
+# The binary npm linked from the artifact — the same one Tests A and B ran, and already
+# proven executable above. It is `node_modules/.bin/pair-cli`: the sole `bin` key of the
+# published package.
+INSTALLED_BIN="$PAIR_BIN"
 
-if [ ! -x "$INSTALLED_BIN" ]; then
-  echo "Warning: Installed binary not found at $INSTALLED_BIN. Skipping suite."
-else
-  # Determine KB source path for offline tests
-  KB_SOURCE_PATH="$REPO_ROOT/packages/knowledge-hub/dataset"
-  if [ ! -d "$KB_SOURCE_PATH" ]; then
-    echo "Warning: Local KB source not found at $KB_SOURCE_PATH. Offline tests may fail."
-    KB_SOURCE_PATH=""
-  fi
+# Determine KB source path for offline tests
+KB_SOURCE_PATH="$REPO_ROOT/packages/knowledge-hub/dataset"
+if [ ! -d "$KB_SOURCE_PATH" ]; then
+  echo "Warning: Local KB source not found at $KB_SOURCE_PATH. Offline tests may fail."
+  KB_SOURCE_PATH=""
+fi
 
-  # Build arguments for run-all.sh
-  ARGS=(--binary "$INSTALLED_BIN" --ci --offline-only)
-  if [ -n "$KB_SOURCE_PATH" ]; then
-    ARGS+=(--kb-source "$KB_SOURCE_PATH")
-  fi
-  if [ "$FORCE_CLEANUP" = "1" ]; then
-    ARGS+=(--cleanup)
-  fi
+# Build arguments for run-all.sh
+ARGS=(--binary "$INSTALLED_BIN" --ci --offline-only)
+if [ -n "$KB_SOURCE_PATH" ]; then
+  ARGS+=(--kb-source "$KB_SOURCE_PATH")
+fi
+if [ "$FORCE_CLEANUP" = "1" ]; then
+  ARGS+=(--cleanup)
+fi
 
-  echo "Running: $RUNNER_SCRIPT ${ARGS[*]}"
-  "$RUNNER_SCRIPT" "${ARGS[@]}"
-  
-  SUITE_RET=$?
-  if [ $SUITE_RET -ne 0 ]; then
-    echo "Standardized smoke-test suite failed with exit code $SUITE_RET"
-    exit $SUITE_RET
-  fi
+echo "Running: $RUNNER_SCRIPT ${ARGS[*]}"
+"$RUNNER_SCRIPT" "${ARGS[@]}"
+
+SUITE_RET=$?
+if [ $SUITE_RET -ne 0 ]; then
+  echo "Standardized smoke-test suite failed with exit code $SUITE_RET"
+  exit $SUITE_RET
 fi
 
 popd >/dev/null

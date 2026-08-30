@@ -470,16 +470,26 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * (`@foomakers/`) and the version (`@latest`) therefore attach to the captured binary here,
  * and the flags are what sit between `npx` and it.
  *
- * The span rule allows only horizontal whitespace after the opening backtick, never `\s*`:
- * a CLOSING FENCE ends with a backtick too, and `\s*` crossed the newline from it into the
- * paragraph below — "pair creates Markdown files" read as an invocation of `creates`. The
- * bug was latent while only `pair-cli` matched (a paragraph rarely opens with it).
+ * The span rule TOKENIZES real code spans (`` `…` `` pairs, `CODE_SPAN`) and anchors the
+ * prefix at the start of the span's CONTENT — it does not scan for the prefix "after a
+ * backtick". Both weaker shapes have already misfired once each, in opposite directions:
+ *   - `` `\s* `` let a CLOSING FENCE (which ends with a backtick) cross the newline into the
+ *     paragraph below — "pair creates Markdown files" read as an invocation of `creates`;
+ *   - `` `[ \t]* `` fixed that newline but still matched after ANY backtick, so a CLOSING
+ *     INLINE span followed by prose on the SAME line did it again: `` `config.json` pair
+ *     skills resolve state `` read as an invocation of `skills`, and the gate would have
+ *     told the writer to "write `pair-cli skills`" inside an English sentence.
+ * Tokenizing removes the class rather than the two cases: the text after a closing delimiter
+ * is outside every span, and a fence (```` ``` ````) yields no span at all since a span needs
+ * a non-backtick character between its delimiters. Both cases are pinned in the suite.
  */
 const PUBLISHED_BIN = 'pair-cli'
 const INVOCATION_PREFIX =
   String.raw`(?:\$[ \t]*)?(?:npx[ \t]+(?:-{1,2}[\w-]+[ \t]+)*)?` +
   String.raw`(?:@[\w.-]+/)?(pair-cli|pair)(?:@[\w.-]+)? `
-const SPAN_INVOCATION = new RegExp('`[ \\t]*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
+/** One inline code span's CONTENT — delimiters paired, never crossing a line. */
+const CODE_SPAN = /`([^`\n]+)`/g
+const SPAN_INVOCATION = new RegExp('^[ \\t]*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
 const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
 
 /**
@@ -508,11 +518,18 @@ export function checkDocsCommands(
     for (const { bin, cmd } of invokedCommands(content)) {
       if (VERSION_STRING.test(cmd)) continue
       // Wrong binary reported once and on its own: `pair kb-validate` is not ALSO an
-      // unknown command, and `pair init` should not be counted twice.
+      // unknown command, and `pair init` should not be counted twice. ONE error, but the
+      // message still has to be honest about both halves — a prescriptive `write
+      // "pair-cli init"` for a command that does not exist sends the writer to publish a
+      // second broken invocation and buys a second red round, so the fix is only offered
+      // when there is one.
       if (bin !== PUBLISHED_BIN) {
+        const remedy = commandDirs.includes(cmd)
+          ? ` — write "${PUBLISHED_BIN} ${cmd}"`
+          : `, and "${cmd}" is not one of its commands`
         errors.push(
           `${rel} tells the reader to run "${bin} ${cmd}", but the published binary is ` +
-            `"${PUBLISHED_BIN}" — write "${PUBLISHED_BIN} ${cmd}"`,
+            `"${PUBLISHED_BIN}"${remedy}`,
         )
         continue
       }
@@ -536,7 +553,7 @@ function invokedCommands(content: string): Invocation[] {
     const [, bin, cmd] = m ?? []
     if (bin !== undefined && cmd !== undefined) found.set(`${bin} ${cmd}`, { bin, cmd })
   }
-  for (const m of content.matchAll(SPAN_INVOCATION)) add(m)
+  for (const [, span] of content.matchAll(CODE_SPAN)) add(SPAN_INVOCATION.exec(span ?? ''))
   let inFence = false
   for (const line of content.split('\n')) {
     if (/^\s*```/.test(line)) {

@@ -284,9 +284,10 @@ describe('checkDocsCommands', () => {
   // found". Before this, the gate matched the literal `pair-cli` prefix only and was
   // structurally blind to the wrong name — the exact drift it exists to catch.
   it('flags a bare `pair <cmd>` invocation in a span — the published bin is pair-cli', () => {
-    const errs = checkDocsCommands(doc('Run `pair install` first.'), commands)
-    expect(errs).toHaveLength(1)
-    expect(errs[0]).toContain('pair-cli')
+    expect(checkDocsCommands(doc('Run `pair install` first.'), commands)).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
   })
 
   it('flags a bare `pair <cmd>` invocation in a fence, even for a real command', () => {
@@ -300,9 +301,16 @@ describe('checkDocsCommands', () => {
   })
 
   // The bare-`pair` case reports the binary once — it is not ALSO an unknown-command
-  // error, or every renamed line would be counted twice.
-  it('reports a bare `pair <unknown>` once, not twice', () => {
-    expect(checkDocsCommands(doc('Run `pair init` first.'), commands)).toHaveLength(1)
+  // error, or every renamed line would be counted twice. The TEXT is asserted too: one
+  // error must not mean half a message. `write "pair-cli init"` for a command that does
+  // not exist is the gate telling a writer to publish a different broken invocation, and
+  // the next run answers `"pair-cli init" … is not a command` — two red rounds, the first
+  // of them wrong. Asserting the count alone is what let that ship.
+  it('reports a bare `pair <unknown>` once, and does not recommend the nonexistent command', () => {
+    const errs = checkDocsCommands(doc('Run `pair init` first.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"init" is not one of its commands')
+    expect(errs[0]).not.toContain('write "pair-cli init"')
   })
 
   // Why the separator is ONE space and not `\s+`: the PM-tool pages align two columns
@@ -336,6 +344,26 @@ describe('checkDocsCommands', () => {
   it('does not let a closing fence reach into the next paragraph', () => {
     const md = '```text\nEpic → Story\n```\n\npair creates Markdown files from the template.'
     expect(checkDocsCommands(doc(md), commands)).toHaveLength(0)
+  })
+
+  // Same class as the closing fence, one line down and unpinned until now: a CLOSING
+  // INLINE span also ends with a backtick, so "after a backtick" read the prose that
+  // follows it as an invocation. `pair` is the product name on ~10 docs pages, so this
+  // turns a correct edit red with advice that would corrupt the sentence — "write
+  // `pair-cli skills`" inside "pair skills follow the Agent Skills standard".
+  it('does not read prose after a CLOSING inline span as an invocation', () => {
+    expect(
+      checkDocsCommands(doc('Read `config.json` pair skills resolve state.'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('See `way-of-working.md` pair install markers here.'), commands),
+    ).toHaveLength(0)
+  })
+
+  it('still flags an invocation that OPENS its own span later on the same line', () => {
+    const errs = checkDocsCommands(doc('Read `config.json`, then run `pair install`.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli install')
   })
 })
 
