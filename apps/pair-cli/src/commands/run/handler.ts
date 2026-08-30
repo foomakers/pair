@@ -223,7 +223,7 @@ export async function handleRunCommand(
   // answer for every card a team has not explicitly tagged.
   if (context.dispatch?.kind === 'skip') {
     reportSkippedDispatch(context)
-    if (!config.dryRun) record(context, deps, context.dispatch, 'skip')
+    if (!config.dryRun) record(context, deps, context.dispatch, { event: 'skip' })
     return 0
   }
 
@@ -239,8 +239,16 @@ export async function handleRunCommand(
   assertEngineAvailable(resolved.engine, createExecutableProbe(fs))
 
   return resolved.dispatch
-    ? await driveDispatchedCard(resolved, resolved.dispatch, context, config, deps)
+    ? await driveDispatchedCard({ resolved, decision: resolved.dispatch, context, config }, deps)
     : await driveRun(resolved, config, deps)
+}
+
+/** One routed card and everything already resolved about it — one subject, not four arguments. */
+interface DispatchedCard {
+  readonly resolved: ResolvedRun
+  readonly decision: DispatchDecision
+  readonly context: RunContext
+  readonly config: RunCommandConfig
 }
 
 /**
@@ -251,12 +259,10 @@ export async function handleRunCommand(
  * trigger in the burst.
  */
 async function driveDispatchedCard(
-  resolved: ResolvedRun,
-  decision: DispatchDecision,
-  context: RunContext,
-  config: RunCommandConfig,
+  card: DispatchedCard,
   deps: RunHandlerDependencies,
 ): Promise<number> {
+  const { resolved, decision, context, config } = card
   const lock = (deps.acquireLock ?? acquireCardLock)({
     workingArea: context.workingArea,
     card: decision.card,
@@ -264,14 +270,17 @@ async function driveDispatchedCard(
   if (lock === undefined) {
     const skipped = lockedSkip(decision.card, join(context.workingArea, 'automation/locks'))
     console.log(`  ${describeDispatch(skipped)}`)
-    record(context, deps, skipped, 'skip')
+    record(context, deps, skipped, { event: 'skip' })
     return 0
   }
 
   try {
-    record(context, deps, decision, 'start')
+    record(context, deps, decision, { event: 'start' })
     const outcome = await driveRun(resolved, config, deps)
-    record(context, deps, decision, 'end', outcome === 0 ? 'completed' : 'failed')
+    record(context, deps, decision, {
+      event: 'end',
+      outcome: outcome === 0 ? 'completed' : 'failed',
+    })
     return outcome
   } finally {
     lock.release()
@@ -306,8 +315,7 @@ function record(
   context: RunContext,
   deps: RunHandlerDependencies,
   decision: DispatchDecision,
-  event: AuditEvent,
-  outcome?: string,
+  { event, outcome }: { event: AuditEvent; outcome?: string },
 ): void {
   const entry = auditRecordFor(decision, event, ...(outcome !== undefined ? [{ outcome }] : []))
   ;(deps.appendAudit ?? appendAuditLine)(context.auditPath, renderAuditLine(entry))
