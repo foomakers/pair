@@ -161,20 +161,20 @@ fi
 PAIR_BIN="$SAMPLE_TMP/node_modules/.bin/pair"
 
 # ---- Test A: Install with explicit --source (current behavior) ----
-echo "Test A: pair install --source $KB_SOURCE_PATH"
+echo "Test A: pair-cli install --source $KB_SOURCE_PATH"
 if [ -x "$PAIR_BIN" ]; then
   "$PAIR_BIN" install --source "$KB_SOURCE_PATH"
 else
   npx pair-cli install --source "$KB_SOURCE_PATH"
 fi
-echo "Test A passed: npm-based pair install with --source succeeded"
+echo "Test A passed: npm-based pair-cli install with --source succeeded"
 
 # ---- Test B: Install with default resolution (no --source, no --offline) ----
 # This exercises the auto-download fallback that real npm users get.
 # Run in a separate directory so the existing install doesn't interfere.
 DEFAULT_TEST_DIR="$TMPDIR/default-resolution-test"
 mkdir -p "$DEFAULT_TEST_DIR"
-echo "Test B: pair install (default resolution — no --source, no --offline)"
+echo "Test B: pair-cli install (default resolution — no --source, no --offline)"
 pushd "$DEFAULT_TEST_DIR" >/dev/null
 if [ -x "$PAIR_BIN" ]; then
   if "$PAIR_BIN" install 2>&1; then

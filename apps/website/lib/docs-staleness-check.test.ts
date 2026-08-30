@@ -227,6 +227,43 @@ describe('checkDocsCommands', () => {
     )
   })
 
+  // The npx runner is a PREFIX of the binary, not a slot that swallows it: the real form
+  // docs use names the SCOPED PACKAGE (`npx --no @foomakers/pair-cli <cmd>`), and an
+  // earlier shape consumed `@foomakers/pair-cli` as the package token and then still
+  // demanded a literal binary after it — so nothing behind npx could ever match and a
+  // misspelled command shipped silently. The `npx --no pair-cli update` case above passed
+  // only by accident (`--no` swallowed as the package token), which is why it alone was
+  // false confidence.
+  it('flags a misspelled command behind npx with the scoped package', () => {
+    const errs = checkDocsCommands(
+      doc('```bash\nnpx --no @foomakers/pair-cli kb-valdate\n```'),
+      commands,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('kb-valdate')
+  })
+
+  it('flags a nonexistent command behind a bare npx', () => {
+    const errs = checkDocsCommands(doc('```bash\nnpx pair-cli bogus-command\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('bogus-command')
+  })
+
+  it('passes a real command behind npx with a versioned scoped package', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --yes @foomakers/pair-cli@latest install\n```'),
+        commands,
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('flags a bare `pair` behind npx — the runner does not launder the wrong binary', () => {
+    const errs = checkDocsCommands(doc('```bash\nnpx --no @foomakers/pair install\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli install')
+  })
+
   // The reason the rule is positional rather than a prose-word allow-list: these are
   // English, and an earlier list-based version had to grow a word for each of them.
   it('ignores "pair-cli" used as a noun in prose', () => {

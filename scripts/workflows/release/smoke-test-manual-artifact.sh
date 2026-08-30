@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Script: smoke-test-manual-artifact.sh
 # Purpose: Smoke-test manual ZIP artifact by verifying checksum, running --version,
-# and exercising `pair install` against the sample project using the extracted binary.
+# and exercising `pair-cli install` against the sample project using the extracted binary.
 # Parameters:
 #   VERSION: The version to test (e.g., v1.0.0)
 

@@ -437,7 +437,8 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  *
  * Positional, deliberately, and not a list of prose words to keep extending: the binary
  * counts as an invocation only at the start of an inline code span or of a fenced line,
- * optionally behind `$ ` or `npx [--no] <pkg>`. That is what separates an instruction
+ * optionally behind `$ ` or an npx runner (`npx [flags] [@scope/]<bin>[@version]`). That
+ * is what separates an instruction
  * from English — "common pair-cli workflows" and "the pair-cli version it invokes" are
  * prose and must not fail the gate, while `` `pair-cli init` `` is a command that does
  * not exist. The previous shape kept a PROSE_WORDS allow-list, which is the maintenance
@@ -453,7 +454,18 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * The separator between binary and command is ONE space, not `\s+`: an aligned column of
  * whitespace is a diagram, never a command. The PM-tool pages map their hierarchy under a
  * fenced heading (`pair                    Linear`), which `\s+` would read as "run
- * `pair Linear`".
+ * `pair Linear`". This is a KNOWING trade: `pair-cli  <cmd>` written with two spaces is no
+ * longer flagged (no such form exists in the docs today). Do not re-widen the separator to
+ * `\s+` to recover it — that hands the four PM-tool diagrams back as false positives; if
+ * multi-space invocations ever appear, narrow the DIAGRAM instead (e.g. require the run of
+ * spaces to align with another line's column).
+ *
+ * The npx runner is a PREFIX of the binary, never a slot that consumes it. An earlier shape
+ * spelled it `npx\s+(?:--no\s+)?@?[\w/.-]+\s+` — a package token followed by a still-required
+ * literal binary — so the real form `npx --no @foomakers/pair-cli <cmd>` could not match at
+ * all and every npx-prefixed invocation in the docs was invisible to the gate. The scope
+ * (`@foomakers/`) and the version (`@latest`) therefore attach to the captured binary here,
+ * and the flags are what sit between `npx` and it.
  *
  * The span rule allows only horizontal whitespace after the opening backtick, never `\s*`:
  * a CLOSING FENCE ends with a backtick too, and `\s*` crossed the newline from it into the
@@ -461,7 +473,9 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * bug was latent while only `pair-cli` matched (a paragraph rarely opens with it).
  */
 const PUBLISHED_BIN = 'pair-cli'
-const INVOCATION_PREFIX = String.raw`(?:\$\s*)?(?:npx\s+(?:--no\s+)?@?[\w/.-]+\s+)?(pair-cli|pair) `
+const INVOCATION_PREFIX =
+  String.raw`(?:\$[ \t]*)?(?:npx[ \t]+(?:-{1,2}[\w-]+[ \t]+)*)?` +
+  String.raw`(?:@[\w.-]+/)?(pair-cli|pair)(?:@[\w.-]+)? `
 const SPAN_INVOCATION = new RegExp('`[ \\t]*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
 const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
 

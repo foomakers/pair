@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # KB Package Smoke Test Script
-# Tests 'pair kb package' command on an installed repository
+# Tests 'pair-cli package' command on an installed repository
 # Verifies package creation, manifest, and content integrity
 
 REPO_ROOT="${1:-}"
@@ -32,7 +32,7 @@ if [[ -z "$REPO_ROOT" ]]; then
   echo "The repository must have:"
   echo "  - .pair/ directory with installed KB content"
   echo "  - config.json with asset_registries configuration"
-  echo "  - pair CLI installed (npm/manual/global)"
+  echo "  - pair-cli installed (npm/manual/global)"
   exit 1
 fi
 
@@ -44,7 +44,7 @@ fi
 
 if [[ ! -d "$REPO_ROOT/.pair" ]]; then
   echo "❌ Error: .pair/ directory not found in $REPO_ROOT"
-  echo "   Please run 'pair install' first"
+  echo "   Please run 'pair-cli install' first"
   exit 1
 fi
 
@@ -93,12 +93,12 @@ trap cleanup EXIT
 echo "🔍 Detecting pair CLI installation..."
 
 PAIR_CMD=""
-if command -v pair >/dev/null 2>&1; then
-  echo "   ✓ Found global pair CLI"
-  PAIR_CMD="pair"
-elif [[ -x "$REPO_ROOT/node_modules/.bin/pair" ]]; then
-  echo "   ✓ Found npm-installed pair CLI"
-  PAIR_CMD="$REPO_ROOT/node_modules/.bin/pair"
+if command -v pair-cli >/dev/null 2>&1; then
+  echo "   ✓ Found global pair-cli"
+  PAIR_CMD="pair-cli"
+elif [[ -x "$REPO_ROOT/node_modules/.bin/pair-cli" ]]; then
+  echo "   ✓ Found npm-installed pair-cli"
+  PAIR_CMD="$REPO_ROOT/node_modules/.bin/pair-cli"
 elif [[ -x "$REPO_ROOT/pair-cli/pair-cli" ]]; then
   echo "   ✓ Found manual pair CLI"
   PAIR_CMD="$REPO_ROOT/pair-cli/pair-cli"
@@ -109,24 +109,24 @@ elif [[ -f "$REPO_ROOT/pair-cli/bundle-cli/index.js" ]]; then
   echo "   ✓ Found manual pair CLI (bundle)"
   PAIR_CMD="node $REPO_ROOT/pair-cli/bundle-cli/index.js"
 else
-  echo "❌ Error: pair CLI not found"
+  echo "❌ Error: pair-cli not found"
   echo "   Checked:"
-  echo "     - Global installation (pair command)"
-  echo "     - npm installation (node_modules/.bin/pair)"
+  echo "     - Global installation (pair-cli command)"
+  echo "     - npm installation (node_modules/.bin/pair-cli)"
   echo "     - Manual installation (pair-cli/)"
   exit 1
 fi
 
-# Test 1: Run kb package command
+# Test 1: Run package command
 echo ""
-echo "🧪 Test 1: Running 'pair kb package'..."
+echo "🧪 Test 1: Running 'pair-cli package'..."
 
 PKG_OUTPUT="$TMPDIR/test-package.zip"
 PKG_LOG="$TMPDIR/package.log"
 
 pushd "$REPO_ROOT" >/dev/null
 
-if $PAIR_CMD kb package --output "$PKG_OUTPUT" > "$PKG_LOG" 2>&1; then
+if $PAIR_CMD package --output "$PKG_OUTPUT" > "$PKG_LOG" 2>&1; then
   echo "   ✓ Command succeeded"
 else
   PKG_RET=$?
