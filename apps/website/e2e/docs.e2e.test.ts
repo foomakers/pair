@@ -598,7 +598,13 @@ test('pm tools journey: index → GitHub Projects → Filesystem with content ve
     .click()
   await expect(page).toHaveURL('/docs/pm-tools/filesystem')
   await expect(main).toContainText('Configuration')
-  await expect(main).toContainText('zero-dependency')
+  // "zero-PM-dependency", not "zero-dependency": the page declares a `code-host`,
+  // so the tracker removes the PM account, never every external account.
+  await expect(main).toContainText('zero-PM-dependency')
+  // ...and the config block the reader copies carries that code host, or their
+  // first /pair-capability-publish-pr HALTs (ADR-018).
+  await expect(main).toContainText('## Git Workflow')
+  await expect(main).toContainText('`code-host`: `github`')
   await expect(main).toContainText('backlog/')
 })
 
