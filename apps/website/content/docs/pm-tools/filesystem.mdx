@@ -5,7 +5,7 @@ description: Configure pair to manage work items as Markdown files in your repos
 
 ## Why this tracker exists
 
-Every other option on this page starts with an account. Sign up, create a workspace, provision an API key, wire an MCP server — and only then can pair file your first story. That is a reasonable price for a team. It is a poor one for a developer trying pair out on a Saturday, for anyone working offline, and for an air-gapped environment where "create an account" is not a step that exists.
+Every other tool in the [PM tools overview](/docs/pm-tools) starts with an account. Sign up, create a workspace, provision an API key, wire an MCP server — and only then can pair file your first story. That is a reasonable price for a team. It is a poor one for a developer trying pair out on a Saturday, for anyone working offline, and for an air-gapped environment where "create an account" is not a step that exists.
 
 The filesystem tracker removes the account. Your backlog is Markdown in your repository; an item's **status is the directory it sits in**, so a transition is a `git mv` and your board history is your commit history. Nothing to provision, nothing to reach over the network, and no second system that can disagree with your code about what shipped.
 
@@ -19,14 +19,22 @@ Add these lines to `.pair/adoption/tech/way-of-working.md`:
 - Filesystem is adopted for project management, using markdown files and folder organization.
   The backlog is managed in `.pair/adoption/product/backlog/` directory structure.
   See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
+
+## Git Workflow
+
+- `code-host`: `github` — repository `<org>/<repo>`.
+- `base-branch`: `main`.
 ```
+
+Item and state operations go to the files; branch, PR, review and merge operations go to the code host. `## Git Workflow` is not optional here — a directory hosts no pull requests, so there is nothing for pair to fall back to when the field is absent.
 
 ### Prerequisites
 
 - A pair-enabled project (`pair-cli install` completed)
-- No external tools, accounts, or API keys needed
+- No PM tool account, API key or MCP server — the backlog is files in your repo
+- An account on the code host you declare above (GitHub by default), because that is where branches, PRs and review live
 
-This is the **zero-dependency option** — everything lives in your repository as version-controlled Markdown files. Ideal for solo developers, offline work, or projects that don't need a separate PM tool.
+This is the **zero-PM-dependency option** — every work item lives in your repository as version-controlled Markdown, and the only external account is the one your pull requests already needed. Ideal for solo developers, offline backlog work, or projects that don't need a separate PM tool.
 
 ## Mapping Model
 

@@ -191,6 +191,30 @@ describe('findDeadRepoLinks', () => {
     expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
   })
 
+  // A bare-prose citation ends in the sentence's full stop, which is NOT part of the
+  // path. Without the trailing-punctuation strip the gate resolves `README.md.` and
+  // reports a dead citation that is in fact live — a false-positive build failure.
+  it('resolves a bare citation ending in sentence punctuation', () => {
+    const content = `see https://github.com/foomakers/pair/blob/main/README.md.`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
+  })
+
+  // `blob/main/` is one of three spellings GitHub serves a repo path under; a
+  // `tree/main/<dir>` citation already ships on reference/cli/commands.mdx. Matching
+  // only `blob` left every other spelling unchecked — the exact 404 this gate exists
+  // to catch, one URL form away.
+  it('flags a dead tree/ URL and passes a live one', () => {
+    const dead = `[cli](https://github.com/foomakers/pair/tree/main/apps/pair-cli-typo)`
+    expect(findDeadRepoLinks(dead, 'a.mdx', REPO_ROOT)).toHaveLength(1)
+    const live = `[cli](https://github.com/foomakers/pair/tree/main/apps/pair-cli)`
+    expect(findDeadRepoLinks(live, 'a.mdx', REPO_ROOT)).toHaveLength(0)
+  })
+
+  it('flags a dead raw/ URL', () => {
+    const content = `https://github.com/foomakers/pair/raw/main/does-not-exist.png`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(1)
+  })
+
   it('every blob citation on the real docs site resolves to a real file', () => {
     const docsDir = resolve(REPO_ROOT, 'apps/website/content/docs')
     const errors = walkMdx(docsDir).flatMap(f =>
