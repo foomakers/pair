@@ -2050,10 +2050,80 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts[0]).toContain('heading level')
   })
 
+  // Still not that section — but the key under it is now REPORTED as sitting
+  // outside every one (round 14), instead of resolving to `default` in silence.
   it('does not read a `### Process Profile Gate` sub-heading as a profile heading', () => {
     const r = resolve('## Notes\n\n### Process Profile Gate\n\n- `profile`: `poc`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('OUTSIDE')
+    expectNoStepSet(r)
+  })
+
+  // Round 14 Minor: every rule above is per-HEADING-SHAPE, so each round closed the
+  // spellings that round thought of, while a key line was only ever READ inside a
+  // matched section and never REPORTED when it sat outside one. `## Process
+  // Profiles` is not an invented typo — it is the KB schema page's own H1
+  // (`# Process Profiles`), the page the adoption template links to as the place to
+  // look the section up. Each of these resolved a perfectly valid
+  // `- `profile`: `poc`` to `default`, 12 steps, zero halts, zero warnings.
+  it.each([
+    ['the plural of the schema page’s own title', '## Process Profiles'],
+    ['the unspaced spelling', '## ProcessProfile'],
+    ['an unrelated heading', '## Setup'],
+    ['no heading at all', ''],
+  ])('HALTs on a key declared under %s', (_, heading) => {
+    const r = resolve(`${heading === '' ? 'Some prose.' : heading}\n\n- \`profile\`: \`poc\`\n`)
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('OUTSIDE')
+    expect(r.halts[0]).toContain('## Process Profile')
+    expectNoStepSet(r)
+  })
+
+  it('names the offending line, so the author is not sent hunting', () => {
+    const r = resolve('## Setup\n\n- `whitelist`: `implement`, `review`\n')
+    expect(r.halts[0]).toContain('line 3')
+    expect(r.halts[0]).toContain('`whitelist`: `implement`, `review`')
+  })
+
+  it('reports a key that sits outside the section a file DOES have', () => {
+    const r = resolve(
+      '## Process Profile\n\n- `profile`: `custom`\n- `whitelist`: `implement`\n\n' +
+        '## Notes\n\n- `profile`: `poc`\n',
+    )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('OUTSIDE')
+  })
+
+  // The three shapes the orphan scan must NOT claim — each is a line the shipped
+  // corpus actually carries outside the section, so claiming one turns the gate red
+  // on the files it governs.
+  it('does not report a key-shaped line inside a FENCED example outside the section', () => {
+    const r = resolve(
+      '## How to declare it\n\n```text\n- `profile`: `poc`\n```\n\n' +
+        '## Process Profile\n\n- `profile`: `poc`\n',
+    )
+    expect(r.profile).toBe('poc')
+    expect(r.halts).toEqual([])
+  })
+
+  it('does not report a documentation TABLE row outside the section', () => {
+    const r = resolve('## Fields\n\n| Key | Value |\n| --- | --- |\n| `profile` | `poc` |\n')
     expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
+  })
+
+  it('does not report a key inside an HTML comment outside the section', () => {
+    const r = resolve('## Notes\n\n<!-- - `profile`: `poc` -->\n')
+    expect(r.profile).toBe('default')
+    expect(r.halts).toEqual([])
+  })
+
+  // A mis-levelled or setext heading already HALTs on its own: the keys under it
+  // are covered by that heading, so the same mistake is not reported twice.
+  it('does not double-report the keys under a mis-levelled heading', () => {
+    const r = resolve('## Notes\n\n### Process Profile\n\n- `profile`: `poc`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('heading level')
   })
 
   // Round 3 Minor: a SECOND `## Process Profile` section was silently ignored —
@@ -2153,16 +2223,26 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
     expect(r.halts).toEqual([])
   })
 
+  // Not that section — so the key under it is read by nothing, and (round 14) is
+  // reported as sitting outside every section rather than resolving to `default`.
   it('does NOT swallow a differently-named heading that merely starts the same', () => {
     const r = resolve('## Process Profile Gate\n\n- `profile`: `poc`\n')
-    expect(r.profile).toBe('default')
-    expect(r.halts).toEqual([])
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('OUTSIDE')
+    expectNoStepSet(r)
   })
 
   // The equality survives the wider normalization: an internal separator collapses,
   // an extra WORD does not.
   it('does NOT swallow a hyphen-separated heading that names a different section', () => {
     const r = resolve('## Process-Profile-Gate\n\n- `profile`: `poc`\n')
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('OUTSIDE')
+    expectNoStepSet(r)
+  })
+
+  it('leaves a differently-named heading alone when it carries no key', () => {
+    const r = resolve('## Process Profile Gate\n\nSee the convention.\n')
     expect(r.profile).toBe('default')
     expect(r.halts).toEqual([])
   })
@@ -2685,10 +2765,22 @@ describe('resolveProcessProfile — the six way-of-working states', () => {
   // `## Process Profile` — reported as "declares `profile` more than once (2 lines)"
   // about a section that visibly carries one, sending the author looking for a
   // duplicate that is not there.
+  //
+  // Round 14: the key under that `#` is now reported — as what it is, a key sitting
+  // outside every section, naming its own line. What round 11 closed is the WRONG
+  // message, not the report: it is still not a duplicate inside the section above.
   it('ends the section at a LEVEL-1 heading too, not only at the next level-2 one', () => {
     const r = resolve(
       '## Process Profile\n\n- `profile`: `poc`\n\n# Other\n\n- `profile`: `custom`\n',
     )
+    expect(r.halts).toHaveLength(1)
+    expect(r.halts[0]).toContain('OUTSIDE')
+    expect(r.halts[0]).toContain('line 7')
+    expect(r.halts[0]).not.toContain('more than once')
+  })
+
+  it('reads the section itself when nothing sits under the later level-1 heading', () => {
+    const r = resolve('## Process Profile\n\n- `profile`: `poc`\n\n# Other\n\nProse.\n')
     expect(r.halts).toEqual([])
     expect(r.profile).toBe('poc')
     expect(r.enabled).toEqual(['brainstorm', 'plan-stories', 'implement'])

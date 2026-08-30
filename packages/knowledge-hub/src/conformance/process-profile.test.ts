@@ -11,6 +11,8 @@ import {
   checkStepMarkersInMirror,
   checkManualPathEntrypoint,
   checkProcessProfiles,
+  parseWowProfileSection,
+  resolveProcessProfile,
   STEP_MARKER,
 } from '../tools/skills-conformance-check'
 import { installedSkillDir } from '../tools/skill-md-mirror'
@@ -330,6 +332,16 @@ describe('profile schema — built-in profiles and their normative error cases',
     for (const kept of ['refine-story', 'plan-tasks', 'implement', 'review']) {
       expect(enabled.has(kept), `\`poc\` must keep \`${kept}\``).toBe(true)
     }
+  })
+
+  // Round 14 Minor: the schema states the heading rules per SHAPE, so a key under a
+  // heading no rule names — `## Process Profiles`, this page's own title — was read
+  // by nothing and reported by nothing. The reader now reports the KEY; the schema
+  // says so where an author looks the section up.
+  it('HALTs on a key written under no `## Process Profile` section at all', () => {
+    expect(profilesSource).toMatch(/## Process Profiles/)
+    expect(profilesSource).toMatch(/## ProcessProfile/)
+    expect(profilesSource.toLowerCase()).toMatch(/no such section|no heading|under no/)
   })
 
   it('says the guidelines still apply to the code a `poc` project produces', () => {
@@ -742,6 +754,27 @@ describe('way-of-working — the `## Process Profile` adoption section', () => {
     const section = sectionBetween(template, '## Process Profile', '\n## ')
     expect(section).toContain('process-profiles.md')
   })
+
+  // Round 14 Minor: the template told every adopting project "a key is a plain list
+  // item at the top level of this section", while the reader deliberately reads a
+  // NESTED one (two spaces is a key, four spaces or a tab HALTs, so the profile does
+  // not depend on the author's Tab width). An author who believed the template parked
+  // their old choice as a sub-bullet note and got "`profile` is declared more than
+  // once" on a file the template called well-formed. The behaviour is right; the
+  // prose was not.
+  it('describes the indent rule the reader implements, not a stricter one', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    // The real reader, on the shape the old wording called out of bounds.
+    const nested = resolveProcessProfile(
+      parseWowProfileSection('## Process Profile\n\n- keys:\n  - `profile`: `poc`\n'),
+      parseStepCatalogue(catalogueSource),
+      parseProcessProfiles(profilesSource),
+    )
+    expect(nested.ok && nested.profile).toBe('poc')
+    expect(section).not.toMatch(/top level/)
+    expect(section.toLowerCase()).toMatch(/nested/)
+    expect(section.toLowerCase()).toMatch(/four spaces/)
+  })
 })
 
 describe('/next resolves the profile and never proposes a disabled step', () => {
@@ -876,6 +909,107 @@ describe('/next resolves the profile and never proposes a disabled step', () => 
     // the mapping table is what makes that explicit instead of implied.
     expect(content).toMatch(/Step id/)
     expect(content.toLowerCase()).toMatch(/rows? 12[–-]16|not steps|never filtered/)
+  })
+
+  /** Every catalogued executable, in the spelling THIS copy of `/next` uses. */
+  const STEP_BY_EXECUTABLE = new Map<string, string>(
+    parseStepCatalogue(catalogueSource).flatMap(e => {
+      if (e.executable === null) return []
+      const dir = collectAllSkillDirs(SKILLS_DIR).find(
+        d => d.split('/').pop() === e.executable?.slice(1),
+      )
+      const names = [e.executable]
+      if (dir !== undefined) names.push(`/${installedSkillDir(dir)}`)
+      return names.map(n => [n, e.id] as [string, string])
+    }),
+  )
+
+  /** Every `| N | condition | `/skill` | rationale |` row of the two cascade tables. */
+  const cascadeRows = (content: string): Array<{ row: number; executable: string }> => {
+    const region = sectionBetween(content, '### Step 2: Cascade', '\n### Step 4')
+    return region
+      .split('\n')
+      .filter(l => /^\|\s*\d+\s*\|/.test(l))
+      .flatMap(l => {
+        const cells = l.split('|')
+        const executable = /`(\/[a-z][a-z0-9-]*)`/.exec(cells[3] ?? '')
+        if (executable === null) return []
+        return [{ row: Number((cells[1] as string).trim()), executable: executable[1] as string }]
+      })
+  }
+
+  /**
+   * The `Row → step id` table as a lookup: row number → step id, or `null` where it
+   * says the row is not a step. A row the table never names is absent from the map.
+   */
+  const rowToStepId = (content: string): Map<number, string | null> => {
+    const region = sectionBetween(content, '**Row → step id.**', '\n### Step 1')
+    const mapping = new Map<number, string | null>()
+    for (const line of region.split('\n')) {
+      if (!/^\|\s*\d/.test(line)) continue
+      const [, rows, step] = line.split('|')
+      const id = /`([a-z][a-z0-9-]*)`/.exec(step ?? '')
+      const numbers = [...(rows ?? '').matchAll(/(\d+)(?:\s*[–-]\s*(\d+))?/g)].flatMap(m => {
+        const from = Number(m[1])
+        const to = m[2] === undefined ? from : Number(m[2])
+        return Array.from({ length: to - from + 1 }, (_, k) => from + k)
+      })
+      for (const n of numbers) mapping.set(n, id === null ? null : (id[1] as string))
+    }
+    return mapping
+  }
+
+  // Round 14 Minor: this table IS the filter's lookup ("nothing about it is inferred
+  // from a row's wording"), and the only guard on it asserted that the literal string
+  // `Step id` appeared somewhere in the file. Deleting the `| 10 `/plan-tasks` |` and
+  // `| 11 `/refine-story` |` mapping rows from BOTH copies left this file at
+  // `Tests 149 passed` and `skills:conformance` at exit 0 — the mapping table
+  // contributes no per-row cases at all. An executor following Step 0.5 literally
+  // then finds rows 10/11 unmapped and treats them like rows 12–16 ("not steps,
+  // therefore never filtered"), so a `custom` project whitelisting `implement` and
+  // `review` alone — the delivery-only shape the shipped docs advertise — is proposed
+  // `/plan-tasks` on a Ready story and `/refine-story` on a Draft one, two steps it
+  // declared it does not run, with no prompt and no note (AC4 broken, silently).
+  //
+  // Subjects come from the CORPUS, like the reporters guard: every cascade row whose
+  // Suggestion cell names a catalogued executable, resolved through the real
+  // `installedSkillDir` for the mirror.
+  it.each(sources)('%s: maps EVERY cascade row that proposes a step (AC4)', (_, content) => {
+    const rows = cascadeRows(content)
+    const mapping = rowToStepId(content)
+    const steps = rows.filter(r => STEP_BY_EXECUTABLE.has(r.executable))
+    // Fail closed: a parse that finds nothing is not a table that is correct.
+    expect(rows.length).toBeGreaterThanOrEqual(11)
+    expect(steps.length).toBeGreaterThanOrEqual(8)
+    for (const { row, executable } of steps) {
+      const expected = STEP_BY_EXECUTABLE.get(executable) as string
+      expect(
+        mapping.get(row),
+        `cascade row ${row} proposes \`${executable}\` — step \`${expected}\` — but the ` +
+          `Row → step id table maps that row to ${JSON.stringify(mapping.get(row) ?? null)}. ` +
+          `An unmapped row is read as "not a step, therefore never filtered".`,
+      ).toBe(expected)
+    }
+  })
+
+  // The other direction: a row the table calls "not a step" must not be one.
+  it.each(sources)('%s: calls no catalogued step a non-step in that table', (_, content) => {
+    const mapping = rowToStepId(content)
+    for (const { row, executable } of cascadeRows(content)) {
+      if (mapping.get(row) !== null) continue
+      expect(
+        STEP_BY_EXECUTABLE.has(executable),
+        `row ${row} proposes \`${executable}\`, a catalogued step, while the mapping table ` +
+          `declares that row is not one`,
+      ).toBe(false)
+    }
+  })
+
+  it.each(sources)('%s: HALTs on a key under no section at all (round 14)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section).toMatch(/## Process Profiles/)
+    expect(section).toMatch(/## ProcessProfile/)
+    expect(section.toLowerCase()).toMatch(/no heading whatever|no heading at all|under no/)
   })
 
   it.each(sources)('%s: keeps the profile stateless, re-read every run', (_, content) => {

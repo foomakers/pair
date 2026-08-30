@@ -1845,6 +1845,78 @@ function countProfileHeadings(lines: string[], inFence: boolean[]): ProfileHeadi
   return found
 }
 
+/**
+ * Which lines a `Process Profile` heading COVERS — the section every key must sit
+ * in, whatever level or form that heading was written at.
+ *
+ * Deliberately generous about the heading: a mis-levelled or setext one already has
+ * its own HALT above, and counting the keys under it as orphans too would report the
+ * same mistake twice. The span it opens ends at the next heading of the same level
+ * or higher, exactly as `sectionOfWhere` ends a level-2 section at level 1 or 2.
+ */
+function profileSectionCoverage(lines: string[], inFence: boolean[]): boolean[] {
+  const covered: boolean[] = []
+  let openLevel: number | null = null
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i]) {
+      covered[i] = openLevel !== null
+      continue
+    }
+    const heading = ATX_HEADING.exec(lines[i] as string)
+    if (heading !== null) {
+      const level = (heading[1] as string).length
+      if (isWowProfileHeading((heading[2] as string).trim())) openLevel = level
+      else if (openLevel !== null && level <= openLevel) openLevel = null
+    } else if (isSetextProfileHeading(lines[i] as string, lines[i + 1])) {
+      openLevel = 2
+    }
+    covered[i] = openLevel !== null
+  }
+  return covered
+}
+
+/** The HALT for a key line that sits under no `## Process Profile` heading at all. */
+function orphanKeyHalt(line: number, text: string): string {
+  return (
+    `a \`profile\` / \`whitelist\` key is declared OUTSIDE any \`## ${WOW_PROFILE_SECTION}\` ` +
+    `section (line ${line}: \`${text.slice(0, 80)}\`) — a key outside the section takes effect ` +
+    `nowhere: the profile resolves to \`default\` and every step is re-enabled, in silence. Put ` +
+    `the key under a \`## ${WOW_PROFILE_SECTION}\` heading — that heading exactly, since ` +
+    `\`## ${WOW_PROFILE_SECTION}s\` (plural, the schema page's own title) and ` +
+    `\`## ${WOW_PROFILE_SECTION.replace(/ /g, '')}\` are other sections`
+  )
+}
+
+/**
+ * Keys written where no `## Process Profile` heading reaches them.
+ *
+ * Round 14 Minor: every heading rule above is per-SHAPE — each round closed the
+ * spellings that round thought of, and a key line is still only ever READ inside a
+ * matched section, never REPORTED when it sits outside one. `## Process Profiles`
+ * (the plural is the KB schema page's own H1, the page the adoption template sends
+ * the author to), `## ProcessProfile`, `## Setup` and no heading at all each
+ * resolved a perfectly valid `` - `profile`: `poc` `` to `default` with 12 steps,
+ * zero halts and zero warnings — byte-identical to writing nothing, in the widening
+ * direction this module exists to close. Reporting the KEY closes plural,
+ * no-heading and unrelated-heading in one move instead of one heading shape per
+ * round.
+ *
+ * Fenced lines and masked HTML comments are excluded by the scan this reads, and a
+ * documentation TABLE row cannot match `isProfileKeyLine` (that exclusion is
+ * load-bearing since round 7) — so the shipped files, whose only key-shaped lines
+ * are inside their own fenced examples, are unaffected.
+ */
+function orphanKeyProblems(lines: string[], inFence: boolean[]): string[] {
+  const covered = profileSectionCoverage(lines, inFence)
+  const problems: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i] || covered[i] === true) continue
+    const line = lines[i] as string
+    if (isProfileKeyLine(line)) problems.push(orphanKeyHalt(i + 1, line.trim()))
+  }
+  return problems
+}
+
 export function profileSectionProblems(content: string): string[] {
   const { lines, inFence, unterminated } = scanProfileDocument(content)
   if (unterminated !== null) return [unterminatedDelimiterHalt(unterminated)]
@@ -1872,6 +1944,7 @@ export function profileSectionProblems(content: string): string[] {
         `read at all, and the profile it declares is silently ignored`,
     )
   }
+  problems.push(...orphanKeyProblems(lines, inFence))
   return problems
 }
 
