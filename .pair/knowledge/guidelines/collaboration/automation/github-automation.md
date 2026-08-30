@@ -195,6 +195,84 @@ jobs:
 - Integration with external tools and notification systems
 - Advanced reporting and analytics automation
 
+## Tag-Driven Dispatch — the reference trigger adapter
+
+The **trigger** for tag-driven workflows: the thin, host-specific piece that turns "a label was added to an issue" into one call to pair's entry point. Everything it decides is decided here; everything it *routes* is decided by `## Workflows` in `tech/automation.md` (schema: [automation-policy.md](automation-policy.md)). The adapter is deliberately small — three steps and no logic of its own — because that is what keeps every host on the same routing core.
+
+### The workflow
+
+```yaml
+name: pair dispatch
+on:
+  issues:
+    types: [labeled]
+
+# One in-flight job per issue, so a burst of label edits does not fan out into a queue of
+# runners. This is a HOST-side economy, NOT the safety guard: the per-card lock inside
+# `pair run` is what guarantees one run per card, and it holds even when two triggers come
+# from two different workflows, two repositories, or a manual invocation on the box.
+concurrency:
+  group: pair-dispatch-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    # The credentials live HERE, at the adapter — the narrowest set that lets it read the
+    # issue it was handed and post one comment on it. `pair run` itself is given none.
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dispatch the card
+        id: dispatch
+        env:
+          # The labels the trigger ALREADY observed — passed as data, never re-fetched. An
+          # adapter that queries the API for them is the tracker client the driver exists
+          # without. Through the environment, not string-interpolated into the command line.
+          CARD_TAGS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          CARD: ${{ github.event.issue.number }}
+        run: |
+          pair run --card "$CARD" --card-tags "$CARD_TAGS" --autonomous \
+            | tee dispatch.log
+
+      - name: Record the run on the card
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CARD: ${{ github.event.issue.number }}
+        run: |
+          # The driver PRINTS this line and never posts it: posting is the adapter's job,
+          # because the adapter is what holds a tracker token. No line ⇒ nothing was
+          # dispatched (untagged, unmapped or ineligible card) ⇒ nothing to comment.
+          record="$(grep '^DISPATCH-RECORD:' dispatch.log || true)"
+          [ -n "$record" ] && gh issue comment "$CARD" --body "$record"
+```
+
+### What the adapter does and does not decide
+
+| Question | Answered by |
+| --- | --- |
+| Did anything happen on a card? | the host trigger (`types: [labeled]`) |
+| Which workflow runs on it? | `## Workflows` in `tech/automation.md` — never the adapter, never a job condition |
+| May this card run at all? | `## Eligibility`, applied by the dispatcher *before* routing |
+| Is another run already on this card? | the per-card lock inside `pair run` |
+| Who tells the humans? | the adapter, by posting the `DISPATCH-RECORD:` line |
+
+A job `if:` that pre-filters on a label is the one thing worth resisting: it duplicates the mapping in a second place, in a language the dispatcher cannot read, and the two drift on the day someone renames a tag in adoption. Let every labeled event through and let the routing core skip what it should skip — a skip is cheap, reported, and appended to the audit trail.
+
+### Untagged is not a case the adapter has to handle
+
+An issue carrying no mapped tag **runs nothing**: the dispatcher reports the skip and exits `0`, and with no `DISPATCH-RECORD:` line the comment step posts nothing. That is the opt-in boundary of the whole feature, and it lives in the routing core precisely so that no adapter can widen it by accident. The same holds when `tech/automation.md` declares no `## Workflows` section at all — the run reports `no mapping declared` and exits cleanly.
+
+### Before wiring the trigger
+
+- **Run it once by hand**, on a card you tagged deliberately: `pair run --card <id> --card-tags "<labels>" --dry-run` prints the route, the perimeter and the policy, and spawns nothing.
+- **Scope the token to the repository the cards live in.** The adapter can only ever post where its token reaches; the engine credentials the run itself needs are a separate, and usually much broader, concern.
+- **Watch the audit file** (`## Audit Location`) for the first few cycles: every start, skip and end is there, including the ones the card never shows.
+
 ## Implementation Guidelines
 
 ### Setup Process

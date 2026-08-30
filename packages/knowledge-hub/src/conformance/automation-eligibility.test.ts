@@ -984,3 +984,155 @@ describe('automation-policy.md — Workflows section (story #217 T1)', () => {
     },
   )
 })
+
+// Story #217 T4 — what the KB SHIPS around the schema, as opposed to the schema itself.
+//
+// Two deliverables, and they answer the two questions a maintainer has after reading the grammar:
+// *which workflow do I map a tag to* (a catalog of workflows that exist, so nobody invents a skill
+// name) and *what fires the dispatch on my host* (the thin per-host adapter, which is where the
+// tracker credentials live and where the on-issue comment is actually posted — the half ADR-024
+// deliberately kept out of the driver).
+describe('automation-policy.md — the workflow catalog (story #217 T4)', () => {
+  const workflowsSection = (content: string): string => {
+    const start = content.indexOf('## Workflows — which workflow each tag routes to')
+    expect(start).toBeGreaterThan(-1)
+    return content.slice(start, content.indexOf('## Harness and Model Policy', start))
+  }
+
+  it.each(policySources)('%s: ships example workflows a mapping can name', (_, content) => {
+    const section = workflowsSection(content)
+    expect(section).toMatch(/### The workflows a mapping can name/)
+    // A catalog whose entries are not installable skill names is worse than none: it reads as
+    // authoritative and every tag mapped from it HALTs on the uninstalled-workflow rule.
+    expect(section).toContain('pair-loop')
+    expect(section).toContain('pair-process-refine-story')
+    expect(section).toContain('pair-process-plan-tasks')
+  })
+
+  it.each(policySources)(
+    '%s: every workflow the catalog names is a skill this repo actually ships',
+    (_, content) => {
+      const section = workflowsSection(content)
+      // Every `⇒ <workflow>` in the section — the example mappings AND the catalog — resolved
+      // against the skills on disk. A renamed skill fails here, on the file that renamed it.
+      const named = [...section.matchAll(/⇒ (pair-[a-z0-9-]+)/g)].map(m => m[1]!)
+      expect(named.length).toBeGreaterThan(0)
+      for (const workflow of new Set(named)) {
+        const slug = workflow.replace(/^pair-/, '')
+        expect(
+          existsSync(join(REPO_ROOT, '.claude/skills', workflow, 'SKILL.md')) ||
+            existsSync(join(REPO_ROOT, '.skills', slug, 'SKILL.md')),
+          `\`## Workflows\` names ${workflow}, which is not a skill in this repo`,
+        ).toBe(true)
+      }
+    },
+  )
+
+  it.each(policySources)(
+    '%s: points at the host adapter rather than restating it',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/github-automation\.md/)
+    },
+  )
+})
+
+const HOST_ADAPTER_REL = 'guidelines/collaboration/automation/github-automation.md'
+const adapterSources: Array<[string, string]> = [
+  ['dataset', read(join(DATASET_KB, HOST_ADAPTER_REL))],
+  ['mirror', read(join(MIRROR_KB, HOST_ADAPTER_REL))],
+]
+
+describe('github-automation.md — the reference trigger adapter (story #217 T4)', () => {
+  const adapterSection = (content: string): string => {
+    const start = content.indexOf('## Tag-Driven Dispatch — the reference trigger adapter')
+    expect(start).toBeGreaterThan(-1)
+    return content.slice(start)
+  }
+
+  it.each(adapterSources)('%s: fires on label events, not on every issue event', (_, content) => {
+    const section = adapterSection(content)
+    expect(section).toMatch(/types: \[labeled\]/)
+  })
+
+  it.each(adapterSources)('%s: calls the ONE entry point, with both inputs', (_, content) => {
+    const section = adapterSection(content)
+    expect(section).toMatch(/pair run --card/)
+    expect(section).toMatch(/--card-tags/)
+    // The labels are DATA the trigger already holds (ADR-024 option 2, rejected): an adapter that
+    // re-reads them from the API is the tracker client the driver exists without.
+    expect(section).toMatch(/github\.event\.issue\.labels/)
+  })
+
+  it.each(adapterSources)(
+    '%s: the adapter posts the DISPATCH-RECORD line — the driver never does',
+    (_, content) => {
+      const section = adapterSection(content)
+      expect(section).toContain('DISPATCH-RECORD')
+      expect(section).toMatch(/gh issue comment/)
+      expect(section).toMatch(/never (posts|holds)/)
+    },
+  )
+
+  it.each(adapterSources)(
+    '%s: states the credential boundary — the token lives in the adapter',
+    (_, content) => {
+      const section = adapterSection(content)
+      expect(section).toMatch(/permissions:/)
+      expect(section).toMatch(/credential/i)
+    },
+  )
+
+  it.each(adapterSources)(
+    '%s: does not sell the host concurrency group as the per-card guard',
+    (_, content) => {
+      const section = adapterSection(content)
+      // `concurrency:` cancels or queues host JOBS; the lock is what guarantees one RUN per card,
+      // and a reader who conflates them ships a burst that starts two agents on one branch.
+      expect(section).toMatch(/concurrency:/)
+      expect(section).toMatch(/per-card lock/)
+    },
+  )
+
+  it.each(adapterSources)('%s: repeats the opt-in boundary at the trigger', (_, content) => {
+    const section = adapterSection(content)
+    expect(section).toMatch(/untagged/i)
+    expect(section).toMatch(/runs nothing|nothing runs|never runs/)
+  })
+
+  it.each(readmeSources)(
+    '%s README: indexes the mapping next to the eligibility filter',
+    (_, content) => {
+      expect(content).toMatch(/## Workflows/)
+    },
+  )
+})
+
+describe('docs site — tag-driven dispatch is documented where an operator looks (story #217 T4)', () => {
+  const adoptionDocs = read(join(DOCS, 'concepts/adoption-files.mdx'))
+  const cliDocs = read(join(DOCS, 'reference/cli/commands.mdx'))
+  const tutorial = read(join(DOCS, 'tutorials/unattended-delivery.mdx'))
+
+  it('adoption-files.mdx documents the `## Workflows` section and its opt-in boundary', () => {
+    expect(adoptionDocs).toContain('## Workflows')
+    expect(adoptionDocs).toMatch(/six independent sections/)
+    expect(adoptionDocs).toMatch(/no mapped tag/)
+    expect(adoptionDocs).toMatch(/no mapping declared/)
+  })
+
+  it('commands.mdx documents both dispatch flags in the `run` option table', () => {
+    const run = cliDocs.slice(cliDocs.indexOf('## run'), cliDocs.indexOf('## Global Options'))
+    expect(run).toMatch(/`--card <id>`/)
+    expect(run).toMatch(/`--card-tags <list>`/)
+    expect(run).toMatch(/### Tag-driven dispatch/)
+    // The three things that make it safe, at the surface an operator reads before wiring a trigger.
+    expect(run).toMatch(/untagged/i)
+    expect(run).toMatch(/per-card lock/)
+    expect(run).toMatch(/DISPATCH-RECORD/)
+  })
+
+  it('the unattended-delivery tutorial shows the trigger-driven variant', () => {
+    expect(tutorial).toMatch(/## Workflows/)
+    expect(tutorial).toMatch(/pair run --card/)
+  })
+})

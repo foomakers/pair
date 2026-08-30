@@ -749,6 +749,8 @@ pair run [options]
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
 | `--root <id>`                   | Scope root, passed through as `pair-next --root`                                                      |
 | `--filter <tag>`                | Label filter, for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
+| `--card <id>`                   | Dispatch this card: its tag picks the workflow from `## Workflows`. Not combinable with `--skill`/`--prompt` |
+| `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card`. Untagged or unmapped ⇒ nothing runs          |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
@@ -772,6 +774,44 @@ alternative — accepting the flag and quietly not applying it — would print a
 label the run does not use, and the printed perimeter is exactly what makes an unattended run
 auditable. The perimeter line therefore says which one it is: `filter <tag> (…, passed to the
 skill)` or `eligibility <tag> (…, applied by the skill itself)`.
+
+### Tag-driven dispatch
+
+`--card` turns the command into the **entry point a trigger calls**: instead of naming a skill, you
+name a card and the labels a trigger observed on it, and the `## Workflows` mapping in
+[`.pair/adoption/tech/automation.md`](/docs/concepts/adoption-files) decides which workflow runs —
+`auto-dev ⇒ pair-loop`, `auto-refine ⇒ pair-process-refine-story`, whatever that project declared.
+
+```bash
+pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
+```
+
+The labels are **passed in, never fetched**: the trigger that fired on a label change already has
+them, and keeping the lookup out of the CLI is what keeps it free of tracker credentials. So
+`--card` cannot be combined with `--skill` or `--prompt` — the mapping is the answer to "which
+workflow", and two answers to one question is refused at parse time rather than silently ranked.
+
+Four properties decide what actually happens, and all four fail towards *not running*:
+
+- **Untagged ⇒ never.** A card carrying no mapped tag is skipped and the skip is reported. There is
+  no default workflow and no fallback: the absence of a route *is* the opt-in boundary.
+- **No `## Workflows` section ⇒ `no mapping declared`**, printed, exit `0`. A project that never
+  wrote the section has not opted in, which is the shipped default rather than an error.
+- **Eligibility is applied before routing.** A card that does not carry the `## Eligibility` label is
+  skipped before its tags are looked at at all.
+- **One run per card.** The dispatch takes an exclusive **per-card lock** before spawning and
+  releases it afterwards; a second trigger on a locked card is skipped and logged, never queued. A
+  burst of label edits therefore cannot start two agents on the same branch.
+
+Two things HALT instead of guessing: a mapped tag whose workflow is **not installed**, and a card
+carrying **two mapped tags** that no `Precedence:` line covers. Both name the file and the value to
+fix.
+
+Every decision — start, skip, end — is appended to the run's `## Audit Location` file, and the start
+record is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own
+host adapter posts as a comment on the card: `pair run` writes files and prints lines, and never
+posts to a tracker. The reference GitHub Actions adapter ships in the knowledge base
+(`collaboration/automation/github-automation.md`).
 
 ### Autonomy and project trust are two separate opt-ins
 
@@ -880,6 +920,12 @@ pair run --skill pair-capability-assess-stack --root 212 --autonomous --max-iter
 
 # A one-shot prompt on the default engine, bounded by its directory
 pair run --prompt "/pair-next --root 212" --cwd . --max-iterations 1
+
+# Tag-driven: the `## Workflows` mapping picks the workflow, the card is the scope
+pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
+
+# What a trigger would do, without doing it — route, perimeter and policy, nothing spawned
+pair run --card 217 --card-tags "auto-dev,risk:green" --dry-run
 ```
 
 ---

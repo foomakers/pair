@@ -256,6 +256,33 @@ A trigger fires on card metadata, and metadata changes in **bursts** (a label ad
 
 Every dispatch decision — **start**, **skip**, **end** — is appended to the run's `## Audit Location` file. The **start** record is *also* emitted on stdout as a single `DISPATCH-RECORD:` line, so the **trigger's host adapter** — the thin, per-host piece that already holds the credentials the trigger runs under — can post it as a comment on the card. The dispatcher core stays **host-agnostic**: it reads tags it was handed, resolves a workflow and writes a file, and never holds a tracker token. Adding a host is a new adapter, never a change to the routing core.
 
+### The workflows a mapping can name
+
+A workflow is a **skill that already exists** — the entry point of a composition, resolved against the installed set. There is no workflow registry to keep in sync and no bespoke engine to write: mapping a tag costs one line of adoption. The ones below are the compositions pair ships, and they are the reason the mapping needs no vocabulary of its own.
+
+| Workflow | What a card routed to it gets | A tag teams usually map to it |
+| --- | --- | --- |
+| `pair-loop` | the delivery loop — selects the card, implements it, opens the PR, drives the review/fix rounds, and stops at a review-approved PR (it never merges outside `## Auto-Advance`) | `auto-dev` |
+| `pair-process-refine-story` | the single Draft→Ready path — interview, Given-When-Then criteria, domain mapping, classification | `auto-refine` |
+| `pair-process-plan-tasks` | a refined story broken into implementation tasks, with the dependency graph and the AC-coverage table written back onto the card | `auto-plan` |
+
+```markdown
+## Workflows
+
+auto-refine ⇒ pair-process-refine-story
+auto-dev ⇒ pair-loop
+Precedence: auto-refine, auto-dev
+```
+
+Two properties of that example are worth stating, because both are load-bearing rather than stylistic:
+
+- **The precedence line is what makes the pair safe.** A card that has just been refined often still carries `auto-refine` when `auto-dev` is added; without the line, that card is a HALT the moment a trigger fires on it. Declaring `auto-refine` first is not a preference — it is the answer to a question the dispatcher refuses to answer for you.
+- **A workflow is never mapped to two tags to mean two intensities of it.** Tags carry no merit (D18), so `auto-dev-fast ⇒ pair-loop` and `auto-dev ⇒ pair-loop` route identically; what varies a run's behaviour is the policy above (`## Eligibility`, `## Stop Predicate`, `## Max Parallelism`), never the tag that routed it.
+
+### What fires the dispatch — the per-host adapter
+
+Nothing in this file starts a run. A **trigger** does: a thin, per-host piece that observes a card's labels changing and calls the entry point with what it already holds, `pair run --card <id> --card-tags <list>`. It is the component that carries the tracker credentials, and the one that posts the `DISPATCH-RECORD:` line back onto the card. The reference implementation — a GitHub Actions job firing on `issues: [labeled]` — is in [github-automation.md](github-automation.md); a host with webhooks and a job runner (Azure DevOps service hooks, a Jira automation rule) is the same three steps against a different API, and adding one never touches the routing core.
+
 ## Harness and Model Policy
 
 A second, independent section of the same file — disjoint from `## Eligibility` above (which cards run unattended) and from `## Auto-Advance` / `## Stop Predicate` / `## Max Parallelism` / `## Audit Location` (the rest-of-file schema ADR-017 §6/#250 lands). This section answers two different questions: **which agent harnesses this project supports**, and **which model class each risk tier gets**. `/pair-capability-setup-harness` reads exactly these two declarations; the [agent-harness framework](../../technical-standards/ai-development/agent-harness/README.md) documents what each harness value means.

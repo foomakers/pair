@@ -90,7 +90,7 @@ If the file doesn't exist, AI assistants skip the domain check entirely — this
 
 ### automation.md
 
-Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in five independent sections `pair-loop` reads. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in.
+Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in six independent sections `pair-loop` and `pair run` read. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in.
 
 ```text
 ## Eligibility
@@ -132,6 +132,24 @@ automation/loop-audit.md
 ```
 
 **`## Audit Location`** — the project-relative path (under `working_path`) an unattended run appends its per-iteration record to. Absent ⇒ `automation/loop-audit.md`. See [automation-policy.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md) for the full schema, every fail-safe default, and every HALT trigger.
+
+```text
+## Workflows
+
+auto-dev ⇒ pair-loop
+auto-refine ⇒ pair-process-refine-story
+Precedence: auto-dev, auto-refine
+```
+
+**`## Workflows`** — the **tag→workflow mapping**, and the declaration that makes automation opt-in *per card*. One entry per line, `<tag> ⇒ <workflow>`: the tag is a plain label a card may carry (matched by string equality, exactly like `## Eligibility`), and the workflow is the **skill** that runs on it. An optional `Precedence:` line resolves a card carrying two mapped tags — first listed wins.
+
+Three properties are worth knowing before you write one:
+
+- **A card with no mapped tag runs nothing.** There is no default workflow and no fallback — the absence of a route *is* the opt-in boundary.
+- **Absent section ⇒ nothing is routable.** A dispatch reports `no mapping declared` and exits cleanly; that is the shipped default, not an error.
+- **Ambiguity halts, it never guesses.** A workflow that is not installed, or a card carrying two mapped tags with no `Precedence:` covering them, stops the run with a message naming the file and the value to fix.
+
+Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point — [`pair run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run) — which is where the routing happens.
 
 ### risk-matrix.md
 
