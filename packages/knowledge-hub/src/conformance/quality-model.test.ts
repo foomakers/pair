@@ -207,6 +207,17 @@ describe('quality-model.md — cost monitoring pointer (#281, R6.3/R6.4)', () =>
 // these assertions pin both halves, because the failure mode of an opt-in override is a
 // later edit quietly promoting it to a default and re-tiering every other project's work.
 describe('quality-model.md — business-impact.trivial-diff override (#438)', () => {
+  /**
+   * §6's `business-impact.trivial-diff` subsection ONLY — from its heading to the next
+   * one. Assertions about the key's own rules must not be satisfiable by text elsewhere
+   * in the document (notably §3.1's dimension table, which names the key too).
+   */
+  const section = (content: string): string => {
+    const [, after] = content.split('### `business-impact.trivial-diff`')
+    expect(after, "§6's business-impact.trivial-diff subsection is missing").toBeDefined()
+    return after.split(/^### /m)[0]
+  }
+
   for (const [label, content] of [
     ['dataset', QUALITY_MODEL],
     ['mirror', QUALITY_MODEL_MIRROR],
@@ -229,18 +240,23 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
 
     // AC7/AC8(a) — the key and the BR2 definition of "trivial" live in §6's schema.
     it(`${label} §6 documents the key with the definition of trivial spelled out`, () => {
-      expect(content).toContain('business-impact.trivial-diff: green')
-      expect(content).toMatch(/`\.md`\/`\.mdx`/)
-      expect(content).toMatch(/comment-only/)
-      expect(content).toMatch(/whitespace-only/)
-      expect(content).toMatch(/formatter-output-only/)
-      expect(content).toMatch(/no changed line alters an executable or declarative statement/)
+      const s = section(content)
+      expect(s).toContain('business-impact.trivial-diff: green')
+      expect(s).toMatch(/`\.md`\/`\.mdx`/)
+      expect(s).toMatch(/comment-only/)
+      expect(s).toMatch(/whitespace-only/)
+      expect(s).toMatch(/formatter-output-only/)
+      expect(s).toMatch(/no changed line alters an executable or declarative statement/)
     })
 
     // BR2's exclusion list — the cases that look cosmetic and are not. Without them the
     // definition reads as "small diff", which is exactly the subjectivity it exists to kill.
+    // Bounded to §6's own subsection ON PURPOSE: anchoring on the first occurrence of the
+    // key lands in §3.1's row, and the resulting slice (§3.1 → EOF) is satisfied by §3.1's
+    // unrelated Security-relevance prose ("new external dependency", ...) — the guard then
+    // passes with the exclusion clause deleted from §6, i.e. it guards nothing.
     it(`${label} lists what is NOT trivial even when it looks cosmetic`, () => {
-      const notTrivial = content.slice(content.indexOf('business-impact.trivial-diff'))
+      const notTrivial = section(content)
       for (const excluded of [
         'rename',
         'string-literal',
@@ -254,37 +270,66 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
 
     // BR1/AC1 — opt-in wording, stated as such, not merely implied by the example.
     it(`${label} states the override is opt-in and absent ⇒ today's KB default`, () => {
-      expect(content).toMatch(/opt-in/i)
-      expect(content).toMatch(
+      const s = section(content)
+      expect(s).toMatch(/opt-in/i)
+      expect(s).toMatch(
         /business-impact\.trivial-diff[\s\S]{0,2000}?(absent|not declared|undeclared)[\s\S]{0,200}?subdomain class/i,
       )
     })
 
     // BR3 — one non-trivial file or hunk disables the override for the whole item.
     it(`${label} states the all-or-nothing rule (no per-file granularity)`, () => {
-      expect(content).toMatch(/all-or-nothing/i)
-      expect(content).toMatch(/one non-trivial (file or hunk|hunk or file)/i)
+      const s = section(content)
+      expect(s).toMatch(/all-or-nothing/i)
+      expect(s).toMatch(/one non-trivial (file or hunk|hunk or file)/i)
     })
 
     // BR5/AC6 — single supported value; anything else warns and is treated as absent.
     it(`${label} states green is the only accepted value, any other warns and is ignored`, () => {
-      expect(content).toMatch(
+      expect(section(content)).toMatch(
         /only accepted value[\s\S]{0,300}(warn|treated as absent)|warn[\s\S]{0,200}treat(ed)? (it )?as absent/i,
+      )
+    })
+
+    // BR5, second half: "green is the only accepted value" must not disqualify the inline
+    // rationale every `## Overrides` key in this repo (and in the example asset) is written
+    // with — read strictly, `green — a change that is trivial per §6 (...)` is not `green`,
+    // so a classifying agent warns and treats a live declaration as absent. §6 has to say
+    // where the value ends.
+    it(`${label} scopes the value to the first token, so an inline rationale may follow`, () => {
+      expect(section(content)).toMatch(
+        /first token|rationale[^.]{0,120}(may|can) follow|value ends at/i,
       )
     })
 
     // BR4/AC5 — raises Business impact only; never lowers another dimension or the max.
     it(`${label} states the override raises green and never lowers the tier`, () => {
-      expect(content).toMatch(
+      const s = section(content)
+      expect(s).toMatch(
         /never lowers[\s\S]{0,300}(red|another dimension)|only ever raises[\s\S]{0,200}green/i,
       )
-      expect(content).toMatch(/refinement floor|confirm-or-raise|never lower/i)
+      expect(s).toMatch(/refinement floor|confirm-or-raise|never lower/i)
+    })
+
+    // AC4 — the refinement-time fail-safe. Without code to read, only an UNAMBIGUOUSLY
+    // trivial declared scope may pre-green the dimension; ambiguity or any named behaviour
+    // change falls back to the subdomain rule, and review re-resolves from the real diff.
+    it(`${label} makes refinement-time application conditional on unambiguous scope`, () => {
+      expect(section(content)).toMatch(/refinement[\s\S]{0,300}unambiguously trivial/i)
     })
 
     // Fail-safe branches: an unreadable diff cannot prove triviality, so the override
     // must not apply — the opposite default would let a binary/huge diff buy a green.
     it(`${label} makes an unverifiable diff fail safe (override does not apply)`, () => {
-      expect(content).toMatch(/unreadable|cannot be verified|binary/i)
+      expect(section(content)).toMatch(/unreadable|cannot be verified|binary/i)
+    })
+
+    // Story-internal BR-numbering (BR1..BR7 exist only in issue #438's body) must not leak
+    // into shipped adopter-facing prose: nothing in the distributed KB defines it, so a
+    // reader who hits "(BR3)" has nothing to resolve it against. Rules are cited by their
+    // in-document name instead.
+    it(`${label} cites no story-internal BR-numbering`, () => {
+      expect(content).not.toMatch(/\bBR\d\b/)
     })
 
     // AC8(b) — the §6 resolution-cascade walkthrough gains its rows.
@@ -311,10 +356,23 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(trivial[4]).toMatch(/green/)
       expect(trivial[4]).toContain('Overrides: business-impact.trivial-diff')
       expect(trivial[7]).toContain('risk:green')
+      // A is the ONLY fixture reaching risk:green, so its Change/diff-risk green has to be
+      // self-evidently justified: the ADL and this repo's own declaration both defend the
+      // mechanical BR2 definition by asserting a NORMATIVE guideline edit still reads yellow
+      // there (shared rule surface) and so cannot reach green. An unlabelled "`.md` guideline
+      // edit" row hand-traced to green is a fixture for exactly the outcome that argument
+      // calls unreachable — the row must say on its face that no rule changed.
+      expect(trivial[1], 'example A must state that it changes no rule').toMatch(
+        /no rule changed|non-normative|typo/i,
+      )
       // AC3 — one non-trivial hunk mixed in: back to the subdomain class (core ⇒ red).
       expect(mixed[4]).toMatch(/red/)
       expect(mixed[4]).toMatch(/core subdomain/)
       expect(mixed[7]).toContain('risk:red')
+      // B spans a doc and a request handler — "multiple modules" per §3.1, so yellow. The
+      // tier is red either way (Business impact red), which is precisely why the cell can
+      // drift unnoticed and mis-calibrate an agent tracing a mixed doc+code diff.
+      expect(mixed[3], 'example B spans two modules ⇒ Change/diff risk yellow').toMatch(/yellow/)
       // AC5/BR4 — the override greens Business impact but another dimension's red stands.
       expect(otherRed[4]).toMatch(/green/)
       expect(otherRed[7]).toContain('risk:red')
@@ -329,6 +387,20 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
         criterion,
       )
     }
+  })
+
+  // AC2's second half lives in the APPLIER, not only in the model: the matrix `classify`
+  // emits must be able to name the override as Business impact's source. Every sibling row
+  // of the output template offers an alternation of sources; a single-valued
+  // `[subdomain class]` leaves the agent no cell to fill but the one that is false — a
+  // core-subdomain diff greened FROM the subdomain class — and the audit trail then loses
+  // the only provenance explaining the green. Naming the KEY is not a D18 threshold: it
+  // trips none of the triviality vocabulary the guard above pins.
+  it('classify SKILL.md matrix template offers the override as a Business impact source', () => {
+    const row = CLASSIFY_SKILL.split('\n').find(l => l.startsWith('| Business impact |'))
+    expect(row, "classify's matrix template has no Business impact row").toBeDefined()
+    expect(row).toContain('subdomain class')
+    expect(row).toContain('Overrides: business-impact.trivial-diff')
   })
 })
 
@@ -346,6 +418,20 @@ describe('this repo declares the trivial-diff override (#438, AC9)', () => {
     const paragraph = entry.split(/\n- /)[0]
     expect(paragraph.length, 'the key is declared with no rationale').toBeGreaterThan(300)
     expect(paragraph).toMatch(/subdomain/i)
+  })
+
+  // This repo carries the rationale INLINE after the value, like both sibling keys. Read
+  // under §6's "green is the only accepted value" that reads as `green — a change that is
+  // trivial per...`, i.e. NOT `green` ⇒ warn ⇒ key treated as absent ⇒ AC9's declaration
+  // inert and every docs PR here back on the subdomain floor. §6 now scopes the value to
+  // the first token; this resolves the declaration the way §6 prescribes and pins `green`.
+  it("resolves to `green` under §6's first-token rule despite the inline rationale", () => {
+    const line = RISK_MATRIX_ADOPTION.split('\n').find(l =>
+      l.startsWith('- business-impact.trivial-diff:'),
+    )
+    expect(line, 'the declaration line is missing').toBeDefined()
+    const value = (line as string).split(':').slice(1).join(':').trim().split(/\s+/)[0]
+    expect(value).toBe('green')
   })
 })
 
@@ -365,6 +451,20 @@ describe('risk-matrix-example.md', () => {
     const overrides = RISK_MATRIX_EXAMPLE.split(/^## Overrides$/m)[1]
     expect(overrides).toBeDefined()
     expect(overrides).toContain('business-impact.trivial-diff')
+  })
+
+  // One section, one syntax: this asset is what a project copies to start its own
+  // risk-matrix.md, so a key/value written `key: value`-inside-one-span next to a sibling
+  // written `key`: `value` hands adopters two forms for the same construct.
+  it('writes every ## Overrides key in the same key-span / value-span form', () => {
+    const overrides = RISK_MATRIX_EXAMPLE.split(/^## Overrides$/m)[1] ?? ''
+    const keys = overrides.split('\n').filter(l => l.startsWith('- '))
+    expect(keys.length, 'no override entries in the example asset').toBeGreaterThan(1)
+    for (const line of keys) {
+      expect(line, 'override entry must read: `key`: `value` — rationale').toMatch(
+        /^- `[a-z-]+\.[a-z-]+`: `/,
+      )
+    }
   })
 })
 

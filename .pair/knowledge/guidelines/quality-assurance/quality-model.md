@@ -179,7 +179,7 @@ Declared, this key lets the **Business impact** dimension (§3.1) resolve `green
 - **Raises green, never lowers anything.** The override may only move Business impact from yellow/red to green. It never touches another dimension, and the tier stays `max()` of the assessed dimensions — a red anywhere else still decides the tier. At review it is subject to the ordinary confirm-or-raise rule: it never lowers a value below the refinement floor (§3.2, D17).
 - **At refinement time** (no code yet): applies only when the story's declared scope is unambiguously trivial (docs/comment/cosmetic only). Ambiguous scope, or any named behaviour change ⇒ it does **not** apply (fail-safe toward the subdomain rule); review re-resolves the dimension from the real diff.
 - **Triviality unverifiable** (diff unreadable — binary, truncated, or too large) ⇒ the override does **not** apply, and `classify` reports `Confidence: low`. An empty diff has nothing to classify as trivial: the dimension resolves from the subdomain class.
-- **`green` is the only accepted value** — the key is a boolean in disguise. Any other value, or a malformed key form, is treated as absent: skills warn and fall back to the KB default for this dimension (the malformed-file rule above, D21) — never a HALT.
+- **`green` is the only accepted value** — the key is a boolean in disguise. The **value is the first token after the colon**; an inline rationale may follow it on the same line — the form every key in this section is written in — and that prose is not part of the value. Any other value, or a malformed key form, is treated as absent: skills warn and fall back to the KB default for this dimension (the malformed-file rule above, D21) — never a HALT.
 - **It is a rule for the classifying agent, not a config key parsed by code.** `classify` resolves `## Overrides` qualitatively, like every other key in this section; nothing here implies a parser or a schema, and no threshold from this section is ever copied into a skill (D18).
 
 ### Resolution-cascade walkthrough
@@ -203,11 +203,11 @@ Hand-traced matrices for a project that has declared `business-impact.trivial-di
 
 | Ex | Service/domain criticality | Change/diff risk | Business impact | Security relevance | Coupling balance | Tier |
 | --- | --- | --- | --- | --- | --- | --- |
-| A — a `.md` guideline plus its guarded markdown mirror, prose only | green | green | green (Overrides: business-impact.trivial-diff) | green | not assessed | risk:green |
-| B — that same `.md` edit plus one changed line in a request handler | green | green | red (core subdomain — one non-trivial hunk disables the override) | green | not assessed | risk:red |
+| A — a typo fix in a `.md` guideline's prose plus its guarded markdown mirror — no rule changed | green | green | green (Overrides: business-impact.trivial-diff) | green | not assessed | risk:green |
+| B — that same `.md` edit plus one changed line in a request handler | green | yellow (two modules) | red (core subdomain — one non-trivial hunk disables the override) | green | not assessed | risk:red |
 | C — a `.md`-only runbook edit describing credential rotation | green | green | green (Overrides: business-impact.trivial-diff) | red (secrets-handling surface) | not assessed | risk:red |
 
-A is the case the key exists for: `.md`-only, so branch (a) holds and the `core` floor is lifted. B is all-or-nothing (BR3) — the handler hunk alters a statement, so the whole item falls back to the subdomain class. C is the never-lowers guarantee: Business impact is greened, Security relevance still reads red on its own heuristic, and `max()` keeps the tier at `risk:red`.
+A is the case the key exists for: `.md`-only, so branch (a) holds and the `core` floor is lifted. Its Change/diff risk is green because the row is a **non-normative** prose fix; a `.md` edit that changes a *rule* is equally trivial by this definition but reads **yellow** on Change/diff risk (a shared rule surface every consumer resolves from), and `max()` keeps that off green — the override never buys a normative change a green tier on its own. B is all-or-nothing (§6, *All-or-nothing per item*) — the handler hunk alters a statement, so the whole item falls back to the subdomain class. C is the never-lowers guarantee: Business impact is greened, Security relevance still reads red on its own heuristic, and `max()` keeps the tier at `risk:red`.
 
 ## 7. Nested Taxonomy
 
