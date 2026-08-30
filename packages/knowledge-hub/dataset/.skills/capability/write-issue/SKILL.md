@@ -1,7 +1,7 @@
 ---
 name: write-issue
-description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories, /publish-pr."
-version: 0.11.0
+description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories, /implement, /publish-pr."
+version: 0.11.1
 author: Foomakers
 ---
 

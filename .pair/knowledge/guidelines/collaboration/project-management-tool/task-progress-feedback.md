@@ -21,7 +21,7 @@ The item to tick is found by its **task ID**, never by its position and never by
 | Rendering | Where it comes from |
 | --- | --- |
 | `- [ ] **T-3**: Comment batcher` | `/pair-process-plan-tasks`' canonical checklist line |
-| `- [ ] T3 — Comment batcher` | the story template's Task Breakdown, as hand-written and as refined |
+| `- [ ] T3 — Comment batcher` | a story body's breakdown as hand-written during refinement — the shape real issue bodies carry (story #220's own body is one) |
 | `- [ ] **T3**: Comment batcher` | the two above, mixed |
 
 Titles are not part of the anchor: a task renamed during implementation still ticks, and a title that happens to contain another task's words never steals the match.
@@ -32,6 +32,14 @@ The locator must resolve to **exactly one** unticked-or-ticked checklist line in
 - **More than one match** (an ambiguous ID, e.g. `T1` also appearing inside `T1`'s own follow-up line): record `ambiguous` with the count, and write nothing to the body.
 
 Both outcomes leave the checklist exactly as it was. **Never guess-tick**: a tick on the wrong line is worse than no tick at all, because the story then reports work that was not done and nothing later contradicts it.
+
+## The Definition-of-Done locator
+
+A Definition-of-Done checkbox has no task ID. When a task factually satisfies one, name the pair the body currently carries: the exact Definition-of-Done section heading and the exact criterion text. This locator is separate from, and **not the task-ID locator**: `T3` may identify the work, but it cannot identify `Automated tests written and passing` among the story's DoD boxes.
+
+Read the current body and find the checklist section whose normalized heading exactly equals the named Definition-of-Done heading. Within that section only, compare each checklist line's normalized label — trim outer whitespace, collapse internal whitespace, ignore Markdown emphasis — with the named **exact criterion**. Do not use a position, a substring, a task title, or an inferred “closest” DoD box.
+
+The Definition-of-Done locator must resolve to **exactly one** unticked-or-ticked checklist line. **Zero matches** (`DoD locator: not-found`) or **more than one match** (`DoD locator: ambiguous`) are reported in that task's batch details and write nothing to the body. **Never guess-tick** a DoD box: an ambiguous completion claim is worse than leaving the box for a reviewer.
 
 ## The tick-only body patch
 
@@ -55,7 +63,7 @@ Each task's outcome is **queued** as it happens and the queue is **flushed exact
 The format honours the reading budget (D22): a headline, then **one line per task**, then everything else collapsed.
 
 ```markdown
-**Task progress — 3 of 4 tasks this iteration** · `feature/US-220-breakdown-task-feedback-loop`
+**Task progress — 2 done, 1 failed of 4 tasks this iteration** · `feature/US-220-breakdown-task-feedback-loop`
 
 - ✅ T1 — Checklist locator + body patcher
 - ✅ T2 — Comment batcher + failure recording
@@ -71,6 +79,8 @@ The format honours the reading budget (D22): a headline, then **one line per tas
 
 Rules the shape encodes:
 
+- **The headline counts outcomes, never bare progress.** It reads `Task progress — <n> done, <n> failed, <n> skipped of <M> tasks this iteration`, spelling out only the non-zero groups; `M` is the number of tasks in the story's breakdown, so more lines than `M` is itself a visible tell. `ticked` and the tick-failure outcomes (`not-found`, `ambiguous`, `patch-rejected`, `write-failed`) count as **done** — the tick is attempted only after the task's work completed, so those name a reporting failure over finished work; `failed` and `skipped` count as themselves. A bare `N of M` is forbidden: on a run where T1 lands and T2 and T3 fail it renders `3 of 4`, which a human scanning an unexpanded board notification reads as three tasks done when exactly one did — re-creating, inside this artifact, the "on task 3 of 4 and failed on task 2 look identical" confusion the loop exists to end.
+- **The batch is a per-task narrative, not the run's outcome.** It is flushed before the pull-request hand-off, so it cannot know whether the hand-off then succeeded: a run that completes every task and stops on a red gate inside the PR step leaves `4 done of 4` and all ✅ on the item, and **no second comment corrects it**. That is deliberate — run-level success or failure belongs to the artifacts that own it (the pull request's existence and state, the caller's own output, and on a supervised path the loop's card-level note), and buying it here would cost either a second comment per iteration or a flush deferred past the hand-off, leaving the failed hand-off itself unreported. A reader takes this comment for what the tasks did, never for whether the run landed.
 - **One line per task, and the line is the whole story for a reader who does not expand.** Outcome glyph, task ID, title, and — for anything other than a plain success — a short reason on the same line.
 - **Everything longer goes in `<details>`**: error output, retry traces, locator mismatch diagnostics. No stack trace, no command transcript, and no diff outside the collapsed block.
 - **An empty batch posts nothing.** The queue holds only what **this invocation** attempted: an item already `[x]` for a task this invocation did not attempt is neither re-written nor queued. So an invocation that completed no task leaves no comment — a re-run that finds every task already done is silent, which is what keeps an idempotent re-invocation from accreting one "nothing to report" comment per attempt.
@@ -95,7 +105,7 @@ Every queued line carries exactly one outcome from this closed set, and the outc
 
 `skipped` is produced at **task selection**, not at task completion: the caller queues it when it declines to attempt a task at all — an unmet dependency, a deferral, work put out of scope mid-run — and carries on to the next task. It is **never the outcome of an attempt** that did not land; that is `failed`. Both halves matter: a deliberate deferral reported as `failed` misnames it, and one left out of the batch shrinks the "N of M tasks this iteration" headline without saying why.
 
-It is queued **at most once per invocation**. Selection scans restart from the top after every task, so a blocked task is reached once per remaining task: a task **already queued** as `skipped` this invocation is passed over silently on every later scan. Otherwise a five-task story blocked on one task reports six lines under a `6 of 5` headline, with that task named twice — breaking both "one line per task" and the headline shape.
+It is queued **at most once per invocation**. Selection scans restart from the top after every task, so a blocked task is reached once per remaining task: a task **already queued** as `skipped` this invocation is passed over silently on every later scan. Otherwise a five-task story blocked on one task reports six lines for five tasks — `Task progress — 4 done, 2 skipped of 5 tasks this iteration`, with that task named twice — breaking both "one line per task" and the headline's per-outcome counts.
 
 The three write-path outcomes (`not-found`, `ambiguous`, `write-failed`) say nothing about the work: the task may well be done. The line reports the **feedback** failure and names the ID it could not tick, so a human can tick it by hand — and the run carries on.
 

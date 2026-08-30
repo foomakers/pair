@@ -1,7 +1,7 @@
 ---
 name: pair-capability-write-issue
-description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, /pair-process-plan-stories, /pair-capability-publish-pr."
-version: 0.11.0
+description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, /pair-process-plan-stories, /pair-process-implement, /pair-capability-publish-pr."
+version: 0.11.1
 author: Foomakers
 ---
 
