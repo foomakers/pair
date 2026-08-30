@@ -238,6 +238,25 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(row).toContain('business-impact.trivial-diff')
     })
 
+    // §3.1 is a row an agent resolves CELL BY CELL, and after this story the green cell
+    // ("any subdomain, when the change is trivial and the project opted in") and the red
+    // cell ("`core` subdomain") both match the same input: an all-`.md` diff in a `core`
+    // subdomain of a project that declared the key. The precedence exists (§6 + the
+    // walkthrough row), but two sections away — the row has to close on itself.
+    it(`${label} §3.1's yellow and red cells resolve the tie against the green cell in-row`, () => {
+      const cells = (
+        content.split('\n').find(l => l.startsWith('| Business impact |')) as string
+      ).split('|')
+      const [, , , , green, yellow, red] = cells.map(c => c.trim())
+      expect(green).toContain('business-impact.trivial-diff')
+      expect(yellow, 'yellow cell must name the override that outranks it').toMatch(
+        /trivial-diff override|§6/,
+      )
+      expect(red, 'red cell must name the override that outranks it').toMatch(
+        /trivial-diff override|§6/,
+      )
+    })
+
     // AC7/AC8(a) — the key and the BR2 definition of "trivial" live in §6's schema.
     it(`${label} §6 documents the key with the definition of trivial spelled out`, () => {
       const s = section(content)
@@ -247,6 +266,31 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(s).toMatch(/whitespace-only/)
       expect(s).toMatch(/formatter-output-only/)
       expect(s).toMatch(/no changed line alters an executable or declarative statement/)
+    })
+
+    // The story's boundary condition, which branch (a) as written does not carry: branch
+    // (a) is the FIRST arm of an OR, so "every changed file is `.md`" short-circuits before
+    // branch (b) is ever consulted. In pair a skill file IS the executable procedure, so a
+    // PR editing only `.claude/skills/**/SKILL.md` + its dataset source — say, flipping the
+    // merge rule from "explicit approval required" to "none" — is all-`.md`, hence trivial,
+    // hence Business impact green, on the diff that rewrites the review gate itself. The
+    // Change/diff-risk yellow that is supposed to hold it off green is a judgement (and this
+    // repo's `change-risk.dataset-mirror-pairs` override collapses source+mirror to ONE
+    // module), so the carve-out has to be mechanical and live inside branch (a).
+    it(`${label} puts executable markdown out of branch (a) so branch (b) decides`, () => {
+      const s = section(content)
+      const bullets = s.split('\n').filter(l => /^\s*-\s/.test(l))
+      const carveOut = bullets.find(l => /executable/i.test(l) && /skill|workflow/i.test(l))
+      expect(carveOut, 'no bullet takes executable markdown out of branch (a)').toBeDefined()
+      expect(carveOut, 'the carve-out must hand the decision to branch (b)').toMatch(/branch \(b\)/)
+      expect(carveOut, 'the carve-out must state the consequence: not trivial').toMatch(
+        /not\*{0,2} trivial/i,
+      )
+      // Branch (a) is evaluated first, so the exclusion has to be visible ON it — a
+      // carve-out stated only further down is one an agent short-circuits past.
+      const branchA = bullets.find(l => /\*\*\(a\)/.test(l))
+      expect(branchA, 'branch (a) bullet missing').toBeDefined()
+      expect(branchA, 'branch (a) must name its own exclusion').toMatch(/executable/i)
     })
 
     // BR2's exclusion list — the cases that look cosmetic and are not. Without them the
@@ -332,11 +376,36 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       expect(content).not.toMatch(/\bBR\d\b/)
     })
 
-    // AC8(b) — the §6 resolution-cascade walkthrough gains its rows.
+    // AC8(b) — the §6 resolution-cascade walkthrough gains its rows. Anchored on each row's
+    // FIRST CELL and asserting that row's resolution, because the loose form
+    // (/\|[^\n|]*[Tt]rivial diff[^\n|]*declared[^\n|]*\|/ + an unbounded search for
+    // "Overrides: business-impact.trivial-diff") was satisfiable WITHOUT the row it exists
+    // to protect: the negative row "Trivial diff, override **not** declared" carries both
+    // "Trivial diff" and "declared", and the worked-examples table carries the Overrides
+    // string. Measured: deleting the positive row from both trees left the suite at 60/60.
     it(`${label} walkthrough table carries the trivial-diff rows`, () => {
-      expect(content).toMatch(/\|[^\n|]*[Tt]rivial diff[^\n|]*declared[^\n|]*\|/)
-      expect(content).toMatch(/\|[^\n|]*[Mm]ixed[^\n|]*\|/)
-      expect(content).toMatch(/Overrides: business-impact\.trivial-diff/)
+      const lines = content.split('\n')
+      const row = (firstCell: string): string | undefined =>
+        lines.find(l => l.startsWith(`| ${firstCell} |`))
+
+      const declared = row('Trivial diff, override declared')
+      expect(declared, 'the override-declared walkthrough row is missing').toBeDefined()
+      expect(declared).toContain('green')
+      expect(declared).toContain('Overrides: business-impact.trivial-diff')
+
+      const notDeclared = row('Trivial diff, override **not** declared')
+      expect(notDeclared, 'the KB-default (undeclared) walkthrough row is missing').toBeDefined()
+      expect(notDeclared).toMatch(/subdomain class/)
+
+      const mixed = row('Mixed diff (one non-trivial file or hunk), override declared')
+      expect(mixed, 'the mixed-diff walkthrough row is missing').toBeDefined()
+      expect(mixed).toMatch(/does not apply/)
+      expect(mixed).toMatch(/subdomain class/)
+
+      const badValue = row('Trivial diff, override declared with a value other than `green`')
+      expect(badValue, 'the bad-value walkthrough row is missing').toBeDefined()
+      expect(badValue).toMatch(/absent/)
+      expect(badValue).toMatch(/never a HALT/)
     })
 
     // AC2/AC3/AC5 asserted, not merely documented: hand-traced matrices in the
