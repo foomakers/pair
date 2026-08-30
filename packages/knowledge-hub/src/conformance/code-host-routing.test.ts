@@ -426,6 +426,78 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     // ...and an omitted code-host there HALTs rather than resolving to filesystem.
     expect(page).toMatch(/filesystem[^\n]*\|[\s\S]{0,80}HALT/i)
   })
+
+  /**
+   * The COPY-PASTE surface, not the prose. `/pair-capability-setup-pm` applies the
+   * tool's implementation guide, so the fenced `way-of-working.md` snippet in that
+   * guide is what actually lands in an adopter's adoption file. A hosts-no-code
+   * guide whose snippet omits `## Git Workflow` therefore ships a configuration
+   * that HALTs on the project's first `/pair-capability-publish-pr` — the guide is
+   * correct in prose and wrong in the block the reader copies.
+   *
+   * Both roots are asserted, because the installed `.pair/knowledge` copy is what
+   * an adopting project reads (the dataset one is only what pair ships).
+   */
+  const WOW_SNIPPET_GUIDES: ReadonlyArray<{ guide: string; hostsCode: boolean }> = [
+    { guide: 'filesystem-implementation.md', hostsCode: false },
+    { guide: 'linear-implementation.md', hostsCode: false },
+    { guide: 'azure-devops-implementation.md', hostsCode: true },
+    // github-implementation.md carries no way-of-working snippet at all, so there is
+    // no copy-paste surface to assert on; the reverse sweep below pins that fact.
+  ]
+
+  /** Every fenced ```markdown block of `content` that configures way-of-working.md. */
+  const wowSnippets = (content: string): string[] =>
+    [...content.matchAll(/```markdown\n([\s\S]*?)```/g)]
+      .map(m => m[1])
+      .filter(block => /adopted for project management/i.test(block))
+
+  for (const { guide, hostsCode } of WOW_SNIPPET_GUIDES) {
+    for (const [rootLabel, root] of [
+      ['dataset', DATASET],
+      ['installed', REPO_ROOT],
+    ] as const) {
+      it(`${guide} (${rootLabel}) — the way-of-working snippet ${
+        hostsCode
+          ? 'omits code-host (zero-config path)'
+          : 'declares code-host (or the first PR HALTs)'
+      }`, () => {
+        const snippets = wowSnippets(read(root, `${PM_TOOL_KB}/${guide}`))
+        expect(snippets.length, `${guide} has no way-of-working snippet`).toBeGreaterThan(0)
+        const snippet = snippets.join('\n')
+        if (hostsCode) {
+          // ADR-018: the tool IS the code host, so demanding the field here would
+          // contradict the zero-configuration default.
+          expect(snippet, guide).not.toContain('code-host')
+        } else {
+          expect(snippet, guide).toMatch(/^##\s+Git Workflow\s*$/m)
+          expect(snippet, guide).toContain('`code-host`')
+          expect(snippet, guide).toContain('`base-branch`')
+        }
+      })
+    }
+  }
+
+  for (const { guide } of WOW_SNIPPET_GUIDES.filter(g => !g.hostsCode)) {
+    it(`${guide} says WHY the field is not optional there (HALT, not preference)`, () => {
+      for (const [rootLabel, root] of [
+        ['dataset', DATASET],
+        ['installed', REPO_ROOT],
+      ] as const) {
+        const content = read(root, `${PM_TOOL_KB}/${guide}`)
+        expect(content, `${guide}/${rootLabel}`).toMatch(/hosts? no code|owns? no repositor/i)
+        expect(content, `${guide}/${rootLabel}`).toContain('HALT')
+      }
+    })
+  }
+
+  it('github-implementation.md is the reverse case: no way-of-working snippet to get wrong', () => {
+    // Guards the exclusion above — if a snippet is ever added there it must be
+    // classified in WOW_SNIPPET_GUIDES rather than silently unasserted.
+    for (const root of [DATASET, REPO_ROOT]) {
+      expect(wowSnippets(read(root, `${PM_TOOL_KB}/github-implementation.md`))).toEqual([])
+    }
+  })
 })
 
 describe('code-host / PM-tool split — the machine-read slots are actually machine-readable (#236, AC3)', () => {
