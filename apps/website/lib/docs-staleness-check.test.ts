@@ -315,6 +315,15 @@ describe('checkDocsCommands', () => {
     expect(checkDocsCommands(doc(diagram), commands)).toHaveLength(0)
   })
 
+  // Same rule, other side: ONE literal space excludes a TAB too, for the same diagram
+  // reason — a tab is column alignment by definition. Pinned so the exclusion reads as
+  // deliberate: a later reader who finds a tab-separated invocation unflagged should
+  // narrow the diagram, not re-widen the separator to `\s`.
+  it('does not read a TAB-separated line as an invocation', () => {
+    expect(checkDocsCommands(doc('```bash\npair-cli\tbogus-tab\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair-cli bogus-one\n```'), commands)).toHaveLength(1)
+  })
+
   it('ignores "pair" used as the product name in prose', () => {
     const prose = 'pair installs bridge files, and pair maps its hierarchy to Linear.'
     expect(checkDocsCommands(doc(prose), commands)).toHaveLength(0)

@@ -111,7 +111,7 @@ describe('gitleaks-example.toml', () => {
  * story actually mirrors, so neither regression class can recur silently.
  *
  * Parity here is `root === realTransform(dataset)`, NOT byte-identity: the
- * `pair update` copy pipeline applies the real content-ops skill transforms
+ * `pair-cli update` copy pipeline applies the real content-ops skill transforms
  * (`rewriteSkillReferences` for `/command` tokens, `rewriteSkillLinkPaths`
  * for SKILL.md link paths) to every `.pair/knowledge/` file. secret-scanning.md
  * references `/setup-gates` and `/assess-security`, which are prefixed in the

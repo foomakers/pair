@@ -116,7 +116,7 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
  * the source is removed, exactly as before. That asymmetry is the whole point: `rm -r` on
  * a shared directory would delete content the source still has.
  *
- * SCOPE — this function DELETES from a real adopter's working tree during `pair update`.
+ * SCOPE — this function DELETES from a real adopter's working tree during `pair-cli update`.
  * Two callers: the content-ops library path (`copyPathOps` / `movePathOps` →
  * `performDirectoryCopy`, on the resolved folder behavior) and, since #393, the CLI's
  * registry install — `copyDirectory` in `apps/pair-cli/src/registry/operations.ts`, gated
@@ -124,7 +124,7 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
  * That covers both shipped directory mirrors: `.pair/knowledge/**` (`knowledge`) and
  * `.github/agents/**` (`github`, whose `include: ["/agents"]` expresses the mirror in
  * `folderBehavior`, leaving `.github/workflows` and friends at `skip` — not owned, never
- * touched). So `pair update` now removes an installed file the dataset no longer ships,
+ * touched). So `pair-cli update` now removes an installed file the dataset no longer ships,
  * including one the adopter authored under a mirror target. That decision, its three
  * non-negotiable properties and the deferred `--dry-run`/`--no-clean` affordance are
  * recorded in
@@ -133,7 +133,7 @@ export async function updateMarkdownLinks(params: UpdateMarkdownLinksParams) {
  * SUPERSEDED (kept as the reason this needs saying at all): before that wire, the CLI
  * install did NOT reach this function — `copyDirHelper` is a pure source→target copy — so a
  * top-level AND a nested orphan planted under `.pair/knowledge/**` both survived every
- * `pair update`, measured on this branch. The two how-to guides deleted from the dataset in
+ * `pair-cli update`, measured on this branch. The two how-to guides deleted from the dataset in
  * #246 and still installed ~5 months later were removed BY HAND in #393, and four unit tests
  * calling this helper directly had made the defect look fixed. Test the gate through
  * `doCopyAndUpdateLinks` with options built by `buildCopyOptions`, never through a
@@ -195,7 +195,7 @@ function registryOwns(srcEntryPath: string, ownership: MirrorCleanupOwnership): 
  * tree, so swallowing the read (`catch(() => [])`) makes every owned entry of the target
  * look absent from the source and removes it — announced, worst of all, as
  * `⚠️ Mirror: removed … (not in the source)`, which blames a dataset retirement for what
- * was an IO fault. One EACCES/EPERM/EIO/EMFILE on a subdirectory during `pair update`
+ * was an IO fault. One EACCES/EPERM/EIO/EMFILE on a subdirectory during `pair-cli update`
  * would take out the whole installed subtree, and the only recovery is the adopter's VCS
  * (there is no `--dry-run`, no `--no-clean`, no install manifest).
  *
@@ -227,7 +227,7 @@ async function readSourceForCleanup(
 /**
  * Removes a target entry the source no longer has, and says so at WARN.
  *
- * WARN, not info: this is the one place `pair update` DELETES from the target tree.
+ * WARN, not info: this is the one place `pair-cli update` DELETES from the target tree.
  * `.pair/knowledge/` is a mirror — `customization/templates.mdx` states that edits there
  * are lost on the next update and that customization belongs in `.pair/adoption/` — but a
  * deletion the operator cannot see in the output is indistinguishable from data loss,

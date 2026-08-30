@@ -819,7 +819,7 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     // number. Measure what the name says.
     // #280 review finding (Minor): it measured the DATASET copy only. The budget
     // exists to bound the entrypoint an assistant actually LOADS, and that is the
-    // INSTALLED MIRROR — `pair install`'s output, systematically larger than its
+    // INSTALLED MIRROR — `pair-cli install`'s output, systematically larger than its
     // source because the transform expands every `/skill` reference to its namespaced
     // form. A dataset-only guard therefore reported green on a tree whose SHIPPED file
     // was already over budget. The overshoot is this branch's, not `main`'s — on

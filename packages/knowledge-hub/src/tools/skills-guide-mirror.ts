@@ -3,7 +3,7 @@
  *
  * The root-level file is GENERATED from the canonical
  * `packages/knowledge-hub/dataset/.pair/knowledge/skills-guide.md` by
- * `pair update`: the copy pipeline applies the exact same content-ops
+ * `pair-cli update`: the copy pipeline applies the exact same content-ops
  * transforms — `rewriteSkillReferences` (the `/command` token rewrite) and
  * `rewriteSkillLinkPaths` (the SKILL.md cross-reference PATH rewrite) — that
  * these helpers reproduce here from the real dataset `.skills/` tree. Because
@@ -82,7 +82,7 @@ export function buildDatasetSkillNameMap(skillsDir: string): SkillNameMap {
  * Skill SKILL.md link-path map (`../.skills/<cat>/<name>/SKILL.md` →
  * `../.claude/skills/<prefixed>/SKILL.md`) for every nested skill dir under
  * `skillsDir`. Delegates to the PRODUCTION `buildSkillLinkPathMap` (same
- * function `pair update` uses) so a bug in the real map construction is caught
+ * function `pair-cli update` uses) so a bug in the real map construction is caught
  * by the conformance test, not masked by a parallel implementation.
  */
 export function buildSkillLinkPathMap(skillsDir: string): SkillLinkPathMap {
@@ -94,7 +94,7 @@ export function buildSkillLinkPathMap(skillsDir: string): SkillLinkPathMap {
  * Applies the real content-ops mirror transform to a snippet of dataset
  * content: `rewriteSkillReferences` (the `/command` token rewrite), then
  * `rewriteSkillLinkPaths` (the SKILL.md link-path rewrite). This is the exact
- * transform the `pair update` pipeline applies to the installed skills-guide.md,
+ * transform the `pair-cli update` pipeline applies to the installed skills-guide.md,
  * with no manual exceptions.
  */
 export function applyKnownMirrorTransforms(

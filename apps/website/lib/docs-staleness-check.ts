@@ -185,7 +185,7 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
 // findSkillCountMismatches pins the "N skills" COUNTS. Neither pins the per-row
 // Command / Description CONTENT, which used to be hand-maintained and could drift
 // silently from the dataset. checkCatalogContent (Check 2c) closes that gap: the
-// Command is DERIVED from category+name (the same transform `pair update` applies)
+// Command is DERIVED from category+name (the same transform `pair-cli update` applies)
 // and the Description from the skill's frontmatter — so the dataset is the single
 // source of truth, CI-enforced. (The Composes column is NOT owned by this check.)
 
@@ -200,7 +200,7 @@ export interface ExpectedRow {
 }
 
 /**
- * category+name → the slash-command, the same name transform `pair update` applies
+ * category+name → the slash-command, the same name transform `pair-cli update` applies
  * when mirroring the dataset into `.claude/skills/`: a meta skill (its SKILL.md sits
  * at the category root, so name === category, e.g. `next`) becomes `/pair-<name>`;
  * every other skill becomes `/pair-<category>-<name>`.
@@ -454,11 +454,14 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * The separator between binary and command is ONE space, not `\s+`: an aligned column of
  * whitespace is a diagram, never a command. The PM-tool pages map their hierarchy under a
  * fenced heading (`pair                    Linear`), which `\s+` would read as "run
- * `pair Linear`". This is a KNOWING trade: `pair-cli  <cmd>` written with two spaces is no
- * longer flagged (no such form exists in the docs today). Do not re-widen the separator to
- * `\s+` to recover it — that hands the four PM-tool diagrams back as false positives; if
- * multi-space invocations ever appear, narrow the DIAGRAM instead (e.g. require the run of
- * spaces to align with another line's column).
+ * `pair Linear`". This is a KNOWING trade, and it covers every non-single-space separator:
+ * neither `pair-cli  <cmd>` written with two spaces nor `pair-cli\t<cmd>` written with a TAB
+ * is flagged (no such form exists in the docs today — verified: `checkDocsCommands` returns
+ * `[]` for both, pinned in the suite). A tab is column alignment by definition, so the
+ * diagram rationale applies to it unchanged. Do not re-widen the separator to `\s+` or `\s`
+ * to recover either — that hands the four PM-tool diagrams back as false positives; if
+ * multi-space or tab invocations ever appear, narrow the DIAGRAM instead (e.g. require the
+ * run of whitespace to align with another line's column).
  *
  * The npx runner is a PREFIX of the binary, never a slot that consumes it. An earlier shape
  * spelled it `npx\s+(?:--no\s+)?@?[\w/.-]+\s+` — a package token followed by a still-required
@@ -730,7 +733,7 @@ export function checkBatchEngineWorkflows(shipped: string[], doc: string): strin
 }
 
 /**
- * The batch-engine page states WHERE `pair install` puts the engine, WHAT ships, and WHAT
+ * The batch-engine page states WHERE `pair-cli install` puts the engine, WHAT ships, and WHAT
  * authority arrives. Every one of those claims is read back from the dataset and the registries
  * rather than trusted, so renaming a target — or adding a workflow — without touching the page
  * fails here instead of leaving a doc pointing at something nobody gets.
@@ -768,7 +771,7 @@ export function batchEngineErrors(paths: {
 
 /**
  * The docs pages whose fenced sample block claims to BE the output of
- * `pair install --list-targets`. These are transcripts a reader compares their own
+ * `pair-cli install --list-targets`. These are transcripts a reader compares their own
  * terminal against line for line, so drift here does not read as a stale doc — it reads
  * as a broken install, and the reader has no way to tell the two apart.
  */
@@ -849,7 +852,7 @@ export function listTargetsSampleErrors(paths: { CLI_CONFIG: string; DOCS_DIR: s
 
 /**
  * Checks 2b + 2d — everything derived from `apps/pair-cli/config.json`: the batch-engine
- * asset paths, and the three docs pages that print `pair install --list-targets` output.
+ * asset paths, and the three docs pages that print `pair-cli install --list-targets` output.
  */
 function cliConfigDerivedErrors(
   paths: Parameters<typeof batchEngineErrors>[0] & Parameters<typeof listTargetsSampleErrors>[0],

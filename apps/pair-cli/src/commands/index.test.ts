@@ -1,5 +1,27 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { describe, it, expect } from 'vitest'
 import { commandRegistry } from './index'
+
+/**
+ * The name the package actually PUBLISHES, read from the manifest rather than copied.
+ *
+ * A literal here would make this gate blind to the one drift it cannot survive: rename the
+ * `bin` key and every `usage`/`examples` string names a binary no install creates, while a
+ * literal-comparing test stays green — the same "the gate cannot see the drift it exists to
+ * catch" shape that let `usage: 'pair run [options]'` ship. Sole `bin` key by construction:
+ * more than one published name would mean the help text has a choice to make, and this
+ * asserts there is none.
+ */
+function publishedBin(): string {
+  const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8')) as {
+    bin: Record<string, string>
+  }
+  const [name, ...rest] = Object.keys(pkg.bin)
+  expect(rest).toEqual([])
+  if (name === undefined) throw new Error('apps/pair-cli/package.json declares no `bin`')
+  return name
+}
 
 describe('commandRegistry', () => {
   it('exports all expected commands with metadata and parsers', () => {
@@ -32,6 +54,7 @@ describe('commandRegistry', () => {
   // test suite and docs:staleness all stayed green. This is that gate: every `usage` and
   // every `examples` entry in the registry names the real binary.
   it('every command names the published binary in usage and examples', () => {
+    const bin = publishedBin()
     const offenders: string[] = []
     for (const key of Object.keys(commandRegistry)) {
       const { metadata } = commandRegistry[key as keyof typeof commandRegistry]
@@ -40,7 +63,7 @@ describe('commandRegistry', () => {
         ...metadata.examples.map((text, i) => ({ where: `${key}.examples[${i}]`, text })),
       ]
       for (const { where, text } of lines) {
-        if (!text.startsWith('pair-cli ')) offenders.push(`${where}: ${text}`)
+        if (!text.startsWith(`${bin} `)) offenders.push(`${where}: ${text}`)
       }
     }
     expect(offenders).toEqual([])
