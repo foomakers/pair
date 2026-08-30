@@ -28,6 +28,19 @@ export type RunInvocationRequest =
  */
 export const DEFAULT_ITERATION_TIMEOUT_SECONDS = 1800
 
+/**
+ * What a trigger observed, and the whole of what the dispatcher (US-217) is told about the card.
+ *
+ * Two facts, both DATA: which card fired, and the labels it carried at that moment. The driver never
+ * reads them from a tracker — it holds no host credentials — so the trigger's own thin adapter is
+ * what supplies them, and that is what keeps the routing core host-agnostic.
+ */
+export interface RunDispatchRequest {
+  readonly card: string
+  /** Empty when the trigger observed no labels: an untagged card routes to nothing, by design. */
+  readonly tags: readonly string[]
+}
+
 export interface RunCommandConfig {
   command: 'run'
   /** Present only when `--engine` was passed; resolution precedence lives in T-2. */
@@ -43,6 +56,8 @@ export interface RunCommandConfig {
   /** Explicit operator authorization to run in a project the engine does not trust (AC6). */
   approveProjectTrust: boolean
   iterationTimeoutSeconds: number
+  /** Present only when `--card` was passed: the run is a tag-driven dispatch (US-217). */
+  dispatch?: RunDispatchRequest
   /** Resolve, print and exit without spawning anything. */
   dryRun: boolean
 }
@@ -58,6 +73,8 @@ interface ParseRunOptions {
   autonomous?: boolean
   approveProjectTrust?: boolean
   iterationTimeout?: string | number
+  card?: string
+  cardTags?: string
   dryRun?: boolean
 }
 
@@ -123,6 +140,53 @@ function resolveEngineFlag(engine: string | undefined): EngineId | undefined {
   return engine
 }
 
+/**
+ * `--card` + `--card-tags` — the dispatch request, or nothing (US-217).
+ *
+ * `--card-tags` is comma-separated because a trigger renders a label LIST into one argument; a tag
+ * may carry spaces (`good first issue`), so the split is on commas alone and each entry is only
+ * trimmed. A label carrying a comma is out of support here for the same reason `## Eligibility`
+ * HALTs on one: the schema's separator wins, and the fix is to rename or re-project the label.
+ *
+ * `--skill`/`--prompt` alongside `--card` is REFUSED rather than silently preferred: the mapping is
+ * what decides which workflow runs on a dispatched card, and two answers to that question in one
+ * command line is exactly the ambiguity the mapping exists to remove.
+ */
+function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefined {
+  const card = identifierText(options.card, '--card')
+  if (card === undefined) {
+    if (options.cardTags !== undefined) {
+      throw new Error('--card-tags was passed without --card: there is no card to dispatch')
+    }
+    return undefined
+  }
+  if (options.skill !== undefined || options.prompt !== undefined) {
+    throw new Error(
+      '--card cannot be combined with --skill or --prompt: the `## Workflows` mapping in ' +
+        '.pair/adoption/tech/automation.md decides which workflow runs on a dispatched card. ' +
+        'Drop --card to invoke a skill directly.',
+    )
+  }
+  return { card, tags: resolveCardTags(options.cardTags) }
+}
+
+/** Each observed label, checked by content: they are reported, audited and matched, never executed. */
+function resolveCardTags(raw: string | undefined): readonly string[] {
+  const declared = optionalText(raw, '--card-tags')
+  if (declared === undefined) return []
+  const tags = declared.split(',').map(tag => tag.trim())
+  for (const tag of tags) {
+    // An EMPTY entry is refused rather than filtered away: `auto-dev,,risk:green` is a rendering
+    // mistake in whatever built the list, and silently dropping it hides a trigger that is one
+    // string-interpolation bug away from passing no tags at all.
+    if (tag.length === 0) {
+      throw new Error(`--card-tags contains an empty tag: ${declared}`)
+    }
+    if (!isSafePromptText(tag)) throw new Error(promptSafetyFailure('--card-tags', tag))
+  }
+  return tags
+}
+
 function resolveScope(options: ParseRunOptions): RunScopeOptions {
   const root = identifierText(options.root, '--root')
   const filter = promptSafeText(options.filter, '--filter')
@@ -144,10 +208,12 @@ export function parseRunCommand(options: ParseRunOptions, args: string[] = []): 
 
   const engine = resolveEngineFlag(options.engine)
   const cwd = optionalText(options.cwd, '--cwd')
+  const dispatch = resolveDispatch(options)
 
   return {
     command: 'run',
     ...(engine && { engine }),
+    ...(dispatch && { dispatch }),
     invocation: resolveInvocation(options),
     scope: resolveScope(options),
     ...(cwd && { cwd }),

@@ -1,0 +1,167 @@
+import { describe, it, expect } from 'vitest'
+import { decideDispatch, describeDispatch, type DispatchRequest } from './dispatch'
+import { readWorkflowMapping } from './workflow-mapping'
+
+const MAPPING = readWorkflowMapping(`## Workflows
+
+auto-dev ⇒ pair-loop
+auto-refine ⇒ pair-process-refine-story
+Precedence: auto-refine, auto-dev
+`)
+
+const INSTALLED = new Set(['pair-loop', 'pair-process-refine-story', 'pair-next'])
+
+function request(overrides: Partial<DispatchRequest> = {}): DispatchRequest {
+  return {
+    card: '217',
+    tags: ['auto-dev', 'risk:green'],
+    eligibility: 'risk:green',
+    mapping: MAPPING,
+    isInstalled: name => INSTALLED.has(name),
+    ...overrides,
+  }
+}
+
+describe('decideDispatch — routing an eligible, mapped card (AC1)', () => {
+  it('routes the card to the workflow its tag maps to', () => {
+    expect(decideDispatch(request())).toEqual({
+      kind: 'route',
+      card: '217',
+      tag: 'auto-dev',
+      workflow: 'pair-loop',
+    })
+  })
+
+  it('resolves a card carrying two mapped tags through the declared precedence', () => {
+    const decision = decideDispatch(request({ tags: ['auto-dev', 'auto-refine', 'risk:green'] }))
+
+    expect(decision).toMatchObject({ kind: 'route', tag: 'auto-refine' })
+  })
+
+  it('matches a tag by plain string equality, never by prefix or family', () => {
+    const decision = decideDispatch(request({ tags: ['auto-develop', 'risk:green'] }))
+
+    expect(decision).toMatchObject({ kind: 'skip', reason: 'unmapped' })
+  })
+})
+
+describe('decideDispatch — nothing runs where nothing was declared (AC2, AC4)', () => {
+  it('skips a card carrying no mapped tag, and says so', () => {
+    const decision = decideDispatch(request({ tags: ['risk:green'] }))
+
+    expect(decision).toMatchObject({ kind: 'skip', reason: 'unmapped' })
+    expect(describeDispatch(decision)).toContain('no mapped tag')
+  })
+
+  it('skips an untagged card — it matches neither eligibility nor any route', () => {
+    const decision = decideDispatch(request({ tags: [] }))
+
+    expect(decision.kind).toBe('skip')
+    // Eligibility is evaluated first, so an untagged card never even reaches routing — the same
+    // fail-safe `## Eligibility` already carries (untagged ⇒ never), not a second rule.
+    expect(decision).toMatchObject({ reason: 'ineligible' })
+  })
+
+  it('skips a card that IS eligible but carries no mapped tag — no default workflow exists', () => {
+    expect(decideDispatch(request({ tags: ['risk:green'] }))).toMatchObject({
+      kind: 'skip',
+      reason: 'unmapped',
+    })
+  })
+
+  it('reports "no mapping declared" when the adoption has no `## Workflows` section', () => {
+    const decision = decideDispatch(request({ mapping: undefined }))
+
+    expect(decision).toMatchObject({ kind: 'skip', reason: 'no-mapping-declared' })
+    expect(describeDispatch(decision)).toContain('no mapping declared')
+    expect(describeDispatch(decision)).toContain('.pair/adoption/tech/automation.md')
+  })
+
+  it('never routes when no `## Eligibility` is declared — automation is off, not widened', () => {
+    const decision = decideDispatch(request({ eligibility: undefined }))
+
+    expect(decision).toMatchObject({ kind: 'skip', reason: 'automation-off' })
+  })
+})
+
+describe('decideDispatch — eligibility is applied BEFORE routing (BR3)', () => {
+  it('skips a mapped card that does not carry the eligibility label, and logs the skip', () => {
+    const decision = decideDispatch(request({ tags: ['auto-dev', 'risk:red'] }))
+
+    expect(decision).toMatchObject({ kind: 'skip', reason: 'ineligible' })
+    expect(describeDispatch(decision)).toContain('risk:green')
+  })
+
+  it('skips an ineligible card even when its tags would resolve a workflow', () => {
+    const decision = decideDispatch(request({ tags: ['auto-dev', 'auto-refine'] }))
+
+    expect(decision).toMatchObject({ kind: 'skip', reason: 'ineligible' })
+  })
+})
+
+describe('decideDispatch — HALTs, never a silent choice', () => {
+  it('HALTs on two mapped tags with no precedence declared', () => {
+    const mapping = readWorkflowMapping(`## Workflows
+
+auto-dev ⇒ pair-loop
+auto-refine ⇒ pair-process-refine-story
+`)
+
+    expect(() =>
+      decideDispatch(request({ mapping, tags: ['auto-dev', 'auto-refine', 'risk:green'] })),
+    ).toThrow(/Precedence/)
+  })
+
+  it('HALTs when precedence lists none of the tags the card actually carries', () => {
+    const mapping = readWorkflowMapping(`## Workflows
+
+auto-dev ⇒ pair-loop
+auto-refine ⇒ pair-process-refine-story
+auto-triage ⇒ pair-next
+Precedence: auto-triage
+`)
+
+    expect(() =>
+      decideDispatch(request({ mapping, tags: ['auto-dev', 'auto-refine', 'risk:green'] })),
+    ).toThrow(/Precedence/)
+  })
+
+  it('HALTs on a declared workflow that is not installed, with an adoption-fix message', () => {
+    expect(() =>
+      decideDispatch(request({ isInstalled: name => name !== 'pair-process-refine-story' })),
+    ).toThrow(/pair-process-refine-story/)
+  })
+
+  it('detects an uninstalled workflow before deciding, not only when a card routes to it', () => {
+    expect(() =>
+      decideDispatch(
+        request({
+          tags: ['risk:green'],
+          isInstalled: name => name !== 'pair-process-refine-story',
+        }),
+      ),
+    ).toThrow(/not installed/)
+  })
+
+  it('never falls back to another workflow when the declared one is missing', () => {
+    let thrown: unknown
+    try {
+      decideDispatch(request({ isInstalled: () => false }))
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(String(thrown)).toMatch(/automation\.md/)
+    expect(String(thrown)).not.toMatch(/falling back/)
+  })
+})
+
+describe('describeDispatch — every decision is legible before anything spawns', () => {
+  it('names the card, the tag and the workflow on a route', () => {
+    const line = describeDispatch(decideDispatch(request()))
+
+    expect(line).toContain('217')
+    expect(line).toContain('auto-dev')
+    expect(line).toContain('pair-loop')
+  })
+})

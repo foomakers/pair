@@ -8,6 +8,7 @@ export const runCommandMetadata = {
     'pair run --skill pair-next --filter risk:green --max-iterations 1 # --filter needs a skill that declares it',
     'pair run --skill pair-next --root 212 --dry-run   # resolve and print, spawn nothing',
     'pair run --prompt "/pair-next --root 212" --max-iterations 1',
+    'pair run --card 217 --card-tags "auto-dev,risk:green"   # tag-driven: the mapping picks the workflow',
   ],
   options: [
     { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude' },
@@ -21,6 +22,16 @@ export const runCommandMetadata = {
       flags: '--filter <tag>',
       description:
         'Label filter, for a skill that declares one (pair-next). REFUSED for pair-loop, which reads `## Eligibility` from tech/automation.md itself',
+    },
+    {
+      flags: '--card <id>',
+      description:
+        'Dispatch this card: its tag selects the workflow from `## Workflows` in tech/automation.md (cannot be combined with --skill/--prompt)',
+    },
+    {
+      flags: '--card-tags <list>',
+      description:
+        'Comma-separated labels the trigger observed on --card. Absent (or unmapped) ⇒ nothing runs',
     },
     { flags: '--cwd <dir>', description: 'Working directory every iteration runs in' },
     {
@@ -52,5 +63,7 @@ export const runCommandMetadata = {
     'An iteration outcome comes from the engine event stream, never from its exit code — no terminal event means failed',
     'Policy (eligibility, stop predicate, parallelism, audit) is read from .pair/adoption/tech/automation.md and never written',
     'The driver NEVER merges, in any mode',
+    'Tag-driven dispatch is opt-in per card: no `## Workflows` mapping, no mapped tag, or an ineligible card ⇒ nothing runs and the skip is reported',
+    'A dispatch takes an exclusive per-card lock: a trigger burst never starts a second run on the same card',
   ],
 } as const

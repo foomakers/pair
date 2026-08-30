@@ -439,3 +439,129 @@ describe('handleRunCommand — driving the loop', () => {
     expect(calls[0]?.promptText).toBe('audit the backlog')
   })
 })
+
+// US-217 — tag-driven dispatch, end to end through the handler: the trigger's two facts in, a
+// routed workflow (or a logged skip) out, and nothing spawned where nothing was declared.
+describe('handleRunCommand — tag-driven dispatch (US-217)', () => {
+  const DISPATCH_POLICY = `${POLICY}
+## Workflows
+
+auto-dev ⇒ pair-loop
+auto-refine ⇒ pair-process-refine-story
+Precedence: auto-refine, auto-dev
+`
+
+  const dispatchFs = (policy = DISPATCH_POLICY) =>
+    projectFs({
+      [`${cwd}/${POLICY_PATH}`]: policy,
+      [`${cwd}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
+    })
+
+  beforeEach(() => vi.stubEnv('PATH', '/bin'))
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  it('routes an eligible, tagged card to its mapped workflow and runs it (AC1, AC3)', async () => {
+    const output = captureLog()
+    const { calls, runner } = fakeRunner([ok()])
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+      dispatchFs(),
+      { runIteration: runner },
+    )
+
+    expect(code).toBe(0)
+    expect(output()).toContain('tag auto-dev ⇒ workflow pair-loop')
+    expect(calls).toHaveLength(1)
+    // The card becomes the run's scope root — `pair-next`'s own parameter, borrowed, not invented.
+    expect(calls[0]?.promptText).toContain('pair-loop')
+    expect(calls[0]?.promptText).toContain('--root 217')
+  })
+
+  it('picks the workflow the declared precedence names on a card carrying two mapped tags', async () => {
+    const output = captureLog()
+    const { calls, runner } = fakeRunner([ok()])
+
+    await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,auto-refine,risk:green' }),
+      dispatchFs(),
+      { runIteration: runner },
+    )
+
+    expect(output()).toContain('workflow pair-process-refine-story')
+    expect(calls[0]?.promptText).toContain('pair-process-refine-story')
+  })
+
+  it('runs NOTHING on a card carrying no mapped tag, and says why (AC2)', async () => {
+    const output = captureLog()
+    const { calls, runner } = fakeRunner([ok()])
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '218', cardTags: 'risk:green' }),
+      dispatchFs(),
+      { runIteration: runner },
+    )
+
+    expect(code).toBe(0)
+    expect(calls).toHaveLength(0)
+    expect(output()).toContain('no mapped tag')
+  })
+
+  it('runs nothing on a mapped but ineligible card, and logs the skip (BR3)', async () => {
+    const output = captureLog()
+    const { calls, runner } = fakeRunner([ok()])
+
+    await handleRunCommand(parseRunCommand({ card: '219', cardTags: 'auto-dev' }), dispatchFs(), {
+      runIteration: runner,
+    })
+
+    expect(calls).toHaveLength(0)
+    expect(output()).toContain('ineligible')
+  })
+
+  it('exits cleanly with "no mapping declared" when the adoption declares no workflows (AC4)', async () => {
+    const output = captureLog()
+    const { calls, runner } = fakeRunner([ok()])
+
+    const code = await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+      dispatchFs(POLICY),
+      { runIteration: runner },
+    )
+
+    expect(code).toBe(0)
+    expect(calls).toHaveLength(0)
+    expect(output()).toContain('no mapping declared')
+  })
+
+  it('HALTs before spawning when a mapped workflow is not installed', async () => {
+    captureLog()
+    const { calls, runner } = fakeRunner([ok()])
+    const fs = projectFs({ [`${cwd}/${POLICY_PATH}`]: DISPATCH_POLICY })
+
+    await expect(
+      handleRunCommand(parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }), fs, {
+        runIteration: runner,
+      }),
+    ).rejects.toThrow(/pair-process-refine-story.*not installed/s)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('resolves and prints the route under --dry-run without spawning anything', async () => {
+    const output = captureLog()
+    const { calls, runner } = fakeRunner([ok()])
+
+    await handleRunCommand(
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green', dryRun: true }),
+      dispatchFs(),
+      { runIteration: runner },
+    )
+
+    expect(output()).toContain('tag auto-dev ⇒ workflow pair-loop')
+    expect(output()).toContain('(from the `## Workflows` mapping)')
+    expect(calls).toHaveLength(0)
+  })
+})

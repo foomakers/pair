@@ -26,6 +26,8 @@ import { buildPromptText, describeApprovalPosture, skillAcceptsFilter } from './
 import { loopExitCode, runLoop, type IterationContext, type LoopOutcome } from './loop'
 import { spawnIteration } from './spawn'
 import type { IterationResult } from './stream-reader'
+import { decideDispatch, describeDispatch, type DispatchDecision } from './dispatch'
+import type { SkillProbe } from './resolve-skill'
 
 /** Injected so the loop can be driven in tests without spawning an engine. */
 export type IterationRunner = (input: {
@@ -60,6 +62,40 @@ interface ResolvedRun {
   perimeter: Perimeter
   policy: AutomationPolicy
   autonomy: AutonomyDecision
+  /** Present only on a tag-driven run (US-217), and then always a `route` — a skip returns earlier. */
+  dispatch?: DispatchDecision
+}
+
+/**
+ * The policy, and the routing decision it implies for a `--card` run (US-217).
+ *
+ * Resolved FIRST and on its own, because a dispatch that routes nothing must cost nothing: a card
+ * that is ineligible, unmapped, or covered by no declaration at all is reported and the run exits,
+ * without resolving an invocation or a perimeter for work that is not going to happen.
+ */
+interface RunContext {
+  config: Config
+  probe: SkillProbe
+  policy: AutomationPolicy
+  dispatch?: DispatchDecision
+}
+
+function resolveContext(config: RunCommandConfig, fs: FileSystemService, cwd: string): RunContext {
+  const loaded = loadConfigWithOverrides(fs, { projectRoot: cwd })
+  // One probe per RUN, not per iteration: the installed skill set does not change mid-run.
+  const probe = createSkillProbe(fs, loaded.config, cwd)
+  const policy = readAutomationPolicy(fs, cwd)
+  const dispatch =
+    config.dispatch &&
+    decideDispatch({
+      card: config.dispatch.card,
+      tags: config.dispatch.tags,
+      eligibility: policy.eligibility,
+      mapping: policy.workflows,
+      isInstalled: probe,
+    })
+
+  return { config: loaded.config, probe, policy, ...(dispatch && { dispatch }) }
 }
 
 /**
@@ -70,14 +106,25 @@ interface ResolvedRun {
  * A refusal — no perimeter, an untrusted project, an engine with no confirmations and no
  * `--autonomous`, a malformed policy — happens here, so no iteration ever starts outside them.
  */
-function resolveRun(config: RunCommandConfig, fs: FileSystemService, cwd: string): ResolvedRun {
-  const loaded = loadConfigWithOverrides(fs, { projectRoot: cwd })
-  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(loaded.config) })
-  // One probe per RUN, not per iteration: the installed skill set does not change mid-run.
-  const invocation = resolveInvocation(config.invocation, createSkillProbe(fs, loaded.config, cwd))
-  const policy = readAutomationPolicy(fs, cwd)
+function resolveRun(
+  config: RunCommandConfig,
+  context: RunContext,
+  cwd: string,
+  fs: FileSystemService,
+): ResolvedRun {
+  const { policy } = context
+  const engine = resolveEngine({ flag: config.engine, declared: declaredEngine(context.config) })
+  // On a routed run the WORKFLOW is the invocation: the card's tag chose it through the adoption
+  // mapping, which is the whole point of tag-driven automation — the cascade never gets a say, and
+  // `--skill`/`--prompt` were refused at parse time so there is nothing to arbitrate here.
+  const invocation: ResolvedInvocation =
+    context.dispatch?.kind === 'route'
+      ? { kind: 'skill', name: context.dispatch.workflow, source: 'mapping' }
+      : resolveInvocation(config.invocation, context.probe)
   const perimeter = createPerimeter({
-    root: config.scope.root,
+    // A dispatched card IS the run's scope — expressed with `pair-next`'s own `--root`, borrowed
+    // rather than invented (D18). An explicit `--root` still wins: it can only narrow further.
+    root: config.scope.root ?? context.dispatch?.card,
     filter: config.scope.filter,
     eligibility: policy.eligibility,
     cwd,
@@ -97,11 +144,19 @@ function resolveRun(config: RunCommandConfig, fs: FileSystemService, cwd: string
     isProjectTrusted: createProjectTrustProbe(fs),
   })
 
-  return { engine, invocation, perimeter, policy, autonomy }
+  return {
+    engine,
+    invocation,
+    perimeter,
+    policy,
+    autonomy,
+    ...(context.dispatch && { dispatch: context.dispatch }),
+  }
 }
 
 function report(resolved: ResolvedRun, policyWarnings: readonly string[]): void {
   console.log(chalk.bold('pair run'))
+  if (resolved.dispatch) console.log(`  ${describeDispatch(resolved.dispatch)}`)
   console.log(`  ${describeEngineResolution(resolved.engine)}`)
   console.log(`  ${describeSkillResolution(resolved.invocation)}`)
   console.log(`  ${describePerimeter(resolved.perimeter)}`)
@@ -133,7 +188,17 @@ export async function handleRunCommand(
   // probed against the engine's trust store, and `--cwd .` is neither legible as a boundary nor
   // comparable against an absolute trust-store key.
   const cwd = resolve(config.cwd ?? fs.currentWorkingDirectory())
-  const resolved = resolveRun(config, fs, cwd)
+  const context = resolveContext(config, fs, cwd)
+
+  // Nothing to run on this card: report the decision and stop. This is a clean exit, never an
+  // error — automation is opt-in per card (D21), so "no workflow applies here" is the shipped
+  // answer for every card a team has not explicitly tagged.
+  if (context.dispatch?.kind === 'skip') {
+    reportSkippedDispatch(context)
+    return 0
+  }
+
+  const resolved = resolveRun(config, context, cwd, fs)
 
   report(resolved, resolved.policy.warnings)
 
@@ -197,6 +262,15 @@ function driveIteration(
     autonomyArgs: resolved.autonomy.args,
     timeoutSeconds: config.iterationTimeoutSeconds,
   })
+}
+
+/** The whole output of a run that routes nothing: the decision, the policy it came from, warnings. */
+function reportSkippedDispatch(context: RunContext): void {
+  console.log(chalk.bold('pair run'))
+  console.log(`  ${describeDispatch(context.dispatch!)}`)
+  console.log(`  Policy: ${context.policy.source} · audit ${context.policy.auditLocation}`)
+  for (const warning of context.policy.warnings) console.log(chalk.yellow(`  ! ${warning}`))
+  console.log(chalk.dim('  Nothing was spawned.'))
 }
 
 function reportOutcome(outcome: LoopOutcome): void {

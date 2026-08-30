@@ -196,3 +196,55 @@ describe('parseRunCommand', () => {
     )
   })
 })
+
+// US-217 — tag-driven dispatch. `--card` + `--card-tags` are the trigger's own two facts: which
+// card fired, and what labels it carried when it did. Both are host DATA, so both are checked by
+// content at parse time, exactly as `--root` and `--filter` are.
+describe('parseRunCommand — tag-driven dispatch (US-217)', () => {
+  it('reads the card and its observed tags', () => {
+    const config = parseRunCommand({ card: '217', cardTags: 'auto-dev, risk:green' })
+
+    expect(config.dispatch).toEqual({ card: '217', tags: ['auto-dev', 'risk:green'] })
+  })
+
+  it('treats a card with no --card-tags as a card carrying no tags (never a default route)', () => {
+    expect(parseRunCommand({ card: '217' }).dispatch).toEqual({ card: '217', tags: [] })
+  })
+
+  it('keeps a tag carrying spaces as one tag', () => {
+    expect(parseRunCommand({ card: '217', cardTags: 'good first issue' }).dispatch?.tags).toEqual([
+      'good first issue',
+    ])
+  })
+
+  it('leaves dispatch absent when no --card is passed', () => {
+    expect(parseRunCommand({ root: '212' }).dispatch).toBeUndefined()
+  })
+
+  it('rejects --card-tags without --card: there is no card to dispatch', () => {
+    expect(() => parseRunCommand({ cardTags: 'auto-dev' })).toThrow(/--card/)
+  })
+
+  it('rejects a --card that is not a plain identifier', () => {
+    expect(() => parseRunCommand({ card: '217; rm -rf /' })).toThrow(/plain identifier/)
+  })
+
+  it('rejects a tag that could turn into a command fragment', () => {
+    expect(() => parseRunCommand({ card: '217', cardTags: 'auto-$(whoami)' })).toThrow(
+      /command fragment/,
+    )
+  })
+
+  it('rejects an empty tag in the list rather than silently dropping it', () => {
+    expect(() => parseRunCommand({ card: '217', cardTags: 'auto-dev,,risk:green' })).toThrow(
+      /--card-tags/,
+    )
+  })
+
+  it.each([
+    ['--skill', { card: '217', skill: 'pair-loop' }],
+    ['--prompt', { card: '217', prompt: 'do the thing' }],
+  ])('refuses %s alongside --card: the mapping already decides what runs', (_case, options) => {
+    expect(() => parseRunCommand(options)).toThrow(/--card/)
+  })
+})
