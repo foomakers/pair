@@ -31,7 +31,7 @@ export const runCommandMetadata = {
     {
       flags: '--card-tags <list>',
       description:
-        'Comma-separated labels the trigger observed on --card. Absent (or unmapped) ⇒ nothing runs',
+        'Comma-separated labels the trigger observed on --card. Absent, empty (an unlabelled card) or unmapped ⇒ nothing runs',
     },
     { flags: '--cwd <dir>', description: 'Working directory every iteration runs in' },
     {

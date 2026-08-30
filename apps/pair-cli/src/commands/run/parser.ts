@@ -170,17 +170,29 @@ function resolveDispatch(options: ParseRunOptions): RunDispatchRequest | undefin
   return { card, tags: resolveCardTags(options.cardTags) }
 }
 
-/** Each observed label, checked by content: they are reported, audited and matched, never executed. */
+/**
+ * Each observed label, checked by content: they are reported, audited and matched, never executed.
+ *
+ * An **empty value is not a malformed flag** — it is the observation "this card carries no labels",
+ * which is precisely the state AC2 is about and the one every host adapter produces for an
+ * unlabelled card (`join(github.event.issue.labels.*.name, ',')` renders `""`). Refusing it would
+ * put the opt-in boundary out of reach of the entry point: the commonest card on a board would fail
+ * its trigger job instead of being skipped cleanly. It is therefore the one flag on this command
+ * where empty is data rather than an error — a HOLE inside a list still is one (below), because
+ * there the caller rendered a list and lost an item.
+ */
 function resolveCardTags(raw: string | undefined): readonly string[] {
-  const declared = optionalText(raw, '--card-tags')
-  if (declared === undefined) return []
-  const tags = declared.split(',').map(tag => tag.trim())
+  if (raw === undefined || raw.trim().length === 0) return []
+  const tags = raw
+    .trim()
+    .split(',')
+    .map(tag => tag.trim())
   for (const tag of tags) {
     // An EMPTY entry is refused rather than filtered away: `auto-dev,,risk:green` is a rendering
     // mistake in whatever built the list, and silently dropping it hides a trigger that is one
     // string-interpolation bug away from passing no tags at all.
     if (tag.length === 0) {
-      throw new Error(`--card-tags contains an empty tag: ${declared}`)
+      throw new Error(`--card-tags contains an empty tag: ${raw.trim()}`)
     }
     if (!isSafePromptText(tag)) throw new Error(promptSafetyFailure('--card-tags', tag))
   }

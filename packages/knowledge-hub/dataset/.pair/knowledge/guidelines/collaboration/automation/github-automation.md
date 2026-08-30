@@ -265,7 +265,7 @@ A job `if:` that pre-filters on a label is the one thing worth resisting: it dup
 
 ### Untagged is not a case the adapter has to handle
 
-An issue carrying no mapped tag **runs nothing**: the dispatcher reports the skip and exits `0`, and with no `DISPATCH-RECORD:` line the comment step posts nothing. That is the opt-in boundary of the whole feature, and it lives in the routing core precisely so that no adapter can widen it by accident. The same holds when `tech/automation.md` declares no `## Workflows` section at all — the run reports `no mapping declared` and exits cleanly.
+An issue carrying no mapped tag **runs nothing**: the dispatcher reports the skip and exits `0`, and with no `DISPATCH-RECORD:` line the comment step posts nothing. That includes the **unlabelled** issue, where `join(github.event.issue.labels.*.name, ',')` renders an empty string: `--card-tags` reads an empty value as the observation "this card carries no labels", so the adapter needs no guard clause and no conditional call — passing what the trigger saw is always correct. That is the opt-in boundary of the whole feature, and it lives in the routing core precisely so that no adapter can widen it by accident. The same holds when `tech/automation.md` declares no `## Workflows` section at all — the run reports `no mapping declared` and exits cleanly.
 
 ### Before wiring the trigger
 

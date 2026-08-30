@@ -41,6 +41,7 @@
 - [ADR-021: Fan-out is one capability with three realizations — in-harness, external driver, degraded](.pair/adoption/tech/adr/adr-021-fan-out-three-realizations.md)
 - [ADR-022: The coverage-baseline ratchet is EXPOSED through the published CLI, not ported to a shipped shell asset](.pair/adoption/tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md)
 - [ADR-023: The coverage-baseline ratchet ships as a GENERATED KB asset, not as a CLI command](.pair/adoption/tech/adr/adr-023-coverage-ratchet-ships-as-a-generated-kb-asset.md)
+- [ADR-024: Tag-driven dispatch — the mapping is adoption, the routing core is host-agnostic, the on-issue record belongs to the host adapter](.pair/adoption/tech/adr/adr-024-tag-driven-dispatch-agnostic-core-host-adapter.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Development Collaboration Context](.pair/adoption/tech/boundedcontext/development-collaboration.md)
@@ -125,6 +126,8 @@
 - [Decision: the CLI invocation name is `pair-cli`, not `pair`](.pair/adoption/decision-log/2026-08-25-cli-invocation-canonical-name-is-pair-cli.md)
 - [Decision: Post-merge cleanup covers local branches and worktrees; PR analyses retire at merge](.pair/adoption/decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md)
 - [Decision: tier 1's `$approval` posture is unconditional, and tier 1 has no declaring composition site yet](.pair/adoption/decision-log/2026-08-28-tier1-approval-posture-is-unconditional-and-has-no-declaring-composition-site-yet.md)
+- [Decision: the two atomicity primitives (exclusive create, append) use `node:fs` directly, in leaf modules tested against a real temporary directory](.pair/adoption/decision-log/2026-08-30-atomicity-primitives-use-node-fs-directly.md)
+- [Decision: an empty `--card-tags` means "this card carries no labels", not a malformed flag](.pair/adoption/decision-log/2026-08-30-empty-card-tags-is-an-observation-not-a-malformed-flag.md)
 
 ## How-To Guides
 

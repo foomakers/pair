@@ -750,7 +750,7 @@ pair run [options]
 | `--root <id>`                   | Scope root, passed through as `pair-next --root`                                                      |
 | `--filter <tag>`                | Label filter, for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
 | `--card <id>`                   | Dispatch this card: its tag picks the workflow from `## Workflows`. Not combinable with `--skill`/`--prompt` |
-| `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card`. Untagged or unmapped ⇒ nothing runs          |
+| `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card`. Empty, absent or unmapped ⇒ nothing runs      |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
@@ -794,7 +794,10 @@ workflow", and two answers to one question is refused at parse time rather than 
 Four properties decide what actually happens, and all four fail towards *not running*:
 
 - **Untagged ⇒ never.** A card carrying no mapped tag is skipped and the skip is reported. There is
-  no default workflow and no fallback: the absence of a route *is* the opt-in boundary.
+  no default workflow and no fallback: the absence of a route *is* the opt-in boundary. An
+  **unlabelled** card is the same case reached one step earlier: `--card-tags` is the one flag on
+  this command where an empty value is *data* ("the trigger saw no labels"), not a malformed flag,
+  so a trigger firing on a bare card skips cleanly instead of failing its job.
 - **No `## Workflows` section ⇒ `no mapping declared`**, printed, exit `0`. A project that never
   wrote the section has not opted in, which is the shipped default rather than an error.
 - **Eligibility is applied before routing.** A card that does not carry the `## Eligibility` label is

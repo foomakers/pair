@@ -241,6 +241,19 @@ describe('parseRunCommand — tag-driven dispatch (US-217)', () => {
     )
   })
 
+  // An UNLABELLED card is the case AC2 is about, and it is what every host adapter renders as an
+  // EMPTY --card-tags: `join(github.event.issue.labels.*.name, ',')` on an issue with no labels is
+  // `""`. Refusing it would make the opt-in boundary — untagged ⇒ skip, cleanly, exit 0 —
+  // unreachable through the entry point and turn the commonest state on a board into a failed
+  // trigger job. Distinct from a HOLE inside a list (`auto-dev,,risk:green`), which stays an error:
+  // there the caller rendered a list and lost an item.
+  it.each([
+    ['an empty value', ''],
+    ['a whitespace-only value', '   '],
+  ])('reads %s as a card carrying no labels, not as a malformed flag', (_case, cardTags) => {
+    expect(parseRunCommand({ card: '217', cardTags }).dispatch).toEqual({ card: '217', tags: [] })
+  })
+
   it.each([
     ['--skill', { card: '217', skill: 'pair-loop' }],
     ['--prompt', { card: '217', prompt: 'do the thing' }],
