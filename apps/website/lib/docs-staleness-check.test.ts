@@ -275,8 +275,46 @@ describe('checkDocsCommands', () => {
     expect(checkDocsCommands(doc('```text\npair-cli vX.Y.Z\n```'), commands)).toHaveLength(0)
   })
 
+  // A flag is never a command NAME, so `pair-cli --version` must stay clean — but the
+  // token is still an invocation, and behind the wrong binary it is the single most
+  // copy-pasted line in the docs. The command token therefore accepts `-`-leading tokens
+  // and the command-existence half is skipped for them; only the binary half applies.
   it('ignores a flag, which is never a command name', () => {
     expect(checkDocsCommands(doc('```bash\npair-cli --version\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair-cli --help\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('Run `pair-cli --version` to check.'), commands)).toHaveLength(0)
+  })
+
+  // US-449 round 5: `pair --version` is the exact form 9 pages already carry in its
+  // CORRECT spelling, so the bare slip is one edit away — and the old command group
+  // (`[A-Za-z][\w.-]*`) could not match a leading `-`, so the whole prefix failed and the
+  // line was not seen as an invocation at all. The page shipped green telling the reader
+  // to run a binary no npm install creates.
+  it('flags a bare `pair --version` in a fence — a flag does not launder the binary', () => {
+    const errs = checkDocsCommands(doc('```bash\npair --version\n```'), commands)
+    expect(errs).toEqual([
+      'a.mdx tells the reader to run "pair --version", but the published binary is "pair-cli"',
+    ])
+  })
+
+  it('flags a bare `pair --help` in an inline span', () => {
+    const errs = checkDocsCommands(doc('Read `pair --help` for the list.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"pair --help"')
+    // The command-existence half must stay OFF for a flag: no "is not one of its
+    // commands", and no `write "pair-cli --help"` prescription either way round.
+    expect(errs[0]).not.toContain('is not one of its commands')
+  })
+
+  it('flags a bare `pair -v` short flag too', () => {
+    expect(checkDocsCommands(doc('```bash\npair -v\n```'), commands)).toHaveLength(1)
+  })
+
+  // `--` alone, or an arrow, is not a flag token: the capture needs a word character
+  // after the dashes, so fenced ASCII diagrams and prose stay clean.
+  it('does not read `pair -> x` or a bare `pair --` as an invocation', () => {
+    expect(checkDocsCommands(doc('```text\npair -> story\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair -- install\n```'), commands)).toHaveLength(0)
   })
 
   // US-449: the published bin is `pair-cli`; `pair` is not installed by any npm install,

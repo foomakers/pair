@@ -141,10 +141,10 @@ only if not already done, and report what you skipped.
       already exists, leave its contents exactly as they are — it is the
       pre-update state, and re-copying after an update would overwrite the only
       evidence of what was removed.
-   c. Ask the operator to run their usual `pair-cli update` and to tell you
-      when it has finished. Do not install or
-      invoke pair yourself if it is not already available, and do not delete
-      anything under `.pair/knowledge/` or `.github/agents/` on your own.
+   c. Ask the operator to run their usual `pair-cli update` and to tell you when
+      it has finished. Do not install or invoke pair yourself if it is not
+      already available, and do not delete anything under `.pair/knowledge/` or
+      `.github/agents/` on your own.
    d. Once the update has run, list every file that exists in the snapshot and
       no longer exists in the live tree — those are the removals. For each,
       classify it with the operator: retired upstream (nothing to do), or

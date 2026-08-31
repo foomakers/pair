@@ -233,12 +233,18 @@ if [ "$FORCE_CLEANUP" = "1" ]; then
 fi
 
 echo "Running: $RUNNER_SCRIPT ${ARGS[*]}"
-"$RUNNER_SCRIPT" "${ARGS[@]}"
-
-SUITE_RET=$?
-if [ $SUITE_RET -ne 0 ]; then
+# Guarded, not bare: under `set -e` (line 2) a bare call aborts the script the instant the
+# runner returns non-zero, so a trailing `SUITE_RET=$?` summary was unreachable and the
+# operator debugging a red release saw only the runner's own output — never the wrapper
+# line naming which stage failed. The exit code was always propagated; the diagnostics
+# were not.
+# `|| SUITE_RET=$?` and not `if ! …`: inside the body of `if ! cmd`, `$?` is the status of
+# the negation (always 0), which would report and re-exit with a green code.
+SUITE_RET=0
+"$RUNNER_SCRIPT" "${ARGS[@]}" || SUITE_RET=$?
+if [ "$SUITE_RET" -ne 0 ]; then
   echo "Standardized smoke-test suite failed with exit code $SUITE_RET"
-  exit $SUITE_RET
+  exit "$SUITE_RET"
 fi
 
 popd >/dev/null

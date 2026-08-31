@@ -482,6 +482,13 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * Tokenizing removes the class rather than the two cases: the text after a closing delimiter
  * is outside every span, and a fence (```` ``` ````) yields no span at all since a span needs
  * a non-backtick character between its delimiters. Both cases are pinned in the suite.
+ *
+ * Only SINGLE-backtick spans are tokenized. CommonMark also allows a doubled delimiter
+ * (`` ``pair install`` ``), and such a span is invisible to this gate — `CODE_SPAN` would
+ * have to balance run lengths to see it. Deliberate while the corpus uses none: every
+ * doubled-backtick hit across the 84 pages is a fence opener (```` ```text ````), zero are
+ * inline spans. If a page ever authors one, balance the delimiter run rather than
+ * loosening the span shape.
  */
 const PUBLISHED_BIN = 'pair-cli'
 const INVOCATION_PREFIX =
@@ -489,8 +496,22 @@ const INVOCATION_PREFIX =
   String.raw`(?:@[\w.-]+/)?(pair-cli|pair)(?:@[\w.-]+)? `
 /** One inline code span's CONTENT — delimiters paired, never crossing a line. */
 const CODE_SPAN = /`([^`\n]+)`/g
-const SPAN_INVOCATION = new RegExp('^[ \\t]*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
-const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
+/**
+ * The token after the binary: a command name, OR a flag. A flag is never a command NAME,
+ * but it IS an invocation — `pair --version` is the single most copy-pasted line in the
+ * docs (9 pages carry it in its correct spelling today), and while the group was
+ * `[A-Za-z][\w.-]*` a leading `-` failed the WHOLE prefix, so `pair --version` was not
+ * seen as an invocation at all and shipped green behind a binary no `npm install`
+ * creates. The token is therefore flag-aware, and `checkDocsCommands` runs only the
+ * binary half on a `-`-leading token — otherwise the correct `pair-cli --version` would
+ * become a false "is not a command". A LETTER is required immediately after the one or
+ * two dashes, which is what a real flag looks like and what an ASCII diagram does not:
+ * `pair -> story` and a bare `pair -- install` (an argument separator, not a flag) match
+ * nothing, same trade as the single-space separator above.
+ */
+const COMMAND_TOKEN = String.raw`(-{1,2}[A-Za-z][\w-]*|[A-Za-z][\w.-]*)`
+const SPAN_INVOCATION = new RegExp('^[ \\t]*' + INVOCATION_PREFIX + COMMAND_TOKEN)
+const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + COMMAND_TOKEN)
 
 /**
  * `vX.Y.Z` / `v0.4.3` on a fenced line is printed OUTPUT, never a command — which is why
@@ -516,7 +537,13 @@ export function checkDocsCommands(
   const errors: string[] = []
   for (const { rel, content } of docs) {
     for (const { bin, cmd } of invokedCommands(content)) {
+      // Ordering is load-bearing and deliberate: the version guard precedes the binary
+      // check, so `pair v0.5.0` — a version BANNER, i.e. output a reader compares against,
+      // not an invocation — is skipped whole and is the one input where a bare `pair`
+      // survives the rule. Flagging it would tell a writer to rewrite printed output.
       if (VERSION_STRING.test(cmd)) continue
+      // A flag is an invocation but not a command name, so only the binary half applies.
+      const isFlag = cmd.startsWith('-')
       // Wrong binary reported once and on its own: `pair kb-validate` is not ALSO an
       // unknown command, and `pair init` should not be counted twice. ONE error, but the
       // message still has to be honest about both halves — a prescriptive `write
@@ -524,16 +551,18 @@ export function checkDocsCommands(
       // second broken invocation and buys a second red round, so the fix is only offered
       // when there is one.
       if (bin !== PUBLISHED_BIN) {
-        const remedy = commandDirs.includes(cmd)
-          ? ` — write "${PUBLISHED_BIN} ${cmd}"`
-          : `, and "${cmd}" is not one of its commands`
+        const remedy = isFlag
+          ? ''
+          : commandDirs.includes(cmd)
+            ? ` — write "${PUBLISHED_BIN} ${cmd}"`
+            : `, and "${cmd}" is not one of its commands`
         errors.push(
           `${rel} tells the reader to run "${bin} ${cmd}", but the published binary is ` +
             `"${PUBLISHED_BIN}"${remedy}`,
         )
         continue
       }
-      if (commandDirs.includes(cmd)) continue
+      if (isFlag || commandDirs.includes(cmd)) continue
       errors.push(`${rel} tells the reader to run "${bin} ${cmd}", which is not a command`)
     }
   }
