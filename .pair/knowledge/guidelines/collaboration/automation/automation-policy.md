@@ -297,7 +297,7 @@ Two properties of that example are worth stating, because both are load-bearing 
 
 ### What fires the dispatch — the per-host adapter
 
-Nothing in this file starts a run. A **trigger** does: a thin, per-host piece that observes a card's labels changing and calls the entry point with what it already holds, `pair run --card <id> --card-tags <list>`. It is the component that carries the tracker credentials, and the one that posts the `DISPATCH-RECORD:` line back onto the card. The reference implementation — a GitHub Actions job firing on `issues: [labeled]` — is in [github-automation.md](github-automation.md); a host with webhooks and a job runner (Azure DevOps service hooks, a Jira automation rule) is the same shape against a different API, and adding one never touches the routing core.
+Nothing in this file starts a run. A **trigger** does: a thin, per-host piece that observes a card's labels changing and calls the entry point with what it already holds, `pair-cli run --card <id> --card-tags <list>`. It is the component that carries the tracker credentials, and the one that posts the `DISPATCH-RECORD:` line back onto the card. The reference implementation — a GitHub Actions job firing on `issues: [labeled]` — is in [github-automation.md](github-automation.md); a host with webhooks and a job runner (Azure DevOps service hooks, a Jira automation rule) is the same shape against a different API, and adding one never touches the routing core.
 
 ## Harness and Model Policy
 

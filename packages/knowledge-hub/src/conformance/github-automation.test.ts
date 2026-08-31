@@ -27,7 +27,7 @@ import { parse } from 'yaml'
  * 1. GitHub's implicit shell is `bash -e {0}`, so a trailing `cmd && other` whose test is false
  *    exits 1 and turns the SILENT case — the untagged issue this feature promises costs nothing —
  *    into a red job and a failure notification on every unmapped label edit on the board;
- * 2. that implicit shell has **no `pipefail`**, so `pair run … | tee log` reports `tee`'s status and
+ * 2. that implicit shell has **no `pipefail`**, so `pair-cli run … | tee log` reports `tee`'s status and
  *    a HALT inside the dispatcher (an uninstalled workflow) lands as a green tick — the adoption-fix
  *    message the design deliberately chose over a silent fallback never reaches a human.
  *
@@ -57,6 +57,19 @@ function adapterWorkflow(content: string): { jobs: Record<string, { steps: Workf
   const block = /```yaml\n([\s\S]*?)```/.exec(section)
   expect(block, 'the adapter section ships no yaml workflow').not.toBeNull()
   return parse(block![1]!)
+}
+
+/**
+ * The command name the shipped dispatch step actually types — first word of its script.
+ *
+ * Read rather than assumed, because this IS the defect class: the step invoked `pair` while the
+ * package it installs publishes `pair-cli`, and the execution guard below stubbed a binary named
+ * after the assumption instead of after the document. Deriving it here means a stub can never
+ * again be built for a name the guideline does not ship.
+ */
+function invokedCommand(content: string): string {
+  const script = step(content, 'Dispatch the card').run!
+  return script.trim().split(/\s+/)[0]!
 }
 
 function step(content: string, name: string): WorkflowStep {
@@ -93,7 +106,7 @@ describe('github-automation.md — the reference trigger adapter (story #217 T4)
 
   it.each(sources)('%s: calls the ONE entry point, with both inputs', (_, content) => {
     const section = adapterSection(content)
-    expect(section).toMatch(/pair run --card/)
+    expect(section).toMatch(/pair-cli run --card/)
     expect(section).toMatch(/--card-tags/)
     // The labels are DATA the trigger already holds (ADR-024 option 2, rejected): an adapter that
     // re-reads them from the API is the tracker client the driver exists without.
@@ -164,8 +177,8 @@ describe('github-automation.md — the reference trigger adapter (story #217 T4)
    *
    * Concrete case: a team copies the block verbatim into `.github/workflows/pair-dispatch.yml` and
    * labels issue 217 `auto-dev`. The job starts, checks out, and "Dispatch the card" runs
-   * `pair run --card "$CARD" …` on `ubuntu-latest`, where nothing installed the CLI:
-   * `bash: pair: command not found`, exit 127, and under the step's `shell: bash` the job goes red.
+   * `pair-cli run --card "$CARD" …` on `ubuntu-latest`, where nothing installed the CLI:
+   * `bash: pair-cli: command not found`, exit 127, and under the step's `shell: bash` the job goes red.
    * Nothing routes, the audit file is never written, and the `if: always()` record step greps an
    * empty `dispatch.log` and posts nothing — so the operator's only signal is a red job on a
    * workflow the KB presents as ready to copy.
@@ -183,12 +196,40 @@ describe('github-automation.md — the reference trigger adapter (story #217 T4)
     )
     expect(
       install,
-      'no step installs @foomakers/pair-cli before `pair run` is invoked',
+      'no step installs @foomakers/pair-cli before `pair-cli run` is invoked',
     ).toBeDefined()
     // ...and the runtime that install needs, since `ubuntu-latest` pins no Node version of its own.
     expect(
       before.some(candidate => candidate.uses?.startsWith('actions/setup-node') === true),
     ).toBe(true)
+  })
+
+  /**
+   * Installing a package and calling a name it does not publish is a step that is DEAD on every
+   * runner, and no amount of string-matching in this file catches it: round 4 added the install,
+   * kept `pair run`, and passed — because the guard below stubbed a binary called `pair`.
+   *
+   * `@foomakers/pair-cli` publishes exactly ONE bin, `pair-cli`
+   * (ADL 2026-08-25-cli-invocation-canonical-name-is-pair-cli — no `pair` alias will be added), and
+   * `npm install -g` creates a shim for that name and no other. This is the readable half; the
+   * PROOF — the real package built, packed, installed into a clean prefix and this exact step run
+   * with only that prefix on PATH — is `scripts/smoke-tests/scenarios/github-dispatch-adapter.sh`,
+   * per ADL 2026-08-31-review-baseline-and-provisioned-artifact-contract (the boundary is never
+   * stubbed). Both producers of the published manifest are read here so neither can drift alone.
+   */
+  it.each(sources)('%s: invokes the name the installed package publishes', (_, content) => {
+    const sourceBins = Object.keys(
+      JSON.parse(readFileSync(join(REPO_ROOT, 'apps/pair-cli/package.json'), 'utf-8')).bin,
+    )
+    // The publishable manifest the release script writes — the one `npm install -g` reads.
+    const packaging = readFileSync(
+      join(REPO_ROOT, 'scripts/workflows/release/package-manual.sh'),
+      'utf-8',
+    )
+    const packagedBin = /bin: \{ '([^']+)':/.exec(packaging)?.[1]
+
+    expect(sourceBins).toEqual([packagedBin])
+    expect(invokedCommand(content)).toBe(packagedBin)
   })
 
   it.each(sources)('%s: counts its own steps the way the prose does', (_, content) => {
@@ -277,12 +318,15 @@ describe('github-automation.md — the shipped trigger adapter, executed (story 
       : ''
 
   describe.each(sources)('%s', (_, content) => {
-    it('the dispatch step FAILS the job when `pair run` HALTs behind the pipe', () => {
+    it('the dispatch step FAILS the job when `pair-cli run` HALTs behind the pipe', () => {
       // The concrete case: `## Workflows` maps `auto-dev ⇒ pair-loop`, `pair-loop` is not installed,
       // the dispatcher HALTs and exits 1. Under `bash -e` alone the pipeline reports `tee`'s status
       // and the job is green — the team's cards silently stop being dispatched while every trigger
       // run shows a tick.
-      stub('pair', 'echo "HALT: pair-loop is not installed" >&2; exit 1')
+      // Stubbed under the name the DOCUMENT invokes, never a name assumed here: whether that
+      // name is one the package publishes is a different question, settled against the real
+      // install in `scripts/smoke-tests/scenarios/github-dispatch-adapter.sh`.
+      stub(invokedCommand(content), 'echo "HALT: pair-loop is not installed" >&2; exit 1')
 
       const result = runStep(step(content, 'Dispatch the card'), {
         CARD: '217',
@@ -308,7 +352,10 @@ describe('github-automation.md — the shipped trigger adapter, executed (story 
     })
 
     it('the dispatch step succeeds on a routed run, and leaves the record in the log', () => {
-      stub('pair', 'echo "DISPATCH-RECORD: 2026-08-30T00:00:00.000Z event=start card=217"')
+      stub(
+        invokedCommand(content),
+        'echo "DISPATCH-RECORD: 2026-08-30T00:00:00.000Z event=start card=217"',
+      )
 
       const result = runStep(step(content, 'Dispatch the card'), {
         CARD: '217',
@@ -320,7 +367,7 @@ describe('github-automation.md — the shipped trigger adapter, executed (story 
     })
 
     it('the record step stays GREEN and posts nothing when nothing was dispatched', () => {
-      // An untagged issue is labelled: `pair run` exits 0 with no `DISPATCH-RECORD:` line. This is
+      // An untagged issue is labelled: `pair-cli run` exits 0 with no `DISPATCH-RECORD:` line. This is
       // the case the guideline promises is silent, and it is AC2's whole point — a failed workflow
       // run here turns the feature's advertised silence into a failure notification per label edit.
       writeFileSync(join(workspace, 'dispatch.log'), 'Dispatch: card 218 · skipped (unmapped)\n')
@@ -333,7 +380,7 @@ describe('github-automation.md — the shipped trigger adapter, executed (story 
 
     it('the record step posts the record on the card when a run did start', () => {
       const record = 'DISPATCH-RECORD: 2026-08-30T00:00:00.000Z event=start card=217 tag=auto-dev'
-      writeFileSync(join(workspace, 'dispatch.log'), `pair run\n${record}\n`)
+      writeFileSync(join(workspace, 'dispatch.log'), `pair-cli run\n${record}\n`)
 
       const result = runStep(step(content, 'Record the run on the card'), { CARD: '217' })
 
