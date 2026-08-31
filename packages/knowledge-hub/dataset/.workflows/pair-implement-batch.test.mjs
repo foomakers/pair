@@ -25,12 +25,25 @@ const SRC = readFileSync(new URL('./pair-implement-batch.js', import.meta.url), 
   '',
 )
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+const REVIEWED_HEAD = 'a'.repeat(40)
 
 async function runWorkflow({ args, dispatch }) {
   const calls = []
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
-    return dispatch(prompt, opts)
+    const result = await dispatch(prompt, opts)
+    // A real reviewer now returns the immutable revision it reviewed. Keep legacy
+    // fixtures concise while allowing focused tests to provide an invalid/missing
+    // value explicitly.
+    if (
+      opts.agentType === 'pair-reviewer' &&
+      result &&
+      typeof result === 'object' &&
+      String(result.verdict ?? '').trim() &&
+      result.reviewedHead === undefined
+    )
+      return { ...result, reviewedHead: REVIEWED_HEAD }
+    return result
   }
   // Mirrors the real primitive's contract: "a thunk that throws (or whose agent errors)
   // resolves to null in the result array — the call itself never rejects". The earlier
@@ -105,7 +118,14 @@ test('valid contract: reviewer schema derives from contract.json (AC1) and cache
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract } }),
   })
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
-  assert.deepEqual(rev.opts.schema, contract.schema)
+  assert.deepEqual(rev.opts.schema, {
+    ...contract.schema,
+    properties: {
+      ...contract.schema.properties,
+      reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    },
+    required: ['verdict', 'reviewedHead'],
+  })
   assert.ok(rev.prompt.includes('Blocker'), 'severity vocabulary threaded from the contract')
   assert.ok(rev.prompt.includes('Rework'), 'verdict vocabulary threaded from the contract')
   assert.deepEqual(result.contracts, [{ name: 'code-review', status: 'cache-hit' }])
@@ -212,8 +232,16 @@ test('contract with usable schema but missing canonical vocabulary keys: prompt 
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract } }),
   })
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
-  // Schema is still enum-locked from the (structurally usable) contract...
-  assert.deepEqual(rev.opts.schema, contract.schema)
+  // Schema is still enum-locked from the (structurally usable) contract, with
+  // the orchestration-owned reviewed revision layered on top.
+  assert.deepEqual(rev.opts.schema, {
+    ...contract.schema,
+    properties: {
+      ...contract.schema.properties,
+      reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    },
+    required: ['verdict', 'reviewedHead'],
+  })
   // ...but the prompt vocabulary text falls back to the documented defaults,
   // since verdictOptions/severities (the canonical keys it's threaded from)
   // are absent. In practice ensure-contract.mjs's validateContract now rejects
@@ -1021,8 +1049,67 @@ test('the fix step sweeps the bounded contract surface before re-review', async 
   assert.match(fix, /location is the starting point/i, 'a finding location is not the contract boundary')
   assert.match(fix, /success\/failure/i, 'paired execution paths are checked together')
   assert.match(fix, /every distributed representation/i, 'source and shipped representations are checked together')
+  assert.match(fix, /PROVISIONED ARTIFACT CONTRACT/, 'a provisioned command has an explicit end-to-end check')
+  assert.match(fix, /producer.*published identity.*consumer/i, 'the provisioner, artifact metadata and invocation are mapped together')
+  assert.match(fix, /clean temporary environment/i, 'the actual installed or built artifact is exercised')
+  assert.match(fix, /never stub.*boundary/i, 'a stub cannot stand in for the published command boundary')
   assert.match(fix, /unrelated cleanup/i, 'the sweep stays bounded and is not scope creep')
   assert.doesNotMatch(fix, /touch ONLY what each finding's location names/, 'line-only scope discipline would recreate the gap')
+})
+
+test('re-review is anchored to the reviewed revision and checks only the fix delta plus prior findings', async () => {
+  const finding = { location: 'workflow.yml:4', severity: 'Major', description: 'd', recommendation: 'r' }
+  let round = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0
+          ? { verdict: 'Rework', findings: [finding] }
+          : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+
+  const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
+  assert.match(reviews[0].prompt, /reviewedHead/i, 'every review returns the immutable head it covered')
+  assert.match(reviews[1].prompt, new RegExp(`git diff ${REVIEWED_HEAD}\\.\\.\\.origin/feat/#292-x --name-only`), 're-review inventories the fix delta, not the entire PR')
+  assert.match(reviews[1].prompt, new RegExp(`git diff ${REVIEWED_HEAD}\\.\\.\\.origin/feat/#292-x`), 're-review starts from the previous review baseline')
+  assert.match(reviews[1].prompt, /only if it is in this delta or a contract boundary changed by this delta/i, 'unchanged PR surface is not repeatedly re-audited')
+})
+
+test('a review without an immutable baseline cannot converge', async () => {
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [], reviewedHead: 'not-a-sha' }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+
+  assert.equal(result.batch[0].status, 'failed-review')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 2, 'missing review evidence is retried once')
+})
+
+test('a review baseline must be lower-case like the review contract declares', async () => {
+  const { result } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [], reviewedHead: 'A'.repeat(40) }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+
+  assert.equal(result.batch[0].status, 'failed-review')
 })
 
 test('accepted-findings key is collision-free for location and description pairs', async () => {

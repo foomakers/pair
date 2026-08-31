@@ -128,6 +128,7 @@
 - [Decision: tier 1's `$approval` posture is unconditional, and tier 1 has no declaring composition site yet](.pair/adoption/decision-log/2026-08-28-tier1-approval-posture-is-unconditional-and-has-no-declaring-composition-site-yet.md)
 - [Decision: the two atomicity primitives (exclusive create, append) use `node:fs` directly, in leaf modules tested against a real temporary directory](.pair/adoption/decision-log/2026-08-30-atomicity-primitives-use-node-fs-directly.md)
 - [Decision: an empty `--card-tags` means "this card carries no labels", not a malformed flag](.pair/adoption/decision-log/2026-08-30-empty-card-tags-is-an-observation-not-a-malformed-flag.md)
+- [Decision: Review re-checks use an immutable baseline and prove provisioned artifacts](.pair/adoption/decision-log/2026-08-31-review-baseline-and-provisioned-artifact-contract.md)
 
 ## How-To Guides
 
