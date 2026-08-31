@@ -207,8 +207,8 @@ The **tag→workflow mapping** (#217, R4.4): the declaration that makes automati
 ## Workflows
 
 auto-dev ⇒ pair-loop
-auto-refine ⇒ pair-process-refine-story
-Precedence: auto-dev, auto-refine
+auto-plan ⇒ pair-process-plan-tasks
+Precedence: auto-dev, auto-plan
 ```
 
 - **One entry per line, `<tag> ⇒ <workflow>`** — the same `⇒` (U+21D2) `## Stop Predicate` uses, and only that one. An ASCII `=>` is a **HALT** naming the documented spelling, so the same file cannot mean different things to two consumers.
@@ -267,29 +267,37 @@ A workflow is a **skill that already exists** — the entry point of a compositi
 | Workflow | What a card routed to it gets | A tag teams usually map to it | How the dispatched card reaches it |
 | --- | --- | --- | --- |
 | `pair-loop` | the delivery loop — selects the card, implements it, opens the PR, drives the review/fix rounds, and stops at a review-approved PR (it never merges outside `## Auto-Advance`) | `auto-dev` | `--root <card>` |
-| `pair-process-refine-story` | the single Draft→Ready path — interview, Given-When-Then criteria, domain mapping, classification | `auto-refine` | `--story <card>` |
 | `pair-process-plan-tasks` | a refined story broken into implementation tasks, with the dependency graph and the AC-coverage table written back onto the card | `auto-plan` | `--story <card>` |
 
-**A mapping may only name a workflow in that table, and the last column is why.** The dispatched card is the whole subject of the run, and it arrives as an **argument** — under the name that workflow's own `## Arguments` table declares, borrowed and never invented (D18). The three above spell it differently, and the difference is not cosmetic: `pair-process-refine-story` and `pair-process-plan-tasks` both state that **when their `$story` is absent they select the highest-priority story on the board themselves**. So a card handed to one of them under a name it does not declare is a card it never sees — the workflow runs, on a *different* card, while the audit trail and the on-issue `DISPATCH-RECORD:` both name the card that was tagged. A consumer therefore **MUST HALT** on a mapped workflow this table does not list, with an adoption-fix message, rather than dispatch a run it cannot scope — the same fail-fast, whole-board check an uninstalled workflow already gets, and for the same reason: a run nobody is watching must never pick its own subject.
+**A mapping may only name a workflow in that table, and the last column is why.** The dispatched card is the whole subject of the run, and it arrives as an **argument** — under the name that workflow's own `## Arguments` table declares, borrowed and never invented (D18). The two above spell it differently, and the difference is not cosmetic: `pair-process-plan-tasks` states that **when its `$story` is absent it selects the highest-priority story on the board itself**. So a card handed to it under a name it does not declare is a card it never sees — the workflow runs, on a *different* card, while the audit trail and the on-issue `DISPATCH-RECORD:` both name the card that was tagged. A consumer therefore **MUST HALT** on a mapped workflow this table does not list, with an adoption-fix message, rather than dispatch a run it cannot scope — the same fail-fast, whole-board check an uninstalled workflow already gets, and for the same reason: a run nobody is watching must never pick its own subject.
 
 **Being scopable is not enough to be mappable.** A consumer may well know how some other skill spells its scope — `pair-next` takes `--root`, and driving it by hand with one is perfectly legitimate — and that is still not a licence to route a card to it. A dispatch takes the card's exclusive lock, writes an `event=start` audit line and emits the `DISPATCH-RECORD:` line the host adapter posts as a comment; a skill that only *reports* changes nothing, so all a team gets is a card claiming work that never happened and a lock nobody needed. Widening the set is a change to this table, made deliberately, with the "what a card routed to it gets" and "how the dispatched card reaches it" columns filled in — never a side effect of a consumer happening to know an argument name.
+
+#### A workflow that needs a human in the room is not mappable
+
+A dispatch runs with **nobody watching**, under an autonomy posture the operator opted into once, for as long as the per-iteration timeout allows. So the table above admits only workflows that can **reach a terminal outcome without an interlocutor**. A workflow whose steps require an explicit human decision — a `Human-judgment gate`, an alignment sync that ends only on an explicit "yes" — has exactly two outcomes when it is dispatched, and both are worse than not running:
+
+- it **stalls** on a question no one answers, until the per-iteration timeout kills it, holding the card's exclusive lock for the whole window while the card carries a public comment saying a run started; or
+- the agent, having no one to ask, **supplies its own approval** and drives the card past the gate — which is the authorization control the gate exists to be, satisfied by the party it exists to constrain.
+
+`pair-process-refine-story` is the concrete exclusion and the reason this rule is written down: it is the single Draft→Ready path, and its own SKILL.md calls phase 0 "the R3.11 AI↔human alignment gate — a prerequisite, not optional", adds three per-step `Human-judgment gate`s, and closes with "what is never skipped is explicit human alignment before the story reaches `Ready`". It is a **hand-driven** workflow (`/pair-process-refine-story --story <card>`, or the refine batch), not a tag-driven one. Refinement is where a human belongs; the mapping is for the work that follows it.
 
 ```markdown
 ## Workflows
 
-auto-refine ⇒ pair-process-refine-story
+auto-plan ⇒ pair-process-plan-tasks
 auto-dev ⇒ pair-loop
-Precedence: auto-refine, auto-dev
+Precedence: auto-plan, auto-dev
 ```
 
 Two properties of that example are worth stating, because both are load-bearing rather than stylistic:
 
-- **The precedence line is what makes the pair safe.** A card that has just been refined often still carries `auto-refine` when `auto-dev` is added; without the line, that card is a HALT the moment a trigger fires on it. Declaring `auto-refine` first is not a preference — it is the answer to a question the dispatcher refuses to answer for you.
+- **The precedence line is what makes the pair safe.** A card that has just been broken into tasks often still carries `auto-plan` when `auto-dev` is added; without the line, that card is a HALT the moment a trigger fires on it. Declaring `auto-plan` first is not a preference — it is the answer to a question the dispatcher refuses to answer for you.
 - **A workflow is never mapped to two tags to mean two intensities of it.** Tags carry no merit (D18), so `auto-dev-fast ⇒ pair-loop` and `auto-dev ⇒ pair-loop` route identically; what varies a run's behaviour is the policy above (`## Eligibility`, `## Stop Predicate`, `## Max Parallelism`), never the tag that routed it.
 
 ### What fires the dispatch — the per-host adapter
 
-Nothing in this file starts a run. A **trigger** does: a thin, per-host piece that observes a card's labels changing and calls the entry point with what it already holds, `pair run --card <id> --card-tags <list>`. It is the component that carries the tracker credentials, and the one that posts the `DISPATCH-RECORD:` line back onto the card. The reference implementation — a GitHub Actions job firing on `issues: [labeled]` — is in [github-automation.md](github-automation.md); a host with webhooks and a job runner (Azure DevOps service hooks, a Jira automation rule) is the same three steps against a different API, and adding one never touches the routing core.
+Nothing in this file starts a run. A **trigger** does: a thin, per-host piece that observes a card's labels changing and calls the entry point with what it already holds, `pair run --card <id> --card-tags <list>`. It is the component that carries the tracker credentials, and the one that posts the `DISPATCH-RECORD:` line back onto the card. The reference implementation — a GitHub Actions job firing on `issues: [labeled]` — is in [github-automation.md](github-automation.md); a host with webhooks and a job runner (Azure DevOps service hooks, a Jira automation rule) is the same shape against a different API, and adding one never touches the routing core.
 
 ## Harness and Model Policy
 

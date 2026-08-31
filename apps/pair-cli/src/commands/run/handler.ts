@@ -237,7 +237,7 @@ export async function handleRunCommand(
   // answer for every card a team has not explicitly tagged.
   if (context.dispatch?.kind === 'skip') {
     reportSkippedDispatch(context)
-    if (!config.dryRun) record(context, deps, context.dispatch, { event: 'skip' })
+    if (!config.dryRun) recordSkip(context, deps, context.dispatch)
     return 0
   }
 
@@ -286,7 +286,7 @@ async function driveDispatchedCard(
     // message names the directory this run actually probed.
     const skipped = lockedSkip(decision.card, acquisition)
     console.log(`  ${describeDispatch(skipped)}`)
-    record(context, deps, skipped, { event: 'skip' })
+    recordSkip(context, deps, skipped)
     return 0
   }
 
@@ -330,6 +330,33 @@ async function driveRun(
 
   reportOutcome(outcome)
   return loopExitCode(outcome)
+}
+
+/**
+ * The `skip` record, with the failure message the frequent path is owed.
+ *
+ * A skip is the commonest outcome on a board — every unmapped label edit, every ineligible card,
+ * every trigger in a burst — and it is the case this feature promises costs nothing. Fail-closed is
+ * still the posture (`appendAuditLine` throws by design: an undecided-but-unrecorded decision is
+ * not a mode), but the bare `EACCES: … open '…/audit.md'` it raised named neither the card nor the
+ * fact that nothing was spawned, so the operator was handed a filesystem error with no way back to
+ * the adoption setting that produced it. Worded like `recordCrash`'s `!started` branch, because it
+ * is the same fact: the destination is unwritable, and nothing ran.
+ */
+function recordSkip(
+  context: RunContext,
+  deps: RunHandlerDependencies,
+  decision: DispatchDecision,
+): void {
+  try {
+    record(context, deps, decision, { event: 'skip' })
+  } catch (failure) {
+    throw new Error(
+      `The skip on card ${decision.card} could not be audited (${describeError(failure)}): ` +
+        `nothing was spawned, so fix the audit destination before the next trigger fires`,
+      { cause: failure },
+    )
+  }
 }
 
 /**

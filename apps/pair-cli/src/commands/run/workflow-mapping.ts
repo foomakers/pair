@@ -1,4 +1,4 @@
-import { assertLabelValue, policyHalt, sectionLines } from './policy-sections'
+import { assertLabelValue, isMarkdownWrapper, policyHalt, sectionLines } from './policy-sections'
 import { idSafetyFailure, isSafeId } from './prompt-safety'
 
 /**
@@ -79,6 +79,17 @@ export function readWorkflowMapping(markdown: string): WorkflowMapping | undefin
 function readRoute(line: string, declaredSoFar: readonly WorkflowRoute[]): WorkflowRoute {
   const match = ENTRY.exec(line)
   if (!match) {
+    // FIRST, and before the arrow spelling: the schema displays this very declaration inside a
+    // ```markdown fence, so the commonest way to get here is a paste that brought the fence with it
+    // — and that line is not a route at all. Reporting it as a grammar failure sends the maintainer
+    // hunting for a malformed entry in a wrapper, and fixing an ASCII arrow inside the fence would
+    // only earn a second HALT on the same paste. `## Eligibility` already names this cause, from
+    // the same list, so both readers of the file say the same thing about the same mistake.
+    if (isMarkdownWrapper(line)) {
+      policyHalt(
+        `\`## Workflows\` line \`${line}\` is a copied markdown wrapper, not a declaration`,
+      )
+    }
     // Named separately from "matches neither grammar": an ASCII arrow is a spelling mistake with an
     // obvious fix, and reporting it as an unrecognised line sends the maintainer hunting.
     if (ASCII_ARROW.test(line)) {

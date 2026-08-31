@@ -199,20 +199,34 @@ function assertWorkflowsInstalled(mapping: WorkflowMapping, isInstalled: SkillPr
  *
  * The mappable set is `DISPATCHABLE_WORKFLOWS` — the KB catalog as data — and NOT every skill the
  * driver happens to know an argument name for: `pair-next` is scopable by hand and still refused
- * here, because routing a card to it would take the card's lock and post a `DISPATCH-RECORD:`
- * comment for a run that only prints a recommendation. The remedy list below is rendered FROM that
- * set, so the message and the check cannot drift apart.
+ * here (it only prints a recommendation), and so is `pair-process-refine-story`, whose scoping
+ * argument this driver knows exactly and whose steps require a human decision no unattended run has.
+ *
+ * So the refusal has TWO causes and TWO messages, because a maintainer fixes them differently: an
+ * uncatalogued workflow is a mapping to change, an unscopable one is a catalog entry the driver has
+ * no row for. Telling the first that "this driver has no declaration of how that workflow names the
+ * card" would send them to add an argument row that already exists. The remedy list is rendered FROM
+ * the set in both arms, so the message and the check cannot drift apart.
  */
 function assertWorkflowsScopable(mapping: WorkflowMapping): void {
   for (const route of mapping.routes) {
     if (dispatchScopeParameterFor(route.workflow) !== undefined) continue
     const catalogued = [...DISPATCHABLE_WORKFLOWS].map(workflow => `\`${workflow}\``).join(', ')
+    const remedy = `Map the tag to one of the workflows the catalog names (${catalogued})`
+    if (!DISPATCHABLE_WORKFLOWS.has(route.workflow)) {
+      policyHalt(
+        `\`## Workflows\` maps \`${route.tag}\` to \`${route.workflow}\`, which the KB catalog ` +
+          `does not name as mappable — a skill outside it is refused even when installed and even ` +
+          `when this driver knows how to scope a card to it, because a dispatch takes the card's ` +
+          `lock and posts a record on it for work nobody is watching. ${remedy}, or widen the ` +
+          `catalog deliberately (see \`automation-policy.md\` § "The workflows a mapping can name")`,
+      )
+    }
     policyHalt(
       `\`## Workflows\` maps \`${route.tag}\` to \`${route.workflow}\`, and this driver has no ` +
         `declaration of how that workflow names the card it works on — so the dispatched card ` +
-        `could not be passed to it, and the run would pick its own subject. Map the tag to one of ` +
-        `the workflows the catalog names (${catalogued}), or add \`${route.workflow}\` to the ` +
-        `catalog with its own scoping argument`,
+        `could not be passed to it, and the run would pick its own subject. ${remedy}, or give ` +
+        `\`${route.workflow}\` its own scoping argument`,
     )
   }
 }

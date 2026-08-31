@@ -45,8 +45,10 @@ const sources: Array<[string, string]> = [
 
 interface WorkflowStep {
   readonly name?: string
+  readonly uses?: string
   readonly shell?: string
   readonly run?: string
+  readonly with?: Record<string, unknown>
 }
 
 /** The one yaml block under the tag-driven-dispatch heading — the workflow a project copies. */
@@ -74,6 +76,9 @@ function step(content: string, name: string): WorkflowStep {
 function shellFlags(declared: string | undefined): string[] {
   return declared === 'bash' ? ['--noprofile', '--norc', '-eo', 'pipefail'] : ['-e']
 }
+
+/** Same interpreter GitHub runs a `run:` step with, resolved without going through the step's PATH. */
+const BASH = '/bin/bash'
 
 describe('github-automation.md — the reference trigger adapter (story #217 T4)', () => {
   const adapterSection = (content: string): string => {
@@ -154,6 +159,47 @@ describe('github-automation.md — the reference trigger adapter (story #217 T4)
     },
   )
 
+  /**
+   * The job must PROVISION the binary it calls — nothing on a bare runner has heard of `pair`.
+   *
+   * Concrete case: a team copies the block verbatim into `.github/workflows/pair-dispatch.yml` and
+   * labels issue 217 `auto-dev`. The job starts, checks out, and "Dispatch the card" runs
+   * `pair run --card "$CARD" …` on `ubuntu-latest`, where nothing installed the CLI:
+   * `bash: pair: command not found`, exit 127, and under the step's `shell: bash` the job goes red.
+   * Nothing routes, the audit file is never written, and the `if: always()` record step greps an
+   * empty `dispatch.log` and posts nothing — so the operator's only signal is a red job on a
+   * workflow the KB presents as ready to copy.
+   */
+  it.each(sources)('%s: installs the CLI it calls, before the step that calls it', (_, content) => {
+    const steps = adapterWorkflow(content).jobs.dispatch!.steps
+    const dispatchAt = steps.findIndex(candidate => candidate.name === 'Dispatch the card')
+    expect(dispatchAt).toBeGreaterThan(-1)
+
+    const before = steps.slice(0, dispatchAt)
+    // The published package, under the install path the getting-started docs already document —
+    // an adapter that installed something else would be a second, divergent install story.
+    const install = before.find(
+      candidate => candidate.run?.includes('@foomakers/pair-cli') === true,
+    )
+    expect(
+      install,
+      'no step installs @foomakers/pair-cli before `pair run` is invoked',
+    ).toBeDefined()
+    // ...and the runtime that install needs, since `ubuntu-latest` pins no Node version of its own.
+    expect(
+      before.some(candidate => candidate.uses?.startsWith('actions/setup-node') === true),
+    ).toBe(true)
+  })
+
+  it.each(sources)('%s: counts its own steps the way the prose does', (_, content) => {
+    // The prose number is what a reader checks their copy against; the yaml is what they copy.
+    // Adding the provisioning step without moving the count leaves the two disagreeing on the one
+    // artifact whose whole selling point is "copy this verbatim".
+    const steps = adapterWorkflow(content).jobs.dispatch!.steps
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six']
+    expect(adapterSection(content)).toContain(`${words[steps.length]!} steps`)
+  })
+
   it.each(sources)('%s: repeats the opt-in boundary at the trigger', (_, content) => {
     const section = adapterSection(content)
     expect(section).toMatch(/untagged/i)
@@ -198,7 +244,11 @@ describe('github-automation.md — the shipped trigger adapter, executed (story 
     const script = join(workspace, 'step.sh')
     writeFileSync(script, declaredStep.run!)
     try {
-      const stdout = execFileSync('bash', [...shellFlags(declaredStep.shell), script], {
+      // The interpreter by ABSOLUTE path: `env.PATH` below is the runner's PATH as the step sees
+      // it, and one case deliberately hands the step a PATH that resolves nothing — which would
+      // otherwise stop Node from finding `bash` itself and report a spawn failure as the step's
+      // exit status.
+      const stdout = execFileSync(BASH, [...shellFlags(declaredStep.shell), script], {
         cwd: workspace,
         encoding: 'utf-8',
         env: { PATH: `${bin}:${process.env.PATH ?? ''}`, ...env },
@@ -240,6 +290,21 @@ describe('github-automation.md — the shipped trigger adapter, executed (story 
       })
 
       expect(result.status).not.toBe(0)
+    })
+
+    it('the dispatch step is DEAD on a runner where nothing installed pair', () => {
+      // No `pair` stub at all — the state of a bare `ubuntu-latest` if the job never provisions it.
+      // This is why the workflow ships a provisioning step: the failure is not a routing failure,
+      // it is `command not found`, and it lands on every label edit on the board.
+      // A hermetic PATH holding everything the step needs EXCEPT the binary the job never installed.
+      stub('tee', 'cat > "$1"')
+      const result = runStep(step(content, 'Dispatch the card'), {
+        CARD: '217',
+        CARD_TAGS: 'auto-dev',
+        PATH: bin,
+      })
+
+      expect(result.status).toBe(127)
     })
 
     it('the dispatch step succeeds on a routed run, and leaves the record in the log', () => {

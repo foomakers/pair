@@ -126,7 +126,7 @@ export function createPerimeter(input: PerimeterInput): Perimeter {
  * so it can only be accepted by an invocation that declares one; the policy label is read by the
  * skill itself, so it is reported rather than passed — but only by a skill that actually reads it.
  * On an invocation that would do neither, the label is DROPPED rather than printed: a card routed
- * to `pair-process-refine-story` is scoped by its card id, and reporting `## Eligibility` as this
+ * to `pair-process-plan-tasks` is scoped by its card id, and reporting `## Eligibility` as this
  * run's boundary would name a filter nothing applies (the run then needs a root, or it has no
  * perimeter at all — which is the refusal below, not a silent unbounded run).
  */

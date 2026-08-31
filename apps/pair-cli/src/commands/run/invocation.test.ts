@@ -430,7 +430,7 @@ describe('SKILL_PARAMETERS matches the corpus that defines it', () => {
    */
   it('dispatches exactly the workflows the KB catalog names — no more, no fewer', () => {
     const catalogued = catalogWorkflows()
-    // The catalog is the thing a team copies from: `auto-refine ⇒ pair-process-refine-story`
+    // The catalog is the thing a team copies from: `auto-plan ⇒ pair-process-plan-tasks`
     // appears verbatim there, in adoption-files.mdx and in the tutorial.
     expect(catalogued.length).toBeGreaterThan(1)
     expect([...DISPATCHABLE_WORKFLOWS].sort()).toEqual([...catalogued].sort())
@@ -453,6 +453,25 @@ describe('SKILL_PARAMETERS matches the corpus that defines it', () => {
     // this skill's scope", never "may a tag route a card here".
     expect(scopeParameterFor('pair-next')).toBe('--root')
     expect(dispatchScopeParameterFor('pair-next')).toBeUndefined()
+  })
+
+  /**
+   * The exclusion the corpus itself justifies — checked against the skill's own SKILL.md, so the
+   * driver's data and the reason for it cannot drift apart.
+   *
+   * `--skill pair-process-refine-story --root 304` renders `--story 304` and is a perfectly good
+   * HAND-DRIVEN run: someone is there to answer. A DISPATCH is the same skill with nobody in the
+   * room, under `--autonomous`, holding the card's lock while the card carries a public comment
+   * saying a run started — so the gates below have two outcomes, a stall until the per-iteration
+   * timeout or an agent approving its own work past them, and the driver refuses instead.
+   */
+  it('refuses to dispatch a workflow whose own SKILL.md requires a human decision', () => {
+    expect(scopeParameterFor('pair-process-refine-story')).toBe('--story')
+    expect(dispatchScopeParameterFor('pair-process-refine-story')).toBeUndefined()
+
+    const skill = readFileSync(fileFor('pair-process-refine-story'), 'utf-8')
+    expect(skill).toMatch(/Human-judgment gate/)
+    expect(skill).toMatch(/explicit human alignment/)
   })
 })
 

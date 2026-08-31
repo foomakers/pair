@@ -287,9 +287,9 @@ risk:green
 
 ## Workflows
 
-auto-refine ⇒ pair-process-refine-story
+auto-plan ⇒ pair-process-plan-tasks
 auto-dev ⇒ pair-loop
-Precedence: auto-refine, auto-dev
+Precedence: auto-plan, auto-dev
 `
 
     /**
@@ -303,7 +303,7 @@ Precedence: auto-refine, auto-dev
      * own row instead of shifting a positional index under an assertion about a different card.
      */
     const BOARD = [
-      // pair-loop declares `--iteration` too, and refine-story does not: each invocation carries
+      // pair-loop declares `--iteration` too, and plan-tasks does not: each invocation carries
       // exactly the arguments its own `## Arguments` table declares, and nothing else.
       {
         card: '301',
@@ -333,12 +333,12 @@ Precedence: auto-refine, auto-dev
       },
       {
         card: '304',
-        tags: ['auto-refine', 'auto-dev', 'risk:green'],
+        tags: ['auto-plan', 'auto-dev', 'risk:green'],
         // The DECLARED precedence wins over the first mapped tag the card carries — and the card
-        // reaches refine-story as `--story`, the argument that skill declares: `--root 304` is a
-        // scope it never sees, and its Step 0 would then pick the top Draft story on the board.
-        routes: '/pair-process-refine-story --story 304',
-        trail: [/event=start card=304 tag=auto-refine/],
+        // reaches plan-tasks as `--story`, the argument that skill declares: `--root 304` is a
+        // scope it never sees, and its Step 0 would then pick the top story on the board.
+        routes: '/pair-process-plan-tasks --story 304',
+        trail: [/event=start card=304 tag=auto-plan/],
       },
       {
         card: '305',
@@ -390,7 +390,7 @@ Precedence: auto-refine, auto-dev
       )
       // The installed skill set the mapping is resolved against — both declared workflows.
       write('.claude/skills/pair-loop/SKILL.md', '')
-      write('.claude/skills/pair-process-refine-story/SKILL.md', '')
+      write('.claude/skills/pair-process-plan-tasks/SKILL.md', '')
       write('.pair/adoption/tech/automation.md', POLICY)
       // A `claude` on PATH: engine resolution probes the filesystem, and the default cascade
       // resolves the schema default when nothing declares one.

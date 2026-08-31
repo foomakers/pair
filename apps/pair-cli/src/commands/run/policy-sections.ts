@@ -63,6 +63,19 @@ const MARKDOWN_BLOCK_MARKERS = ['`', '-', '*', '+', '>', '#']
 const GITHUB_LABEL_CAP = 50
 
 /**
+ * Whether a line the schema expected to be a DECLARATION is markdown the operator copied around it.
+ *
+ * Exported because both readers of `tech/automation.md` meet the same paste and must name the same
+ * cause: the schema displays every declaration inside a fenced block, so the fence markers travel
+ * with a copy of it. `sectionBodies` keeps them (a fence is not a heading), and a reader that
+ * reported the fence as a malformed value — or as a line matching no grammar — sends the maintainer
+ * hunting for a mistake in a line that is not a declaration at all.
+ */
+export function isMarkdownWrapper(value: string): boolean {
+  return MARKDOWN_BLOCK_MARKERS.some(marker => value.startsWith(marker))
+}
+
+/**
  * The shape rules a value must satisfy to BE a label on the host — applied identically wherever the
  * schema puts a label (`## Eligibility`'s single value, and each routing key of `## Workflows`).
  *
@@ -76,7 +89,7 @@ export function assertLabelValue(source: string, value: string): void {
   if (value.includes(',') || /(^|\s)(AND|OR|NOT)(\s|$)/.test(value)) {
     policyHalt(`${source} declares \`${value}\`, but the declaration takes exactly one label`)
   }
-  if (MARKDOWN_BLOCK_MARKERS.some(marker => value.startsWith(marker))) {
+  if (isMarkdownWrapper(value)) {
     policyHalt(
       `${source} declares \`${value}\`, which is a copied markdown wrapper, not a bare label`,
     )

@@ -1028,22 +1028,71 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
     return content.slice(start, content.indexOf('## Harness and Model Policy', start))
   }
 
+  /** The workflow named in each row of the catalog TABLE — never prose that merely mentions one. */
+  const catalogRows = (content: string): string[] =>
+    [...workflowsSection(content).matchAll(/^\| `(pair-[a-z0-9-]+)` \|/gm)].map(match => match[1]!)
+
   it.each(policySources)('%s: ships example workflows a mapping can name', (_, content) => {
     const section = workflowsSection(content)
     expect(section).toMatch(/### The workflows a mapping can name/)
     // A catalog whose entries are not installable skill names is worse than none: it reads as
     // authoritative and every tag mapped from it HALTs on the uninstalled-workflow rule.
-    expect(section).toContain('pair-loop')
-    expect(section).toContain('pair-process-refine-story')
-    expect(section).toContain('pair-process-plan-tasks')
+    expect(catalogRows(content)).toEqual(['pair-loop', 'pair-process-plan-tasks'])
   })
 
   /**
-   * The catalog is what a team copies from — `auto-refine ⇒ pair-process-refine-story` appears
+   * A dispatched workflow runs with NOBODY WATCHING — so it may not need anybody.
+   *
+   * The excluded case, concretely: a team copies the guideline's own example into
+   * `tech/automation.md` and labels Draft card 304 `auto-refine` + `risk:green`. The trigger fires
+   * `pair run --card 304 --card-tags "auto-refine,risk:green" --autonomous`; the driver takes 304's
+   * exclusive lock, appends `event=start`, prints the `DISPATCH-RECORD:` line the adapter posts as a
+   * public comment on the card, and spawns the workflow under `bypassPermissions`. If that workflow
+   * mandates explicit human alignment, the run either stalls on a question no one answers until the
+   * per-iteration timeout — holding the lock, on a card publicly claiming a run started — or the
+   * agent answers itself and satisfies the very authorization gate the skill says is never skipped.
+   *
+   * So the rule is a property of the CATALOGUED SKILLS, checked against their own SKILL.md rather
+   * than against the prose that describes them: putting a row back is a failing test here.
+   */
+  it.each(policySources)(
+    '%s: every catalogued workflow can finish with nobody watching',
+    (_, content) => {
+      for (const workflow of catalogRows(content)) {
+        const slug = workflow.replace(/^pair-/, '')
+        const file = [
+          join(REPO_ROOT, '.claude/skills', workflow, 'SKILL.md'),
+          join(REPO_ROOT, '.skills', slug, 'SKILL.md'),
+        ].find(candidate => existsSync(candidate))
+        expect(file, `${workflow} is catalogued but has no SKILL.md in this repo`).toBeDefined()
+
+        const skill = read(file!)
+        for (const marker of [
+          /Human-judgment gate/,
+          /explicit human "yes"/,
+          /explicit human alignment/,
+        ]) {
+          expect(
+            skill,
+            `${workflow} requires an explicit human decision (${marker.source}), so a tag must not route an unattended card to it`,
+          ).not.toMatch(marker)
+        }
+      }
+
+      // ...and the rule itself, at the surface a team reads before widening the table.
+      const section = workflowsSection(content)
+      expect(section).toMatch(/A workflow that needs a human in the room is not mappable/)
+      // The exclusion is named, so nobody re-adds the row believing it was an oversight.
+      expect(section).toMatch(/`pair-process-refine-story` is the concrete exclusion/)
+    },
+  )
+
+  /**
+   * The catalog is what a team copies from — `auto-plan ⇒ pair-process-plan-tasks` appears
    * verbatim here, in adoption-files.mdx and in the tutorial. A catalogued workflow that the
-   * dispatcher cannot hand the card to is worse than an absent one: the two `pair-process-*` rows
-   * both select the highest-priority story on the board when their `$story` is absent, so a card
-   * passed under a name they do not declare is never seen, while the audit trail and the
+   * dispatcher cannot hand the card to is worse than an absent one: the `pair-process-*` row
+   * selects the highest-priority story on the board when its `$story` is absent, so a card passed
+   * under a name it does not declare is never seen, while the audit trail and the
    * `DISPATCH-RECORD:` comment both name the card that WAS tagged.
    */
   it.each(policySources)(
@@ -1053,9 +1102,9 @@ describe('automation-policy.md — the workflow catalog (story #217 T4)', () => 
       const rows = [
         ...section.matchAll(/^\| `(pair-[a-z0-9-]+)` \|[^\n]*\| `(--[a-z-]+) <card>` \|/gm),
       ]
-      // Three rows today; the assertion is that EVERY row carries the column, not how many.
+      // Two rows today; the assertion is that EVERY row carries the column, not how many.
       expect(rows.length).toBe([...section.matchAll(/^\| `pair-[a-z0-9-]+` \|/gm)].length)
-      expect(rows.length).toBeGreaterThan(2)
+      expect(rows.length).toBeGreaterThan(1)
 
       for (const [, workflow, parameter] of rows) {
         const slug = workflow!.replace(/^pair-/, '')

@@ -450,14 +450,14 @@ describe('handleRunCommand — tag-driven dispatch (US-217)', () => {
 ## Workflows
 
 auto-dev ⇒ pair-loop
-auto-refine ⇒ pair-process-refine-story
-Precedence: auto-refine, auto-dev
+auto-plan ⇒ pair-process-plan-tasks
+Precedence: auto-plan, auto-dev
 `
 
   const dispatchFs = (policy = DISPATCH_POLICY) =>
     projectFs({
       [`${cwd}/${POLICY_PATH}`]: policy,
-      [`${cwd}/.claude/skills/pair-process-refine-story/SKILL.md`]: '',
+      [`${cwd}/.claude/skills/pair-process-plan-tasks/SKILL.md`]: '',
     })
 
   /** Records what was audited, without touching a real working area. */
@@ -526,13 +526,13 @@ Precedence: auto-refine, auto-dev
     const { calls, handler } = deps()
 
     await handleRunCommand(
-      parseRunCommand({ card: '217', cardTags: 'auto-dev,auto-refine,risk:green' }),
+      parseRunCommand({ card: '217', cardTags: 'auto-dev,auto-plan,risk:green' }),
       dispatchFs(),
       handler,
     )
 
-    expect(output()).toContain('workflow pair-process-refine-story')
-    expect(calls[0]?.promptText).toContain('pair-process-refine-story')
+    expect(output()).toContain('workflow pair-process-plan-tasks')
+    expect(calls[0]?.promptText).toContain('pair-process-plan-tasks')
   })
 
   it('runs NOTHING on a card carrying no mapped tag, and says why (AC2)', async () => {
@@ -593,7 +593,7 @@ Precedence: auto-refine, auto-dev
         fs,
         handler,
       ),
-    ).rejects.toThrow(/pair-process-refine-story.*not installed/s)
+    ).rejects.toThrow(/pair-process-plan-tasks.*not installed/s)
     expect(calls).toHaveLength(0)
   })
 
@@ -793,6 +793,64 @@ Precedence: auto-refine, auto-dev
       // Nothing ran, and the card is left dispatchable for the next trigger.
       expect(calls).toHaveLength(0)
       expect(lock.events).toEqual(['acquire:217', 'release:217'])
+    })
+  })
+
+  /**
+   * The SKIP is the frequent path, and it had no message of its own.
+   *
+   * `start`/`end` were given worded failures above; the skip — the commonest outcome on a board,
+   * and the one this feature promises "costs nothing" — wrote its record outside any try, so an
+   * unwritable `## Audit Location` surfaced as a bare `EACCES: … open '…/audit.md'`: no card
+   * number, no statement that nothing was spawned, no adoption-fix pointer. Fail-closed is kept
+   * (an unaudited decision is not a mode) — what changes is that the operator is told which card,
+   * that nothing ran, and where to fix it.
+   */
+  describe('an unauditable SKIP names the card, not just the filesystem', () => {
+    const unwritable = (handler: Record<string, unknown>) => ({
+      ...handler,
+      appendAudit: () => {
+        throw new Error("EACCES: permission denied, open '/ro/loop-audit.md'")
+      },
+    })
+
+    it.each([
+      ['unmapped', { card: '302', cardTags: '' }],
+      ['ineligible', { card: '219', cardTags: 'auto-dev' }],
+    ])('the pre-lock skip on an %s card', async (_reason, flags) => {
+      captureLog()
+      const { calls, handler } = deps()
+
+      const failing = await handleRunCommand(
+        parseRunCommand(flags),
+        dispatchFs(),
+        unwritable(handler),
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain(`card ${flags.card}`)
+      expect(String(failing)).toContain('could not be audited')
+      expect(String(failing)).toContain('EACCES')
+      expect(String(failing)).toContain('nothing was spawned')
+      expect(String(failing)).toContain('audit destination')
+      expect(calls).toHaveLength(0)
+    })
+
+    it('the lock-held skip, where a run IS in flight on the card', async () => {
+      captureLog()
+      const { calls, lock, handler } = deps([ok()], true)
+
+      const failing = await handleRunCommand(
+        parseRunCommand({ card: '217', cardTags: 'auto-dev,risk:green' }),
+        dispatchFs(),
+        unwritable(handler),
+      ).catch((error: unknown) => error)
+
+      expect(String(failing)).toContain('card 217')
+      expect(String(failing)).toContain('could not be audited')
+      expect(String(failing)).toContain('nothing was spawned')
+      expect(calls).toHaveLength(0)
+      // The holder's lock is NOT released by the run that failed to record its own skip.
+      expect(lock.events).toEqual(['acquire:217'])
     })
   })
 })

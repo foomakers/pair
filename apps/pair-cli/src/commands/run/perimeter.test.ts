@@ -53,7 +53,7 @@ describe('createPerimeter', () => {
   })
 
   it('drops a policy label no one on this invocation would apply, rather than printing it', () => {
-    // A card routed to `pair-process-refine-story`: the workflow declares no `--filter` AND does
+    // A card routed to `pair-process-plan-tasks`: the workflow declares no `--filter` AND does
     // not read `## Eligibility` itself, so the label is neither passed nor applied. Reporting it
     // as the perimeter would name a boundary nothing enforces — the run is bounded by its card.
     const perimeter = createPerimeter({
@@ -70,8 +70,8 @@ describe('createPerimeter', () => {
   })
 
   it('refuses to run such an invocation unscoped — the label is not a perimeter for it', () => {
-    // Without the card there is nothing left: `pair-process-refine-story` with no story argument
-    // selects the highest-priority Draft story on the board, which is the unbounded run AC5 forbids.
+    // Without the card there is nothing left: `pair-process-plan-tasks` with no story argument
+    // selects the highest-priority story on the board, which is the unbounded run AC5 forbids.
     expect(() =>
       createPerimeter({ ...base, eligibility: 'risk:green', filterDelivery: 'none' }),
     ).toThrow(/No work perimeter declared/)

@@ -197,7 +197,9 @@ jobs:
 
 ## Tag-Driven Dispatch — the reference trigger adapter
 
-The **trigger** for tag-driven workflows: the thin, host-specific piece that turns "a label was added to an issue" into one call to pair's entry point. Everything it decides is decided here; everything it *routes* is decided by `## Workflows` in `tech/automation.md` (schema: [automation-policy.md](automation-policy.md)). The adapter is deliberately small — three steps and no logic of its own — because that is what keeps every host on the same routing core.
+The **trigger** for tag-driven workflows: the thin, host-specific piece that turns "a label was added to an issue" into one call to pair's entry point. Everything it decides is decided here; everything it *routes* is decided by `## Workflows` in `tech/automation.md` (schema: [automation-policy.md](automation-policy.md)). The adapter is deliberately small — five steps, three of them setup, and no logic of its own — because that is what keeps every host on the same routing core.
+
+**The runner does not ship `pair`.** `ubuntu-latest` has never heard of it, so the job installs the CLI itself: without that step `pair run` is `command not found`, the step exits 127, the job goes red and nothing is ever routed or audited. The **engine** the run spawns (`claude`, `pi`, `opencode`) and its credentials are the adopter's own step — the block below installs the driver, not the agent.
 
 ### The workflow
 
@@ -230,6 +232,18 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      # `pair` is NOT on a hosted runner. Without these two steps the next one is
+      # `bash: pair: command not found` (exit 127) on every labeled event — a red job,
+      # nothing routed, nothing audited. Pin the version you adopted rather than
+      # `@latest` if you want the trigger to be reproducible.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the pair CLI
+        shell: bash
+        run: npm install -g @foomakers/pair-cli
 
       - name: Dispatch the card
         id: dispatch
@@ -289,6 +303,7 @@ An issue carrying no mapped tag **runs nothing**: the dispatcher reports the ski
 ### Before wiring the trigger
 
 - **Run it once by hand**, on a card you tagged deliberately: `pair run --card <id> --card-tags "<labels>" --dry-run` prints the route, the perimeter and the policy, and spawns nothing.
+- **Provision `pair` and the engine on the runner.** The job above installs the CLI; the **engine** it spawns (`claude`, `pi`, `opencode`) and that engine's credentials are yours to add. Neither is present on a hosted runner by default, and a missing binary is `command not found` — a red job, with nothing routed and nothing written to the audit file.
 - **Scope the token to the repository the cards live in.** The adapter can only ever post where its token reaches; the engine credentials the run itself needs are a separate, and usually much broader, concern.
 - **Watch the audit file** (`## Audit Location`) for the first few cycles: every start, skip and end is there, including the ones the card never shows.
 - **Check the mapping resolves before the first trigger fires.** A `## Workflows` entry naming a workflow nobody installed — or one the dispatcher cannot hand the card to, i.e. anything outside the [catalog](automation-policy.md#the-workflows-a-mapping-can-name) — HALTs the dispatch *before* eligibility and routing, so it stops **every** card on the board, not only cards carrying that tag. That is the intended blast radius — a broken mapping is broken for everyone, and finding out only on the one card that happens to carry the tag would make the failure depend on which trigger fired first — but it means the dry run above is a check on the whole board, not on one card.

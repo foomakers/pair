@@ -780,7 +780,7 @@ skill)` or `eligibility <tag> (…, applied by the skill itself)`.
 `--card` turns the command into the **entry point a trigger calls**: instead of naming a skill, you
 name a card and the labels a trigger observed on it, and the `## Workflows` mapping in
 [`.pair/adoption/tech/automation.md`](/docs/concepts/adoption-files) decides which workflow runs —
-`auto-dev ⇒ pair-loop`, `auto-refine ⇒ pair-process-refine-story`, whatever that project declared.
+`auto-dev ⇒ pair-loop`, `auto-plan ⇒ pair-process-plan-tasks`, whatever that project declared.
 
 ```bash
 pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
@@ -824,18 +824,27 @@ carrying that tag.
 
 The second is what keeps the trail true. The dispatched card reaches its workflow as an argument
 under that workflow's own name for it — `--root <card>` for `pair-loop`, `--story <card>` for
-`pair-process-refine-story` and `pair-process-plan-tasks` — and those two select the
-highest-priority story on the board when they receive no story at all. A workflow whose scoping
-argument this command does not know would therefore run on a card nobody tagged, while the audit
-line and the `DISPATCH-RECORD:` comment both named the card that *was* tagged: so the mapping is
-refused instead.
+`pair-process-plan-tasks` — and the latter selects the highest-priority story on the board when it
+receives no story at all. A workflow whose scoping argument this command does not know would
+therefore run on a card nobody tagged, while the audit line and the `DISPATCH-RECORD:` comment both
+named the card that *was* tagged: so the mapping is refused instead.
 
-Those three are the **whole** mappable set, and knowing a skill's scope argument is not what puts it
-there. `pair run --skill pair-next --root 212` is a perfectly good hand-driven run, and
-`auto-triage ⇒ pair-next` is still refused: a dispatch takes the card's exclusive lock, writes an
-`event=start` line and emits a `DISPATCH-RECORD:` comment, and doing all that for a skill that only
-prints a recommendation leaves a card claiming work nothing did. Widening the set is a change to the
-[catalog](/docs/reference/guidelines-catalog) in `collaboration/automation/automation-policy.md`.
+Those two are the **whole** mappable set, and knowing a skill's scope argument is not what puts it
+there. Two refusals show the gap from opposite sides:
+
+- `pair run --skill pair-next --root 212` is a perfectly good hand-driven run, and
+  `auto-triage ⇒ pair-next` is still refused: a dispatch takes the card's exclusive lock, writes an
+  `event=start` line and emits a `DISPATCH-RECORD:` comment, and doing all that for a skill that
+  only prints a recommendation leaves a card claiming work nothing did.
+- `auto-refine ⇒ pair-process-refine-story` is refused too, and the command knows exactly how that
+  workflow spells its scope. Refinement is the single Draft→Ready path and it **requires a human**:
+  its alignment gate ends only on an explicit approval. Dispatched unattended it either stalls until
+  the per-iteration timeout — holding the card's lock, on a card publicly commented as started — or
+  the agent approves its own work past the gate. Run it by hand
+  (`--skill pair-process-refine-story --root <card>`), where someone is there to answer.
+
+Widening the set is a change to the [catalog](/docs/reference/guidelines-catalog) in
+`collaboration/automation/automation-policy.md`.
 
 Every decision — start, skip, end — is appended to the run's `## Audit Location` file, and the start
 record — only the start — is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own

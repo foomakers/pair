@@ -256,9 +256,9 @@ section Step 1 left out — `## Workflows`, the seventh — to the same policy f
 ```text
 ## Workflows
 
-auto-refine ⇒ pair-process-refine-story
+auto-plan ⇒ pair-process-plan-tasks
 auto-dev ⇒ pair-loop
-Precedence: auto-refine, auto-dev
+Precedence: auto-plan, auto-dev
 ```
 
 …then have your code host call the entry point when a label changes, passing the card and the labels
@@ -270,15 +270,18 @@ pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
 
 The mapping decides which workflow runs; a card carrying **no mapped tag runs nothing**, and with no
 `## Workflows` section at all the command reports `no mapping declared` and exits cleanly. Map a tag
-only to a workflow from the guideline's catalog (`pair-loop`, `pair-process-refine-story`,
-`pair-process-plan-tasks`): the card is handed over as the argument that workflow declares —
-`--root 217`, or `--story 217` for the two `pair-process-*` ones — and a mapping naming anything
-else HALTs rather than start a run that would pick its own card. Only a run
+only to a workflow from the guideline's catalog (`pair-loop`, `pair-process-plan-tasks`): the card
+is handed over as the argument that workflow declares — `--root 217`, or `--story 217` for
+`pair-process-plan-tasks` — and a mapping naming anything else HALTs rather than start a run that
+would pick its own card. **Refinement is deliberately not in that catalog**:
+`pair-process-refine-story` ends only on an explicit human approval, so unattended it would either
+stall until the timeout or approve its own work past the gate — refine by hand, and map tags for
+what follows. Only a run
 *start* is printed as a `DISPATCH-RECORD:` line for your trigger to post back on the card — skips and
 endings stay in the audit file, so a label edit that routes nothing never comments. The ready-made
-GitHub Actions job — three steps, fires on `issues: [labeled]` — is in
-`collaboration/automation/github-automation.md` in the knowledge base; the flags are documented in
-[`pair run`](/docs/reference/cli/commands#run).
+GitHub Actions job — fires on `issues: [labeled]`, installs the CLI (a runner does not ship it) and
+dispatches — is in `collaboration/automation/github-automation.md` in the knowledge base; the flags
+are documented in [`pair run`](/docs/reference/cli/commands#run).
 
 The dispatch takes a **per-card lock** so a burst of label edits cannot start two runs on one card —
 but that lock is scoped to one working area. On a daemon box (Options A–C) that is the guard. On

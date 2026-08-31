@@ -5,11 +5,11 @@ import { readWorkflowMapping } from './workflow-mapping'
 const MAPPING = readWorkflowMapping(`## Workflows
 
 auto-dev ⇒ pair-loop
-auto-refine ⇒ pair-process-refine-story
-Precedence: auto-refine, auto-dev
+auto-plan ⇒ pair-process-plan-tasks
+Precedence: auto-plan, auto-dev
 `)
 
-const INSTALLED = new Set(['pair-loop', 'pair-process-refine-story', 'pair-process-plan-tasks'])
+const INSTALLED = new Set(['pair-loop', 'pair-process-plan-tasks'])
 
 function request(overrides: Partial<DispatchRequest> = {}): DispatchRequest {
   return {
@@ -33,9 +33,9 @@ describe('decideDispatch — routing an eligible, mapped card (AC1)', () => {
   })
 
   it('resolves a card carrying two mapped tags through the declared precedence', () => {
-    const decision = decideDispatch(request({ tags: ['auto-dev', 'auto-refine', 'risk:green'] }))
+    const decision = decideDispatch(request({ tags: ['auto-dev', 'auto-plan', 'risk:green'] }))
 
-    expect(decision).toMatchObject({ kind: 'route', tag: 'auto-refine' })
+    expect(decision).toMatchObject({ kind: 'route', tag: 'auto-plan' })
   })
 
   it('matches a tag by plain string equality, never by prefix or family', () => {
@@ -93,7 +93,7 @@ describe('decideDispatch — eligibility is applied BEFORE routing (BR3)', () =>
   })
 
   it('skips an ineligible card even when its tags would resolve a workflow', () => {
-    const decision = decideDispatch(request({ tags: ['auto-dev', 'auto-refine'] }))
+    const decision = decideDispatch(request({ tags: ['auto-dev', 'auto-plan'] }))
 
     expect(decision).toMatchObject({ kind: 'skip', reason: 'ineligible' })
   })
@@ -104,11 +104,11 @@ describe('decideDispatch — HALTs, never a silent choice', () => {
     const mapping = readWorkflowMapping(`## Workflows
 
 auto-dev ⇒ pair-loop
-auto-refine ⇒ pair-process-refine-story
+auto-plan ⇒ pair-process-plan-tasks
 `)
 
     expect(() =>
-      decideDispatch(request({ mapping, tags: ['auto-dev', 'auto-refine', 'risk:green'] })),
+      decideDispatch(request({ mapping, tags: ['auto-dev', 'auto-plan', 'risk:green'] })),
     ).toThrow(/Precedence/)
   })
 
@@ -116,20 +116,20 @@ auto-refine ⇒ pair-process-refine-story
     const mapping = readWorkflowMapping(`## Workflows
 
 auto-dev ⇒ pair-loop
-auto-refine ⇒ pair-process-refine-story
-auto-tasks ⇒ pair-process-plan-tasks
-Precedence: auto-tasks
+auto-plan ⇒ pair-process-plan-tasks
+auto-dev-fast ⇒ pair-loop
+Precedence: auto-dev-fast
 `)
 
     expect(() =>
-      decideDispatch(request({ mapping, tags: ['auto-dev', 'auto-refine', 'risk:green'] })),
+      decideDispatch(request({ mapping, tags: ['auto-dev', 'auto-plan', 'risk:green'] })),
     ).toThrow(/Precedence/)
   })
 
   it('HALTs on a declared workflow that is not installed, with an adoption-fix message', () => {
     expect(() =>
-      decideDispatch(request({ isInstalled: name => name !== 'pair-process-refine-story' })),
-    ).toThrow(/pair-process-refine-story/)
+      decideDispatch(request({ isInstalled: name => name !== 'pair-process-plan-tasks' })),
+    ).toThrow(/pair-process-plan-tasks/)
   })
 
   it('detects an uninstalled workflow before deciding, not only when a card routes to it', () => {
@@ -137,7 +137,7 @@ Precedence: auto-tasks
       decideDispatch(
         request({
           tags: ['risk:green'],
-          isInstalled: name => name !== 'pair-process-refine-story',
+          isInstalled: name => name !== 'pair-process-plan-tasks',
         }),
       ),
     ).toThrow(/not installed/)
@@ -147,7 +147,7 @@ Precedence: auto-tasks
     // The defect this closes: the workflow IS installed, so the check above passed, and the card
     // was then handed to it under a scoping parameter nobody verified it declares. An unrecognised
     // scope does not fail loudly inside the agent — it is ignored, and a workflow that selects its
-    // own subject when unscoped (both `pair-process-*` rows of the KB catalog do) then works a
+    // own subject when unscoped (the `pair-process-*` row of the KB catalog does) then works a
     // DIFFERENT card than the one the audit trail and the on-issue `DISPATCH-RECORD:` name.
     const mapping = readWorkflowMapping(`## Workflows
 
@@ -196,7 +196,7 @@ Precedence: auto-review, auto-dev
     // The gap between "the driver holds a `--root` row for it" and "a tag may be mapped to it".
     // `pair-next` has a row in `SKILL_PARAMETERS` because `--skill pair-next --root 212` is a
     // legitimate hand-driven invocation — but every operator surface (the HALT's own list, the KB
-    // catalog, the tutorial, ADR-024) tells a team the mappable set is three, and `pair-next` only
+    // catalog, the tutorial, ADR-024) tells a team the mappable set is two, and `pair-next` only
     // PRINTS a recommendation: a run routed to it takes the card's exclusive lock, writes
     // `event=start … workflow=pair-next` and posts a DISPATCH-RECORD comment for work that never
     // happens. The dispatchable set is its own declaration, not a by-product of the argument table.
@@ -225,22 +225,54 @@ auto-triage ⇒ pair-next
     expect(String(thrown)).toMatch(/scop/i)
     // The list the message offers is the mappable set, and it does not name the workflow it just
     // refused — a HALT whose remedy includes the rejected value is not a remedy.
-    expect(String(thrown)).toMatch(
-      /`pair-loop`, `pair-process-refine-story`, `pair-process-plan-tasks`/,
-    )
+    expect(String(thrown)).toMatch(/`pair-loop`, `pair-process-plan-tasks`/)
   })
 
-  it('routes to every workflow the KB catalog recommends, each under its own scoping argument', () => {
-    // The three rows of `automation-policy.md` § "The workflows a mapping can name": a mapping
-    // copied verbatim out of the guideline must dispatch, not HALT.
+  it('refuses `pair-process-refine-story` for the reason that is actually true of it', () => {
+    // The sharpest case in the set: the driver knows EXACTLY how this workflow spells its scope
+    // (`--story`, and `--skill pair-process-refine-story --root 304` renders it), so it is not
+    // unscopable — it is unmappable. Its own SKILL.md makes phase 0 the R3.11 alignment gate and
+    // adds three `Human-judgment gate`s, and a dispatch has nobody to satisfy them: the run either
+    // stalls until the per-iteration timeout, holding card 304's lock while 304 carries a public
+    // `DISPATCH-RECORD:` comment saying a run started, or the agent answers its own gate and drives
+    // the story to `Ready` with the authorization control satisfied by the party it constrains.
+    // The message must therefore NOT send a maintainer to add an argument row that already exists.
     const mapping = readWorkflowMapping(`## Workflows
 
 auto-refine ⇒ pair-process-refine-story
+`)
+
+    let thrown: unknown
+    try {
+      decideDispatch(
+        request({
+          mapping,
+          tags: ['auto-refine', 'risk:green'],
+          isInstalled: name => INSTALLED.has(name) || name === 'pair-process-refine-story',
+        }),
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(String(thrown)).toMatch(/pair-process-refine-story/)
+    expect(String(thrown)).toMatch(/catalog does not name as mappable/)
+    // The claim that would be false of this workflow — the driver holds a `--story` row for it.
+    expect(String(thrown)).not.toMatch(/no declaration of how that workflow names the card/)
+    expect(String(thrown)).toMatch(/`pair-loop`, `pair-process-plan-tasks`/)
+    expect(String(thrown)).toMatch(/automation\.md/)
+  })
+
+  it('routes to every workflow the KB catalog recommends, each under its own scoping argument', () => {
+    // The two rows of `automation-policy.md` § "The workflows a mapping can name": a mapping
+    // copied verbatim out of the guideline must dispatch, not HALT.
+    const mapping = readWorkflowMapping(`## Workflows
+
 auto-plan ⇒ pair-process-plan-tasks
 auto-dev ⇒ pair-loop
-Precedence: auto-refine, auto-plan, auto-dev
+Precedence: auto-plan, auto-dev
 `)
-    const installed = new Set([...INSTALLED, 'pair-process-plan-tasks'])
+    const installed = new Set(INSTALLED)
 
     expect(
       decideDispatch(

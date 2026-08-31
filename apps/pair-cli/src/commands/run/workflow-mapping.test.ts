@@ -99,6 +99,21 @@ describe('readWorkflowMapping — HALT triggers', () => {
     halts('- auto-dev ⇒ pair-loop', /markdown wrapper/)
   })
 
+  /**
+   * The paste the guideline invites: its own declaration is DISPLAYED inside a ```markdown fence,
+   * so an operator copying the block brings the fence markers with it. `sectionBodies` keeps them
+   * (a fence is not a heading), so the fence line reaches `readRoute` — where "matches neither
+   * `<tag> ⇒ <workflow>` nor `Precedence: …`" sends the maintainer hunting for a malformed route in
+   * a line that is not one. The same paste under `## Eligibility` already names the real cause.
+   */
+  it('names the copied fence for what it is, rather than reporting it as a malformed route', () => {
+    halts('```\nauto-dev ⇒ pair-loop\n```', /markdown wrapper/)
+    halts('```text\nauto-dev ⇒ pair-loop\n```', /markdown wrapper/)
+    // The wrapper is reported before the arrow spelling: fixing the arrow first would only earn a
+    // second HALT on the same paste.
+    halts('```\nauto-dev => pair-loop\n```', /markdown wrapper/)
+  })
+
   it('HALTs on a tag that could turn into a command fragment in an agent prompt', () => {
     halts('auto-$(whoami) ⇒ pair-loop', /command fragment/)
   })
