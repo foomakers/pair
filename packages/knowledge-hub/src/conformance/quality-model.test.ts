@@ -305,10 +305,9 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
     // subdomain of a project that declared the key. The precedence exists (§6 + the
     // walkthrough row), but two sections away — the row has to close on itself.
     it(`${label} §3.1's yellow and red cells resolve the tie against the green cell in-row`, () => {
-      const cells = (
-        content.split('\n').find(l => l.startsWith('| Business impact |')) as string
-      ).split('|')
-      const [, , , , green, yellow, red] = cells.map(c => c.trim())
+      const row = content.split('\n').find(l => l.startsWith('| Business impact |'))
+      expect(row, "§3.1's Business impact row is missing").toBeDefined()
+      const [, , , , green, yellow, red] = (row as string).split('|').map(c => c.trim())
       expect(green).toContain('business-impact.trivial-diff')
       expect(yellow, 'yellow cell must name the override that outranks it').toMatch(
         /trivial-diff override|§6/,
@@ -474,6 +473,18 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
         '.pair/adoption/tech/automation.md',
         '.pair/adoption/tech/risk-matrix.md',
         '.pair/adoption/tech/way-of-working.md',
+        // The class is a DIRECTORY, not three names. `tech/coverage-baseline.md` is the
+        // fourth member this repo ships and the enumeration missed: `coverage-gate.sh`
+        // reads its `baseline.<type>=` lines with a plain `^key=` match, so a one-file PR
+        // moving `baseline.shared=84` to `40` is all-`.md`, matches no name in a
+        // three-name list ⇒ branch (a) short-circuits ⇒ trivial ⇒ Business impact green
+        // ⇒ `risk:green` — the tier `tech/automation.md` declares eligible for unattended
+        // runs, on the diff that disables the coverage regression gate.
+        '.pair/adoption/tech/coverage-baseline.md',
+        // Not a file this repo ships: the class has to be scoped as a DIRECTORY, or the
+        // enumeration re-opens the same hole the day a project adds its next policy file.
+        // This path fails against any list of names and passes against `tech/**`.
+        '.pair/adoption/tech/a-policy-file-added-later.md',
       ]) {
         expect(
           carveOutCovers(carveOut as string, machineRead),
@@ -724,8 +735,21 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
 
   // BR7/D18 — `classify` stays a model-applier: the triviality criteria live in the
   // quality model, never in the skill. Grep-verifiable, per the story's DoD.
+  // `trivial change`/`objectively trivial` are the two phrasings the model itself uses, so
+  // they are the most natural way for a later story to smuggle the criterion into the
+  // applier ("a trivial change — only prose or docs touched — resolves Business impact
+  // green"): a sentence that trips none of the four mechanical tokens. Both are absent from
+  // the skill today (only the KEY name `business-impact.trivial-diff` appears), so pinning
+  // them costs nothing and closes the gap the DoD calls grep-verifiable.
   it('classify SKILL.md carries no triviality threshold of its own (D18)', () => {
-    for (const criterion of ['comment-only', 'whitespace-only', 'formatter-output', '.mdx']) {
+    for (const criterion of [
+      'comment-only',
+      'whitespace-only',
+      'formatter-output',
+      '.mdx',
+      'trivial change',
+      'objectively trivial',
+    ]) {
       expect(CLASSIFY_SKILL, `classify must not own the criterion "${criterion}"`).not.toContain(
         criterion,
       )
@@ -754,6 +778,64 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
     expect(claim, 'the claim must exclude the family the phase never asks about').toMatch(
       /trivial-diff/,
     )
+  })
+
+  // The SAME claim ("Phase 3.6 offers `## Criticality Table` and `## Overrides`") is made in
+  // three more shipped places, and the round that corrected `bootstrap/SKILL.md`, §6 and both
+  // website pages left all three saying the opposite. `how-to/02` is the manual, skill-less
+  // bootstrap path — what an agent reads when it cannot run `/pair-process-bootstrap` — and
+  // it still calls the two sections "the two classification-delta sections nothing else
+  // authors". An adopter following it concludes the interview covers everything `## Overrides`
+  // can hold, never learns `business-impact.trivial-diff` is hand-authored, and — having
+  // answered the threshold/reviewer questions — has `## Overrides` on disk, so a re-run
+  // reports `already authored` and never proposes the knob. Pinned in every tree so the
+  // copies of one fact cannot disagree again.
+  it('every shipped statement of the Phase 3.6 offer scopes it to the families it asks about', () => {
+    const claims: [rel: string, locate: (content: string) => string | undefined][] = [
+      [
+        'how-to/02-how-to-complete-bootstrap-checklist.md',
+        c => c.split('\n').find(l => l.includes('classification-delta sections')),
+      ],
+      ['skills-guide.md', c => c.split('\n').find(l => l.startsWith('| Classification delta |'))],
+      [
+        'assets/bootstrap-checklist.md',
+        c => c.split('\n').find(l => l.includes('`## Criticality Table` / `## Overrides` delta')),
+      ],
+    ]
+    for (const [treeLabel, root] of TEMPLATE_TREES) {
+      for (const [rel, locate] of claims) {
+        const claim = locate(readKb(root, rel))
+        expect(claim, `${treeLabel}/${rel}: the Phase 3.6 offer claim is missing`).toBeDefined()
+        expect(
+          claim,
+          `${treeLabel}/${rel} still credits Phase 3.6 with the whole \`## Overrides\` section`,
+        ).toMatch(/trivial-diff/)
+      }
+    }
+  })
+
+  // The ADL argues the Change/diff-risk yellow "cannot be relied on" to hold a machine-read
+  // markdown edit off green — and, two bullets earlier, relies on exactly that yellow to
+  // tolerate a normative KB guideline staying INSIDE branch (a). Both may be right, but the
+  // reader resolving a PR that rewrites §3.1's own dimension table has only prose to tell
+  // them which argument applies. The distinguishing criterion has to be shipped, not
+  // inferred: a guideline is a shared rule surface MANY INDEPENDENT CONSUMERS resolve from,
+  // so §3.1's own "shared code" trigger fires on its own; the carved-out classes have a
+  // single consumer (the agent that executes the file, or the skill that reads its values)
+  // and no dimension fires on their behalf.
+  it('states why a normative guideline stays in branch (a) while machine-read markdown does not', () => {
+    for (const [label, statement] of [
+      ['the ADL', TRIVIAL_DIFF_ADL],
+      ['§6 (dataset)', section(QUALITY_MODEL)],
+      ['§6 (mirror)', section(QUALITY_MODEL_MIRROR)],
+    ] as const) {
+      expect(statement, `${label} does not name the guideline side of the asymmetry`).toMatch(
+        /independent consumers/,
+      )
+      expect(statement, `${label} does not name the carved-out side of the asymmetry`).toMatch(
+        /single consumer/,
+      )
+    }
   })
 
   // The ADL is the durable record a later contributor reads before extending the schema.
@@ -792,6 +874,10 @@ describe('quality-model.md — business-impact.trivial-diff override (#438)', ()
       '.pair/adoption/tech/automation.md',
       '.pair/adoption/tech/risk-matrix.md',
       '.pair/adoption/tech/way-of-working.md',
+      '.pair/adoption/tech/coverage-baseline.md',
+      // A file this repo does NOT ship: the class is a directory, and a statement that
+      // enumerates names instead fails here the day a project adds its next policy file.
+      '.pair/adoption/tech/a-policy-file-added-later.md',
     ]) {
       expect(
         carveOutCovers(enumeration as string, machineRead),
@@ -912,6 +998,10 @@ describe('this repo declares the trivial-diff override (#438, AC9)', () => {
       '.pair/adoption/tech/automation.md',
       '.pair/adoption/tech/risk-matrix.md',
       '.pair/adoption/tech/way-of-working.md',
+      '.pair/adoption/tech/coverage-baseline.md',
+      // A file this repo does NOT ship: the class is a directory, and a statement that
+      // enumerates names instead fails here the day a project adds its next policy file.
+      '.pair/adoption/tech/a-policy-file-added-later.md',
       '.claude/skills/pair-loop/SKILL.md',
       'AGENTS.md',
     ]) {
@@ -977,6 +1067,10 @@ describe('risk-matrix-example.md', () => {
       '.pair/adoption/tech/automation.md',
       '.pair/adoption/tech/risk-matrix.md',
       '.pair/adoption/tech/way-of-working.md',
+      '.pair/adoption/tech/coverage-baseline.md',
+      // A file this repo does NOT ship: the class is a directory, and a statement that
+      // enumerates names instead fails here the day a project adds its next policy file.
+      '.pair/adoption/tech/a-policy-file-added-later.md',
     ]) {
       expect(
         carveOutCovers(entry as string, machineRead),
