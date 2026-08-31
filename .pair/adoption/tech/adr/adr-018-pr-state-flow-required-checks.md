@@ -182,21 +182,22 @@ label is an advisory view that can never enable a merge. Concretely:
   the merged head), satisfying the compliance angle of the story without a new artifact.
 - **Consequence accepted knowingly: a 🔴 merge requires a second human account.** GitHub rejects an
   approving review from the PR author, so on a single-maintainer repository (including this one) no 🔴 PR
-  can reach `ready-to-merge` while `pair-explicit-approval` is a required context. Such a project either
-  adds a second human reviewer account or deliberately leaves that context out of the required list and
-  records the 🔴 rule as advisory. An alternative solo-approval token (a human-applied `approved:human`
-  label with actor verification, or an `/approve` comment command) is a **design change tracked as
-  [#398](https://github.com/foomakers/pair/issues/398)** — intentionally absent here rather than
-  half-specified.
+  can reach `ready-to-merge` through the review path while `pair-explicit-approval` is a required
+  context. Such a project either adds a second human reviewer account or deliberately leaves that
+  context out of the required list and records the 🔴 rule as advisory. **Amended by
+  [#398](https://github.com/foomakers/pair/issues/398)** (§ Amendment below): a human-applied,
+  head-bound `/approve <head-sha>` token is now a third option — explicit human confirmation, **not**
+  independent review, and not forgery-resistant until #218 gives the agent its own identity.
 - **Ordering is part of the decision**: the workflow job and the `pr-state:*` labels must exist and be
   observed reporting on a real PR *before* the protection is written (and `enforce_admins` enabled),
   otherwise a required context that never reports blocks every merge with no escape hatch.
 - Adding a code host means adding an implementation-guide section, not touching the model or the
   evaluator. Hosts lacking required checks remain usable in advisory mode.
 - **A distinct reviewer identity stays out of scope**, deliberately (Option 4): the dispatched reviewer
-  runs as the author's account, so its verdict is a `--comment` review by construction, and a second
-  human account remains the only way to satisfy 🔴. The identity question is recorded here so it is not
-  rediscovered per project; it is weighed in the same follow-up story as the solo-approval token
+  runs as the author's account, so its verdict is a `--comment` review by construction. The identity
+  question is recorded here so it is not rediscovered per project; it is now tracked as
+  [#218](https://github.com/foomakers/pair/issues/218), and the § Amendment below explains why it is the
+  **prerequisite for the approval token's forgery-resistance** rather than an alternative to it
   ([#398](https://github.com/foomakers/pair/issues/398)).
 - **Merge blocking was verified end-to-end on a live code host** (throwaway repository, 2026-07-30):
   labels → workflow → contexts observed on the head commit → protection applied with
@@ -226,3 +227,209 @@ label is an advisory view that can never enable a merge. Concretely:
 - KB: new `pr-states.md` + `assets/pr-state.sh`; `quality-model.md` §4 gains a pointer to the flow
   (criteria stay in the model); `github-implementation.md` gains the host recipe.
 - Docs site: new `concepts/pr-state-flow` page, cross-linked from `concepts/tag-driven-gates`.
+
+## Amendment (2026-08-30) — the solo-maintainer approval token (#398)
+
+**Status**: Accepted. Amends this ADR; supersedes nothing. The decision above stands unchanged; this
+adds one **satisfaction path** to `pair-explicit-approval` and states precisely what it is worth.
+
+### Context of the amendment
+
+The consequence accepted knowingly above — *a 🔴 merge requires a second human account* — turned out to
+be the load-bearing one for pair's most common adopter shape. On a single-account repository the 🔴 tier
+was not merely awkward: it was **unusable**, because GitHub rejects an approving review from the PR
+author, so the only remaining options were "add a human" (not one a solo maintainer has) or "drop the
+context and keep D10 advisory". Story #398 closes that with a third option instead of leaving the
+highest tier decorative.
+
+### Decision
+
+**A human-applied, head-bound approval token is an alternative way to satisfy `pair-explicit-approval`
+— never a replacement for the review path, and never a change to what the tier requires.**
+
+- **Mechanism: a comment command, not a label.** The maintainer posts `/approve <head-sha>` on the pull
+  request. Weighed against a human-applied `approved:human` label (the other candidate in #398): a label
+  carries **no head SHA**, so binding it to the current head would mean comparing a `labeled` timeline
+  event's timestamp against the head commit — a comparison a force-push can invalidate in either
+  direction. A comment names the head **explicitly**, which makes both the binding and the
+  re-application after a push unambiguous; the actor is equally host-asserted on both surfaces, so the
+  SHA binding is what decides it. Withdrawal is an edit or a delete, and the job reads the comments
+  fresh, so only the current state of the current head counts.
+- **The actor is resolved server-side, in two stages that both have to pass.** Stage 1
+  (`human_token_approval_jq_filter`, shipped in `assets/pr-state.sh` next to the review predicate — one
+  executable projection, no transliteration) accepts a comment only on host-asserted fields:
+  `.user.type == "User"` (no Bot, no Organization), `.performed_via_github_app == null` (an App posting
+  on a human's behalf is rejected), `.author_association ∈ {OWNER, MEMBER, COLLABORATOR}`, and the
+  command **owning its line, outside fenced regions and HTML comments** — `(^|\n)/approve <40-hex head
+  SHA>` with no leading whitespace, applied to the body with fenced regions (triple-backtick and `~~~`)
+  and `<!-- … -->` comments stripped first. The anchor alone covers `>`-prefixed quote-replies,
+  4-space-indented blocks and inline backticks; it does **not** cover a fence, which puts the command at
+  column 0 of its own line — the shape a maintainer produces when they paste the command to *explain*
+  it, and the shape this ADR and the implementation guide both use to show it — nor an HTML comment,
+  which renders as nothing at all, so a token no reader can see would name its author as the approver.
+  Without those strips, both comments approved the PR. The fence strip is **line-anchored** and rejoins
+  with `""`: the first form of it was a backtick-parity `split("```")` joined with `"\n"`, which read an
+  inline ` ```gh``` ` span as a fence and then manufactured the line boundary that made a mid-line
+  mention count. Stated at the strength of the mechanism and no higher — it is a targeted strip, not a
+  CommonMark parser, so the residual is named in the guide's Stage 1 table (a fence indented four or
+  more spaces is not recognised; its content is indented too, so the anchor rejects the token anyway).
+  Only the command and the SHA come from the body; a body claiming to be someone else changes nothing.
+  Stage 2 (`token_approver_login` / `token_permission_sufficient`) reads
+  `GET /repos/{owner}/{repo}/collaborators/{login}/permission` and requires `admin`/`maintain`/`write`.
+  **The association is a pre-filter, not the authorization** — and stating it that way is a correction,
+  not a nuance: GitHub's `MEMBER` means "member of the organization that owns the repository" and says
+  nothing about permission on *this* repository, so on a 500-member org a read-only member would
+  otherwise have satisfied 🔴. Only the permission read is authorization.
+- **The author exclusion, and the opt-in that suspends it.** The review predicate carries
+  `.user.login != PR_AUTHOR`; the token carries it too, because without it *any* author on *any*
+  repository self-satisfies 🔴 the moment no review has been submitted yet — which is the state of every
+  🔴 PR before someone reviews it, on a ten-person repository as much as a one-person one. Nothing in a
+  comment payload says "this repository cannot produce a second human", so the repository **declares**
+  it: the variable `PAIR_SOLO_APPROVAL_TOKEN=true`, threaded into the predicate as
+  `SOLO_APPROVAL_TOKEN`. Set, the author's own token counts — the entire point on a one-person repo.
+  Unset (the default), the token is still available but only to a **non-author** write-level human, so
+  it can never be a self-approval shortcut for a repository that *can* produce a second human. The
+  opt-in is the executable form of the business rule "the token is a fallback for a configuration that
+  cannot produce a second human, not a shortcut for one that can".
+- **Why the default is the LOOSE form and not "opt-in unset ⇒ token path unreachable".** Deliberate,
+  and stated because the rule above reads stricter than the code. On a repository that *can* produce
+  independent review, D10 can now also be satisfied by a comment that never appears in the Reviews tab
+  and is never subject to `dismiss_stale_reviews`. Accepted: the security delta is small (the token is
+  head-bound, so a force-push voids it exactly as `dismiss_stale_reviews` would, and stage 2 demands
+  the same write-level permission a reviewer holds); the **visibility** delta is real and is the price.
+  What buys it is one fewer required setting for the adopter the token exists for: the strict form
+  makes the solo maintainer — the only adopter who cannot fall back to a review — depend on a
+  repository variable being set correctly before 🔴 is satisfiable at all, and a mis-set variable there
+  is a silently unmergeable PR rather than a merely looser one. Revisit if the visibility cost ever
+  bites: the strict form is one `if` branch away.
+- **The review path stays primary — but "primary" is not "free".** The job queries the reviews endpoint
+  first and wins wherever an approval exists. It reaches the token branch whenever that query returns
+  zero, which is the state of **every** 🔴 PR before its first review: a ten-person repository pays the
+  comments query and one permission read per candidate there too, and a non-author write-level human's
+  token satisfies 🔴 on it. An earlier draft of this bullet claimed the opposite, which was false and
+  contradicted the opt-in table above it.
+- **A comment run belongs in its own concurrency group, not merely a non-cancelling one.**
+  `concurrency` is evaluated at RUN level, before any job `if:`, so the body filter that keeps
+  discussion traffic from spending Actions minutes cannot keep a comment run out of the group. Sharing
+  one group breaks in **both** directions and `cancel-in-progress: ${{ github.event_name !=
+  'issue_comment' }}` fixes only one: the comment run stops killing a running evaluation, but it is
+  still **cancellABLE**, because GitHub cancels a group's PENDING run whenever a newer run queues into
+  it. A `/approve` waiting behind a `synchronize` evaluation is therefore dropped by the next ordinary
+  comment on the thread — it never executes, and the status left standing is the evaluation's `needs a
+  non-author human approval…`, with a valid token unread on the PR and re-dropped by every further
+  comment. The group is keyed by comment id for `issue_comment`
+  (`…-${{ github.event_name == 'issue_comment' && github.event.comment.id || 'eval' }}`), so a token
+  run neither cancels nor is cancelled, while `edited`/`deleted` of the SAME comment share its key and
+  the newest state of that comment still wins. What remains is a publication race in the fail-safe
+  direction, recorded in the guide's § Residual: a concurrent evaluation that read the comments before
+  the token was posted can overwrite the token's `success` with a `failure` — blocked, never merged,
+  and cleared by any subsequent event.
+- **Every refusal states which refusal it is, at BOTH stages.** The stage-2 collapse (below) had a
+  stage-1 twin: with the opt-in unset, the PR author's own token is dropped by stage 1, so the
+  candidate list is empty and the gate published the byte-identical "no token was posted" — to the one
+  person who did post one, on the only repository shape the token exists for, with the variable that
+  would lift the exclusion named nowhere on the PR. When the candidate list is empty the job re-runs
+  stage 1 with the opt-in forced on (`token_blocked_by_author_exclusion`) and, if the author's token is
+  what the exclusion dropped, publishes `token posted by the PR author; set
+  PAIR_SOLO_APPROVAL_TOKEN=true if this repo has one human`. The opt-in is also compared
+  case-insensitively with whitespace ignored, because it is typed into a free-text Actions Variables
+  box and a `True` that silently declared nothing was indistinguishable, on the PR, from never having
+  set it.
+- **A stage-2 failure is reported as a stage-2 failure.** The permission read can 403 (the collaborators
+  endpoint is not covered by the job's four `permissions:` entries), 5xx or rate-limit. Folding those
+  onto `none` made the published description byte-identical to "no token was posted", so a maintainer
+  whose token could not be authorized was told to post the token they had just posted, with the cause
+  visible only in a workflow log they had no reason to open. `TOKEN_PERMISSION_UNKNOWN` +
+  `token_denied_desc` give the three states three descriptions.
+- **The tier requirement is untouched.** quality-model §4 and D10 still demand explicit human approval
+  at 🔴. This amendment changes *how the rule is satisfied*, never what it demands.
+
+### What the token guarantees — and what it does not
+
+It is **explicit human confirmation, not independent review**. Naming it correctly is half the decision:
+a token the solo maintainer applies to their own PR is not a second pair of eyes, and a flow that
+implied otherwise would turn the 🔴 tier into ceremony. What it does provide is exactly three
+properties: **deliberateness** (merging a 🔴 change takes a distinct, explicit act, not a reflex), an
+**audit trail** (who confirmed, when, on which head SHA — published in the status description), and
+**invalidation on change** (a force-push moves the head, so the token is void, exactly like a
+review-based approval). Adopters with two humans keep the stronger property; solo adopters get the
+weaker one, knowingly.
+
+### Forgery-resistance is NOT achieved in the default configuration (#218)
+
+Stated in the words the mechanism supports, and no stronger:
+
+- **Shared credentials (today's default): the token is auditable but forgeable by the agent.** When the
+  agent runs `gh` authenticated as the maintainer, the agent and the human are **the same actor on the
+  wire** — every field above resolves identically for both, so no server-side check can separate them,
+  and an agent holding those credentials can post the `/approve <head-sha>` comment itself. The token
+  records *that a deliberate act happened under this identity*, not *that a human performed it*.
+- **Dedicated identity (#218): the same token becomes verifiable — but only in one of #218's possible
+  shapes.** The property is recovered when the agent ships as a **GitHub App or a Bot account**: its
+  comments then carry `.user.type == "Bot"` or an App attribution and are rejected by the very
+  predicate above, at which point "applied by a human, not by the agent" is **verified rather than
+  assumed**. It is **not** recovered when #218 ships the agent as a **machine user account** — a second
+  GitHub user holding a PAT, the cheapest and most common way to give an agent its own identity. There
+  `user.type` is `"User"` and `performed_via_github_app` is `null`, so the predicate **accepts** the
+  agent's `/approve` and the token is exactly as forgeable as it is today; recovering the property in
+  that shape would additionally require an explicit deny-list of the agent's login. #218 is therefore
+  the prerequisite for the security property, but only under that condition — a dedicated identity is
+  not sufficient by itself, the identity must be non-human to the host. Until then, an adopter for whom
+  forgery-resistance is the point must keep a second human account, and the token is the honest
+  fallback for everyone else.
+
+**Grep-verifiable statement, one sentence per identity configuration** (this is the DoD item, kept
+literal so it can be checked with `grep`, not inferred):
+
+- With **shared credentials** (the agent authenticated as the maintainer), the agent **can** apply the
+  token and nothing distinguishes it from the human — the token is auditable, not unforgeable.
+- With a **dedicated identity** (#218) shipped as a **GitHub App or Bot account**, the agent **cannot**
+  apply the token: its comments are host-attributed to a Bot or an App and the predicate rejects them —
+  the human act becomes verifiable.
+- With a **dedicated identity** shipped as a **machine user account** (a second GitHub user with a
+  PAT), the agent **can** still apply the token: `user.type` is `"User"` and there is no App
+  attribution, so the predicate accepts it — the same forgeability as shared credentials, and it would
+  need an explicit deny-list of the agent login to close.
+
+This is the residual the flow declares rather than hides, in the same spirit as `pair-review` being an
+anti-accident and not an authorization control.
+
+### Consequences of the amendment
+
+- 🔴 is usable on a single-account repository, at a **named, weaker** guarantee — the failure mode this
+  amendment exists to prevent is not a bug but a false sense of security.
+- **The token costs one extra API read per candidate actor**, on the fallback path only: the
+  collaborators permission endpoint, called only after stage 1 found a candidate. 🟢/🟡 PRs never reach
+  it — the gate auto-passes below 🔴. A 🔴 PR does reach it whenever the reviews query returns zero,
+  which includes a repository with two humans before its first review (see § Decision, "the review path
+  stays primary — but 'primary' is not 'free'"); the read is bounded by the fallback path, not by the
+  repository's headcount.
+- One more event triggers the job (`issue_comment`), **body-filtered on `created`** so that an ordinary
+  comment CREATED spends no Actions minutes; `edited`/`deleted` stay unfiltered, because a withdrawal no
+  longer contains the command and is precisely the event that must re-evaluate. That exemption has a
+  price, recorded rather than hidden: editing or deleting *any* comment on *any* PR runs the job in
+  full, including the pending-first flip that makes the required context merge-blocking until the
+  evaluation completes — so a typo fix on a 🟢 PR whose evaluation then dies leaves it blocked until the
+  next event. Fail-safe direction, and narrowing it would need per-comment state the payload does not
+  carry. The payload carries `issue` and not `pull_request`; head/base/author are resolved from the API
+  there. Residual, recorded: if that single read fails, the pending-first step aborts and the *previous*
+  status for that same head stands, so a token withdrawn during a dying evaluation stays satisfied until
+  the next event. A tier raise — the case the pending-first property exists for — arrives as a `labeled`
+  event carrying the head SHA and never depends on that read.
+- Verification follows the existing split: the predicate is executed against a committed comments
+  fixture in `scripts/smoke-tests/scenarios/pr-state-flow.sh`; the content invariants (including this
+  amendment's wording) are asserted in `packages/knowledge-hub/src/conformance/pr-state-flow.test.ts`.
+  The live pass is ordering step 4 in `github-implementation.md`, on the adopting repository.
+
+### Adoption Impact (amendment)
+
+- `way-of-working.md`: the single-maintainer line stops reading "a second human account is a
+  prerequisite" and names the token as this repository's available path — **conditional on setting
+  `PAIR_SOLO_APPROVAL_TOKEN=true` here**, since this repository's PR author and its maintainer are the
+  same person.
+- KB: `assets/pr-state.sh` gains the token predicate + audit projection + the server-side permission
+  stage; `pr-states.md` gains the two edge-case rows; `github-implementation.md` gains the token
+  section, the body-filtered `issue_comment` trigger and ordering step 4.
+- Docs site: `concepts/pr-state-flow` states the solo path, its opt-in and its limit.
+- **New repository setting for adopters**: the Actions variable `PAIR_SOLO_APPROVAL_TOKEN`, unset by
+  default. Leaving it unset is the safe configuration and requires no action.

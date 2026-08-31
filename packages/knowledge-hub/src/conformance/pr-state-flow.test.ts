@@ -150,10 +150,13 @@ describe('pr-states.md — the PR state flow model (#234)', () => {
 
   // --- review round 1 on PR #390 ---
 
-  it('states plainly that a 🔴 merge needs a SECOND human account (the author cannot approve)', () => {
+  // Updated by #398: the review path still needs a second human account — what changed
+  // is that a solo repository now has a *named, weaker* alternative instead of nothing.
+  it('states plainly that the REVIEW path needs a SECOND human account (the author cannot approve)', () => {
     expect(GUIDELINE).toMatch(/second human/i)
-    expect(GUIDELINE).not.toMatch(/what a solo maintainer satisfies deliberately/i)
     expect(GUIDELINE).toMatch(/solo[\s\S]{0,400}(cannot|impossible|no 🔴)/i)
+    // and never sells the solo fallback as the same thing
+    expect(GUIDELINE).not.toMatch(/token[\s\S]{0,60}(is|counts as|means) independent review/i)
   })
 
   it('maps 🟡’s "reviewer approval" onto the pair review explicitly (no two readings)', () => {
@@ -395,7 +398,11 @@ describe('pair-explicit-approval runs from a TRUSTED ref (round 2)', () => {
   })
 
   it('pins the checkout to the BASE sha, never to the PR head, and disables credentials', () => {
-    expect(GITHUB_GUIDE).toMatch(/ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/)
+    // #398 added an `issue_comment` trigger, whose payload carries no `pull_request`
+    // object — hence the API-resolved BASE fallback. Still the base, never the head.
+    expect(GITHUB_GUIDE).toMatch(
+      /ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha(\s*\|\|\s*steps\.pr\.outputs\.base)?\s*\}\}/,
+    )
     expect(GITHUB_GUIDE).not.toMatch(
       /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)\s*\}\}/,
     )
@@ -587,7 +594,7 @@ describe('BOTH merge paths carry the synthesis precondition (round 3)', () => {
   })
 })
 
-describe('the deferred solo-maintainer token is citable everywhere it is deferred (round 3)', () => {
+describe('the solo-maintainer token is citable everywhere it is referenced (round 3)', () => {
   it('cites #398 in the model, the ADR, the docs page and this repo’s way-of-working', () => {
     expect(GUIDELINE).toContain('#398')
     expect(ADR_018).toContain('#398')
@@ -597,6 +604,342 @@ describe('the deferred solo-maintainer token is citable everywhere it is deferre
 
   it('drops the "does not exist in this flow" phrasing in favour of the tracked issue', () => {
     expect(GUIDELINE).not.toMatch(/it does not exist in this flow/)
+  })
+})
+
+// --- story #398: the solo-maintainer explicit-approval token -------------------
+// A repository with one human account cannot produce the non-author approving review
+// the 🔴 rule asks for, so the rule was unusable there. The token is an ALTERNATIVE
+// satisfaction path — deliberate, auditable, head-bound — and explicitly NOT
+// independent review. The authorization-relevant part is that the actor is resolved
+// from host-asserted fields, never from the body the applier writes.
+
+/**
+ * The token PREDICATE ITSELF — the single `printf` line inside
+ * `human_token_approval_select`, not the file that contains it.
+ *
+ * Scoping matters (review round 1): asserted against the whole evaluator, a check
+ * like `/\.user\.type=="User"/` is satisfied by the REVIEW predicate this story does
+ * not touch, and `/[Bb]ot/` by the prose comment above it — so deleting the bot
+ * exclusion from the token predicate left both AC-named tests green.
+ *
+ * Extraction failure is asserted INSIDE a test (round 3), never here: an `expect()`
+ * at module scope turns a reformatted `printf` into a vitest COLLECTION error that
+ * takes every other assertion in this file down with it, reported as an unhandled
+ * assertion rather than as the named guard below.
+ */
+const TOKEN_PREDICATE = ((): string => {
+  const m = EVALUATOR.match(/human_token_approval_select\(\)\s*\{\s*\n\s*printf\s+'%s'\s+'([^']*)'/)
+  return m?.[1] ?? ''
+})()
+
+describe('the token predicate ships in the evaluator (#398)', () => {
+  it('ships as ONE printf-ed predicate — every assertion below reads that line', () => {
+    expect(
+      TOKEN_PREDICATE,
+      'human_token_approval_select must ship as one printf-ed predicate',
+    ).not.toBe('')
+  })
+
+  it('exposes the token entry points next to the review predicate it does not replace', () => {
+    for (const fn of [
+      'human_token_approval_jq_filter',
+      'human_token_approval_login_jq_filter',
+      'human_token_approval_actor_jq_filter',
+      'token_permission_sufficient',
+      'token_approver_login',
+      'solo_approval_token_body',
+    ]) {
+      expect(EVALUATOR).toContain(fn)
+    }
+    // AC4 regression: the review predicate is untouched — still APPROVED, on the
+    // current head, by a human who is not the author.
+    expect(EVALUATOR).toContain(
+      '.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR',
+    )
+  })
+
+  it('AC2 — resolves the actor from host-asserted fields, never from the applier’s body', () => {
+    expect(TOKEN_PREDICATE).toContain('.user.type=="User"')
+    expect(TOKEN_PREDICATE).toContain('performed_via_github_app')
+    expect(TOKEN_PREDICATE).toContain('author_association')
+    // the body is read for the COMMAND + the SHA only, never for an actor field
+    expect(TOKEN_PREDICATE).not.toMatch(/\.body[\s\S]{0,120}(login|actor|user\.type)/)
+  })
+
+  it('AC2/AC3 — the token is bound to the current head SHA and never satisfiable unbound', () => {
+    expect(TOKEN_PREDICATE).toContain('env.HEAD_SHA')
+    // HEAD_SHA is concatenated INTO a regex, so a length check is not enough: 40
+    // metacharacters would make the predicate match any `/approve <40 chars>`.
+    expect(TOKEN_PREDICATE).toContain('test("^[0-9a-f]{40}$")')
+    expect(TOKEN_PREDICATE).not.toMatch(/\(env\.HEAD_SHA\|length\)==40/)
+  })
+
+  it('AC5 — bots and app-attributed comments are excluded by construction', () => {
+    expect(TOKEN_PREDICATE).toContain('.user.type=="User"')
+    expect(TOKEN_PREDICATE).toContain('(.performed_via_github_app|not)')
+  })
+
+  it('excludes the PR author unless the repository declared itself single-human', () => {
+    expect(TOKEN_PREDICATE).toContain('env.SOLO_APPROVAL_TOKEN')
+    expect(TOKEN_PREDICATE).toContain('.user.login != env.PR_AUTHOR')
+    // Round 3: the opt-in is typed into a free-text Actions Variables box, so a
+    // case-SENSITIVE `== "true"` made `True` declare nothing while looking set.
+    expect(TOKEN_PREDICATE).toContain('ascii_downcase')
+    expect(TOKEN_PREDICATE).not.toContain('env.SOLO_APPROVAL_TOKEN=="true"')
+  })
+
+  it('names the author exclusion as the cause when it is what dropped the token', () => {
+    // Round 3, the stage-1 twin of the stage-2 collapse: with the opt-in unset the
+    // author's own token never reaches stage 2, so the gate published the identical
+    // "no token was posted" line to the one person who had posted one.
+    expect(EVALUATOR).toContain('token_blocked_by_author_exclusion')
+    expect(EVALUATOR).toMatch(/PAIR_SOLO_APPROVAL_TOKEN=true if this repo has one human/)
+    expect(GITHUB_GUIDE).toContain('token_blocked_by_author_exclusion')
+  })
+
+  it('anchors the command to its own line, so a quote-reply never approves', () => {
+    // `(^|\s)…` matched the newline before `> ` in GitHub's own Quote reply output.
+    expect(TOKEN_PREDICATE).toContain(String.raw`test("(^|\\n)/approve`)
+    // no leading-whitespace tolerance either: an indented code block must not approve
+    expect(TOKEN_PREDICATE).toContain(String.raw`(\\n|$)")`)
+    expect(TOKEN_PREDICATE).not.toContain(String.raw`(^|\\s)/approve`)
+  })
+
+  it('strips FENCED regions and HTML comments before the anchor', () => {
+    // Round 2: the line anchor rejects `> `, 4-space indents and inline backticks,
+    // and accepts a ```-fenced command — the shape a maintainer produces to SHOW the
+    // token, including in this repo's own guide. Stripping happens before `test(…)`.
+    // Round 3: the fence split must be LINE-ANCHORED (a bare `split("```")` read an
+    // inline ```gh``` span as a fence) and rejoin with `""` (joining with `"\n"`
+    // manufactured the line boundary that then made a mid-line mention count); HTML
+    // comments render as nothing at all and must go too.
+    const stripAt = TOKEN_PREDICATE.indexOf('```')
+    const testAt = TOKEN_PREDICATE.indexOf('test("(^|\\\\n)/approve')
+    expect(stripAt, 'the predicate must strip backtick fences').toBeGreaterThan(-1)
+    expect(stripAt).toBeLessThan(testAt)
+    expect(TOKEN_PREDICATE, 'line-anchored fence split').toContain(
+      String.raw`split("(^|\\n) {0,3}` + '```' + String.raw`[^\\n]*";"")`,
+    )
+    expect(TOKEN_PREDICATE, 'and tilde fences too').toContain(
+      String.raw`split("(^|\\n) {0,3}~~~[^\\n]*";"")`,
+    )
+    expect(TOKEN_PREDICATE, 'HTML comments are invisible when rendered').toContain(
+      String.raw`gsub("<!--(.|\\n)*?-->";"")`,
+    )
+    // a bare parity split, or a "\n" join, is the defect — never reintroduce either
+    expect(TOKEN_PREDICATE).not.toContain('split("```")')
+    expect(TOKEN_PREDICATE).not.toContain(String.raw`join("\n")`)
+    // the ODD segments (inside the fences) are the ones dropped
+    expect(TOKEN_PREDICATE).toContain('map(select(.key % 2 == 0) | .value)')
+  })
+
+  it('makes the server-side permission read the authorization, not the association', () => {
+    // `MEMBER` is "in the owning org", not "has push access here" — so the
+    // association may only ever be a pre-filter.
+    expect(EVALUATOR).toMatch(/admin \| maintain \| write\) return 0/)
+    expect(EVALUATOR).toMatch(/collaborators\/\{login\}\/permission/)
+    expect(EVALUATOR).toMatch(/pre-filter, not the authorization/i)
+  })
+
+  it('bounds the audit line under the 140-char status-description cap', () => {
+    // The full 40-char head put a 24+ character login over the API cap.
+    expect(EVALUATOR).toContain('env.HEAD_SHA[0:12]')
+    expect(EVALUATOR).toMatch(/140/)
+  })
+
+  it('states the guarantee in the settled words, inside the executable projection', () => {
+    expect(EVALUATOR).toMatch(/confirmation, not independent review/)
+  })
+
+  it('builds every projection from ONE predicate text (count + audit line cannot drift)', () => {
+    expect(EVALUATOR).toMatch(/human_token_approval_select/)
+    for (const proj of [
+      'human_token_approval_jq_filter',
+      'human_token_approval_login_jq_filter',
+      'human_token_approval_actor_jq_filter',
+    ]) {
+      const body = EVALUATOR.slice(EVALUATOR.indexOf(`${proj}() {`))
+      expect(body.slice(0, 300), `${proj} must be built from the shared select`).toContain(
+        '$(human_token_approval_select)',
+      )
+    }
+  })
+})
+
+describe('the host job wires the token as the ALTERNATIVE path (#398)', () => {
+  it('AC1 — the job succeeds on either a human non-author review OR an accepted token', () => {
+    expect(GITHUB_GUIDE).toMatch(/human_token_approval_jq_filter/)
+    expect(GITHUB_GUIDE).toMatch(/issues\/\$PR\/comments/)
+  })
+
+  it('AC4 — the review path is queried first; the token is only the fallback', () => {
+    const reviewAt = GITHUB_GUIDE.indexOf('pulls/$PR/reviews')
+    const tokenAt = GITHUB_GUIDE.indexOf('issues/$PR/comments')
+    expect(reviewAt).toBeGreaterThan(-1)
+    expect(tokenAt).toBeGreaterThan(reviewAt)
+    expect(GITHUB_GUIDE).toMatch(/(preferred|primary|only if|fallback)[\s\S]{0,400}token/i)
+  })
+
+  it('paginates the comments query — a token on page 2 is not "no token"', () => {
+    expect(GITHUB_GUIDE).toMatch(/--paginate[^\n]*issues\/\$PR\/comments/)
+  })
+
+  it('keeps the authorization properties: trusted ref, head-pinned status, producer pin', () => {
+    expect(GITHUB_GUIDE).toMatch(
+      /ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha(\s*\|\|\s*steps\.pr\.outputs\.base)?\s*\}\}/,
+    )
+    // the fallback is the resolved BASE of the same PR — never the head, on any trigger
+    expect(GITHUB_GUIDE).not.toMatch(/ref:[^\n]*steps\.pr\.outputs\.head/)
+    expect(GITHUB_GUIDE).toMatch(/"context":\s*"pair-explicit-approval",\s*"app_id"/)
+    expect(GITHUB_GUIDE).toMatch(/statuses\/\$HEAD_SHA[\s\S]{0,400}pair-explicit-approval/)
+  })
+
+  it('re-evaluates on the comment event, otherwise the token never reaches the check', () => {
+    expect(GITHUB_GUIDE).toMatch(/issue_comment:/)
+  })
+
+  it('authorizes the actor server-side — the association is only a pre-filter', () => {
+    expect(GITHUB_GUIDE).toMatch(/collaborators\/\$1\/permission/)
+    expect(GITHUB_GUIDE).toMatch(/token_approver_login/)
+    expect(GITHUB_GUIDE).toMatch(/human_token_approval_login_jq_filter/)
+    // the audit line is drawn only for the actor stage 2 authorized
+    expect(GITHUB_GUIDE).toMatch(/grep "\^\$APPROVER approved head "/)
+  })
+
+  it('threads the single-human opt-in, so the author exclusion is live by default', () => {
+    expect(GITHUB_GUIDE).toMatch(/SOLO_APPROVAL_TOKEN: \$\{\{ vars\.PAIR_SOLO_APPROVAL_TOKEN \}\}/)
+    expect(GITHUB_GUIDE).toMatch(/PAIR_SOLO_APPROVAL_TOKEN[\s\S]{0,600}author/i)
+  })
+
+  it('body-filters the created comment, but never the withdrawal events', () => {
+    expect(GITHUB_GUIDE).toMatch(/contains\(github\.event\.comment\.body, '\/approve'\)/)
+    // an edited-away or deleted token no longer CONTAINS the command and must still
+    // re-evaluate, so only `created` may be filtered
+    expect(GITHUB_GUIDE).toMatch(/github\.event\.action != 'created' \|\|/)
+  })
+
+  it('tells the adopter exactly what to post, and what it does NOT mean', () => {
+    expect(GITHUB_GUIDE).toMatch(/\/approve <head-sha>|\/approve \$HEAD_SHA/)
+    expect(GITHUB_GUIDE).toMatch(/confirmation, not independent review/)
+  })
+
+  it('keys a comment run into its OWN concurrency group (round 3)', () => {
+    // `concurrency` is evaluated at RUN level, before any job condition, and GitHub
+    // cancels a group's PENDING run whenever a newer run queues into it. Making comment
+    // runs merely non-cancelling left them cancellABLE: an ordinary comment posted after
+    // a `/approve` dropped the token run entirely — it never executed, and the standing
+    // status was the earlier evaluation's, with a valid token unread on the PR.
+    expect(GITHUB_GUIDE).toMatch(
+      /group: pair-explicit-approval-[^\n]*github\.event_name == 'issue_comment' && github\.event\.comment\.id \|\| 'eval'/,
+    )
+    // the shared-group forms are BOTH defects — neither may return
+    expect(GITHUB_GUIDE).not.toMatch(
+      /cancel-in-progress: \$\{\{ github\.event_name != 'issue_comment' \}\}/,
+    )
+    expect(GITHUB_GUIDE).not.toMatch(
+      /group: pair-explicit-approval-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \}\}\n/,
+    )
+    // and the bullet no longer claims an ordinary comment cannot cancel anything
+    expect(GITHUB_GUIDE).not.toMatch(/neither spends Actions minutes nor cancels/)
+  })
+
+  it('prices the ordinary comment per ACTION — edited/deleted run the job in full', () => {
+    // The `if:` body-filters only `created`, so the heading claim "an ordinary comment
+    // spends no Actions minutes" was broader than the mechanism: an edit or a delete of
+    // ANY comment on ANY PR runs the job, pending-first flip included, which is a
+    // merge-blocking window opened by a typo fix.
+    expect(GITHUB_GUIDE).toMatch(/ordinary comment _created_ spends no Actions minutes/)
+    expect(GITHUB_GUIDE).not.toMatch(/\*\*An ordinary comment spends no Actions minutes\.\*\*/)
+    expect(GITHUB_GUIDE).toMatch(/_edited_ or _deleted_ one runs the job in full/)
+    expect(GITHUB_GUIDE).toMatch(/pending-first step flips[\s\S]{0,120}merge-blocking/i)
+  })
+
+  it('reports a permission-lookup failure as itself, not as "no token was posted"', () => {
+    expect(GITHUB_GUIDE).toMatch(/TOKEN_PERMISSION_UNKNOWN/)
+    expect(GITHUB_GUIDE).toMatch(/HTTP 404/)
+    expect(GITHUB_GUIDE).toMatch(/token_denied_desc/)
+    // the collaborators endpoint is not covered by the job's four permissions
+    expect(GITHUB_GUIDE).toMatch(/administration: read/)
+    expect(EVALUATOR).toMatch(/TOKEN_PERMISSION_UNKNOWN/)
+    expect(EVALUATOR).toMatch(/token_denied_desc/)
+  })
+
+  it('stops claiming the token branch is free for a multi-human repository', () => {
+    // Round 2 removed two PHRASINGS of the retracted claim; round 3 found it alive in
+    // ADR § Consequences, reworded ("a two-human repository (which never leaves the
+    // review path) … pay nothing") five bullets below its own correction. Assert the
+    // BEHAVIOUR the claim asserts, not the words the last draft happened to use.
+    for (const doc of [GITHUB_GUIDE, ADR_018]) {
+      expect(doc).not.toMatch(/pays no (extra|additional) API call/i)
+      expect(doc).not.toMatch(/unchanged, byte for byte/i)
+      expect(doc).not.toMatch(/never leaves the review path/i)
+      expect(doc).not.toMatch(/two-human[^.]{0,90}(pay|cost)(s|ing)? nothing/i)
+    }
+  })
+})
+
+describe('the docs claim exactly what the token provides (#398)', () => {
+  it('AC8 — pr-states.md names the three properties and the one it does not have', () => {
+    expect(GUIDELINE).toMatch(/deliberate/i)
+    expect(GUIDELINE).toMatch(/audit/i)
+    expect(GUIDELINE).toMatch(/confirmation, not independent review/)
+    expect(GUIDELINE).toMatch(/\/approve/)
+  })
+
+  it('AC6 — the ADR records the forgery-resistance limit and the #218 dependency', () => {
+    expect(ADR_018).toMatch(/confirmation, not independent review/)
+    expect(ADR_018).toMatch(/#218/)
+    expect(ADR_018).toMatch(/forgery-resistance/i)
+    // the grep-verifiable per-identity statement the DoD asks for, literally
+    expect(ADR_018).toMatch(
+      /shared credentials[\s\S]{0,600}dedicated identity|dedicated identity[\s\S]{0,600}shared credentials/i,
+    )
+  })
+
+  it('AC6 — and states WHICH shape of #218 recovers it (a machine user account does not)', () => {
+    // The claim only holds for an App/Bot identity: a machine USER account with a
+    // PAT is `user.type == "User"` with no App attribution, so the predicate ACCEPTS
+    // the agent and nothing is recovered.
+    expect(ADR_018).toMatch(/machine user account/i)
+    expect(ADR_018).toMatch(/GitHub App or Bot account/i)
+    expect(ADR_018).toMatch(/deny-list/i)
+    expect(DOCS_PAGE).toMatch(/machine \*?user\*? account/i)
+  })
+
+  it('records the author exclusion and its single-human opt-in as the decision it is', () => {
+    for (const doc of [ADR_018, GITHUB_GUIDE, GUIDELINE, DOCS_PAGE]) {
+      expect(doc).toMatch(/PAIR_SOLO_APPROVAL_TOKEN/)
+    }
+    expect(ADR_018).toMatch(/author exclusion/i)
+    expect(GITHUB_GUIDE).toMatch(/pre-filter/i)
+    expect(GUIDELINE).toMatch(/pre-filter/i)
+  })
+
+  it('corrects the "write-level association" claim on every surface that made it', () => {
+    for (const doc of [EVALUATOR, GITHUB_GUIDE, GUIDELINE, ADR_018, DOCS_PAGE, ROOT_WOW]) {
+      expect(doc).not.toMatch(/write-level association/i)
+      expect(doc).not.toMatch(/write-level `?author_association`?/i)
+    }
+    for (const doc of [GITHUB_GUIDE, GUIDELINE, DOCS_PAGE, ROOT_WOW]) {
+      expect(doc).toMatch(/collaborators API|collaborators\/|admin.*maintain.*write/i)
+    }
+  })
+
+  it('AC7 — the tier REQUIREMENT is untouched: quality-model §4 and D10 still demand it', () => {
+    expect(QUALITY_MODEL).toMatch(/explicit approval required/i)
+    // the token changes how the rule is satisfied, never what it demands
+    expect(ADR_018).toMatch(/satisfaction path|how the rule is satisfied/i)
+    expect(ADR_018).not.toMatch(/🔴 no longer requires|drops the explicit-approval requirement/i)
+  })
+
+  it('AC8 — the deferral wording is gone everywhere it used to point at #398', () => {
+    for (const doc of [GUIDELINE, ADR_018, ROOT_WOW]) {
+      expect(doc).toContain('#398')
+    }
+    expect(GUIDELINE).not.toMatch(/deliberately not part of this flow/)
+    expect(ADR_018).not.toMatch(/intentionally absent here rather than\s*\n?\s*half-specified/)
+    expect(DOCS_PAGE).toMatch(/\/approve/)
   })
 })
 

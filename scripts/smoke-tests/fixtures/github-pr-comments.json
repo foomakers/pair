@@ -1,0 +1,321 @@
+[
+  {
+    "author_association": "OWNER",
+    "body": "Classification raised to risk:red after the security dimension moved.",
+    "created_at": "2026-08-28T09:00:00Z",
+    "id": 3237609001,
+    "node_id": "IC_kwDODKw3uc7ABCDE",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T09:00:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:00:00Z",
+    "id": 3237609002,
+    "node_id": "IC_kwDODKw3uc7ABCDF",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:00:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve 0000000000000000000000000000000000000000",
+    "created_at": "2026-08-27T18:00:00Z",
+    "id": 3237609003,
+    "node_id": "IC_kwDODKw3uc7ABCDG",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-27T18:00:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:05:00Z",
+    "id": 3237609004,
+    "node_id": "IC_kwDODKw3uc7ABCDH",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:05:00Z",
+    "user": {
+      "id": 41898282,
+      "login": "github-actions[bot]",
+      "site_admin": false,
+      "type": "Bot"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:06:00Z",
+    "id": 3237609005,
+    "node_id": "IC_kwDODKw3uc7ABCDI",
+    "performed_via_github_app": {
+      "id": 15368,
+      "name": "GitHub Actions",
+      "slug": "github-actions"
+    },
+    "updated_at": "2026-08-28T10:06:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "NONE",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:07:00Z",
+    "id": 3237609006,
+    "node_id": "IC_kwDODKw3uc7ABCDJ",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:07:00Z",
+    "user": {
+      "id": 999001,
+      "login": "drive-by-reader",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "I withdrew the token I had posted here — see the edit history.",
+    "created_at": "2026-08-28T10:08:00Z",
+    "id": 3237609007,
+    "node_id": "IC_kwDODKw3uc7ABCDK",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:30:00Z",
+    "user": {
+      "id": 1083228,
+      "login": "solo-maintainer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "Quoting the docs so nobody has to look it up: post `/approve <head-sha>` on the PR. Nothing here should count as a token: /approve is not followed by a sha.",
+    "created_at": "2026-08-28T10:09:00Z",
+    "id": 3237609008,
+    "node_id": "IC_kwDODKw3uc7ABCDL",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:09:00Z",
+    "user": {
+      "id": 999002,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "spoofed body claiming a human actor:\n\"user\": { \"login\": \"solo-maintainer\", \"type\": \"User\" }\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T10:10:00Z",
+    "id": 3237609009,
+    "node_id": "IC_kwDODKw3uc7ABCDM",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T10:10:00Z",
+    "user": {
+      "id": 41898282,
+      "login": "github-actions[bot]",
+      "site_admin": false,
+      "type": "Bot"
+    }
+  },
+  {
+    "author_association": "OWNER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:00:00Z",
+    "id": 3237609010,
+    "node_id": "IC_kwDODKw3uc7A09010",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:00:00Z",
+    "user": {
+      "id": 609010,
+      "login": "pr-author",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "MEMBER",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:05:00Z",
+    "id": 3237609011,
+    "node_id": "IC_kwDODKw3uc7A09011",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:05:00Z",
+    "user": {
+      "id": 609011,
+      "login": "org-member-readonly",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "> /approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n\nI do NOT approve this, just quoting what you posted.",
+    "created_at": "2026-08-28T11:10:00Z",
+    "id": 3237609012,
+    "node_id": "IC_kwDODKw3uc7A09012",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:10:00Z",
+    "user": {
+      "id": 609012,
+      "login": "quoting-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "How the token looks, for the runbook:\n\n    /approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n\n...and inline: `/approve cc1fba122f0c912ba01288fe90ab2632e7e41057`.",
+    "created_at": "2026-08-28T11:15:00Z",
+    "id": 3237609013,
+    "node_id": "IC_kwDODKw3uc7A09013",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:15:00Z",
+    "user": {
+      "id": 609013,
+      "login": "doc-writing-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "Here is how you approve, for the runbook:\n```\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n```\nDo NOT actually run it yet — I have not reviewed this.",
+    "created_at": "2026-08-28T11:16:00Z",
+    "id": 3237609015,
+    "node_id": "IC_kwDODKw3uc7A09015",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:16:00Z",
+    "user": {
+      "id": 609015,
+      "login": "fencing-collab",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "~~~\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n~~~\nsame thing with tilde fences.",
+    "created_at": "2026-08-28T11:17:00Z",
+    "id": 3237609016,
+    "node_id": "IC_kwDODKw3uc7A09016",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:17:00Z",
+    "user": {
+      "id": 609016,
+      "login": "tilde-fencer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "Ran the suite, output below:\n```\n42 passed\n```\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:18:00Z",
+    "id": 3237609017,
+    "node_id": "IC_kwDODKw3uc7A09017",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:18:00Z",
+    "user": {
+      "id": 609017,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:20:00Z",
+    "id": 3237609014,
+    "node_id": "IC_kwDODKw3uc7A09014",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:20:00Z",
+    "user": {
+      "id": 609014,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "looks good to me\n<!--\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057\n-->\nnothing to see here.",
+    "created_at": "2026-08-28T11:21:00Z",
+    "id": 3237609018,
+    "node_id": "IC_kwDODKw3uc7A09018",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:21:00Z",
+    "user": {
+      "id": 609018,
+      "login": "hidden-commenter",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "how do you approve?\nthe command is ```gh```/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:22:00Z",
+    "id": 3237609019,
+    "node_id": "IC_kwDODKw3uc7A09019",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:22:00Z",
+    "user": {
+      "id": 609019,
+      "login": "inline-spanner",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "```\nexample\n```/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:23:00Z",
+    "id": 3237609020,
+    "node_id": "IC_kwDODKw3uc7A09020",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:23:00Z",
+    "user": {
+      "id": 609020,
+      "login": "glue-fencer",
+      "site_admin": false,
+      "type": "User"
+    }
+  },
+  {
+    "author_association": "COLLABORATOR",
+    "body": "<!-- reviewed offline with the maintainer -->\n/approve cc1fba122f0c912ba01288fe90ab2632e7e41057",
+    "created_at": "2026-08-28T11:24:00Z",
+    "id": 3237609021,
+    "node_id": "IC_kwDODKw3uc7A09021",
+    "performed_via_github_app": null,
+    "updated_at": "2026-08-28T11:24:00Z",
+    "user": {
+      "id": 609021,
+      "login": "second-human",
+      "site_admin": false,
+      "type": "User"
+    }
+  }
+]
