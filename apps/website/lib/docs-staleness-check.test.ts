@@ -308,6 +308,65 @@ describe('checkDocsCommands', () => {
     )
   })
 
+  // US-449 round 7: `--package`/`-p` is the one runner flag whose ARGUMENT is a package
+  // NAME, and the flag run consumed the flag alone. So the canonical npx idiom for a
+  // package whose bin differs from its package name —
+  // `npx --package @foomakers/pair-cli pair-cli install`, a CORRECT line — had `--package `
+  // eaten as a flag, `@foomakers/` read as the scope, the first `pair-cli` read as the
+  // binary and the REAL binary token read as the command: `"pair-cli pair-cli" … is not a
+  // command`, a CI red on a correct page with no edit that clears it short of deleting a
+  // correct instruction. Same for `-p` and, since the runner list widened, for
+  // `pnpm dlx --package …`.
+  it('consumes `--package`/`-p` together with its package argument', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --package @foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+    expect(
+      checkDocsCommands(doc('```bash\nnpx -p @foomakers/pair-cli pair-cli install\n```'), commands),
+    ).toEqual([])
+    expect(
+      checkDocsCommands(
+        doc('```bash\npnpm dlx --package @foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+  })
+
+  // The other direction of the same flag: consuming the argument must not launder the
+  // WRONG binary that follows it.
+  it('still flags a bare `pair` after a consumed `--package` argument', () => {
+    expect(
+      checkDocsCommands(doc('```bash\nnpx -p @foomakers/pair-cli pair install\n```'), commands),
+    ).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  // The `--flag=value` spelling had no form at all in the flag run, so real drift shipped
+  // green behind a LISTED runner: `npx --package=@foomakers/pair-cli pair install`
+  // returned [].
+  it('accepts the `--flag=value` spelling of a runner flag', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --package=@foomakers/pair-cli pair install\n```'),
+        commands,
+      ),
+    ).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+    expect(
+      checkDocsCommands(
+        doc('```bash\npnpm dlx --package=@foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+  })
+
   // Why the BARE package-manager form takes no flag run, while `npx`/`pnpm dlx` do:
   // `pnpm --filter <pkg>` puts a PACKAGE NAME in flag-argument position, and this
   // repo's package is literally called `pair-cli`. Consuming `--filter ` as a flag would

@@ -480,11 +480,26 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * `pnpm dlx` / `pnpm exec` / `yarn dlx` / `npx` consume a flag run; a BARE package manager
  * (`pnpm <bin> <cmd>`) does not, and that asymmetry is load-bearing. `pnpm --filter <pkg>`
  * puts a PACKAGE NAME in flag-argument position, and this repo's package is literally
- * called `pair-cli` — consuming the `--filter` flag together with its argument would read the filter's argument as
+ * called `pair-cli` — reading `--filter` as a lone flag would read the filter's argument as
  * the binary and the script name as its command, so `pnpm --filter @pair/pair-cli build`
  * would be reported as the nonexistent command `build` on three pages that are correct as
- * written. Both halves are pinned in the suite. Add a runner here when the docs start
- * publishing one, and give it the flag run only if its flags cannot take a package argument.
+ * written. Both halves are pinned in the suite.
+ *
+ * A flag whose ARGUMENT is a package name is therefore consumed WITH its argument, and the
+ * runners above have exactly one: `--package`/`-p` (`RUNNER_FLAG`). Reading it as a lone
+ * flag broke both directions of the canonical npx idiom for a package whose bin differs
+ * from its name. `npx --package @foomakers/pair-cli pair-cli install` — correct as written —
+ * had `--package ` eaten as a flag, `@foomakers/` read as the scope, the first `pair-cli`
+ * read as the binary and the REAL binary token read as its command: the gate turned red on
+ * a correct page with no edit that clears it short of deleting a correct instruction. In
+ * the other direction `npx --package=@foomakers/pair-cli pair install` returned `[]`, since
+ * the flag run had no `=value` form — real drift, green, behind a LISTED runner. Both
+ * spellings and both directions are pinned. Add a runner here when the docs start
+ * publishing one, and add any flag of it that takes a package/name argument to
+ * `RUNNER_FLAG`'s first alternative — a runner whose package-argument flag is NOT listed
+ * there must not be given the flag run at all (which is what keeps bare `pnpm` out: its
+ * `--filter` is exactly such a flag and is deliberately unlisted, so the whole flag run is
+ * withheld rather than widened around it).
  *
  * The span rule TOKENIZES real code spans (`` `…` `` pairs, `CODE_SPAN`) and anchors the
  * prefix at the start of the span's CONTENT — it does not scan for the prefix "after a
@@ -507,10 +522,17 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * loosening the span shape.
  */
 const PUBLISHED_BIN = 'pair-cli'
+/**
+ * ONE flag of a runner's flag run. `--package`/`-p` is listed FIRST because its argument is
+ * a package NAME and must be consumed with it (see above); every other flag stands alone,
+ * in either the `--flag value` or the `--flag=value` spelling.
+ */
+const RUNNER_FLAG = String.raw`(?:(?:--package|-p)[ \t]+\S+|-{1,2}[\w-]+(?:=\S*)?)[ \t]+`
 /** `npx`/`pnpm dlx`/`pnpm exec`/`yarn dlx` take a flag run; a bare `pnpm` must not (see above). */
 const RUNNER =
-  String.raw`(?:(?:npx|pnpm[ \t]+dlx|pnpm[ \t]+exec|yarn[ \t]+dlx)[ \t]+(?:-{1,2}[\w-]+[ \t]+)*` +
-  String.raw`|pnpm[ \t]+)?`
+  String.raw`(?:(?:npx|pnpm[ \t]+dlx|pnpm[ \t]+exec|yarn[ \t]+dlx)[ \t]+(?:` +
+  RUNNER_FLAG +
+  String.raw`)*|pnpm[ \t]+)?`
 const INVOCATION_PREFIX =
   String.raw`(?:\$[ \t]*)?` + RUNNER + String.raw`(?:@[\w.-]+/)?(pair-cli|pair)(?:@[\w.-]+)? `
 /** One inline code span's CONTENT — delimiters paired, never crossing a line. */
