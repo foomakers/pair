@@ -10,6 +10,14 @@ import type { ResolvedInvocation } from './resolve-skill'
  * to catch.
  */
 export interface SkillArguments {
+  /**
+   * The SCOPE of the run — the epic, story or card the work is bounded to.
+   *
+   * A slot, not a spelling: `pair-loop` and `pair-next` name it `--root`, `pair-process-refine-story`
+   * and `pair-process-plan-tasks` name it `--story`, and `SKILL_PARAMETERS` is what maps the slot
+   * onto each skill's own word for it. The driver never invents the name (D18) — it renders the one
+   * the skill's `## Arguments` table declares, or the run does not scope at all.
+   */
   root?: string
   filter?: string
   predicate?: string
@@ -28,16 +36,84 @@ export interface SkillArguments {
 type SkillParameterMap = Readonly<Partial<Record<keyof SkillArguments, string>>>
 
 /**
- * Which of those parameters each skill actually declares, as DATA.
+ * Which of those parameters each skill actually declares, and under WHICH NAME — as DATA.
  *
  * `pair-loop` declares `--root`, `--predicate`, `--iteration` (its SKILL.md Arguments table)
  * and reads the eligibility filter from `tech/automation.md` itself — so the driver must NOT
  * pass it a `--filter` it never declared. `pair-next` declares `--root` and `--filter`.
+ *
+ * The two `pair-process-*` rows spell the scope `$story`, never `--root`. Rendering `--root <card>`
+ * at them is not a harmless extra argument: both skills' Step 0 reads "if `$story` is not provided,
+ * select the highest-priority story from the backlog", so an unrecognised scope makes the agent work
+ * a DIFFERENT card. The row is what keeps a run and its record talking about the same card;
+ * `invocation.test.ts` pins every name here against the skills' own `## Arguments` tables in the
+ * dataset corpus. Only `pair-process-plan-tasks` is MAPPABLE (see `DISPATCHABLE_WORKFLOWS`) —
+ * `pair-process-refine-story` keeps its row for the hand-driven `--skill` run, where someone is
+ * there to answer its human-judgment gates.
  */
 export const SKILL_PARAMETERS: Readonly<Record<string, SkillParameterMap>> = Object.freeze({
   'pair-loop': { root: '--root', predicate: '--predicate', iteration: '--iteration' },
   'pair-next': { root: '--root', filter: '--filter' },
+  'pair-process-refine-story': { root: '--story' },
+  'pair-process-plan-tasks': { root: '--story' },
 })
+
+/**
+ * How this skill names the run's scope, or `undefined` when the driver has no declaration for it.
+ *
+ * Deliberately does NOT fall back to `UNKNOWN_SKILL_PARAMETERS`: the fallback exists so an operator
+ * driving an arbitrary skill by hand still gets a perimeter, and "probably `--root`" is an
+ * acceptable guess when a human is watching the invocation. On a tag-driven dispatch nobody is, and
+ * the card the trigger fired on is the only thing the run is about — so `dispatch.ts` HALTs on a
+ * mapped workflow this returns `undefined` for, rather than guessing on an unattended run.
+ */
+export function scopeParameterFor(skill: string): string | undefined {
+  return SKILL_PARAMETERS[skill]?.root
+}
+
+/**
+ * The workflows a `## Workflows` mapping may name — the KB catalog, as DATA.
+ *
+ * A SEPARATE declaration from `SKILL_PARAMETERS`, not a subset read off it, because the two answer
+ * different questions. The argument table answers "how does this skill spell its scope", and it
+ * carries a `pair-next` row because `--skill pair-next --root 212` is a legitimate hand-driven run.
+ * This set answers "may a tag route a card here", and `pair-next` is not an answer to it: a card
+ * dispatched to it takes the card's exclusive lock, writes `event=start … workflow=pair-next` and
+ * gets a `DISPATCH-RECORD:` comment posted on it, for a run that prints a next-action
+ * recommendation and changes nothing.
+ *
+ * `pair-process-refine-story` is the other exclusion, and the sharper one: the driver knows exactly
+ * how it spells its scope (`--story`, the row above), and it is still not mappable. It cannot reach
+ * a terminal outcome with nobody watching — its SKILL.md makes phase 0 "the R3.11 AI↔human
+ * alignment gate — a prerequisite, not optional", adds three per-step `Human-judgment gate`s and
+ * closes with "what is never skipped is explicit human alignment before the story reaches `Ready`".
+ * A dispatch spawns it under `--autonomous` with no interlocutor, so it either stalls until the
+ * per-iteration timeout while holding the card's exclusive lock (on a card publicly commented as
+ * started), or the agent answers its own gate and the authorization control is satisfied by the
+ * party it exists to constrain. Refining is hand-driven work; the mapping is for what follows it.
+ *
+ * Deriving one from the other is what let all four argument rows quietly become the mappable set
+ * while every operator surface — the HALT message below, the KB catalog table, the tutorial,
+ * ADR-024 — named a shorter list.
+ * `invocation.test.ts` asserts set EQUALITY against the catalog table in the dataset,
+ * in both directions: a workflow documented as mappable but missing here HALTs a board on a
+ * mapping copied verbatim out of the guideline, and a workflow here but not in the catalog is
+ * accepted by a driver that every document says refuses it.
+ */
+export const DISPATCHABLE_WORKFLOWS: ReadonlySet<string> = Object.freeze(
+  new Set(['pair-loop', 'pair-process-plan-tasks']),
+)
+
+/**
+ * How a DISPATCHED card reaches this workflow, or `undefined` when a tag may not route to it.
+ *
+ * Both halves matter and both are refusals: a skill outside the catalog, and a catalogued skill the
+ * driver holds no scoping row for. Either way `dispatch.ts` HALTs rather than guessing — see
+ * `scopeParameterFor` for why an unattended run gets no "probably `--root`".
+ */
+export function dispatchScopeParameterFor(skill: string): string | undefined {
+  return DISPATCHABLE_WORKFLOWS.has(skill) ? scopeParameterFor(skill) : undefined
+}
 
 /**
  * A skill this driver has no parameter declaration for still gets the two FROZEN scoping
@@ -45,6 +121,18 @@ export const SKILL_PARAMETERS: Readonly<Record<string, SkillParameterMap>> = Obj
  * (AC5), and inventing arguments for an unknown skill is exactly what BR1 forbids.
  */
 const UNKNOWN_SKILL_PARAMETERS: SkillParameterMap = { root: '--root', filter: '--filter' }
+
+/**
+ * Skills that read `## Eligibility` from `tech/automation.md` THEMSELVES.
+ *
+ * The third answer to "what happens to the eligibility label on this invocation", and the reason
+ * it is a set rather than the negation of "declares `--filter`": `pair-loop` declares no `--filter`
+ * because it reads the policy file (its SKILL.md Step 0), while `pair-process-plan-tasks` declares
+ * none because the label plays no part in planning the tasks of ONE story. Reporting the second as
+ * "applied by the skill itself" would print a perimeter nobody applies — the same class of untrue
+ * perimeter line round 1's finding 1 removed, one skill over.
+ */
+const POLICY_READING_SKILLS: ReadonlySet<string> = Object.freeze(new Set(['pair-loop']))
 
 /**
  * How `approval` is spelled on the wire, once (US-464).
@@ -99,18 +187,26 @@ function parametersFor(skill: string): SkillParameterMap {
   return APPROVAL_DECLARING_SKILLS.has(skill) ? { ...declared, ...APPROVAL_PARAMETER } : declared
 }
 
+/** HOW the eligibility label reaches the selection on this invocation — see `Perimeter`. */
+export type FilterDelivery = 'argument' | 'read-by-skill' | 'none'
+
 /**
- * Whether this invocation can carry `--filter` at all.
+ * Which of the three, for one resolved invocation.
  *
- * `pair-loop` declares none — it reads `## Eligibility` from `tech/automation.md` itself — and a
- * verbatim `--prompt` carries no parameters whatsoever. The caller uses this to REFUSE a
- * `--filter` it could not honour, instead of accepting it, dropping it in `buildSkillArgs`, and
- * printing it as the run's perimeter anyway (review round 1, finding 1: the printed label and the
- * cards actually driven could disagree).
+ * - `argument` — the skill declares `--filter`, so the driver passes it (`pair-next`);
+ * - `read-by-skill` — the skill reads `## Eligibility` from the policy file itself (`pair-loop`);
+ * - `none` — neither: a verbatim `--prompt`, or a workflow scoped to ONE card
+ *   (`pair-process-plan-tasks`). The label is not this run's perimeter, and saying it is would
+ *   print a boundary nothing applies.
+ *
+ * The caller uses this to REFUSE a `--filter` it could not honour, instead of accepting it,
+ * dropping it in `buildSkillArgs`, and printing it as the run's perimeter anyway (review round 1,
+ * finding 1: the printed label and the cards actually driven could disagree).
  */
-export function skillAcceptsFilter(invocation: ResolvedInvocation): boolean {
-  if (invocation.kind === 'prompt') return false
-  return parametersFor(invocation.name).filter !== undefined
+export function filterDeliveryFor(invocation: ResolvedInvocation): FilterDelivery {
+  if (invocation.kind === 'prompt') return 'none'
+  if (parametersFor(invocation.name).filter !== undefined) return 'argument'
+  return POLICY_READING_SKILLS.has(invocation.name) ? 'read-by-skill' : 'none'
 }
 
 /**

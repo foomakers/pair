@@ -1,6 +1,8 @@
 import { join } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
 import { isLabelShape, isSafePromptText, promptSafetyFailure } from './prompt-safety'
+import { assertLabelValue, policyHalt, POLICY_PATH, sectionLines } from './policy-sections'
+import { readWorkflowMapping, type WorkflowMapping } from './workflow-mapping'
 
 /**
  * The automation-policy reader (US-451 T-8) — READ-ONLY, and it BORROWS every parameter.
@@ -18,7 +20,7 @@ import { isLabelShape, isSafePromptText, promptSafetyFailure } from './prompt-sa
  * not been read.
  */
 
-export const POLICY_PATH = '.pair/adoption/tech/automation.md'
+export { POLICY_PATH } from './policy-sections'
 export const DEFAULT_AUDIT_LOCATION = 'automation/loop-audit.md'
 /** Absent stop-predicate section ⇒ exactly one iteration, never an unbounded run. */
 export const FAIL_SAFE_MAX_ITERATIONS = 1
@@ -44,13 +46,16 @@ export interface AutomationPolicy {
   readonly maxIterations: number
   readonly maxParallelism: number
   readonly auditLocation: string
+  /**
+   * `## Workflows`'s tag→workflow mapping (US-217), absent when the project declares none.
+   *
+   * Absent is the SHIPPED state and never an error: with no mapping there is no workflow to route a
+   * card to, so a tag-driven dispatch reports "no mapping declared" and exits cleanly. Automation is
+   * opt-in per card, and this is the declaration that opts in.
+   */
+  readonly workflows?: WorkflowMapping
   readonly source: typeof POLICY_PATH | 'fail-safe defaults (policy file absent)'
   readonly warnings: readonly string[]
-}
-
-/** A HALT on the policy read: the message names the file and the offending value. */
-function halt(detail: string): never {
-  throw new Error(`${POLICY_PATH} — ${detail}. Fix the adoption file, then re-run.`)
 }
 
 /**
@@ -68,7 +73,7 @@ function halt(detail: string): never {
  */
 function assertSafePromptText(section: string, value: string): void {
   if (isSafePromptText(value)) return
-  halt(promptSafetyFailure(`\`## ${section}\``, value))
+  policyHalt(promptSafetyFailure(`\`## ${section}\``, value))
 }
 
 export function readAutomationPolicy(fs: FileSystemService, projectRoot: string): AutomationPolicy {
@@ -91,6 +96,7 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
   const warnings: string[] = []
   const eligibility = readEligibility(markdown, warnings)
   const stop = readStopPredicate(markdown)
+  const workflows = readWorkflowMapping(markdown)
 
   return {
     ...(eligibility !== undefined && { eligibility }),
@@ -99,6 +105,7 @@ export function readAutomationPolicy(fs: FileSystemService, projectRoot: string)
     maxIterations: stop.maxIterations,
     maxParallelism: readMaxParallelism(markdown),
     auditLocation: readAuditLocation(markdown),
+    ...(workflows !== undefined && { workflows }),
     source: POLICY_PATH,
     warnings,
   }
@@ -121,52 +128,7 @@ export function describeParallelism(policy: AutomationPolicy): string {
   )
 }
 
-/* ------------------------------------------------------------------ sections */
-
-/**
- * The body of a level-2 section, as RENDERED markdown: an occurrence inside a fenced code block
- * is not a heading (the schema documents its own declarations inside fences, so a line scan that
- * ignored fences would read a documentation example as a declaration).
- */
-function sectionBodies(markdown: string, heading: string): string[][] {
-  const bodies: string[][] = []
-  let current: string[] | undefined
-  let fenced = false
-
-  for (const raw of markdown.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (line.startsWith('```')) {
-      fenced = !fenced
-      if (current) current.push(raw)
-      continue
-    }
-    if (!fenced && /^##\s+/.test(line)) {
-      if (current) bodies.push(current)
-      current = line.replace(/^##\s+/, '') === heading ? [] : undefined
-      continue
-    }
-    if (current) current.push(raw)
-  }
-  if (current) bodies.push(current)
-  return bodies
-}
-
-/** The section's non-empty lines, trimmed — the unit every schema rule is stated over. */
-function sectionLines(markdown: string, heading: string): string[] | undefined {
-  const bodies = sectionBodies(markdown, heading)
-  if (bodies.length === 0) return undefined
-  if (bodies.length > 1) {
-    halt(`carries ${bodies.length} \`## ${heading}\` headings, but exactly one declaration is read`)
-  }
-  return bodies[0]!.map(line => line.trim()).filter(line => line.length > 0)
-}
-
 /* -------------------------------------------------------------- eligibility */
-
-// The schema's list, plus a leading SINGLE backtick: an inline-code paste is the same copied-wrapper
-// mistake as a fence, and tier 1 already rejected it (round 7, minor 1).
-const MARKDOWN_BLOCK_MARKERS = ['`', '-', '*', '+', '>', '#']
-const GITHUB_LABEL_CAP = 50
 
 /**
  * `## Eligibility` — exactly one label, validated by the guideline's seven HALT triggers and
@@ -180,33 +142,18 @@ function readEligibility(markdown: string, warnings: string[]): string | undefin
     )
     return undefined
   }
-  if (lines.length === 0) halt('`## Eligibility` is present but empty (a half-written declaration)')
+  if (lines.length === 0)
+    policyHalt('`## Eligibility` is present but empty (a half-written declaration)')
   if (lines.length > 1) {
-    halt(`\`## Eligibility\` carries ${lines.length} non-empty lines, but takes exactly one label`)
+    policyHalt(
+      `\`## Eligibility\` carries ${lines.length} non-empty lines, but takes exactly one label`,
+    )
   }
 
   const value = lines[0]!
-  // A STANDALONE token, as the schema says and tier 1 matches — `\b` made `area:OR-tools` a HALT,
-  // rejecting a legitimate label (round 7, minor 1).
-  if (value.includes(',') || /(^|\s)(AND|OR|NOT)(\s|$)/.test(value)) {
-    halt(`\`## Eligibility\` declares \`${value}\`, but the declaration takes exactly one label`)
-  }
-  if (MARKDOWN_BLOCK_MARKERS.some(marker => value.startsWith(marker))) {
-    halt(
-      `\`## Eligibility\` declares \`${value}\`, which is a copied markdown wrapper, not a bare label`,
-    )
-  }
-  if (value.length > GITHUB_LABEL_CAP) {
-    halt(
-      `\`## Eligibility\` declares a ${value.length}-character value, longer than the host's label cap (${GITHUB_LABEL_CAP})`,
-    )
-  }
-  if (value.split(/\s+/).filter(token => token.includes(':')).length > 1) {
-    halt(`\`## Eligibility\` declares \`${value}\`, which juxtaposes several labels on one line`)
-  }
-  // The guideline's SEPARATE content MUST, layered on top of the seven triggers rather than
-  // widening them: this value reaches an agent prompt, so it may never be a command fragment.
-  assertSafePromptText('Eligibility', value)
+  // The shape triggers plus the content MUST, in `policy-sections.ts` — the SAME rules each
+  // `## Workflows` routing key gets, because the schema states them once for every label slot.
+  assertLabelValue('`## Eligibility`', value)
   return value
 }
 
@@ -216,7 +163,7 @@ function readEligibility(markdown: string, warnings: string[]): string | undefin
 function assertTierShapes(tiers: readonly string[]): void {
   for (const tier of tiers) {
     if (!isLabelShape(tier)) {
-      halt(
+      policyHalt(
         `\`## Auto-Advance\` names \`${tier}\`, which is not a well-formed \`family:tier\` label`,
       )
     }
@@ -238,19 +185,21 @@ function readAutoAdvance(markdown: string, eligibility: string | undefined): str
 
   const value = lines[0]!
   if (lines.length > 1) {
-    halt(
+    policyHalt(
       `\`## Auto-Advance\` carries ${lines.length} non-empty lines, but takes exactly one switch`,
     )
   }
   if (value === AUTO_ADVANCE_OFF) return value
   if (/\b(AND|OR|NOT)\b/.test(value)) {
-    halt(`\`## Auto-Advance\` declares \`${value}\`, but the switch is a tier, not an expression`)
+    policyHalt(
+      `\`## Auto-Advance\` declares \`${value}\`, but the switch is a tier, not an expression`,
+    )
   }
   const tiers = value.split(',').map(tier => tier.trim())
   assertTierShapes(tiers)
   const foreign = tiers.filter(tier => tier !== eligibility)
   if (foreign.length > 0 || new Set(tiers).size !== tiers.length) {
-    halt(
+    policyHalt(
       `\`## Auto-Advance\` declares \`${value}\`, which is not this project's \`## Eligibility\` ` +
         `tier (${eligibility ?? 'none declared'}) — a tier outside eligibility is never selected, ` +
         `so it could never advance`,
@@ -321,13 +270,13 @@ function readStopPredicate(markdown: string): { predicate?: string; maxIteration
       // Named separately from "matches neither grammar": an ASCII arrow is a spelling mistake with
       // an obvious fix, and reporting it as an unrecognised line sends the maintainer hunting.
       if (ASCII_ARROW.test(line)) {
-        halt(
+        policyHalt(
           `\`## Stop Predicate\` line \`${line}\` uses \`=>\`, but the documented arrow is \`⇒\` ` +
             `(U+21D2) — the same form the fan-out workflow requires, so the two realizations of the ` +
             `loop read this file identically`,
         )
       }
-      halt(
+      policyHalt(
         `\`## Stop Predicate\` line \`${line}\` matches neither \`<selector> ⇒ <condition>\` nor \`max-iterations: <n>\``,
       )
     }
@@ -360,7 +309,7 @@ function assertSelector(selector: string, line: string): void {
   if (selector === 'root') return
   const payload = /^(?:tag|type):(.*)$/.exec(selector)?.[1] ?? ''
   if (payload.length === 0) {
-    halt(
+    policyHalt(
       `\`## Stop Predicate\` line \`${line}\` has an empty selector payload — \`tag:\`/\`type:\` needs a label`,
     )
   }
@@ -377,7 +326,7 @@ function assertCondition(condition: string, line: string): void {
   const parts = condition.split(/\s+and\s+/i).map(part => part.trim())
   const valid = parts.every(part => CONDITIONS.includes(part) || /^has-tag:\S+$/.test(part))
   if (!valid) {
-    halt(
+    policyHalt(
       `\`## Stop Predicate\` line \`${line}\` names \`${condition}\`, which is not a canonical macrostate (${CONDITIONS.join(', ')}) or \`has-tag:<label>\``,
     )
   }
@@ -418,11 +367,13 @@ function readMaxParallelism(markdown: string): number {
 function assertParallelismOverride(line: string): void {
   const match = /^(.+?):\s*(-?\d+)\s*$/.exec(line)
   if (!match) {
-    halt(`\`## Max Parallelism\` override line \`${line}\` is not \`<tier>: <positive integer>\``)
+    policyHalt(
+      `\`## Max Parallelism\` override line \`${line}\` is not \`<tier>: <positive integer>\``,
+    )
   }
   const tier = match[1]!.trim()
   if (!isLabelShape(tier)) {
-    halt(
+    policyHalt(
       `\`## Max Parallelism\` override key \`${tier}\` is not a well-formed \`family:tier\` label`,
     )
   }
@@ -435,7 +386,7 @@ function readAuditLocation(markdown: string): string {
   // Tier 1's own four checks, in its own order (round 5, minor 1): exactly one line, no absolute
   // path, no segment that escapes the working area, and safe to inline.
   if (lines.length > 1) {
-    halt(`\`## Audit Location\` declares ${lines.length} lines, but takes exactly one path`)
+    policyHalt(`\`## Audit Location\` declares ${lines.length} lines, but takes exactly one path`)
   }
   const value = lines[0]!
   // The drive-letter half is NOT an extra tier-2 rule any more: tier 1 gained the same line in this
@@ -443,12 +394,12 @@ function readAuditLocation(markdown: string): string {
   // asserts they agree. Closing the divergence at the source beat documenting it — the rule was
   // simply one platform short on tier 1, with the same intent already written there.
   if (value.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(value)) {
-    halt(
+    policyHalt(
       `\`## Audit Location\` declares the absolute path \`${value}\`; it must be project-relative`,
     )
   }
   if (value.split('/').some(segment => segment === '..')) {
-    halt(
+    policyHalt(
       `\`## Audit Location\` declares \`${value}\`, where a path segment escapes the working area; ` +
         `it must stay project-relative`,
     )
@@ -472,7 +423,7 @@ function numericPositiveInteger(raw: string, what: string): number {
   const text = raw.trim()
   const value = Number(text)
   if (!Number.isInteger(value) || value <= 0) {
-    halt(`${what} declares \`${text}\`, which is not a positive integer`)
+    policyHalt(`${what} declares \`${text}\`, which is not a positive integer`)
   }
   return value
 }
@@ -487,11 +438,13 @@ function numericPositiveInteger(raw: string, what: string): number {
 function positiveInteger(raw: string, what: string): number {
   const text = raw.trim()
   if (!/^-?\d+$/.test(text)) {
-    halt(`${what} declares \`${text}\`, which is not a positive integer (decimal digits only)`)
+    policyHalt(
+      `${what} declares \`${text}\`, which is not a positive integer (decimal digits only)`,
+    )
   }
   const value = Number(text)
   if (!Number.isInteger(value) || value <= 0) {
-    halt(`${what} declares \`${text}\`, which is not a positive integer`)
+    policyHalt(`${what} declares \`${text}\`, which is not a positive integer`)
   }
   return value
 }

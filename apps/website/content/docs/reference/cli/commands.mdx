@@ -747,8 +747,10 @@ pair run [options]
 | `--engine <id>`                 | Engine to drive: `pi`, `opencode` or `claude`. Precedence: flag > `pair.config.json` > schema default |
 | `--skill <name>`                | Skill to invoke. Explicit, and **never** falls back — a missing skill is an error                     |
 | `--prompt <text>`               | Run this text instead of a skill invocation (mutually exclusive with `--skill`)                       |
-| `--root <id>`                   | Scope root, passed through as `pair-next --root`                                                      |
+| `--root <id>`                   | Scope root, passed on under the resolved skill's own name for it (`--root` for `pair-next`/`pair-loop`, `--story` for the `pair-process-*` workflows). Not combinable with `--card` — a dispatched card **is** the scope |
 | `--filter <tag>`                | Label filter, for a skill that declares one (`pair-next`). **Refused** for `pair-loop` — see below     |
+| `--card <id>`                   | Dispatch this card: its tag picks the workflow from `## Workflows`. Not combinable with `--skill`/`--prompt`/`--root` |
+| `--card-tags <list>`            | Comma-separated labels the trigger observed on `--card`. Empty, absent or unmapped ⇒ nothing runs      |
 | `--cwd <dir>`                   | Working directory every iteration runs in                                                            |
 | `--max-iterations <n>`          | Iteration cap. **Narrows** the policy's `max-iterations`; it can never widen it                       |
 | `--autonomous`                  | Explicit opt-in: run without confirmations, **and** without the skill's approval rounds — see below   |
@@ -772,6 +774,83 @@ alternative — accepting the flag and quietly not applying it — would print a
 label the run does not use, and the printed perimeter is exactly what makes an unattended run
 auditable. The perimeter line therefore says which one it is: `filter <tag> (…, passed to the
 skill)` or `eligibility <tag> (…, applied by the skill itself)`.
+
+### Tag-driven dispatch
+
+`--card` turns the command into the **entry point a trigger calls**: instead of naming a skill, you
+name a card and the labels a trigger observed on it, and the `## Workflows` mapping in
+[`.pair/adoption/tech/automation.md`](/docs/concepts/adoption-files) decides which workflow runs —
+`auto-dev ⇒ pair-loop`, `auto-plan ⇒ pair-process-plan-tasks`, whatever that project declared.
+
+```bash
+pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
+```
+
+The labels are **passed in, never fetched**: the trigger that fired on a label change already has
+them, and keeping the lookup out of the CLI is what keeps it free of tracker credentials.
+
+A dispatched card is the **whole subject** of the run, so `--card` cannot be combined with
+`--skill`, `--prompt` or `--root`: the mapping is the answer to "which workflow" and the card itself
+is the answer to "on what", and a second answer to either is refused at parse time rather than
+silently ranked. `--root` matters most here — `--card 217 --root 300` would otherwise drive the
+agent over subtree 300 while the audit trail, the `DISPATCH-RECORD:` comment and the exclusive lock
+all named 217: card 300 unguarded (its own lock still free, so a second trigger on it starts a
+second agent on the same branch) and card 217 credited with work nothing did on it. `--filter` is
+still accepted — it narrows what a selector picks up *within* the run, it does not name a subject.
+
+Four properties decide what actually happens, and all four fail towards *not running*:
+
+- **Untagged ⇒ never.** A card carrying no mapped tag is skipped and the skip is reported. There is
+  no default workflow and no fallback: the absence of a route *is* the opt-in boundary. An
+  **unlabelled** card is the same case reached one step earlier: `--card-tags` is the one flag on
+  this command where an empty value is *data* ("the trigger saw no labels"), not a malformed flag,
+  so a trigger firing on a bare card skips cleanly instead of failing its job.
+- **No `## Workflows` section ⇒ `no mapping declared`**, printed, exit `0`. A project that never
+  wrote the section has not opted in, which is the shipped default rather than an error.
+- **Eligibility is applied before routing.** A card that does not carry the `## Eligibility` label is
+  skipped before its tags are looked at at all.
+- **One run per card.** The dispatch takes an exclusive **per-card lock** (a directory under
+  `<working_path>/automation/locks/`) before spawning and releases it afterwards; a second trigger on
+  a locked card is skipped and logged, never queued, and the skip prints where the lock is and how
+  long it has been held — a run killed by a signal leaves one behind, and nothing reaps it. The lock
+  is **filesystem-local**: it guards dispatches sharing one working area, so a host that gives every
+  job a fresh checkout needs its own concurrency group as the cross-job guard.
+
+Three things HALT instead of guessing: a mapped tag whose workflow is **not installed**, a mapped
+workflow **outside the catalog** the guideline publishes, and a card carrying **two mapped tags**
+that no `Precedence:` line covers. All three name the file and the value to fix. The first two are
+checked before eligibility and routing, so they stop dispatch for **every** card, not only the ones
+carrying that tag.
+
+The second is what keeps the trail true. The dispatched card reaches its workflow as an argument
+under that workflow's own name for it — `--root <card>` for `pair-loop`, `--story <card>` for
+`pair-process-plan-tasks` — and the latter selects the highest-priority story on the board when it
+receives no story at all. A workflow whose scoping argument this command does not know would
+therefore run on a card nobody tagged, while the audit line and the `DISPATCH-RECORD:` comment both
+named the card that *was* tagged: so the mapping is refused instead.
+
+Those two are the **whole** mappable set, and knowing a skill's scope argument is not what puts it
+there. Two refusals show the gap from opposite sides:
+
+- `pair run --skill pair-next --root 212` is a perfectly good hand-driven run, and
+  `auto-triage ⇒ pair-next` is still refused: a dispatch takes the card's exclusive lock, writes an
+  `event=start` line and emits a `DISPATCH-RECORD:` comment, and doing all that for a skill that
+  only prints a recommendation leaves a card claiming work nothing did.
+- `auto-refine ⇒ pair-process-refine-story` is refused too, and the command knows exactly how that
+  workflow spells its scope. Refinement is the single Draft→Ready path and it **requires a human**:
+  its alignment gate ends only on an explicit approval. Dispatched unattended it either stalls until
+  the per-iteration timeout — holding the card's lock, on a card publicly commented as started — or
+  the agent approves its own work past the gate. Run it by hand
+  (`--skill pair-process-refine-story --root <card>`), where someone is there to answer.
+
+Widening the set is a change to the [catalog](/docs/reference/guidelines-catalog) in
+`collaboration/automation/automation-policy.md`.
+
+Every decision — start, skip, end — is appended to the run's `## Audit Location` file, and the start
+record — only the start — is *also* printed as a single `DISPATCH-RECORD:` line. That line is what the trigger's own
+host adapter posts as a comment on the card: `pair run` writes files and prints lines, and never
+posts to a tracker. The reference GitHub Actions adapter ships in the knowledge base
+(`collaboration/automation/github-automation.md`).
 
 ### Autonomy and project trust are two separate opt-ins
 
@@ -880,6 +959,12 @@ pair run --skill pair-capability-assess-stack --root 212 --autonomous --max-iter
 
 # A one-shot prompt on the default engine, bounded by its directory
 pair run --prompt "/pair-next --root 212" --cwd . --max-iterations 1
+
+# Tag-driven: the `## Workflows` mapping picks the workflow, the card is the scope
+pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
+
+# What a trigger would do, without doing it — route, perimeter and policy, nothing spawned
+pair run --card 217 --card-tags "auto-dev,risk:green" --dry-run
 ```
 
 ---

@@ -841,7 +841,7 @@ describe('automation-policy.md — Audit Location section (story #250 T1)', () =
       const auditIdx = content.indexOf('## Audit Location — where the unattended trail is written')
       const section = content.slice(
         auditIdx,
-        content.indexOf('## Harness and Model Policy', auditIdx),
+        content.indexOf('## Workflows — which workflow each tag routes to', auditIdx),
       )
       expect(section).toContain('working_path')
       expect(section).toContain('pair.config.json')
@@ -856,11 +856,399 @@ describe('automation-policy.md — Audit Location section (story #250 T1)', () =
       const auditIdx = content.indexOf('## Audit Location — where the unattended trail is written')
       const section = content.slice(
         auditIdx,
-        content.indexOf('## Harness and Model Policy', auditIdx),
+        content.indexOf('## Workflows — which workflow each tag routes to', auditIdx),
       )
       expect(section).toContain('automation/loop-audit.md')
       expect(section).toMatch(/MUST HALT the run/)
       expect(section.toLowerCase()).toMatch(/not an acceptable degraded mode/)
     },
   )
+})
+
+// Story #217 — tag-driven workflows. The mapping is ADOPTION data (`## Workflows`), the tag is an
+// opaque routing key, and every safety property of the feature — untagged never runs, absent
+// section is not an error, eligibility before routing, no silent choice on a multi-tag card, one
+// run per card, an audit trail whose on-issue half belongs to the host adapter — is normative
+// content pinned here rather than left to a reader's memory.
+describe('automation-policy.md — Workflows section (story #217 T1)', () => {
+  const workflowsSection = (content: string): string => {
+    const start = content.indexOf('## Workflows — which workflow each tag routes to')
+    expect(start).toBeGreaterThan(-1)
+    return content.slice(start, content.indexOf('## Harness and Model Policy', start))
+  }
+
+  it.each(policySources)(
+    '%s: the declaration is `<tag> ⇒ <workflow>`, one per line',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toContain('## Workflows\n\nauto-dev ⇒ pair-loop')
+      expect(section).toMatch(/One entry per line/)
+      expect(section).toMatch(/U\+21D2/)
+      expect(section).toMatch(/ASCII `=>`/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: the tag is an opaque routing key, matched by string equality (D18)',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/OPAQUE routing key/)
+      expect(section).toContain('D18')
+      expect(section).toMatch(/string equality/)
+      expect(section).toMatch(/no classification criteria anywhere in the routing code/i)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: the workflow is a skill name resolved against the installed set',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/workflow is a skill name/)
+      expect(section).toMatch(/composition of existing skills/)
+      expect(section).toMatch(/installed/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: untagged ⇒ never, with no default workflow anywhere',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/Untagged ⇒ never/)
+      expect(section).toMatch(/no default workflow/)
+      expect(section).toMatch(/MUST\*{0,2} skip it and log the skip/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: absent section is opt-out, not an error — exit cleanly',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/no mapping declared/)
+      expect(section).toMatch(/exit cleanly/)
+      expect(section).toMatch(/never an error/)
+      expect(section).toMatch(/Absent section ≠ empty section/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: eligibility is applied BEFORE routing, and the skip is logged',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/Eligibility is applied BEFORE routing/)
+      expect(section).toMatch(/skipped before its tags are looked at/)
+      expect(section).toMatch(/logged/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: unknown workflow and undecidable multi-tag both HALT',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/workflow is not installed ⇒ HALT/)
+      expect(section).toMatch(/Never a silent fall back/)
+      expect(section).toMatch(/two or more mapped tags with no `Precedence:` line/)
+      expect(section).toMatch(/MUST HALT|⇒ HALT/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: one run per card — an exclusive lock, never a queue',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/exclusive per-card lock/)
+      expect(section).toMatch(/skipped and logged/)
+      expect(section).toMatch(/never queued/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: says what the lock does NOT cover — one working area, and no reaper',
+    (_, content) => {
+      const section = workflowsSection(content)
+      // A reader who takes the lock for a cross-machine guard adds a second trigger outside the
+      // host's concurrency group and gets two agents on one branch — the exact race it exists for.
+      expect(section).toMatch(/scoped to ONE working area/)
+      expect(section).toMatch(/ephemeral/)
+      expect(section).toMatch(/concurrency group/)
+      // ...and a lock nothing reaps turns automation silently off for one card, forever.
+      expect(section).toMatch(/no timeout and nothing reaps it/)
+      expect(section).toMatch(/where.*lock is and.*how long/i)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: a mapping naming an uninstalled workflow stops the WHOLE board',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/before\*{0,2} eligibility and routing/)
+      expect(section).toMatch(/every\*{0,2} card/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: the audit trail keeps host credentials out of the core',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/start.*skip.*end|start\*\*, \*\*skip\*\*, \*\*end/)
+      expect(section).toContain('## Audit Location')
+      expect(section).toMatch(/host adapter/)
+      expect(section).toMatch(/never holds a tracker token/)
+      // ONLY the start is posted on the card. A skip comment per unmapped label edit is the noise
+      // this narrow reading exists to avoid, and leaving it implicit is how a future adapter author
+      // re-derives an `end` comment from the job's exit status.
+      expect(section).toMatch(/and \*\*only\*\* the start record/)
+      expect(section).toMatch(/skip and an end stay in the file/)
+    },
+  )
+
+  it.each(policySources)('%s: the file index names the seventh section', (_, content) => {
+    expect(content).toMatch(/It specifies seven sections/)
+    expect(content).toMatch(/`## Workflows` \(#217\)/)
+  })
+
+  it.each(policySources)(
+    '%s: eligibility selects, the mapping routes — stated as disjoint',
+    (_, content) => {
+      expect(content).toMatch(/Which workflow runs on an eligible card/)
+    },
+  )
+})
+
+// Story #217 T4 — what the KB SHIPS around the schema, as opposed to the schema itself.
+//
+// Two deliverables, and they answer the two questions a maintainer has after reading the grammar:
+// *which workflow do I map a tag to* (a catalog of workflows that exist, so nobody invents a skill
+// name) and *what fires the dispatch on my host* (the thin per-host adapter, which is where the
+// tracker credentials live and where the on-issue comment is actually posted — the half ADR-024
+// deliberately kept out of the driver).
+describe('automation-policy.md — the workflow catalog (story #217 T4)', () => {
+  const workflowsSection = (content: string): string => {
+    const start = content.indexOf('## Workflows — which workflow each tag routes to')
+    expect(start).toBeGreaterThan(-1)
+    return content.slice(start, content.indexOf('## Harness and Model Policy', start))
+  }
+
+  /** The workflow named in each row of the catalog TABLE — never prose that merely mentions one. */
+  const catalogRows = (content: string): string[] =>
+    [...workflowsSection(content).matchAll(/^\| `(pair-[a-z0-9-]+)` \|/gm)].map(match => match[1]!)
+
+  it.each(policySources)('%s: ships example workflows a mapping can name', (_, content) => {
+    const section = workflowsSection(content)
+    expect(section).toMatch(/### The workflows a mapping can name/)
+    // A catalog whose entries are not installable skill names is worse than none: it reads as
+    // authoritative and every tag mapped from it HALTs on the uninstalled-workflow rule.
+    expect(catalogRows(content)).toEqual(['pair-loop', 'pair-process-plan-tasks'])
+  })
+
+  /**
+   * A dispatched workflow runs with NOBODY WATCHING — so it may not need anybody.
+   *
+   * The excluded case, concretely: a team copies the guideline's own example into
+   * `tech/automation.md` and labels Draft card 304 `auto-refine` + `risk:green`. The trigger fires
+   * `pair run --card 304 --card-tags "auto-refine,risk:green" --autonomous`; the driver takes 304's
+   * exclusive lock, appends `event=start`, prints the `DISPATCH-RECORD:` line the adapter posts as a
+   * public comment on the card, and spawns the workflow under `bypassPermissions`. If that workflow
+   * mandates explicit human alignment, the run either stalls on a question no one answers until the
+   * per-iteration timeout — holding the lock, on a card publicly claiming a run started — or the
+   * agent answers itself and satisfies the very authorization gate the skill says is never skipped.
+   *
+   * So the rule is a property of the CATALOGUED SKILLS, checked against their own SKILL.md rather
+   * than against the prose that describes them: putting a row back is a failing test here.
+   */
+  it.each(policySources)(
+    '%s: every catalogued workflow can finish with nobody watching',
+    (_, content) => {
+      for (const workflow of catalogRows(content)) {
+        const slug = workflow.replace(/^pair-/, '')
+        const file = [
+          join(REPO_ROOT, '.claude/skills', workflow, 'SKILL.md'),
+          join(REPO_ROOT, '.skills', slug, 'SKILL.md'),
+        ].find(candidate => existsSync(candidate))
+        expect(file, `${workflow} is catalogued but has no SKILL.md in this repo`).toBeDefined()
+
+        const skill = read(file!)
+        for (const marker of [
+          /Human-judgment gate/,
+          /explicit human "yes"/,
+          /explicit human alignment/,
+        ]) {
+          expect(
+            skill,
+            `${workflow} requires an explicit human decision (${marker.source}), so a tag must not route an unattended card to it`,
+          ).not.toMatch(marker)
+        }
+      }
+
+      // ...and the rule itself, at the surface a team reads before widening the table.
+      const section = workflowsSection(content)
+      expect(section).toMatch(/A workflow that needs a human in the room is not mappable/)
+      // The exclusion is named, so nobody re-adds the row believing it was an oversight.
+      expect(section).toMatch(/`pair-process-refine-story` is the concrete exclusion/)
+    },
+  )
+
+  /**
+   * The catalog is what a team copies from — `auto-plan ⇒ pair-process-plan-tasks` appears
+   * verbatim here, in adoption-files.mdx and in the tutorial. A catalogued workflow that the
+   * dispatcher cannot hand the card to is worse than an absent one: the `pair-process-*` row
+   * selects the highest-priority story on the board when its `$story` is absent, so a card passed
+   * under a name it does not declare is never seen, while the audit trail and the
+   * `DISPATCH-RECORD:` comment both name the card that WAS tagged.
+   */
+  it.each(policySources)(
+    '%s: names the argument each catalogued workflow receives the card as — the one it declares',
+    (_, content) => {
+      const section = workflowsSection(content)
+      const rows = [
+        ...section.matchAll(/^\| `(pair-[a-z0-9-]+)` \|[^\n]*\| `(--[a-z-]+) <card>` \|/gm),
+      ]
+      // Two rows today; the assertion is that EVERY row carries the column, not how many.
+      expect(rows.length).toBe([...section.matchAll(/^\| `pair-[a-z0-9-]+` \|/gm)].length)
+      expect(rows.length).toBeGreaterThan(1)
+
+      for (const [, workflow, parameter] of rows) {
+        const slug = workflow!.replace(/^pair-/, '')
+        const file = [
+          join(REPO_ROOT, '.claude/skills', workflow!, 'SKILL.md'),
+          join(REPO_ROOT, '.skills', slug, 'SKILL.md'),
+        ].find(candidate => existsSync(candidate))
+        expect(file, `${workflow} is catalogued but has no SKILL.md in this repo`).toBeDefined()
+
+        // `$story` (documentation form) and `--story` (invocation form) are one argument, per the
+        // ADL of 2026-08-28. What must not happen is the catalog naming a third thing.
+        const name = parameter!.replace(/^--/, '')
+        expect(
+          read(file!),
+          `${workflow} does not declare \`${parameter}\` — the catalog promises a scope it cannot receive`,
+        ).toMatch(new RegExp(`\\|\\s*\`(?:\\$|--)${name}\``))
+      }
+
+      // ...and the rule that makes the column load-bearing rather than decorative: the table IS
+      // the mappable set, and a workflow outside it HALTs.
+      expect(section).toMatch(/MUST HALT\*\* on a mapped workflow this table does not list/)
+      // The direction a reader gets wrong on their own: knowing how a skill spells its scope is
+      // not what makes a tag allowed to route a card to it (`pair-next` is scopable and unmappable).
+      expect(section).toMatch(/Being scopable is not enough to be mappable/)
+    },
+  )
+
+  /**
+   * The schema bullet and the catalog section must state ONE rule, not two.
+   *
+   * The bullet is where a team writing its first mapping stops reading. Saying only "resolved
+   * against the installed skill set" there licensed `auto-review ⇒ pair-process-review` — an
+   * installed skill, so legal by that sentence — and the next trigger on ANY card, including
+   * untagged and ineligible ones, HALTed the whole board on a mapping the schema had blessed.
+   */
+  it.each(policySources)(
+    '%s: the schema bullet carries the catalog restriction, not just "installed"',
+    (_, content) => {
+      const section = workflowsSection(content)
+      const bullet = /^- \*\*The workflow is a skill name\*\*[^\n]*$/m.exec(section)
+      expect(
+        bullet,
+        'the `## Workflows` schema no longer has a workflow-name bullet',
+      ).not.toBeNull()
+
+      const text = bullet![0]
+      expect(text).toMatch(/installed/)
+      // Both halves, in the bullet itself — a reader who never reaches the catalog section must
+      // not come away thinking any installed skill is mappable.
+      expect(text).toMatch(/catalog|The workflows a mapping can name/)
+      expect(text).toMatch(/refus/i)
+      // ...and the claim this replaced, which the same PR's own code made false.
+      expect(text).not.toMatch(/no workflow catalog/)
+    },
+  )
+
+  it.each(policySources)(
+    '%s: every workflow the catalog names is a skill this repo actually ships',
+    (_, content) => {
+      const section = workflowsSection(content)
+      // Every `⇒ <workflow>` in the section — the example mappings AND the catalog — resolved
+      // against the skills on disk. A renamed skill fails here, on the file that renamed it.
+      const named = [...section.matchAll(/⇒ (pair-[a-z0-9-]+)/g)].map(m => m[1]!)
+      expect(named.length).toBeGreaterThan(0)
+      for (const workflow of new Set(named)) {
+        const slug = workflow.replace(/^pair-/, '')
+        expect(
+          existsSync(join(REPO_ROOT, '.claude/skills', workflow, 'SKILL.md')) ||
+            existsSync(join(REPO_ROOT, '.skills', slug, 'SKILL.md')),
+          `\`## Workflows\` names ${workflow}, which is not a skill in this repo`,
+        ).toBe(true)
+      }
+    },
+  )
+
+  it.each(policySources)(
+    '%s: points at the host adapter rather than restating it',
+    (_, content) => {
+      const section = workflowsSection(content)
+      expect(section).toMatch(/github-automation\.md/)
+    },
+  )
+})
+
+describe('automation README — indexes the mapping next to the eligibility filter (story #217 T4)', () => {
+  it.each(readmeSources)('%s README: lists the `## Workflows` section', (_, content) => {
+    expect(content).toMatch(/## Workflows/)
+  })
+})
+
+describe('docs site — tag-driven dispatch is documented where an operator looks (story #217 T4)', () => {
+  const adoptionDocs = read(join(DOCS, 'concepts/adoption-files.mdx'))
+  const cliDocs = read(join(DOCS, 'reference/cli/commands.mdx'))
+  const tutorial = read(join(DOCS, 'tutorials/unattended-delivery.mdx'))
+
+  it('adoption-files.mdx documents the `## Workflows` section and its opt-in boundary', () => {
+    expect(adoptionDocs).toContain('## Workflows')
+    expect(adoptionDocs).toMatch(/no mapped tag/)
+    expect(adoptionDocs).toMatch(/no mapping declared/)
+  })
+
+  it('commands.mdx documents both dispatch flags in the `run` option table', () => {
+    const run = cliDocs.slice(cliDocs.indexOf('## run'), cliDocs.indexOf('## Global Options'))
+    expect(run).toMatch(/`--card <id>`/)
+    expect(run).toMatch(/`--card-tags <list>`/)
+    expect(run).toMatch(/### Tag-driven dispatch/)
+    // The three things that make it safe, at the surface an operator reads before wiring a trigger.
+    expect(run).toMatch(/untagged/i)
+    expect(run).toMatch(/per-card lock/)
+    expect(run).toMatch(/DISPATCH-RECORD/)
+  })
+
+  it('the unattended-delivery tutorial shows the trigger-driven variant', () => {
+    expect(tutorial).toMatch(/## Workflows/)
+    expect(tutorial).toMatch(/pair run --card/)
+  })
+
+  it('every surface counts the policy file the way the guideline does', () => {
+    // A reader who completed Step 1 believing they have six sections, then told to add "a sixth",
+    // cannot tell whether they are adding one or editing one — in the tutorial whose whole subject
+    // is a fail-closed policy file where a mis-declared section HALTs the run. The concepts page is
+    // the OTHER end of the same path (Option D links to it for the mapping), so a reader told seven
+    // on one page and six on the other cannot tell which surface is incomplete.
+    const [policy] = policySources.map(([, content]) => content)
+    const declared = /It specifies (\w+) sections/.exec(policy!)![1]!
+    const capitalised = `${declared[0]!.toUpperCase()}${declared.slice(1)}`
+
+    expect(tutorial).toContain(`${capitalised} independent`)
+    // ...and the section Option D adds is numbered off that same count, not off Step 1's listing.
+    expect(tutorial).toContain(`the ${declared}th`)
+
+    expect(adoptionDocs).toContain(`${declared} independent sections`)
+    // Both surfaces omit the same section, so both must say which one and where it is documented —
+    // otherwise the count and the listing disagree with no way to tell why.
+    for (const surface of [tutorial, adoptionDocs]) {
+      expect(surface).toMatch(/`## Harness` \/ `## Model Policy`/)
+    }
+  })
+
+  it('the tutorial does not sell the per-card lock as the guard on ephemeral runners', () => {
+    // Option D is the CI-triggered path, where every job checks out a fresh workspace and the
+    // lock cannot see another job's holder — the host concurrency group is the guard there.
+    const wrapped = tutorial.replace(/\s+/g, ' ')
+    expect(wrapped).toMatch(/lock is scoped to one working area/i)
+    expect(wrapped).toMatch(/concurrency group\s*.{0,12}is the guard/)
+  })
 })

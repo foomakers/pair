@@ -32,8 +32,10 @@ systemd-managed daemon on a dedicated box in about 30 minutes.
 ## Step 1: Declare the automation policy
 
 Everything here lives in one adoption file: `.pair/adoption/tech/automation.md`. It's optional —
-absent, it means "automation is off," never "automation runs on everything." Six independent
-sections, each with its own fail-closed default:
+absent, it means "automation is off," never "automation runs on everything." Seven independent
+sections, each with its own fail-closed default. Five of them are below; `## Workflows` is what
+Option D in Step 4 adds, and `## Harness` / `## Model Policy` (supported engines, per-tier model
+class) live in the guideline:
 
 ```markdown
 ## Eligibility
@@ -244,6 +246,51 @@ the same crash-recovery guarantee Option A gets for free.
   what it actually needs (a machine user or a fine-grained token, not your personal one), and don't
   run anything else on it you wouldn't want that same credential set exposed to.
 </Callout>
+
+### Option D — no schedule at all: let a tag start the run
+
+The three options above are **pull**: something wakes up on a timer and asks what is eligible. The
+alternative is **push** — a run starts when *you* tag a card, and never otherwise. Add the one
+section Step 1 left out — `## Workflows`, the seventh — to the same policy file:
+
+```text
+## Workflows
+
+auto-plan ⇒ pair-process-plan-tasks
+auto-dev ⇒ pair-loop
+Precedence: auto-plan, auto-dev
+```
+
+…then have your code host call the entry point when a label changes, passing the card and the labels
+it just observed:
+
+```bash
+pair run --card 217 --card-tags "auto-dev,risk:green" --autonomous
+```
+
+The mapping decides which workflow runs; a card carrying **no mapped tag runs nothing**, and with no
+`## Workflows` section at all the command reports `no mapping declared` and exits cleanly. Map a tag
+only to a workflow from the guideline's catalog (`pair-loop`, `pair-process-plan-tasks`): the card
+is handed over as the argument that workflow declares — `--root 217`, or `--story 217` for
+`pair-process-plan-tasks` — and a mapping naming anything else HALTs rather than start a run that
+would pick its own card. **Refinement is deliberately not in that catalog**:
+`pair-process-refine-story` ends only on an explicit human approval, so unattended it would either
+stall until the timeout or approve its own work past the gate — refine by hand, and map tags for
+what follows. Only a run
+*start* is printed as a `DISPATCH-RECORD:` line for your trigger to post back on the card — skips and
+endings stay in the audit file, so a label edit that routes nothing never comments. The ready-made
+GitHub Actions job — fires on `issues: [labeled]`, installs the CLI (a runner does not ship it) and
+dispatches — is in `collaboration/automation/github-automation.md` in the knowledge base; the flags
+are documented in [`pair run`](/docs/reference/cli/commands#run).
+
+The dispatch takes a **per-card lock** so a burst of label edits cannot start two runs on one card —
+but that lock is scoped to one working area. On a daemon box (Options A–C) that is the guard. On
+ephemeral CI runners each job checks out its own workspace, so there the *host's* concurrency group
+is the guard, and every path that can dispatch a card belongs in it — the shipped job declares
+`concurrency: pair-dispatch-<issue>` for exactly that reason.
+
+Pull and push compose: the timer keeps the eligible backlog moving, the tag starts a specific card
+now. Both read the same policy file, and both stop at the same human merge gate.
 
 ## Step 5: Watch it — audit trail and recovery
 

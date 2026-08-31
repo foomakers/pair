@@ -90,7 +90,7 @@ If the file doesn't exist, AI assistants skip the domain check entirely — this
 
 ### automation.md
 
-Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in five independent sections `pair-loop` reads. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in.
+Optional. `tech/automation.md` declares how much of the delivery flow may run **unattended**, in seven independent sections `pair-loop` and `pair run` read. Each has its own fail-closed default — absent file or absent section never widens automation, only a project that writes the section opts in. Six of them are below; the seventh, `## Harness` / `## Model Policy` (supported engines, per-tier model class), lives in the [guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md).
 
 ```text
 ## Eligibility
@@ -132,6 +132,26 @@ automation/loop-audit.md
 ```
 
 **`## Audit Location`** — the project-relative path (under `working_path`) an unattended run appends its per-iteration record to. Absent ⇒ `automation/loop-audit.md`. See [automation-policy.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/automation/automation-policy.md) for the full schema, every fail-safe default, and every HALT trigger.
+
+```text
+## Workflows
+
+auto-dev ⇒ pair-loop
+auto-plan ⇒ pair-process-plan-tasks
+Precedence: auto-dev, auto-plan
+```
+
+**`## Workflows`** — the **tag→workflow mapping**, and the declaration that makes automation opt-in *per card*. One entry per line, `<tag> ⇒ <workflow>`: the tag is a plain label a card may carry (matched by string equality, exactly like `## Eligibility`), and the workflow is the **skill** that runs on it. An optional `Precedence:` line resolves a card carrying two mapped tags — first listed wins.
+
+Five properties are worth knowing before you write one:
+
+- **A card with no mapped tag runs nothing.** There is no default workflow and no fallback — the absence of a route *is* the opt-in boundary.
+- **Absent section ⇒ nothing is routable.** A dispatch reports `no mapping declared` and exits cleanly; that is the shipped default, not an error.
+- **Ambiguity halts, it never guesses.** A workflow that is not installed, a workflow outside the guideline's catalog, or a card carrying two mapped tags with no `Precedence:` covering them: each stops the run with a message naming the file and the value to fix.
+- **The card travels as the workflow's own argument.** `pair-loop` takes it as `--root <card>` and `pair-process-plan-tasks` as `--story <card>` — and the latter selects the highest-priority story on the board when it gets no story at all, so a workflow the dispatcher cannot scope to the card is refused rather than run on a card nobody tagged. Those two *are* the mappable set: a skill outside it is refused even when installed, because a dispatch takes the card's lock and posts a record on it, and doing that for a skill that only reports leaves a card claiming work nothing did.
+- **A workflow that needs a human in the room is not mappable.** A dispatch runs unattended, so `auto-refine ⇒ pair-process-refine-story` is refused even though the dispatcher knows how to scope it: refinement's alignment gate ends only on an explicit human approval, and unattended that means either a stall until the timeout — holding the card's lock, on a card publicly commented as started — or an agent approving its own work past the gate. Refine by hand; map the tags for what follows.
+
+Eligibility is applied **before** routing, so a mapped card that does not carry the eligibility label is skipped and logged without ever being routed. A trigger passes the card and its labels to the entry point — [`pair run --card <id> --card-tags <list>`](/docs/reference/cli/commands#run) — which is where the routing happens.
 
 ### risk-matrix.md
 

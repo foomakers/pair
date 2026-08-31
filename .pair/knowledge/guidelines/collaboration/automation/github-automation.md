@@ -195,6 +195,120 @@ jobs:
 - Integration with external tools and notification systems
 - Advanced reporting and analytics automation
 
+## Tag-Driven Dispatch — the reference trigger adapter
+
+The **trigger** for tag-driven workflows: the thin, host-specific piece that turns "a label was added to an issue" into one call to pair's entry point. Everything it decides is decided here; everything it *routes* is decided by `## Workflows` in `tech/automation.md` (schema: [automation-policy.md](automation-policy.md)). The adapter is deliberately small — five steps, three of them setup, and no logic of its own — because that is what keeps every host on the same routing core.
+
+**The runner does not ship `pair-cli`.** `ubuntu-latest` has never heard of it, so the job installs the CLI itself: without that step `pair-cli run` is `command not found`, the step exits 127, the job goes red and nothing is ever routed or audited. The **engine** the run spawns (`claude`, `pi`, `opencode`) and its credentials are the adopter's own step — the block below installs the driver, not the agent.
+
+### The workflow
+
+```yaml
+name: pair dispatch
+on:
+  issues:
+    types: [labeled]
+
+# One in-flight job per issue. On EPHEMERAL runners this group IS the cross-job guard, and
+# `cancel-in-progress: false` is what makes it one: every job checks out a fresh workspace,
+# so the per-card lock `pair-cli run` takes lives in a working area no other job can see, and it
+# can never observe a holder from another runner (ADR-024: the lock is filesystem-local).
+# A second trigger declared OUTSIDE this group — a `workflow_dispatch` button, an
+# `issue_comment` job — therefore starts a second agent on the same card, the same branch
+# and the same PR. Put every path that dispatches a card into THIS group.
+# The per-card lock is the guard within ONE working area: a persistent daemon box, where the
+# bursts it stops are real and the host has no concurrency group at all.
+concurrency:
+  group: pair-dispatch-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    # The credentials live HERE, at the adapter — the narrowest set that lets it read the
+    # issue it was handed and post one comment on it. `pair-cli run` itself is given none.
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # `pair-cli` is NOT on a hosted runner. Without these two steps the next one is
+      # `bash: pair-cli: command not found` (exit 127) on every labeled event — a red job,
+      # nothing routed, nothing audited. Pin the version you adopted rather than
+      # `@latest` if you want the trigger to be reproducible.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the pair CLI
+        shell: bash
+        run: npm install -g @foomakers/pair-cli
+
+      - name: Dispatch the card
+        id: dispatch
+        # DECLARED, not defaulted. GitHub's implicit shell is `bash -e {0}` — WITHOUT
+        # `pipefail` — so the pipeline below would report `tee`'s status and a HALT inside
+        # `pair-cli run` (an uninstalled workflow, an undecidable multi-tag card) would land as a
+        # green tick. `shell: bash` is what makes GitHub run the step with `-eo pipefail`.
+        shell: bash
+        env:
+          # The labels the trigger ALREADY observed — passed as data, never re-fetched. An
+          # adapter that queries the API for them is the tracker client the driver exists
+          # without. Through the environment, not string-interpolated into the command line.
+          CARD_TAGS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          CARD: ${{ github.event.issue.number }}
+        run: |
+          pair-cli run --card "$CARD" --card-tags "$CARD_TAGS" --autonomous \
+            | tee dispatch.log
+
+      - name: Record the run on the card
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CARD: ${{ github.event.issue.number }}
+        run: |
+          # The driver PRINTS this line and never posts it: posting is the adapter's job,
+          # because the adapter is what holds a tracker token. No line ⇒ nothing was
+          # dispatched (untagged, unmapped or ineligible card) ⇒ nothing to comment.
+          record="$(grep '^DISPATCH-RECORD:' dispatch.log || true)"
+          # `if`, not `[ -n "$record" ] && …`: under `-e` a trailing compound whose test is
+          # false exits 1, so the silent case — the untagged issue this feature promises
+          # costs nothing — would fail the step and notify a human on every unmapped label
+          # edit on the board.
+          if [ -n "$record" ]; then
+            gh issue comment "$CARD" --body "$record"
+          fi
+```
+
+### What the adapter does and does not decide
+
+| Question | Answered by |
+| --- | --- |
+| Did anything happen on a card? | the host trigger (`types: [labeled]`) |
+| Which workflow runs on it? | `## Workflows` in `tech/automation.md` — never the adapter, never a job condition |
+| May this card run at all? | `## Eligibility`, applied by the dispatcher *before* routing |
+| Is another run already on this card? | the per-card lock inside `pair-cli run` |
+| Who tells the humans? | the adapter, by posting the `DISPATCH-RECORD:` line |
+
+**Only a run START is ever posted on the card.** `DISPATCH-RECORD:` is emitted for the `start` event and for nothing else — a skip and an end are appended to the audit file only. That is deliberate and it is the whole reason the comment step needs no filter of its own: a board where every unmapped label edit posted a "nothing happened" comment would be unreadable within a day, and an `end` comment would double every run's noise for a fact the audit trail already holds. An adapter that wants the end on the card reads it from `## Audit Location`; it must not re-derive it from the exit status.
+
+A job `if:` that pre-filters on a label is the one thing worth resisting: it duplicates the mapping in a second place, in a language the dispatcher cannot read, and the two drift on the day someone renames a tag in adoption. Let every labeled event through and let the routing core skip what it should skip — a skip is cheap, reported, and appended to the audit trail.
+
+### Untagged is not a case the adapter has to handle
+
+An issue carrying no mapped tag **runs nothing**: the dispatcher reports the skip and exits `0`, and with no `DISPATCH-RECORD:` line the comment step posts nothing. That includes the **unlabelled** issue, where `join(github.event.issue.labels.*.name, ',')` renders an empty string: `--card-tags` reads an empty value as the observation "this card carries no labels", so the adapter needs no guard clause and no conditional call — passing what the trigger saw is always correct. That is the opt-in boundary of the whole feature, and it lives in the routing core precisely so that no adapter can widen it by accident. The same holds when `tech/automation.md` declares no `## Workflows` section at all — the run reports `no mapping declared` and exits cleanly.
+
+### Before wiring the trigger
+
+- **Run it once by hand**, on a card you tagged deliberately: `pair-cli run --card <id> --card-tags "<labels>" --dry-run` prints the route, the perimeter and the policy, and spawns nothing.
+- **Provision `pair-cli` and the engine on the runner.** The job above installs the CLI; the **engine** it spawns (`claude`, `pi`, `opencode`) and that engine's credentials are yours to add. Neither is present on a hosted runner by default, and a missing binary is `command not found` — a red job, with nothing routed and nothing written to the audit file.
+- **Scope the token to the repository the cards live in.** The adapter can only ever post where its token reaches; the engine credentials the run itself needs are a separate, and usually much broader, concern.
+- **Watch the audit file** (`## Audit Location`) for the first few cycles: every start, skip and end is there, including the ones the card never shows.
+- **Check the mapping resolves before the first trigger fires.** A `## Workflows` entry naming a workflow nobody installed — or one the dispatcher cannot hand the card to, i.e. anything outside the [catalog](automation-policy.md#the-workflows-a-mapping-can-name) — HALTs the dispatch *before* eligibility and routing, so it stops **every** card on the board, not only cards carrying that tag. That is the intended blast radius — a broken mapping is broken for everyone, and finding out only on the one card that happens to carry the tag would make the failure depend on which trigger fired first — but it means the dry run above is a check on the whole board, not on one card.
+- **Know how to clear a stale lock.** The per-card lock is a directory (`<working_path>/automation/locks/<card>/`) with no timeout and nothing to reap it: a run killed by SIGKILL, an OOM kill or a job timeout leaves it behind, and every later trigger on that card then skips with `run-in-progress` and exits `0` — automation silently off for that one card. The skip line prints the directory and how long it has been held; when no run is alive, `rm -rf` that directory to clear it. On ephemeral runners the workspace is discarded with the job, so this is a **persistent daemon** concern.
+
 ## Implementation Guidelines
 
 ### Setup Process
@@ -286,12 +400,4 @@ jobs:
 - Approval workflows and sign-off procedures
 - Compliance verification and audit trail management
 
-This GitHub automation framework provides comprehensive automation capabilities that integrate seamlessly with development workflows while maintaining visibility, control, and reliability for team collaboration and project management.Automation
-
-## Overview
-
-This document outlines automation strategies for GitHub-based collaboration workflows.
-
-## TODO
-
-This document needs to be completed with GitHub automation guidelines.
+This GitHub automation framework provides comprehensive automation capabilities that integrate seamlessly with development workflows while maintaining visibility, control, and reliability for team collaboration and project management.

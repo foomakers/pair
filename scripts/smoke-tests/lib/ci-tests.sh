@@ -48,6 +48,7 @@ CI_TESTS=(
   "batch-engine-install.sh"
   "registry-exclude.sh"
   "no-dataset-in-artifacts.sh"
+  "github-dispatch-adapter.sh"
   "runner-outcomes.sh"
 )
 
