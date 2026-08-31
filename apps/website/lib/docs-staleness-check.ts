@@ -437,8 +437,8 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  *
  * Positional, deliberately, and not a list of prose words to keep extending: the binary
  * counts as an invocation only at the start of an inline code span or of a fenced line,
- * optionally behind `$ ` or an npx runner (`npx [flags] [@scope/]<bin>[@version]`). That
- * is what separates an instruction
+ * optionally behind `$ ` or a package-manager runner (`<runner> [flags] [@scope/]<bin>[@version]`).
+ * That is what separates an instruction
  * from English — "common pair-cli workflows" and "the pair-cli version it invokes" are
  * prose and must not fail the gate, while `` `pair-cli init` `` is a command that does
  * not exist. The previous shape kept a PROSE_WORDS allow-list, which is the maintenance
@@ -463,12 +463,28 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * multi-space or tab invocations ever appear, narrow the DIAGRAM instead (e.g. require the
  * run of whitespace to align with another line's column).
  *
- * The npx runner is a PREFIX of the binary, never a slot that consumes it. An earlier shape
+ * The runner is a PREFIX of the binary, never a slot that consumes it. An earlier shape
  * spelled it `npx\s+(?:--no\s+)?@?[\w/.-]+\s+` — a package token followed by a still-required
  * literal binary — so the real form `npx --no @foomakers/pair-cli <cmd>` could not match at
  * all and every npx-prefixed invocation in the docs was invisible to the gate. The scope
  * (`@foomakers/`) and the version (`@latest`) therefore attach to the captured binary here,
- * and the flags are what sit between `npx` and it.
+ * and the flags are what sit between the runner and it.
+ *
+ * The runner list is every form the docs PUBLISH, not `npx` alone. While `npx` was the only
+ * one, `pnpm dlx pair-cli install` (reference/cli/workflows.mdx), `pnpm dlx pair-cli
+ * update-link --dry-run`, `pnpm pair-cli install` (tutorials/team-setup.mdx) and `pnpm
+ * pair-cli --version` (tutorials/first-project.mdx) sat behind a runner the rule could not
+ * see: dropping the `-cli` on any of them returned `[]` and shipped green, and an unknown
+ * command behind the same runner (`pnpm dlx pair-cli kb validate`) was invisible too.
+ *
+ * `pnpm dlx` / `pnpm exec` / `yarn dlx` / `npx` consume a flag run; a BARE package manager
+ * (`pnpm <bin> <cmd>`) does not, and that asymmetry is load-bearing. `pnpm --filter <pkg>`
+ * puts a PACKAGE NAME in flag-argument position, and this repo's package is literally
+ * called `pair-cli` — consuming the `--filter` flag together with its argument would read the filter's argument as
+ * the binary and the script name as its command, so `pnpm --filter @pair/pair-cli build`
+ * would be reported as the nonexistent command `build` on three pages that are correct as
+ * written. Both halves are pinned in the suite. Add a runner here when the docs start
+ * publishing one, and give it the flag run only if its flags cannot take a package argument.
  *
  * The span rule TOKENIZES real code spans (`` `…` `` pairs, `CODE_SPAN`) and anchors the
  * prefix at the start of the span's CONTENT — it does not scan for the prefix "after a
@@ -491,9 +507,12 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * loosening the span shape.
  */
 const PUBLISHED_BIN = 'pair-cli'
+/** `npx`/`pnpm dlx`/`pnpm exec`/`yarn dlx` take a flag run; a bare `pnpm` must not (see above). */
+const RUNNER =
+  String.raw`(?:(?:npx|pnpm[ \t]+dlx|pnpm[ \t]+exec|yarn[ \t]+dlx)[ \t]+(?:-{1,2}[\w-]+[ \t]+)*` +
+  String.raw`|pnpm[ \t]+)?`
 const INVOCATION_PREFIX =
-  String.raw`(?:\$[ \t]*)?(?:npx[ \t]+(?:-{1,2}[\w-]+[ \t]+)*)?` +
-  String.raw`(?:@[\w.-]+/)?(pair-cli|pair)(?:@[\w.-]+)? `
+  String.raw`(?:\$[ \t]*)?` + RUNNER + String.raw`(?:@[\w.-]+/)?(pair-cli|pair)(?:@[\w.-]+)? `
 /** One inline code span's CONTENT — delimiters paired, never crossing a line. */
 const CODE_SPAN = /`([^`\n]+)`/g
 /**

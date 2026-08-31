@@ -264,6 +264,77 @@ describe('checkDocsCommands', () => {
     expect(errs[0]).toContain('pair-cli install')
   })
 
+  // US-449 round 6: npx was the ONLY runner the prefix knew, and the docs publish three
+  // other forms today — `pnpm dlx pair-cli install` (reference/cli/workflows.mdx:269),
+  // `pnpm pair-cli install` (tutorials/team-setup.mdx:48), `pnpm pair-cli --version`
+  // (tutorials/first-project.mdx:75). Drop the `-cli` on any of them and the gate returned
+  // [] — the drift this rule exists to catch, on the exact lines the site publishes.
+  it('flags a bare `pair` behind `pnpm dlx` — the form workflows.mdx publishes', () => {
+    const errs = checkDocsCommands(doc('```bash\npnpm dlx pair install\n```'), commands)
+    expect(errs).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  it('flags a bare `pair` behind a bare `pnpm` — the form team-setup.mdx publishes', () => {
+    const errs = checkDocsCommands(doc('Use `pnpm pair install` instead.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"pair install"')
+  })
+
+  it('flags a bare `pair` behind `yarn dlx` and `pnpm exec`', () => {
+    expect(checkDocsCommands(doc('```bash\nyarn dlx pair update\n```'), commands)).toHaveLength(1)
+    expect(checkDocsCommands(doc('```bash\npnpm exec pair install\n```'), commands)).toHaveLength(1)
+  })
+
+  it('sees an unknown command behind a non-npx runner too', () => {
+    const errs = checkDocsCommands(doc('```bash\npnpm dlx pair-cli kb validate\n```'), commands)
+    expect(errs).toEqual(['a.mdx tells the reader to run "pair-cli kb", which is not a command'])
+  })
+
+  it('passes the correct pnpm forms the docs already publish', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm dlx pair-cli install\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\npnpm dlx pair-cli update-link --dry-run\n```'), [
+        ...commands,
+        'update-link',
+      ]),
+    ).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npnpm pair-cli --version\n```'), commands)).toHaveLength(
+      0,
+    )
+  })
+
+  // Why the BARE package-manager form takes no flag run, while `npx`/`pnpm dlx` do:
+  // `pnpm --filter <pkg>` puts a PACKAGE NAME in flag-argument position, and this
+  // repo's package is literally called `pair-cli`. Consuming `--filter ` as a flag would
+  // read the filter's argument as the binary and the script name as its command —
+  // `pnpm --filter @pair/pair-cli build` would be reported as the nonexistent command
+  // `build`, on three pages that are correct as written.
+  it('does not read `pnpm --filter <pkg> <script>` as an invocation of the CLI', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm --filter @pair/pair-cli build\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\npnpm --filter pair-cli dev update .\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('Use `pnpm --filter` to scope a command.'), commands),
+    ).toHaveLength(0)
+  })
+
+  it('does not read a package INSTALL as an invocation', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm add -D @foomakers/pair-cli\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\nnpm install -g @foomakers/pair-cli\n```'), commands),
+    ).toHaveLength(0)
+  })
+
   // The reason the rule is positional rather than a prose-word allow-list: these are
   // English, and an earlier list-based version had to grow a word for each of them.
   it('ignores "pair-cli" used as a noun in prose', () => {
