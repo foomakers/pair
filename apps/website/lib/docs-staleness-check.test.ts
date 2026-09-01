@@ -533,6 +533,28 @@ describe('checkDocsCommands', () => {
     expect(errs).toHaveLength(1)
     expect(errs[0]).toContain('pair-cli install')
   })
+
+  // CommonMark's DOUBLED delimiter is covered even though `CODE_SPAN` balances no run
+  // lengths: the attempt at the outer backtick fails (`[^`\n]+` cannot match the backtick
+  // that follows), the scan retries one character on and pairs the INNER delimiters. Pinned
+  // because the docstring next to `CODE_SPAN` used to claim the opposite — and a writer who
+  // trusted it would double the delimiters to quote a wrong form deliberately and get an
+  // unexplained red, with "balance the delimiter run" as the recorded (and useless) remedy.
+  it('tokenizes a DOUBLED-backtick span, both directions', () => {
+    const errs = checkDocsCommands(doc('Run ``pair install`` now.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('write "pair-cli install"')
+    expect(checkDocsCommands(doc('Run ``pair-cli install`` now.'), commands)).toHaveLength(0)
+  })
+
+  it('flags a wrong form quoted in a doubled span — doubling is not an exemption', () => {
+    const errs = checkDocsCommands(doc('Never write ``pair init``.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"init" is not one of its commands')
+    // The way to show a wrong form on a docs page is unbackticked prose: the rule is
+    // positional (span content / fenced line), so prose is outside it by construction.
+    expect(checkDocsCommands(doc('Never write pair init.'), commands)).toHaveLength(0)
+  })
 })
 
 describe('buildValidRoutes', () => {

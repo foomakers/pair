@@ -514,12 +514,25 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * is outside every span, and a fence (```` ``` ````) yields no span at all since a span needs
  * a non-backtick character between its delimiters. Both cases are pinned in the suite.
  *
- * Only SINGLE-backtick spans are tokenized. CommonMark also allows a doubled delimiter
- * (`` ``pair install`` ``), and such a span is invisible to this gate — `CODE_SPAN` would
- * have to balance run lengths to see it. Deliberate while the corpus uses none: every
- * doubled-backtick hit across the 84 pages is a fence opener (```` ```text ````), zero are
- * inline spans. If a page ever authors one, balance the delimiter run rather than
- * loosening the span shape.
+ * CommonMark's DOUBLED delimiter (`` ``pair install`` ``) is tokenized TOO, without
+ * `CODE_SPAN` balancing run lengths: the attempt at the outer backtick fails (`[^`\n]+`
+ * cannot match the backtick that follows), the scan retries one character on and pairs the
+ * INNER delimiters, so the span content arrives verbatim. Both directions are pinned in the
+ * suite; nothing here needs a balanced delimiter run. And doubling is not an EXEMPTION: a
+ * page that wants to quote a wrong form deliberately writes it as unbackticked prose, which
+ * this positional rule (span content / fenced line) does not reach by construction.
+ */
+/**
+ * The canonical binary name — the one place inside this package where it is written, and
+ * the alternation below is BUILT from it, so a `bin` rename is a one-line edit here. Were
+ * the alternation a literal, renaming this constant alone would leave the gate unable to
+ * see the NEW name at all (silent, the exact blindness US-449 removed) while reporting the
+ * old correct lines as wrong. `pair` stays a literal beside it because it is the known-WRONG
+ * binary, not a second name for the published one — on a future rename, add the superseded
+ * name there too for as long as the corpus still carries it.
+ *
+ * Interpolated into a regex as-is, which an npm bin name may be (`[\w.-]`-ish); a future
+ * name carrying a regex metacharacter would need escaping.
  */
 const PUBLISHED_BIN = 'pair-cli'
 /**
@@ -533,8 +546,18 @@ const RUNNER =
   String.raw`(?:(?:npx|pnpm[ \t]+dlx|pnpm[ \t]+exec|yarn[ \t]+dlx)[ \t]+(?:` +
   RUNNER_FLAG +
   String.raw`)*|pnpm[ \t]+)?`
+/**
+ * Group 1: the binary a line names — the published one (from `PUBLISHED_BIN`) or the legacy
+ * `pair` that no install creates. `PUBLISHED_BIN` is first so the longer name wins the
+ * alternation when one is a prefix of the other.
+ */
+const BINARY = `(${PUBLISHED_BIN}|pair)`
 const INVOCATION_PREFIX =
-  String.raw`(?:\$[ \t]*)?` + RUNNER + String.raw`(?:@[\w.-]+/)?(pair-cli|pair)(?:@[\w.-]+)? `
+  String.raw`(?:\$[ \t]*)?` +
+  RUNNER +
+  String.raw`(?:@[\w.-]+/)?` +
+  BINARY +
+  String.raw`(?:@[\w.-]+)? `
 /** One inline code span's CONTENT — delimiters paired, never crossing a line. */
 const CODE_SPAN = /`([^`\n]+)`/g
 /**
