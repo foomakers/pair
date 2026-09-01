@@ -48,6 +48,19 @@ const allSkillDocs = (): string[] => {
   return walk(root).sort()
 }
 
+/** Every `.mdx` page of the docs site, recursively, as repo-root-relative paths. */
+const DOCS_ROOT = 'apps/website/content/docs'
+const allDocsPages = (): string[] => {
+  const root = join(REPO_ROOT, DOCS_ROOT)
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+      const abs = join(dir, entry.name)
+      if (entry.isDirectory()) return walk(abs)
+      return entry.isFile() && entry.name.endsWith('.mdx') ? [relative(REPO_ROOT, abs)] : []
+    })
+  return walk(root).sort()
+}
+
 describe('code-host / PM-tool split — WoW schema (#236, AC1)', () => {
   const wow = dataset(WOW_TEMPLATE)
 
@@ -457,17 +470,22 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     [...content.matchAll(/```markdown\n([\s\S]*?)```/g)].map(m => m[1])
 
   /**
-   * Does a snippet DECLARE a code host? Structure, not substring.
+   * Does a snippet DECLARE a code host? The `code-host:` key line, nothing else.
    *
-   * `way-of-working-pm-resolution.md` § Section ownership puts `code-host` inside
-   * `## Git Workflow`, and its step 4 explicitly PERMITS declaring a `code-host` that
-   * names the same tool as `pm-tool` ("treat it exactly as if it were omitted"). So a
-   * hosts-code guide that spelled the explicit-but-equal form, or merely mentioned the
-   * word in a comment inside its snippet, is not wrong — only a guide that ships a
-   * declaration in its copy-paste block stops showing the zero-configuration path.
+   * NOT the `## Git Workflow` heading: `way-of-working-pm-resolution.md` § Section
+   * ownership gives that heading BOTH `code-host` and `base-branch`, and its
+   * `base-branch` resolution names `## Git Workflow` → `base-branch` as *the current
+   * placement*. A hosts-code guide documenting a non-default base branch therefore
+   * ships the heading with no code host in it — legal, and the recommended placement.
+   * Keying on the heading accused exactly that guide of declaring a code host.
+   *
+   * Step 4 of the resolution rule also PERMITS a `code-host` naming the same tool as
+   * `pm-tool` ("treat it exactly as if it were omitted") — still a declaration, so
+   * still off the zero-configuration path a hosts-code guide must show; and a prose
+   * mention of the word inside the block is not a declaration at all.
    */
   const declaresCodeHost = (snippet: string): boolean =>
-    /^##\s+Git Workflow\s*$/m.test(snippet) || /^\s*[-*]?\s*`?code-host`?\s*:/m.test(snippet)
+    /^\s*[-*]?\s*`?code-host`?\s*:/m.test(snippet)
 
   for (const { guide, hostsCode } of WOW_SNIPPET_GUIDES) {
     for (const [rootLabel, root] of [
@@ -476,7 +494,7 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     ] as const) {
       it(`${guide} (${rootLabel}) — the way-of-working snippet ${
         hostsCode
-          ? 'ships no `## Git Workflow` declaration (it shows the zero-config path)'
+          ? 'ships no `code-host` declaration (it shows the zero-config path)'
           : 'declares code-host (or the first PR HALTs)'
       }`, () => {
         const snippets = wowSnippets(read(root, `${PM_TOOL_KB}/${guide}`))
@@ -575,6 +593,25 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
       expect(
         declaresCodeHost(
           '- Azure DevOps is adopted for project management.\n  It hosts code, so no `code-host` line is needed.',
+        ),
+      ).toBe(false)
+    })
+
+    // `## Git Workflow` owns base-branch too, and that is its CURRENT placement per the
+    // resolution rule — so a hosts-code guide documenting `develop` ships the heading
+    // with no code host under it. Keying the predicate on the heading called that guide
+    // a code-host declaration and reddened the gate on legal, recommended content.
+    it('declaresCodeHost is false for a Git Workflow section that only sets base-branch', () => {
+      expect(
+        declaresCodeHost(
+          [
+            '- Azure DevOps is adopted for project management.',
+            '  Organization: <org>. Project: <project>.',
+            '',
+            '## Git Workflow',
+            '',
+            '- `base-branch`: `develop`.',
+          ].join('\n'),
         ),
       ).toBe(false)
     })
@@ -731,12 +768,14 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
    * `never mirrored onto Boards`) and pinning the noun let exactly that phrasing ship
    * unscoped. Row-scoped mentions with no `onto` (linear.mdx's Review table cell,
    * `review state is never mirrored`) stay out of scope — the row names the event.
+   *
+   * The surface is the WHOLE docs tree, walked, not `pm-tools/` plus a hand-appended
+   * page: the claim's natural home also includes `concepts/pr-state-flow.mdx` (where
+   * `reference/guidelines-catalog.mdx` routes readers for exactly this topic), and any
+   * page named rather than walked is a door the sweep does not watch.
    */
   it('every "never mirrored onto X" claim on the docs site is scoped to PR states', () => {
-    const pages = readdirSync(join(REPO_ROOT, 'apps/website/content/docs/pm-tools'))
-      .filter(name => name.endsWith('.mdx'))
-      .map(name => `apps/website/content/docs/pm-tools/${name}`)
-      .concat('apps/website/content/docs/concepts/code-host.mdx')
+    const pages = allDocsPages()
     let claims = 0
     for (const rel of pages) {
       for (const line of read(REPO_ROOT, rel).split('\n')) {
@@ -749,6 +788,41 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
       }
     }
     expect(claims, 'no no-mirroring claim found at all — has the wording moved?').toBeGreaterThan(0)
+  })
+
+  /**
+   * The `In Review` transition is CONDITIONAL: `linear-implementation.md` § State
+   * Mapping says a team without an `In Review` state has none mapped to `Review`, and
+   * skills report the gap instead of guessing. A page that promises the transition flat
+   * ("moves the issue to In Review when the PR opens") tells a reader on a stock Linear
+   * team — Backlog / Todo / In Progress / Done — to expect something that will never
+   * happen, and contradicts the very table it points at.
+   *
+   * Detector: a TRANSITION to the state (`→ In Review`, `moves … to "In Review"`), not
+   * the bare words — a state-mapping table row or a glossary mention asserts nothing.
+   * The qualifier must sit on the CLAIM's own line: the defect this closes is precisely
+   * a flat promise followed a line later by its negation, which a window would accept.
+   */
+  it('every "→ In Review" promise on the docs site says the state is not guaranteed', () => {
+    const TRANSITION = /(→|->|moves?\b[^|\n]{0,40}\bto)\s*\**"?In Review"?/i
+    const QUALIFIER = /only if|if the team|where the team|teams? (that|which) have|default teams/i
+    let claims = 0
+    const unconditional: string[] = []
+    for (const rel of allDocsPages()) {
+      const lines = read(REPO_ROOT, rel).split('\n')
+      for (const [i, line] of lines.entries()) {
+        if (!TRANSITION.test(line)) continue
+        claims++
+        if (!QUALIFIER.test(line)) unconditional.push(`${rel}:${i + 1}`)
+      }
+    }
+    expect(
+      unconditional,
+      'unconditional "In Review" promise — Linear\'s default teams ship no such state (see the Status Transitions table)',
+    ).toEqual([])
+    expect(claims, 'no In Review transition found at all — has the wording moved?').toBeGreaterThan(
+      0,
+    )
   })
 
   it('the Linear guide says who provisions the chromatic risk:/cost: labels', () => {
