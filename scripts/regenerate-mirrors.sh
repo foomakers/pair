@@ -33,6 +33,13 @@
 # happy path exercisable against a throwaway fixture instead of the real repo —
 # the same split `scripts/format-lib/run-format.sh` already uses.
 #
+# Consequence, and it is intended: the toolchain must be installed in the tree being
+# realigned. A freshly created linked worktree (`git worktree add`, the shape pair's own
+# automation uses) has no `node_modules/`, so this exits 1 with "run `pnpm install`
+# first" — and `/pair-capability-publish-pr` HALTs on that before creating the PR. That
+# tree cannot pass the quality gate one step later either, so the outcome is the same
+# either way; refusing here just names the cause with the shorter message.
+#
 # Exit codes:
 #   0 — the mirrors match the local dataset (regenerated, or already in sync)
 #   1 — broken: no git working tree, no dataset, no toolchain, or the CLI failed.

@@ -85,7 +85,7 @@ read from the adoption, never named in the skill.**
 
 ## Alternatives Considered
 
-- **Step in Phase 2, after the push (the card's proposal)**: unreachable on drift, because Phase 1
+- **Step in Phase 2, after the gate (the card's proposal)**: unreachable on drift, because Phase 1
   HALTs first; and it would leave the gate's verdict describing a tree the PR does not contain.
 - **Hardcode `pnpm mirrors:regenerate` in the skill**: makes a repo-specific script part of a
   distributed corpus. Every adopter would get a step that fails or does nothing.

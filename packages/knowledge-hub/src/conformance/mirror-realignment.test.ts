@@ -85,7 +85,9 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
 
   it('commits the generated paths ALONE, and never stages the whole tree', () => {
     const p1 = phase1()
-    expect(p1).toContain('git add -A')
+    // Only the negated form is asserted: a bare `toContain('git add -A')` is satisfied by
+    // the exact prose this test exists to forbid ("stage everything with `git add -A`"),
+    // so it cannot distinguish the rule from its inverse. The regex below proves both.
     expect(p1).toMatch(/never `git add -A`/)
     expect(p1).toMatch(/stage \*\*only\*\* the paths that comparison produced/)
     expect(p1).toMatch(/never mixed into a feature commit/)

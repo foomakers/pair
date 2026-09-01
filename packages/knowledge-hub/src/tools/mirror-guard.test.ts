@@ -543,9 +543,11 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
   // the working tree's own dataset and nothing else.
   it('names the LOCAL regeneration command, never the published-KB install (#419)', () => {
     const message = captureThrownMessage(() => assertKb(REL, expected, 'drifted\n'))
-    const remedyLine = message
-      .split('\n')
-      .find(line => line.startsWith('Regenerate with')) as string
+    const remedyLine = message.split('\n').find(line => line.startsWith('Regenerate with'))
+    // Asserted, not cast: reword the guard's remedy line and `find` returns undefined, so
+    // a cast would surface the break as `TypeError: Cannot read properties of undefined`
+    // instead of naming the contract that broke — the remedy line must still be there.
+    expect(remedyLine).toBeDefined()
     expect(remedyLine).toContain(MIRROR_REGENERATE_COMMAND)
     expect(remedyLine).not.toContain('pair update')
   })
