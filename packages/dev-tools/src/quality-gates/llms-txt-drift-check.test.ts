@@ -263,14 +263,19 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(result.message).not.toContain('their order or surrounding whitespace')
     expect(result.message).not.toMatch(/^Regenerate with/m)
     // The recipe named is the one PROVEN to rewrite the working tree under the `eol=lf`
-    // attribute. `git add --renormalize` is the idiomatic-sounding alternative and it is
-    // inert when the INDEX is already LF — it stages nothing, the CRs stay on disk, and
-    // the gate stays red: advice that reads like a fix and leaves the contributor
-    // exactly where the loop started.
-    expect(result.message).toContain('git config core.autocrlf false')
+    // attribute, and it touches nothing but the one file. `git add --renormalize` is the
+    // idiomatic-sounding alternative and it is inert when the INDEX is already LF — it
+    // stages nothing, the CRs stay on disk, and the gate stays red: advice that reads
+    // like a fix and leaves the contributor exactly where the loop started. A
+    // `git config core.autocrlf false` step is the other thing it must NOT say: the
+    // attribute overrides `autocrlf` on its own (verified on a `core.autocrlf=true`
+    // clone: `rm` + `git checkout --` alone → `w/lf`, 0 CRs, config untouched), so the
+    // config line would rewrite the contributor's repo-local git config for every file
+    // to fix one.
     expect(result.message).toContain(
       `rm ${TRACKED_INDEX_PATH} && git checkout -- ${TRACKED_INDEX_PATH}`,
     )
+    expect(result.message).not.toContain('git config')
     expect(result.message).not.toContain('--renormalize')
   })
 

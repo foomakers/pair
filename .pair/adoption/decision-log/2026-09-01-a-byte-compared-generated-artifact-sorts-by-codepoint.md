@@ -67,11 +67,13 @@ on any machine that checks it out.** Two rules follow, one per axis of variation
    and under an `\n`-only split it collapses to a SINGLE segment — the whole index as one
    unreadable `extra` line, no terminator caution, and the closing advice back to the bare
    `pair update` this rule exists to prevent. The recipe it prints is the one that was
-   **run** against a
-   `core.autocrlf=true` clone (`git config core.autocrlf false`, then `rm` + `git
-   checkout --`): the idiomatic `git add --renormalize` is inert when the index side is
-   already LF — it stages nothing, all 583 CR-carrying lines stay on disk and the gate
-   stays red.
+   **run** against a `core.autocrlf=true` clone — `rm` + `git checkout --`, the one file
+   and nothing else: the idiomatic `git add --renormalize` is inert when the index side is
+   already LF (it stages nothing, all 583 CR-carrying lines stay on disk and the gate stays
+   red), and a `git config core.autocrlf false` step in front is unnecessary (the `eol=lf`
+   attribute overrides `autocrlf` by itself — with the config left at `true`, the two-step
+   recipe alone gave `w/lf`, 0 CRs, gate green) and would rewrite repo-local git config for
+   every file to fix one.
 
 Platform scope, since the question is what makes rule 2 necessary: **LF is the repo's
 normal form on every platform**, in the index and in the working tree. Windows is not

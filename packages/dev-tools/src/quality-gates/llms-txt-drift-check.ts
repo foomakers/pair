@@ -233,8 +233,8 @@ function sparseTreeCaution(emptiedSections: string[]): string {
  * `.pair/llms.txt` is written by the generator with `\n` and compared byte for byte, so
  * a checkout that rewrites its terminators makes it unequal by construction. Git does
  * exactly that under `core.autocrlf=true` (the Windows default), which is why the repo's
- * `.gitattributes` pins the file to `eol=lf` — this caution is what a checkout made
- * BEFORE that pin, or against a git that never read it, gets told.
+ * `.gitattributes` pins the file to `eol=lf` — this caution is what a working copy
+ * checked out BEFORE that pin (and not rewritten since) gets told.
  *
  * Naming `pair update` here would be the one piece of advice that cannot work: the
  * regenerated file lands as LF and the next checkout puts the CRs back. The exit is a
@@ -246,6 +246,14 @@ function sparseTreeCaution(emptiedSections: string[]): string {
  * tree keeps its CRs — verified on a `core.autocrlf=true` clone, where it left all 583
  * CR-carrying lines in place and the gate red. Deleting the file first is what forces
  * git to write it out again, under the attribute.
+ *
+ * The recipe touches ONE file and nothing else — no `git config core.autocrlf false`
+ * in front of it. The `eol=lf` attribute overrides `autocrlf` on its own (same clone,
+ * config left at `true`: `rm` + `git checkout --` alone → `w/lf`, 0 CRs, gate green),
+ * so the config step would rewrite the contributor's repo-local git config for every
+ * file in order to fix one. The only state where it would matter — the attribute
+ * absent from index and tree — cannot be reached from this message, which ships in
+ * the same commit as the pin.
  *
  * ANY CR triggers this, not just `\r\n`. A bare-CR file is not a state git produces —
  * but the cause (a conversion outside the generator), the diagnosis and the exit are
@@ -260,7 +268,6 @@ function carriageReturnCaution(): string {
     `  Regenerating will NOT fix this — the write lands as LF and the next checkout\n` +
     `  restores the CRs. Re-check out the file instead, under the LF pin this repo\n` +
     `  carries in .gitattributes:\n` +
-    `    git config core.autocrlf false\n` +
     `    rm ${TRACKED_INDEX_PATH} && git checkout -- ${TRACKED_INDEX_PATH}`
   )
 }
