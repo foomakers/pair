@@ -98,6 +98,14 @@ function isolatedHome(dir: string): Record<string, string> {
   return { HOME: home }
 }
 
+// Every test here shells out to the REAL script, which builds the CLI (turbo, cached
+// after the first) and then runs a full 7-registry regeneration over a fixture tree.
+// That is seconds, not milliseconds, and vitest's 5s default is measured while turbo
+// runs every other package's suite in parallel — so the default is a flake, not a
+// budget. `SCRIPT_RUN_TIMEOUT_MS` is per test, and the same explicit-timeout treatment
+// run-format.test.ts already gives its multi-subprocess cases.
+const SCRIPT_RUN_TIMEOUT_MS = 120_000
+
 describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419)', () => {
   let tmp = ''
 
@@ -106,58 +114,74 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
     tmp = ''
   })
 
-  it('regenerates a drifted mirror from the LOCAL dataset (AC1)', () => {
-    tmp = makeFixture()
-    const mirror = join(tmp, '.pair/knowledge/index.md')
-    write(mirror, '# hand-edited drift\n')
+  it(
+    'regenerates a drifted mirror from the LOCAL dataset (AC1)',
+    () => {
+      tmp = makeFixture()
+      const mirror = join(tmp, '.pair/knowledge/index.md')
+      write(mirror, '# hand-edited drift\n')
 
-    const result = run(tmp, isolatedHome(tmp))
+      const result = run(tmp, isolatedHome(tmp))
 
-    expect(result.status).toBe(0)
-    expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
-  })
+      expect(result.status).toBe(0)
+      expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
 
-  it('never fetches or installs a published KB version (AC1)', () => {
-    tmp = makeFixture()
-    write(join(tmp, '.pair/knowledge/index.md'), '# hand-edited drift\n')
-    const env = isolatedHome(tmp)
+  it(
+    'never fetches or installs a published KB version (AC1)',
+    () => {
+      tmp = makeFixture()
+      write(join(tmp, '.pair/knowledge/index.md'), '# hand-edited drift\n')
+      const env = isolatedHome(tmp)
 
-    const result = run(tmp, env)
+      const result = run(tmp, env)
 
-    expect(result.status).toBe(0)
-    // A published-version resolution caches the downloaded KB under `~/.pair/kb/<version>`.
-    // Its absence is the observable difference between "regenerated from the working tree"
-    // and "updated to whatever is published", which is the whole point of the story.
-    expect(existsSync(join(env['HOME'] as string, '.pair/kb'))).toBe(false)
-  })
+      expect(result.status).toBe(0)
+      // A published-version resolution caches the downloaded KB under `~/.pair/kb/<version>`.
+      // Its absence is the observable difference between "regenerated from the working tree"
+      // and "updated to whatever is published", which is the whole point of the story.
+      expect(existsSync(join(env['HOME'] as string, '.pair/kb'))).toBe(false)
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
 
-  it('is idempotent — a second run produces no further diff (AC2)', () => {
-    tmp = makeFixture()
-    write(join(tmp, '.pair/knowledge/index.md'), '# hand-edited drift\n')
-    run(tmp, isolatedHome(tmp))
-    git(tmp, ['add', '-A'])
-    git(tmp, ['commit', '-q', '-m', 'regenerated'])
+  it(
+    'is idempotent — a second run produces no further diff (AC2)',
+    () => {
+      tmp = makeFixture()
+      write(join(tmp, '.pair/knowledge/index.md'), '# hand-edited drift\n')
+      run(tmp, isolatedHome(tmp))
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'regenerated'])
 
-    const second = run(tmp, isolatedHome(tmp))
+      const second = run(tmp, isolatedHome(tmp))
 
-    expect(second.status).toBe(0)
-    expect(git(tmp, ['status', '--porcelain'])).toBe('')
-  })
+      expect(second.status).toBe(0)
+      expect(git(tmp, ['status', '--porcelain'])).toBe('')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
 
-  it('leaves unstaged authored changes untouched (dirty-tree edge case)', () => {
-    tmp = makeFixture()
-    const authored = join(tmp, 'src/authored.ts')
-    write(authored, 'export const authored = 1\n')
-    git(tmp, ['add', '-A'])
-    git(tmp, ['commit', '-q', '-m', 'fixture'])
-    writeFileSync(authored, 'export const authored = 2\n')
-    write(join(tmp, '.pair/knowledge/index.md'), '# hand-edited drift\n')
+  it(
+    'leaves unstaged authored changes untouched (dirty-tree edge case)',
+    () => {
+      tmp = makeFixture()
+      const authored = join(tmp, 'src/authored.ts')
+      write(authored, 'export const authored = 1\n')
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'fixture'])
+      writeFileSync(authored, 'export const authored = 2\n')
+      write(join(tmp, '.pair/knowledge/index.md'), '# hand-edited drift\n')
 
-    const result = run(tmp, isolatedHome(tmp))
+      const result = run(tmp, isolatedHome(tmp))
 
-    expect(result.status).toBe(0)
-    expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
-  })
+      expect(result.status).toBe(0)
+      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
 
   it('exits non-zero and names the reason when the dataset is missing (AC7)', () => {
     tmp = realpathSync(mkdtempSync(join(tmpdir(), 'regen-mirrors-')))
