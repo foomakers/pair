@@ -32,8 +32,10 @@ describe('generateLlmsTxt over the real repo tree — the sections the index mus
   // to find project context carried NO Adoption sections at all: an adopting
   // project ran `pair install` and got an llms.txt missing its own PRD,
   // architecture and tech-stack, the highest-value entries in the file, with
-  // nothing reporting it. Byte equality above pins whatever the generator emits,
-  // so without this case the wrong output would be asserted correct.
+  // nothing reporting it. The byte-equality guard in
+  // `packages/dev-tools/src/quality-gates/llms-txt-drift-check.ts` pins whatever
+  // the generator emits, so without this case the wrong output would be asserted
+  // correct.
   it('indexes the project adoption files from the real layout', async () => {
     const generated = await generateLlmsTxt(fileSystemService, REPO_ROOT)
 
