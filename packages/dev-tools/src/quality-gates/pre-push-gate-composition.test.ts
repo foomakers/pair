@@ -9,6 +9,7 @@ import {
   ROOT_PACKAGE_JSON,
   GUARD_SCRIPT,
   REMEDY_SCRIPT,
+  MIRROR_REMEDY_SCRIPT,
   PRE_PUSH_REMEDY,
 } from './pre-push-gate-composition'
 
@@ -151,6 +152,17 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
     expect(PRE_PUSH_REMEDY).toContain('.claude/skills/**')
     expect(PRE_PUSH_REMEDY).toContain('skills:conformance')
   })
+
+  // #419. The re-sync step used to name `pair update`, which is an INSTALL command:
+  // it resolves and installs the latest PUBLISHED knowledge base. A contributor whose
+  // working tree drifted needs regeneration from the working tree's own dataset, so
+  // the advertised remedy depended on what had been released rather than on what was
+  // in front of them — the most plausible reason three recorded drifts were hand-ported
+  // instead of regenerated.
+  it('names the LOCAL regeneration command, not the published-KB install (#419)', () => {
+    expect(PRE_PUSH_REMEDY).toContain(`pnpm ${MIRROR_REMEDY_SCRIPT}`)
+    expect(PRE_PUSH_REMEDY).not.toContain('pair update')
+  })
 })
 
 // The gate no longer NAMES a formatter — it delegates to `pnpm format:check`.
@@ -253,6 +265,7 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
         'mdlint:fix':
           "turbo mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md'",
         [GUARD_SCRIPT]: 'pnpm --filter @pair/dev-tools pre-push-gate:check',
+        [MIRROR_REMEDY_SCRIPT]: './scripts/regenerate-mirrors.sh',
         ...scripts,
       },
     })
@@ -391,6 +404,17 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     const r = checkRootGate(JSON.stringify(scripts))
     expect(r.ok).toBe(false)
     expect(r.message).toContain(REMEDY_SCRIPT)
+  })
+
+  // Same dead-advice check, for the second command the remedy now names (#419). Both
+  // steps of a two-step remedy have to exist, or the half that does not is a loop back
+  // to `--no-verify` — which is the failure this guard was written to prevent for the first.
+  it('fails when the mirror-regeneration remedy does not exist', () => {
+    const scripts = JSON.parse(pkg({})) as { scripts: Record<string, string> }
+    delete scripts.scripts[MIRROR_REMEDY_SCRIPT]
+    const r = checkRootGate(JSON.stringify(scripts))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain(MIRROR_REMEDY_SCRIPT)
   })
 
   it('fails loudly when there is no gate at all, rather than passing vacuously', () => {

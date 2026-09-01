@@ -78,7 +78,7 @@ import {
 // `SkillMd` in its name (the context it was introduced in), `diffSkillMd` is a
 // generic compact line-diff. Reusing it keeps ONE drift-report format across
 // both mirror guards.
-import { diffSkillMd } from './skill-md-mirror'
+import { diffSkillMd, MIRROR_REGENERATE_COMMAND } from './skill-md-mirror'
 
 /**
  * One (dataset source → installed copy) pair this module guards: where the
@@ -461,7 +461,7 @@ export function assertMirrorMatches(
     throw new Error(
       `Mirror ${mirrorPath} has drifted.\n` +
         `${compared}\n` +
-        `Regenerate with 'pair update' — never hand-edit the mirror.\n` +
+        `Regenerate with '${MIRROR_REGENERATE_COMMAND}' — never hand-edit the mirror.\n` +
         `--- expected (dataset -> real 'pair update' transform)\n` +
         `+++ actual (installed mirror on disk)\n` +
         `${diffSkillMd(expected, actual)}`,

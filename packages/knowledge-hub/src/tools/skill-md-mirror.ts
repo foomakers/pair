@@ -64,6 +64,22 @@ import {
   walkMarkdownFiles,
 } from '@pair/content-ops'
 
+/**
+ * The command every mirror guard in this package names when it fails — stated ONCE,
+ * so the two guards cannot advertise different remedies for the same drift.
+ *
+ * It is deliberately NOT `pair update` (#419). That command resolves and INSTALLS the
+ * latest published knowledge base, so a contributor whose working tree drifted was being
+ * told to update the KB to whatever had been released — a different operation, and a
+ * non-deterministic one. `pnpm mirrors:regenerate` regenerates the mirrors from the
+ * working tree's own dataset, offline. Three of the seven drift incidents on record were
+ * hand-ported mirrors, which is what a remedy nobody believes in produces.
+ *
+ * References to the `pair update` TRANSFORM elsewhere in this module are a different
+ * claim (what the mirror is compared against) and stay as they are.
+ */
+export const MIRROR_REGENERATE_COMMAND = 'pnpm mirrors:regenerate'
+
 /** The exact naming-transform options the `skills` registry uses in config.json. */
 export const SKILL_COPY_OPTS = { flatten: true, flattenDepth: 2, prefix: 'pair' } as const
 
@@ -420,13 +436,13 @@ export function assertRootArtifactMatches(
   if (actual === undefined) {
     throw new Error(
       `Root mirror missing for dataset artifact '${datasetArtifact}': ` +
-        `${rootPath} does not exist. Run 'pair update' to regenerate it.`,
+        `${rootPath} does not exist. Run '${MIRROR_REGENERATE_COMMAND}' to regenerate it.`,
     )
   }
   if (actual !== expected) {
     throw new Error(
       `Root mirror for dataset artifact '${datasetArtifact}' has drifted from its dataset ` +
-        `source transform. Run 'pair update' to regenerate ${rootPath}.\n` +
+        `source transform. Run '${MIRROR_REGENERATE_COMMAND}' to regenerate ${rootPath}.\n` +
         `--- expected (dataset → real transform)\n` +
         `+++ actual (root mirror on disk)\n` +
         `${diffSkillMd(expected, actual)}`,

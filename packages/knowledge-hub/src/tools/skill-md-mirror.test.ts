@@ -12,6 +12,7 @@ import {
   diffSkillMd,
   SKILL_COPY_OPTS,
   skillCopySyncOptions,
+  MIRROR_REGENERATE_COMMAND,
   type DatasetTree,
 } from './skill-md-mirror'
 
@@ -455,7 +456,7 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
 
   it('FAILS loudly when the root mirror is missing (AC4)', () => {
     expect(() => assertRootArtifactMatches(SKILL, expected, undefined)).toThrow(
-      /missing[\s\S]*pair update/,
+      new RegExp(`missing[\\s\\S]*${MIRROR_REGENERATE_COMMAND}`),
     )
   })
 })
@@ -572,11 +573,11 @@ describe('drift-injection on sub-docs and nested references (non-SKILL.md artifa
     expect(() => assertRootArtifactMatches(SUB, sub, drifted)).toThrow(/drifted/)
   })
 
-  it('FAILS loudly when the sub-doc root copy is missing, pointing at pair update (AC4)', () => {
+  it('FAILS loudly when the sub-doc root copy is missing, pointing at the remedy (AC4)', () => {
     const message = captureThrownMessage(() =>
       assertRootArtifactMatches(SUB, mirror.byDatasetPath.get(SUB)!, undefined),
     )
-    expect(message).toMatch(/missing[\s\S]*pair update/)
+    expect(message).toMatch(new RegExp(`missing[\\s\\S]*${MIRROR_REGENERATE_COMMAND}`))
     expect(message).toContain(SUB)
     expect(message).toContain(SUB_ROOT)
   })

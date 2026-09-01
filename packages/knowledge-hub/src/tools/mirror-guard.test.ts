@@ -21,6 +21,7 @@ import {
   CLAUDE_MD_MIRROR,
   type GuardedMirror,
 } from './mirror-guard'
+import { MIRROR_REGENERATE_COMMAND } from './skill-md-mirror'
 
 // packages/knowledge-hub/src/tools -> repo root
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..')
@@ -531,8 +532,22 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
     const message = captureThrownMessage(() => assertKb(REL, expected, 'drifted\n'))
     expect(message).toContain(join(KB_MIRROR.mirrorRel, REL))
     expect(message).toContain(join(KB_MIRROR.datasetRel, REL))
-    expect(message).toContain("Regenerate with 'pair update'")
+    expect(message).toContain(`Regenerate with '${MIRROR_REGENERATE_COMMAND}'`)
     expect(message).toContain('never hand-edit the mirror')
+  })
+
+  // #419. The remedy used to be `pair update`, which INSTALLS the latest published
+  // knowledge base — so the fix for "your working tree drifted" depended on what had
+  // been released. Three of the seven recorded drifts were hand-ported instead, which
+  // is what a disproportionate remedy buys. The command named here regenerates from
+  // the working tree's own dataset and nothing else.
+  it('names the LOCAL regeneration command, never the published-KB install (#419)', () => {
+    const message = captureThrownMessage(() => assertKb(REL, expected, 'drifted\n'))
+    const remedyLine = message
+      .split('\n')
+      .find(line => line.startsWith('Regenerate with')) as string
+    expect(remedyLine).toContain(MIRROR_REGENERATE_COMMAND)
+    expect(remedyLine).not.toContain('pair update')
   })
 
   it('names the paths of the registry it was given, not the KB by default', () => {
