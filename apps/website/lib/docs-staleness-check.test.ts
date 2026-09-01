@@ -580,12 +580,13 @@ describe('checkDocsCommands', () => {
   // (two spans) and `:219` (one) — exist to quote a BACKTICKED literal, so their content holds
   // backticks; the `cell` fixture below is `:211` with both of its spans, plus the invocation an
   // author would add on the same line, and `prose` is the span-bearing clause of `:219` with that
-  // same invocation appended. Do NOT "restore" either fixture to its corpus line: the appended
-  // invocation IS the line-mate the parity leak used to blind, and dropping it from EITHER fixture
-  // leaves a line carrying no invocation — the loop below fails `toHaveLength(1)` and the suite
-  // goes red (measured, both). For `cell` the restored line is additionally byte-identical to the
-  // corpus-verbatim assertion below, so restoring it also duplicates a case covered there; `prose`
-  // has no such counterpart and simply turns red. A delimiter run that is balanced but whose
+  // same invocation appended. Do NOT drop the appended invocation from either fixture: it IS the
+  // line-mate the parity leak used to blind, and without it the line carries no invocation at all
+  // — the loop below fails `toHaveLength(1)` and the suite goes red (measured, both). Dropping it
+  // from `cell` additionally leaves `:211` byte-for-byte, i.e. duplicates the corpus-verbatim
+  // assertion below; `prose` is only the span-bearing EXCERPT of `:219` (the corpus clause runs on
+  // `; only triple-backtick/tilde *blocks* are excluded.`), so no restored-corpus reading of it
+  // exists and it simply turns red. A delimiter run that is balanced but whose
   // content excludes backticks still cannot pair them, and the same parity leak blinds the rest of
   // those lines.
   it('reads a doubled span whose CONTENT contains backticks, and the rest of its line', () => {
