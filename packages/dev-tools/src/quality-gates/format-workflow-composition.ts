@@ -17,9 +17,10 @@
  *   coverage.
  * - `paths:`, the same hole spelled positively — an allow-list excludes everything
  *   it does not name, so a markdown-only PR runs no check at all.
- * - a trigger narrowed off the base branch (`pull_request.branches: [release]`) or
- *   off the events that matter (`types: [closed]` runs the check only once the PR
- *   is closed). Whatever shapes the trigger shapes the coverage.
+ * - a trigger narrowed off the base branch (`pull_request.branches: [release]`, or
+ *   its negative spelling `branches-ignore: [main]`) or off the events that matter
+ *   (`types: [closed]` runs the check only once the PR is closed). Whatever shapes
+ *   the trigger shapes the coverage.
  * - `pull_request_target` instead of `pull_request`, which hands the base repo's
  *   credentials to a fork's head commit.
  * - a write-mode formatter, or a formatting auto-commit. The ADL 2026-07-31 ban
@@ -28,17 +29,24 @@
  * - dropping `push: main`, so drift on the base branch is invisible.
  * - dropping `concurrency`, so a superseded run keeps burning a runner and
  *   reporting a stale verdict for a ref that has already moved on.
- * - `continue-on-error: true`, `if: false`, or a write-scoped `permissions:` on the
- *   job. None of these touch a trigger or a step COMMAND, yet each turns the
- *   `format` context into one that cannot fail, never runs, or hands a
- *   write-scoped token to a job that executes PR-authored lifecycle scripts
- *   (`pnpm install`). AC5's "safe on fork PRs by construction, not by review" is
- *   only construction if the construction is asserted.
- * - dropping the failure-path remedy. `--list-different` prints the offending file
- *   and suppresses prettier's own "run with --write to fix" line, so a red check
- *   without that step hands the contributor this story exists for — hooks not
- *   installed, pushed with `--no-verify` — a bare filename and no instruction
- *   (AC1).
+ * - `continue-on-error: true`, ANY `if:` on the job, any step `if:` that is not the
+ *   remedy's `failure()` guard, or a write-scoped `permissions:`. None of these
+ *   touch a trigger or a step COMMAND, yet each turns the `format` context into one
+ *   that cannot fail, never runs, or hands a write-scoped token to a job that
+ *   executes PR-authored lifecycle scripts (`pnpm install`). AC5's "safe on fork PRs
+ *   by construction, not by review" is only construction if the construction is
+ *   asserted. `if:` is an ALLOW-list on purpose: a deny-list of literal falses
+ *   (`if: false`) waves through every never-true EXPRESSION — `if: github.event_name
+ *   == 'workflow_dispatch'` on the job, or `if: github.event_name == 'push'` on the
+ *   checking step, both leave a SUCCESS `format` context on unformatted code.
+ * - dropping the failure-path remedy, or widening it. `--list-different` prints the
+ *   offending file and suppresses prettier's own "run with --write to fix" line, so
+ *   a red check without that step hands the contributor this story exists for —
+ *   hooks not installed, pushed with `--no-verify` — a bare filename and no
+ *   instruction (AC1). And an unscoped `if: failure()` is JOB-scoped, so a failed
+ *   `pnpm install` is annotated "not formatted, run `pnpm format`" — a confident
+ *   wrong diagnosis over the real cause. The remedy is therefore conditioned on the
+ *   checking step's own `outcome`.
  *
  * Structure is asserted, never exact file text: comments, step names and action
  * versions must be editable without false-failing this guard.
@@ -167,6 +175,22 @@ function branchesOf(block: string[]): string[] | null {
   return listValueOf(block, 'branches')
 }
 
+/**
+ * A step's lines with the leading `- ` list marker blanked out, so `- name:` and the
+ * keys under it sit at ONE indent and a single `^ {n}key:` probe finds either.
+ */
+function levelledStep(step: string[]): string[] {
+  const [first, ...rest] = step
+  return [(first ?? '').replace(/^(\s*)-(\s)/, '$1 $2'), ...rest]
+}
+
+/** The scalar value of `key:` at exactly `indent` inside `block`, or `undefined`. */
+function scalarAt(block: string[], key: string, indent: number): string | undefined {
+  const header = block.find(line => new RegExp(`^ {${indent}}${key}:`).test(line))
+  if (header === undefined) return undefined
+  return header.replace(new RegExp(`^ {${indent}}${key}:\\s*`), '').trim()
+}
+
 /** Every job in the workflow, by name, with its own body lines. */
 function jobsOf(lines: string[]): { name: string; body: string[] }[] {
   const jobs = blockUnder(lines, 'jobs', 0)
@@ -262,8 +286,27 @@ export function readRootScripts(): Record<string, string> {
   return pkg.scripts ?? {}
 }
 
-/** A trigger block that does not cover the base branch reports on nothing that merges. */
+/**
+ * A trigger block that does not cover the base branch reports on nothing that merges.
+ *
+ * Both spellings, the way `paths`/`paths-ignore` are handled together: a missing
+ * filter means "every branch", so `branches-ignore` is invisible to `branchesOf` and
+ * a one-line `branches-ignore: [main]` under `pull_request` would leave every PR
+ * targeting the base branch unchecked with this guard green. The key is rejected
+ * outright rather than pattern-matched against `main` — `branches-ignore` is a glob
+ * list (`ma*`, `m[a]in`), and a filter that MIGHT exclude the one branch that must
+ * never be excluded buys nothing here.
+ */
 function baseBranchProblems(event: string, block: string[]): string[] {
+  const ignored = listValueOf(block, 'branches-ignore')
+  if (ignored !== null) {
+    return [
+      `the \`${event}\` trigger filters with \`branches-ignore: [${ignored.join(', ')}]\`: that is the\n` +
+        `  negative spelling of the same hole — one entry matching \`${BASE_BRANCH}\` and no change landing\n` +
+        `  on the base branch is ever checked, while the \`format\` context simply never reports. Use\n` +
+        `  \`branches:\` and name \`${BASE_BRANCH}\`.`,
+    ]
+  }
   const branches = branchesOf(block)
   if (branches === null || branches.includes(BASE_BRANCH)) return []
   return [
@@ -346,6 +389,9 @@ function triggerProblems(clean: string, lines: string[]): string[] {
   return [...problems, ...baseBranchProblems('push', push)]
 }
 
+/** The one accepted expression spelling: cancel WHEN the event is a pull request. */
+const CANCEL_ON_PULL_REQUEST = /github\.event_name\s*==\s*(['"])pull_request\1/
+
 /**
  * Supersession, NOT de-duplication. The group is keyed on `github.ref`, and the two
  * triggers never share a ref — a `pull_request` run is `refs/pull/<n>/merge`, a push
@@ -359,9 +405,12 @@ function triggerProblems(clean: string, lines: string[]): string[] {
  * `${BASE_BRANCH}` a minute apart share `format-refs/heads/main`, so the first
  * commit's run is cancelled and that commit carries no formatting verdict at all —
  * a dent in AC7's "drift on the base branch is visible". So the accepted spellings
- * are a literal `true` (cancel everywhere) or an expression conditioned on the
- * `pull_request` event (cancel on PRs, queue on the base branch, which is the
- * shipped choice); anything that cancels nothing on a PR is the dropped mitigation.
+ * are an ALLOW-list of two: a literal `true` (cancel everywhere), or an EQUALITY on
+ * the `pull_request` event (cancel on PRs, queue on the base branch — the shipped
+ * choice). A substring test for `pull_request` is not enough: `${{ github.event_name
+ * != 'pull_request' }}` contains it and inverts it, producing BOTH failure modes at
+ * once — nothing cancelled on a PR, and the first of two merges a minute apart
+ * cancelled on `main`.
  */
 function concurrencyProblems(lines: string[]): string[] {
   const concurrency = blockUnder(lines, 'concurrency', 0)
@@ -378,12 +427,14 @@ function concurrencyProblems(lines: string[]): string[] {
         '  a runner and reporting a stale verdict.',
     ]
   }
-  if (value === 'true' || /\bpull_request\b/.test(value)) return []
+  if (value === 'true' || CANCEL_ON_PULL_REQUEST.test(value)) return []
   return [
-    `the \`concurrency\` group sets \`cancel-in-progress: ${value}\`, which cancels nothing on a pull\n` +
-      '  request: a superseded run keeps burning a runner and reporting a stale verdict. Use `true`,\n' +
-      "  or an expression conditioned on the event (`${{ github.event_name == 'pull_request' }}`)\n" +
-      `  so runs on \`${BASE_BRANCH}\` queue instead of cancelling each other's verdict.`,
+    `the \`concurrency\` group sets \`cancel-in-progress: ${value}\`, which does not cancel a superseded\n` +
+      '  run on a pull request: that run keeps burning a runner and reporting a stale verdict for a ref\n' +
+      '  that has moved on. Accepted spellings are the literal `true`, or the EQUALITY `${{\n' +
+      "  github.event_name == 'pull_request' }}` — a negated form (`!=`) reads as conditional and is\n" +
+      `  the mitigation inverted: nothing cancelled on a PR, and on \`${BASE_BRANCH}\` two merges a minute\n` +
+      "  apart cancel each other's verdict.",
   ]
 }
 
@@ -413,6 +464,47 @@ function permissionProblems(name: string, body: string[]): string[] {
   ]
 }
 
+/** The only condition a step in this workflow may carry: the failure-path remedy. */
+const FAILURE_GUARD = /\bfailure\(\)/
+
+/**
+ * `if:` is an ALLOW-list, not a deny-list, and this is the whole reason why. A rule
+ * that bans the LITERAL falses (`if: false`, `'false'`, `${{ false }}`) waves through
+ * every never-true EXPRESSION, which is the spelling anyone would actually write:
+ *
+ * - `if: github.event_name == 'workflow_dispatch'` on the JOB — no PR ever runs it,
+ *   and a skipped required check reports neutral, green enough to merge through.
+ * - `if: github.event_name == 'push'` on the CHECKING step — every PR runs the job,
+ *   skips the only step that checks anything, and the `format` context reports
+ *   SUCCESS on unformatted code. Every other rule here stays green through it.
+ *
+ * So: no `if:` on a job at all (this workflow has one job and it must always run),
+ * and the only step condition permitted is the remedy's `failure()` guard.
+ */
+function conditionProblems(lines: string[]): string[] {
+  const problems: string[] = []
+  for (const job of jobsOf(lines)) {
+    const jobCondition = scalarAt(job.body, 'if', keyIndent(job.body))
+    if (jobCondition !== undefined) {
+      problems.push(
+        `job \`${job.name}\` carries \`if: ${jobCondition}\`: a job that can be skipped is a check that\n` +
+          '  can be absent, and a skipped required check reports neutral — green enough to merge\n' +
+          '  through. This job must run on every event the triggers allow.',
+      )
+    }
+    for (const step of stepsOf(job.body).map(levelledStep)) {
+      const condition = scalarAt(step, 'if', keyIndent(step))
+      if (condition === undefined || FAILURE_GUARD.test(condition)) continue
+      problems.push(
+        `a step in job \`${job.name}\` carries \`if: ${condition}\`: the job still runs and the \`format\`\n` +
+          '  context still reports SUCCESS, but the step is skipped. The only condition a step here may\n' +
+          "  carry is the remedy's `failure()` guard — anything else is a check that silently opts out.",
+      )
+    }
+  }
+  return problems
+}
+
 /**
  * Job-level ways to keep the `format` context reporting while it can no longer
  * report red. Neither touches a trigger nor a step command, so every other rule in
@@ -431,12 +523,7 @@ function jobProblems(clean: string, lines: string[]): string[] {
     )
   }
 
-  if (/^\s*if:\s*(?:false|'false'|"false"|\$\{\{\s*false\s*\}\})\s*$/m.test(clean)) {
-    problems.push(
-      'carries an unconditionally false `if:`: the job is skipped, and a skipped required check is\n' +
-        '  reported as neutral — green enough to merge through.',
-    )
-  }
+  problems.push(...conditionProblems(lines))
 
   for (const job of jobsOf(lines)) {
     problems.push(...permissionProblems(job.name, job.body))
@@ -469,6 +556,59 @@ function remedyProblems(lines: string[]): string[] {
       '  files and prettier\'s own "run with --write" hint is suppressed by `--list-different`, so a\n' +
       '  contributor whose hooks are not installed — the one this check exists for — reads a bare\n' +
       '  filename and no instruction. Add a step with `if: failure()` that echoes what to run.',
+  ]
+}
+
+/**
+ * A bare `if: failure()` is JOB-scoped: it fires when ANY earlier step failed, not
+ * only the formatting check. `pnpm install` dying on a lockfile drift or a registry
+ * outage would annotate the Checks tab with "The files listed in the previous step
+ * are not formatted. Run 'pnpm format' locally" — the contributor runs it, nothing
+ * changes, and the real cause is buried under a confident wrong diagnosis in the one
+ * message the UI surfaces. So the remedy is conditioned on the CHECKING step's own
+ * `outcome`, which requires that step to carry an `id:`.
+ *
+ * Silent when no step runs `format:check` at all — `stepProblems` owns that failure
+ * and reporting it twice would name the wrong cause.
+ */
+function remedyScopeProblems(lines: string[]): string[] {
+  const steps = jobsOf(lines)
+    .flatMap(job => stepsOf(job.body))
+    .map(levelledStep)
+  const check = steps.find(step =>
+    extractRunBlocks(step.join('\n'))
+      .map(stripQuotedMessages)
+      .some(run => referencesScript(run, FORMAT_CHECK_SCRIPT)),
+  )
+  if (check === undefined) return []
+
+  const scopingAdvice =
+    `  Give the \`pnpm ${FORMAT_CHECK_SCRIPT}\` step an \`id:\` and condition the remedy on it\n` +
+    "  (`if: failure() && steps.<id>.outcome == 'failure'`)."
+  const id = scalarAt(check, 'id', keyIndent(check))
+  if (id === undefined || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(id)) {
+    return [
+      `the \`pnpm ${FORMAT_CHECK_SCRIPT}\` step declares no usable \`id:\`, so the remedy cannot be scoped to\n` +
+        '  it. A bare `if: failure()` fires when ANY step failed — a broken `pnpm install` would be\n' +
+        '  annotated "not formatted", sending the contributor to run `pnpm format` against a cause it\n' +
+        `  cannot fix.\n${scopingAdvice}`,
+    ]
+  }
+
+  const conditions = steps
+    .map(step => scalarAt(step, 'if', keyIndent(step)))
+    .filter((condition): condition is string => condition !== undefined)
+    .filter(condition => FAILURE_GUARD.test(condition))
+  const scoped = conditions.some(
+    condition =>
+      condition.includes(`steps.${id}.outcome`) || condition.includes(`steps.${id}.conclusion`),
+  )
+  if (scoped) return []
+  return [
+    'the failure-path remedy is not scoped to the formatting check: `if: failure()` is JOB-scoped, so\n' +
+      '  a failed `pnpm install`, checkout or setup-node is annotated "not formatted. Run `pnpm\n' +
+      '  format`" — the contributor runs it, it changes nothing, and the real cause is buried under a\n' +
+      `  confident wrong diagnosis.\n${scopingAdvice}`,
   ]
 }
 
@@ -566,6 +706,7 @@ export function checkFormatWorkflow(
     ...jobProblems(clean, lines),
     ...stepProblems(clean, rootScripts),
     ...remedyProblems(lines),
+    ...remedyScopeProblems(lines),
   ]
 
   if (problems.length === 0) {

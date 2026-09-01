@@ -19,8 +19,9 @@ import {
 //   - a `paths-ignore:` key (the reason this is not a job inside ci.yml, whose
 //     workflow-level `paths-ignore: ['.changeset/**']` a job would inherit), or
 //     its allow-list twin `paths:`, which excludes everything it does not list,
-//   - a trigger narrowed off the base branch (`pull_request.branches: [release]`)
-//     or off the events that matter (`types: [closed]`),
+//   - a trigger narrowed off the base branch (`pull_request.branches: [release]`,
+//     or its negative spelling `branches-ignore: [main]`) or off the events that
+//     matter (`types: [closed]`),
 //   - `pull_request_target` instead of `pull_request` (a fork PR would then run
 //     with the base repo's credentials),
 //   - a write-mode formatter step (`pnpm format`), which would make CI rewrite
@@ -28,10 +29,12 @@ import {
 //     hook-specific,
 //   - dropping the `push: main` trigger, so drift on the base branch goes unseen,
 //   - dropping `concurrency`, so a superseded run keeps reporting a stale verdict,
-//   - `continue-on-error: true`, `if: false`, or a write-scoped token on the job —
-//     each keeps the check green (or absent) while the context still reports,
+//   - `continue-on-error: true`, ANY `if:` on the job, a step `if:` other than the
+//     remedy's `failure()` guard, or a write-scoped token — each keeps the check
+//     green (or absent) while the context still reports,
 //   - dropping the failure-path remedy, so a red check names the offending file
-//     and nothing a contributor can act on (AC1).
+//     and nothing a contributor can act on (AC1) — or widening it past the check
+//     step's own outcome, so a broken `pnpm install` is annotated "not formatted".
 //
 // Structure is asserted, never exact file text: cosmetic YAML edits (comments,
 // step names, action versions) must not false-fail this guard.
@@ -75,9 +78,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       - name: Check formatting
+        id: format_check
         run: pnpm format:check
       - name: Explain how to fix it
-        if: failure()
+        if: failure() && steps.format_check.outcome == 'failure'
         run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."
 `
 
@@ -191,6 +195,45 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
     expect(r.message).toContain('pull_request')
   })
 
+  // AC2, base-branch NEGATIVE spelling. `branches-ignore` is the same filter written
+  // the other way round, and a missing filter correctly means "every branch" — so
+  // reading only `branches:` made this one-line edit invisible: no PR targeting main
+  // is format-checked and the `format` context simply never reports.
+  it('fails on a `branches-ignore` under pull_request', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  pull_request:\n    branches:\n      - main',
+        '  pull_request:\n    branches-ignore:\n      - main',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('branches-ignore')
+  })
+
+  it('fails on a `branches-ignore` under push', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  push:\n    branches:\n      - main',
+        '  push:\n    branches-ignore: [main]',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('branches-ignore')
+  })
+
+  // Rejected outright rather than pattern-matched against `main`: the values are
+  // globs, so `ma*` excludes the base branch too and no substring test would see it.
+  it('fails on a `branches-ignore` that excludes the base branch by glob', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  pull_request:\n    branches:\n      - main',
+        '  pull_request:\n    branches-ignore:\n      - ma*',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('branches-ignore')
+  })
+
   // AC2, event half. `types: [closed]` runs the check only AFTER the PR is closed —
   // never while it is reviewable.
   it('fails when a `types:` narrowing drops opened/synchronize', () => {
@@ -290,11 +333,27 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
     expect(r.ok, r.message).toBe(true)
   })
 
-  it('fails on a cancel-in-progress expression that cancels nothing on a PR', () => {
+  it('fails on a cancel-in-progress expression naming no event at all', () => {
     const r = checkFormatWorkflow(
       WELL_FORMED.replace(
         'cancel-in-progress: true',
         "cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('cancel-in-progress')
+  })
+
+  // The accepted-expression rule is an ALLOW-list of equality, not a substring test
+  // for `pull_request`: the NEGATION contains that substring and inverts the
+  // mitigation, producing BOTH failure modes the rule exists for — three pushes to a
+  // PR branch keep three runners alive on a stale verdict, and two merges to `main` a
+  // minute apart leave the first commit with no formatting verdict at all.
+  it('fails on a cancel-in-progress that NEGATES the pull_request event', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        'cancel-in-progress: true',
+        "cancel-in-progress: ${{ github.event_name != 'pull_request' }}",
       ),
     )
     expect(r.ok).toBe(false)
@@ -320,6 +379,45 @@ describe('the format job cannot be made advisory, skipped or privileged (#413)',
   it('fails on an unconditionally false `if:`', () => {
     const r = checkFormatWorkflow(
       WELL_FORMED.replace('  format:\n    runs-on:', '  format:\n    if: false\n    runs-on:'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  // The rule is an ALLOW-list, and this is why: a deny-list of literal falses waves
+  // through every never-true EXPRESSION, which is the spelling anyone would write.
+  // The job never runs on a PR, and a skipped required check reports neutral.
+  it('fails on a never-true job `if:` EXPRESSION, not just the literal false', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  format:\n    runs-on:',
+        "  format:\n    if: github.event_name == 'workflow_dispatch'\n    runs-on:",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  // The worse half: the JOB runs on every PR, and only the one step that checks
+  // anything is skipped — so the `format` context reports SUCCESS on unformatted
+  // code while every other rule in the module stays green.
+  it('fails on an `if:` that skips the checking STEP while the job still reports', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '      - name: Check formatting\n',
+        "      - name: Check formatting\n        if: github.event_name == 'push'\n",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  it('fails on an `if:` added to any other step, e.g. the install', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '      - name: Install dependencies\n',
+        '      - name: Install dependencies\n        if: false\n',
+      ),
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('if:')
@@ -371,7 +469,7 @@ describe('a failing format check tells the contributor what to run (#413)', () =
   it('fails when no failure-path step names the remedy', () => {
     const r = checkFormatWorkflow(
       WELL_FORMED.replace(
-        / {6}- name: Explain how to fix it\n {8}if: failure\(\)\n {8}run: .*\n/,
+        / {6}- name: Explain how to fix it\n {8}if: failure\(\).*\n {8}run: .*\n/,
         '',
       ),
     )
@@ -391,9 +489,37 @@ describe('a failing format check tells the contributor what to run (#413)', () =
   })
 
   it('does not accept a remedy printed unconditionally on the success path', () => {
-    const r = checkFormatWorkflow(WELL_FORMED.replace('        if: failure()\n', ''))
+    const r = checkFormatWorkflow(WELL_FORMED.replace(/^ {8}if: failure\(\).*\n/m, ''))
     expect(r.ok).toBe(false)
     expect(r.message).toContain('pnpm format')
+  })
+
+  // `if: failure()` is JOB-scoped: it fires when ANY earlier step failed. A `pnpm
+  // install` broken by a lockfile drift or a registry outage would be annotated
+  // "not formatted. Run 'pnpm format'" — the contributor runs it, nothing changes,
+  // and the real cause is buried under a confident wrong diagnosis.
+  it('fails when the remedy is not scoped to the check step (a bare `if: failure()`)', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        "        if: failure() && steps.format_check.outcome == 'failure'\n",
+        '        if: failure()\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('not scoped')
+  })
+
+  it('fails when the check step carries no `id:` to scope the remedy against', () => {
+    const r = checkFormatWorkflow(WELL_FORMED.replace('        id: format_check\n', ''))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('id:')
+  })
+
+  it('accepts `conclusion` as well as `outcome` for the scoping', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('steps.format_check.outcome', 'steps.format_check.conclusion'),
+    )
+    expect(r.ok, r.message).toBe(true)
   })
 
   // The reason this rule needs its own scanner: the write-mode guard reads the
@@ -587,8 +713,70 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
 
   it('fires on the shipped workflow when its failure path stops naming the remedy', () => {
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
-    const r = checkFormatWorkflow(shipped.replace(/^\s*if: failure\(\)\n/m, ''))
+    const r = checkFormatWorkflow(shipped.replace(/^\s*if: failure\(\).*\n/m, ''))
     expect(r.ok).toBe(false)
     expect(r.message).toContain('pnpm format')
+  })
+
+  it('fires on the shipped workflow when the remedy widens to a bare `if: failure()`', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(shipped.replace(/^(\s*)if: failure\(\).*$/m, '$1if: failure()'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('not scoped')
+  })
+
+  // The two never-true `if:` EXPRESSIONS, on the file this repo actually runs: the
+  // job-level one skips the job, the step-level one leaves the job green with the
+  // only checking step skipped. A literal-false deny-list waved both through.
+  it('fires on the shipped workflow when a never-true `if:` is added to the job', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        '  format:\n    runs-on:',
+        "  format:\n    if: github.event_name == 'workflow_dispatch'\n    runs-on:",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  it('fires on the shipped workflow when a never-true `if:` is added to the check step', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        '      - name: Check formatting\n',
+        "      - name: Check formatting\n        if: github.event_name == 'push'\n",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  // The negative branch filter, on the shipped file: one line under `pull_request`
+  // and no PR targeting `main` is ever format-checked.
+  it('fires on the shipped workflow when a trigger gains a `branches-ignore`', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    for (const event of ['pull_request', 'push']) {
+      const r = checkFormatWorkflow(
+        shipped.replace(
+          `  ${event}:\n    branches:\n      - main`,
+          `  ${event}:\n    branches-ignore:\n      - main`,
+        ),
+      )
+      expect(r.ok, `${event}: ${r.message}`).toBe(false)
+      expect(r.message).toContain('branches-ignore')
+    }
+  })
+
+  it('fires on the shipped workflow when cancel-in-progress negates the PR event', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        "cancel-in-progress: ${{ github.event_name != 'pull_request' }}",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('cancel-in-progress')
   })
 })

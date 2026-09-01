@@ -91,13 +91,20 @@ jobs:
       # The identical script the pre-push hook and a developer run. It names the
       # offending files and exits non-zero.
       - name: Check formatting
+        id: format_check
         run: pnpm format:check
       # …but it does NOT name the remedy: `--list-different` prints the paths and
       # suppresses prettier's own "Run Prettier with --write to fix" line. The
       # contributor this workflow exists for (hooks not installed, or pushed with
       # `--no-verify`) would otherwise read a bare filename and no instruction. The
       # annotation surfaces on the PR's Checks tab, not only in the log.
+      #
+      # SCOPED to the check's own outcome, not a bare `if: failure()` — that is
+      # JOB-scoped and fires for ANY earlier failure. A `pnpm install` broken by a
+      # lockfile drift or a registry outage would otherwise be annotated "not
+      # formatted, run 'pnpm format'": the contributor runs it, nothing changes, and
+      # the real cause sits under a confident wrong diagnosis.
       - name: Explain how to fix a formatting failure
-        if: failure()
+        if: failure() && steps.format_check.outcome == 'failure'
         run: |
           echo "::error title=Formatting check failed::The files listed in the previous step are not formatted. Run 'pnpm format' locally, commit the result, and push again. CI never rewrites your branch."

@@ -48,7 +48,16 @@ stale PASS, which is the entire failure mode the CLI + root-step pattern was inv
 
 For #413 this means: no `format-workflow:check` CLI, no new root script, no new `quality-gate`
 segment and no new `ci.yml` step. The guard is a vitest file, and `@pair/dev-tools#test` /
-`#test:coverage` gain `$TURBO_ROOT$/.github/workflows/format.yml`.
+`#test:coverage` gain **two** inputs: `$TURBO_ROOT$/.github/workflows/format.yml` and
+`$TURBO_ROOT$/package.json`.
+
+The second is not bookkeeping. Both guards in that folder resolve **script delegation** against the
+root scripts — `checkThisRepoGate` parses `package.json` outright, and `checkFormatWorkflow` defaults
+`rootScripts` to `readRootScripts()`, which is the only reason `pnpm format` in a workflow step
+resolves to `prettier:fix` at all. MEASURED without it: `turbo run test --filter=@pair/dev-tools
+--dry=json` hashed `7271baf2a672a276`, and rewriting the root `format:check` script to `pnpm
+prettier:fix` — i.e. CI now WRITES — left the hash at `7271baf2a672a276`, a cached PASS with neither
+guard running. With the entry the same mutation moves the hash and both guards fire.
 
 Two facts make this sufficient rather than merely lighter:
 
@@ -99,4 +108,6 @@ context rather than inside `pnpm test`.
   task is not enforced" bullet gains the `$TURBO_ROOT$`-input mechanism as the second way to
   satisfy it, and states when the CLI + root-gate-step form is still required.
 - `turbo.json` — `@pair/dev-tools#test` and `@pair/dev-tools#test:coverage` declare
-  `$TURBO_ROOT$/.github/workflows/format.yml` (the change itself, recorded here as the rationale).
+  `$TURBO_ROOT$/.github/workflows/format.yml` and `$TURBO_ROOT$/package.json` (the change itself,
+  recorded here as the rationale). Trimming the `package.json` entry as "undocumented" reopens the
+  measured stale-cache false green above, for BOTH guards in that folder.
