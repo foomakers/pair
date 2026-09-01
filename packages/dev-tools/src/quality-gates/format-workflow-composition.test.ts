@@ -29,12 +29,15 @@ import {
 //     hook-specific,
 //   - dropping the `push: main` trigger, so drift on the base branch goes unseen,
 //   - dropping `concurrency`, so a superseded run keeps reporting a stale verdict,
-//   - `continue-on-error: true`, ANY `if:` on the job, a step `if:` other than the
-//     remedy's `failure()` guard, or a write-scoped token — each keeps the check
-//     green (or absent) while the context still reports,
+//   - `continue-on-error: true`, ANY `if:` on the job, ANY `if:` on the step that
+//     runs `format:check` (a `failure()` guard included — it is false on a normal
+//     PR, so the check is skipped and the job ends green), a step `if:` elsewhere
+//     that is not a SCOPED `failure()` guard, or a write-scoped token — each keeps
+//     the check green (or absent) while the context still reports,
 //   - dropping the failure-path remedy, so a red check names the offending file
-//     and nothing a contributor can act on (AC1) — or widening it past the check
-//     step's own outcome, so a broken `pnpm install` is annotated "not formatted".
+//     and nothing a contributor can act on (AC1) — or widening ANY failure-path
+//     step past the check step's own outcome, so a broken `pnpm install` is
+//     annotated "not formatted".
 //
 // Structure is asserted, never exact file text: cosmetic YAML edits (comments,
 // step names, action versions) must not false-fail this guard.
@@ -423,6 +426,75 @@ describe('the format job cannot be made advisory, skipped or privileged (#413)',
     expect(r.message).toContain('if:')
   })
 
+  // The hole an allow-list keyed on `failure()` ALONE still leaves open: the guard
+  // permitted any condition containing `failure()`, on ANY step — including the one
+  // step that checks anything. `if: failure()` there is never true on a normal PR
+  // (every earlier step succeeded), so `Check formatting` is SKIPPED, the job ends
+  // successful, and the `format` context reports SUCCESS on unformatted code. The
+  // check step therefore carries NO condition at all.
+  it('fails on `if: failure()` on the CHECK step itself', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '      - name: Check formatting\n',
+        '      - name: Check formatting\n        if: failure()\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  it('fails when `failure()` is ANDed onto a never-true event test on the check step', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '      - name: Check formatting\n',
+        "      - name: Check formatting\n        if: github.event_name == 'push' && failure()\n",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  // Worse than the other two: a step referencing its OWN `steps.<id>.outcome` reads
+  // an unpopulated context, so `'' == 'failure'` is false on every event and the
+  // check never runs at all — while spelling out the exact scoping the guard asks
+  // the REMEDY for.
+  it('fails when the check step scopes itself on its own outcome', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '      - name: Check formatting\n',
+        "      - name: Check formatting\n        if: failure() && steps.format_check.outcome == 'failure'\n",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  // One correctly-scoped step must not license every other one: `failure()` on a
+  // second annotation step is JOB-scoped, so a `pnpm install` dying on a lockfile
+  // drift annotates the Checks tab "not formatted" over the real cause — exactly
+  // the diagnosis the scoping rule exists to prevent, one step further out.
+  it('fails on a SECOND failure-path step left unscoped beside a scoped remedy', () => {
+    const r = checkFormatWorkflow(
+      `${WELL_FORMED}      - name: Extra note
+        if: failure()
+        run: echo "::error title=Formatting check failed::not formatted"
+`,
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('not scoped')
+  })
+
+  it('fails on `if: failure()` added to the install step beside a scoped remedy', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '      - name: Install dependencies\n',
+        '      - name: Install dependencies\n        if: failure()\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('not scoped')
+  })
+
   // AC5 is "safe on fork PRs by construction, not by review". This job runs
   // `pnpm install`, i.e. PR-authored lifecycle scripts; a write-scoped token in
   // reach of that is the whole exposure.
@@ -513,6 +585,15 @@ describe('a failing format check tells the contributor what to run (#413)', () =
     const r = checkFormatWorkflow(WELL_FORMED.replace('        id: format_check\n', ''))
     expect(r.ok).toBe(false)
     expect(r.message).toContain('id:')
+  })
+
+  // A quoted id is valid YAML, prettier-stable, and `steps.format_check.outcome`
+  // resolves against it exactly the same on GitHub. Reading the scalar raw made the
+  // guard red on a CORRECT workflow, with a message describing a file that does
+  // declare a usable id — and a false-positive gate is the kind that gets deleted.
+  it('accepts a quoted `id:` on the check step', () => {
+    const r = checkFormatWorkflow(WELL_FORMED.replace('id: format_check', "id: 'format_check'"))
+    expect(r.ok, r.message).toBe(true)
   })
 
   it('accepts `conclusion` as well as `outcome` for the scoping', () => {
@@ -750,6 +831,63 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('if:')
+  })
+
+  // The three spellings an allow-list keyed on `failure()` alone waved through, on
+  // the file this repo actually runs. All of them leave `Check formatting` skipped
+  // on a normal pull request while the job — and the `format` context — end green.
+  it('fires on the shipped workflow when the check step is given a `failure()` guard', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const conditions = [
+      'failure()',
+      "github.event_name == 'push' && failure()",
+      "failure() && steps.format_check.outcome == 'failure'",
+    ]
+    for (const condition of conditions) {
+      const r = checkFormatWorkflow(
+        shipped.replace(
+          '      - name: Check formatting\n',
+          `      - name: Check formatting\n        if: ${condition}\n`,
+        ),
+      )
+      expect(r.ok, `${condition}: ${r.message}`).toBe(false)
+      expect(r.message).toContain('if:')
+    }
+  })
+
+  // One correctly-scoped remedy must not license a second, job-scoped one: the
+  // annotation would fire on a broken `pnpm install` and tell the contributor to
+  // run `pnpm format` against a cause it cannot fix.
+  it('fires on the shipped workflow when a second unscoped `failure()` step is added', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      `${shipped}      - name: Extra note
+        if: failure()
+        run: echo "::error title=Formatting check failed::not formatted"
+`,
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('not scoped')
+  })
+
+  it('fires on the shipped workflow when `if: failure()` is added to the install step', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        '      - name: Install dependencies\n',
+        '      - name: Install dependencies\n        if: failure()\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('not scoped')
+  })
+
+  // Quoting the id is valid YAML and resolves identically on GitHub: the shipped
+  // workflow must stay GREEN through it, or the guard fails a correct file.
+  it('stays green on the shipped workflow when its `id:` is quoted', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(shipped.replace('id: format_check', "id: 'format_check'"))
+    expect(r.ok, r.message).toBe(true)
   })
 
   // The negative branch filter, on the shipped file: one line under `pull_request`

@@ -29,24 +29,29 @@
  * - dropping `push: main`, so drift on the base branch is invisible.
  * - dropping `concurrency`, so a superseded run keeps burning a runner and
  *   reporting a stale verdict for a ref that has already moved on.
- * - `continue-on-error: true`, ANY `if:` on the job, any step `if:` that is not the
- *   remedy's `failure()` guard, or a write-scoped `permissions:`. None of these
- *   touch a trigger or a step COMMAND, yet each turns the `format` context into one
- *   that cannot fail, never runs, or hands a write-scoped token to a job that
- *   executes PR-authored lifecycle scripts (`pnpm install`). AC5's "safe on fork PRs
- *   by construction, not by review" is only construction if the construction is
- *   asserted. `if:` is an ALLOW-list on purpose: a deny-list of literal falses
- *   (`if: false`) waves through every never-true EXPRESSION — `if: github.event_name
- *   == 'workflow_dispatch'` on the job, or `if: github.event_name == 'push'` on the
- *   checking step, both leave a SUCCESS `format` context on unformatted code.
+ * - `continue-on-error: true`, ANY `if:` on the job, ANY `if:` on the step that runs
+ *   `format:check`, a step `if:` elsewhere that is not a SCOPED `failure()` guard, or
+ *   a write-scoped `permissions:`. None of these touch a trigger or a step COMMAND,
+ *   yet each turns the `format` context into one that cannot fail, never runs, or
+ *   hands a write-scoped token to a job that executes PR-authored lifecycle scripts
+ *   (`pnpm install`). AC5's "safe on fork PRs by construction, not by review" is only
+ *   construction if the construction is asserted. `if:` is an ALLOW-list on purpose:
+ *   a deny-list of literal falses (`if: false`) waves through every never-true
+ *   EXPRESSION — `if: github.event_name == 'workflow_dispatch'` on the job, or
+ *   `if: github.event_name == 'push'` on the checking step, both leave a SUCCESS
+ *   `format` context on unformatted code. And `failure()` is not the allow-list
+ *   either: on the CHECKING step it is false on a normal PR, so the check is skipped
+ *   and the job ends green wearing the remedy's own spelling — hence no condition at
+ *   all there, and everywhere else `failure()` AND the check step's own outcome.
  * - dropping the failure-path remedy, or widening it. `--list-different` prints the
  *   offending file and suppresses prettier's own "run with --write to fix" line, so
  *   a red check without that step hands the contributor this story exists for —
  *   hooks not installed, pushed with `--no-verify` — a bare filename and no
  *   instruction (AC1). And an unscoped `if: failure()` is JOB-scoped, so a failed
  *   `pnpm install` is annotated "not formatted, run `pnpm format`" — a confident
- *   wrong diagnosis over the real cause. The remedy is therefore conditioned on the
- *   checking step's own `outcome`.
+ *   wrong diagnosis over the real cause. EVERY failure-path step is therefore
+ *   conditioned on the checking step's own `outcome`: one scoped step does not
+ *   license a second, unscoped one beside it.
  *
  * Structure is asserted, never exact file text: comments, step names and action
  * versions must be editable without false-failing this guard.
@@ -137,8 +142,14 @@ function keyIndent(block: string[]): number {
   return indents.length === 0 ? 0 : Math.min(...indents)
 }
 
+/**
+ * A YAML scalar without its surrounding quotes. MATCHED pairs only: an `if:`
+ * condition ends in a quote of its own (`… == 'failure'`) and stripping that half
+ * would corrupt the value the rules read — and report it back corrupted.
+ */
 function unquote(value: string): string {
-  return value.trim().replace(/^['"]|['"]$/g, '')
+  const trimmed = value.trim()
+  return /^(['"])[\s\S]*\1$/.test(trimmed) ? trimmed.slice(1, -1) : trimmed
 }
 
 /**
@@ -184,11 +195,17 @@ function levelledStep(step: string[]): string[] {
   return [(first ?? '').replace(/^(\s*)-(\s)/, '$1 $2'), ...rest]
 }
 
-/** The scalar value of `key:` at exactly `indent` inside `block`, or `undefined`. */
+/**
+ * The scalar value of `key:` at exactly `indent` inside `block`, or `undefined`.
+ * Unquoted, because `id: 'format_check'` is valid YAML that GitHub resolves
+ * identically to the bare spelling: reading it raw made this guard red on a
+ * CORRECT workflow, with a message describing a file that does declare a usable
+ * id — and a gate that false-fails is the kind that gets weakened or deleted.
+ */
 function scalarAt(block: string[], key: string, indent: number): string | undefined {
   const header = block.find(line => new RegExp(`^ {${indent}}${key}:`).test(line))
   if (header === undefined) return undefined
-  return header.replace(new RegExp(`^ {${indent}}${key}:\\s*`), '').trim()
+  return unquote(header.replace(new RegExp(`^ {${indent}}${key}:\\s*`), ''))
 }
 
 /** Every job in the workflow, by name, with its own body lines. */
@@ -464,8 +481,27 @@ function permissionProblems(name: string, body: string[]): string[] {
   ]
 }
 
-/** The only condition a step in this workflow may carry: the failure-path remedy. */
+/** The guard every failure-path step must carry — necessary, never sufficient. */
 const FAILURE_GUARD = /\bfailure\(\)/
+
+/** Does this step RUN the formatting check? (Quoted messages are data, not commands.) */
+function runsFormatCheck(step: string[]): boolean {
+  return extractRunBlocks(step.join('\n'))
+    .map(stripQuotedMessages)
+    .some(run => referencesScript(run, FORMAT_CHECK_SCRIPT))
+}
+
+/** Every step of every job, levelled so one `^ {n}key:` probe finds any of its keys. */
+function allSteps(lines: string[]): string[][] {
+  return jobsOf(lines)
+    .flatMap(job => stepsOf(job.body))
+    .map(levelledStep)
+}
+
+/** The `steps.<id>.outcome`/`.conclusion` reference that scopes a condition to the check. */
+function scopesTo(condition: string, id: string): boolean {
+  return condition.includes(`steps.${id}.outcome`) || condition.includes(`steps.${id}.conclusion`)
+}
 
 /**
  * `if:` is an ALLOW-list, not a deny-list, and this is the whole reason why. A rule
@@ -478,8 +514,17 @@ const FAILURE_GUARD = /\bfailure\(\)/
  *   skips the only step that checks anything, and the `format` context reports
  *   SUCCESS on unformatted code. Every other rule here stays green through it.
  *
- * So: no `if:` on a job at all (this workflow has one job and it must always run),
- * and the only step condition permitted is the remedy's `failure()` guard.
+ * And `failure()` is NOT the allow-list either, because the checking step is exactly
+ * the step it must never appear on: `if: failure()` there is false on a normal PR
+ * (every earlier step succeeded), so the check is SKIPPED and the job ends green —
+ * the identical loss, wearing the remedy's own spelling. `if: failure() &&
+ * steps.format_check.outcome == 'failure'` on that step is worse still: a step
+ * reading its OWN `steps.<id>` context reads an unpopulated value, so it never runs
+ * on any event at all.
+ *
+ * So: no `if:` on a job (this workflow has one job and it must always run), NO `if:`
+ * on the step that runs `format:check`, and on every other step only a condition
+ * carrying `failure()` — scoped, which `remedyScopeProblems` owns.
  */
 function conditionProblems(lines: string[]): string[] {
   const problems: string[] = []
@@ -494,11 +539,23 @@ function conditionProblems(lines: string[]): string[] {
     }
     for (const step of stepsOf(job.body).map(levelledStep)) {
       const condition = scalarAt(step, 'if', keyIndent(step))
-      if (condition === undefined || FAILURE_GUARD.test(condition)) continue
+      if (condition === undefined) continue
+      if (runsFormatCheck(step)) {
+        problems.push(
+          `the \`pnpm ${FORMAT_CHECK_SCRIPT}\` step carries \`if: ${condition}\`: the one step that checks\n` +
+            '  anything must carry NO condition. Every condition is a way for it to be skipped while the\n' +
+            '  job still ends successful and the `format` context reports SUCCESS on unformatted code —\n' +
+            "  including a `failure()` guard, false on a normal PR, and a self-reference to this step's\n" +
+            '  own `steps.<id>.outcome`, which reads an unpopulated context and never runs at all.',
+        )
+        continue
+      }
+      if (FAILURE_GUARD.test(condition)) continue
       problems.push(
         `a step in job \`${job.name}\` carries \`if: ${condition}\`: the job still runs and the \`format\`\n` +
           '  context still reports SUCCESS, but the step is skipped. The only condition a step here may\n' +
-          "  carry is the remedy's `failure()` guard — anything else is a check that silently opts out.",
+          "  carry is the remedy's `failure()` guard, scoped to the checking step's own outcome —\n" +
+          '  anything else is a check that silently opts out.',
       )
     }
   }
@@ -568,22 +625,23 @@ function remedyProblems(lines: string[]): string[] {
  * message the UI surfaces. So the remedy is conditioned on the CHECKING step's own
  * `outcome`, which requires that step to carry an `id:`.
  *
+ * EVERY such condition, not merely one of them: a correctly-scoped remedy does not
+ * license a second `failure()` step beside it. One extra `- name: Extra note` /
+ * `if: failure()` / `run: echo "::error title=Formatting check failed::…"` fires on
+ * a lockfile drift just as the unscoped remedy did, and the Checks tab carries the
+ * same wrong diagnosis — the rule would be green over the exact loss it names.
+ *
  * Silent when no step runs `format:check` at all — `stepProblems` owns that failure
- * and reporting it twice would name the wrong cause.
+ * and reporting it twice would name the wrong cause. The checking step's own `if:`
+ * is `conditionProblems`' (it may carry none at all), so it is skipped here.
  */
 function remedyScopeProblems(lines: string[]): string[] {
-  const steps = jobsOf(lines)
-    .flatMap(job => stepsOf(job.body))
-    .map(levelledStep)
-  const check = steps.find(step =>
-    extractRunBlocks(step.join('\n'))
-      .map(stripQuotedMessages)
-      .some(run => referencesScript(run, FORMAT_CHECK_SCRIPT)),
-  )
+  const steps = allSteps(lines)
+  const check = steps.find(runsFormatCheck)
   if (check === undefined) return []
 
   const scopingAdvice =
-    `  Give the \`pnpm ${FORMAT_CHECK_SCRIPT}\` step an \`id:\` and condition the remedy on it\n` +
+    `  Give the \`pnpm ${FORMAT_CHECK_SCRIPT}\` step an \`id:\` and condition EVERY failure-path step on it\n` +
     "  (`if: failure() && steps.<id>.outcome == 'failure'`)."
   const id = scalarAt(check, 'id', keyIndent(check))
   if (id === undefined || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(id)) {
@@ -596,19 +654,19 @@ function remedyScopeProblems(lines: string[]): string[] {
   }
 
   const conditions = steps
+    .filter(step => !runsFormatCheck(step))
     .map(step => scalarAt(step, 'if', keyIndent(step)))
     .filter((condition): condition is string => condition !== undefined)
     .filter(condition => FAILURE_GUARD.test(condition))
-  const scoped = conditions.some(
-    condition =>
-      condition.includes(`steps.${id}.outcome`) || condition.includes(`steps.${id}.conclusion`),
-  )
-  if (scoped) return []
+  // No failure-path step at all is `remedyProblems`' finding, not this one.
+  const unscoped = conditions.filter(condition => !scopesTo(condition, id))
+  if (unscoped.length === 0) return []
   return [
-    'the failure-path remedy is not scoped to the formatting check: `if: failure()` is JOB-scoped, so\n' +
-      '  a failed `pnpm install`, checkout or setup-node is annotated "not formatted. Run `pnpm\n' +
-      '  format`" — the contributor runs it, it changes nothing, and the real cause is buried under a\n' +
-      `  confident wrong diagnosis.\n${scopingAdvice}`,
+    `${unscoped.length} failure-path step(s) are not scoped to the formatting check` +
+      ` (\`if: ${unscoped.join('`, `if: ')}\`): \`failure()\` is\n` +
+      '  JOB-scoped, so a failed `pnpm install`, checkout or setup-node is annotated "not formatted.\n' +
+      '  Run `pnpm format`" — the contributor runs it, it changes nothing, and the real cause is buried\n' +
+      `  under a confident wrong diagnosis. Every failure-path step needs the scope, not just one.\n${scopingAdvice}`,
   ]
 }
 
