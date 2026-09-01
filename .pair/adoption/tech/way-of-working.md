@@ -54,6 +54,23 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 - When a bug fix or feature changes behavior covered by an existing CP, the corresponding test case MUST be updated.
 - **CP5's docs page list is machine-asserted against the filesystem** — `packages/knowledge-hub/src/conformance/docs-page-coverage.test.ts` compares it to `apps/website/content/docs/**/*.mdx`, so adding a docs page without listing it in CP5 fails CI ([ADL](../decision-log/2026-08-20-cp5-page-list-is-asserted-against-the-filesystem.md)).
 
+## Review Convergence
+
+- **Baseline then delta:** the first review is complete and returns the immutable 40-character
+  head it inspected. A re-review verifies prior findings plus only the diff from that head and
+  directly changed producer/consumer boundaries; an unchanged PR surface does not create another
+  fix round. Missing or invalid review-head evidence fails closed, never converges a PR.
+- **Provisioned artifact proof:** a fix that installs, builds, publishes, names, or invokes an
+  artifact maps `producer -> published identity -> consumer` and proves the real path in a clean
+  temporary environment. The exact boundary is never stubbed, aliased, or faked. See ADL
+  [2026-08-31-review-baseline-and-provisioned-artifact-contract.md](../decision-log/2026-08-31-review-baseline-and-provisioned-artifact-contract.md).
+- **Contract inventory before a loop:** before reporting or fixing a changed contract, inventory
+  its authoritative producer, inputs, consumers and representations. A finite protocol, parser,
+  configuration or state transition gets a complete decision table of supported and
+  invalid/boundary states, with a real probe/test per row; re-review applies the same rule only to
+  its delta and changed boundary. See ADL
+  [2026-09-01-review-contract-inventory-prevents-serial-findings.md](../decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md).
+
 ## Quality Gates
 
 - `pnpm quality-gate` is the adopted project-level quality gate command.
