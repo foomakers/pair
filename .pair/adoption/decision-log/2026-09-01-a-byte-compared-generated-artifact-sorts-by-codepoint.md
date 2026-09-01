@@ -1,4 +1,4 @@
-# Decision: a generated artifact that is tracked and byte-compared sorts by a fixed, environment-independent order, never by locale collation
+# Decision: a generated artifact that is tracked and byte-compared is byte-reproducible across environments — fixed entry order, pinned line endings
 
 ## Date
 
@@ -36,11 +36,34 @@ across environments … locale-dependent sort"), and the determinism test that w
 to cover it ran the generator twice **in one process**, where the ICU default is a
 constant — so it could not fail on the thing it named.
 
+**The same failure has a second axis: the line terminator.** The generator emits `\n`;
+the bytes on disk are whatever git checked out. With `core.autocrlf=true` (git's default
+on Windows) every one of the index's 562 content lines gains a `\r`, byte equality fails
+on the whole file, and the gate reports 562 `missing` + 562 `extra` — a ~1124-line dump
+that hides any real drift — closing with "regenerate and commit". Obeying it writes LF,
+the next checkout restores the CRs, and the message cannot get the contributor out of the
+loop. The repo had no `.gitattributes` at all, so nothing pinned the normal form.
+
 ## Decision
 
-**Any generated artifact that is both tracked and byte-compared orders its entries by an
-order that is a function of the content alone** — not by `localeCompare`, and not by
-filesystem-walk order.
+**Any generated artifact that is both tracked and byte-compared must be byte-reproducible
+on any machine that checks it out.** Two rules follow, one per axis of variation found:
+
+1. **Entry order is a function of the content alone** — not `localeCompare`, not
+   filesystem-walk order.
+2. **The line terminator is pinned in `.gitattributes`** (`* text=auto eol=lf`, plus an
+   explicit `.pair/llms.txt text eol=lf` naming the gate that depends on it), so the
+   checkout cannot rewrite the bytes the gate compares. **And the gate reports a CRLF
+   tracked file as what it is**: it normalizes the terminator before computing the
+   missing/extra deltas (so a real drift stays visible under CRLF), states the terminator
+   mismatch, and puts its call to action behind the precondition "once the checkout is
+   normalized to LF" — never the bare `pair update`, which here is the one fix that
+   provably cannot work.
+
+Platform scope, since the question is what makes rule 2 necessary: **LF is the repo's
+normal form on every platform**, in the index and in the working tree. Windows is not
+excluded as a development platform — it is supported by normalizing on checkout rather
+than by teaching each gate to accept both terminators.
 
 **The invariant being bought is DETERMINISM across environments, not a particular
 collation.** Any total order fixed by the string's own units qualifies; the property that
@@ -84,6 +107,13 @@ It is kept as the stable citation key — the normative statement is this sectio
 - **Normalize in the gate instead** (sort both sides before comparing): the gate would
   stop reporting a real ordering drift, and the committed file would still differ by
   machine. Rejected — it hides the symptom in the one place built to reveal it.
+- **Declare Windows out of scope and change nothing** (no `.gitattributes`, no CRLF
+  branch). Defensible on today's evidence — CI is `ubuntu-latest`, no doc claims Windows
+  — but the cost of being wrong is a contributor stuck in an unbreakable regenerate loop
+  on their first gate run, and the cost of being right is two lines of config. Rejected.
+- **Accept CRLF in the verdict** (compare normalized text, call it in-sync): drops AC1's
+  byte equality, and the tracked file's bytes would then legitimately differ by machine —
+  the very property this ADL exists to protect. Rejected.
 
 ## Consequences
 
@@ -98,3 +128,26 @@ It is kept as the stable citation key — the normative statement is this sectio
 - The fixture test asserts the order on the `PRD.md` / `context-map.md` pair — chosen
   because ICU and codepoint disagree on it, so the assertion fails if the comparator
   is ever reverted.
+- The repo gains its first `.gitattributes`. It is inert on the current tree (no tracked
+  text file carries a CR) and on macOS/Linux clones; it changes what a
+  `core.autocrlf=true` clone puts in the working tree.
+- The drift report has one more branch: `trackedUsesCrlf`. It suppresses the
+  order/whitespace sentence (one cause, one diagnosis) and adds "the checkout is
+  normalized to LF" to the call to action's preconditions, which now compose with the
+  sparse-tree one.
+
+## Adoption Impact
+
+- `adoption/tech/way-of-working.md` — the Quality Gates entry for `llms-index:check`
+  states the index's order rule and now also the LF pin, both citing this ADL.
+- **`@pair/pair-cli` is published (`0.4.3`, not private) and this changes its output**:
+  `generateLlmsTxt` is what `pair install` / `pair update` writes into every adopter's
+  `.pair/llms.txt`, so their next run reorders it. Per ADL
+  [2026-08-20-a-user-facing-cli-fix-carries-its-changeset.md](2026-08-20-a-user-facing-cli-fix-carries-its-changeset.md)
+  that is a user-facing behaviour change to a published package and it carries a **patch
+  changeset in this PR** (`.changeset/`), which is where the adopter's CHANGELOG entry
+  comes from. Release timing stays a human decision; authoring the changeset does not.
+- No `tech-stack.md` change: no dependency enters or leaves. `.gitattributes` is repo
+  configuration, not a tool choice.
+- No ADR: this is the byte-level contract of one generated artifact, not a boundary or a
+  pattern.

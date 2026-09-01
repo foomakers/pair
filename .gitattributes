@@ -1,0 +1,13 @@
+# LF is this repo's normal form in the index AND in the working tree, on every
+# platform. CI is `ubuntu-latest` and no tracked text file carries a CR today; the
+# pin keeps that true through a checkout made with `core.autocrlf=true` (git's
+# Windows default), which would otherwise hand the working tree CRLF copies.
+* text=auto eol=lf
+
+# Not a preference here but a correctness constraint: `.pair/llms.txt` is generated
+# with `\n` and compared BYTE FOR BYTE against a fresh generator run by
+# `pnpm llms-index:check` (#416). Terminators rewritten on checkout make the gate red
+# on an untouched tree, and regenerating cannot end that loop — the write lands as LF
+# and the next checkout restores the CRs. See ADL
+# `.pair/adoption/decision-log/2026-09-01-a-byte-compared-generated-artifact-sorts-by-codepoint.md`.
+.pair/llms.txt text eol=lf

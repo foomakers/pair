@@ -236,6 +236,67 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(result.message).not.toContain('Once the tree is complete')
   })
 
+  // A contributor who cloned with `core.autocrlf=true` gets every line of the tracked
+  // file terminated `\r\n` while the generator emits `\n`. Byte equality fails on the
+  // whole file, and a line-literal delta degenerates into the worst possible report:
+  // every tracked line `extra`, every generated line `missing` (~1124 lines on the real
+  // index) under the advice "regenerate and commit", which writes LF, gets CR back on
+  // the next checkout, and loops. The terminators are normalized away before the delta
+  // and the mismatch is reported as what it is.
+  it('reports a CRLF checkout as a line-ending mismatch, not every line missing AND extra', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(/\n/g, '\r\n'), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.ok).toBe(false)
+    expect(result.report).toMatchObject({
+      kind: 'drift',
+      missing: [],
+      extra: [],
+      trackedUsesCrlf: true,
+    })
+    expect(result.message).toContain('CRLF')
+    // Not diagnosed as an ordering problem, and not closed with the bare imperative
+    // that would send the contributor round the loop.
+    expect(result.message).not.toContain('their order or surrounding whitespace')
+    expect(result.message).not.toMatch(/^Regenerate with/m)
+    expect(result.message).toContain('renormalize')
+  })
+
+  it('still names the real content delta when the tracked file is ALSO CRLF', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(/\n/g, '\r\n'), 'utf-8')
+    mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
+    writeFileSync(
+      join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
+      '# Story Local Markers\n',
+      'utf-8',
+    )
+
+    const result = await checkLlmsIndexDrift(root)
+
+    const line =
+      '- [Story Local Markers](.pair/knowledge/guidelines/collaboration/story-local-markers.md)'
+    expect(result.report).toMatchObject({ kind: 'drift', missing: [line], extra: [] })
+    expect(result.message).toContain('CRLF')
+    // AC5 survives, behind its precondition: the command is named, the imperative is not bare.
+    expect(result.message).toContain(REGENERATION_COMMAND)
+    expect(result.message).toContain('Once the checkout is normalized to LF')
+  })
+
+  it('reports an LF tracked file as CRLF-free, so the caution never fires on a normal clone', async () => {
+    const root = await makeInSyncTree()
+    writeFileSync(join(root, TRACKED_INDEX_PATH), '# pair\n', 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ kind: 'drift', trackedUsesCrlf: false })
+    expect(result.message).not.toContain('CRLF')
+  })
+
   // The story's edge case names "locale-dependent sort" verbatim. `localeCompare`
   // passes no locale and uses the runtime's ICU default, so a Node built without full
   // ICU orders the index differently and the gate goes red on an untouched tree.
@@ -311,6 +372,36 @@ describe('compareIndex — the pure line-level comparison', () => {
 
     expect(report).toMatchObject({ kind: 'drift', missing: [], extra: ['- [A](a.md)'] })
     expect(formatReport(report, '/repo')).not.toContain('order')
+  })
+
+  // The terminator states git can hand a checkout: LF (the generator's own) and CRLF
+  // (`core.autocrlf=true` on Windows). A file half-converted by a merge carries both.
+  it('normalizes the terminator before diffing, flagging CRLF instead of every line', () => {
+    const report = compareIndex('- [A](a.md)\n- [B](b.md)\n', '- [A](a.md)\r\n- [B](b.md)\r\n')
+
+    expect(report).toMatchObject({
+      kind: 'drift',
+      missing: [],
+      extra: [],
+      trackedUsesCrlf: true,
+    })
+    expect(formatReport(report, '/repo')).not.toContain('their order or surrounding whitespace')
+  })
+
+  it('flags a MIXED-terminator file too — one CRLF line is enough', () => {
+    const report = compareIndex('- [A](a.md)\n- [B](b.md)\n', '- [A](a.md)\r\n- [B](b.md)\n')
+
+    expect(report).toMatchObject({ kind: 'drift', missing: [], extra: [], trackedUsesCrlf: true })
+  })
+
+  // `## Heading\r` must not read as a heading the generator dropped: under a naive
+  // split every section of a CRLF file looks emptied and the report tells the
+  // contributor their KB tree is incomplete — on a complete tree.
+  it('does not read CRLF headings as emptied sections', () => {
+    const report = compareIndex('## Adoption\n- [A](a.md)\n', '## Adoption\r\n- [A](a.md)\r\n')
+
+    expect(report).toMatchObject({ kind: 'drift', emptiedSections: [] })
+    expect(formatReport(report, '/repo')).not.toContain('do not regenerate')
   })
 
   it('reports a DROPPED duplicate as missing when the generator emits a line twice', () => {

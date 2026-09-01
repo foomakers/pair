@@ -108,12 +108,29 @@ export type DriftReport =
        * `emptiedSections` below for why this is not just more `extra` lines.
        */
       emptiedSections: string[]
+      /**
+       * The tracked file carries at least one `\r\n`. A separate fact from the two
+       * deltas: it explains a byte mismatch the deltas cannot show, and it is the one
+       * case where `pair update` is the WRONG advice. See `crlfCaution`.
+       */
+      trackedUsesCrlf: boolean
     }
   | { kind: 'broken-setup'; detail: string }
 
-/** Lines that carry index information — blank lines say nothing about drift. */
+/**
+ * Lines that carry index information — blank lines say nothing about drift, and
+ * neither does the terminator. The generator always emits `\n`; the tracked file's
+ * terminator is whatever git checked out, which is `\r\n` under
+ * `core.autocrlf=true`. Comparing line LITERALS across that difference makes every
+ * line of both files unmatched (on the real index: ~562 `missing` + ~562 `extra`),
+ * burying any actual delta. The verdict stays byte equality (AC1) — this only shapes
+ * the EXPLANATION, and `trackedUsesCrlf` carries the fact the normalization hides.
+ */
 function contentLines(text: string): string[] {
-  return text.split('\n').filter(line => line.trim() !== '')
+  return text
+    .split('\n')
+    .map(line => (line.endsWith('\r') ? line.slice(0, -1) : line))
+    .filter(line => line.trim() !== '')
 }
 
 /** Occurrence counts, because a duplicated line is drift the SET view cannot see. */
@@ -170,6 +187,7 @@ export function compareIndex(expected: string, actual: string | null): DriftRepo
     extra: surplus(actualLines, expectedLines),
     trackedExists: actual !== null,
     emptiedSections: headings(actual ?? '').filter(heading => !generatedHeadings.has(heading)),
+    trackedUsesCrlf: (actual ?? '').includes('\r\n'),
   }
 }
 
@@ -204,19 +222,43 @@ function sparseTreeCaution(emptiedSections: string[]): string {
 }
 
 /**
+ * `.pair/llms.txt` is written by the generator with `\n` and compared byte for byte, so
+ * a checkout that rewrites its terminators makes it unequal by construction. Git does
+ * exactly that under `core.autocrlf=true` (the Windows default), which is why the repo's
+ * `.gitattributes` pins the file to `eol=lf` — this caution is what a checkout made
+ * BEFORE that pin, or against a git that never read it, gets told.
+ *
+ * Naming `pair update` here would be the one piece of advice that cannot work: the
+ * regenerated file lands as LF and the next checkout puts the CRs back. The exit is a
+ * renormalization, so that is what the message names.
+ */
+function crlfCaution(): string {
+  return (
+    `⚠ The tracked file uses CRLF line endings; the generator emits LF, so the two\n` +
+    `  cannot be byte-equal. The lists above are computed on the line CONTENT, with the\n` +
+    `  terminators normalized away.\n` +
+    `  Regenerating will NOT fix this — the write lands as LF and the next checkout\n` +
+    `  restores the CRs. Fix the checkout instead (this repo pins LF in .gitattributes):\n` +
+    `    git config core.autocrlf false && git add --renormalize ${TRACKED_INDEX_PATH}`
+  )
+}
+
+/**
  * The LAST paragraph — the one a contributor scanning for the fix acts on, which is why
- * the caution above does not merely PRECEDE it but CHANGES it. A message that says "do
+ * a caution above does not merely PRECEDE it but CHANGES it. A message that says "do
  * not regenerate: restore the tree first" and then closes with the bare imperative
  * "Regenerate with `pair update` and commit the result" contradicts itself and delivers,
  * in its own call to action, the damage the caution exists to prevent.
  *
- * The command is named on BOTH branches (AC5 — a drift report always says how to fix
- * it); only the precondition in front of it changes.
+ * The command is named on EVERY branch (AC5 — a drift report always says how to fix
+ * it); only the precondition in front of it changes. `preconditions` are the cautions
+ * that fired, in the order they must be satisfied.
  */
-function callToAction(treeLooksComplete: boolean): string {
-  const imperative = treeLooksComplete
-    ? `Regenerate with \`${REGENERATION_COMMAND}\` and commit the result.`
-    : `Once the tree is complete, regenerate with \`${REGENERATION_COMMAND}\` and commit the result.`
+function callToAction(preconditions: string[]): string {
+  const imperative =
+    preconditions.length === 0
+      ? `Regenerate with \`${REGENERATION_COMMAND}\` and commit the result.`
+      : `Once ${preconditions.join(' and ')}, regenerate with \`${REGENERATION_COMMAND}\` and commit the result.`
 
   return (
     `${imperative}\n` +
@@ -250,16 +292,26 @@ function formatDrift(
     renderLines('extra', report.extra) + `\n  (the tracked file has these; the generator does not)`,
   )
 
-  if (report.missing.length === 0 && report.extra.length === 0) {
+  // An empty delta on an LF file leaves order/whitespace as the only explanation. On a
+  // CRLF file the explanation is the terminator, and `crlfCaution` states it — printing
+  // both would offer two diagnoses for one cause.
+  if (report.missing.length === 0 && report.extra.length === 0 && !report.trackedUsesCrlf) {
     parts.push(
       `Both sides carry the same lines, each the same number of times: the difference is\n` +
         `their order or surrounding whitespace (a trailing newline, a blank line).`,
     )
   }
 
-  const treeLooksComplete = report.emptiedSections.length === 0
-  if (!treeLooksComplete) parts.push(sparseTreeCaution(report.emptiedSections))
-  parts.push(callToAction(treeLooksComplete))
+  const preconditions: string[] = []
+  if (report.trackedUsesCrlf) {
+    parts.push(crlfCaution())
+    preconditions.push('the checkout is normalized to LF')
+  }
+  if (report.emptiedSections.length > 0) {
+    parts.push(sparseTreeCaution(report.emptiedSections))
+    preconditions.push('the tree is complete')
+  }
+  parts.push(callToAction(preconditions))
 
   return parts
 }
