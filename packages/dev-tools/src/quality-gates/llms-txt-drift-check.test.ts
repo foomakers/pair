@@ -10,10 +10,19 @@
  * `generateLlmsTxt` actually emits for that fixture. Per AC-6 the trailing-newline
  * form is #393's, consumed here and not re-litigated.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, statSync } from 'fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  readdirSync,
+  chmodSync,
+  statSync,
+} from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   REGENERATION_COMMAND,
@@ -21,6 +30,7 @@ import {
   checkLlmsIndexDrift,
   compareIndex,
   formatReport,
+  main,
   readOnlyFileSystem,
 } from './llms-txt-drift-check'
 import { generateLlmsTxt } from '../../../../apps/pair-cli/src/registry/llms-generation'
@@ -173,6 +183,52 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(result.report.kind).toBe('broken-setup')
   })
 
+  // A tree missing ONE WHOLE section still yields other sections, so it clears the
+  // broken-setup guard and is reported as drift listing every guideline as `extra`.
+  // The verdict is right (a mass deletion looks identical), the ADVICE is not: a
+  // contributor who obeys "regenerate and commit" on a sparse checkout commits an
+  // index with the entire Guidelines section deleted — the index going stale in the
+  // more damaging direction, caused by the gate's own message.
+  it('cautions against regenerating when a whole tracked section has no generated entries', async () => {
+    const root = await makeInSyncTree()
+    rmSync(join(root, '.pair/knowledge/guidelines'), { recursive: true, force: true })
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ kind: 'drift', emptiedSections: ['Guidelines'] })
+    expect(result.message).toContain('Guidelines')
+    expect(result.message).toContain('do not regenerate')
+  })
+
+  it('adds no caution when every tracked heading still has generated entries', async () => {
+    const root = await makeInSyncTree()
+    rmSync(join(root, '.pair/knowledge/guidelines/testing/README.md'), { force: true })
+    writeFileSync(join(root, '.pair/knowledge/guidelines/testing/other.md'), '# Other\n', 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ kind: 'drift', emptiedSections: [] })
+    expect(result.message).not.toContain('do not regenerate')
+  })
+
+  // The story's edge case names "locale-dependent sort" verbatim. `localeCompare`
+  // passes no locale and uses the runtime's ICU default, so a Node built without full
+  // ICU orders the index differently and the gate goes red on an untouched tree.
+  // `PRD.md` vs `context-map.md` is a pair where ICU (case-insensitive: context-map
+  // first) and codepoint order ('P' 0x50 < 'c' 0x63: PRD first) disagree.
+  it('orders entries by codepoint, not by the runtime locale', async () => {
+    const root = makeTree({
+      ...KB_FILES,
+      '.pair/adoption/product/context-map.md': '# Context Map\n',
+    })
+
+    const generated = await generateLlmsTxt(readOnlyFileSystem, root)
+
+    expect(generated.indexOf('product/PRD.md')).toBeLessThan(
+      generated.indexOf('product/context-map.md'),
+    )
+  })
+
   it('is deterministic: the same tree yields the same generated index twice', async () => {
     const root = await makeInSyncTree({
       '.pair/knowledge/guidelines/b/second.md': '# Second\n',
@@ -215,5 +271,94 @@ describe('compareIndex — the pure line-level comparison', () => {
   it('ignores blank lines, which carry no index information', () => {
     expect(compareIndex('- [A](a)\n\n\n', '- [A](a)\n').kind).toBe('drift')
     expect(compareIndex('- [A](a)\n\n\n', '- [A](a)\n')).toMatchObject({ missing: [], extra: [] })
+  })
+
+  // `.pair/llms.txt` is touched by every ADL/guideline addition, so parallel branches
+  // conflict on it routinely and a "keep both sides" resolution duplicates an entry
+  // line. Diffed as SETS that duplicate is invisible: 0 missing / 0 extra plus the
+  // "order or whitespace" sentence — a confidently wrong diagnosis in exactly the
+  // case where the contributor needs the diff (AC2).
+  it('reports a DUPLICATED line as extra — multiplicity, not set membership', () => {
+    const report = compareIndex(
+      '- [A](a.md)\n- [B](b.md)\n',
+      '- [A](a.md)\n- [A](a.md)\n- [B](b.md)\n',
+    )
+
+    expect(report).toMatchObject({ kind: 'drift', missing: [], extra: ['- [A](a.md)'] })
+    expect(formatReport(report, '/repo')).not.toContain('order')
+  })
+
+  it('reports a DROPPED duplicate as missing when the generator emits a line twice', () => {
+    const report = compareIndex('- [A](a.md)\n- [A](a.md)\n', '- [A](a.md)\n')
+
+    expect(report).toMatchObject({ kind: 'drift', missing: ['- [A](a.md)'], extra: [] })
+  })
+})
+
+describe('main — the CLI wrapper', () => {
+  it('turns an UNREADABLE KB directory into a report, not an unhandled rejection', async () => {
+    const root = await makeInSyncTree()
+    const locked = join(root, '.pair/knowledge/guidelines/locked')
+    mkdirSync(locked, { recursive: true })
+    writeFileSync(join(locked, 'rule.md'), '# Rule\n', 'utf-8')
+    chmodSync(locked, 0o000)
+
+    let readable = true
+    try {
+      readdirSync(locked)
+    } catch {
+      readable = false
+    }
+
+    const previousExitCode = process.exitCode
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      // Running as root defeats the permission bit; the case does not exist there.
+      if (!readable) {
+        await main(root)
+
+        expect(process.exitCode).toBe(1)
+        const printed = errors.mock.calls.map(call => String(call[0])).join('\n')
+        expect(printed).toContain('llms-index')
+        expect(printed).toContain('EACCES')
+        expect(printed).not.toContain(REGENERATION_COMMAND)
+      }
+    } finally {
+      errors.mockRestore()
+      process.exitCode = previousExitCode
+      chmodSync(locked, 0o700)
+    }
+  })
+
+  it('prints the in-sync report and leaves the exit code untouched on a clean tree', async () => {
+    const root = await makeInSyncTree()
+    const previousExitCode = process.exitCode
+    const logs = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      process.exitCode = undefined
+      await main(root)
+
+      expect(process.exitCode).toBeUndefined()
+      expect(String(logs.mock.calls[0]?.[0])).toContain('matches the generator')
+    } finally {
+      logs.mockRestore()
+      process.exitCode = previousExitCode
+    }
+  })
+
+  it('exits 1 on drift', async () => {
+    const root = await makeInSyncTree()
+    writeFileSync(join(root, TRACKED_INDEX_PATH), '# pair\n', 'utf-8')
+    const previousExitCode = process.exitCode
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await main(root)
+
+      expect(process.exitCode).toBe(1)
+      expect(String(errors.mock.calls[0]?.[0])).toContain(REGENERATION_COMMAND)
+    } finally {
+      errors.mockRestore()
+      process.exitCode = previousExitCode
+    }
   })
 })

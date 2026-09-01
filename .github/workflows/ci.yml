@@ -110,9 +110,10 @@ jobs:
       # test, because a KB-only change (a guideline added under `.pair/`) touches no
       # package `turbo test` hashes — it would replay a cached PASS and the drift would
       # ship. This step and the root `quality-gate` chain run the SAME command
-      # unconditionally, which is the whole parity point. Must stay after `Run build`:
-      # the gate reads the generator's SOURCE but ts-node still type-checks it against
-      # @pair/content-ops' emitted types.
+      # unconditionally, which is the whole parity point. Position in the job is free:
+      # the script runs `ts-node -T`, so it needs no build of @pair/content-ops (whose
+      # types the imported generator source references). Type-checking that source is
+      # `turbo ts:check`'s job, and THAT task carries the `^build` edge.
       - name: Run llms-index drift check
         run: pnpm llms-index:check
       - name: Run duplication check

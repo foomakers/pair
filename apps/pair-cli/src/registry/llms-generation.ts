@@ -52,7 +52,16 @@ async function scanSection(
     }
   }
 
-  return entries.sort((a, b) => a.path.localeCompare(b.path))
+  // Codepoint order, NOT `localeCompare`: the index is a TRACKED, byte-compared
+  // artifact (#416's drift gate), so its order must be a property of the content and
+  // not of the runtime. `localeCompare` with no locale argument uses the runtime's
+  // ICU default — measured on this repo's index, 458 of 560 entries sit in a
+  // different position under ICU collation than under codepoint order (ICU puts
+  // `.pair/adoption/product/context-map.md` before `PRD.md`, codepoint order the
+  // reverse). On a Node built without full ICU the gate would then go red on an
+  // untouched tree and send the contributor to regenerate, committing
+  // environment-dependent churn.
+  return entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 }
 
 export async function generateLlmsTxt(fs: LlmsSourceFs, baseTarget: string): Promise<string> {

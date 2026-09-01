@@ -70,6 +70,24 @@ Three mechanical consequences, all handled here rather than left to be rediscove
   luck. The dependency is what makes the ordering a graph edge instead of a coin flip.
 - `ts-node`/vitest compile the imported source directly because it is reached by a
   relative path, not through `node_modules` (which `ts-node` ignores by default).
+- **The gate's own script runs `ts-node -T` (transpile-only).** Type-checking the
+  imported source at GATE-RUN time made the gate's verdict depend on whether someone
+  had built a sibling package: `llms-generation.ts`'s first line imports
+  `@pair/content-ops` TYPES, which exist only in `dist/`. Reproduced on this branch by
+  moving `packages/content-ops/dist` aside — `pnpm llms-index:check` produced none of
+  its three outcomes and died with
+  `../../apps/pair-cli/src/registry/llms-generation.ts(1,40): error TS2307: Cannot find module '@pair/content-ops'`
+  plus a ts-node stack, exit 1. The same command with `-T` printed
+  `✓ llms-index: .pair/llms.txt matches the generator` on that same unbuilt tree.
+  Nothing is lost: type-checking that source belongs to `ts:check` in BOTH packages,
+  and `turbo ts:check` is the task that carries the `^build` edge (which is also why
+  the `@pair/content-ops` devDependency below stays — it orders `ts:check`, and only
+  `ts:check`). The rejected alternative was to make `llms-index:check` a turbo task
+  with `"dependsOn": ["^build"]`: it restores ordering but puts a repo-wide guard
+  behind turbo's cache, whose key is package-scoped — the stale-PASS trap this
+  repo's `turbo.json` already documents twice — so it would need `cache: false` or a
+  `$TURBO_ROOT$/.pair/**` inputs list, i.e. more machinery for a property `-T`
+  gives for free.
 
 **2. Code invoked BY a gate takes the narrowest file-system capability it needs.**
 `generateLlmsTxt`'s parameter changed from `FileSystemService` (30 members, including
