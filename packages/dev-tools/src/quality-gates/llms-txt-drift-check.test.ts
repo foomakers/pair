@@ -262,7 +262,34 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     // that would send the contributor round the loop.
     expect(result.message).not.toContain('their order or surrounding whitespace')
     expect(result.message).not.toMatch(/^Regenerate with/m)
-    expect(result.message).toContain('renormalize')
+    // The recipe named is the one PROVEN to rewrite the working tree under the `eol=lf`
+    // attribute. `git add --renormalize` is the idiomatic-sounding alternative and it is
+    // inert when the INDEX is already LF — it stages nothing, the CRs stay on disk, and
+    // the gate stays red: advice that reads like a fix and leaves the contributor
+    // exactly where the loop started.
+    expect(result.message).toContain('git config core.autocrlf false')
+    expect(result.message).toContain(
+      `rm ${TRACKED_INDEX_PATH} && git checkout -- ${TRACKED_INDEX_PATH}`,
+    )
+    expect(result.message).not.toContain('--renormalize')
+  })
+
+  // Not a state git produces — it is what a hand-rolled `s/\n/\r\n/` conversion leaves
+  // on a file that was already CRLF. Reported as the terminator problem it is, rather
+  // than as the whole file having changed.
+  it('reports a doubled terminator as a line-ending mismatch too', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(/\n/g, '\r\r\n'), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({
+      kind: 'drift',
+      missing: [],
+      extra: [],
+      trackedUsesCrlf: true,
+    })
   })
 
   it('still names the real content delta when the tracked file is ALSO CRLF', async () => {

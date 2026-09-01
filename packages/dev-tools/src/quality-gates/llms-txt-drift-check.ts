@@ -129,7 +129,7 @@ export type DriftReport =
 function contentLines(text: string): string[] {
   return text
     .split('\n')
-    .map(line => (line.endsWith('\r') ? line.slice(0, -1) : line))
+    .map(line => line.replace(/\r+$/, ''))
     .filter(line => line.trim() !== '')
 }
 
@@ -231,6 +231,13 @@ function sparseTreeCaution(emptiedSections: string[]): string {
  * Naming `pair update` here would be the one piece of advice that cannot work: the
  * regenerated file lands as LF and the next checkout puts the CRs back. The exit is a
  * renormalization, so that is what the message names.
+ *
+ * The recipe is the one that was RUN, not the one that reads best. `git add
+ * --renormalize` is the usual advice and it is inert here: the index side is already
+ * LF (that is what `.gitattributes` guarantees), so it stages nothing and the working
+ * tree keeps its CRs — verified on a `core.autocrlf=true` clone, where it left all 583
+ * CR-carrying lines in place and the gate red. Deleting the file first is what forces
+ * git to write it out again, under the attribute.
  */
 function crlfCaution(): string {
   return (
@@ -238,8 +245,10 @@ function crlfCaution(): string {
     `  cannot be byte-equal. The lists above are computed on the line CONTENT, with the\n` +
     `  terminators normalized away.\n` +
     `  Regenerating will NOT fix this — the write lands as LF and the next checkout\n` +
-    `  restores the CRs. Fix the checkout instead (this repo pins LF in .gitattributes):\n` +
-    `    git config core.autocrlf false && git add --renormalize ${TRACKED_INDEX_PATH}`
+    `  restores the CRs. Re-check out the file instead, under the LF pin this repo\n` +
+    `  carries in .gitattributes:\n` +
+    `    git config core.autocrlf false\n` +
+    `    rm ${TRACKED_INDEX_PATH} && git checkout -- ${TRACKED_INDEX_PATH}`
   )
 }
 

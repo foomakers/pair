@@ -58,7 +58,11 @@ on any machine that checks it out.** Two rules follow, one per axis of variation
    missing/extra deltas (so a real drift stays visible under CRLF), states the terminator
    mismatch, and puts its call to action behind the precondition "once the checkout is
    normalized to LF" — never the bare `pair update`, which here is the one fix that
-   provably cannot work.
+   provably cannot work. The recipe it prints is the one that was **run** against a
+   `core.autocrlf=true` clone (`git config core.autocrlf false`, then `rm` + `git
+   checkout --`): the idiomatic `git add --renormalize` is inert when the index side is
+   already LF — it stages nothing, all 583 CR-carrying lines stay on disk and the gate
+   stays red.
 
 Platform scope, since the question is what makes rule 2 necessary: **LF is the repo's
 normal form on every platform**, in the index and in the working tree. Windows is not
