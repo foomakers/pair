@@ -45,6 +45,7 @@
         "$TURBO_ROOT$/.claude-plugin/marketplace.json",
         "$TURBO_ROOT$/.pair/**",
         "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/apps/website/content/docs/**",
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
         "$TURBO_ROOT$/qa/**",
@@ -71,6 +72,7 @@
         "$TURBO_ROOT$/.claude-plugin/marketplace.json",
         "$TURBO_ROOT$/.pair/**",
         "$TURBO_ROOT$/apps/pair-cli/config.json",
+        "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/apps/website/content/docs/**",
         "$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts",
         "$TURBO_ROOT$/qa/**",
@@ -87,15 +89,22 @@
     // logic would therefore replay a cached PASS on this test locally — the identical
     // local-false-green class this same PR's knowledge-hub#test entry above exists to close,
     // for the one test file in this PR that most needs to actually run.
+    // WIDENED to scripts/** (#419): regenerate-mirrors.test.ts exercises
+    // scripts/regenerate-mirrors.sh the same way, so a per-script list would have to grow with
+    // every new one and degrades SILENTLY (stale PASS) when it does not — the same reason the
+    // note at the top of this file gives for preferring over-approximation. $TURBO_ROOT$/package.json
+    // is here because pre-push-gate-composition.test.ts runs checkRootGate against the REAL root
+    // package.json: deleting the `mirrors:regenerate` script is exactly the dead-advice regression
+    // that guard exists to catch, and it touches no file under packages/dev-tools.
     "@pair/dev-tools#test": {
       "dependsOn": ["build"],
       "outputs": [],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"]
     },
     "@pair/dev-tools#test:coverage": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/format-lib/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**", "$TURBO_ROOT$/package.json"]
     },
     "ts:check": {
       "dependsOn": ["^build"],

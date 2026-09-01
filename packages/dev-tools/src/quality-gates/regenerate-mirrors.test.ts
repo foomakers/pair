@@ -1,10 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawn } from 'child_process'
 import {
   mkdtempSync,
   mkdirSync,
   writeFileSync,
   readFileSync,
+  readdirSync,
+  copyFileSync,
+  chmodSync,
   existsSync,
   rmSync,
   realpathSync,
@@ -26,26 +29,42 @@ import { REPO_ROOT } from './repo-root'
 const REGENERATE = resolve(REPO_ROOT, 'scripts/regenerate-mirrors.sh')
 
 interface RunResult {
-  status: number
+  /** `null` when the child was killed by a SIGNAL — never conflated with an exit code. */
+  status: number | null
   stdout: string
   stderr: string
 }
 
-function run(cwd: string, env?: Record<string, string>): RunResult {
+function run(cwd: string, env?: Record<string, string>, script: string = REGENERATE): RunResult {
   try {
-    const stdout = execFileSync(REGENERATE, [], {
+    const stdout = execFileSync(script, [], {
       cwd,
       env: env ? { ...process.env, ...env } : process.env,
     })
     return { status: 0, stdout: stdout.toString('utf-8'), stderr: '' }
   } catch (error) {
-    const e = error as { status: number; stdout?: Buffer; stderr?: Buffer }
+    const e = error as { status: number | null; stdout?: Buffer; stderr?: Buffer }
     return {
-      status: e.status,
+      status: e.status ?? null,
       stdout: e.stdout?.toString('utf-8') ?? '',
       stderr: e.stderr?.toString('utf-8') ?? '',
     }
   }
+}
+
+/**
+ * "The script refused and said why", not merely "the script did not exit 0".
+ *
+ * `status !== 0` alone passes VACUOUSLY on a timeout kill: `execFileSync` reports a
+ * signalled child with `status === null`, and `null !== 0`. These cases were already
+ * observed flaking under parallel turbo load, which is exactly when a signal kill
+ * happens — so a suite asserting only `not.toBe(0)` would go green on the flake it was
+ * written to survive.
+ */
+function expectRefusal(result: RunResult, reason: string): void {
+  expect(result.status).not.toBe(0)
+  expect(result.status).not.toBeNull()
+  expect(result.stderr).toContain(reason)
 }
 
 function git(dir: string, args: string[]): string {
@@ -89,6 +108,40 @@ function makeFixture(): string {
 
   initRepo(dir)
   return dir
+}
+
+/**
+ * A fixture where TOOLCHAIN_ROOT is the fixture too, not this repo.
+ *
+ * The script derives `TOOLCHAIN_ROOT` from its OWN location (`$(dirname $0)/..`), so the
+ * only way to exercise the toolchain branches — no turbo, build failure, build green but
+ * no `dist/cli.js` — is to run the REAL script from a copy inside the fixture's
+ * `scripts/`. It is copied byte-for-byte, never re-implemented: a divergence between the
+ * copy and `scripts/regenerate-mirrors.sh` would test a script nobody runs.
+ */
+function makeToolchainFixture(): string {
+  const dir = makeFixture()
+  const copy = join(dir, 'scripts/regenerate-mirrors.sh')
+  mkdirSync(dirname(copy), { recursive: true })
+  copyFileSync(REGENERATE, copy)
+  chmodSync(copy, 0o755)
+  return dir
+}
+
+/** A turbo the fixture owns, so the build step's outcome is the case under test. */
+function writeTurboStub(dir: string, body: string): void {
+  const stub = join(dir, 'node_modules/.bin/turbo')
+  write(stub, `#!/bin/sh\n${body}`)
+  chmodSync(stub, 0o755)
+}
+
+/** Polls `condition` until it holds, so the interrupt lands mid-build, not before it. */
+async function waitUntil(condition: () => boolean, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('waitUntil: condition never became true')
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
 }
 
 /** A HOME nobody shares, so a KB cache slot written by a download is visible. */
@@ -189,8 +242,7 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
 
     const result = run(tmp, isolatedHome(tmp))
 
-    expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('packages/knowledge-hub/dataset')
+    expectRefusal(result, 'packages/knowledge-hub/dataset')
   })
 
   it('exits non-zero and names the reason outside a git working tree (AC7)', () => {
@@ -198,9 +250,87 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
 
     const result = run(tmp, { ...isolatedHome(tmp), GIT_CEILING_DIRECTORIES: tmp })
 
-    expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('git')
+    // The full sentence, not just 'git': almost any failure mentions git, so the loose
+    // form would not distinguish this branch from an unrelated crash.
+    expectRefusal(result, 'not inside a git working tree')
   })
+
+  it(
+    'exits non-zero and names the reason when the toolchain has no turbo (AC7)',
+    () => {
+      tmp = makeToolchainFixture()
+
+      const result = run(tmp, isolatedHome(tmp), join(tmp, 'scripts/regenerate-mirrors.sh'))
+
+      // Softening `[ ! -x "$TURBO" ]` to a warning would let the script fall through to
+      // `exec node "$CLI"` against whatever stale dist/ is on disk — a regeneration with
+      // yesterday's transform, reported as success. That is the silent success AC-7 forbids.
+      expectRefusal(result, 'run `pnpm install` first')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'exits non-zero and names the reason when the CLI build fails (AC7)',
+    () => {
+      tmp = makeToolchainFixture()
+      writeTurboStub(tmp, 'echo "TS2304: build exploded" >&2\nexit 1\n')
+
+      const result = run(tmp, isolatedHome(tmp), join(tmp, 'scripts/regenerate-mirrors.sh'))
+
+      expectRefusal(result, 'could not build the pair CLI — nothing was regenerated')
+      // The build's own output is forwarded, or the developer gets a verdict with no cause.
+      expect(result.stderr).toContain('TS2304: build exploded')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'exits non-zero when the build claims success but produced no CLI (AC7)',
+    () => {
+      tmp = makeToolchainFixture()
+      writeTurboStub(tmp, 'exit 0\n') // green build, no dist/cli.js written
+
+      const result = run(tmp, isolatedHome(tmp), join(tmp, 'scripts/regenerate-mirrors.sh'))
+
+      // Dropping this post-build check is the worst of the four: `exec node "$CLI"` on a
+      // stale dist/ regenerates with yesterday's transform and EXITS 0, over output the
+      // guards still reject.
+      expectRefusal(result, 'the build reported success but')
+      expect(result.stderr).toContain('apps/pair-cli/dist/cli.js')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'removes its temporary build log when INTERRUPTED mid-build (no TMPDIR leak)',
+    async () => {
+      // The failure and success paths already `rm` the log explicitly. The gap is the
+      // window between `mktemp` and those `rm`s: a Ctrl-C there (or a CI job cancelled
+      // during the turbo build, which is where the seconds are spent) leaks one file into
+      // TMPDIR per interrupted run. Only the EXIT/HUP/INT/TERM trap closes it, so this
+      // case interrupts a real, slow build rather than an already-terminated one.
+      tmp = makeToolchainFixture()
+      writeTurboStub(tmp, 'sleep 30\n')
+      const tmpEnvDir = join(tmp, '.tmpdir')
+      mkdirSync(tmpEnvDir, { recursive: true })
+
+      // `detached` so the signal reaches the whole group: sh defers a TERM trap until the
+      // foreground command returns, and the foreground command here is the sleeping build.
+      const child = spawn(join(tmp, 'scripts/regenerate-mirrors.sh'), [], {
+        cwd: tmp,
+        detached: true,
+        env: { ...process.env, ...isolatedHome(tmp), TMPDIR: tmpEnvDir },
+      })
+      const exited = new Promise<void>(resolve => child.on('close', () => resolve()))
+      await waitUntil(() => readdirSync(tmpEnvDir).length === 1)
+      process.kill(-(child.pid as number), 'SIGTERM')
+      await exited
+
+      expect(readdirSync(tmpEnvDir)).toEqual([])
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
 
   it('has no check mode — one writer, one checker (AC8)', () => {
     const source = readFileSync(REGENERATE, 'utf-8')

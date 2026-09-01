@@ -156,26 +156,34 @@ export const MIRROR_REMEDY_SCRIPT = 'mirrors:regenerate'
 /**
  * What a developer should run instead. Named in the failure so it is actionable.
  *
- * The second step is not optional advice: `packages/knowledge-hub/dataset/.skills/**`
- * IS in format scope (workspace package), while its generated twin
- * `.claude/skills/pair-<prefixed>/**` is NOT (`.claude/` is not a workspace member),
- * and `skill-md-mirror` asserts the two are byte-equal through the real `pair update`
+ * The second step is not optional advice: `packages/knowledge-hub/dataset/**` IS in
+ * format scope (workspace package), while its generated twins `.claude/skills/**` and
+ * root `.pair/knowledge/**` are NOT (neither is a workspace member), and the mirror
+ * guards assert each twin is byte-equal to the output of the real `pair update`
  * transform. So a format-only edit to the dataset copy turns a green `format:check`
  * into a red `skills:conformance` LATER IN THE SAME GATE. Advertising `pnpm format`
  * alone would hand the developer a loop back to `--no-verify`. Structural fix (one
  * format scope for both copies) is #414.
  *
- * Kept byte-identical (modulo the ADL link form) to the same paragraph in
- * `DEVELOPMENT.md` and `apps/website/content/docs/contributing/development-setup.mdx`,
- * per ADL 2026-07-31 — the three copies are hand-kept, so a `diff` of the paragraph is
- * the only signal that they have diverged.
+ * SCOPE OF THE BYTE-IDENTITY RULE (ADL 2026-07-31): the two hand-kept **documents** —
+ * `DEVELOPMENT.md` and `apps/website/content/docs/contributing/development-setup.mdx` —
+ * are byte-identical to each other modulo the ADL link form, and a `diff` of those two
+ * paragraph blocks is the only signal that they have diverged. This constant is NOT a
+ * third copy of that paragraph and is not diffed against them: it is the same remedy in
+ * the failure-message register, deliberately shorter. It carries the two-step remedy and
+ * both mirror trees (the substance); it drops the docs' exit-2 sentence, their
+ * `gate:composition` aside and the ADL link (none of which help at the failure), and it
+ * never spells `pair update` — the docs contrast the two commands for a reader, whereas a
+ * failure message that names an install command is exactly the dead advice #419 removed,
+ * which is why the unit test forbids the string here and not there.
  */
 export const PRE_PUSH_REMEDY =
   'Formatting is checked, not applied, before a push: run `pnpm format` and commit the result. ' +
   'Applying it here could not fix the commits being pushed anyway. ' +
-  'If `pnpm format` touched `packages/knowledge-hub/dataset/.skills/**`, re-sync the generated ' +
-  `\`.claude/skills/**\` copies (\`pnpm ${MIRROR_REMEDY_SCRIPT}\`) in the same commit, or ` +
-  '`skills:conformance` fails later in this same gate on the mirror-equality guard.'
+  'If `pnpm format` touched `packages/knowledge-hub/dataset/**`, re-sync the generated ' +
+  `\`.claude/skills/**\` and \`.pair/knowledge/**\` copies (\`pnpm ${MIRROR_REMEDY_SCRIPT}\`) ` +
+  'in the same commit, or `skills:conformance` fails later in this same gate on the ' +
+  'mirror-equality guard.'
 
 /** Bounds the transitive expansion, so a cyclic or deep script graph terminates. */
 const MAX_EXPANSION_DEPTH = 10

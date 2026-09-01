@@ -15,7 +15,16 @@
 # `source-resolution` smoke scenario exercises. No generation logic lives here.
 #
 # There is no check mode. The mirror-equality guards (`pnpm skills:conformance`)
-# are the checker; this is the only writer — one writer, one checker.
+# are the checker; this is the only writer.
+#
+# The two scopes are NOT symmetric, and pretending otherwise hides real drift: the
+# guards check the DATASET-SOURCED mirrors (a file with no counterpart in
+# `packages/knowledge-hub/dataset` is compared to nothing), while this command
+# additionally rewrites skill references across the whole installed tree. Observed:
+# commit 6655439d regenerated adr-021, adr-022, adr-023 and
+# collaborative-workflow.context.md — four files that exist only in the target tree —
+# after they had sat drifted on a green `main`. So in that region drift accumulates
+# undetected until whichever run of this writer comes next, and lands there.
 #
 # Two roots, and they are not the same thing:
 #   TOOLCHAIN_ROOT — where this script and the CLI that does the work live.
@@ -60,6 +69,12 @@ BUILD_LOG="$(mktemp "${TMPDIR:-/tmp}/regenerate-mirrors.XXXXXX")" || {
   echo "regenerate-mirrors: cannot create a temporary file (checked TMPDIR=${TMPDIR:-/tmp})." >&2
   exit 1
 }
+# The explicit `rm`s below cover the paths this script controls; the trap covers the one
+# it does not — Ctrl-C or a SIGTERM between `mktemp` and the `rm`, which would otherwise
+# leak a file into TMPDIR on every interrupted run. It cannot cover the final `exec`
+# (which replaces this process), which is why the success path still removes the log
+# itself before reaching it.
+trap 'rm -f "$BUILD_LOG"' EXIT HUP INT TERM
 if ! (cd "$TOOLCHAIN_ROOT" && "$TURBO" run build --filter=@pair/pair-cli...) >"$BUILD_LOG" 2>&1; then
   cat "$BUILD_LOG" >&2
   rm -f "$BUILD_LOG"

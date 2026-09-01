@@ -7,6 +7,7 @@ import {
   buildSkillLinkPathMap,
   applyKnownMirrorTransforms,
 } from '../tools/skills-guide-mirror'
+import { MIRROR_REGENERATE_COMMAND } from '../tools/skill-md-mirror'
 import { sectionBetween } from './test-utils'
 
 // Conformance guard for story #419: /publish-pr realigns the generated mirrors from
@@ -27,6 +28,7 @@ const DATASET = join(__dirname, '../../dataset/.skills/capability/publish-pr/SKI
 const MIRROR = join(__dirname, '../../../../.claude/skills/pair-capability-publish-pr/SKILL.md')
 const SKILLS_DIR = join(__dirname, '../../dataset/.skills')
 const WAY_OF_WORKING = join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md')
+const ROOT_PACKAGE_JSON = join(__dirname, '../../../../package.json')
 
 const dataset = (): string => readFileSync(DATASET, 'utf-8')
 const mirror = (): string => readFileSync(MIRROR, 'utf-8')
@@ -34,6 +36,18 @@ const mirror = (): string => readFileSync(MIRROR, 'utf-8')
 /** Phase 1's body, bounded by the next phase heading — fails closed on a rename. */
 const phase1 = (): string =>
   sectionBetween(dataset(), '### Phase 1:', '### Phase 2: Resolve Merge Strategy')
+
+/**
+ * The `## Notes` section. It is the file's LAST section, so it runs to EOF and
+ * `sectionBetween` (which needs an end marker) does not apply — this fails closed the
+ * same way, by throwing when the heading is gone.
+ */
+const notes = (): string => {
+  const content = dataset()
+  const start = content.indexOf('## Notes')
+  if (start === -1) throw new Error('publish-pr SKILL.md: `## Notes` heading not found')
+  return content.slice(start)
+}
 
 describe('publish-pr realigns mirrors before its gate (#419)', () => {
   it('runs the realignment inside Phase 1, ahead of the /verify-quality composition', () => {
@@ -73,8 +87,27 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     const p1 = phase1()
     expect(p1).toContain('git add -A')
     expect(p1).toMatch(/never `git add -A`/)
-    expect(p1).toMatch(/stage \*\*only\*\* those paths/)
+    expect(p1).toMatch(/stage \*\*only\*\* the paths that comparison produced/)
     expect(p1).toMatch(/never mixed into a feature commit/)
+  })
+
+  it('derives the staged set from a BEFORE/AFTER porcelain comparison, never from a path glob', () => {
+    // The rule this replaces staged "the generated paths the command owns", resolved
+    // through the adoption's owned-path globs. In this repository those globs include
+    // root `.pair/**`, which holds 117 tracked AUTHORED files under `.pair/adoption/**`
+    // (`git ls-files .pair/adoption | wc -l` -> 117). A contributor who edits
+    // `.pair/adoption/tech/way-of-working.md`, leaves it unstaged and runs the skill
+    // would have their prose committed under `chore: regenerate mirrors from local
+    // dataset` — a commit they never wrote — contradicting this same phase's
+    // "unstaged authored changes ... must survive the run untouched".
+    const p1 = phase1()
+    expect(p1).toMatch(/\*\*before\*\* snapshot — `git status --porcelain`/)
+    expect(p1).toMatch(/\*\*after\*\* snapshot \(`git status --porcelain` again\)/)
+    expect(p1).toMatch(/appeared, disappeared or changed between the two reads/)
+    expect(p1).toMatch(/rather than from a \*\*path glob\*\*/)
+    expect(p1).toMatch(/and never a glob/)
+    // The portability payoff, stated where the rule is: no adopter enumerates globs.
+    expect(p1).toMatch(/no adopter has to enumerate owned globs anywhere/)
   })
 
   it('names the commit a regeneration, never a fix (an overwritten hand-edit was restored)', () => {
@@ -108,6 +141,19 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     expect(c).toMatch(/exits non-zero\*\* \(Phase 1\)[\s\S]{0,200}no PR side effects/)
   })
 
+  it('Notes carve the Phase-1 write out instead of denying it', () => {
+    // A skill whose behaviour IS its prose cannot carry a normative "does not modify
+    // source files" in Notes while Phase 1 writes and commits files: an agent or
+    // maintainer reconciling the two can conclude the realignment is out of contract
+    // and skip or delete it. The Notes bullet must name the exception.
+    const n = notes()
+    expect(n).not.toMatch(/it does not modify source files/)
+    expect(n).toMatch(
+      /modifies files \*\*only\*\* through the adoption-declared `mirror-realign-command`/,
+    )
+    expect(n).toMatch(/never renders a review verdict, and never merges/)
+  })
+
   it('installed mirror is reproducible from the dataset via the real transform', () => {
     // Same whole-file guarantee implement-compose-close.test.ts asserts: the mirror must
     // equal the dataset run through the `pair update` copy pipeline (frontmatter `name`
@@ -132,5 +178,23 @@ describe("this repository's own wiring for the realignment (#419)", () => {
     const wow = readFileSync(WAY_OF_WORKING, 'utf-8')
     const gates = sectionBetween(wow, '## Quality Gates', '### Review Tier Matrix')
     expect(gates).toContain('`mirror-realign-command`')
+  })
+
+  it('every mirror guard prints a command the root package.json actually defines', () => {
+    // MIRROR_REGENERATE_COMMAND is the copy of the script name that had NO guard tying
+    // it to package.json. `gate:composition` covers dev-tools' MIRROR_REMEDY_SCRIPT and
+    // the test above covers the way-of-working literal, so renaming the script to
+    // `mirrors:sync` in package.json + MIRROR_REMEDY_SCRIPT + way-of-working.md left
+    // both green while every mirror-guard failure still printed
+    // "Regenerate with 'pnpm mirrors:regenerate'" — a dead command, the exact class
+    // gate:composition exists to prevent for the other remedy step. This closes it from
+    // this side: the two packages now both fail against the same package.json.
+    const rootPkg = JSON.parse(readFileSync(ROOT_PACKAGE_JSON, 'utf-8')) as {
+      scripts?: Record<string, string>
+    }
+    const runner = 'pnpm '
+    expect(MIRROR_REGENERATE_COMMAND.startsWith(runner)).toBe(true)
+    const script = MIRROR_REGENERATE_COMMAND.slice(runner.length)
+    expect(Object.keys(rootPkg.scripts ?? {})).toContain(script)
   })
 })

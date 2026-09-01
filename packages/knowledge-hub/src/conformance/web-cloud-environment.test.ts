@@ -567,6 +567,10 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
         '$TURBO_ROOT$/.claude-plugin/marketplace.json',
         '$TURBO_ROOT$/.pair/**',
         '$TURBO_ROOT$/apps/pair-cli/config.json',
+        // #419: mirror-realignment.test.ts asserts MIRROR_REGENERATE_COMMAND names a script
+        // the ROOT package.json actually defines. Renaming that script touches no file in
+        // this package, so without this entry the guard replays a cached PASS over dead advice.
+        '$TURBO_ROOT$/package.json',
         '$TURBO_ROOT$/apps/website/content/docs/**',
         '$TURBO_ROOT$/apps/website/e2e/docs.e2e.test.ts',
         '$TURBO_ROOT$/qa/**',
@@ -577,7 +581,12 @@ describe("turbo.json keeps each package's #test / #test:coverage inputs in sync"
     },
     {
       pkg: '@pair/dev-tools',
-      requiredInputs: ['$TURBO_DEFAULT$', '$TURBO_ROOT$/scripts/format-lib/**'],
+      // #419 widened `scripts/format-lib/**` to `scripts/**`: regenerate-mirrors.test.ts
+      // execFileSyncs scripts/regenerate-mirrors.sh the same way run-format.test.ts does its
+      // script, and a per-script list degrades SILENTLY (a stale PASS) the next time one is
+      // added without it. `package.json` is required because pre-push-gate-composition.test.ts
+      // runs checkRootGate against the REAL root manifest.
+      requiredInputs: ['$TURBO_DEFAULT$', '$TURBO_ROOT$/scripts/**', '$TURBO_ROOT$/package.json'],
     },
   ]
 

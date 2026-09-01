@@ -147,9 +147,14 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
   // cannot reach its generated .claude twin (not a workspace member), while skill-md-mirror
   // asserts byte equality — so format:check-green becomes skills:conformance-red later in
   // the SAME gate. Reproduced on the real MD049 drift this branch cleared.
-  it('the remedy warns that a dataset .skills edit needs the .claude mirror re-synced', () => {
-    expect(PRE_PUSH_REMEDY).toContain('packages/knowledge-hub/dataset/.skills/**')
+  it('the remedy warns that a dataset edit needs BOTH generated mirror trees re-synced', () => {
+    expect(PRE_PUSH_REMEDY).toContain('packages/knowledge-hub/dataset/**')
     expect(PRE_PUSH_REMEDY).toContain('.claude/skills/**')
+    // Naming only `.claude/skills/**` (the pre-#419-review shape) sends a contributor who
+    // reformatted a dataset GUIDELINE looking at the skills tree, where nothing changed —
+    // its twin is `.pair/knowledge/**`. Both documents already named both trees; this
+    // constant did not, which is the divergence the docblock above now scopes explicitly.
+    expect(PRE_PUSH_REMEDY).toContain('.pair/knowledge/**')
     expect(PRE_PUSH_REMEDY).toContain('skills:conformance')
   })
 
