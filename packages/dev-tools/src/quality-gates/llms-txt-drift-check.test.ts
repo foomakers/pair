@@ -239,7 +239,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   // A contributor who cloned with `core.autocrlf=true` gets every line of the tracked
   // file terminated `\r\n` while the generator emits `\n`. Byte equality fails on the
   // whole file, and a line-literal delta degenerates into the worst possible report:
-  // every tracked line `extra`, every generated line `missing` (~1124 lines on the real
+  // every tracked line `extra`, every generated line `missing` (~1140 lines on the real
   // index) under the advice "regenerate and commit", which writes LF, gets CR back on
   // the next checkout, and loops. The terminators are normalized away before the delta
   // and the mismatch is reported as what it is.
@@ -255,7 +255,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
       kind: 'drift',
       missing: [],
       extra: [],
-      trackedUsesCrlf: true,
+      trackedCarriesCr: true,
     })
     expect(result.message).toContain('CRLF')
     // Not diagnosed as an ordering problem, and not closed with the bare imperative
@@ -288,8 +288,55 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
       kind: 'drift',
       missing: [],
       extra: [],
-      trackedUsesCrlf: true,
+      trackedCarriesCr: true,
     })
+  })
+
+  // The third terminator state a text file can be in: a BARE CR (classic-Mac form, what
+  // a hand-rolled `s/\n/\r/` conversion leaves). Split on `\n` alone the whole file is
+  // ONE segment — every generated line `missing`, a single unreadable concatenation
+  // `extra`, no terminator caution, and the report closes with the bare `pair update`
+  // the CRLF branch exists to avoid: regenerating writes LF and whatever produced the
+  // CRs puts them back. Same cause as CRLF, so the same diagnosis and the same recipe.
+  it('reports a BARE-CR file as a line-ending mismatch, not one giant extra line', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(/\n/g, '\r'), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.ok).toBe(false)
+    expect(result.report).toMatchObject({
+      kind: 'drift',
+      missing: [],
+      extra: [],
+      trackedCarriesCr: true,
+    })
+    expect(result.message).toContain('carriage return')
+    expect(result.message).not.toContain('their order or surrounding whitespace')
+    expect(result.message).not.toMatch(/^Regenerate with/m)
+    expect(result.message).toContain(
+      `rm ${TRACKED_INDEX_PATH} && git checkout -- ${TRACKED_INDEX_PATH}`,
+    )
+  })
+
+  it('still names the real content delta when the tracked file is BARE-CR', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(/\n/g, '\r'), 'utf-8')
+    mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
+    writeFileSync(
+      join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
+      '# Story Local Markers\n',
+      'utf-8',
+    )
+
+    const result = await checkLlmsIndexDrift(root)
+
+    const line =
+      '- [Story Local Markers](.pair/knowledge/guidelines/collaboration/story-local-markers.md)'
+    expect(result.report).toMatchObject({ kind: 'drift', missing: [line], extra: [] })
+    expect(result.message).toContain('Once the checkout is normalized to LF')
   })
 
   it('still names the real content delta when the tracked file is ALSO CRLF', async () => {
@@ -320,7 +367,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 
     const result = await checkLlmsIndexDrift(root)
 
-    expect(result.report).toMatchObject({ kind: 'drift', trackedUsesCrlf: false })
+    expect(result.report).toMatchObject({ kind: 'drift', trackedCarriesCr: false })
     expect(result.message).not.toContain('CRLF')
   })
 
@@ -410,7 +457,7 @@ describe('compareIndex — the pure line-level comparison', () => {
       kind: 'drift',
       missing: [],
       extra: [],
-      trackedUsesCrlf: true,
+      trackedCarriesCr: true,
     })
     expect(formatReport(report, '/repo')).not.toContain('their order or surrounding whitespace')
   })
@@ -418,7 +465,7 @@ describe('compareIndex — the pure line-level comparison', () => {
   it('flags a MIXED-terminator file too — one CRLF line is enough', () => {
     const report = compareIndex('- [A](a.md)\n- [B](b.md)\n', '- [A](a.md)\r\n- [B](b.md)\n')
 
-    expect(report).toMatchObject({ kind: 'drift', missing: [], extra: [], trackedUsesCrlf: true })
+    expect(report).toMatchObject({ kind: 'drift', missing: [], extra: [], trackedCarriesCr: true })
   })
 
   // `## Heading\r` must not read as a heading the generator dropped: under a naive
@@ -429,6 +476,36 @@ describe('compareIndex — the pure line-level comparison', () => {
 
     expect(report).toMatchObject({ kind: 'drift', emptiedSections: [] })
     expect(formatReport(report, '/repo')).not.toContain('do not regenerate')
+  })
+
+  // The terminator domain is closed here, one row per state a tracked file can be in:
+  // LF (above), CRLF, mixed, doubled `\r\r\n`, bare CR, CR mixed with LF, and a stray CR
+  // left at EOF. Every state carrying a CR is the same diagnosis, because it is the same
+  // cause and the same exit.
+  it('normalizes a BARE-CR terminator, and does not read its headings as emptied sections', () => {
+    const report = compareIndex('## Adoption\n- [A](a.md)\n', '## Adoption\r- [A](a.md)\r')
+
+    expect(report).toMatchObject({
+      kind: 'drift',
+      missing: [],
+      extra: [],
+      trackedCarriesCr: true,
+      emptiedSections: [],
+    })
+    expect(formatReport(report, '/repo')).not.toContain('their order or surrounding whitespace')
+    expect(formatReport(report, '/repo')).not.toContain('do not regenerate')
+  })
+
+  it('flags a file mixing BARE CR and LF — one CR is enough', () => {
+    const report = compareIndex('- [A](a.md)\n- [B](b.md)\n', '- [A](a.md)\r- [B](b.md)\n')
+
+    expect(report).toMatchObject({ kind: 'drift', missing: [], extra: [], trackedCarriesCr: true })
+  })
+
+  it('flags a stray CR left at end of file', () => {
+    const report = compareIndex('- [A](a.md)\n', '- [A](a.md)\n\r')
+
+    expect(report).toMatchObject({ kind: 'drift', missing: [], extra: [], trackedCarriesCr: true })
   })
 
   it('reports a DROPPED duplicate as missing when the generator emits a line twice', () => {

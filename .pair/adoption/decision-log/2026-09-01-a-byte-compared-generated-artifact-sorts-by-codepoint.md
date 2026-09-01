@@ -38,11 +38,14 @@ constant — so it could not fail on the thing it named.
 
 **The same failure has a second axis: the line terminator.** The generator emits `\n`;
 the bytes on disk are whatever git checked out. With `core.autocrlf=true` (git's default
-on Windows) every one of the index's 562 content lines gains a `\r`, byte equality fails
-on the whole file, and the gate reports 562 `missing` + 562 `extra` — a ~1124-line dump
+on Windows) every one of the index's 570 content lines gains a `\r`, byte equality fails
+on the whole file, and the gate reports 570 `missing` + 570 `extra` — a ~1140-line dump
 that hides any real drift — closing with "regenerate and commit". Obeying it writes LF,
 the next checkout restores the CRs, and the message cannot get the contributor out of the
 loop. The repo had no `.gitattributes` at all, so nothing pinned the normal form.
+(Figures measured on the committed index at this commit: 583 physical lines, 570 of them
+non-blank — the deltas are computed over the non-blank lines. 562 is the ENTRY count, and
+an earlier draft of this paragraph used it for both.)
 
 ## Decision
 
@@ -53,12 +56,18 @@ on any machine that checks it out.** Two rules follow, one per axis of variation
    filesystem-walk order.
 2. **The line terminator is pinned in `.gitattributes`** (`* text=auto eol=lf`, plus an
    explicit `.pair/llms.txt text eol=lf` naming the gate that depends on it), so the
-   checkout cannot rewrite the bytes the gate compares. **And the gate reports a CRLF
-   tracked file as what it is**: it normalizes the terminator before computing the
-   missing/extra deltas (so a real drift stays visible under CRLF), states the terminator
-   mismatch, and puts its call to action behind the precondition "once the checkout is
-   normalized to LF" — never the bare `pair update`, which here is the one fix that
-   provably cannot work. The recipe it prints is the one that was **run** against a
+   checkout cannot rewrite the bytes the gate compares. **And the gate reports a
+   CR-carrying tracked file as what it is**: it splits on the whole terminator set
+   (`\r\n`, bare `\r`, `\n`) before computing the missing/extra deltas (so a real drift
+   stays visible under any of them), states the terminator mismatch, and puts its call to
+   action behind the precondition "once the checkout is normalized to LF" — never the
+   bare `pair update`, which here is the one fix that provably cannot work. The trigger is
+   **any** `\r`, not `\r\n` alone: a bare-CR file (classic-Mac form — git never writes it,
+   a hand-rolled `s/\n/\r/` does) has the same cause, the same diagnosis and the same exit,
+   and under an `\n`-only split it collapses to a SINGLE segment — the whole index as one
+   unreadable `extra` line, no terminator caution, and the closing advice back to the bare
+   `pair update` this rule exists to prevent. The recipe it prints is the one that was
+   **run** against a
    `core.autocrlf=true` clone (`git config core.autocrlf false`, then `rm` + `git
    checkout --`): the idiomatic `git add --renormalize` is inert when the index side is
    already LF — it stages nothing, all 583 CR-carrying lines stay on disk and the gate
@@ -135,10 +144,11 @@ It is kept as the stable citation key — the normative statement is this sectio
 - The repo gains its first `.gitattributes`. It is inert on the current tree (no tracked
   text file carries a CR) and on macOS/Linux clones; it changes what a
   `core.autocrlf=true` clone puts in the working tree.
-- The drift report has one more branch: `trackedUsesCrlf`. It suppresses the
+- The drift report has one more branch: `trackedCarriesCr`. It suppresses the
   order/whitespace sentence (one cause, one diagnosis) and adds "the checkout is
   normalized to LF" to the call to action's preconditions, which now compose with the
-  sparse-tree one.
+  sparse-tree one. The terminator domain is closed: LF, CRLF, mixed, doubled `\r\r\n`,
+  bare CR, CR mixed with LF, and a stray CR at EOF — one test row each.
 
 ## Adoption Impact
 

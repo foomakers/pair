@@ -109,28 +109,36 @@ export type DriftReport =
        */
       emptiedSections: string[]
       /**
-       * The tracked file carries at least one `\r\n`. A separate fact from the two
+       * The tracked file carries at least one `\r` — as `\r\n` (a `core.autocrlf=true`
+       * checkout) or bare (a hand-rolled conversion). A separate fact from the two
        * deltas: it explains a byte mismatch the deltas cannot show, and it is the one
-       * case where `pair update` is the WRONG advice. See `crlfCaution`.
+       * case where `pair update` is the WRONG advice. See `carriageReturnCaution`.
        */
-      trackedUsesCrlf: boolean
+      trackedCarriesCr: boolean
     }
   | { kind: 'broken-setup'; detail: string }
+
+/**
+ * Every terminator a text file can carry, as ONE separator: `\r\n`, bare `\r`, bare
+ * `\n`. Splitting on `\n` alone leaves a bare-CR file (classic-Mac form, what a
+ * hand-rolled `s/\n/\r/` conversion writes) as a SINGLE segment — the whole index
+ * concatenated into one unreadable `extra` line, with no CR anywhere at a segment end
+ * for a trailing-`\r` strip to find. Alternation order matters: `\r\n` must be tried
+ * before `\r`, or every CRLF line would yield a spurious empty segment.
+ */
+const LINE_TERMINATOR = /\r\n|\r|\n/
 
 /**
  * Lines that carry index information — blank lines say nothing about drift, and
  * neither does the terminator. The generator always emits `\n`; the tracked file's
  * terminator is whatever git checked out, which is `\r\n` under
  * `core.autocrlf=true`. Comparing line LITERALS across that difference makes every
- * line of both files unmatched (on the real index: ~562 `missing` + ~562 `extra`),
+ * line of both files unmatched (on the real index: ~570 `missing` + ~570 `extra`),
  * burying any actual delta. The verdict stays byte equality (AC1) — this only shapes
- * the EXPLANATION, and `trackedUsesCrlf` carries the fact the normalization hides.
+ * the EXPLANATION, and `trackedCarriesCr` carries the fact the normalization hides.
  */
 function contentLines(text: string): string[] {
-  return text
-    .split('\n')
-    .map(line => line.replace(/\r+$/, ''))
-    .filter(line => line.trim() !== '')
+  return text.split(LINE_TERMINATOR).filter(line => line.trim() !== '')
 }
 
 /** Occurrence counts, because a duplicated line is drift the SET view cannot see. */
@@ -187,7 +195,7 @@ export function compareIndex(expected: string, actual: string | null): DriftRepo
     extra: surplus(actualLines, expectedLines),
     trackedExists: actual !== null,
     emptiedSections: headings(actual ?? '').filter(heading => !generatedHeadings.has(heading)),
-    trackedUsesCrlf: (actual ?? '').includes('\r\n'),
+    trackedCarriesCr: (actual ?? '').includes('\r'),
   }
 }
 
@@ -238,12 +246,17 @@ function sparseTreeCaution(emptiedSections: string[]): string {
  * tree keeps its CRs — verified on a `core.autocrlf=true` clone, where it left all 583
  * CR-carrying lines in place and the gate red. Deleting the file first is what forces
  * git to write it out again, under the attribute.
+ *
+ * ANY CR triggers this, not just `\r\n`. A bare-CR file is not a state git produces —
+ * but the cause (a conversion outside the generator), the diagnosis and the exit are
+ * identical, and the checkout named below rewrites it to LF just the same. The
+ * alternative is the one report that closes with `pair update` and cannot be obeyed.
  */
-function crlfCaution(): string {
+function carriageReturnCaution(): string {
   return (
-    `⚠ The tracked file uses CRLF line endings; the generator emits LF, so the two\n` +
-    `  cannot be byte-equal. The lists above are computed on the line CONTENT, with the\n` +
-    `  terminators normalized away.\n` +
+    `⚠ The tracked file's lines end with a carriage return (CRLF, or a bare CR); the\n` +
+    `  generator emits LF, so the two cannot be byte-equal. The lists above are computed\n` +
+    `  on the line CONTENT, with the terminators normalized away.\n` +
     `  Regenerating will NOT fix this — the write lands as LF and the next checkout\n` +
     `  restores the CRs. Re-check out the file instead, under the LF pin this repo\n` +
     `  carries in .gitattributes:\n` +
@@ -302,9 +315,9 @@ function formatDrift(
   )
 
   // An empty delta on an LF file leaves order/whitespace as the only explanation. On a
-  // CRLF file the explanation is the terminator, and `crlfCaution` states it — printing
-  // both would offer two diagnoses for one cause.
-  if (report.missing.length === 0 && report.extra.length === 0 && !report.trackedUsesCrlf) {
+  // CR-carrying file the explanation is the terminator, and `carriageReturnCaution`
+  // states it — printing both would offer two diagnoses for one cause.
+  if (report.missing.length === 0 && report.extra.length === 0 && !report.trackedCarriesCr) {
     parts.push(
       `Both sides carry the same lines, each the same number of times: the difference is\n` +
         `their order or surrounding whitespace (a trailing newline, a blank line).`,
@@ -312,8 +325,8 @@ function formatDrift(
   }
 
   const preconditions: string[] = []
-  if (report.trackedUsesCrlf) {
-    parts.push(crlfCaution())
+  if (report.trackedCarriesCr) {
+    parts.push(carriageReturnCaution())
     preconditions.push('the checkout is normalized to LF')
   }
   if (report.emptiedSections.length > 0) {
