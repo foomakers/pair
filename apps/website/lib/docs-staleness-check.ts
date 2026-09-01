@@ -514,13 +514,23 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * is outside every span, and a fence (```` ``` ````) yields no span at all since a span needs
  * a non-backtick character between its delimiters. Both cases are pinned in the suite.
  *
- * CommonMark's DOUBLED delimiter (`` ``pair install`` ``) is tokenized TOO, without
- * `CODE_SPAN` balancing run lengths: the attempt at the outer backtick fails (`[^`\n]+`
- * cannot match the backtick that follows), the scan retries one character on and pairs the
- * INNER delimiters, so the span content arrives verbatim. Both directions are pinned in the
- * suite; nothing here needs a balanced delimiter run. And doubling is not an EXEMPTION: a
+ * CommonMark's DOUBLED delimiter (`` ``pair install`` ``) is why `CODE_SPAN` implements the
+ * real closer rule — an opening RUN of N backticks closed by the first run of EXACTLY N,
+ * content free to hold runs of any OTHER length — rather than pairing single backticks. A
+ * naive `` `([^`\n]+)` `` does read a doubled span's OWN content (the attempt at the outer
+ * backtick fails, the scan retries one character on and pairs the inner delimiters), which
+ * is why this was invisible: it consumes only ONE of the two CLOSING backticks, and the
+ * leftover flips span parity for the REST OF THE LINE, so every later inline invocation on
+ * it goes unseen — no error, silent. Balancing the run alone is still not enough, because
+ * the reason an author doubles the delimiter is to quote a BACKTICKED literal, so the
+ * content holds backticks too: both doubled spans the corpus carries today
+ * (`reference/skill-management.mdx:211` and `:219`) are of that shape. Live, not latent —
+ * appending an inline `` `pair install` `` to either of those real lines returned `[]`,
+ * while the same text on a plain line was flagged. Doubling is still not an EXEMPTION: a
  * page that wants to quote a wrong form deliberately writes it as unbackticked prose, which
- * this positional rule (span content / fenced line) does not reach by construction.
+ * this positional rule (span content / fenced line) does not reach by construction. A fence
+ * still yields no span, now because content may neither begin nor end with a backtick.
+ * The doubled span, its backticked content, its line-mates and the fence are all pinned.
  */
 /**
  * The canonical binary name — the one place inside this package where it is written, and
@@ -558,8 +568,15 @@ const INVOCATION_PREFIX =
   String.raw`(?:@[\w.-]+/)?` +
   BINARY +
   String.raw`(?:@[\w.-]+)? `
-/** One inline code span's CONTENT — delimiters paired, never crossing a line. */
-const CODE_SPAN = /`([^`\n]+)`/g
+/**
+ * One inline code span's CONTENT (group 2), never crossing a line. CommonMark's own closer
+ * rule: an opening RUN of N backticks (`(?<!`)` keeps the scan from starting mid-run) is
+ * closed by the first run of EXACTLY N (`\1(?!`)`), and the content between them may hold
+ * backtick runs of any other length — which is the whole reason an author doubles the
+ * delimiter. Content may neither begin nor end with a backtick, so a fence yields no span.
+ * See the doubled-delimiter paragraph above.
+ */
+const CODE_SPAN = /(?<!`)(`+)([^`\n](?:[^\n]*?[^`\n])?)\1(?!`)/g
 /**
  * The token after the binary: a command name, OR a flag. A flag is never a command NAME,
  * but it IS an invocation — `pair --version` is the single most copy-pasted line in the
@@ -646,7 +663,7 @@ function invokedCommands(content: string): Invocation[] {
     const [, bin, cmd] = m ?? []
     if (bin !== undefined && cmd !== undefined) found.set(`${bin} ${cmd}`, { bin, cmd })
   }
-  for (const [, span] of content.matchAll(CODE_SPAN)) add(SPAN_INVOCATION.exec(span ?? ''))
+  for (const [, , span] of content.matchAll(CODE_SPAN)) add(SPAN_INVOCATION.exec(span ?? ''))
   let inFence = false
   for (const line of content.split('\n')) {
     if (/^\s*```/.test(line)) {

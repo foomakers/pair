@@ -534,12 +534,8 @@ describe('checkDocsCommands', () => {
     expect(errs[0]).toContain('pair-cli install')
   })
 
-  // CommonMark's DOUBLED delimiter is covered even though `CODE_SPAN` balances no run
-  // lengths: the attempt at the outer backtick fails (`[^`\n]+` cannot match the backtick
-  // that follows), the scan retries one character on and pairs the INNER delimiters. Pinned
-  // because the docstring next to `CODE_SPAN` used to claim the opposite — and a writer who
-  // trusted it would double the delimiters to quote a wrong form deliberately and get an
-  // unexplained red, with "balance the delimiter run" as the recorded (and useless) remedy.
+  // CommonMark's DOUBLED delimiter is covered because `CODE_SPAN` closes an opening run of N
+  // backticks on the first run of exactly N. Pinned in both directions.
   it('tokenizes a DOUBLED-backtick span, both directions', () => {
     const errs = checkDocsCommands(doc('Run ``pair install`` now.'), commands)
     expect(errs).toHaveLength(1)
@@ -554,6 +550,55 @@ describe('checkDocsCommands', () => {
     // The way to show a wrong form on a docs page is unbackticked prose: the rule is
     // positional (span content / fenced line), so prose is outside it by construction.
     expect(checkDocsCommands(doc('Never write pair init.'), commands)).toHaveLength(0)
+  })
+
+  // The reason `CODE_SPAN` implements CommonMark's closer rule instead of stumbling into the
+  // inner pair: a naive `` `([^`\n]+)` `` consumes ONE of the two closing backticks,
+  // and the leftover backtick flips code-span parity for the REST OF THE LINE — every later
+  // inline invocation on it becomes invisible, with no error to say so. The corpus already
+  // carries inline doubled spans (`reference/skill-management.mdx`), so this is live: an
+  // author quoting a backticked literal in a doubled span and adding a real command later on
+  // the same line shipped the wrong binary green. Both spans of the line are read now.
+  it('a doubled span does not blind the REST of its line', () => {
+    const errs = checkDocsCommands(
+      doc('See ``pair-cli install`` then `pair update` next.'),
+      commands,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('write "pair-cli update"')
+    // ANY doubled span does it, including one that names no binary at all.
+    expect(
+      checkDocsCommands(doc('Note ``config.json`` and `pair update` next.'), commands),
+    ).toEqual(errs)
+    // The paired success path: correct binary in both spans stays silent.
+    expect(
+      checkDocsCommands(doc('See ``pair-cli install`` then `pair-cli update` next.'), commands),
+    ).toHaveLength(0)
+  })
+
+  // The two doubled spans the corpus ACTUALLY carries (`reference/skill-management.mdx:211`
+  // and `:219`) exist to quote a BACKTICKED literal, so their content holds backticks. A
+  // delimiter run that is balanced but whose content excludes backticks still cannot pair
+  // them, and the same parity leak blinds the rest of those lines. Verbatim from the corpus,
+  // with the invocation an author would add on the same line.
+  it('reads a doubled span whose CONTENT contains backticks, and the rest of its line', () => {
+    const cell = '| `` `/next` `` | `` `/pair-next` `` | Run `pair install` to apply.'
+    const prose =
+      'Inline single-backtick code spans (`` `/next` ``) are still rewritten. Run `pair install` to apply.'
+    for (const line of [cell, prose]) {
+      const errs = checkDocsCommands(doc(line), commands)
+      expect(errs).toHaveLength(1)
+      expect(errs[0]).toContain('write "pair-cli install"')
+    }
+    // The quoted literals themselves are never invocations, with or without the line-mate.
+    expect(checkDocsCommands(doc('| `` `/next` `` | `` `/pair-next` `` |'), commands)).toHaveLength(
+      0,
+    )
+    // A fenced code block still yields NO span: a run of three backticks has no non-backtick
+    // character before an equal-length run on the same line.
+    expect(
+      checkDocsCommands(doc('```bash\npair-cli install\n```\n\nDone.'), commands),
+    ).toHaveLength(0)
   })
 })
 
