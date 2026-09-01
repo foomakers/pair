@@ -188,9 +188,47 @@ function renderLines(label: string, lines: string[]): string {
 }
 
 /**
+ * A tree missing ONE WHOLE section still yields other sections, so it clears the
+ * broken-setup guard and lands in `formatDrift` listing every entry of that section as
+ * `extra`. The verdict is right (a partial checkout is indistinguishable from a
+ * legitimate mass deletion) — the ADVICE is not, and a contributor who obeys it on a
+ * sparse tree commits an index with the whole section deleted.
+ */
+function sparseTreeCaution(emptiedSections: string[]): string {
+  return (
+    `⚠ The tracked file carries section(s) the generator produced NOTHING for:\n` +
+    emptiedSections.map(s => `  ${s}`).join('\n') +
+    `\n  If you expected those files to exist your KB tree is incomplete (partial\n` +
+    `  install, sparse checkout) — do not regenerate: restore the tree first.`
+  )
+}
+
+/**
+ * The LAST paragraph — the one a contributor scanning for the fix acts on, which is why
+ * the caution above does not merely PRECEDE it but CHANGES it. A message that says "do
+ * not regenerate: restore the tree first" and then closes with the bare imperative
+ * "Regenerate with `pair update` and commit the result" contradicts itself and delivers,
+ * in its own call to action, the damage the caution exists to prevent.
+ *
+ * The command is named on BOTH branches (AC5 — a drift report always says how to fix
+ * it); only the precondition in front of it changes.
+ */
+function callToAction(treeLooksComplete: boolean): string {
+  const imperative = treeLooksComplete
+    ? `Regenerate with \`${REGENERATION_COMMAND}\` and commit the result.`
+    : `Once the tree is complete, regenerate with \`${REGENERATION_COMMAND}\` and commit the result.`
+
+  return (
+    `${imperative}\n` +
+    `This check never writes ${TRACKED_INDEX_PATH} — a gate that fixed the drift would\n` +
+    `hide it.`
+  )
+}
+
+/**
  * The diagnosis a contributor acts on: the two multiset deltas, plus the sentence that
- * explains an EMPTY pair (order/whitespace), plus the caution that must fire before the
- * regeneration advice.
+ * explains an EMPTY pair (order/whitespace), plus a call to action whose wording depends
+ * on whether the tree looks complete.
  */
 function formatDrift(
   report: Extract<DriftReport, { kind: 'drift' }>,
@@ -219,24 +257,9 @@ function formatDrift(
     )
   }
 
-  // A tree missing ONE WHOLE section still yields other sections, so it clears the
-  // broken-setup guard and lands here as drift listing every entry of that section as
-  // `extra`. The verdict is right (a partial checkout is indistinguishable from a
-  // legitimate mass deletion) — the ADVICE that follows is not, and a contributor who
-  // obeys it on a sparse tree commits an index with the section deleted.
-  if (report.emptiedSections.length > 0) {
-    parts.push(
-      `⚠ The tracked file carries section(s) the generator produced NOTHING for:\n` +
-        report.emptiedSections.map(s => `  ${s}`).join('\n') +
-        `\n  If you expected those files to exist your KB tree is incomplete (partial\n` +
-        `  install, sparse checkout) — do not regenerate: restore the tree first.`,
-    )
-  }
-
-  parts.push(
-    `Regenerate with \`${REGENERATION_COMMAND}\` and commit the result. This check never\n` +
-      `writes ${TRACKED_INDEX_PATH} — a gate that fixed the drift would hide it.`,
-  )
+  const treeLooksComplete = report.emptiedSections.length === 0
+  if (!treeLooksComplete) parts.push(sparseTreeCaution(report.emptiedSections))
+  parts.push(callToAction(treeLooksComplete))
 
   return parts
 }

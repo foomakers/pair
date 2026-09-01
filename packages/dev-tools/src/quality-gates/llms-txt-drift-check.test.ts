@@ -33,7 +33,10 @@ import {
   main,
   readOnlyFileSystem,
 } from './llms-txt-drift-check'
-import { generateLlmsTxt } from '../../../../apps/pair-cli/src/registry/llms-generation'
+import {
+  generateLlmsTxt,
+  type LlmsSourceFs,
+} from '../../../../apps/pair-cli/src/registry/llms-generation'
 
 const fixtures: string[] = []
 
@@ -200,6 +203,25 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(result.message).toContain('do not regenerate')
   })
 
+  // The caution is worthless if the message then closes with the bare imperative: the
+  // LAST paragraph is the call to action a contributor scanning for the fix obeys, and
+  // obeying it here commits the index with the Guidelines section deleted. So the
+  // closing paragraph itself must carry the precondition.
+  it('conditions the closing call to action on a complete tree when a section was emptied', async () => {
+    const root = await makeInSyncTree()
+    rmSync(join(root, '.pair/knowledge/guidelines'), { recursive: true, force: true })
+
+    const result = await checkLlmsIndexDrift(root)
+
+    // Still names the command (AC5) — behind its precondition.
+    expect(result.message).toContain(REGENERATION_COMMAND)
+    expect(result.message).toContain('Once the tree is complete, regenerate with')
+    // No paragraph anywhere opens with the unconditional imperative.
+    expect(result.message).not.toMatch(/^Regenerate with/m)
+    const paragraphs = result.message.split('\n\n')
+    expect(paragraphs[paragraphs.length - 1]).toContain('Once the tree is complete')
+  })
+
   it('adds no caution when every tracked heading still has generated entries', async () => {
     const root = await makeInSyncTree()
     rmSync(join(root, '.pair/knowledge/guidelines/testing/README.md'), { force: true })
@@ -209,14 +231,17 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 
     expect(result.report).toMatchObject({ kind: 'drift', emptiedSections: [] })
     expect(result.message).not.toContain('do not regenerate')
+    // The paired path: a complete tree keeps the unconditional imperative.
+    expect(result.message).toMatch(/^Regenerate with/m)
+    expect(result.message).not.toContain('Once the tree is complete')
   })
 
   // The story's edge case names "locale-dependent sort" verbatim. `localeCompare`
   // passes no locale and uses the runtime's ICU default, so a Node built without full
   // ICU orders the index differently and the gate goes red on an untouched tree.
   // `PRD.md` vs `context-map.md` is a pair where ICU (case-insensitive: context-map
-  // first) and codepoint order ('P' 0x50 < 'c' 0x63: PRD first) disagree.
-  it('orders entries by codepoint, not by the runtime locale', async () => {
+  // first) and the code-unit comparator ('P' 0x50 < 'c' 0x63: PRD first) disagree.
+  it('orders entries by code unit, not by the runtime locale', async () => {
     const root = makeTree({
       ...KB_FILES,
       '.pair/adoption/product/context-map.md': '# Context Map\n',
@@ -296,7 +321,47 @@ describe('compareIndex — the pure line-level comparison', () => {
 })
 
 describe('main — the CLI wrapper', () => {
+  // The catch path asserted through the INJECTED fs seam, so the coverage does not
+  // depend on the uid the suite runs under. Probing a `chmod 000` directory and
+  // skipping the body when it stays readable (root — the default user in a plain
+  // `node:*` image and in many self-hosted runners) makes the test vacuous exactly
+  // there: deleting `main`'s try/catch would re-introduce the unhandled rejection and
+  // the suite would still print all-green, with no skip marker to show the gap.
   it('turns an UNREADABLE KB directory into a report, not an unhandled rejection', async () => {
+    const root = await makeInSyncTree()
+    const scandirDenied = Object.assign(
+      new Error(`EACCES: permission denied, scandir '${join(root, '.pair/knowledge/guidelines')}'`),
+      { code: 'EACCES' },
+    )
+    const unreadableTree: LlmsSourceFs = {
+      ...readOnlyFileSystem,
+      readdir: () => {
+        throw scandirDenied
+      },
+    }
+
+    const previousExitCode = process.exitCode
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await main(root, unreadableTree)
+
+      expect(process.exitCode).toBe(1)
+      const printed = errors.mock.calls.map(call => String(call[0])).join('\n')
+      expect(printed).toContain('llms-index')
+      expect(printed).toContain('EACCES')
+      expect(printed).toContain('could not read the knowledge base')
+      // A broken setup is not a stale index: it must NOT send anyone to regenerate.
+      expect(printed).not.toContain(REGENERATION_COMMAND)
+    } finally {
+      errors.mockRestore()
+      process.exitCode = previousExitCode
+    }
+  })
+
+  // The same path against a REAL permission-denied directory — kept as the proof that
+  // the injected error is the one the OS actually raises. Explicitly SKIPPED, never
+  // silently vacuous, under a uid the permission bit does not bind.
+  it('reports a real chmod-000 KB directory the same way', async ctx => {
     const root = await makeInSyncTree()
     const locked = join(root, '.pair/knowledge/guidelines/locked')
     mkdirSync(locked, { recursive: true })
@@ -309,20 +374,21 @@ describe('main — the CLI wrapper', () => {
     } catch {
       readable = false
     }
+    if (readable) {
+      chmodSync(locked, 0o700)
+      ctx.skip('this uid ignores the permission bit (root) — the case cannot exist here')
+    }
 
     const previousExitCode = process.exitCode
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      // Running as root defeats the permission bit; the case does not exist there.
-      if (!readable) {
-        await main(root)
+      await main(root)
 
-        expect(process.exitCode).toBe(1)
-        const printed = errors.mock.calls.map(call => String(call[0])).join('\n')
-        expect(printed).toContain('llms-index')
-        expect(printed).toContain('EACCES')
-        expect(printed).not.toContain(REGENERATION_COMMAND)
-      }
+      expect(process.exitCode).toBe(1)
+      const printed = errors.mock.calls.map(call => String(call[0])).join('\n')
+      expect(printed).toContain('llms-index')
+      expect(printed).toContain('EACCES')
+      expect(printed).not.toContain(REGENERATION_COMMAND)
     } finally {
       errors.mockRestore()
       process.exitCode = previousExitCode

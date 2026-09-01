@@ -1,4 +1,4 @@
-# Decision: a generated artifact that is tracked and byte-compared sorts by codepoint, never by locale collation
+# Decision: a generated artifact that is tracked and byte-compared sorts by a fixed, environment-independent order, never by locale collation
 
 ## Date
 
@@ -38,11 +38,27 @@ constant — so it could not fail on the thing it named.
 
 ## Decision
 
-**Any generated artifact that is both tracked and byte-compared orders its entries by
-codepoint** — `a < b ? -1 : a > b ? 1 : 0` — not by `localeCompare`, and not by
+**Any generated artifact that is both tracked and byte-compared orders its entries by an
+order that is a function of the content alone** — not by `localeCompare`, and not by
 filesystem-walk order.
 
-Applied here to `scanSection` in `apps/pair-cli/src/registry/llms-generation.ts`.
+**The invariant being bought is DETERMINISM across environments, not a particular
+collation.** Any total order fixed by the string's own units qualifies; the property that
+matters is that two machines running the same generator over the same tree emit the same
+bytes.
+
+Realized here as JavaScript's default string relational comparison —
+`a < b ? -1 : a > b ? 1 : 0` — applied to `scanSection` in
+`apps/pair-cli/src/registry/llms-generation.ts`. That operator compares **UTF-16 code
+units**, which is the same order as codepoint order for every character in the BMP, hence
+for every path this or any adopter's KB has carried (all ASCII). The two orders diverge
+only above U+FFFF: a non-BMP character is a surrogate pair (U+D800–U+DFFF) and therefore
+sorts BELOW U+E000–U+FFFF, where codepoint order would put it above. Either order
+satisfies the invariant — both are environment-independent — so the divergence is a
+naming precision, not a defect, and no code change follows from it. A future artifact
+citing this ADL should cite the invariant (determinism), and read "code unit" as the
+implementation, not as a requirement of its own.
+
 `.pair/llms.txt` is regenerated in the same commit, since the order changes.
 
 The rule follows from what the artifact IS: a machine-read index whose consumer is an
@@ -51,6 +67,9 @@ of a 560-line link list will notice, and costs cross-environment reproducibility
 
 An artifact rendered for humans and not byte-compared (a docs page, a report) is free
 to collate — the rule is scoped to the byte-compared, tracked case.
+
+(The file's slug says `sorts-by-codepoint`, the shorthand this was first written under.
+It is kept as the stable citation key — the normative statement is this section.)
 
 ## Alternatives Considered
 
