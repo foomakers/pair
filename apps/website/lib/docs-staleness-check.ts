@@ -523,14 +523,20 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
  * leftover flips span parity for the REST OF THE LINE, so every later inline invocation on
  * it goes unseen — no error, silent. Balancing the run alone is still not enough, because
  * the reason an author doubles the delimiter is to quote a BACKTICKED literal, so the
- * content holds backticks too: both doubled spans the corpus carries today
- * (`reference/skill-management.mdx:211` and `:219`) are of that shape. Live, not latent —
- * appending an inline `` `pair install` `` to either of those real lines returned `[]`,
- * while the same text on a plain line was flagged. Doubling is still not an EXEMPTION: a
- * page that wants to quote a wrong form deliberately writes it as unbackticked prose, which
- * this positional rule (span content / fenced line) does not reach by construction. A fence
- * still yields no span, now because content may neither begin nor end with a backtick.
- * The doubled span, its backticked content, its line-mates and the fence are all pinned.
+ * content holds backticks too: the two lines that carry doubled spans today
+ * (`reference/skill-management.mdx:211`, which carries two of them, and `:219`, which carries
+ * one) are all of that shape. Live, not latent — appending an inline `` `pair install` `` to
+ * either of those real lines returned `[]`, while the same text on a plain line was flagged.
+ * Doubling is still not an EXEMPTION: a page that wants to quote a wrong form deliberately
+ * writes it as unbackticked prose, which this positional rule (span content / fenced line)
+ * does not reach by construction. A fence still yields no span, now because content may
+ * neither begin nor end with a backtick.
+ *
+ * The doubled span, its backticked content and its line-mates are pinned. The fence is pinned
+ * through what it can actually change: the fence pass's own cases and the closing fence that
+ * must not reach the paragraph below. "A fence yields no span" is NOT assertable through
+ * `checkDocsCommands` — a fenced line is scanned by the fence pass regardless and errors dedup
+ * by binary+command, so the two passes reading the same line collapse to one error either way.
  */
 /**
  * The canonical binary name — the one place inside this package where it is written, and

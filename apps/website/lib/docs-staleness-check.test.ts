@@ -576,8 +576,9 @@ describe('checkDocsCommands', () => {
     ).toHaveLength(0)
   })
 
-  // The two doubled spans the corpus ACTUALLY carries (`reference/skill-management.mdx:211`
-  // and `:219`) exist to quote a BACKTICKED literal, so their content holds backticks. A
+  // The doubled spans the corpus ACTUALLY carries — two lines, `reference/skill-management.mdx:211`
+  // (two spans) and `:219` (one) — exist to quote a BACKTICKED literal, so their content holds
+  // backticks; the `cell` fixture below is `:211` verbatim, with both of its spans. A
   // delimiter run that is balanced but whose content excludes backticks still cannot pair
   // them, and the same parity leak blinds the rest of those lines. Verbatim from the corpus,
   // with the invocation an author would add on the same line.
@@ -594,11 +595,12 @@ describe('checkDocsCommands', () => {
     expect(checkDocsCommands(doc('| `` `/next` `` | `` `/pair-next` `` |'), commands)).toHaveLength(
       0,
     )
-    // A fenced code block still yields NO span: a run of three backticks has no non-backtick
-    // character before an equal-length run on the same line.
-    expect(
-      checkDocsCommands(doc('```bash\npair-cli install\n```\n\nDone.'), commands),
-    ).toHaveLength(0)
+    // "A fence yields no span" is deliberately NOT asserted here — through `checkDocsCommands`
+    // it is unobservable: a fenced LINE is scanned by the fence pass anyway and errors dedup by
+    // `${bin} ${cmd}`, so a fenced line the span pass also read collapses to the same single
+    // error either way. The fence's observable pins are the fence pass's own cases above and
+    // the closing-fence/next-paragraph case, which is what goes red if the span rule stops
+    // tokenizing and returns to matching "after a backtick".
   })
 })
 
