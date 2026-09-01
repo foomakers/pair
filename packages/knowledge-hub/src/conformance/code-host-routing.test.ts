@@ -802,18 +802,39 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
    * the bare words — a state-mapping table row or a glossary mention asserts nothing.
    * The qualifier must sit on the CLAIM's own line: the defect this closes is precisely
    * a flat promise followed a line later by its negation, which a window would accept.
+   *
+   * The verb alternation covers the SYNONYMS that express the same transition, not the
+   * two phrasings that happen to be on the site today. Pinning it to `move` reproduced,
+   * on the wording axis, the unwatched door the sweep above closed on the path axis: a
+   * page worded `pair transitions the issue to In Review` shipped an unconditional
+   * promise past a green gate. The gap is capped at 40 non-pipe characters and the
+   * preposition must sit immediately before the state, which is what keeps bare
+   * state-mapping rows (`| In Review | Review |`) and glossary mentions out.
    */
+  const promisesInReview = (line: string): boolean =>
+    /(→|->|\b(?:moves?|transitions?|advances?|promotes?|sets?|puts?|switches|flips?|shifts?|updates?|changes?|marks?)\b[^|\n]{0,40}\b(?:to|into|as))\s*\**"?In Review"?/i.test(
+      line,
+    )
+
+  /**
+   * Is the promise scoped to teams that actually have the state? The qualifier must
+   * CONDITION the transition. `default teams` alone does not: it is a bare noun phrase
+   * that reads the same in a sentence asserting the opposite (`Linear's default teams
+   * move the issue to In Review`), so keying on it excused the exact claim this sweep
+   * exists to catch.
+   */
+  const scopesInReviewToTeamsThatHaveIt = (line: string): boolean =>
+    /only if|if the team|where the team|teams? (that|which) have/i.test(line)
+
   it('every "→ In Review" promise on the docs site says the state is not guaranteed', () => {
-    const TRANSITION = /(→|->|moves?\b[^|\n]{0,40}\bto)\s*\**"?In Review"?/i
-    const QUALIFIER = /only if|if the team|where the team|teams? (that|which) have|default teams/i
     let claims = 0
     const unconditional: string[] = []
     for (const rel of allDocsPages()) {
       const lines = read(REPO_ROOT, rel).split('\n')
       for (const [i, line] of lines.entries()) {
-        if (!TRANSITION.test(line)) continue
+        if (!promisesInReview(line)) continue
         claims++
-        if (!QUALIFIER.test(line)) unconditional.push(`${rel}:${i + 1}`)
+        if (!scopesInReviewToTeamsThatHaveIt(line)) unconditional.push(`${rel}:${i + 1}`)
       }
     }
     expect(
@@ -823,6 +844,52 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
     expect(claims, 'no In Review transition found at all — has the wording moved?').toBeGreaterThan(
       0,
     )
+  })
+
+  /**
+   * The two predicates above, executed against realistic page text rather than trusted
+   * by inspection — including the phrasings that slipped the `move`-only detector.
+   */
+  describe('the In Review sweep predicates', () => {
+    it('promisesInReview sees the transition however the sentence words its verb', () => {
+      for (const line of [
+        'When the PR opens, pair transitions the issue to In Review.',
+        'Opening the PR moves the issue to "In Review".',
+        'The skill advances the item to **In Review** on PR creation.',
+        'pair sets the status to "In Review" when the PR opens.',
+        'The adapter updates the work item to In Review.',
+        'It marks the issue as In Review as soon as the PR is ready.',
+        'PR URL commented on ENG-412; ENG-412 → In Review',
+      ]) {
+        expect(promisesInReview(line), line).toBe(true)
+      }
+    })
+
+    it('promisesInReview ignores a state-mapping row and a glossary mention', () => {
+      for (const line of [
+        '| In Review    | Review      |',
+        'pair skills never reason in board labels like "Todo" or "In Review".',
+        'Map `Review` to whatever your board actually has; `az boards work-item update --state "In Review"` fails on a stock Scrum project.',
+        'Linear\'s default teams ship no "In Review" state; a skill reports the gap.',
+      ]) {
+        expect(promisesInReview(line), line).toBe(false)
+      }
+    })
+
+    it('a bare "default teams" does not scope a promise it is the subject of', () => {
+      const inverted = "Linear's default teams move the issue to In Review."
+      expect(promisesInReview(inverted)).toBe(true)
+      expect(scopesInReviewToTeamsThatHaveIt(inverted)).toBe(false)
+      // ...while the real conditional forms on the site still count as scoped.
+      expect(
+        scopesInReviewToTeamsThatHaveIt('ENG-412 → In Review (only if the team has that state)'),
+      ).toBe(true)
+      expect(
+        scopesInReviewToTeamsThatHaveIt(
+          'the table moves the issue to "In Review", on teams that have that state',
+        ),
+      ).toBe(true)
+    })
   })
 
   it('the Linear guide says who provisions the chromatic risk:/cost: labels', () => {
