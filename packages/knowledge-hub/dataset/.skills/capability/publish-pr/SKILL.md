@@ -1,13 +1,13 @@
 ---
 name: publish-pr
-description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. Standalone — driven by a handoff/checkpoint, not by /implement having run in the same session. Composed by /implement's closing phase (Step 3.3); reused by hotfix and automation loops. Composes /verify-quality, /checkpoint, /write-issue."
-version: 0.7.1
+description: "Publishes a completed story branch as a pull request: realigns the generated mirrors from the local dataset (committing them separately when they drifted), runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. Standalone — driven by a handoff/checkpoint, not by /implement having run in the same session. Composed by /implement's closing phase (Step 3.3); reused by hotfix and automation loops. Composes /verify-quality, /checkpoint, /write-issue."
+version: 0.8.0
 author: Foomakers
 ---
 
 # /publish-pr — Publish a Story Branch as a PR
 
-Take a completed story branch to a review-ready pull request in one standalone step: **gate → compose PR → propagate tags → ready-for-review → board state → review dispatch**. Reliable on a clean context (input is a handoff document, not session memory) and reusable outside `/implement` — hotfix branches and automation loops (#212, G10) invoke it directly.
+Take a completed story branch to a review-ready pull request in one standalone step: **realign mirrors → gate → compose PR → propagate tags → ready-for-review → board state → review dispatch**. Reliable on a clean context (input is a handoff document, not session memory) and reusable outside `/implement` — hotfix branches and automation loops (#212, G10) invoke it directly.
 
 **One PR per story:** the story lands on ONE branch with ONE PR. If a PR already exists for the branch, this skill UPDATES it — it never opens a second PR for the same story.
 
@@ -38,6 +38,7 @@ Two sibling sections cover git concerns and the split is deliberate: **`## Merge
 
 - **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Merge Strategy`** — the same section the merge consumers read (`/review` Phase 6): `Method` (`squash` | `merge` | `rebase`, **default `squash`**) and the `Commit format` ([commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md)). Recorded on the PR as the intended merge strategy; **squash happens at merge, never here**. `branch-format` (to parse the branch id) comes from the [branch template](../../../.pair/knowledge/guidelines/collaboration/templates/branch-template.md).
 - **way-of-working.md → `## Git Workflow`** — `code-host` (the tool owning branches/PRs) and `base-branch` (default `main`; **a `base-branch` declared under `## Merge Strategy`, where this skill's ≤ 0.4.1 versions documented it, is still honored** — the resolution order is single-sourced in the convention's **`base-branch` resolution** — the same order `/implement` applies, so the two readers cannot disagree on the target branch). **`code-host` absent ⇒ code host = PM tool** (single-tool; the zero-configuration default, not a degradation), and the same tool named in both places is treated exactly as omitted. Resolution, the PM↔code-host routing table, and the cross-linking convention live in one place: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) — this skill states only which side each operation is on.
+- **way-of-working.md → `## Quality Gates` → `mirror-realign-command`** — the project's single writer for its generated mirrors, run in Phase 1 before the gate. Declared as a command the project owns (e.g. a root script), because which artifacts a repo generates, and from what, is the repo's business and not this skill's — a hardcoded command would emit a step most projects cannot run. **Absent ⇒ the realignment step is skipped entirely** (zero-configuration default, not a degradation). The command must be a *writer*, local and idempotent: the guards that detect drift are the checkers, this is the one thing that fixes it.
 - **way-of-working.md → `## State Mapping`** — board-column ↔ canonical-macrostate mapping (see [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Omitted ⇒ canonical names assumed.
 - **way-of-working.md → `## Assignment`** — the fallback when no `$assignee` is passed. This skill writes the **code-host** side, so it reads **`code-host-assignee` first and `default-assignee` second** — the split-configuration key exists because the same human often carries two identifiers, and resolving the PM-tool login against the code host is how a PR ends up rejected and published unassigned. **One rule, two callers**: the schema and the cascade live once, in the [resolution convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md), and both this skill (the PR, a **code-host** write) and `/write-issue` (the item, a **PM-tool** write) read them from there rather than each defining their own. Both omitted ⇒ no default; the PR is published unassigned with a warning.
 
@@ -54,12 +55,21 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 3. **Verify**: Story ID resolved AND the branch is known. If the story id cannot be resolved from handoff or branch → **HALT**: "Cannot resolve story id — pass `$story` explicitly." (edge case).
 4. **Act**: If no handoff document exists, gather minimal state directly: branch (`git branch --show-current`), commits since base, and the story's ACs/tags from the PM tool. Note in the output that no handoff was found.
 
-### Phase 1: Quality Gate (BLOCKING)
+### Phase 1: Realign Generated Mirrors, then Quality Gate (BLOCKING)
 
-1. **Act**: Compose `/verify-quality` with `$scope` (default `all`). This is a local pre-flight, not a replacement for CI (CI stays authoritative, #210).
-2. **Check**: Did every required gate pass?
-3. **Skip**: If all gates pass, proceed to Phase 2.
-4. **Act**: If any required gate fails → **HALT** before creating or updating the PR. Report each failing check (gate name + first failing detail). No PR side effects occur on a red gate.
+The realignment runs **before** the gate, and the order is load-bearing in both directions: mirror drift is precisely what turns the gate red, so a step placed after it would be unreachable in the only case it exists for — and a gate that ran first would have judged a tree the PR no longer contains. It is also the **only** write this skill makes to the branch.
+
+1. **Check**: Does the adoption declare a `mirror-realign-command`?
+2. **Skip**: If it does not, go to step 5. A project with no generated mirrors has nothing to realign — the zero-configuration default, not a degradation, and nothing is reported.
+3. **Act**: Run the declared command. It regenerates the mirrors from the working tree's **local** dataset — never a published release — and is idempotent. A **non-zero exit → HALT** before any PR side effect, reporting the command's own reason verbatim: it never reports success over a no-op, so a failure here means nothing was written and the drift is still there.
+4. **Check → Act**: Read `git status --porcelain` for the generated paths the command owns.
+   - **No change** → a no-op stays **silent**: no commit, and no output row (the `Mirrors:` row is emitted only when a commit was made). Continue to step 5.
+   - **Changed** → stage **only** those paths — never `git add -A`: unstaged authored changes belong to the contributor and must survive the run untouched, and this skill must not commit them — and commit them **alone**, as their own commit, never mixed into a feature commit. Name it as a *regeneration* (e.g. `chore: regenerate mirrors from local dataset`), never a "fix": an overwritten hand-edit was restored to what the dataset generates, not repaired. Drift in a file this branch never touched is committed here too, and **said so in the output** — surprising, but better than pushing knowingly stale generated output, and the separate commit keeps even a dataset-wide regeneration readable next to the authored work.
+   - **Verify**: `git log` shows exactly one new commit, and `git status` still shows every pre-existing unstaged authored change, untouched.
+5. **Act**: Compose `/verify-quality` with `$scope` (default `all`). This is a local pre-flight, not a replacement for CI (CI stays authoritative, #210).
+6. **Check**: Did every required gate pass?
+7. **Skip**: If all gates pass, proceed to Phase 2.
+8. **Act**: If any required gate fails → **HALT** before creating or updating the PR. Report each failing check (gate name + first failing detail). No PR side effects occur on a red gate.
 
 ### Phase 2: Resolve Merge Strategy & Prepare Base
 
@@ -154,6 +164,7 @@ The PR is ready; it must now be **under review and mechanically blocked** — se
 PUBLISH-PR REPORT:
 ├── Story:      [#ID: Title]
 ├── Handoff:    [.pair/working/checkpoints/<id>.md | none — state gathered from branch+story]
+├── Mirrors:    [regenerated — commit <sha>, N file(s) — omit this row entirely when nothing was committed]
 ├── Gate:       [PASS | HALTED — N gates failing]
 ├── Base:       [base-branch — squash on merge: yes|no]
 ├── PR:         [#PR-number — URL — Created | Updated — ready-for-review confirmed by read | ready-for-review not confirmed — finding]
@@ -184,6 +195,7 @@ When invoked **independently** (hotfix, automation loop #212):
 ## HALT Conditions
 
 - **Story id unresolvable** from handoff or branch (Phase 0).
+- **`mirror-realign-command` exits non-zero** (Phase 1) — report its own reason verbatim; nothing was regenerated and no PR side effects occur. Same shape as the gate-red HALT it precedes.
 - **Quality gate red** (Phase 1) — report failing checks; no PR side effects.
 - **pr-template not found** (Phase 3) — cannot compose a PR without it.
 - **Code host unreachable or unauthenticated** for create/update (Phase 4) — report with a setup pointer and stop; nothing partial is left ready. **PM-side work already done is not rolled back** (the board write is the PM tool's own state); re-invocation is idempotent and resumes at the code-host step.
@@ -202,6 +214,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **A write the host reports as applied but a read does not show** (a tag, the assignee, ready-for-review, the `pair-review` status, the `pr-state:*` label — each read back where it is written: tags and assignee in Phase 4 step 3, ready-for-review in step 6, the check status and the state label in Phase 5 steps 3 and 4): report it as a finding on the corresponding output row and continue. The PR exists and is what matters; what must never happen is reporting the unapplied write as done.
 - **No board state maps to `Review`** (a minimal board, D4 — a project that reviews on the PR and merges straight to `Done`): **write no state field** in step 7 — membership is still established and confirmed — and report `Board: n-a — no Review state on this board`. The zero-configuration documented skip, **not** an error and not a degraded publish — the readiness signal is the PR itself.
 - **The direct board write cannot complete** (membership unconfirmable after the add and its one retry — the item writer's Step 7b; or a macrostate no board state can express — its Step 6): report the blocker verbatim on the `Board:` row as `not updated — <reason>` and continue. The reasons are the item writer's, the write is **this skill's own** — it applies those beats by reference, it does not compose them. The PR is published and ready-for-review; a board write that did not happen is **reported, never absorbed into a green publish**, and this skill never HALTs on it (the code-host artifact is the work).
+- **No `mirror-realign-command` declared**: skip the realignment step and report nothing (Phase 1) — the zero-configuration default for a project with no generated mirrors, **not** a degradation. Never substitute a guessed command, and never a knowledge-base *install* command: installing a published release is a different operation from realigning a working tree, and using one for the other makes the fix depend on what has been published.
 - **`/checkpoint` not installed**: gather state from branch + story directly (Phase 0).
 - **`/write-issue` not installed**: only the **comment-mode back-link** (Phase 4 step 5) is affected — write it directly per the PM tool's implementation guide **and read the item's comments back to confirm it**, or warn with the manual-link instruction. A direct post the read does not show is reported `back-link failed — manual link needed`, **never as posted**: losing the composition must not lose the confirming read with it, or the degraded path becomes the one path that claims a write it never made. **The board write in step 7 is unaffected and still runs in full** (membership → confirming read → state field): it is direct, never a composition, so a missing item writer can never leave the story off the board. Skipping the board write here would re-create #384/#372 — green, ready-for-review, and invisible.
 - **Nested subagent dispatch unavailable** (Phase 5 — the common case: this skill is itself running in `/implement`'s handoff subagent and the harness forbids a second level): return `Review: review-dispatch-required — /review $pr=<n>` and let the **caller** dispatch (`/implement` Step 3.3). This is the primary path when nested, not a degradation — the review still runs, one frame up, on a clean context.
