@@ -56,7 +56,12 @@
 #     'success'` still names the check and is false exactly when it fails: the remedy
 #     is skipped on the one run that needed it. `.conclusion`, `"failure"` and the
 #     reversed operand order are accepted; `!=`, the other three values and
-#     `contains()` are not.
+#     `contains()` are not. And the equality must DECIDE, not merely appear: `&&`
+#     binds tighter than `||`, so `failure() && <scope> || steps.install.outcome ==
+#     'failure'` keeps the scope spelled exactly as below and annotates a broken
+#     `pnpm install` "not formatted" again. The condition is a CONJUNCTION — extra
+#     `&&` terms only narrow and are fine, `||` and a negated scope (`!(<scope>)`)
+#     are not.
 
 name: Format
 

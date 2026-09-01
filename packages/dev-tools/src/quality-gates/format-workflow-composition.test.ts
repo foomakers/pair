@@ -44,6 +44,9 @@ import {
 //     failed), so a broken `pnpm install` is annotated "not formatted" or the remedy
 //     never fires at all, or placing a correctly-SPELLED scope where it cannot
 //     RESOLVE (a second job, or above the check step), so it is false on every run,
+//     or leaving the comparison exactly right but letting it DECIDE nothing — `&&`
+//     binds tighter than `||`, so `failure() && <scope> || <anything>` fires the
+//     remedy on runs the check passed,
 //   - respelling a trigger as a FLOW mapping, which the block reader sees as an
 //     empty block and therefore as "no filter at all" — the spelling all four
 //     trigger holes above walk through untouched — or respelling a STEP the same
@@ -1501,6 +1504,94 @@ describe('a failure-path scope must resolve on the FAILURE path (#413)', () => {
     )
     expect(r.message).toContain('compare it to')
     expect(r.message).not.toContain('are not scoped to the formatting check')
+  })
+})
+
+// Requiring the equality to be PRESENT is the third leg; requiring it to DECIDE is the
+// fourth. `if:` is a boolean expression, and in GitHub's grammar `&&` binds tighter than
+// `||`, so `failure() && <scope> || <anything>` parses as `(failure() && <scope>) || <anything>`
+// — the scope is still there, spelled exactly as shipped, and decides nothing.
+describe('a failure-path scope must DECIDE, not merely appear (#413)', () => {
+  const SCOPE = "steps.format_check.outcome == 'failure'"
+  const remedyOf = (condition: string) =>
+    mutate(WELL_FORMED, `failure() && ${SCOPE}`, condition, 'the scoped remedy condition')
+
+  // Every one of these keeps `steps.format_check.outcome == 'failure'` intact, so
+  // `scopesTo` reports them scoped — and every one of them fires the remedy on a run the
+  // check did not fail on, which is round 3's loss (a broken `pnpm install` annotated
+  // "not formatted. Run `pnpm format`") restored by adding tokens the guard never reads.
+  const neutralized: [string, string][] = [
+    [
+      '`|| true`, which makes the whole condition unconditionally true',
+      `failure() && ${SCOPE} || true`,
+    ],
+    [
+      '`|| github.event_name ==` …, true on every push regardless of the check',
+      `failure() && ${SCOPE} || github.event_name == 'push'`,
+    ],
+    [
+      "another step's outcome ORed in — the install failure this scope exists to stay quiet about",
+      `failure() && ${SCOPE} || steps.install.outcome == 'failure'`,
+    ],
+    [
+      'the same disjunction parenthesised, so the scope is one disjunct of two',
+      `failure() && (${SCOPE} || steps.install.outcome == 'failure')`,
+    ],
+    ['`always()` ORed in front of the whole guard', `always() || failure() && ${SCOPE}`],
+    ['the scope negated as a group', `failure() && !(${SCOPE})`],
+    [
+      "the status reference negated, which compares `false` to `'failure'` and is never true",
+      `failure() && !steps.format_check.outcome == 'failure'`,
+    ],
+    ['the neutralised condition wrapped in an expression', `\${{ failure() && ${SCOPE} || true }}`],
+  ]
+
+  for (const [label, condition] of neutralized) {
+    it(`fails on ${label}`, () => {
+      const r = checkFormatWorkflow(remedyOf(condition))
+      expect(r.ok, `${condition}: ${r.message}`).toBe(false)
+      expect(r.message, condition).toContain('decides nothing')
+    })
+  }
+
+  // A conjunction can only NARROW when the remedy fires, so it can never restore the
+  // loss — and a `!` on a status FUNCTION is not a `!` on the scope. Rejecting these
+  // would fail a correct workflow, which is how a guard gets weakened (round 4).
+  const kept: [string, string][] = [
+    ['an extra narrowing conjunct', `failure() && ${SCOPE} && github.event_name == 'pull_request'`],
+    [
+      '`!cancelled()`, a negated function rather than a negated scope',
+      `failure() && !cancelled() && ${SCOPE}`,
+    ],
+    ['the shipped spelling itself', `failure() && ${SCOPE}`],
+  ]
+
+  for (const [label, condition] of kept) {
+    it(`accepts ${label}`, () => {
+      const r = checkFormatWorkflow(remedyOf(condition))
+      expect(r.ok, `${condition}: ${r.message}`).toBe(true)
+    })
+  }
+
+  // The three buckets stay disjoint: a neutralised condition DOES name the check and
+  // DOES carry the equality, so reporting it as "not scoped" or "does not compare it to
+  // 'failure'" would name a cause the author already got right.
+  it('names the neutralisation, not the missing reference or the wrong value', () => {
+    const r = checkFormatWorkflow(remedyOf(`failure() && ${SCOPE} || true`))
+    expect(r.message).toContain('decides nothing')
+    expect(r.message).not.toContain('are not scoped to the formatting check')
+    expect(r.message).not.toContain('do not compare it to')
+  })
+
+  // On the file this repo actually runs, not only the fixture: the mutation is one
+  // ` || true` appended to line 139, and every other rule in the module stays green.
+  it('fires on the shipped workflow when the scope is ORed away', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      mutate(shipped, `failure() && ${SCOPE}`, `failure() && ${SCOPE} || true`, SCOPE),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('decides nothing')
   })
 })
 

@@ -91,7 +91,11 @@
  *   the bare filename anyway. Nor is naming the context enough: the condition must
  *   COMPARE it to `'failure'`. `outcome` holds one of four values, so
  *   `steps.<id>.outcome == 'success'` still mentions the check and is false exactly
- *   when the check fails — the same never-firing remedy from a one-token edit.
+ *   when the check fails — the same never-firing remedy from a one-token edit. Nor is
+ *   the comparison being PRESENT enough: it must DECIDE. `&&` binds tighter than
+ *   `||`, so `failure() && <scope> || steps.install.outcome == 'failure'` keeps the
+ *   scope spelled exactly right and puts the broken-install annotation back; the
+ *   condition is a CONJUNCTION, and `||` or a negation of the scope is rejected.
  *
  * Structure is asserted, never exact file text: comments, step names and action
  * versions must be editable without false-failing this guard.
@@ -830,6 +834,40 @@ function scopesTo(condition: string, id: string): boolean {
 }
 
 /**
+ * Present is not the same as DECISIVE, and that is the fourth leg of this scope.
+ *
+ * `if:` is a boolean expression and `&&` binds tighter than `||`, so
+ * `failure() && steps.<id>.outcome == 'failure' || true` parses as
+ * `(failure() && <scope>) || true` — the comparison `scopesTo` demands is there,
+ * character for character the shipped spelling, and the step fires on every run. The
+ * measured losses, each one a few tokens appended to a condition every other rule in
+ * this module reports well-formed:
+ *
+ * - `|| steps.install.outcome == 'failure'` — a broken `pnpm install` is annotated
+ *   "not formatted. Run `pnpm format`" again. That is exactly the loss round 3 closed
+ *   by introducing the scope, restored without touching the scope.
+ * - `|| true` / `always() || …` — the remedy also fires on GREEN runs, annotating a
+ *   passing PR with a formatting failure that did not happen.
+ * - `!(<scope>)` — the scope inverted with one character, where `!= 'failure'` (which
+ *   `scopesTo` already rejects) is the same inversion spelled with two.
+ * - `!steps.<id>.outcome == 'failure'` — unary `!` binds tighter than `==`, so this
+ *   compares `false` to `'failure'` and is never true on any run.
+ *
+ * So the structure is an allow-list too: a CONJUNCTION of terms. `&&` can only narrow
+ * when the remedy fires and can never make it fire on a run the check passed, so extra
+ * conjuncts stay green; `||` and a negation OF THE SCOPE do not. `!` on a status
+ * function (`!cancelled()`) is left alone — it negates a function, not this scope, and
+ * a guard that fails a correct workflow is the kind that gets weakened (round 4).
+ */
+function decides(condition: string, id: string): boolean {
+  // Quoted literals are DATA: `== 'failure'` must not be read as structure. Masking
+  // them first is the same data/structure split `stripQuotedMessages` makes for `run:`.
+  const structure = condition.replace(/'[^'\n]*'|"[^"\n]*"/g, "''")
+  if (structure.includes('||')) return false
+  return !new RegExp(`!\\s*(?:\\(|steps\\.${id}\\.)`).test(structure)
+}
+
+/**
  * `if:` is an ALLOW-list, not a deny-list, and this is the whole reason why. A rule
  * that bans the LITERAL falses (`if: false`, `'false'`, `${{ false }}`) waves through
  * every never-true EXPRESSION, which is the spelling anyone would actually write:
@@ -1164,6 +1202,21 @@ function miscomparedProblem(miscompared: FailurePathStep[], id: string): string 
   )
 }
 
+function neutralizedProblem(neutralized: FailurePathStep[], id: string): string {
+  return (
+    `${neutralized.length} failure-path step(s) carry the \`steps.${id}\` scope but it decides nothing` +
+    `\n  (\`if: ${neutralized.map(step => step.condition).join('`, `if: ')}\`). \`if:\` is a boolean\n` +
+    '  expression and `&&` binds tighter than `||`, so `failure() && <scope> || <anything>` is\n' +
+    '  `(failure() && <scope>) || <anything>`: the comparison is spelled exactly right and the step\n' +
+    "  still fires when the check did not fail. `|| steps.<other>.outcome == 'failure'` annotates a\n" +
+    '  broken `pnpm install` "not formatted. Run `pnpm format`" — the loss the scope exists to\n' +
+    '  prevent — and `|| true` annotates GREEN runs too. A negation of the scope itself\n' +
+    "  (`!(<scope>)`, or `!steps.<id>.outcome == 'failure'`, which compares `false` to `'failure'`)\n" +
+    '  inverts it or makes it never true. The condition must be a CONJUNCTION: extra `&&` terms are\n' +
+    `  fine (they only narrow), \`||\` and a negated scope are not.\n${SCOPING_ADVICE}`
+  )
+}
+
 function foreignJobProblem(foreign: FailurePathStep[], id: string, hostName: string): string {
   const names = [...new Set(foreign.map(step => step.job))].join('`, `')
   return (
@@ -1211,12 +1264,16 @@ function remedyScopeProblems(lines: string[]): string[] {
 
   // No failure-path step at all is `remedyProblems`' finding, not this one.
   const failurePath = failurePathSteps(jobs, host.name, checkIndex)
-  // Three buckets, not two: a condition that NAMES the checking step but compares it to
-  // the wrong outcome is neither unscoped (the author did scope it) nor scoped (it
-  // resolves false on the failure path), and reporting it as the first names the wrong
-  // cause — the reference the message would ask for is already there.
+  // Four buckets, not two, and they partition the failure path: a condition that NAMES
+  // the checking step but compares it to the wrong outcome is neither unscoped (the
+  // author did scope it) nor scoped (it resolves false on the failure path); one that
+  // carries the right comparison inside a disjunction or a negation is neither of those
+  // either (the comparison is correct, it just decides nothing). Reporting any of them
+  // as another names a cause the author already got right.
   const unscoped = failurePath.filter(step => !referencesCheck(step.condition, id))
-  const scoped = failurePath.filter(step => scopesTo(step.condition, id))
+  const compared = failurePath.filter(step => scopesTo(step.condition, id))
+  const scoped = compared.filter(step => decides(step.condition, id))
+  const neutralized = compared.filter(step => !decides(step.condition, id))
   const miscompared = failurePath.filter(
     step => referencesCheck(step.condition, id) && !scopesTo(step.condition, id),
   )
@@ -1226,6 +1283,7 @@ function remedyScopeProblems(lines: string[]): string[] {
   return [
     ...(unscoped.length > 0 ? [unscopedProblem(unscoped)] : []),
     ...(miscompared.length > 0 ? [miscomparedProblem(miscompared, id)] : []),
+    ...(neutralized.length > 0 ? [neutralizedProblem(neutralized, id)] : []),
     ...(foreign.length > 0 ? [foreignJobProblem(foreign, id, host.name)] : []),
     ...(early.length > 0 ? [earlyStepProblem(early, id, checkIndex)] : []),
   ]
