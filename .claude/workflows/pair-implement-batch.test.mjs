@@ -1074,8 +1074,10 @@ test('review and fix exhaust finite protocol states before another round', async
   const fix = calls.find(c => c.opts.label?.startsWith('fix:')).prompt
   assert.ok(review.includes('CONTRACT INVENTORY (mandatory)'), 'the reviewer inventories a contract before reporting its first hole')
   assert.ok(review.includes('finite decision table of every supported state'), 'a finite protocol/state space is exhausted in the same review')
+  assert.ok(review.includes('AUTHORITATIVE BOUNDARY PROOF (mandatory)'), 'the reviewer must prove externally-defined state semantics at the real boundary')
   assert.ok(fix.includes('FINITE-STATE COMPLETENESS (mandatory when'), 'the fixer must preserve that complete state model')
   assert.ok(fix.includes('Do not implement one newly discovered row at a time'), 'the next re-review is not used to discover ordinary variants serially')
+  assert.ok(fix.includes('A unit test of the function being changed cannot establish external semantics'), 'the fixer cannot infer external-tool behavior from its own unit tests')
 })
 
 test('re-review is anchored to the reviewed revision and checks only the fix delta plus prior findings', async () => {

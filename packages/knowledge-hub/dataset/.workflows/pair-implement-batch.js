@@ -1024,11 +1024,16 @@ const TEXT_SHAPE =
   '(specific inputs/state -> the wrong output or the loss that follows) and the EVIDENCE it is real ' +
   '(what you ran, what it printed). Cut narration, never evidence.'
 
+const AUTHORITATIVE_BOUNDARY_PROOF =
+  'AUTHORITATIVE BOUNDARY PROOF (mandatory): when a table row, equivalence, normalization or remediation depends on an external command, service, file format or runtime, name the exact real producer/consumer that defines it and run a minimal isolated end-to-end probe for every such claim. Keep rows distinct until that boundary proves them equivalent. A unit test of the function being changed cannot establish external semantics or prove that user-facing repair advice works: apply the advice in a clean temporary environment and verify the promised postcondition.'
+
 const CONTRACT_INVENTORY =
-  'CONTRACT INVENTORY (mandatory): before reporting findings, map each changed observable contract to its authoritative producer, inputs, consumers and representations. A FIRST review inventories every changed contract; a re-review inventories only its fix delta and directly changed boundary. For a finite protocol, parser, configuration, state transition or command-output domain, build a finite decision table of every supported state plus its invalid/boundary pair, and probe the real behavior. Report every defect that table exposes now; do not leave ordinary rows for a later review.'
+  'CONTRACT INVENTORY (mandatory): before reporting findings, map each changed observable contract to its authoritative producer, inputs, consumers and representations. A FIRST review inventories every changed contract; a re-review inventories only its fix delta and directly changed boundary. For a finite protocol, parser, configuration, state transition or command-output domain, build a finite decision table of every supported state plus its invalid/boundary pair, and probe the real behavior. Report every defect that table exposes now; do not leave ordinary rows for a later review. ' +
+  AUTHORITATIVE_BOUNDARY_PROOF
 
 const FINITE_STATE_COMPLETENESS =
-  'FINITE-STATE COMPLETENESS (mandatory when a change parses, selects, snapshots, or branches on a finite protocol/state domain): identify the authoritative grammar or producer, make the complete decision table of supported states and invalid/boundary cases, then write and run a real test for every row before editing the canonical source. Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant.'
+  'FINITE-STATE COMPLETENESS (mandatory when a change parses, selects, snapshots, or branches on a finite protocol/state domain): identify the authoritative grammar or producer, make the complete decision table of supported states and invalid/boundary cases, then write and run a real test for every row before editing the canonical source. Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant. ' +
+  AUTHORITATIVE_BOUNDARY_PROOF
 
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')

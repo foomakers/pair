@@ -67,9 +67,12 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 - **Contract inventory before a loop:** before reporting or fixing a changed contract, inventory
   its authoritative producer, inputs, consumers and representations. A finite protocol, parser,
   configuration or state transition gets a complete decision table of supported and
-  invalid/boundary states, with a real probe/test per row; re-review applies the same rule only to
-  its delta and changed boundary. See ADL
-  [2026-09-01-review-contract-inventory-prevents-serial-findings.md](../decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md).
+  invalid/boundary states, with a real probe/test per row. When a row, equivalence, normalization
+  or repair depends on an external tool/service/format, prove it at that authoritative boundary;
+  an internal unit test cannot prove external semantics or that repair advice works. Re-review
+  applies the same rule only to its delta and changed boundary. See ADLs
+  [2026-09-01-review-contract-inventory-prevents-serial-findings.md](../decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
+  and [2026-09-01-external-boundary-proof-prevents-false-equivalence.md](../decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md).
 
 ## Quality Gates
 
