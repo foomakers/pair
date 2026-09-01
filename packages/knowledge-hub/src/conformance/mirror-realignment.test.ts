@@ -104,12 +104,37 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     // "unstaged authored changes ... must survive the run untouched".
     const p1 = phase1()
     expect(p1).toMatch(/\*\*before\*\* snapshot — `git status --porcelain`/)
-    expect(p1).toMatch(/\*\*after\*\* snapshot \(`git status --porcelain` again\)/)
+    expect(p1).toMatch(/\*\*after\*\* snapshot \(`git status --porcelain` again/)
     expect(p1).toMatch(/appeared, disappeared or changed between the two reads/)
     expect(p1).toMatch(/rather than from a \*\*path glob\*\*/)
     expect(p1).toMatch(/and never a glob/)
     // The portability payoff, stated where the rule is: no adopter enumerates globs.
     expect(p1).toMatch(/no adopter has to enumerate owned globs anywhere/)
+  })
+
+  it('pairs the porcelain snapshots with a content DIGEST of the already-dirty paths', () => {
+    // Round-2 finding. A porcelain entry encodes STATUS, not content, so on a path that was
+    // already dirty before the run the entry is identical either way. Concrete loss: HEAD
+    // carries a drifted mirror, the contributor holds an uncommitted hand-edit to that same
+    // file, the command regenerates it -> ` M <path>` before, ` M <path>` after. Under a
+    // status-only comparison the agent reads NO CHANGE: no commit, no `Mirrors:` row, silence
+    // — while the hand-edit is gone from disk and the branch still pushes the stale mirror,
+    // turning `skills:conformance` red on the very PR this step exists to keep green.
+    // MEASURED against the real script:
+    // packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts, 'overwrites a pre-dirty
+    // mirror while `git status --porcelain` stays byte-identical'.
+    const p1 = phase1()
+    expect(p1).toMatch(/content digest of every path that snapshot reports as dirty/)
+    expect(p1).toMatch(/`git hash-object <path>`/)
+    expect(p1).toMatch(/encodes \*\*status, not content\*\*/)
+    // The digest half must be IN the staged set, not merely detected.
+    expect(p1).toMatch(/plus every path already dirty in the before snapshot whose digest changed/)
+    // ...and the loss must be reported: silence is the failure mode, not the commit.
+    expect(p1).toMatch(/overwrote uncommitted changes in: <paths>/)
+    expect(p1).toMatch(/Never silent here/)
+    expect(dataset()).toMatch(/overwrote uncommitted changes in: <paths>\]/)
+    // The no-op branch must require BOTH halves to be quiet, or it re-opens the same hole.
+    expect(p1).toMatch(/equal \*\*and no dirty path's digest moved\*\*/)
   })
 
   it('names the commit a regeneration, never a fix (an overwritten hand-edit was restored)', () => {
@@ -118,10 +143,18 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     expect(p1).toMatch(/never a "fix"/)
   })
 
-  it('leaves unstaged authored changes untouched and verifies they survived', () => {
+  it('verifies survival by CONTENT, so the check cannot certify an unseen overwrite', () => {
     const p1 = phase1()
     expect(p1).toMatch(/unstaged authored changes[\s\S]{0,200}must survive the run untouched/)
-    expect(p1).toMatch(/`git status` still shows every pre-existing unstaged authored change/)
+    // The previous wording — "`git status` still shows every pre-existing unstaged authored
+    // change, untouched" — PASSES on an overwritten file: the path is still listed, because
+    // that is what an overwrite of a dirty path leaves behind. The Verify must read the
+    // digest, and must say why the listing is not evidence.
+    expect(p1).not.toMatch(/`git status` still shows every pre-existing unstaged authored change/)
+    expect(p1).toMatch(
+      /every pre-existing dirty path that is NOT in the set still carries its before digest/,
+    )
+    expect(p1).toMatch(/certify the loss it is meant to catch/)
   })
 
   it('stays SILENT on a no-op — no commit and no output row', () => {

@@ -68,6 +68,23 @@ read from the adoption, never named in the skill.**
   file the run did not touch has an identical entry in both snapshots. Corollary: **no adopter has
   to enumerate owned globs anywhere**, and this file's own list of written trees is descriptive
   only.
+- **The comparison is content-aware on paths that were ALREADY dirty**, because a porcelain entry
+  encodes status, not content. The before snapshot therefore carries a digest
+  (`git hash-object`) of every path it reports dirty, and the staged set is the entries that
+  appeared/disappeared/changed **plus the pre-dirty paths whose digest moved**. Without it: HEAD
+  carries a drifted mirror, the contributor holds an uncommitted edit to that same file, the
+  command regenerates it — the same unstaged-modified `M <path>` entry on both reads — and a
+  status-only comparison reads NO CHANGE, so the hand-edit is destroyed with nothing reported
+  *and* the stale mirror is
+  pushed, turning the branch's own conformance job red. Measured against the real script in
+  `regenerate-mirrors.test.ts` ("overwrites a pre-dirty mirror while `git status --porcelain` stays
+  byte-identical").
+- **The overwrite is reported, never silent.** Those paths are committed like any other write (the
+  regenerated content is what must ship), and each is named on the `Mirrors:` row —
+  `overwrote uncommitted changes in: <paths>`. The commit is not the remedy for the loss; naming it
+  is. And the step-4 Verify reads the **digest** of every pre-existing dirty path not in the staged
+  set, not `git status`'s listing: the listing is exactly what an overwrite also leaves behind, so a
+  survival check phrased on it certifies the loss it exists to catch.
 - **A thin script whose behaviour IS the deliverable may be exercised from vitest**, black-box,
   against a throwaway fixture — a bounded, documented exception to ADL 2026-07-13, which otherwise
   stands unchanged. Conditions, all of them: the script holds no logic that could be extracted to a
@@ -98,6 +115,11 @@ read from the adoption, never named in the skill.**
 - **Stage by owned-path glob (the first draft)**: rejected — see Context 3. The glob covers authored
   files in this repo, and any adopter would have to enumerate its own, correctly, for a rule whose
   failure mode is committing someone else's work.
+- **HALT when the run overwrote a pre-dirty path**: rejected. The overwrite has already happened by
+  the time it is detectable — the command ran — so a HALT recovers nothing the contributor lost, and
+  it additionally blocks the PR on a condition this step itself caused, leaving the drift in place.
+  Committing the regenerated content and *naming the loss* keeps both the mirror and the contributor
+  informed; only the silence was the defect.
 - **Move the script tests to `scripts/smoke-tests/`**: rejected — see Context 4. The suite would lose
   the broken-toolchain cases outright (a smoke scenario runs against a working install), and vitest
   is where the assertions and the fixture helpers already live.

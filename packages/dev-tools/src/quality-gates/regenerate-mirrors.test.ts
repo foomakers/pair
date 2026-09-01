@@ -236,6 +236,66 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
     SCRIPT_RUN_TIMEOUT_MS,
   )
 
+  it(
+    'overwrites a pre-dirty mirror while `git status --porcelain` stays byte-identical',
+    () => {
+      // The measurement behind /publish-pr's Phase-1 staging rule (#419 round 2). That rule
+      // derives "what this run wrote" from a before/after `git status --porcelain` diff. A
+      // porcelain entry encodes STATUS, not content — so on a path that was ALREADY dirty
+      // before the run, the entry is ` M <path>` before and ` M <path>` after whether the run
+      // rewrote the file or never opened it. Both cases are in this fixture at once:
+      //   - the mirror, whose committed content is drifted and whose working copy carries an
+      //     uncommitted hand-edit the run destroys;
+      //   - an authored file the run does not touch.
+      // The two are INDISTINGUISHABLE in the snapshots, which is why the rule pairs each dirty
+      // path with a content digest: without it the agent reads "no change", commits nothing,
+      // reports nothing, and pushes the stale mirror the guards reject.
+      tmp = makeFixture()
+      const mirror = join(tmp, '.pair/knowledge/index.md')
+      const authored = join(tmp, 'src/authored.ts')
+      write(authored, 'export const authored = 1\n')
+      // The installed target has to exist before the first run: `pair update` refuses a
+      // project it was never installed into (same reason the AC1 case writes it).
+      write(mirror, '# pre-existing install\n')
+
+      // Converge first, so the second run's ONLY write is the mirror — otherwise the fixture's
+      // first-ever regeneration touches other installed files and the snapshots differ for a
+      // reason that has nothing to do with the case under test.
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'converged'])
+
+      // HEAD now carries a DRIFTED mirror: this is what makes the run write something.
+      writeFileSync(mirror, '# committed drift\n')
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'drifted mirror on HEAD'])
+
+      // Two uncommitted changes: one on the mirror (about to be destroyed), one authored.
+      writeFileSync(mirror, '# uncommitted hand-edit\n')
+      writeFileSync(authored, 'export const authored = 2\n')
+
+      const before = git(tmp, ['status', '--porcelain'])
+      const mirrorBefore = git(tmp, ['hash-object', mirror]).trim()
+      const authoredBefore = git(tmp, ['hash-object', authored]).trim()
+
+      const result = run(tmp, isolatedHome(tmp))
+
+      expect(result.status).toBe(0)
+      const after = git(tmp, ['status', '--porcelain'])
+      expect(before).toMatch(/^ M \.pair\/knowledge\/index\.md$/m)
+      expect(before).toMatch(/^ M src\/authored\.ts$/m)
+      // THE DEFECT, executed: the snapshots the staging rule compares are equal...
+      expect(after).toBe(before)
+      // ...yet the hand-edit is gone, replaced by what the dataset generates.
+      expect(git(tmp, ['hash-object', mirror]).trim()).not.toBe(mirrorBefore)
+      expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
+      // ...and the authored file, whose entry is identically unchanged, really is untouched.
+      expect(git(tmp, ['hash-object', authored]).trim()).toBe(authoredBefore)
+      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
   it('exits non-zero and names the reason when the dataset is missing (AC7)', () => {
     tmp = realpathSync(mkdtempSync(join(tmpdir(), 'regen-mirrors-')))
     initRepo(tmp)
