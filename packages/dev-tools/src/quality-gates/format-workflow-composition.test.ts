@@ -60,7 +60,14 @@ import {
 //   - renaming the job that RUNS the check, which deletes the `format` status
 //     context branch protection is told to require — or leaving a decoy `format:`
 //     job behind that only echoes, so that context reports SUCCESS while the real
-//     check publishes one nobody requires,
+//     check publishes one nobody requires — or renaming it through `name:` (GitHub
+//     publishes the DISPLAY name, id only when `name:` is absent) or suffixing it
+//     through a matrix (`format (20)`), or giving another job `name: format`,
+//   - a `push:` filtered by `tags:` alone, which GitHub fires for tag refs only — the
+//     workflow never runs on a push to `main` and `branchesOf` read "no filter" as
+//     "every branch",
+//   - a `concurrency.group` not keyed on `github.ref`, which puts a PR push and an
+//     in-progress run on `main` in ONE group and cancels the latter,
 //   - a `#` inside quotes read as a comment, which cuts an executing command out of
 //     the guard's view.
 //
@@ -285,6 +292,92 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
     expect(r.message).toContain('branches-ignore')
   })
 
+  // AC7, the filter GitHub reads as a DIFFERENT ref kind. `branches` and `tags` are
+  // two independent filters on one event, and the producer's rule (GitHub docs, "events
+  // that trigger workflows" § push: "If you define only tags/tags-ignore or only
+  // branches/branches-ignore, the workflow won't run for events affecting the undefined
+  // Git ref") is measured on this repo: release.yml declares `push: tags: ['v*']` and
+  // nothing else, and every one of its `push` runs is a tag — none is `main`, while
+  // ci.yml ran on each of those days' pushes to `main`. So `push: tags:` with no
+  // `branches:` never runs on any push to `main`, and `branchesOf` returning null —
+  // "no filter, every branch" — was exactly wrong for it: the guard reported the
+  // workflow well-formed while post-merge drift went unseen.
+  it('fails on a `push` filtered by `tags:` alone', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  push:\n    branches:\n      - main',
+        "  push:\n    tags:\n      - 'v*'",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('tags')
+    expect(r.message).toContain('never runs on a push to any branch')
+  })
+
+  it('fails on a `push` filtered by `tags-ignore:` alone', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  push:\n    branches:\n      - main',
+        "  push:\n    tags-ignore: ['v*']",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('tags-ignore')
+  })
+
+  // `tags:` is not a filter `pull_request` accepts at all; same fail-closed treatment,
+  // since either way no PR against `main` is checked.
+  it('fails on a `pull_request` filtered by `tags:` alone', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  pull_request:\n    branches:\n      - main',
+        "  pull_request:\n    tags:\n      - 'v*'",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('tags')
+  })
+
+  // Both filters defined: the same producer rule says the event fires for EITHER ref
+  // kind, so `main` is still covered. Kept green so the rule rejects the hole, not the
+  // word.
+  it('accepts a `tags:` filter beside a `branches:` filter that covers the base branch', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        '  push:\n    branches:\n      - main',
+        "  push:\n    branches:\n      - main\n    tags:\n      - 'v*'",
+        'the `push:` trigger',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('accepts a `tags-ignore:` filter beside a `branches:` filter that covers the base branch', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        '  push:\n    branches:\n      - main',
+        "  push:\n    tags-ignore: ['v*']\n    branches: [main]",
+        'the `push:` trigger',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  // A tag filter beside a branch filter that MISSES the base branch is still the
+  // off-base-branch hole, reported as that and not as a tag problem.
+  it('still reports the off-base-branch hole when a `tags:` filter sits beside it', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  push:\n    branches:\n      - main',
+        "  push:\n    branches:\n      - release\n    tags:\n      - 'v*'",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('does not cover `main`')
+  })
+
   // AC2, event half. `types: [closed]` runs the check only AFTER the PR is closed —
   // never while it is reviewable.
   it('fails when a `types:` narrowing drops opened/synchronize', () => {
@@ -418,6 +511,81 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('cancel-in-progress')
+  })
+
+  // The `github.ref` keying is what the whole concurrency argument stands on — "the
+  // two triggers never meet" is only true because a PR run is `refs/pull/<n>/merge` and
+  // a push to main is `refs/heads/main`. Nothing read `group:`. So `group: format` (or
+  // `${{ github.workflow }}`) put EVERY run in one group: a `push` run on main in
+  // progress, any PR push then joins that group with `cancel-in-progress` true (the
+  // event is `pull_request`) and cancels main's run — that commit ends with no
+  // formatting verdict, the AC7 loss the conditional cancel exists to prevent — and two
+  // PRs pushed a minute apart cancel each other's verdict. Same-group cancellation is
+  // measured, not inferred: runs 33527856271 and 33528146034 of the shipped workflow
+  // are `cancelled` because a later push to the same PR ref joined their group.
+  it('fails when the concurrency group is a constant', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('group: format-${{ github.ref }}', 'group: format'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('group: format`')
+    expect(r.message).toContain('github.ref')
+  })
+
+  it('fails when the concurrency group is keyed on the workflow name only', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('group: format-${{ github.ref }}', 'group: ${{ github.workflow }}'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('github.ref')
+  })
+
+  // The token outside `${{ }}` is the literal string `github.ref`, i.e. a constant.
+  it('fails when `github.ref` is written outside an expression', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('group: format-${{ github.ref }}', 'group: format-github.ref'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('github.ref')
+  })
+
+  // Allow-list of the canonical spelling, as for `cancel-in-progress`: a different
+  // context that happens to START with `github.ref` is not the same key. `ref_name` is
+  // `<n>/merge` for a PR and the bare branch name for a push; `head_ref` is EMPTY on a
+  // push, so every push to main shares `format-` — and `sha` never groups two runs at
+  // all, so nothing is ever superseded.
+  it('fails on the near-miss contexts `github.ref_name`, `github.head_ref` and `github.sha`', () => {
+    for (const group of [
+      'group: format-${{ github.ref_name }}',
+      'group: format-${{ github.head_ref }}',
+      'group: format-${{ github.sha }}',
+    ]) {
+      const r = checkFormatWorkflow(WELL_FORMED.replace('group: format-${{ github.ref }}', group))
+      expect(r.ok, group).toBe(false)
+      expect(r.message, group).toContain('github.ref')
+    }
+  })
+
+  it('fails when the concurrency block declares no group at all', () => {
+    const r = checkFormatWorkflow(WELL_FORMED.replace('  group: format-${{ github.ref }}\n', ''))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('group')
+  })
+
+  // Correct spellings that carry the ref key stay green: bare, prefixed by another
+  // context, the documented `head_ref || ref` fallback, and quoted.
+  it('accepts every group spelling keyed on github.ref', () => {
+    for (const group of [
+      'group: ${{ github.ref }}',
+      'group: ${{ github.workflow }}-${{ github.ref }}',
+      'group: format-${{ github.head_ref || github.ref }}',
+      'group: "format-${{ github.ref }}"',
+    ]) {
+      const r = checkFormatWorkflow(
+        mutate(WELL_FORMED, 'group: format-${{ github.ref }}', group, 'the concurrency group'),
+      )
+      expect(r.ok, `${group}: ${r.message}`).toBe(true)
+    }
   })
 })
 
@@ -1259,8 +1427,8 @@ describe('a `#` inside quotes is not a comment (#413)', () => {
   })
 })
 
-// The job id IS the status context. Nothing asserted it, so renaming `format:` to
-// `fmt:` left the guard green while the context way-of-working documents — and that
+// The job's display name (its id when `name:` is absent) IS the status context. Nothing
+// asserted it, so renaming `format:` to `fmt:` left the guard green while the context way-of-working documents — and that
 // AC8 names for branch protection — silently stopped existing. In advisory mode that
 // is no signal at all; once protection lists it, a required context that never
 // reports leaves every PR pending with no escape hatch
@@ -1351,6 +1519,115 @@ describe('the job that reports the `format` context is named (#413)', () => {
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('no job is named `format`')
+  })
+
+  // GitHub publishes the job's DISPLAY NAME as the check context, not its id. Measured
+  // on this repo: version.yml's job id `version` carries `name: Create version commits
+  // and tags`, and `gh run view 32579550290 --json jobs` reports the job as `Create
+  // version commits and tags`. So one `name:` line renames the `format` context the
+  // same way `fmt:` does — rename red, `name:` was green.
+  it('fails when the host job carries a `name:` that is not `format`', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  format:\n    runs-on: ubuntu-latest\n',
+        '  format:\n    name: Formatting\n    runs-on: ubuntu-latest\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('name: Formatting')
+    expect(r.message).toContain('display name')
+  })
+
+  it('fails when the host job name is an expression, whatever it evaluates to', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  format:\n    runs-on: ubuntu-latest\n',
+        '  format:\n    name: ${{ github.workflow }}\n    runs-on: ubuntu-latest\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('display name')
+  })
+
+  // A `name:` equal to the id publishes the same context; nothing is lost.
+  it('accepts a `name:` on the host job that spells the same context', () => {
+    for (const name of ['name: format', "name: 'format'"]) {
+      const r = checkFormatWorkflow(
+        mutate(
+          WELL_FORMED,
+          '  format:\n    runs-on: ubuntu-latest\n',
+          `  format:\n    ${name}\n    runs-on: ubuntu-latest\n`,
+          'the `format:` job header',
+        ),
+      )
+      expect(r.ok, `${name}: ${r.message}`).toBe(true)
+    }
+  })
+
+  // A matrix appends its values to the display name: actions/checkout's job id
+  // `analyze` with `name: Analyze` and `matrix.language: ['javascript']` is published as
+  // `Analyze (javascript)` (run 33304315280). `format` would become `format (20)` and
+  // stop existing — every PR pending once protection lists it, with no escape hatch.
+  it('fails when the host job carries a `strategy:` (matrix)', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  format:\n    runs-on: ubuntu-latest\n',
+        "  format:\n    strategy:\n      matrix:\n        node: ['20']\n    runs-on: ubuntu-latest\n",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('strategy')
+    expect(r.message).toContain('format (')
+  })
+
+  // `strategy:` without a `matrix:` publishes no suffix today; rejected all the same,
+  // fail-closed — a strategy block exists to carry a matrix.
+  it('fails on a `strategy:` block without a matrix, fail-closed', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  format:\n    runs-on: ubuntu-latest\n',
+        '  format:\n    strategy:\n      fail-fast: false\n    runs-on: ubuntu-latest\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('strategy')
+  })
+
+  // The decoy, spelled through the display name: a second job whose `name:` is
+  // `format` publishes a SECOND `format` context after an `echo`, beside the real one.
+  it('fails when another job takes the `format` display name', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '\n  format:\n',
+        `
+  notes:
+    name: format
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Nothing
+        run: echo ok
+  format:
+`,
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('`notes`')
+    expect(r.message).toContain('display name')
+  })
+
+  // A step's `name:` sits one level deeper and is not the job's display name.
+  it('does not mistake a step `name:` for the job display name', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        '      - name: Check formatting\n',
+        '      - name: Formatting\n',
+        'the check step name',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
   })
 })
 
@@ -1976,5 +2253,69 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('cancel-in-progress')
+  })
+
+  // Measured `ok=true` on the shipped file before the fix. The workflow never runs on
+  // a push to any branch — post-merge drift invisible with the guard green.
+  it('fires on the shipped workflow when `push:` is filtered by tags alone', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        '  push:\n    branches:\n      - main\n',
+        "  push:\n    tags:\n      - 'v*'\n",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('tags')
+  })
+
+  it('stays green on the shipped workflow when a tags filter is added BESIDE the branch filter', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      mutate(
+        shipped,
+        '  push:\n    branches:\n      - main\n',
+        "  push:\n    branches:\n      - main\n    tags:\n      - 'v*'\n",
+        'the shipped `push:` trigger',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  // Measured `ok=true` on the shipped file before the fix, both spellings. Every run in
+  // one group: a PR push cancels main's in-progress run.
+  it('fires on the shipped workflow when the concurrency group stops being keyed on the ref', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    for (const group of ['group: format', 'group: ${{ github.workflow }}']) {
+      const r = checkFormatWorkflow(shipped.replace('group: format-${{ github.ref }}', group))
+      expect(r.ok, group).toBe(false)
+      expect(r.message, group).toContain('github.ref')
+    }
+  })
+
+  // Measured `ok=true` on the shipped file before the fix, both rows: a `name:` renames
+  // the published context, a matrix suffixes it — `format` stops existing either way.
+  it('fires on the shipped workflow when the host job is given a display name', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        '  format:\n    runs-on: ubuntu-latest\n',
+        '  format:\n    name: Formatting\n    runs-on: ubuntu-latest\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('display name')
+  })
+
+  it('fires on the shipped workflow when the host job is given a matrix', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        '  format:\n    runs-on: ubuntu-latest\n',
+        "  format:\n    strategy:\n      matrix:\n        node: ['20']\n    runs-on: ubuntu-latest\n",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('strategy')
   })
 })

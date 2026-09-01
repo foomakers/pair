@@ -42,9 +42,20 @@
 #   - THE CHECK STEP RUNS EXACTLY `pnpm format:check`. Not `--filter=`, not `-s`
 #     (which would hide the filenames), not a `cd` — each makes CI check a subset of
 #     the tree the developer checks.
-# The job id is `format` because the job id IS the status context (AC8) — asserted on
-# the job that RUNS `pnpm format:check`, so moving the steps to another job and leaving
-# a `format:` decoy behind is red too.
+# The job id is `format` because the job's DISPLAY NAME — its id when `name:` is
+# absent — IS the status context (AC8): asserted on the job that RUNS
+# `pnpm format:check`, so moving the steps to another job and leaving a `format:`
+# decoy behind is red too. And so is a `name:` on this job other than `format`
+# (version.yml's job id `version` is published as `Create version commits and tags`),
+# a `strategy:` (a matrix publishes `format (20)`, and `format` stops existing), or
+# `name: format` on any other job.
+#
+# TWO TRIGGER/GROUP SHAPES THAT LOOK HARMLESS AND ARE NOT:
+#   - `push: tags:` with no `branches:` fires for TAG refs only (release.yml's `push`
+#     runs are all tags, never `main`), so the workflow would never run on a push to
+#     `main`. A tag filter BESIDE `branches: [main]` is fine; alone it is red.
+#   - `concurrency.group` must be keyed on `${{ github.ref }}` — see the block below;
+#     a constant group cancels main's in-progress run on the next PR push.
 #
 # TWO MORE, for the same reason (each is one token, and each leaves the context green):
 #   - NOTHING GATES THIS JOB. No `if:` and no `needs:` — a job skipped for either

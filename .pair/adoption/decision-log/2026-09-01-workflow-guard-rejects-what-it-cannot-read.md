@@ -98,7 +98,7 @@ weakened or deleted.
   alternative, and the direction ADL 2026-07-29 points): not taken **now**, and it
   stays the right end state. It replaces every structural rule at once — indent
   arithmetic disappears and the whole class of "spelling X is invisible" goes with it
-  — but it is a rewrite of the canonical module and its 166 tests, landed at review
+  — but it is a rewrite of the canonical module and its 190 tests, landed at review
   round 6 of a `risk:green` story whose findings' own recommendation was, both times,
   the narrow rejection.
 
@@ -112,6 +112,15 @@ weakened or deleted.
   fails OPEN, or the first rule needing real structure (nested `with:`, matrix jobs),
   flips it without further argument. `yaml@2.8.2` is already a catalog entry, so the
   cost is one devDependency line in `@pair/dev-tools`.
+
+  **Rounds 7–9 did not fire it.** Their findings were RULE gaps — semantics GitHub
+  defines (a tags-only `push` filter fires for tag refs only; `concurrency.group` must
+  be keyed on the ref; the check context is the job's DISPLAY name, so `name:` and a
+  matrix rename it) — read correctly by the line reader and simply unasserted. A parser
+  would not have caught any of them; it would delete the ~600 lines of spelling
+  rejection this ADL records. Round 9 surfaced that trade explicitly for the human at
+  the merge gate: accept the line reader with the trigger above, or require the
+  migration before merge. That is where the call sits.
 - **Teach `blockUnder` to parse flow mappings**: rejected — a second reader to keep in
   step with the first, and the next spelling neither knows fails open again. It is
   exactly the "hand-rolled checker" ADL 2026-07-29 rejected, with the failure mode this

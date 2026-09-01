@@ -49,12 +49,28 @@
  *   pnpm format:check`, each making CI check a strict subset of the tree the developer
  *   and the hook check — AC4's divergence, reinstated green. The command is an
  *   equality (`checkCommandProblems`).
- * - the job that RUNS the check renamed, or displaced by a decoy. The job id IS the
- *   status context: `format` is what way-of-working requires and what AC8 tells branch
- *   protection to list, so `fmt:` deletes the context without touching a rule — and a
- *   `format:` job that only echoes, beside a `worker:` job carrying the real steps,
- *   reports SUCCESS in that context after an echo. Asserted on the HOST job, never on
- *   the set of job names (`jobIdentityProblems`).
+ * - the job that RUNS the check renamed, or displaced by a decoy. The job's DISPLAY
+ *   NAME — its id when `name:` is absent — is the status context GitHub publishes:
+ *   `format` is what way-of-working requires and what AC8 tells branch protection to
+ *   list, so `fmt:` deletes the context without touching a rule — and a `format:` job
+ *   that only echoes, beside a `worker:` job carrying the real steps, reports SUCCESS
+ *   in that context after an echo. Asserted on the HOST job, never on the set of job
+ *   names (`jobIdentityProblems`). And the id is not the whole story: a `name:` line
+ *   renames the published context as surely as the id does (this repo's version.yml,
+ *   job id `version`, is published as `Create version commits and tags`), and a
+ *   `strategy.matrix` suffixes its values (`format (20)`), so `name:` other than
+ *   `format` and any `strategy:` on the host are rejected, and `name: format` on any
+ *   OTHER job is the decoy spelled through the display name.
+ * - a `push:` trigger filtered by `tags:` alone. `branches` and `tags` are independent
+ *   filters and GitHub fires the event only for the ref kinds a filter names, so with no
+ *   `branches:` the workflow never runs on a push to any branch — measured on this
+ *   repo's release.yml, whose `push` runs are all tags. "No filter ⇒ every branch" was
+ *   the wrong reading for it (`tagFilterProblems`).
+ * - a `concurrency.group` that is not keyed on `github.ref`. Every claim below about
+ *   the two triggers "never meeting" holds only because of that key; `group: format`
+ *   puts every run in one group, so a PR push cancels an in-progress run on `main`
+ *   (the cancel is conditioned on the PR event, which the PR push is) and that commit
+ *   ends with no verdict (`groupProblems`).
  * - dropping `push: main`, so drift on the base branch is invisible.
  * - dropping `concurrency`, so a superseded run keeps burning a runner and
  *   reporting a stale verdict for a ref that has already moved on.
@@ -136,9 +152,11 @@ export const FORMAT_CHECK_SCRIPT = 'format:check'
 export const BASE_BRANCH = 'main'
 
 /**
- * The job id, which IS the status context GitHub publishes. way-of-working documents
- * `format` as the required check and AC8 names it as the context branch protection
- * must list, so renaming the job deletes that context without touching a rule.
+ * The job id — and, with no `name:` on the job, its display name, which is what GitHub
+ * publishes as the status context. way-of-working documents `format` as the required
+ * check and AC8 names it as the context branch protection must list, so renaming the
+ * job, giving it a `name:`, or giving it a matrix deletes that context without touching
+ * a rule.
  */
 export const FORMAT_JOB = 'format'
 
@@ -596,11 +614,39 @@ function baseBranchProblems(event: string, block: string[]): string[] {
     ]
   }
   const branches = branchesOf(block)
-  if (branches === null || branches.includes(BASE_BRANCH)) return []
+  if (branches === null) return tagFilterProblems(event, block)
+  if (branches.includes(BASE_BRANCH)) return []
   return [
     `the \`${event}\` trigger does not cover \`${BASE_BRANCH}\` (${branches.join(', ') || 'no branch'}),\n` +
       `  so a change landing on the base branch is never checked through \`${event}\`.`,
   ]
+}
+
+/**
+ * A trigger filtered by TAGS with no branch filter beside it. `branches` and `tags` are
+ * two independent filters on one event, and the producer's rule (GitHub docs, "events
+ * that trigger workflows" § push) is: "If you define only tags/tags-ignore or only
+ * branches/branches-ignore, the workflow won't run for events affecting the undefined
+ * Git ref." Measured on this repo: release.yml declares `push: tags: ['v*']` and every
+ * one of its `push` runs is a tag — none is `main`. So `branchesOf` returning null was
+ * read as "no filter, every branch", which is exactly wrong here: the workflow never
+ * runs on any push to `${BASE_BRANCH}`, post-merge drift is invisible (AC7), and the
+ * guard reported it well-formed. Rejected fail-closed, in the same shape as
+ * `branches-ignore`; a tag filter BESIDE a `branches:` that names the base branch stays
+ * green, because with both defined the event fires for either ref kind.
+ */
+function tagFilterProblems(event: string, block: string[]): string[] {
+  return ['tags', 'tags-ignore'].flatMap(key => {
+    const tags = listValueOf(block, key)
+    if (tags === null) return []
+    return [
+      `the \`${event}\` trigger filters with \`${key}: [${tags.join(', ')}]\` and no \`branches:\`: GitHub\n` +
+        '  then fires the event for TAG refs only, so this workflow never runs on a push to any branch —\n' +
+        `  drift on \`${BASE_BRANCH}\` is invisible after a merge while the \`format\` context simply never\n` +
+        `  reports. Add \`branches:\` naming \`${BASE_BRANCH}\` (a tag filter beside it is fine), or drop the\n` +
+        '  tag filter.',
+    ]
+  })
 }
 
 /**
@@ -681,6 +727,51 @@ function triggerProblems(clean: string, lines: string[]): string[] {
 const CANCEL_ON_PULL_REQUEST = /github\.event_name\s*==\s*(['"])pull_request\1/
 
 /**
+ * The group must be keyed on the ref, INSIDE an expression. `\b` after `ref` keeps
+ * `github.ref_name` and `github.ref_type` out (different contexts, not the canonical
+ * key), and requiring the `${{ }}` keeps `group: format-github.ref` out — outside an
+ * expression that is a constant string. `github.head_ref || github.ref` passes because
+ * it contains the canonical key.
+ */
+const GROUP_KEYED_ON_REF = /\$\{\{[^}]*\bgithub\.ref\b[^}]*\}\}/
+
+/**
+ * The `group:` half of the concurrency rule. Everything the doc-comment on
+ * `concurrencyProblems` says — "the two triggers never meet" — is true ONLY because the
+ * group is keyed on `github.ref`, and nothing read `group:`. `group: format` (or
+ * `${{ github.workflow }}`) puts every run in ONE group: a `push` run on `refs/heads/main`
+ * in progress, then any PR push joins that group with `cancel-in-progress` true (the
+ * event is `pull_request`) and cancels main's run — that commit ends with no formatting
+ * verdict, the AC7 loss the conditional cancel exists to prevent — and two PRs pushed a
+ * minute apart cancel each other's verdict. Same-group cancellation is measured on the
+ * shipped workflow (runs 33527856271 and 33528146034, cancelled by a later push to the
+ * same PR ref), so the only question is what the group is keyed on.
+ */
+function groupProblems(concurrency: string[]): string[] {
+  const group = scalarAt(concurrency, 'group', keyIndent(concurrency))
+  if (group === undefined) {
+    return [
+      'the `concurrency` block declares no `group:`, so nothing says which runs supersede which —\n' +
+        '  key it on the ref: `group: format-${{ github.ref }}`.',
+    ]
+  }
+  if (GROUP_KEYED_ON_REF.test(group)) return []
+  return [
+    `the \`concurrency\` block sets \`group: ${group}\`, which is not keyed on \`github.ref\`. Keyed on the\n` +
+      '  ref, a PR run (`refs/pull/<n>/merge`) and a push to `' +
+      BASE_BRANCH +
+      '` (`refs/heads/main`) never share a\n' +
+      '  group; a constant (or a key such as `github.workflow`) puts EVERY run in one group, so a PR\n' +
+      '  push arriving while a `push` run on `' +
+      BASE_BRANCH +
+      '` is in progress cancels it (the cancel is\n' +
+      '  conditioned on the PR event, which that push IS) and that commit ends with no formatting\n' +
+      '  verdict — and two PRs pushed a minute apart cancel each other. Use `${{ github.ref }}` (or\n' +
+      '  `${{ github.head_ref || github.ref }}`) inside the group expression.',
+  ]
+}
+
+/**
  * Supersession, NOT de-duplication. The group is keyed on `github.ref`, and the two
  * triggers never share a ref — a `pull_request` run is `refs/pull/<n>/merge`, a push
  * to the base branch is `refs/heads/main` — so they land in different groups and are
@@ -708,15 +799,18 @@ function concurrencyProblems(lines: string[]): string[] {
         '  stale verdict for a ref that has already moved on.',
     ]
   }
+  const problems = groupProblems(concurrency)
   const value = /cancel-in-progress:\s*(.+)$/m.exec(concurrency.join('\n'))?.[1]?.trim()
   if (value === undefined) {
     return [
+      ...problems,
       'the `concurrency` group does not set `cancel-in-progress`, so a superseded run keeps burning\n' +
         '  a runner and reporting a stale verdict.',
     ]
   }
-  if (value === 'true' || CANCEL_ON_PULL_REQUEST.test(value)) return []
+  if (value === 'true' || CANCEL_ON_PULL_REQUEST.test(value)) return problems
   return [
+    ...problems,
     `the \`concurrency\` group sets \`cancel-in-progress: ${value}\`, which does not cancel a superseded\n` +
       '  run on a pull request: that run keeps burning a runner and reporting a stale verdict for a ref\n' +
       '  that has moved on. Accepted spellings are the literal `true`, or the EQUALITY `${{\n' +
@@ -771,12 +865,14 @@ function allSteps(lines: string[]): string[][] {
 
 interface LevelledJob {
   name: string
+  body: string[]
   steps: string[][]
 }
 
 function levelledJobs(lines: string[]): LevelledJob[] {
   return jobsOf(lines).map(job => ({
     name: job.name,
+    body: job.body,
     steps: stepsOf(job.body).map(levelledStep),
   }))
 }
@@ -959,7 +1055,8 @@ function conditionProblems(lines: string[]): string[] {
 }
 
 /**
- * The job id IS the status context. Nothing else in this module asserts it, so
+ * The job's display name — its id when `name:` is absent — IS the status context.
+ * Nothing else in this module asserts it, so
  * renaming `format:` to `fmt:` left every rule green while the context way-of-working
  * documents — and that AC8 names for branch protection — stopped existing. In
  * advisory mode that is no signal at all; once protection requires it, a required
@@ -978,25 +1075,87 @@ function jobIdentityProblems(lines: string[]): string[] {
   const jobs = levelledJobs(lines)
   const host = hostJob(jobs)
   if (host !== undefined) {
-    if (host.name === FORMAT_JOB) return []
-    return [
-      `the job that runs \`pnpm ${FORMAT_CHECK_SCRIPT}\` is \`${host.name}\`, not \`${FORMAT_JOB}\`. The job id IS\n` +
-        `  the status context GitHub publishes: way-of-working requires \`${FORMAT_JOB}\` and AC8 names it as\n` +
-        '  the context branch protection must list. So the check that runs publishes a context nobody\n' +
-        `  requires, and \`${FORMAT_JOB}\` is either absent — every PR left pending once protection lists it,\n` +
-        '  with no escape hatch — or present on a job that checks nothing and reports SUCCESS regardless.',
-    ]
+    if (host.name !== FORMAT_JOB) {
+      return [
+        `the job that runs \`pnpm ${FORMAT_CHECK_SCRIPT}\` is \`${host.name}\`, not \`${FORMAT_JOB}\`. The job's display\n` +
+          `  name — its id when \`name:\` is absent — IS the status context GitHub publishes: way-of-working\n` +
+          `  requires \`${FORMAT_JOB}\` and AC8 names it as the context branch protection must list. So the check\n` +
+          `  that runs publishes a context nobody requires, and \`${FORMAT_JOB}\` is either absent — every PR left\n` +
+          '  pending once protection lists it, with no escape hatch — or present on a job that checks\n' +
+          '  nothing and reports SUCCESS regardless.',
+      ]
+    }
+    return [...displayNameProblems(host, jobs), ...matrixProblems(host)]
   }
   const names = jobs.map(job => job.name)
   return names.includes(FORMAT_JOB)
     ? []
     : [
-        `no job is named \`${FORMAT_JOB}\` (found: ${names.join(', ') || 'no job at all'}). The job id IS the\n` +
-          `  status context GitHub publishes: way-of-working requires \`${FORMAT_JOB}\` and AC8 names it as the\n` +
-          '  context branch protection must list. Renaming the job deletes that context without touching a\n' +
-          '  rule — silently while review enforcement is advisory, and once protection requires it, a\n' +
-          '  required context that never reports leaves every PR pending with no escape hatch.',
+        `no job is named \`${FORMAT_JOB}\` (found: ${names.join(', ') || 'no job at all'}). The job's display\n` +
+          `  name — its id when \`name:\` is absent — IS the status context GitHub publishes: way-of-working\n` +
+          `  requires \`${FORMAT_JOB}\` and AC8 names it as the context branch protection must list. Renaming\n` +
+          '  the job deletes that context without touching a rule — silently while review enforcement is\n' +
+          '  advisory, and once protection requires it, a required context that never reports leaves\n' +
+          '  every PR pending with no escape hatch.',
       ]
+}
+
+/** A job's `name:` — the display name GitHub publishes as its check context, if set. */
+function displayNameOf(job: LevelledJob): string | undefined {
+  return scalarAt(job.body, 'name', keyIndent(job.body))
+}
+
+/**
+ * GitHub publishes the job's DISPLAY NAME as the check context, not its id — measured
+ * on this repo: version.yml's job id `version` carries `name: Create version commits and
+ * tags`, and `gh run view 32579550290 --json jobs` reports the job under that name. So
+ * one `name:` line on the host renames the `format` context exactly as `fmt:` does
+ * (rename went red, `name:` went green), and a `name: format` on ANY OTHER job is the
+ * round-6 decoy spelled through the display name — a second `format` context published
+ * after an `echo`. Only a `name:` equal to the id is accepted: same context, nothing
+ * lost.
+ */
+function displayNameProblems(host: LevelledJob, jobs: LevelledJob[]): string[] {
+  const problems: string[] = []
+  const hostName = displayNameOf(host)
+  if (hostName !== undefined && hostName !== FORMAT_JOB) {
+    problems.push(
+      `job \`${host.name}\` carries \`name: ${hostName}\`: GitHub publishes a job's display name as its check\n` +
+        `  context, not its id, so this renames the \`${FORMAT_JOB}\` context — the one way-of-working requires\n` +
+        '  and AC8 tells branch protection to list — as surely as renaming the job would. Drop `name:`,\n' +
+        `  or set it to \`${FORMAT_JOB}\`.`,
+    )
+  }
+  for (const job of jobs) {
+    if (job === host) continue
+    if (displayNameOf(job) !== FORMAT_JOB) continue
+    problems.push(
+      `job \`${job.name}\` carries \`name: ${FORMAT_JOB}\`: GitHub publishes a job's display name as its check\n` +
+        `  context, so this job publishes a SECOND \`${FORMAT_JOB}\` context beside the one that checks —\n` +
+        '  the decoy spelled through the display name. Only the job that runs the check may carry it.',
+    )
+  }
+  return problems
+}
+
+/**
+ * A matrix appends its values to the display name: actions/checkout's job id `analyze`
+ * with `name: Analyze` and `matrix.language: ['javascript']` is published as `Analyze
+ * (javascript)` (run 33304315280). So `strategy.matrix.node: ['20']` on the host makes
+ * the context `format (20)` and `format` stops existing — every PR pending once
+ * protection lists it, with no escape hatch. Rejected on any `strategy:` block, not
+ * only one carrying `matrix:`: a strategy block exists to carry a matrix, and this
+ * workflow has exactly one thing to run.
+ */
+function matrixProblems(host: LevelledJob): string[] {
+  const strategy = inlineAfter(host.body, 'strategy', keyIndent(host.body))
+  if (strategy === undefined) return []
+  return [
+    `job \`${host.name}\` declares \`strategy:\`: a matrix suffixes its values onto the job's display name, so\n` +
+      `  the published context becomes \`${FORMAT_JOB} (20)\` (or one per cell) and \`${FORMAT_JOB}\` itself stops\n` +
+      '  existing — every PR left pending once branch protection lists it, with no escape hatch. This\n' +
+      '  workflow runs one command once; it has no matrix.',
+  ]
 }
 
 /**
