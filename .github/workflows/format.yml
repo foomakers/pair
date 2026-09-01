@@ -1,0 +1,82 @@
+# Formatting gate (story #413).
+#
+# Since #394 the pre-push hook CHECKS formatting instead of applying it — right
+# shape for a hook, but it left the LOCAL HOOK AS THE ONLY ENFORCEMENT POINT: a
+# push with `--no-verify`, or a contributor whose hooks are not installed, landed
+# unformatted code with every CI check green.
+#
+# A DEDICATED WORKFLOW, not a job in ci.yml: that workflow carries
+# `paths-ignore: ['.changeset/**']` at WORKFLOW level, which a job inherits — so a
+# PR touching only `.changeset/**` would run no formatting check at all. Shipping
+# a check with a hole in its TRIGGER is the same mistake as one with a hole in its
+# coverage: it reads as enforcement and is not. Its own workflow also means its own
+# status context (`format`), separately requirable once branch protection is
+# written, instead of hiding behind ci.yml's single `build` context.
+#
+# ONE COMMAND, TWO PLACES: `pnpm format:check` verbatim — no CI-only flag, path
+# list or config. Local/CI parity is the whole point.
+#
+# CHECK ONLY: nothing here writes. CI repairing the branch is the same defect as a
+# write-mode pre-push hook, one layer up (ADL 2026-07-31).
+#
+# NO SECRET, `pull_request` (never `pull_request_target`), no `${{ }}` in any
+# `run:` — a fork PR is a full-strength run with no credential in reach and no
+# injection sink, by construction rather than by review.
+#
+# The shape above is asserted by packages/dev-tools/src/quality-gates/
+# format-workflow-composition.test.ts — a YAML-only change gets a guard, or the
+# next edit silently reintroduces the hole.
+
+name: Format
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# `push: main` and `pull_request` both fire on the same head after a merge; without
+# this the workflow reports twice for one commit.
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    # This job runs `pnpm install`, i.e. PR-authored lifecycle scripts. It takes the
+    # least token it can and a timeout that turns a hung install into a red instead
+    # of a six-hour default.
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+      - name: Ensure pnpm is available (fallback)
+        run: |
+          if ! command -v pnpm >/dev/null 2>&1; then
+            echo "pnpm not found in PATH; attempting to enable via corepack"
+            corepack enable || true
+            corepack prepare pnpm@10.15.0 --activate || true
+          fi
+      # Pinned to the same major ci.yml and release.yml pin — see the note on
+      # ci.yml's `Setup Node.js` step. Raising this means raising those together.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      # The identical script the pre-push hook and a developer run. It names the
+      # offending files and exits non-zero; the remedy is `pnpm format`, committed
+      # deliberately by the author.
+      - name: Check formatting
+        run: pnpm format:check
