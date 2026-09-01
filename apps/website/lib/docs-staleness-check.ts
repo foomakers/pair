@@ -191,6 +191,29 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
   return errors
 }
 
+/**
+ * Case-SENSITIVE `existsSync`. github.com resolves repo paths case-sensitively; APFS
+ * on macOS does not, and `existsSync` inherits the filesystem's rule. A citation
+ * spelled `.pair/adoption/tech/ADR/adr-018-….md` therefore resolved on a developer's
+ * Mac (local `docs:staleness` printed PASS) and 404'd for every reader — a local gate
+ * disagreeing with Linux CI on exactly the 404 class Check 5b exists to catch.
+ * Each segment is compared byte-for-byte against its parent directory's entries.
+ */
+export function existsCaseSensitive(root: string, relPath: string): boolean {
+  let dir = root
+  for (const segment of relPath.split('/').filter(s => s !== '' && s !== '.')) {
+    let entries: string[]
+    try {
+      entries = readdirSync(dir)
+    } catch {
+      return false // parent is missing or not a directory
+    }
+    if (!entries.includes(segment)) return false
+    dir = join(dir, segment)
+  }
+  return existsSync(dir)
+}
+
 /** Check 5b: every `{blob,tree,raw}/main/<path>` citation resolves to a real repo path. */
 export function findDeadRepoLinks(content: string, rel: string, root: string): string[] {
   const errors: string[] = []
@@ -203,7 +226,7 @@ export function findDeadRepoLinks(content: string, rel: string, root: string): s
     // would fail the build on a live URL.
     const path = (raw.split(/[#?]/)[0] ?? '').replace(/[.,;:]+$/, '')
     if (path === '') continue
-    if (!existsSync(join(root, path))) {
+    if (!existsCaseSensitive(root, path)) {
       errors.push(`Dead repo-file citation in ${rel}: ${path} does not exist in the repo`)
     }
   }

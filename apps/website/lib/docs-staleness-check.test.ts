@@ -186,6 +186,24 @@ describe('findDeadRepoLinks', () => {
     expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
   })
 
+  // github.com resolves paths case-SENSITIVELY; APFS on a developer's Mac does not.
+  // `existsSync` inherits the filesystem's rule, so a citation spelled `…/tech/ADR/…`
+  // used to print PASS locally and 404 for every reader — a local gate disagreeing
+  // with Linux CI on precisely the class of 404 this check exists to catch.
+  it('flags a citation whose path differs from the repo only in case', () => {
+    const miscased = ADR.replace('/adr/', '/ADR/')
+    const content = `see [ADR-018](https://github.com/foomakers/pair/blob/main/${miscased})`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('/ADR/')
+  })
+
+  it('flags a citation whose FILE name differs from the repo only in case', () => {
+    const miscased = ADR.replace('adr-018-code', 'ADR-018-code')
+    const content = `see https://github.com/foomakers/pair/blob/main/${miscased}`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(1)
+  })
+
   it('resolves a blob URL carrying an anchor', () => {
     const content = `[Callers Matrix](https://github.com/foomakers/pair/blob/main/.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities)`
     expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(0)
