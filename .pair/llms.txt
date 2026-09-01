@@ -126,6 +126,7 @@
 - [Decision: Post-merge cleanup covers local branches and worktrees; PR analyses retire at merge](.pair/adoption/decision-log/2026-08-25-post-merge-cleanup-covers-local-branches-pr-analyses-retire-at-merge.md)
 - [Decision: tier 1's `$approval` posture is unconditional, and tier 1 has no declaring composition site yet](.pair/adoption/decision-log/2026-08-28-tier1-approval-posture-is-unconditional-and-has-no-declaring-composition-site-yet.md)
 - [Decision: Review re-checks use an immutable baseline and prove provisioned artifacts](.pair/adoption/decision-log/2026-08-31-review-baseline-and-provisioned-artifact-contract.md)
+- [Decision: a quality gate imports the generator it checks by SOURCE path, and the generator hands it a read-only file-system slice](.pair/adoption/decision-log/2026-09-01-a-gate-imports-its-generator-by-source-and-gets-a-read-only-slice.md)
 - [Decision: External boundary proof prevents false equivalence](.pair/adoption/decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md)
 - [Decision: Review contract inventory prevents serial findings](.pair/adoption/decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
 
