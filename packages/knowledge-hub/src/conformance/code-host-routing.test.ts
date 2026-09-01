@@ -810,11 +810,26 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
    * promise past a green gate. The gap is capped at 40 non-pipe characters and the
    * preposition must sit immediately before the state, which is what keeps bare
    * state-mapping rows (`| In Review | Review |`) and glossary mentions out.
+   *
+   * The alternation is also VOICE-independent: verbs carry an inflection suffix rather
+   * than a hard-coded `s`, so `is moved to`, `gets marked as`, `is updated to` and the
+   * bare infinitive after a modal (`will switch … to`) count as the same promise as the
+   * present tense. Passive is arguably the MORE natural voice for docs prose describing
+   * what the tool does to the card, so a present-tense-only list left the sweep's own
+   * headline case — `The issue is moved to In Review when the PR opens.` — unwatched.
+   * Accepted trade-off: a purely descriptive past-participle line (`issues moved to In
+   * Review by hand are left untouched`) owes no qualifier yet trips the detector. A
+   * false positive costs one qualifier on a docs line; the false negative it replaces
+   * shipped an unconditional promise to every reader on a stock Linear team.
    */
+  const TRANSITION_VERBS =
+    'move|transition|advance|promote|set|put|switch|flip|shift|update|change|mark'
+  // `(?:e?[sd]|ped)?` = base | -s/-es | -d/-ed | -ped (flip → flipped).
   const promisesInReview = (line: string): boolean =>
-    /(→|->|\b(?:moves?|transitions?|advances?|promotes?|sets?|puts?|switches|flips?|shifts?|updates?|changes?|marks?)\b[^|\n]{0,40}\b(?:to|into|as))\s*\**"?In Review"?/i.test(
-      line,
-    )
+    new RegExp(
+      `(→|->|\\b(?:${TRANSITION_VERBS})(?:e?[sd]|ped)?\\b[^|\\n]{0,40}\\b(?:to|into|as))\\s*\\**"?In Review"?`,
+      'i',
+    ).test(line)
 
   /**
    * Is the promise scoped to teams that actually have the state? The qualifier must
@@ -860,6 +875,18 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
         'The adapter updates the work item to In Review.',
         'It marks the issue as In Review as soon as the PR is ready.',
         'PR URL commented on ENG-412; ENG-412 → In Review',
+        // Passive / past participle — the more natural voice for docs prose about
+        // what the tool does to the card, and the form a present-tense-only
+        // alternation lets through.
+        'The issue is moved to In Review when the PR opens.',
+        'The issue is transitioned to In Review when the PR opens.',
+        'The card gets marked as In Review as soon as the PR is ready.',
+        'The status is updated to In Review.',
+        'The item is flipped to "In Review" by the publish step.',
+        'Once the PR is ready the card is switched to In Review.',
+        // Bare infinitive after a modal / imperative — same door, other end.
+        'Opening a PR will switch the issue to In Review.',
+        'The skill can advance the item to **In Review** on PR creation.',
       ]) {
         expect(promisesInReview(line), line).toBe(true)
       }
