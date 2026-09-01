@@ -71,6 +71,51 @@ function git(dir: string, args: string[]): string {
   return execFileSync('git', args, { cwd: dir }).toString('utf-8')
 }
 
+/** `git`, but a refusal is data — used to MEASURE the shapes `git hash-object` cannot read. */
+function tryGit(dir: string, args: string[]): RunResult {
+  try {
+    return { status: 0, stdout: git(dir, args), stderr: '' }
+  } catch (error) {
+    const e = error as { status: number | null; stdout?: Buffer; stderr?: Buffer }
+    return {
+      status: e.status ?? null,
+      stdout: e.stdout?.toString('utf-8') ?? '',
+      stderr: e.stderr?.toString('utf-8') ?? '',
+    }
+  }
+}
+
+interface Snapshot {
+  entries: string
+  digests: Map<string, string>
+}
+
+/**
+ * /publish-pr Phase 1's before/after snapshot, executed exactly as the skill words it:
+ * `git status --porcelain --untracked-files=all`, plus `git hash-object [-w] <path>` over
+ * every entry whose worktree file still exists. `untrackedFilesAll` and `writeBlobs` are
+ * knobs ONLY so the test can run the pre-fix recipe next to the fixed one and show the
+ * difference; the skill documents one setting for each.
+ */
+function snapshotTree(
+  dir: string,
+  opts: { untrackedFilesAll: boolean; writeBlobs: boolean },
+): Snapshot {
+  const args = ['status', '--porcelain']
+  if (opts.untrackedFilesAll) args.push('--untracked-files=all')
+  const entries = git(dir, args)
+  const digests = new Map<string, string>()
+  for (const line of entries.split('\n').filter(Boolean)) {
+    const path = line.slice(3)
+    // "digest only entries whose worktree file exists": a deletion has nothing to read.
+    if (!existsSync(join(dir, path))) continue
+    const hash = ['hash-object']
+    if (opts.writeBlobs) hash.push('-w')
+    digests.set(path, git(dir, [...hash, path]).trim())
+  }
+  return { entries, digests }
+}
+
 function initRepo(dir: string): void {
   git(dir, ['init', '-q'])
   git(dir, ['config', 'user.email', 'test@example.com'])
@@ -292,6 +337,111 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       // ...and the authored file, whose entry is identically unchanged, really is untouched.
       expect(git(tmp, ['hash-object', authored]).trim()).toBe(authoredBefore)
       expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'the documented before/after recipe survives every ordinary porcelain shape',
+    () => {
+      // Round-3 finding, executed. The Phase-1 snapshot pass has to hold for the tree a real
+      // contributor is standing in, which is not "one modified tracked file": it also has
+      // uncommitted DELETIONS and NOT-YET-COMMITTED DIRECTORIES, and `git hash-object` refuses
+      // both. This fixture puts all three shapes in one tree and runs the real script over it:
+      //   ` D doomed.md`                     — deletion: unhashable, and a fatal here meets the
+      //                                        step's own non-zero → HALT (PR blocked by the
+      //                                        snapshot pass that exists to protect it);
+      //   `?? .pair/knowledge/sub/note.md`   — a REGENERATED file inside an untracked directory:
+      //                                        under the default -u mode it is one `?? sub/`
+      //                                        entry, identical before and after, and unhashable
+      //                                        — the run rewrites it and the comparison reads
+      //                                        NO CHANGE, so it never gets staged;
+      //   ` M .pair/knowledge/index.md`      — the overwritten hand-edit, recoverable only if the
+      //                                        before digest was taken with `-w`.
+      tmp = makeFixture()
+      const dataset = join(tmp, 'packages/knowledge-hub/dataset')
+      const mirror = join(tmp, '.pair/knowledge/index.md')
+      const NESTED = '# nested note\n'
+      write(join(dataset, '.pair/knowledge/sub/note.md'), NESTED)
+      write(mirror, '# pre-existing install\n')
+
+      // Converge, then commit everything EXCEPT the nested install: that directory is the
+      // untracked-directory case, and it has to stay uncommitted to be one.
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      const nested = join(tmp, '.pair/knowledge/sub/note.md')
+      expect(readFileSync(nested, 'utf-8')).toBe(NESTED)
+      write(join(tmp, '.gitignore'), '.pair/.kb-version.json\n')
+      git(tmp, ['add', '-A', '--', ':!.pair/knowledge/sub'])
+      git(tmp, ['commit', '-q', '-m', 'converged, nested install left uncommitted'])
+
+      // A tracked file the contributor deleted without committing the deletion.
+      write(join(tmp, 'doomed.md'), '# doomed\n')
+      git(tmp, ['add', 'doomed.md'])
+      git(tmp, ['commit', '-q', '-m', 'doomed'])
+      rmSync(join(tmp, 'doomed.md'))
+
+      // HEAD carries a drifted mirror (so the run writes), the worktree an uncommitted hand-edit.
+      writeFileSync(mirror, '# committed drift\n')
+      git(tmp, ['add', '.pair/knowledge/index.md'])
+      git(tmp, ['commit', '-q', '-m', 'drifted mirror on HEAD'])
+      const HAND_EDIT = '# uncommitted hand-edit\n'
+      writeFileSync(mirror, HAND_EDIT)
+      const NESTED_EDIT = '# nested hand-edit\n'
+      writeFileSync(nested, NESTED_EDIT)
+
+      // THE PRE-FIX RECIPE, measured: two of the three shapes are fatal, not hashable.
+      const defaultPorcelain = git(tmp, ['status', '--porcelain'])
+      expect(defaultPorcelain).toMatch(/^\?\? \.pair\/knowledge\/sub\/$/m)
+      expect(tryGit(tmp, ['hash-object', '.pair/knowledge/sub/']).stderr).toContain(
+        'fatal: Unable to hash',
+      )
+      expect(tryGit(tmp, ['hash-object', 'doomed.md']).stderr).toContain(
+        "fatal: could not open 'doomed.md' for reading",
+      )
+      expect(tryGit(tmp, ['hash-object', 'doomed.md']).status).toBe(128)
+
+      const before = snapshotTree(tmp, { untrackedFilesAll: true, writeBlobs: true })
+      expect(before.entries).toMatch(/^ D doomed\.md$/m)
+      expect(before.entries).toMatch(/^ M \.pair\/knowledge\/index\.md$/m)
+      // -uall is what turns the collapsed `?? sub/` into a hashable per-file entry.
+      expect(before.entries).toMatch(/^\?\? \.pair\/knowledge\/sub\/note\.md$/m)
+      expect(before.digests.has('doomed.md')).toBe(false)
+      expect(before.digests.has('.pair/knowledge/sub/note.md')).toBe(true)
+
+      const result = run(tmp, isolatedHome(tmp))
+      expect(result.status).toBe(0)
+
+      const after = snapshotTree(tmp, { untrackedFilesAll: true, writeBlobs: false })
+      // Status is blind to BOTH overwrites — that is why the digest half exists...
+      expect(after.entries).toBe(before.entries)
+      // ...and with the recipe as documented, both are detected.
+      expect(after.digests.get('.pair/knowledge/index.md')).not.toBe(
+        before.digests.get('.pair/knowledge/index.md'),
+      )
+      expect(after.digests.get('.pair/knowledge/sub/note.md')).not.toBe(
+        before.digests.get('.pair/knowledge/sub/note.md'),
+      )
+      expect(readFileSync(mirror, 'utf-8')).toBe(KB_INDEX)
+      expect(readFileSync(nested, 'utf-8')).toBe(NESTED)
+
+      // The deletion is untouched by the run, and its survival is carried by the entry —
+      // the Verify's on-disk qualifier is sound because status DOES move on a recreated path.
+      expect(existsSync(join(tmp, 'doomed.md'))).toBe(false)
+
+      // `-w` is the difference between naming the loss and undoing it.
+      const mirrorSha = before.digests.get('.pair/knowledge/index.md')
+      const nestedSha = before.digests.get('.pair/knowledge/sub/note.md')
+      expect(mirrorSha).toBeDefined()
+      expect(nestedSha).toBeDefined()
+      expect(git(tmp, ['cat-file', '-p', mirrorSha ?? ''])).toBe(HAND_EDIT)
+      expect(git(tmp, ['cat-file', '-p', nestedSha ?? ''])).toBe(NESTED_EDIT)
+      // Without `-w` the same content hashes to the same sha and lands nowhere: the report row
+      // would name a path whose bytes are in no HEAD, no index, no disk and no ODB.
+      const control = join(tmp, 'control.md')
+      writeFileSync(control, '# not written to the ODB\n')
+      const unwritten = git(tmp, ['hash-object', control]).trim()
+      writeFileSync(control, '# overwritten\n')
+      expect(tryGit(tmp, ['cat-file', '-p', unwritten]).stderr).toContain('Not a valid object name')
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )

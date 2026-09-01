@@ -103,8 +103,10 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     // dataset` — a commit they never wrote — contradicting this same phase's
     // "unstaged authored changes ... must survive the run untouched".
     const p1 = phase1()
-    expect(p1).toMatch(/\*\*before\*\* snapshot — `git status --porcelain`/)
-    expect(p1).toMatch(/\*\*after\*\* snapshot \(`git status --porcelain` again/)
+    expect(p1).toMatch(/\*\*before\*\* snapshot — `git status --porcelain --untracked-files=all`/)
+    expect(p1).toMatch(
+      /\*\*after\*\* snapshot \(`git status --porcelain --untracked-files=all` again/,
+    )
     expect(p1).toMatch(/appeared, disappeared or changed between the two reads/)
     expect(p1).toMatch(/rather than from a \*\*path glob\*\*/)
     expect(p1).toMatch(/and never a glob/)
@@ -124,17 +126,63 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     // packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts, 'overwrites a pre-dirty
     // mirror while `git status --porcelain` stays byte-identical'.
     const p1 = phase1()
-    expect(p1).toMatch(/content digest of every path that snapshot reports as dirty/)
-    expect(p1).toMatch(/`git hash-object <path>`/)
+    expect(p1).toMatch(/content digest of every entry whose worktree file still exists/)
+    expect(p1).toMatch(/`git hash-object -w <path>`/)
     expect(p1).toMatch(/encodes \*\*status, not content\*\*/)
     // The digest half must be IN the staged set, not merely detected.
     expect(p1).toMatch(/plus every path already dirty in the before snapshot whose digest changed/)
     // ...and the loss must be reported: silence is the failure mode, not the commit.
-    expect(p1).toMatch(/overwrote uncommitted changes in: <paths>/)
+    expect(p1).toMatch(/overwrote uncommitted changes in: <path>/)
     expect(p1).toMatch(/Never silent here/)
-    expect(dataset()).toMatch(/overwrote uncommitted changes in: <paths>\]/)
+    expect(dataset()).toMatch(/overwrote uncommitted changes in: <path> \(recover: /)
     // The no-op branch must require BOTH halves to be quiet, or it re-opens the same hole.
     expect(p1).toMatch(/equal \*\*and no dirty path's digest moved\*\*/)
+  })
+
+  it('scopes the digest to the porcelain shapes `git hash-object` can actually read', () => {
+    // Round-3 finding (a). The digest pass, as first written, ran `git hash-object <path>` over
+    // EVERY dirty entry. Two of the three ordinary shapes are not hashable, MEASURED in a scratch
+    // repo (`rm gone.md`; `mkdir newdir && echo a > newdir/a.md`; hand-edit `tracked.md`):
+    //   ` D gone.md`      -> fatal: could not open 'gone.md' for reading (exit 128)
+    //   `?? newdir/`      -> fatal: Unable to hash newdir/            (exit 128)
+    //   ` M tracked.md`   -> 6d9435b…
+    // A fatal inside step 3 meets the step's own "non-zero exit → HALT" and blocks the PR on a
+    // condition the snapshot pass itself created; and `?? dir/` is ONE entry however many files
+    // under it the run rewrote — identical before and after, unhashable, so the untracked subtree
+    // keeps exactly the status-vs-content blindness the digest was added to close.
+    // Executed end to end against the real script:
+    // packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts, 'the documented before/after
+    // recipe survives every ordinary porcelain shape'.
+    const p1 = phase1()
+    expect(p1).toMatch(/`git status --porcelain --untracked-files=all`/)
+    expect(p1).toMatch(/collapses a not-yet-committed directory into one `\?\? dir\/` entry/)
+    expect(p1).toMatch(/fatal: Unable to hash dir\//)
+    expect(p1).toMatch(/fatal: could not open 'gone\.md' for reading/)
+    expect(p1).toMatch(/Skip those entries/)
+    // Skipping deletions must be justified, not merely permitted: status DOES move on a recreated
+    // path, so the digest is only needed where it cannot.
+    expect(p1).toMatch(/moves its porcelain entry/)
+    // The `git diff` escape hatch the earlier wording offered cannot cover the untracked half.
+    expect(p1).toMatch(/it never reports untracked paths at all/)
+    // Verify must not demand a digest from a path that has none.
+    expect(p1).toMatch(
+      /every pre-existing dirty path that is NOT in the set and still has a file on disk/,
+    )
+  })
+
+  it('persists the before digest with `-w`, so the overwritten bytes are recoverable', () => {
+    // Round-3 finding (b). Plain `git hash-object` hashes and throws the content away. After the
+    // command overwrites a pre-dirty path the contributor's uncommitted bytes are in no HEAD (never
+    // committed), no index, no disk (overwritten) and no ODB — so `overwrote uncommitted changes
+    // in: <path>` named a loss with no remedy. MEASURED: `SHA=$(git hash-object -w tracked.md)`,
+    // overwrite, `git cat-file -p $SHA` -> `v2-handedit`; the same sha taken WITHOUT `-w` ->
+    // `fatal: Not a valid object name`.
+    const p1 = phase1()
+    expect(p1).toMatch(/writes the blob into the object database/)
+    expect(p1).toMatch(/`git cat-file -p <sha>`/)
+    expect(p1).toMatch(/overwrote uncommitted changes in: <path> \(recover: git cat-file -p <sha>/)
+    // The after pass must NOT be told to write blobs: only the pre-overwrite content is at risk.
+    expect(p1).toMatch(/re-hashing needs no `-w`/)
   })
 
   it('names the commit a regeneration, never a fix (an overwritten hand-edit was restored)', () => {
@@ -152,7 +200,7 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     // digest, and must say why the listing is not evidence.
     expect(p1).not.toMatch(/`git status` still shows every pre-existing unstaged authored change/)
     expect(p1).toMatch(
-      /every pre-existing dirty path that is NOT in the set still carries its before digest/,
+      /every pre-existing dirty path that is NOT in the set and still has a file on disk still carries its before digest/,
     )
     expect(p1).toMatch(/certify the loss it is meant to catch/)
   })

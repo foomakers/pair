@@ -70,7 +70,8 @@ read from the adoption, never named in the skill.**
   only.
 - **The comparison is content-aware on paths that were ALREADY dirty**, because a porcelain entry
   encodes status, not content. The before snapshot therefore carries a digest
-  (`git hash-object`) of every path it reports dirty, and the staged set is the entries that
+  (`git hash-object -w`) of every dirty path **whose worktree file exists**, read from
+  `git status --porcelain --untracked-files=all`, and the staged set is the entries that
   appeared/disappeared/changed **plus the pre-dirty paths whose digest moved**. Without it: HEAD
   carries a drifted mirror, the contributor holds an uncommitted edit to that same file, the
   command regenerates it — the same unstaged-modified `M <path>` entry on both reads — and a
@@ -79,12 +80,24 @@ read from the adoption, never named in the skill.**
   pushed, turning the branch's own conformance job red. Measured against the real script in
   `regenerate-mirrors.test.ts` ("overwrites a pre-dirty mirror while `git status --porcelain` stays
   byte-identical").
-- **The overwrite is reported, never silent.** Those paths are committed like any other write (the
-  regenerated content is what must ship), and each is named on the `Mirrors:` row —
-  `overwrote uncommitted changes in: <paths>`. The commit is not the remedy for the loss; naming it
-  is. And the step-4 Verify reads the **digest** of every pre-existing dirty path not in the staged
-  set, not `git status`'s listing: the listing is exactly what an overwrite also leaves behind, so a
-  survival check phrased on it certifies the loss it exists to catch.
+- **Each of the three flags in the snapshot recipe is load-bearing** (round-3 review, measured in a
+  scratch repo): `--untracked-files=all`, because the default reports a not-yet-committed directory
+  as one `?? dir/` entry — identical on both reads whatever the run wrote inside it — and
+  `git hash-object dir/` is `fatal: Unable to hash dir/`, i.e. the same blindness the digest closes,
+  surviving where the digest cannot reach; **file-exists scoping**, because `git hash-object` on a
+  ` D ` entry is `fatal: could not open … for reading` (exit 128) and this step's own
+  non-zero → HALT would block the PR on a condition the snapshot pass created — safe to skip,
+  since a recreated deletion *moves* its porcelain entry; and **`-w`**, because plain
+  `git hash-object` discards the bytes it hashes.
+- **The overwrite is reported *and* recoverable, never silent.** Those paths are committed like any
+  other write (the regenerated content is what must ship), and each is named on the `Mirrors:` row —
+  `overwrote uncommitted changes in: <path> (recover: git cat-file -p <sha> > <path>)`. The commit
+  is not the remedy for the loss; the `-w` blob plus that line is. Naming a path the contributor
+  cannot restore — the content is in no HEAD, no index, no disk — is only a better-documented loss.
+  And the step-4 Verify reads the **digest** of every pre-existing dirty path not in the staged
+  set **that still has a file on disk**, not `git status`'s listing: the listing is exactly what an
+  overwrite also leaves behind, so a survival check phrased on it certifies the loss it exists to
+  catch.
 - **A thin script whose behaviour IS the deliverable may be exercised from vitest**, black-box,
   against a throwaway fixture — a bounded, documented exception to ADL 2026-07-13, which otherwise
   stands unchanged. Conditions, all of them: the script holds no logic that could be extracted to a
