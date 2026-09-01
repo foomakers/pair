@@ -578,10 +578,13 @@ describe('checkDocsCommands', () => {
 
   // The doubled spans the corpus ACTUALLY carries — two lines, `reference/skill-management.mdx:211`
   // (two spans) and `:219` (one) — exist to quote a BACKTICKED literal, so their content holds
-  // backticks; the `cell` fixture below is `:211` verbatim, with both of its spans. A
-  // delimiter run that is balanced but whose content excludes backticks still cannot pair
-  // them, and the same parity leak blinds the rest of those lines. Verbatim from the corpus,
-  // with the invocation an author would add on the same line.
+  // backticks; the `cell` fixture below is `:211` with both of its spans, plus the invocation an
+  // author would add on the same line, and `prose` is the span-bearing clause of `:219` with that
+  // same invocation appended. Do NOT "restore" either fixture to its corpus line: the appended
+  // invocation IS the line-mate the parity leak used to blind, and dropping it collapses the case
+  // into the corpus-verbatim assertion below. A delimiter run that is balanced but whose content
+  // excludes backticks still cannot pair them, and the same parity leak blinds the rest of those
+  // lines.
   it('reads a doubled span whose CONTENT contains backticks, and the rest of its line', () => {
     const cell = '| `` `/next` `` | `` `/pair-next` `` | Run `pair install` to apply.'
     const prose =
@@ -591,7 +594,8 @@ describe('checkDocsCommands', () => {
       expect(errs).toHaveLength(1)
       expect(errs[0]).toContain('write "pair-cli install"')
     }
-    // The quoted literals themselves are never invocations, with or without the line-mate.
+    // The quoted literals themselves are never invocations, with or without the line-mate —
+    // this one is `:211` verbatim.
     expect(checkDocsCommands(doc('| `` `/next` `` | `` `/pair-next` `` |'), commands)).toHaveLength(
       0,
     )
