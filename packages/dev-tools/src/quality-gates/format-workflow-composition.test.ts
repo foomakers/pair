@@ -17,14 +17,21 @@ import {
 // The failure modes this guard exists for are all one-line edits that keep the
 // workflow LOOKING like enforcement:
 //   - a `paths-ignore:` key (the reason this is not a job inside ci.yml, whose
-//     workflow-level `paths-ignore: ['.changeset/**']` a job would inherit),
+//     workflow-level `paths-ignore: ['.changeset/**']` a job would inherit), or
+//     its allow-list twin `paths:`, which excludes everything it does not list,
+//   - a trigger narrowed off the base branch (`pull_request.branches: [release]`)
+//     or off the events that matter (`types: [closed]`),
 //   - `pull_request_target` instead of `pull_request` (a fork PR would then run
 //     with the base repo's credentials),
 //   - a write-mode formatter step (`pnpm format`), which would make CI rewrite
 //     files instead of reporting — the ADL 2026-07-31 ban is repo-wide, not
 //     hook-specific,
 //   - dropping the `push: main` trigger, so drift on the base branch goes unseen,
-//   - dropping `concurrency`, so `push` + `pull_request` double-report the same head.
+//   - dropping `concurrency`, so a superseded run keeps reporting a stale verdict,
+//   - `continue-on-error: true`, `if: false`, or a write-scoped token on the job —
+//     each keeps the check green (or absent) while the context still reports,
+//   - dropping the failure-path remedy, so a red check names the offending file
+//     and nothing a contributor can act on (AC1).
 //
 // Structure is asserted, never exact file text: cosmetic YAML edits (comments,
 // step names, action versions) must not false-fail this guard.
@@ -69,6 +76,9 @@ jobs:
         run: pnpm install
       - name: Check formatting
         run: pnpm format:check
+      - name: Explain how to fix it
+        if: failure()
+        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."
 `
 
 describe('extractRunBlocks reads what the workflow actually executes (#413)', () => {
@@ -142,6 +152,68 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
     expect(r.message).toContain('paths-ignore')
   })
 
+  // AC3, allow-list twin. `paths:` is the same hole spelled positively: everything
+  // NOT listed is excluded. A markdown-only or `.changeset`-only PR would then run
+  // no formatting check at all — identical outcome to the `paths-ignore` above.
+  it('fails on a `paths:` allow-list under pull_request', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  pull_request:\n    branches:',
+        "  pull_request:\n    paths: ['**/*.ts']\n    branches:",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('paths')
+  })
+
+  it('fails on a `paths:` allow-list under push', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  push:\n    branches:',
+        "  push:\n    paths: ['**/*.ts']\n    branches:",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('paths')
+  })
+
+  // AC2, base-branch half. `branchesOf` was applied to `push` only, so retargeting
+  // the PR trigger at a branch nobody opens PRs against silenced the check for
+  // every real PR while the guard stayed green.
+  it('fails when `pull_request` no longer covers the base branch', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  pull_request:\n    branches:\n      - main',
+        '  pull_request:\n    branches:\n      - release',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('pull_request')
+  })
+
+  // AC2, event half. `types: [closed]` runs the check only AFTER the PR is closed —
+  // never while it is reviewable.
+  it('fails when a `types:` narrowing drops opened/synchronize', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  pull_request:\n    branches:',
+        '  pull_request:\n    types: [closed]\n    branches:',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('types')
+  })
+
+  it('accepts a `types:` list that still covers opened and synchronize', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  pull_request:\n    branches:',
+        '  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review]\n    branches:',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
   // AC2. Without `pull_request` the check does not exist where it matters.
   it('fails when the `pull_request` trigger is gone', () => {
     const r = checkFormatWorkflow(
@@ -203,6 +275,170 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('cancel-in-progress')
+  })
+
+  // Two merges to `main` a minute apart share `format-refs/heads/main`, so an
+  // unconditional cancel throws away the FIRST commit's verdict — AC7 wanted drift
+  // on the base branch visible. Cancelling only PR runs keeps both properties.
+  it('accepts a cancel-in-progress conditioned on the pull_request event', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        'cancel-in-progress: true',
+        "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('fails on a cancel-in-progress expression that cancels nothing on a PR', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        'cancel-in-progress: true',
+        "cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}",
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('cancel-in-progress')
+  })
+})
+
+// Nothing asserted a single JOB-level property, so the check could be made
+// advisory, skipped outright, or handed a write-scoped token while every trigger
+// and step rule above stayed green — and the `format` context would still report.
+describe('the format job cannot be made advisory, skipped or privileged (#413)', () => {
+  it('fails on `continue-on-error: true`, which reports SUCCESS on unformatted code', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '      - name: Check formatting\n',
+        '      - name: Check formatting\n        continue-on-error: true\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('continue-on-error')
+  })
+
+  it('fails on an unconditionally false `if:`', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('  format:\n    runs-on:', '  format:\n    if: false\n    runs-on:'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('if:')
+  })
+
+  // AC5 is "safe on fork PRs by construction, not by review". This job runs
+  // `pnpm install`, i.e. PR-authored lifecycle scripts; a write-scoped token in
+  // reach of that is the whole exposure.
+  it('fails on `permissions: write-all`', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '    permissions:\n      contents: read\n',
+        '    permissions: write-all\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('permissions')
+  })
+
+  it('fails on any write scope inside the permissions block', () => {
+    const r = checkFormatWorkflow(WELL_FORMED.replace('contents: read', 'contents: write'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('permissions')
+  })
+
+  it('fails when the permissions block is deleted, so the repo default is inherited', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('    permissions:\n      contents: read\n', ''),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('permissions')
+  })
+
+  it('accepts the empty and read-all spellings of "no write scope"', () => {
+    for (const spelling of ['permissions: {}', 'permissions: read-all']) {
+      const r = checkFormatWorkflow(
+        WELL_FORMED.replace('    permissions:\n      contents: read', `    ${spelling}`),
+      )
+      expect(r.ok, `${spelling}: ${r.message}`).toBe(true)
+    }
+  })
+})
+
+// AC1: the failing check must name the offending file AND the remedy. Prettier's
+// `--list-different` prints the file and suppresses its own "run with --write"
+// line, so without a failure-path step the contributor this story exists for —
+// hooks not installed, pushed with `--no-verify` — gets a bare filename.
+describe('a failing format check tells the contributor what to run (#413)', () => {
+  it('fails when no failure-path step names the remedy', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        / {6}- name: Explain how to fix it\n {8}if: failure\(\)\n {8}run: .*\n/,
+        '',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('pnpm format')
+  })
+
+  it('does not accept `pnpm format:check` as the remedy', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        'echo "::error::Not formatted. Run \'pnpm format\' locally and commit the result."',
+        'echo "::error::Not formatted. Run pnpm format:check locally."',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('pnpm format')
+  })
+
+  it('does not accept a remedy printed unconditionally on the success path', () => {
+    const r = checkFormatWorkflow(WELL_FORMED.replace('        if: failure()\n', ''))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('pnpm format')
+  })
+
+  // The reason this rule needs its own scanner: the write-mode guard reads the
+  // literal `pnpm format`, so the obvious spelling of the remedy was rejected as a
+  // write-mode STEP. A quoted message is data, not a command.
+  it('does not mistake an echoed remedy for a step that writes files', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '        run: pnpm format:check\n',
+        '        run: pnpm format:check || { echo "Formatting failed. Run pnpm format and commit."; exit 1; }\n',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('still fails when `pnpm format` is actually RUN rather than quoted', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('        run: pnpm format:check\n', '        run: pnpm format\n'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier:fix')
+  })
+
+  // A quoted string is only inert if it cannot execute: `$( … )` and backticks
+  // inside double quotes DO run. Those quotes stay in scope for the write scan.
+  it('still fails on a write hidden in a command substitution inside a quoted message', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '        run: pnpm format:check\n',
+        '        run: echo "$(prettier --write .)" && pnpm format:check\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier --write')
+  })
+
+  it('does not let a quoted message satisfy the "CI runs format:check" rule', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '        run: pnpm format:check\n',
+        '        run: echo "pnpm format:check"\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain(FORMAT_CHECK_SCRIPT)
   })
 })
 
@@ -327,5 +563,32 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('paths-ignore')
+  })
+
+  // The same "fires on the SHIPPED file" treatment for the three properties whose
+  // absence a well-formed fixture cannot demonstrate: they are job-level, and a
+  // fixture that drifts from the real job would keep passing while the real job
+  // goes advisory / privileged / silent.
+  it('fires on the shipped workflow when the job is made advisory or privileged', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const advisory = checkFormatWorkflow(
+      shipped.replace(
+        '      - name: Check formatting\n',
+        '      - name: Check formatting\n        continue-on-error: true\n',
+      ),
+    )
+    expect(advisory.ok).toBe(false)
+    expect(advisory.message).toContain('continue-on-error')
+
+    const privileged = checkFormatWorkflow(shipped.replace('contents: read', 'contents: write'))
+    expect(privileged.ok).toBe(false)
+    expect(privileged.message).toContain('permissions')
+  })
+
+  it('fires on the shipped workflow when its failure path stops naming the remedy', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(shipped.replace(/^\s*if: failure\(\)\n/m, ''))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('pnpm format')
   })
 })

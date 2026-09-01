@@ -36,12 +36,25 @@ on:
   push:
     branches:
       - main
+  # Manual runs on an arbitrary ref. Re-running the job from the Actions UI only
+  # replays the ref it already ran on; this is the escape hatch ci.yml already has.
+  workflow_dispatch:
 
-# `push: main` and `pull_request` both fire on the same head after a merge; without
-# this the workflow reports twice for one commit.
+# SUPERSESSION, not de-duplication. Keyed on `github.ref` the two triggers never
+# meet: a `pull_request` run is `refs/pull/<n>/merge`, a push to main is
+# `refs/heads/main`, so they sit in different groups (and after a merge the PR is
+# closed, so `pull_request` does not fire at all). What this buys is dropping a run
+# whose ref has already moved on — push three commits to a PR branch, only the last
+# verdict is worth a runner.
+#
+# Hence the CONDITIONAL cancel: two merges to main a minute apart share
+# `format-refs/heads/main`, and an unconditional `true` would cancel the first
+# commit's run, leaving that commit with no formatting verdict — precisely the
+# post-merge visibility this workflow's `push` trigger exists for. On main, runs
+# queue.
 concurrency:
   group: format-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   format:
@@ -76,7 +89,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       # The identical script the pre-push hook and a developer run. It names the
-      # offending files and exits non-zero; the remedy is `pnpm format`, committed
-      # deliberately by the author.
+      # offending files and exits non-zero.
       - name: Check formatting
         run: pnpm format:check
+      # …but it does NOT name the remedy: `--list-different` prints the paths and
+      # suppresses prettier's own "Run Prettier with --write to fix" line. The
+      # contributor this workflow exists for (hooks not installed, or pushed with
+      # `--no-verify`) would otherwise read a bare filename and no instruction. The
+      # annotation surfaces on the PR's Checks tab, not only in the log.
+      - name: Explain how to fix a formatting failure
+        if: failure()
+        run: |
+          echo "::error title=Formatting check failed::The files listed in the previous step are not formatted. Run 'pnpm format' locally, commit the result, and push again. CI never rewrites your branch."

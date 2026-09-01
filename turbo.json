@@ -92,13 +92,21 @@
     // regression the guard exists for — touches no file under packages/dev-tools and would replay
     // a cached PASS. CI is cold on every run and unaffected either way; this closes the LOCAL
     // false green, which is also what the pre-push hook (`turbo test`) sees.
+    // Third, and the one BOTH guards in this folder read: the root package.json. checkThisRepoGate
+    // parses it outright, and checkFormatWorkflow defaults rootScripts to readRootScripts(), which
+    // is how `pnpm format` in a workflow step resolves to prettier:fix at all. MEASURED without
+    // this entry: `turbo run test --filter=@pair/dev-tools --dry=json` hashed 7271baf2a672a276, and
+    // rewriting the root `format:check` script to `pnpm prettier:fix` — i.e. CI now WRITES — left
+    // the hash at 7271baf2a672a276, a cached PASS with the guard never running. Same one input away
+    // from the false green each guard exists to close.
     "@pair/dev-tools#test": {
       "dependsOn": ["build"],
       "outputs": [],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/scripts/format-lib/**",
-        "$TURBO_ROOT$/.github/workflows/format.yml"
+        "$TURBO_ROOT$/.github/workflows/format.yml",
+        "$TURBO_ROOT$/package.json"
       ]
     },
     "@pair/dev-tools#test:coverage": {
@@ -107,7 +115,8 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/scripts/format-lib/**",
-        "$TURBO_ROOT$/.github/workflows/format.yml"
+        "$TURBO_ROOT$/.github/workflows/format.yml",
+        "$TURBO_ROOT$/package.json"
       ]
     },
     "ts:check": {
