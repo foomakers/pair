@@ -29,16 +29,22 @@
 #
 # THREE THINGS THAT LOOK LIKE STYLE AND ARE NOT, so an editor is not surprised by a
 # red `pnpm test`:
-#   - BLOCK STYLE ONLY. `pull_request: { branches: [main] }` is valid YAML and is
-#     rejected: the guard reads block mappings, and a flow mapping is an empty block
-#     to it — every filter inside would read as "no filter at all".
+#   - BLOCK STYLE ONLY, for keys AND for steps. `pull_request: { branches: [main] }`
+#     is valid YAML and is rejected: the guard reads block mappings, and a flow
+#     mapping is an empty block to it — every filter inside would read as "no filter
+#     at all". A step is a sequence ITEM, so the same holds one level down:
+#     `- { uses: creyD/prettier_action@v4 }` is a step GitHub runs and a step the
+#     guard cannot look inside, so only `- key: value` items are accepted (no `- {`,
+#     `- [`, `- *alias`, `- &anchor`, or a bare `-`).
 #   - `uses:` IS AN ALLOW-LIST (checkout, pnpm/action-setup, setup-node). The
 #     write-mode scan reads `run:` blocks, so an action that rewrites the checkout is
 #     invisible to it; a fourth action is a deliberate edit to the guard.
 #   - THE CHECK STEP RUNS EXACTLY `pnpm format:check`. Not `--filter=`, not `-s`
 #     (which would hide the filenames), not a `cd` — each makes CI check a subset of
 #     the tree the developer checks.
-# The job id is `format` because the job id IS the status context (AC8).
+# The job id is `format` because the job id IS the status context (AC8) — asserted on
+# the job that RUNS `pnpm format:check`, so moving the steps to another job and leaving
+# a `format:` decoy behind is red too.
 
 name: Format
 

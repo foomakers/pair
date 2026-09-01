@@ -42,13 +42,18 @@ import {
 //     every run,
 //   - respelling a trigger as a FLOW mapping, which the block reader sees as an
 //     empty block and therefore as "no filter at all" — the spelling all four
-//     trigger holes above walk through untouched,
+//     trigger holes above walk through untouched — or respelling a STEP the same
+//     way (`- { uses: creyD/prettier_action@v4 }`), which is a sequence ITEM and so
+//     is invisible to the key-level sweep, to `usesProblems` and to the write-mode
+//     scan at once,
 //   - a formatting action (`uses:`), invisible to a write scan that reads `run:`
 //     blocks, and needing no permission at all when placed before the check,
 //   - a checking command that is not THE command (`--filter=`, `-s`, a `cd`), so CI
 //     checks a strict subset of the tree the developer checks,
-//   - renaming the job, which deletes the `format` status context branch protection
-//     is told to require,
+//   - renaming the job that RUNS the check, which deletes the `format` status
+//     context branch protection is told to require — or leaving a decoy `format:`
+//     job behind that only echoes, so that context reports SUCCESS while the real
+//     check publishes one nobody requires,
 //   - a `#` inside quotes read as a comment, which cuts an executing command out of
 //     the guard's view.
 //
@@ -940,6 +945,84 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
     }
   })
 
+  // A step is a sequence ITEM, and the sweep above reads mapping KEYS. So every step
+  // spelling that is not a block mapping walked past BOTH readers at once: `stepsOf`
+  // accepts the line as a step, `levelledStep` blanks the dash, and then
+  // `scalarAt(step, 'uses', …)` and `extractRunBlocks` each want their key at line
+  // start and find none. Placed before the checking step, such an item rewrites the
+  // runner's checkout — `pnpm format:check` then passes on unformatted code and the
+  // `format` context goes green: the AC6 loss `usesProblems` and the write-mode scan
+  // both exist to prevent, reached through the one spelling with no rule on it.
+  //
+  // Measured on the shipped workflow before the fix (`checkFormatWorkflow` returned
+  // `ok=true` on every row): a `run:` writer, a `uses:` formatter and a `uses:`
+  // auto-commit, in flow, JSON, flow-sequence, anchored and off-line spellings.
+  describe('a step is a sequence item, and only a BLOCK MAPPING item is read', () => {
+    const items: [string, string][] = [
+      ['a flow mapping running a formatter', '- { name: Fix, run: npx prettier --write . }'],
+      ['a flow mapping with no spaces', '- {run: prettier --write .}'],
+      ['the JSON spelling of the same', '- { "name": "Fix", "run": "npx prettier --write ." }'],
+      ['a flow mapping using a formatting ACTION', '- { uses: creyD/prettier_action@v4 }'],
+      [
+        'a flow mapping using an auto-commit action',
+        '- { uses: stefanzweifel/git-auto-commit-action@v5 }',
+      ],
+      ['a flow SEQUENCE item', '- [a, b]'],
+      ['an anchored item whose first key shares the line', '- &fixer run: npx prettier --write .'],
+      ['an alias item', '- *fixer'],
+      ['a bare dash, with the node on the NEXT line', '-\n        { run: npx prettier --write . }'],
+    ]
+
+    for (const [label, item] of items) {
+      it(`fails on ${label}`, () => {
+        const r = checkFormatWorkflow(
+          WELL_FORMED.replace(
+            '      - name: Check formatting\n',
+            `      ${item}\n      - name: Check formatting\n`,
+          ),
+        )
+        expect(r.ok, `${label}: ${r.message}`).toBe(false)
+        expect(r.message, label).toContain('sequence item')
+      })
+    }
+
+    // Over-reach: the two sequence-item spellings this reader DOES follow must stay
+    // green — a step written as a block mapping, and a plain scalar item under a
+    // trigger filter.
+    it('leaves a block-mapping step and a scalar list item alone', () => {
+      const extraStep = WELL_FORMED.replace(
+        '      - name: Check formatting\n',
+        '      - name: Say hello\n        run: echo hello\n      - name: Check formatting\n',
+      )
+      expect(checkFormatWorkflow(extraStep).ok, checkFormatWorkflow(extraStep).message).toBe(true)
+
+      const twoBranches = WELL_FORMED.replace(
+        '  push:\n    branches:\n      - main\n',
+        "  push:\n    branches:\n      - main\n      - 'release'\n",
+      )
+      expect(checkFormatWorkflow(twoBranches).ok, checkFormatWorkflow(twoBranches).message).toBe(
+        true,
+      )
+    })
+
+    // …and shell text inside a `run:` block scalar is not YAML at all: a brace
+    // expansion or a `[` test at the start of a line there must not read as an
+    // unreadable sequence item. The body's own reader is `extractRunBlocks`.
+    it('does not read a `run:` block scalar body as YAML structure', () => {
+      const shell = WELL_FORMED.replace(
+        '      - name: Install dependencies\n        run: pnpm install\n',
+        `      - name: Install dependencies
+        run: |
+          - { a,b }
+          - [ -d node_modules ] && echo cached
+          -
+          pnpm install
+`,
+      )
+      expect(checkFormatWorkflow(shell).ok, checkFormatWorkflow(shell).message).toBe(true)
+    })
+  })
+
   // Over-reach guard: the rule is about the keys read as BLOCKS. A flow SEQUENCE of
   // branch names and an inline `permissions:` map are both read correctly today, and
   // rejecting them would fail a correct workflow.
@@ -1076,6 +1159,71 @@ describe('the job that reports the `format` context is named (#413)', () => {
   it('accepts the quoted spelling of the same job id', () => {
     const r = checkFormatWorkflow(WELL_FORMED.replace('\n  format:\n', "\n  'format':\n"))
     expect(r.ok, r.message).toBe(true)
+  })
+
+  // "Some job is named `format`" is satisfied by a DECOY. Keep `format:` with one
+  // `run: echo ok` step, move the real steps into `worker:`, and the `format` context —
+  // the one way-of-working documents and AC8 tells branch protection to list — reports
+  // SUCCESS after an echo, while the job that actually checks anything publishes a
+  // `worker` context nobody requires. Same loss as the plain rename, and worse: the
+  // rename goes red, this used to stay green. So the assertion is on the HOST job.
+  it('fails on a decoy `format` job while another job runs the check', () => {
+    const decoy = WELL_FORMED.replace(
+      '\n  format:\n',
+      `
+  format:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Nothing
+        run: echo ok
+  worker:
+`,
+    )
+    const r = checkFormatWorkflow(decoy)
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('is `worker`, not `format`')
+  })
+
+  // The same shape without the decoy: the host is renamed and no `format` job exists
+  // at all. One accurate problem, not the old name-set message.
+  it('names the host job when it is renamed and nothing else claims the context', () => {
+    const r = checkFormatWorkflow(WELL_FORMED.replace('\n  format:\n', '\n  worker:\n'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('is `worker`, not `format`')
+  })
+
+  // A second job beside a correctly-named host is not the loss — the context still
+  // belongs to the job that checks.
+  it('accepts an extra job beside a `format` host that runs the check', () => {
+    const extra = WELL_FORMED.replace(
+      '\n  format:\n',
+      `
+  notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Nothing
+        run: echo ok
+  format:
+`,
+    )
+    expect(checkFormatWorkflow(extra).ok, checkFormatWorkflow(extra).message).toBe(true)
+  })
+
+  // No job runs the check at all: `stepProblems` owns that cause, and this rule falls
+  // back to the name-set assertion so a missing context is still reported.
+  it('still reports the missing `format` job when no job runs the check', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace('\n  format:\n', '\n  worker:\n').replace(
+        '        run: pnpm format:check\n',
+        '        run: echo skip\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('no job is named `format`')
   })
 })
 
@@ -1357,6 +1505,63 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
     const r = checkFormatWorkflow(shipped.replace('\n  format:\n', '\n  fmt:\n'))
     expect(r.ok).toBe(false)
     expect(r.message).toContain('status context')
+  })
+
+  // Measured on the shipped file before the fix: `ok=true`. `format` reports SUCCESS
+  // after an `echo`; the job that checks publishes `worker`, which nothing requires.
+  it('fires on the shipped workflow when a decoy job takes the `format` name', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      shipped.replace(
+        '\n  format:\n',
+        `
+  format:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Nothing
+        run: echo ok
+  worker:
+`,
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('is `worker`, not `format`')
+  })
+
+  // Each of these was measured `ok=true` on the shipped file: a step spelled as
+  // anything but a block mapping is invisible to `usesProblems` AND to the write-mode
+  // scan, so inserted before the checking step it rewrites the checkout and the
+  // `format` context goes green on unformatted code (AC6).
+  it('fires on the shipped workflow when a step is spelled as a flow item', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    for (const item of [
+      '- { name: Fix, run: npx prettier --write . }',
+      '- {run: prettier --write .}',
+      '- { uses: creyD/prettier_action@v4 }',
+      '- { uses: stefanzweifel/git-auto-commit-action@v5 }',
+      '- { "name": "Fix", "run": "npx prettier --write ." }',
+    ]) {
+      const r = checkFormatWorkflow(
+        shipped.replace(
+          '      - name: Check formatting\n',
+          `      ${item}\n      - name: Check formatting\n`,
+        ),
+      )
+      expect(r.ok, `${item}: ${r.message}`).toBe(false)
+      expect(r.message, item).toContain('sequence item')
+    }
+  })
+
+  // The shipped file's own `run: |` block scalar contains shell (`if ! command -v
+  // pnpm …`), and the workflow is green: the structural rules do not read that body.
+  it('stays green on the shipped workflow, whose run blocks carry real shell', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    expect(shipped, 'the shipped workflow no longer has a block scalar to prove this on').toContain(
+      'run: |',
+    )
+    expect(checkFormatWorkflow(shipped).ok).toBe(true)
   })
 
   it('fires on the shipped workflow when the remedy is moved above the checking step', () => {

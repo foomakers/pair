@@ -29,6 +29,14 @@
  *   as "absent, therefore no filter", and the four holes above walk through the one
  *   spelling nobody wrote a rule for. Flow mappings are REJECTED, not parsed
  *   (`flowStyleProblems`).
+ * - the same spelling one level down, on a step. A step is a sequence ITEM, not a
+ *   mapping key, so `- { name: Fix, run: npx prettier --write . }` slipped past the
+ *   key-level sweep AND past both readers that look inside a step: `scalarAt(step,
+ *   'uses', …)` and `extractRunBlocks` each want their key at line start, and neither
+ *   finds one. Placed before the checking step that item rewrites the checkout while
+ *   invisible to `usesProblems` and to the write-mode scan at once. Only a BLOCK
+ *   MAPPING item is read; flow, JSON, anchored, aliased and off-line items are
+ *   rejected (`relocationProblems`).
  * - a write-mode formatter, or a formatting auto-commit. The ADL 2026-07-31 ban
  *   ("the gate reports, the developer fixes deliberately") is repo-wide, not
  *   hook-specific — CI repairing the branch is the same defect one layer up.
@@ -41,9 +49,12 @@
  *   pnpm format:check`, each making CI check a strict subset of the tree the developer
  *   and the hook check — AC4's divergence, reinstated green. The command is an
  *   equality (`checkCommandProblems`).
- * - a job renamed. The job id IS the status context: `format` is what way-of-working
- *   requires and what AC8 tells branch protection to list, so `fmt:` deletes the
- *   context without touching a rule (`jobIdentityProblems`).
+ * - the job that RUNS the check renamed, or displaced by a decoy. The job id IS the
+ *   status context: `format` is what way-of-working requires and what AC8 tells branch
+ *   protection to list, so `fmt:` deletes the context without touching a rule — and a
+ *   `format:` job that only echoes, beside a `worker:` job carrying the real steps,
+ *   reports SUCCESS in that context after an echo. Asserted on the HOST job, never on
+ *   the set of job names (`jobIdentityProblems`).
  * - dropping `push: main`, so drift on the base branch is invisible.
  * - dropping `concurrency`, so a superseded run keeps burning a runner and
  *   reporting a stale verdict for a ref that has already moved on.
@@ -416,29 +427,36 @@ export function readRootScripts(): Record<string, string> {
  * which is the ADL 2026-07-29 argument ("a parser written to the same
  * misunderstanding validates nothing") landing on this module.
  *
- * Hence: every structural key must carry a BLOCK value, i.e. nothing on its own line
- * after the colon. Flow mappings are the spelling that motivated it; an ANCHOR
- * (`pull_request: &filters`), an ALIAS (`pull_request: *filters`) and a MERGE KEY
- * (`<<: *filters`) are the same class — they relocate content a line reader cannot
- * follow, and an alias under `steps:` hides a whole step from the write-mode scan.
+ * Hence, on BOTH of YAML's node positions:
+ *
+ * - every structural KEY must carry a BLOCK value, i.e. nothing on its own line after
+ *   the colon. Flow mappings are the spelling that motivated it; an ANCHOR
+ *   (`pull_request: &filters`) and an ALIAS (`pull_request: *filters`) are the same
+ *   class — they relocate content a line reader cannot follow.
+ * - every sequence ITEM must be a BLOCK MAPPING (or a plain scalar, under a trigger
+ *   filter). `steps:` is a sequence, and its contents are read by walking into each
+ *   item — so a `- { … }`, `- [ … ]`, `- *step`, `- &step …` or bare `-` item is
+ *   content relocated out of view exactly as a flow mapping is, and it hides a whole
+ *   step from `usesProblems` and the write-mode scan (`relocationProblems`). A merge
+ *   key (`<<: *filters`) is the same move in the third position.
  *
  * Bounded on purpose: `branches: [main]` (a flow SEQUENCE, read correctly by
- * `listValueOf`) and an inline `permissions: { contents: read }` (read correctly by
- * `permissionProblems`) stay accepted, because a guard that fails a CORRECT workflow
+ * `listValueOf`), an inline `permissions: { contents: read }` (read correctly by
+ * `permissionProblems`) and shell text inside a `run:` block scalar (not YAML at all —
+ * `withoutBlockScalars`) stay accepted, because a guard that fails a CORRECT workflow
  * is the kind that gets weakened.
  */
-const ALIAS_ITEM = /^-\s*\*[A-Za-z_][\w-]*$/
-
 function spellingKind(spelling: string): string {
+  if (spelling === '') return 'an off-line'
   if (/^[{[]/.test(spelling)) return 'flow-style'
   if (spelling.startsWith('*')) return 'an alias'
   if (spelling.startsWith('&')) return 'an anchor'
   return 'inline'
 }
 
-function unreadableSpelling(path: string, spelling: string): string {
+function unreadableSpelling(path: string, spelling: string, kind = spelling): string {
   return (
-    `\`${path}\` carries ${spellingKind(spelling)} value (\`${spelling}\`) where this guard reads a BLOCK. A flow\n` +
+    `\`${path}\` carries ${spellingKind(kind)} value (\`${spelling}\`) where this guard reads a BLOCK. A flow\n` +
     "  mapping lives on its key's own line, and an alias or anchor lives somewhere else entirely,\n" +
     '  so the block under that key is EMPTY and every rule reading a key inside it sees "absent" —\n' +
     '  which for a trigger filter means "no filter, so every value". `pull_request: { branches:\n' +
@@ -468,18 +486,71 @@ function structuralKeys(lines: string[]): [string, string | undefined][] {
   ]
 }
 
+/** A key whose value is a block scalar (`run: |`, `run: >-`), list item or not. */
+const BLOCK_SCALAR_HEADER = /^(\s*)(-\s+)?['"]?[A-Za-z_][\w.-]*['"]?:\s*[|>][-+]?\d*\s*$/
+
 /**
- * Anchors, aliases and merge keys away from a structural key: a `<<: *filters` inside
- * a trigger block, or a `- *step` inside `steps:`, moves content out of the reader's
- * view just as a flow mapping does — and the aliased step is invisible to the
- * write-mode scan. Matched on merge KEYS and on whole-line sequence items only, so
- * shell text inside a `run:` block scalar cannot false-fail it.
+ * The file's STRUCTURAL lines, with every block-scalar body blanked out. A `run: |`
+ * body is shell text, not YAML: a line inside it may legitimately begin `- {` (brace
+ * expansion) or `- [` (a test), and the line-level rules below would reject a correct
+ * workflow on it. What that body EXECUTES is read by `extractRunBlocks`, which is the
+ * reader that belongs to it.
+ */
+function withoutBlockScalars(lines: string[]): string[] {
+  const kept: string[] = []
+  let masked: number | null = null
+  for (const line of lines) {
+    if (masked !== null && (line.trim() === '' || indentOf(line) > masked)) {
+      kept.push('')
+      continue
+    }
+    masked = null
+    kept.push(line)
+    const header = BLOCK_SCALAR_HEADER.exec(line)
+    if (header !== null) masked = (header[1]?.length ?? 0) + (header[2]?.length ?? 0)
+  }
+  return kept
+}
+
+/**
+ * The value of a block-SEQUENCE item, when that value is one this reader cannot follow
+ * into — `null` for the two it can (`- name: Fix`, and a plain or quoted scalar such as
+ * `- main` under `branches:`).
+ *
+ * A step is a sequence ITEM, not a mapping key, so `flowStyleProblems`' key-level sweep
+ * never looked at one: `- { name: Fix, run: npx prettier --write . }` is a valid step
+ * GitHub executes, `stepsOf` accepts it as a step, and then `scalarAt(step, 'uses', …)`
+ * and `extractRunBlocks` both want their key at line start and find nothing. The step
+ * was invisible to `usesProblems` AND to the write-mode scan at once — placed before the
+ * checking step it rewrites the runner's checkout, `pnpm format:check` passes on
+ * unformatted code and the `format` context goes green: the exact AC6 loss both of those
+ * rules exist to prevent, through the one spelling that had no rule.
+ *
+ * `- [a, b]`, `- *alias`, `- &anchor` and a bare `-` (the node sits on the NEXT line)
+ * are the same class and are rejected with it — the reader follows a `- ` into a block
+ * mapping and nothing else.
+ */
+function unreadableItem(trimmed: string): string | null {
+  const match = /^-\s*(.*)$/.exec(trimmed)
+  if (match === null) return null
+  const value = (match[1] ?? '').trim()
+  if (value === '' || /^[{[*&]/.test(value)) return value
+  return null
+}
+
+/**
+ * Content relocated away from where a line reader can follow it: a `<<: *filters` merge
+ * key inside a trigger block, or a sequence item that is not a block mapping. Both move
+ * content out of the reader's view exactly as a flow mapping does, with the same
+ * fail-OPEN result. Read on the structural lines only, so shell text inside a `run:`
+ * block scalar cannot false-fail it.
  */
 function relocationProblems(lines: string[]): string[] {
-  return lines.flatMap(line => {
+  return withoutBlockScalars(lines).flatMap(line => {
     const trimmed = line.trim()
     if (trimmed.startsWith('<<:')) return [unreadableSpelling('a merge key', trimmed)]
-    if (ALIAS_ITEM.test(trimmed)) return [unreadableSpelling('a sequence item', trimmed)]
+    const item = unreadableItem(trimmed)
+    if (item !== null) return [unreadableSpelling('a sequence item', trimmed, item)]
     return []
   })
 }
@@ -687,6 +758,28 @@ function allSteps(lines: string[]): string[][] {
     .map(levelledStep)
 }
 
+interface LevelledJob {
+  name: string
+  steps: string[][]
+}
+
+function levelledJobs(lines: string[]): LevelledJob[] {
+  return jobsOf(lines).map(job => ({
+    name: job.name,
+    steps: stepsOf(job.body).map(levelledStep),
+  }))
+}
+
+/**
+ * The job that actually RUNS `pnpm format:check` — the single job whose id becomes the
+ * `format` status context, and the anchor both `jobIdentityProblems` and
+ * `remedyScopeProblems` reason from. Asserting anything about "the job named `format`"
+ * instead lets a decoy carry the name while the real check publishes another context.
+ */
+function hostJob(jobs: LevelledJob[]): LevelledJob | undefined {
+  return jobs.find(job => job.steps.some(runsFormatCheck))
+}
+
 /** The `steps.<id>.outcome`/`.conclusion` reference that scopes a condition to the check. */
 function scopesTo(condition: string, id: string): boolean {
   return condition.includes(`steps.${id}.outcome`) || condition.includes(`steps.${id}.conclusion`)
@@ -761,17 +854,38 @@ function conditionProblems(lines: string[]): string[] {
  * advisory mode that is no signal at all; once protection requires it, a required
  * context that never reports leaves every PR pending with no escape hatch
  * (github-implementation.md § Ordering, measured on this repo).
+ *
+ * Asserted on the HOST job — the one that runs `pnpm format:check` — never on the set
+ * of job NAMES. "Some job is called `format`" is satisfied by a decoy: keep `format:`
+ * with a single `run: echo ok` step and move the real steps into a second job
+ * `worker:`, and every other rule here stays green while the `format` context reports
+ * SUCCESS after an `echo` and the job that checks anything publishes a `worker` context
+ * nobody requires. That is the same context-deletion loss as the plain rename, and
+ * worse: the rename now goes red, the decoy would not.
  */
 function jobIdentityProblems(lines: string[]): string[] {
-  const names = jobsOf(lines).map(job => job.name)
-  if (names.includes(FORMAT_JOB)) return []
-  return [
-    `no job is named \`${FORMAT_JOB}\` (found: ${names.join(', ') || 'no job at all'}). The job id IS the\n` +
-      `  status context GitHub publishes: way-of-working requires \`${FORMAT_JOB}\` and AC8 names it as the\n` +
-      '  context branch protection must list. Renaming the job deletes that context without touching a\n' +
-      '  rule — silently while review enforcement is advisory, and once protection requires it, a\n' +
-      '  required context that never reports leaves every PR pending with no escape hatch.',
-  ]
+  const jobs = levelledJobs(lines)
+  const host = hostJob(jobs)
+  if (host !== undefined) {
+    if (host.name === FORMAT_JOB) return []
+    return [
+      `the job that runs \`pnpm ${FORMAT_CHECK_SCRIPT}\` is \`${host.name}\`, not \`${FORMAT_JOB}\`. The job id IS\n` +
+        `  the status context GitHub publishes: way-of-working requires \`${FORMAT_JOB}\` and AC8 names it as\n` +
+        '  the context branch protection must list. So the check that runs publishes a context nobody\n' +
+        `  requires, and \`${FORMAT_JOB}\` is either absent — every PR left pending once protection lists it,\n` +
+        '  with no escape hatch — or present on a job that checks nothing and reports SUCCESS regardless.',
+    ]
+  }
+  const names = jobs.map(job => job.name)
+  return names.includes(FORMAT_JOB)
+    ? []
+    : [
+        `no job is named \`${FORMAT_JOB}\` (found: ${names.join(', ') || 'no job at all'}). The job id IS the\n` +
+          `  status context GitHub publishes: way-of-working requires \`${FORMAT_JOB}\` and AC8 names it as the\n` +
+          '  context branch protection must list. Renaming the job deletes that context without touching a\n' +
+          '  rule — silently while review enforcement is advisory, and once protection requires it, a\n' +
+          '  required context that never reports leaves every PR pending with no escape hatch.',
+      ]
 }
 
 /**
@@ -940,7 +1054,7 @@ interface FailurePathStep {
 
 /** Every `failure()`-conditioned step except the checking one (whose `if:` is `conditionProblems`'). */
 function failurePathSteps(
-  jobs: { name: string; steps: string[][] }[],
+  jobs: LevelledJob[],
   hostName: string,
   checkIndex: number,
 ): FailurePathStep[] {
@@ -992,11 +1106,8 @@ function checkStepId(check: string[]): string | null {
 }
 
 function remedyScopeProblems(lines: string[]): string[] {
-  const jobs = jobsOf(lines).map(job => ({
-    name: job.name,
-    steps: stepsOf(job.body).map(levelledStep),
-  }))
-  const host = jobs.find(job => job.steps.some(runsFormatCheck))
+  const jobs = levelledJobs(lines)
+  const host = hostJob(jobs)
   if (host === undefined) return []
   const checkIndex = host.steps.findIndex(runsFormatCheck)
   const check = host.steps[checkIndex]
