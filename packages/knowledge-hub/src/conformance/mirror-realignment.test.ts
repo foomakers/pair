@@ -230,6 +230,34 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     expect(p1).toMatch(/never part of this commit/)
   })
 
+  it('stages first, because a pathspec cannot name a mirror the run just CREATED', () => {
+    // The residual of the round-4 pathspec fix, and its paired failure path. `git commit --
+    // <paths>` resolves the pathspec against paths git ALREADY KNOWS (index or HEAD), so the
+    // single most common shape this step produces — a contributor adds a file to the dataset,
+    // the run CREATES its mirror, `?? <path>` — is not committable by pathspec alone.
+    // MEASURED in a scratch repo (untracked `brandnew.md`):
+    //   git commit -m 'chore: regenerate mirrors from local dataset' -- brandnew.md
+    //   -> error: pathspec 'brandnew.md' did not match any file(s) known to git   (exit 1)
+    // and the whole commit aborts, so the regenerated mirror never lands: the branch pushes
+    // without it and its own `skills:conformance` job goes red — the exact failure the
+    // realignment step exists to prevent, now caused by the step. The reason the omission is
+    // SILENT is the other half of the table, measured on the same tree: ` M tracked.md` and
+    // ` D gone.md` DO commit by pathspec while unstaged (`git show --name-status` -> `M
+    // tracked.md`, `D gone.md`), so a recipe without `git add` works on every drifted or
+    // removed mirror and fails only on the first NEW one. Executed against the real script:
+    // packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts, 'stages a newly created
+    // mirror before committing it — a pathspec alone cannot name it'.
+    const p1 = phase1()
+    expect(p1).toMatch(/`git add <paths>`, then `git commit -m/)
+    expect(p1).toMatch(
+      /replaces the index as the commit's \*\*scope\*\*, not the `git add` as its \*\*step\*\*/,
+    )
+    expect(p1).toMatch(/did not match any file\(s\) known to git/)
+    // The asymmetry must be stated, or the next editor drops the `git add` again for the same
+    // reason it was dropped once: on every case they are likely to try, it is redundant.
+    expect(p1).toMatch(/modified or deleted \*\*does\*\* commit by pathspec while unstaged/)
+  })
+
   it('names the commit a regeneration, never a fix (an overwritten hand-edit was restored)', () => {
     const p1 = phase1()
     expect(p1).toMatch(/regenerate mirrors from local dataset/)

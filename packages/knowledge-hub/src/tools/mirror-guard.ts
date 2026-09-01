@@ -347,7 +347,12 @@ export function orphanedMirrorEntries(
  * (`.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`);
  * it cannot fix a red here, because this repo's installed trees ARE the source
  * of truth being guarded. The remedy printed is therefore the human one — remove
- * the file, or give it a dataset source and regenerate.
+ * the file, or give it a dataset source and regenerate with
+ * `MIRROR_REGENERATE_COMMAND` and never `pair update` (#419): the ADD half of
+ * that remedy puts the file in the LOCAL dataset only, so no published release
+ * carries it and an install cannot serve it. The message itself carries the
+ * reason and no issue number — it is read by a contributor watching a gate fail,
+ * not by a maintainer reading history.
  *
  * Valid for a `behavior: "mirror"` registry, whose target is meant to be the
  * dataset's IMAGE. It would be wrong for `behavior: "add"` (`adoption`), where a

@@ -163,6 +163,8 @@ function write(path: string, content: string): void {
 
 const STUB_SKILL = '# /stub\n\nA stub skill.\n'
 const KB_INDEX = '# Mock Knowledge\n'
+/** A dataset file added AFTER convergence: its mirror does not exist yet, so the run creates it. */
+const NEW_GUIDE = '# Mock New Guide\n'
 
 /**
  * The smallest tree `pair update --source <dir>` accepts: a KB-shaped dataset
@@ -632,6 +634,85 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       ).toEqual([REL])
       // The contributor's prose is still THEIRS: staged, uncommitted, unmodified.
       expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z']))).toEqual([
+        { xy: 'M ', path: 'src/authored.ts' },
+      ])
+      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'stages a newly created mirror before committing it — a pathspec alone cannot name it',
+    () => {
+      // The residual of the round-4 pathspec fix, and its paired failure path. `git commit --
+      // <paths>` resolves the pathspec against paths git ALREADY KNOWS (index or HEAD). The
+      // single most common way this step produces a path at all is a contributor ADDING a file
+      // to the dataset — the one case a published-KB install provably cannot serve — and the
+      // run then CREATES its mirror: a `??` entry, which git does not know. CONCRETE FAILURE:
+      // the pathspec commit exits 1 with `error: pathspec ... did not match any file(s) known
+      // to git` and aborts WHOLE, so the regenerated mirror is never committed; the branch is
+      // pushed without it and its own `skills:conformance` job goes red — the exact drift the
+      // realignment step exists to remove, now caused by the step. It is silent until then
+      // because a MODIFIED tracked mirror commits by pathspec while unstaged (asserted below),
+      // so a recipe without `git add` works on every drifted mirror and fails on the first new
+      // one.
+      tmp = makeFixture()
+      const authored = join(tmp, 'src/authored.ts')
+      write(authored, 'export const authored = 1\n')
+      write(join(tmp, '.pair/knowledge/index.md'), '# pre-existing install\n')
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'converged'])
+
+      // A drifted tracked mirror (the ` M ` row) AND a brand-new dataset file whose mirror does
+      // not exist yet (the `??` row) — the two shapes one realignment run routinely produces.
+      writeFileSync(join(tmp, '.pair/knowledge/index.md'), '# committed drift\n')
+      write(join(tmp, 'packages/knowledge-hub/dataset/.pair/knowledge/new-guide.md'), NEW_GUIDE)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'drifted mirror + a new dataset file'])
+      // ...and the contributor has already staged authored work, so the round-4 property
+      // (a pre-STAGED path is never swept in) has to survive the added `git add` too.
+      writeFileSync(authored, 'export const authored = 2\n')
+      git(tmp, ['add', 'src/authored.ts'])
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+
+      const DRIFTED = '.pair/knowledge/index.md'
+      const CREATED = '.pair/knowledge/new-guide.md'
+      const MSG = 'chore: regenerate mirrors from local dataset'
+      // The run created the new mirror from the LOCAL dataset (no release carries it)...
+      expect(readFileSync(join(tmp, CREATED), 'utf-8')).toBe(NEW_GUIDE)
+      // ...and it is untracked, which is the whole defect.
+      expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z', '-uall']))).toContainEqual({
+        xy: '??',
+        path: CREATED,
+      })
+
+      // Pathspec WITHOUT the `git add`: refused, and it takes the drifted mirror down with it.
+      const head = git(tmp, ['rev-parse', 'HEAD']).trim()
+      const refused = tryGit(tmp, ['commit', '-m', MSG, '--', CREATED, DRIFTED])
+      expect(refused.status).not.toBe(0)
+      expect(refused.stderr).toContain(`did not match any file(s) known to git`)
+      expect(git(tmp, ['rev-parse', 'HEAD']).trim()).toBe(head)
+
+      // Why the omission stays invisible: the tracked, unstaged, MODIFIED mirror commits by
+      // pathspec on its own. Every drifted-mirror run works; only a new mirror breaks.
+      git(tmp, ['commit', '-q', '-m', MSG, '--', DRIFTED])
+      expect(
+        git(tmp, ['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean),
+      ).toEqual([DRIFTED])
+      git(tmp, ['reset', '-q', '--soft', 'HEAD~1'])
+      git(tmp, ['reset', '-q', 'HEAD', '--', DRIFTED])
+
+      // The documented form: stage the same set first, then scope the commit by pathspec.
+      git(tmp, ['add', CREATED, DRIFTED])
+      git(tmp, ['commit', '-q', '-m', MSG, '--', CREATED, DRIFTED])
+      expect(
+        git(tmp, ['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean).sort(),
+      ).toEqual([CREATED, DRIFTED].sort())
+      // The `git add` did not cost the round-4 property: the prose is still staged, uncommitted.
+      expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z', '-uall']))).toEqual([
         { xy: 'M ', path: 'src/authored.ts' },
       ])
       expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')

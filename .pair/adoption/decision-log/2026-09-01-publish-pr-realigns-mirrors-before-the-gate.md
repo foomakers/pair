@@ -105,7 +105,16 @@ read from the adoption, never named in the skill.**
   resumed/interrupted `/pair-process-implement` leaves a populated index. The step-4 Verify catches
   it only *after* the commit exists, and a Verify failure is not a HALT condition — so the
   mislabelled commit would be pushed. `git commit -m "…" -- <paths>` commits only the pathspec and
-  leaves the staged entries staged and untouched.
+  leaves the staged entries staged and untouched. The pathspec replaces the index as the commit's
+  **scope**, not the `git add` as its **step**: a pathspec resolves against paths git already knows
+  (index or HEAD), so a mirror the run CREATED — `?? <path>`, the shape a contributor produces by
+  adding a file to the dataset, the one case a published-KB install cannot serve — is
+  `error: pathspec '<path>' did not match any file(s) known to git`, exit 1, and the commit aborts
+  whole, leaving the branch to push without the mirror it just regenerated. A modified or deleted
+  tracked path DOES commit by pathspec while unstaged, which is why a dropped `git add` looks
+  harmless until the first new mirror — so the recipe states both the step and the asymmetry.
+  Measured end to end against the real script in `regenerate-mirrors.test.ts` ("stages a newly
+  created mirror before committing it — a pathspec alone cannot name it").
 - **Each of the three remaining rules in the snapshot recipe is load-bearing** (round-3 review,
   measured in a
   scratch repo): `--untracked-files=all`, because the default reports a not-yet-committed directory
