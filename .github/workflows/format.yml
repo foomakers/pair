@@ -26,6 +26,19 @@
 # The shape above is asserted by packages/dev-tools/src/quality-gates/
 # format-workflow-composition.test.ts — a YAML-only change gets a guard, or the
 # next edit silently reintroduces the hole.
+#
+# THREE THINGS THAT LOOK LIKE STYLE AND ARE NOT, so an editor is not surprised by a
+# red `pnpm test`:
+#   - BLOCK STYLE ONLY. `pull_request: { branches: [main] }` is valid YAML and is
+#     rejected: the guard reads block mappings, and a flow mapping is an empty block
+#     to it — every filter inside would read as "no filter at all".
+#   - `uses:` IS AN ALLOW-LIST (checkout, pnpm/action-setup, setup-node). The
+#     write-mode scan reads `run:` blocks, so an action that rewrites the checkout is
+#     invisible to it; a fourth action is a deliberate edit to the guard.
+#   - THE CHECK STEP RUNS EXACTLY `pnpm format:check`. Not `--filter=`, not `-s`
+#     (which would hide the filenames), not a `cd` — each makes CI check a subset of
+#     the tree the developer checks.
+# The job id is `format` because the job id IS the status context (AC8).
 
 name: Format
 
