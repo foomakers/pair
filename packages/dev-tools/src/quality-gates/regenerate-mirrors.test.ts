@@ -91,22 +91,56 @@ interface Snapshot {
 }
 
 /**
+ * One porcelain entry: its two-letter status code and the worktree path it names.
+ *
+ * `-z` is NUL-SEPARATED and, unlike the default, never quotes or octal-escapes a path —
+ * which is the whole reason the recipe uses it (round-4 finding). It costs one parsing
+ * rule in exchange: a rename/copy entry spends a SECOND field on its OLD path
+ * (`R  new\0old\0`), so that field must be CONSUMED, never read as an entry of its own —
+ * it has no status code, and `slice(3)` over it would yield a truncated path.
+ */
+interface PorcelainEntry {
+  xy: string
+  path: string
+}
+
+function parsePorcelainZ(out: string): PorcelainEntry[] {
+  const fields = out.split('\0').filter(field => field !== '')
+  const entries: PorcelainEntry[] = []
+  for (let i = 0; i < fields.length; i += 1) {
+    const field = fields[i] as string
+    const xy = field.slice(0, 2)
+    entries.push({ xy, path: field.slice(3) })
+    if (xy.includes('R') || xy.includes('C')) i += 1
+  }
+  return entries
+}
+
+/**
  * /publish-pr Phase 1's before/after snapshot, executed exactly as the skill words it:
- * `git status --porcelain --untracked-files=all`, plus `git hash-object [-w] <path>` over
- * every entry whose worktree file still exists. `untrackedFilesAll` and `writeBlobs` are
- * knobs ONLY so the test can run the pre-fix recipe next to the fixed one and show the
- * difference; the skill documents one setting for each.
+ * `git status --porcelain -z --untracked-files=all`, plus `git hash-object [-w] <path>`
+ * over every entry whose worktree file still exists. `untrackedFilesAll`, `writeBlobs`
+ * and `nulSeparated` are knobs ONLY so the test can run a pre-fix recipe next to the
+ * fixed one and show the difference; the skill documents one setting for each.
  */
 function snapshotTree(
   dir: string,
-  opts: { untrackedFilesAll: boolean; writeBlobs: boolean },
+  opts: { untrackedFilesAll: boolean; writeBlobs: boolean; nulSeparated: boolean },
 ): Snapshot {
   const args = ['status', '--porcelain']
+  if (opts.nulSeparated) args.push('-z')
   if (opts.untrackedFilesAll) args.push('--untracked-files=all')
   const entries = git(dir, args)
+  const paths = opts.nulSeparated
+    ? parsePorcelainZ(entries).map(entry => entry.path)
+    : // The pre-fix parse, kept verbatim so the failure it produces is MEASURED, not argued:
+      // a quoted/escaped path fails the exists test below and is dropped from the digest.
+      entries
+        .split('\n')
+        .filter(Boolean)
+        .map(line => line.slice(3))
   const digests = new Map<string, string>()
-  for (const line of entries.split('\n').filter(Boolean)) {
-    const path = line.slice(3)
+  for (const path of paths) {
     // "digest only entries whose worktree file exists": a deletion has nothing to read.
     if (!existsSync(join(dir, path))) continue
     const hash = ['hash-object']
@@ -400,18 +434,27 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       )
       expect(tryGit(tmp, ['hash-object', 'doomed.md']).status).toBe(128)
 
-      const before = snapshotTree(tmp, { untrackedFilesAll: true, writeBlobs: true })
-      expect(before.entries).toMatch(/^ D doomed\.md$/m)
-      expect(before.entries).toMatch(/^ M \.pair\/knowledge\/index\.md$/m)
+      const before = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: true,
+        nulSeparated: true,
+      })
+      const beforeEntries = parsePorcelainZ(before.entries)
+      expect(beforeEntries).toContainEqual({ xy: ' D', path: 'doomed.md' })
+      expect(beforeEntries).toContainEqual({ xy: ' M', path: '.pair/knowledge/index.md' })
       // -uall is what turns the collapsed `?? sub/` into a hashable per-file entry.
-      expect(before.entries).toMatch(/^\?\? \.pair\/knowledge\/sub\/note\.md$/m)
+      expect(beforeEntries).toContainEqual({ xy: '??', path: '.pair/knowledge/sub/note.md' })
       expect(before.digests.has('doomed.md')).toBe(false)
       expect(before.digests.has('.pair/knowledge/sub/note.md')).toBe(true)
 
       const result = run(tmp, isolatedHome(tmp))
       expect(result.status).toBe(0)
 
-      const after = snapshotTree(tmp, { untrackedFilesAll: true, writeBlobs: false })
+      const after = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: false,
+        nulSeparated: true,
+      })
       // Status is blind to BOTH overwrites — that is why the digest half exists...
       expect(after.entries).toBe(before.entries)
       // ...and with the recipe as documented, both are detected.
@@ -442,6 +485,156 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
       const unwritten = git(tmp, ['hash-object', control]).trim()
       writeFileSync(control, '# overwritten\n')
       expect(tryGit(tmp, ['cat-file', '-p', unwritten]).stderr).toContain('Not a valid object name')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'the snapshot recipe sees a path with a space and a non-ASCII byte — the default parse does not',
+    () => {
+      // Round-4 finding, executed. Porcelain v1 QUOTES and octal-escapes any path holding a
+      // space or a non-ASCII byte, so `line.slice(3)` yields `"caff\303\250.md"` — a string
+      // that is not a filename. The entry then fails every "does the worktree file exist"
+      // test and is DROPPED from the digest, which is the same status-vs-content blindness
+      // the digest exists to close, reached through the parser instead of through `git`.
+      //
+      // CONCRETE LOSS this fixture reproduces: a generated mirror at `.pair/knowledge/con
+      // spazio.md`, already dirty with an uncommitted hand-edit, is overwritten by the run.
+      // Its porcelain entry is ` M "con spazio.md"` before AND after (status unchanged) and
+      // its digest was never taken — so the comparison reads NO CHANGE: the hand-edit is
+      // destroyed with no `recover:` row, and the regenerated bytes are never staged, so the
+      // branch pushes the stale mirror and its own conformance job goes red.
+      tmp = makeFixture()
+      const dataset = join(tmp, 'packages/knowledge-hub/dataset')
+      const SPACED = '# spaced note\n'
+      const ACCENTED = '# accented note\n'
+      write(join(dataset, '.pair/knowledge/con spazio.md'), SPACED)
+      write(join(dataset, '.pair/knowledge/caffè.md'), ACCENTED)
+      write(join(tmp, '.pair/knowledge/index.md'), '# pre-existing install\n')
+
+      // Converge and commit, so the only writes the case measures are the two overwrites.
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      const spaced = join(tmp, '.pair/knowledge/con spazio.md')
+      const accented = join(tmp, '.pair/knowledge/caffè.md')
+      expect(readFileSync(spaced, 'utf-8')).toBe(SPACED)
+      expect(readFileSync(accented, 'utf-8')).toBe(ACCENTED)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'converged'])
+
+      // HEAD carries drift on both, so the run genuinely writes and the entries stay ` M `.
+      writeFileSync(spaced, '# committed drift\n')
+      writeFileSync(accented, '# committed drift\n')
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'drifted mirrors on HEAD'])
+
+      // Uncommitted hand-edits on both: pre-dirty, so ONLY the digest can see the overwrite.
+      const SPACED_EDIT = '# spaced hand-edit\n'
+      const ACCENTED_EDIT = '# accented hand-edit\n'
+      writeFileSync(spaced, SPACED_EDIT)
+      writeFileSync(accented, ACCENTED_EDIT)
+
+      // THE PRE-FIX PARSE, measured: quoted and escaped, so neither path is digested.
+      const quoted = git(tmp, ['status', '--porcelain', '--untracked-files=all'])
+      expect(quoted).toMatch(/^ M "\.pair\/knowledge\/con spazio\.md"$/m)
+      expect(quoted).toMatch(/^ M "\.pair\/knowledge\/caff\\303\\250\.md"$/m)
+      const preFix = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: true,
+        nulSeparated: false,
+      })
+      expect(preFix.digests.has('.pair/knowledge/con spazio.md')).toBe(false)
+      expect(preFix.digests.has('.pair/knowledge/caffè.md')).toBe(false)
+
+      const before = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: true,
+        nulSeparated: true,
+      })
+      const beforeEntries = parsePorcelainZ(before.entries)
+      // -z prints the real bytes: no quotes, no octal escapes.
+      expect(beforeEntries).toContainEqual({ xy: ' M', path: '.pair/knowledge/con spazio.md' })
+      expect(beforeEntries).toContainEqual({ xy: ' M', path: '.pair/knowledge/caffè.md' })
+      expect(before.digests.has('.pair/knowledge/con spazio.md')).toBe(true)
+      expect(before.digests.has('.pair/knowledge/caffè.md')).toBe(true)
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+
+      const after = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: false,
+        nulSeparated: true,
+      })
+      // Status is identical across the run for both paths — the overwrite is invisible there.
+      expect(after.entries).toBe(before.entries)
+      // ...and the documented recipe detects it, on both, and can hand the bytes back.
+      for (const [rel, edit] of [
+        ['.pair/knowledge/con spazio.md', SPACED_EDIT],
+        ['.pair/knowledge/caffè.md', ACCENTED_EDIT],
+      ] as const) {
+        expect(after.digests.get(rel)).not.toBe(before.digests.get(rel))
+        expect(git(tmp, ['cat-file', '-p', before.digests.get(rel) ?? ''])).toBe(edit)
+      }
+      expect(readFileSync(spaced, 'utf-8')).toBe(SPACED)
+      expect(readFileSync(accented, 'utf-8')).toBe(ACCENTED)
+
+      // Second shape from the same finding: a NEW generated file with a space appears only in
+      // the after snapshot, so status DOES catch it — but under the default parse the agent
+      // stages the literal quoted string, and `git add` refuses it as a pathspec.
+      expect(tryGit(tmp, ['add', '"con spazio.md"']).stderr).toContain('did not match any files')
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'the regeneration commit carries only the regenerated paths, never a pre-STAGED authored file',
+    () => {
+      // Round-4 finding, executed. The staging rule protects UNSTAGED authored work, but a
+      // plain `git commit` after `git add <paths>` commits THE WHOLE INDEX — and publish-pr
+      // is standalone, explicitly runs on a dirty tree, and a resumed/interrupted implement
+      // leaves a populated index. CONCRETE LOSS: the contributor's staged prose lands inside
+      // `chore: regenerate mirrors from local dataset`, a commit they never wrote — verbatim
+      // the harm the whole staging-rule section exists to prevent, reached through the index
+      // instead of through a glob. The documented form commits by PATHSPEC, which cannot.
+      tmp = makeFixture()
+      const mirror = join(tmp, '.pair/knowledge/index.md')
+      const authored = join(tmp, 'src/authored.ts')
+      write(authored, 'export const authored = 1\n')
+      write(mirror, '# pre-existing install\n')
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'converged'])
+
+      // HEAD carries a drifted mirror, so the run writes something...
+      writeFileSync(mirror, '# committed drift\n')
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'drifted mirror on HEAD'])
+      // ...and the contributor has ALREADY STAGED an authored change before the run.
+      writeFileSync(authored, 'export const authored = 2\n')
+      git(tmp, ['add', 'src/authored.ts'])
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+
+      // The control: the index-based form, measured. It sweeps the staged prose in.
+      const REL = '.pair/knowledge/index.md'
+      const MSG = 'chore: regenerate mirrors from local dataset'
+      git(tmp, ['add', REL])
+      git(tmp, ['commit', '-q', '-m', MSG])
+      expect(
+        git(tmp, ['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean).sort(),
+      ).toEqual([REL, 'src/authored.ts'])
+
+      // The documented form, on the same state: pathspec, so the index is not consulted.
+      git(tmp, ['reset', '-q', '--soft', 'HEAD~1'])
+      git(tmp, ['commit', '-q', '-m', MSG, '--', REL])
+      expect(
+        git(tmp, ['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean),
+      ).toEqual([REL])
+      // The contributor's prose is still THEIRS: staged, uncommitted, unmodified.
+      expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z']))).toEqual([
+        { xy: 'M ', path: 'src/authored.ts' },
+      ])
+      expect(readFileSync(authored, 'utf-8')).toBe('export const authored = 2\n')
     },
     SCRIPT_RUN_TIMEOUT_MS,
   )

@@ -414,9 +414,10 @@ export function diffSkillMd(expected: string, actual: string): string {
  * Asserts one root mirror artifact — a `SKILL.md` or any sub-doc the same
  * `pair update` transform generates — equals the real pipeline output.
  * Throws LOUDLY, naming the offending artifact by its DATASET-relative path
- * (its canonical identity), pointing at the generated root path, and giving the
- * `pair update` regenerate hint, when the mirror is missing (AC4) or has
- * drifted (AC2). This is the guard's assertion helper, kept in a tested
+ * (its canonical identity), pointing at the generated root path, and giving
+ * `MIRROR_REGENERATE_COMMAND` as the regenerate hint — the same one in BOTH
+ * branches, missing (AC4) and drifted (AC2), which is the whole reason that
+ * constant exists (#419). This is the guard's assertion helper, kept in a tested
  * production module (per the "gate & tooling code in tested modules" ADL) so
  * both the real on-disk guard and the drift-injection tests drive the same
  * code path.

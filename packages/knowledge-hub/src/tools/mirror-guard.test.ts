@@ -602,10 +602,19 @@ describe('assertMirrorMatches — failure paths and message (#393)', () => {
     expect(message).not.toContain('naming transform')
   })
 
-  it('reports a missing mirror as missing, with the regenerate hint (not as drift)', () => {
-    expect(() => assertKb(REL, expected, undefined)).toThrow(
-      /Mirror missing.*does not exist.*pair update/s,
-    )
+  // #419 round 4: the MISSING branch, not just the drifted one. It is the branch a
+  // contributor reaches by adding `packages/knowledge-hub/dataset/.pair/knowledge/new-guide.md`
+  // and committing before regenerating — the most common way here, since a brand-new dataset
+  // file has no mirror yet. Told to run `pair update`, they install the PUBLISHED KB: their
+  // new file is in no release so the guard stays red, AND every other local mirror is
+  // overwritten with released content — manufacturing the drift this guard exists to stop.
+  it('reports a missing mirror as missing (not as drift) and names the LOCAL regeneration command', () => {
+    const message = captureThrownMessage(() => assertKb(REL, expected, undefined))
+    expect(message).toContain('Mirror missing')
+    expect(message).toContain('does not exist')
+    expect(message).not.toContain('has drifted')
+    expect(message).toContain(MIRROR_REGENERATE_COMMAND)
+    expect(message).not.toContain('pair update')
   })
 })
 
@@ -646,7 +655,13 @@ describe('assertNoOrphanedMirrorEntries — the reverse sweep (#393)', () => {
     )
     expect(message).toContain('DELETE it')
     expect(message).toContain(`ADD it to the dataset under ${KB_MIRROR.datasetRel}`)
-    expect(message).toContain("'pair update'")
+    // #419 round 4, same contract as the forward guard's two branches: the SECOND half of
+    // this remedy ("add it to the dataset AND regenerate") is exactly the case `pair update`
+    // cannot serve — a file just added to the local dataset is in no published release, so
+    // the reader who follows the instruction literally comes back to a still-red guard.
+    // The `pair update` sentence one line above is a different claim (what the install
+    // does to an installed-only file) and stays.
+    expect(message).toContain(`regenerate with '${MIRROR_REGENERATE_COMMAND}'`)
     // states what it compared, like its forward sibling, so the reader cannot
     // mistake it for the transform assertion
     expect(message).toContain('COMPARED')

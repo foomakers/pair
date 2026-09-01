@@ -377,7 +377,8 @@ export function assertNoOrphanedMirrorEntries(
       `IMAGE, so a file only the target has is drift: 'pair update' neither writes nor removes it, ` +
       `and it goes on being read as if it were shipped content${alsoIndexed}.\n` +
       `Remedy: DELETE it, or ADD it to the dataset under ${mirror.datasetRel} and regenerate with ` +
-      `'pair update'.`,
+      `'${MIRROR_REGENERATE_COMMAND}' (#419: a file just added to the LOCAL dataset is in no ` +
+      `published release, so 'pair update' cannot install it).`,
   )
 }
 
@@ -433,7 +434,7 @@ export function assertMirrorMatches(
   if (actual === undefined) {
     throw new Error(
       `Mirror missing for dataset file '${datasetRelPath}': ${mirrorPath} does not exist. ` +
-        `Run 'pair update' to regenerate it.`,
+        `Run '${MIRROR_REGENERATE_COMMAND}' to regenerate it.`,
     )
   }
   if (actual !== expected) {

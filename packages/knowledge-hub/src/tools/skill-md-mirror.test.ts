@@ -23,12 +23,13 @@ const ROOT_CLAUDE_SKILLS = join(REPO_ROOT, '.claude/skills')
 
 /**
  * On-disk root mirror of a dataset artifact, or `undefined` ONLY when it is
- * genuinely absent (which the guard reports as "missing → run `pair update`").
+ * genuinely absent (which the guard reports as "missing → run
+ * `MIRROR_REGENERATE_COMMAND`").
  *
  * A copy that EXISTS but cannot be read (EACCES, a directory in its place) is a
  * different failure with a different fix: it is rethrown naming the path and the
  * underlying cause, never collapsed into `undefined` — which would mislabel it
- * as missing and hand the developer a hint (`pair update`) that cannot fix an
+ * as missing and hand the developer a regeneration hint that cannot fix an
  * EACCES. `read` is injectable so that branch is actually covered by a test.
  *
  * PLACEMENT (deliberate, and the reason it differs from its sibling): the
@@ -54,7 +55,7 @@ const rootMirrorContent = (
     throw new Error(
       `Root mirror for dataset artifact '${datasetArtifact}' EXISTS at ${p} but is ` +
         `unreadable: ${(err as Error).message}. Fix the file/permissions — ` +
-        `'pair update' cannot regenerate over an unreadable path.`,
+        `'${MIRROR_REGENERATE_COMMAND}' cannot regenerate over an unreadable path.`,
     )
   }
 }
@@ -181,15 +182,15 @@ describe('directional guard ignores root-only artifacts with no dataset source',
 })
 
 /**
- * Missing vs unreadable are DISTINCT failures with distinct fixes: `pair update`
- * regenerates a missing copy, but cannot fix an EACCES. The root-copy read must
+ * Missing vs unreadable are DISTINCT failures with distinct fixes: the regeneration
+ * command regenerates a missing copy, but cannot fix an EACCES. The root-copy read must
  * therefore never collapse "unreadable" into "missing" (nor, worse, into a pass).
  */
 describe('root-copy read distinguishes a missing copy from an unreadable one', () => {
   it('reports an EXISTING but unreadable root copy as unreadable, never as missing', () => {
     // The catch branch of the root-copy read: an EACCES (or a dir in its place)
     // must fail with its path and cause, not be swallowed into `undefined` and
-    // mislabelled "does not exist. Run 'pair update'".
+    // mislabelled "does not exist. Run '<regeneration command>'".
     const artifact = 'next/SKILL.md'
     const rootPath = join(ROOT_CLAUDE_SKILLS, installedArtifactPath(artifact))
     expect(existsSync(rootPath)).toBe(true) // precondition: it DOES exist
@@ -204,6 +205,11 @@ describe('root-copy read distinguishes a missing copy from an unreadable one', (
     expect(message).toContain('unreadable')
     expect(message).toContain('EACCES: permission denied')
     expect(message).not.toContain('does not exist')
+    // #419 round 4: a developer reads this message on a real failure, so it is one of the
+    // places the remedy is named. It must name the SAME command the two guard branches do —
+    // two remedies for one guard is the condition MIRROR_REGENERATE_COMMAND removed.
+    expect(message).toContain(MIRROR_REGENERATE_COMMAND)
+    expect(message).not.toContain('pair update')
   })
 })
 
