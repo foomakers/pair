@@ -45,6 +45,18 @@
 # The job id is `format` because the job id IS the status context (AC8) — asserted on
 # the job that RUNS `pnpm format:check`, so moving the steps to another job and leaving
 # a `format:` decoy behind is red too.
+#
+# TWO MORE, for the same reason (each is one token, and each leaves the context green):
+#   - NOTHING GATES THIS JOB. No `if:` and no `needs:` — a job skipped for either
+#     reason reports its required check as SUCCESSFUL, so once branch protection lists
+#     `format` the merge goes through with the check never having executed. This
+#     workflow is single-job by design.
+#   - THE REMEDY'S SCOPE IS AN EQUALITY AGAINST `'failure'`. `outcome` holds one of
+#     `success`/`failure`/`cancelled`/`skipped`, so `steps.format_check.outcome ==
+#     'success'` still names the check and is false exactly when it fails: the remedy
+#     is skipped on the one run that needed it. `.conclusion`, `"failure"` and the
+#     reversed operand order are accepted; `!=`, the other three values and
+#     `contains()` are not.
 
 name: Format
 

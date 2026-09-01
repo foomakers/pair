@@ -58,8 +58,9 @@
  * - dropping `push: main`, so drift on the base branch is invisible.
  * - dropping `concurrency`, so a superseded run keeps burning a runner and
  *   reporting a stale verdict for a ref that has already moved on.
- * - `continue-on-error: true`, ANY `if:` on the job, ANY `if:` on the step that runs
- *   `format:check`, a step `if:` elsewhere that is not a SCOPED `failure()` guard, or
+ * - `continue-on-error: true`, ANY `if:` on the job, ANY `needs:` on the job, ANY `if:`
+ *   on the step that runs `format:check`, a step `if:` elsewhere that is not a SCOPED
+ *   `failure()` guard, or
  *   a write-scoped `permissions:`. None of these touch a trigger or a step COMMAND,
  *   yet each turns the `format` context into one that cannot fail, never runs, or
  *   hands a write-scoped token to a job that executes PR-authored lifecycle scripts
@@ -72,6 +73,9 @@
  *   either: on the CHECKING step it is false on a normal PR, so the check is skipped
  *   and the job ends green wearing the remedy's own spelling — hence no condition at
  *   all there, and everywhere else `failure()` AND the check step's own outcome.
+ *   `needs:` sits in the same bullet because it is that neutralization with no
+ *   condition written anywhere: a job whose dependency fails or is skipped never runs,
+ *   is reported skipped, and a skipped job's required check reads SUCCESSFUL.
  * - dropping the failure-path remedy, or widening it. `--list-different` prints the
  *   offending file and suppresses prettier's own "run with --write to fix" line, so
  *   a red check without that step hands the contributor this story exists for —
@@ -84,7 +88,10 @@
  *   merely be spelled — `steps` is job-local and empty before the step has run, so a
  *   remedy in a SECOND JOB, or ABOVE the checking step in the same job, carries a
  *   condition false on every run: the remedy fires never and AC1's contributor reads
- *   the bare filename anyway.
+ *   the bare filename anyway. Nor is naming the context enough: the condition must
+ *   COMPARE it to `'failure'`. `outcome` holds one of four values, so
+ *   `steps.<id>.outcome == 'success'` still mentions the check and is false exactly
+ *   when the check fails — the same never-firing remedy from a one-token edit.
  *
  * Structure is asserted, never exact file text: comments, step names and action
  * versions must be editable without false-failing this guard.
@@ -780,9 +787,46 @@ function hostJob(jobs: LevelledJob[]): LevelledJob | undefined {
   return jobs.find(job => job.steps.some(runsFormatCheck))
 }
 
-/** The `steps.<id>.outcome`/`.conclusion` reference that scopes a condition to the check. */
-function scopesTo(condition: string, id: string): boolean {
+/** Names the checking step's status context at all — necessary, and on its own nothing. */
+function referencesCheck(condition: string, id: string): boolean {
   return condition.includes(`steps.${id}.outcome`) || condition.includes(`steps.${id}.conclusion`)
+}
+
+/**
+ * The comparison that actually puts a step on the FAILURE path.
+ *
+ * Naming `steps.<id>.outcome` and SCOPING to the failure are two different things, and
+ * the substring test that used to stand in for this asserted only the first. The value
+ * domain is four states — `success`, `failure`, `cancelled`, `skipped` — and the
+ * reference is a substring of every condition that reads any of them:
+ *
+ * - `== 'success'` is the one-token edit that costs AC1. A PR carries an unformatted
+ *   file, `Check formatting` fails, `failure()` is true — and `outcome` is `'failure'`,
+ *   so the comparison is FALSE and the remedy is SKIPPED on precisely the run that
+ *   needed it. The contributor reads `--list-different`'s bare filename with prettier's
+ *   own "run with --write to fix" line suppressed, which is the whole reason the remedy
+ *   step exists.
+ * - `== 'skipped'` fires only when the check never ran — i.e. on the broken `pnpm
+ *   install` this scope exists to stay QUIET about, and never on a formatting failure.
+ *   The wrong diagnosis, inverted onto the wrong run.
+ * - `!= 'success'` is true for `failure`, `skipped` AND `cancelled`: the unscoped
+ *   `if: failure()` back, wearing a scope.
+ * - a bare reference (`failure() && steps.<id>.outcome`) is truthy for all four values,
+ *   so it is `if: failure()` with extra words.
+ *
+ * So this is an ALLOW-list like every other rule here: equality against `'failure'`, on
+ * `outcome` or `conclusion`, in either operand order, in either quote style. `contains()`
+ * and every other spelling is rejected rather than reasoned about — the same
+ * fail-CLOSED direction the flow-style rules take.
+ */
+function scopesTo(condition: string, id: string): boolean {
+  const status = `steps\\.${id}\\.(?:outcome|conclusion)`
+  // `['"]{1,2}` also accepts YAML's doubled-quote escape inside a single-quoted scalar.
+  const failure = `(['"]{1,2})failure\\1`
+  return (
+    new RegExp(`${status}\\s*==\\s*${failure}`).test(condition) ||
+    new RegExp(`${failure}\\s*==\\s*${status}`).test(condition)
+  )
 }
 
 /**
@@ -806,13 +850,42 @@ function scopesTo(condition: string, id: string): boolean {
  * reading its OWN `steps.<id>` context reads an unpopulated value, so it never runs
  * on any event at all.
  *
- * So: no `if:` on a job (this workflow has one job and it must always run), NO `if:`
- * on the step that runs `format:check`, and on every other step only a condition
- * carrying `failure()` — scoped, which `remedyScopeProblems` owns.
+ * And `needs:` is the same neutralization with no condition written anywhere. A job
+ * whose dependency fails — or is itself skipped — never runs and is REPORTED SKIPPED,
+ * which is the same "required check reads successful" GitHub behaviour the job `if:`
+ * rule cites. `needs: precheck` with a `precheck` job that exits 1 leaves every other
+ * rule in this module green while the formatting check never executes. This workflow is
+ * single-job by design, so nothing may gate the job that publishes the context.
+ *
+ * So: no `if:` and no `needs:` on a job (this workflow has one job and it must always
+ * run), NO `if:` on the step that runs `format:check`, and on every other step only a
+ * condition carrying `failure()` — scoped, which `remedyScopeProblems` owns.
  */
+
+/** The jobs a job waits for, in any spelling — `null` when it waits for none. */
+function dependenciesOf(body: string[]): string[] | null {
+  const indent = keyIndent(body)
+  const header = body.find(line => new RegExp(`^ {${indent}}needs:`).test(line))
+  if (header === undefined) return null
+  const inline = unquote(header.replace(new RegExp(`^ {${indent}}needs:`), ''))
+  if (inline !== '' && !inline.startsWith('[')) return [inline]
+  return listValueOf(body, 'needs') ?? []
+}
+
 function conditionProblems(lines: string[]): string[] {
   const problems: string[] = []
   for (const job of jobsOf(lines)) {
+    const dependencies = dependenciesOf(job.body)
+    if (dependencies !== null) {
+      problems.push(
+        `job \`${job.name}\` declares \`needs: ${dependencies.join(', ') || '(nothing readable)'}\`: a job that can be\n` +
+          '  skipped is a check that can be absent, and a job whose dependency fails — or is itself\n' +
+          '  skipped — never runs and is reported SKIPPED, which on GitHub reports its required check as\n' +
+          '  SUCCESSFUL (github-implementation.md § Ordering). The merge then goes through with the\n' +
+          '  formatting check never having executed, exactly as a job-level `if:` would, and with no\n' +
+          '  condition written anywhere to notice. This workflow is single-job by design.',
+      )
+    }
     const jobCondition = scalarAt(job.body, 'if', keyIndent(job.body))
     if (jobCondition !== undefined) {
       problems.push(
@@ -1078,6 +1151,19 @@ function unscopedProblem(unscoped: FailurePathStep[]): string {
   )
 }
 
+function miscomparedProblem(miscompared: FailurePathStep[], id: string): string {
+  return (
+    `${miscompared.length} failure-path step(s) name \`steps.${id}\` but do not compare it to` +
+    ` \`'failure'\`\n  (\`if: ${miscompared.map(step => step.condition).join('`, `if: ')}\`). The\n` +
+    '  reference alone scopes nothing: `outcome` holds one of `success`, `failure`, `cancelled`,\n' +
+    "  `skipped`, so `== 'success'` is FALSE exactly when the check failed — the remedy is skipped on\n" +
+    "  the one run that needed it and the contributor reads `--list-different`'s bare filename with\n" +
+    "  prettier's own \"run with --write to fix\" line suppressed (AC1). And `== 'skipped'` or\n" +
+    "  `!= 'success'` fires on the broken `pnpm install` this scope exists to stay quiet about.\n" +
+    `  The accepted comparison is \`steps.${id}.outcome == 'failure'\` (or \`.conclusion\`).\n${SCOPING_ADVICE}`
+  )
+}
+
 function foreignJobProblem(foreign: FailurePathStep[], id: string, hostName: string): string {
   const names = [...new Set(foreign.map(step => step.job))].join('`, `')
   return (
@@ -1125,13 +1211,21 @@ function remedyScopeProblems(lines: string[]): string[] {
 
   // No failure-path step at all is `remedyProblems`' finding, not this one.
   const failurePath = failurePathSteps(jobs, host.name, checkIndex)
-  const unscoped = failurePath.filter(step => !scopesTo(step.condition, id))
+  // Three buckets, not two: a condition that NAMES the checking step but compares it to
+  // the wrong outcome is neither unscoped (the author did scope it) nor scoped (it
+  // resolves false on the failure path), and reporting it as the first names the wrong
+  // cause — the reference the message would ask for is already there.
+  const unscoped = failurePath.filter(step => !referencesCheck(step.condition, id))
   const scoped = failurePath.filter(step => scopesTo(step.condition, id))
+  const miscompared = failurePath.filter(
+    step => referencesCheck(step.condition, id) && !scopesTo(step.condition, id),
+  )
   const foreign = scoped.filter(step => step.job !== host.name)
   const early = scoped.filter(step => step.job === host.name && step.index < checkIndex)
 
   return [
     ...(unscoped.length > 0 ? [unscopedProblem(unscoped)] : []),
+    ...(miscompared.length > 0 ? [miscomparedProblem(miscompared, id)] : []),
     ...(foreign.length > 0 ? [foreignJobProblem(foreign, id, host.name)] : []),
     ...(early.length > 0 ? [earlyStepProblem(early, id, checkIndex)] : []),
   ]

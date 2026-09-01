@@ -29,17 +29,21 @@ import {
 //     hook-specific,
 //   - dropping the `push: main` trigger, so drift on the base branch goes unseen,
 //   - dropping `concurrency`, so a superseded run keeps reporting a stale verdict,
-//   - `continue-on-error: true`, ANY `if:` on the job, ANY `if:` on the step that
-//     runs `format:check` (a `failure()` guard included — it is false on a normal
-//     PR, so the check is skipped and the job ends green), a step `if:` elsewhere
-//     that is not a SCOPED `failure()` guard, or a write-scoped token — each keeps
-//     the check green (or absent) while the context still reports,
+//   - `continue-on-error: true`, ANY `if:` on the job, ANY `needs:` on the job (the
+//     same neutralization with no condition written anywhere: a job whose dependency
+//     fails or is skipped never runs, and a skipped job's required check reads
+//     SUCCESSFUL), ANY `if:` on the step that runs `format:check` (a `failure()`
+//     guard included — it is false on a normal PR, so the check is skipped and the
+//     job ends green), a step `if:` elsewhere that is not a SCOPED `failure()` guard,
+//     or a write-scoped token — each keeps the check green (or absent) while the
+//     context still reports,
 //   - dropping the failure-path remedy, so a red check names the offending file
 //     and nothing a contributor can act on (AC1) — or widening ANY failure-path
-//     step past the check step's own outcome, so a broken `pnpm install` is
-//     annotated "not formatted", or placing a correctly-SPELLED scope where it
-//     cannot RESOLVE (a second job, or above the check step), so it is false on
-//     every run,
+//     step past the check step's own outcome, or naming that outcome without
+//     COMPARING it to `'failure'` (`== 'success'` is false exactly when the check
+//     failed), so a broken `pnpm install` is annotated "not formatted" or the remedy
+//     never fires at all, or placing a correctly-SPELLED scope where it cannot
+//     RESOLVE (a second job, or above the check step), so it is false on every run,
 //   - respelling a trigger as a FLOW mapping, which the block reader sees as an
 //     empty block and therefore as "no filter at all" — the spelling all four
 //     trigger holes above walk through untouched — or respelling a STEP the same
@@ -105,6 +109,29 @@ jobs:
         if: failure() && steps.format_check.outcome == 'failure'
         run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."
 `
+
+/**
+ * A mutation asserted to have HAPPENED, for every test that expects the guard to stay
+ * GREEN through it.
+ *
+ * A positive-path `.replace` that matches nothing passes vacuously: rename `id:
+ * format_check` in the workflow — an edit this guard permits, since `checkStepId` reads
+ * whatever id is there — and "accepts a quoted `id:`" silently re-runs the guard on the
+ * UNMUTATED file, still passes, and stops covering the `unquote` path that once made
+ * this guard RED on a correct workflow. Nothing goes red to say so.
+ *
+ * A NEGATIVE-path test cannot fail this way — an unmutated well-formed workflow is
+ * green, so `expect(ok).toBe(false)` catches the no-op replacement itself — which is why
+ * only the green ones route through here.
+ *
+ * Asserted as "the needle is still there" rather than `mutated !== source`, because one
+ * accepted spelling IS the shipped one (`uses: actions/checkout@v4` in the version
+ * table): that row replaces text with itself and must stay covered.
+ */
+function mutate(source: string, from: string | RegExp, to: string, label = String(from)): string {
+  expect(source, `the fixture no longer contains ${label}`).toMatch(from)
+  return source.replace(from, to)
+}
 
 describe('extractRunBlocks reads what the workflow actually executes (#413)', () => {
   it('collects an inline `run:` command', () => {
@@ -270,9 +297,11 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
 
   it('accepts a `types:` list that still covers opened and synchronize', () => {
     const r = checkFormatWorkflow(
-      WELL_FORMED.replace(
+      mutate(
+        WELL_FORMED,
         '  pull_request:\n    branches:',
         '  pull_request:\n    types: [opened, synchronize, reopened, ready_for_review]\n    branches:',
+        'the `pull_request` trigger block',
       ),
     )
     expect(r.ok, r.message).toBe(true)
@@ -315,7 +344,12 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
 
   it('accepts the flow spelling of the branch filter (`branches: [main]`)', () => {
     const r = checkFormatWorkflow(
-      WELL_FORMED.replace('  push:\n    branches:\n      - main', '  push:\n    branches: [main]'),
+      mutate(
+        WELL_FORMED,
+        '  push:\n    branches:\n      - main',
+        '  push:\n    branches: [main]',
+        'the block-style `push` branch filter',
+      ),
     )
     expect(r.ok, r.message).toBe(true)
   })
@@ -346,9 +380,11 @@ describe('the format workflow closes the trigger-shaped holes (#413)', () => {
   // on the base branch visible. Cancelling only PR runs keeps both properties.
   it('accepts a cancel-in-progress conditioned on the pull_request event', () => {
     const r = checkFormatWorkflow(
-      WELL_FORMED.replace(
+      mutate(
+        WELL_FORMED,
         'cancel-in-progress: true',
         "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        '`cancel-in-progress: true`',
       ),
     )
     expect(r.ok, r.message).toBe(true)
@@ -417,6 +453,52 @@ describe('the format job cannot be made advisory, skipped or privileged (#413)',
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('if:')
+  })
+
+  // `needs:` is the UNGUARDED spelling of the job `if:` above. A job whose dependency
+  // fails — or is itself skipped — never runs and is reported skipped, and on GitHub a
+  // skipped job reports its required check as SUCCESSFUL
+  // (github-implementation.md § Ordering). So once AC8 lists `format`, that context
+  // reads green and the merge goes through with the formatting check never having
+  // executed. Every other rule in this module stays green through it, exactly like the
+  // job-level `if:` it sits beside.
+  const PRECHECK = `  precheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Gate
+        run: exit 1
+`
+
+  const dependencies: [string, string][] = [
+    ['a scalar', '    needs: precheck\n'],
+    ['a flow sequence', '    needs: [precheck]\n'],
+    ['a block sequence', '    needs:\n      - precheck\n'],
+  ]
+
+  for (const [label, spelling] of dependencies) {
+    it(`fails when the job that runs the check is gated by \`needs:\` spelled as ${label}`, () => {
+      const r = checkFormatWorkflow(
+        `${WELL_FORMED.replace('jobs:\n', `jobs:\n${PRECHECK}`).replace(
+          '  format:\n    runs-on: ubuntu-latest\n',
+          `  format:\n    runs-on: ubuntu-latest\n${spelling}`,
+        )}`,
+      )
+      expect(r.ok, `${label}: ${r.message}`).toBe(false)
+      expect(r.message, label).toContain('needs:')
+    })
+  }
+
+  it('fails on `needs:` even with no failing job to depend on — the gating is the loss', () => {
+    const r = checkFormatWorkflow(
+      WELL_FORMED.replace(
+        '  format:\n    runs-on: ubuntu-latest\n',
+        '  format:\n    runs-on: ubuntu-latest\n    needs: setup\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('needs:')
   })
 
   // The worse half: the JOB runs on every PR, and only the one step that checks
@@ -544,7 +626,12 @@ describe('the format job cannot be made advisory, skipped or privileged (#413)',
   it('accepts the empty and read-all spellings of "no write scope"', () => {
     for (const spelling of ['permissions: {}', 'permissions: read-all']) {
       const r = checkFormatWorkflow(
-        WELL_FORMED.replace('    permissions:\n      contents: read', `    ${spelling}`),
+        mutate(
+          WELL_FORMED,
+          '    permissions:\n      contents: read',
+          `    ${spelling}`,
+          'the block-style `permissions:`',
+        ),
       )
       expect(r.ok, `${spelling}: ${r.message}`).toBe(true)
     }
@@ -610,13 +697,20 @@ describe('a failing format check tells the contributor what to run (#413)', () =
   // guard red on a CORRECT workflow, with a message describing a file that does
   // declare a usable id — and a false-positive gate is the kind that gets deleted.
   it('accepts a quoted `id:` on the check step', () => {
-    const r = checkFormatWorkflow(WELL_FORMED.replace('id: format_check', "id: 'format_check'"))
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, 'id: format_check', "id: 'format_check'", '`id: format_check`'),
+    )
     expect(r.ok, r.message).toBe(true)
   })
 
   it('accepts `conclusion` as well as `outcome` for the scoping', () => {
     const r = checkFormatWorkflow(
-      WELL_FORMED.replace('steps.format_check.outcome', 'steps.format_check.conclusion'),
+      mutate(
+        WELL_FORMED,
+        'steps.format_check.outcome',
+        'steps.format_check.conclusion',
+        '`steps.format_check.outcome`',
+      ),
     )
     expect(r.ok, r.message).toBe(true)
   })
@@ -632,9 +726,11 @@ describe('a failing format check tells the contributor what to run (#413)', () =
   // rule in play — and the checking-step spelling is asserted red just below.
   it('does not mistake an echoed remedy for a step that writes files', () => {
     const r = checkFormatWorkflow(
-      WELL_FORMED.replace(
+      mutate(
+        WELL_FORMED,
         '        run: pnpm install\n',
         '        run: pnpm install || { echo "Formatting failed. Run pnpm format and commit."; exit 1; }\n',
+        'the install step',
       ),
     )
     expect(r.ok, r.message).toBe(true)
@@ -703,7 +799,12 @@ describe('the format workflow runs the same command a developer runs (#413)', ()
 
   it('accepts `pnpm run format:check`, the one other spelling of the same invocation', () => {
     const r = checkFormatWorkflow(
-      WELL_FORMED.replace('run: pnpm format:check', 'run: pnpm run format:check'),
+      mutate(
+        WELL_FORMED,
+        'run: pnpm format:check',
+        'run: pnpm run format:check',
+        'the checking command',
+      ),
     )
     expect(r.ok, r.message).toBe(true)
   })
@@ -990,15 +1091,19 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
     // green — a step written as a block mapping, and a plain scalar item under a
     // trigger filter.
     it('leaves a block-mapping step and a scalar list item alone', () => {
-      const extraStep = WELL_FORMED.replace(
+      const extraStep = mutate(
+        WELL_FORMED,
         '      - name: Check formatting\n',
         '      - name: Say hello\n        run: echo hello\n      - name: Check formatting\n',
+        'the checking step',
       )
       expect(checkFormatWorkflow(extraStep).ok, checkFormatWorkflow(extraStep).message).toBe(true)
 
-      const twoBranches = WELL_FORMED.replace(
+      const twoBranches = mutate(
+        WELL_FORMED,
         '  push:\n    branches:\n      - main\n',
         "  push:\n    branches:\n      - main\n      - 'release'\n",
+        'the `push` branch filter',
       )
       expect(checkFormatWorkflow(twoBranches).ok, checkFormatWorkflow(twoBranches).message).toBe(
         true,
@@ -1009,7 +1114,8 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
     // expansion or a `[` test at the start of a line there must not read as an
     // unreadable sequence item. The body's own reader is `extractRunBlocks`.
     it('does not read a `run:` block scalar body as YAML structure', () => {
-      const shell = WELL_FORMED.replace(
+      const shell = mutate(
+        WELL_FORMED,
         '      - name: Install dependencies\n        run: pnpm install\n',
         `      - name: Install dependencies
         run: |
@@ -1018,6 +1124,7 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
           -
           pnpm install
 `,
+        'the install step',
       )
       expect(checkFormatWorkflow(shell).ok, checkFormatWorkflow(shell).message).toBe(true)
     })
@@ -1027,17 +1134,21 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
   // branch names and an inline `permissions:` map are both read correctly today, and
   // rejecting them would fail a correct workflow.
   it('leaves the flow spellings the guard does read correctly alone', () => {
-    const flowBranches = WELL_FORMED.replace(
+    const flowBranches = mutate(
+      WELL_FORMED,
       '  pull_request:\n    branches:\n      - main\n',
       '  pull_request:\n    branches: [main]\n',
+      'the `pull_request` branch filter',
     )
     expect(checkFormatWorkflow(flowBranches).ok, checkFormatWorkflow(flowBranches).message).toBe(
       true,
     )
 
-    const inlinePermissions = WELL_FORMED.replace(
+    const inlinePermissions = mutate(
+      WELL_FORMED,
       '    permissions:\n      contents: read\n',
       '    permissions: { contents: read }\n',
+      'the block-style `permissions:`',
     )
     expect(
       checkFormatWorkflow(inlinePermissions).ok,
@@ -1082,8 +1193,15 @@ describe('a step may only use an allow-listed action (#413)', () => {
       'actions/checkout@a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0',
       'ACTIONS/CHECKOUT@v4',
     ]) {
+      // One row here IS the shipped spelling, so this mutation is deliberately an
+      // identity for it — `mutate` asserts the NEEDLE, not that the text changed.
       const r = checkFormatWorkflow(
-        WELL_FORMED.replace('uses: actions/checkout@v4', `uses: ${action}`),
+        mutate(
+          WELL_FORMED,
+          'uses: actions/checkout@v4',
+          `uses: ${action}`,
+          '`uses: actions/checkout@v4`',
+        ),
       )
       expect(r.ok, `${action}: ${r.message}`).toBe(true)
     }
@@ -1121,9 +1239,11 @@ describe('a `#` inside quotes is not a comment (#413)', () => {
 
   it('still strips a real shell comment inside a block scalar', () => {
     const r = checkFormatWorkflow(
-      WELL_FORMED.replace(
+      mutate(
+        WELL_FORMED,
         '        run: pnpm install\n',
         '        run: |\n          pnpm install # prettier --write .\n',
+        'the install step',
       ),
     )
     expect(r.ok, r.message).toBe(true)
@@ -1157,7 +1277,9 @@ describe('the job that reports the `format` context is named (#413)', () => {
   })
 
   it('accepts the quoted spelling of the same job id', () => {
-    const r = checkFormatWorkflow(WELL_FORMED.replace('\n  format:\n', "\n  'format':\n"))
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, '\n  format:\n', "\n  'format':\n", 'the `format:` job header'),
+    )
     expect(r.ok, r.message).toBe(true)
   })
 
@@ -1197,7 +1319,8 @@ describe('the job that reports the `format` context is named (#413)', () => {
   // A second job beside a correctly-named host is not the loss — the context still
   // belongs to the job that checks.
   it('accepts an extra job beside a `format` host that runs the check', () => {
-    const extra = WELL_FORMED.replace(
+    const extra = mutate(
+      WELL_FORMED,
       '\n  format:\n',
       `
   notes:
@@ -1209,6 +1332,7 @@ describe('the job that reports the `format` context is named (#413)', () => {
         run: echo ok
   format:
 `,
+      'the `format:` job header',
     )
     expect(checkFormatWorkflow(extra).ok, checkFormatWorkflow(extra).message).toBe(true)
   })
@@ -1264,8 +1388,119 @@ ${REMEDY}`,
   })
 
   it('accepts two correctly-placed scoped remedies', () => {
-    const r = checkFormatWorkflow(WELL_FORMED.replace(REMEDY, REMEDY + REMEDY))
+    const r = checkFormatWorkflow(mutate(WELL_FORMED, REMEDY, REMEDY + REMEDY, 'the remedy step'))
     expect(r.ok, r.message).toBe(true)
+  })
+})
+
+// Naming `steps.<id>.outcome` and COMPARING it are two different things, and only the
+// second one scopes anything. `steps.<id>.outcome` holds one of four values — `success`,
+// `failure`, `cancelled`, `skipped` — so the reference is a substring of every condition
+// that reads it, including the ones that are false exactly when the check fails.
+//
+// The table below is that value domain, both operators, both operand orders and both
+// quote styles. The decisive row is `== 'success'`: a PR carries an unformatted file,
+// `Check formatting` fails, `failure()` is true — but `outcome` is `'failure'`, so the
+// remedy is SKIPPED on the one run that needed it and the contributor reads
+// `--list-different`'s bare filename with prettier's own "--write to fix" hint
+// suppressed. That is AC1's exact loss from a one-token edit.
+describe('a failure-path scope must resolve on the FAILURE path (#413)', () => {
+  const SCOPE = "steps.format_check.outcome == 'failure'"
+
+  const accepted: [string, string][] = [
+    ['the shipped spelling', "steps.format_check.outcome == 'failure'"],
+    ['`conclusion` instead of `outcome`', "steps.format_check.conclusion == 'failure'"],
+    ['double quotes around the value', 'steps.format_check.outcome == "failure"'],
+    ['no spaces around the operator', "steps.format_check.outcome=='failure'"],
+    ['extra spaces around the operator', "steps.format_check.outcome   ==   'failure'"],
+    ['the operands reversed', "'failure' == steps.format_check.outcome"],
+    [
+      'the whole condition wrapped in an expression',
+      "${{ failure() && steps.format_check.outcome == 'failure' }}",
+    ],
+  ]
+
+  for (const [label, condition] of accepted) {
+    it(`accepts ${label}`, () => {
+      // The wrapped row already carries its own `failure()`; the others are ANDed onto one.
+      const spelled = condition.startsWith('${{') ? condition : `failure() && ${condition}`
+      const r = checkFormatWorkflow(
+        mutate(WELL_FORMED, `failure() && ${SCOPE}`, spelled, 'the scoped remedy condition'),
+      )
+      expect(r.ok, `${label}: ${r.message}`).toBe(true)
+    })
+  }
+
+  // Every other value in the domain, both operators, plus the two shapes that name the
+  // context without comparing it at all. Each leaves the reference intact — the whole
+  // point: a substring test for `steps.<id>.outcome` reports all of them well-formed.
+  const rejected: [string, string, string][] = [
+    [
+      "== 'success' — false exactly when the check failed, so the remedy never fires on a red check",
+      "steps.format_check.outcome == 'success'",
+      'AC1',
+    ],
+    [
+      "== 'skipped' — fires only when the check never ran, i.e. on the broken `pnpm install`",
+      "steps.format_check.outcome == 'skipped'",
+      'wrong diagnosis',
+    ],
+    [
+      "== 'cancelled' — fires on a superseded run and on nothing else",
+      "steps.format_check.outcome == 'cancelled'",
+      'AC1',
+    ],
+    ["!= 'failure' — the scope inverted", "steps.format_check.outcome != 'failure'", 'AC1'],
+    [
+      "!= 'success' — true for `failure`, `skipped` AND `cancelled`, i.e. the unscoped remedy back",
+      "steps.format_check.outcome != 'success'",
+      'wrong diagnosis',
+    ],
+    [
+      "conclusion == 'success' — the same inversion on the other status field",
+      "steps.format_check.conclusion == 'success'",
+      'AC1',
+    ],
+    [
+      'a bare reference with no comparison, which is truthy for all four values',
+      'steps.format_check.outcome',
+      'no comparison',
+    ],
+    [
+      '`contains()` instead of the equality this allow-list accepts',
+      "contains(steps.format_check.outcome, 'failure')",
+      'not canonical',
+    ],
+  ]
+
+  for (const [label, condition] of rejected) {
+    it(`fails on ${label}`, () => {
+      const r = checkFormatWorkflow(
+        mutate(
+          WELL_FORMED,
+          `failure() && ${SCOPE}`,
+          `failure() && ${condition}`,
+          'the scoped remedy condition',
+        ),
+      )
+      expect(r.ok, `${condition}: ${r.message}`).toBe(false)
+      expect(r.message, condition).toContain("== 'failure'")
+    })
+  }
+
+  // The reference is still there, so the "not scoped at all" message would be the wrong
+  // cause to report: the author DID scope it, to the wrong value.
+  it('names the comparison, not the missing reference, when the value is wrong', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        `failure() && ${SCOPE}`,
+        "failure() && steps.format_check.outcome == 'success'",
+        'the scoped remedy condition',
+      ),
+    )
+    expect(r.message).toContain('compare it to')
+    expect(r.message).not.toContain('are not scoped to the formatting check')
   })
 })
 
@@ -1420,8 +1655,58 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
   // workflow must stay GREEN through it, or the guard fails a correct file.
   it('stays green on the shipped workflow when its `id:` is quoted', () => {
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
-    const r = checkFormatWorkflow(shipped.replace('id: format_check', "id: 'format_check'"))
+    const r = checkFormatWorkflow(
+      mutate(shipped, 'id: format_check', "id: 'format_check'", '`id: format_check`'),
+    )
     expect(r.ok, r.message).toBe(true)
+  })
+
+  // One token on the file this repo actually runs. `failure()` is still true when the
+  // formatting check fails, but `outcome` is `'failure'`, so `== 'success'` is FALSE and
+  // the remedy step is skipped on precisely the run that needed it: the contributor gets
+  // `--list-different`'s bare filename with prettier's own "--write to fix" hint
+  // suppressed, and nothing telling them what to run (AC1).
+  it('fires on the shipped workflow when the remedy scope compares against the wrong outcome', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    for (const value of ['success', 'skipped']) {
+      const r = checkFormatWorkflow(
+        mutate(
+          shipped,
+          "steps.format_check.outcome == 'failure'",
+          `steps.format_check.outcome == '${value}'`,
+          "the shipped remedy's scope",
+        ),
+      )
+      expect(r.ok, `${value}: ${r.message}`).toBe(false)
+      expect(r.message, value).toContain('compare it to')
+    }
+  })
+
+  // The reviewer's measured repro: a second job the `format` job depends on. `precheck`
+  // fails (or is itself skipped), `format` never runs and is reported skipped, and a
+  // skipped job reports its required check SUCCESSFUL — so once AC8 lists `format` the
+  // merge goes through with the formatting check never having executed.
+  it('fires on the shipped workflow when the format job is gated by `needs:`', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const gated = mutate(
+      shipped,
+      '  format:\n    runs-on: ubuntu-latest\n',
+      `  precheck:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Gate
+        run: exit 1
+  format:
+    needs: precheck
+    runs-on: ubuntu-latest
+`,
+      'the shipped `format` job header',
+    )
+    const r = checkFormatWorkflow(gated)
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('needs:')
   })
 
   // The negative branch filter, on the shipped file: one line under `pull_request`
