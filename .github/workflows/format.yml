@@ -79,10 +79,10 @@ name: Format
 on:
   pull_request:
     branches:
-    - main
+      - main
   push:
     branches:
-    - main
+      - main
   # Manual runs on an arbitrary ref. Re-running the job from the Actions UI only
   # replays the ref it already ran on; this is the escape hatch ci.yml already has.
   workflow_dispatch:
@@ -113,53 +113,45 @@ jobs:
       contents: read
     timeout-minutes: 10
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Expression probe (temporary)
-      env:
-        NEG_PAREN: ${{ !(github.event_name == 'pull_request') }}
-        AND_FALSE: ${{ github.event_name == 'pull_request' && false }}
-        OR_TRUE: ${{ github.event_name == 'pull_request' || true }}
-        EQ: ${{ github.event_name == 'pull_request' }}
-        PUSH_CONJ: ${{ github.event_name == 'push' }}
-      run: echo "NEG_PAREN=$NEG_PAREN AND_FALSE=$AND_FALSE OR_TRUE=$OR_TRUE EQ=$EQ PUSH_CONJ=$PUSH_CONJ"
-    - name: Install pnpm
-      uses: pnpm/action-setup@v4
-      with:
-        version: '10.15.0'
-    - name: Ensure pnpm is available (fallback)
-      run: |
-        if ! command -v pnpm >/dev/null 2>&1; then
-          echo "pnpm not found in PATH; attempting to enable via corepack"
-          corepack enable || true
-          corepack prepare pnpm@10.15.0 --activate || true
-        fi
-    # Pinned to the same major ci.yml and release.yml pin — see the note on
-    # ci.yml's `Setup Node.js` step. Raising this means raising those together.
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'pnpm'
-    - name: Install dependencies
-      run: pnpm install
-    # The identical script the pre-push hook and a developer run. It names the
-    # offending files and exits non-zero.
-    - name: Check formatting
-      id: format_check
-      run: pnpm format:check
-    # …but it does NOT name the remedy: `--list-different` prints the paths and
-    # suppresses prettier's own "Run Prettier with --write to fix" line. The
-    # contributor this workflow exists for (hooks not installed, or pushed with
-    # `--no-verify`) would otherwise read a bare filename and no instruction. The
-    # annotation surfaces on the PR's Checks tab, not only in the log.
-    #
-    # SCOPED to the check's own outcome, not a bare `if: failure()` — that is
-    # JOB-scoped and fires for ANY earlier failure. A `pnpm install` broken by a
-    # lockfile drift or a registry outage would otherwise be annotated "not
-    # formatted, run 'pnpm format'": the contributor runs it, nothing changes, and
-    # the real cause sits under a confident wrong diagnosis.
-    - name: Explain how to fix a formatting failure
-      if: failure() && steps.format_check.outcome == 'failure' && github.event_name == 'push'
-      run: |
-        echo "::error title=Formatting check failed::The files listed in the previous step are not formatted. Run 'pnpm format' locally, commit the result, and push again. CI never rewrites your branch."
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+      - name: Ensure pnpm is available (fallback)
+        run: |
+          if ! command -v pnpm >/dev/null 2>&1; then
+            echo "pnpm not found in PATH; attempting to enable via corepack"
+            corepack enable || true
+            corepack prepare pnpm@10.15.0 --activate || true
+          fi
+      # Pinned to the same major ci.yml and release.yml pin — see the note on
+      # ci.yml's `Setup Node.js` step. Raising this means raising those together.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      # The identical script the pre-push hook and a developer run. It names the
+      # offending files and exits non-zero.
+      - name: Check formatting
+        id: format_check
+        run: pnpm format:check
+      # …but it does NOT name the remedy: `--list-different` prints the paths and
+      # suppresses prettier's own "Run Prettier with --write to fix" line. The
+      # contributor this workflow exists for (hooks not installed, or pushed with
+      # `--no-verify`) would otherwise read a bare filename and no instruction. The
+      # annotation surfaces on the PR's Checks tab, not only in the log.
+      #
+      # SCOPED to the check's own outcome, not a bare `if: failure()` — that is
+      # JOB-scoped and fires for ANY earlier failure. A `pnpm install` broken by a
+      # lockfile drift or a registry outage would otherwise be annotated "not
+      # formatted, run 'pnpm format'": the contributor runs it, nothing changes, and
+      # the real cause sits under a confident wrong diagnosis.
+      - name: Explain how to fix a formatting failure
+        if: failure() && steps.format_check.outcome == 'failure'
+        run: |
+          echo "::error title=Formatting check failed::The files listed in the previous step are not formatted. Run 'pnpm format' locally, commit the result, and push again. CI never rewrites your branch."
