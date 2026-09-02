@@ -427,7 +427,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     })
     expect(result.message).toContain(`"${line} "`)
     expect(result.message).toContain(`"${line}"`)
-    expect(result.message).toContain('differ only in characters a terminal does not show')
+    expect(result.message).toContain('characters a terminal does not show')
     // The class caution names the BOM as one possible class; the dedicated BOM caution
     // (which asserts the file STARTS with one) must not fire on a trailing space.
     expect(result.message).not.toContain('starts with a byte-order mark')
@@ -444,7 +444,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 
     expect(result.report).toMatchObject({ missing: [line], extra: [` ${line}`] })
     expect(result.message).toContain(`" ${line}"`)
-    expect(result.message).toContain('differ only in characters a terminal does not show')
+    expect(result.message).toContain('characters a terminal does not show')
   })
 
   it('renders a NON-BREAKING-space look-alike pair escaped', async () => {
@@ -458,7 +458,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 
     expect(result.report).toMatchObject({ missing: [line], extra: [nbsp] })
     expect(result.message).toContain('Testing\\u00a0Guidelines')
-    expect(result.message).toContain('differ only in characters a terminal does not show')
+    expect(result.message).toContain('characters a terminal does not show')
   })
 
   it('renders a ZERO-WIDTH-space look-alike pair escaped', async () => {
@@ -473,7 +473,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
 
     expect(result.report).toMatchObject({ missing: [line], extra: [zw] })
     expect(result.message).toContain('How to \\u200bstart')
-    expect(result.message).toContain('differ only in characters a terminal does not show')
+    expect(result.message).toContain('characters a terminal does not show')
   })
 
   // The paired path: a VISIBLE difference is rendered raw. Quoting every line would
@@ -493,7 +493,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
       '- [Story Local Markers](.pair/knowledge/guidelines/collaboration/story-local-markers.md)'
     expect(result.message).toContain(`  ${line}\n`)
     expect(result.message).not.toContain(`"${line}"`)
-    expect(result.message).not.toContain('differ only in characters a terminal does not show')
+    expect(result.message).not.toContain('characters a terminal does not show')
     expect(result.message).not.toContain('starts with a byte-order mark')
   })
 
@@ -522,7 +522,227 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(result.message).toContain(`  ${real}\n`)
     expect(result.message).toContain(`"${prd} "`)
     expect(result.message).toContain('"\\ufeff# pair"')
-    expect(result.message).toContain('2 missing/extra pair(s) differ only in characters')
+    expect(result.message).toContain('4 line(s) above carry characters a terminal does not show')
+  })
+
+  // ---- Round 7: the invisible-character class is Unicode's, not a hand list ------------
+  //
+  // `ZERO_WIDTH` was a hand-picked list (BOM, ZWSP..ZWJ, WJ, SHY, LS/PS) and missed the
+  // bidi format characters — the invisible bytes a browser or Word paste most often
+  // carries (U+200E LRM, U+200F RLM, U+061C ALM, the U+2066–2069 isolates), plus the
+  // invisible operators U+2061–2064, U+180E and the variation selectors. Probe at the
+  // reviewed head: `compareIndex('- [A](a.md)\n', '- [A\u200E](a.md)\n')` rendered BOTH
+  // lines raw — two identical `- [A](a.md)` and no caution, the exact shape the
+  // look-alike rendering exists to prevent. The class is now `\p{Cf}` + `\p{Zl}` +
+  // `\p{Zp}` + `\p{Variation_Selector}` (Node 24 Unicode tables: 432 code points), so
+  // every row below is one member of the authoritative class, not a new hand entry.
+  it.each([
+    ['U+200E LEFT-TO-RIGHT MARK', '\u200E'],
+    ['U+200F RIGHT-TO-LEFT MARK', '\u200F'],
+    ['U+061C ARABIC LETTER MARK', '\u061C'],
+    ['U+2066 LEFT-TO-RIGHT ISOLATE', '\u2066'],
+    ['U+2069 POP DIRECTIONAL ISOLATE', '\u2069'],
+    ['U+202E RIGHT-TO-LEFT OVERRIDE', '\u202E'],
+    ['U+180E MONGOLIAN VOWEL SEPARATOR', '\u180E'],
+    ['U+2061 FUNCTION APPLICATION', '\u2061'],
+    ['U+2064 INVISIBLE PLUS', '\u2064'],
+    ['U+FE0F VARIATION SELECTOR-16', '\uFE0F'],
+    ['U+2028 LINE SEPARATOR', '\u2028'],
+    ['U+00AD SOFT HYPHEN', '\u00AD'],
+    ['U+FEFF BOM mid-line', '\uFEFF'],
+  ])('renders a %s look-alike pair escaped', (_name, char) => {
+    const line = '- [A](a.md)'
+    const spoiled = `- [A${char}](a.md)`
+    const hex = `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
+
+    const report = compareIndex(`${line}\n`, `${spoiled}\n`)
+    const message = formatReport(report, '/repo')
+
+    expect(report).toMatchObject({ kind: 'drift', missing: [line], extra: [spoiled] })
+    expect(message).toContain(`  "${line}"\n`)
+    expect(message).toContain(`  "- [A${hex}](a.md)"\n`)
+    expect(message).not.toContain(`  ${spoiled}\n`)
+    expect(message).toContain('characters a terminal does not show')
+  })
+
+  // Above the BMP the format class continues (the TAG characters U+E0001/E0020–E007F
+  // that spell emoji flag sequences, the supplementary variation selectors). One code
+  // point is two UTF-16 units there, so a `charCodeAt(0)` escape would print the lone
+  // high surrogate. Spelled `\u{XXXXX}` — the form JavaScript itself reads back.
+  it.each([
+    ['U+E0001 LANGUAGE TAG', '\u{E0001}', 'e0001'],
+    ['U+E007F CANCEL TAG', '\u{E007F}', 'e007f'],
+    ['U+E0100 VARIATION SELECTOR-17', '\u{E0100}', 'e0100'],
+  ])('renders an astral %s look-alike pair escaped as \\u{XXXXX}', (_name, char, hex) => {
+    const line = '- [A](a.md)'
+    const spoiled = `- [A${char}](a.md)`
+
+    const message = formatReport(compareIndex(`${line}\n`, `${spoiled}\n`), '/repo')
+
+    expect(message).toContain(`  "- [A\\u{${hex}}](a.md)"\n`)
+    expect(message).toContain(`  "${line}"\n`)
+    expect(message).toContain('characters a terminal does not show')
+  })
+
+  // The paired negative: an astral character that is VISIBLE (an emoji base with no
+  // selector) is a real difference and stays raw — `\p{Cf}` must not swallow it.
+  it('renders a visibly different astral character raw', () => {
+    const message = formatReport(compareIndex('- [A](a.md)\n', '- [A\u{1F680}](a.md)\n'), '/repo')
+
+    expect(message).toContain('  - [A\u{1F680}](a.md)\n')
+    expect(message).not.toContain('"- [A')
+    expect(message).not.toContain('characters a terminal does not show')
+  })
+
+  // The reviewer's row, through the real pipeline: a bidi mark pasted into a tracked
+  // entry of a fixture tree.
+  it('renders a LEFT-TO-RIGHT-MARK look-alike pair escaped on a real tree', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const line = '- [How to start](.pair/knowledge/how-to/01-how-to-start.md)'
+    const lrm = line.replace('How to start', 'How to start\u200E')
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, lrm), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ missing: [line], extra: [lrm] })
+    expect(result.message).toContain('How to start\\u200e')
+    expect(result.message).toContain(`  "${line}"\n`)
+    expect(result.message).toContain('characters a terminal does not show')
+  })
+
+  // ---- Round 7: an UNPAIRED invisible line is escaped too ----------------------------
+  //
+  // Only pairs were escaped. A tracked line consisting of a lone U+200B has no
+  // counterpart (it is not White_Space, so `contentLines` keeps it), and rendered raw it
+  // printed `1 extra line(s):` followed by an apparently blank line — content the
+  // reader cannot see, with no caution. Any line that CARRIES an invisible character
+  // is now escaped, paired or not.
+  it('escapes an unpaired extra line that consists only of a zero-width space', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8') + '\u200B\n', 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ kind: 'drift', missing: [], extra: ['\u200B'] })
+    expect(result.message).toContain('1 extra line(s):\n  "\\u200b"\n')
+    expect(result.message).not.toContain('\n  \u200B\n')
+    expect(result.message).toContain('1 line(s) above carry characters a terminal does not show')
+  })
+
+  it('escapes an unpaired extra line that carries a non-breaking space next to its clean twin', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const line = '- [Testing Guidelines](.pair/knowledge/guidelines/testing/README.md)'
+    const nbsp = line.replace('Testing Guidelines', 'Testing\u00A0Guidelines')
+    // The clean line stays, so the NBSP line is EXTRA with nothing missing to pair with.
+    writeFileSync(
+      tracked,
+      readFileSync(tracked, 'utf-8').replace(line, `${line}\n${nbsp}`),
+      'utf-8',
+    )
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ missing: [], extra: [nbsp] })
+    expect(result.message).toContain('Testing\\u00a0Guidelines')
+    expect(result.message).not.toContain(`  ${nbsp}\n`)
+    expect(result.message).toContain('1 line(s) above carry characters a terminal does not show')
+  })
+
+  // The paired negative for the unpaired rule: an unpaired line with NO invisible
+  // character — the common whole-entry delta — is still raw (already asserted by the
+  // "visibly different line raw" row above; restated here on the multi-line shape).
+  it('leaves an unpaired plain extra line raw when another line is escaped', () => {
+    const message = formatReport(
+      compareIndex('- [A](a.md)\n', '- [A](a.md) \n- [B](b.md)\n'),
+      '/repo',
+    )
+
+    expect(message).toContain('  "- [A](a.md) "\n')
+    expect(message).toContain('  - [B](b.md)\n')
+    expect(message).not.toContain('"- [B](b.md)"')
+  })
+
+  // ---- Round 7: the caution counts the quoted LINES ------------------------------------
+  //
+  // It counted DISTINCT visible forms: one missing `- [A](a.md)` against two extra
+  // variants (`- [A](a.md) `, `   - [A](a.md)`) printed three quoted lines under a
+  // caution that said `1 missing/extra pair(s)`.
+  it('counts every quoted line in the caution, not the distinct visible forms', () => {
+    const message = formatReport(
+      compareIndex('- [A](a.md)\n', '- [A](a.md) \n   - [A](a.md)\n'),
+      '/repo',
+    )
+
+    expect(message).toContain('1 missing line(s):\n  "- [A](a.md)"\n')
+    expect(message).toContain(
+      '2 extra line(s):\n  "- [A](a.md) "\n  "\\u0020\\u0020\\u0020- [A](a.md)"\n',
+    )
+    expect(message).toContain('3 line(s) above carry characters a terminal does not show')
+  })
+
+  // ---- Round 7: a run of spaces is in the class -----------------------------------------
+  //
+  // `visibleForm` folded each space-like to ONE space but kept runs, so `- [A  B](a.md)`
+  // against `- [A B](a.md)` was not a look-alike and printed raw. A doubled space is
+  // technically visible (a wider gap) and just as easy to miss in a 50-line list, so
+  // runs collapse in the KEY — and, because quotes alone would not show the width, a
+  // run of two or more spaces is spelled `\u0020\u0020` in the RENDERING.
+  it('renders a doubled-space look-alike pair escaped, with the run spelled out', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const line = '- [How to start](.pair/knowledge/how-to/01-how-to-start.md)'
+    const doubled = line.replace('How to start', 'How to  start')
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, doubled), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ missing: [line], extra: [doubled] })
+    expect(result.message).toContain(
+      '"- [How to\\u0020\\u0020start](.pair/knowledge/how-to/01-how-to-start.md)"',
+    )
+    expect(result.message).toContain(`  "${line}"\n`)
+    expect(result.message).toContain('characters a terminal does not show')
+  })
+
+  // A single interior space is never touched: it is the ordinary word separator and
+  // spelling it out would quote-and-escape every entry of a plain look-alike pair.
+  it('keeps single spaces literal inside an escaped line', () => {
+    const message = formatReport(compareIndex('- [A B](a.md)\n', '- [A B](a.md) \n'), '/repo')
+
+    expect(message).toContain('  "- [A B](a.md) "\n')
+    expect(message).not.toContain('A\\u0020B')
+  })
+
+  // ---- Round 7: one space-like class, used by KEY and RENDERING alike ------------------
+  //
+  // The class was written twice — `SPACE_LIKE` (with `\t`) and an inline copy in
+  // `escapeInvisible` (without) — so a code point added to one list and not the other
+  // would make a pair DETECTED (key folds it) but rendered UNESCAPED (still two identical
+  // lines). Every member is asserted on both sides here; the tab shows as `\t` because
+  // `JSON.stringify` already spells it.
+  it.each([
+    ['U+00A0 NO-BREAK SPACE', '\u00A0', '\\u00a0'],
+    ['U+2000 EN QUAD', '\u2000', '\\u2000'],
+    ['U+2009 THIN SPACE', '\u2009', '\\u2009'],
+    ['U+200A HAIR SPACE', '\u200A', '\\u200a'],
+    ['U+202F NARROW NO-BREAK SPACE', '\u202F', '\\u202f'],
+    ['U+205F MEDIUM MATHEMATICAL SPACE', '\u205F', '\\u205f'],
+    ['U+3000 IDEOGRAPHIC SPACE', '\u3000', '\\u3000'],
+    ['U+0009 TAB', '\t', '\\t'],
+  ])('detects AND escapes a %s look-alike pair', (_name, char, escaped) => {
+    const line = '- [A B](a.md)'
+    const spoiled = `- [A${char}B](a.md)`
+
+    const report = compareIndex(`${line}\n`, `${spoiled}\n`)
+    const message = formatReport(report, '/repo')
+
+    expect(report).toMatchObject({ missing: [line], extra: [spoiled] })
+    expect(message).toContain(`  "- [A${escaped}B](a.md)"\n`)
+    expect(message).toContain(`  "${line}"\n`)
+    expect(message).toContain('2 line(s) above carry characters a terminal does not show')
   })
 
   // Both editor-class problems at once: the CR caution owns the precondition (git puts

@@ -227,40 +227,62 @@ function hasIndexableSection(generated: string): boolean {
 const BYTE_ORDER_MARK = '\uFEFF'
 
 /**
- * Characters a terminal renders as NOTHING: the BOM, the zero-width family, the soft
- * hyphen, the two Unicode line/paragraph separators. `JSON.stringify` leaves every one
- * of them unescaped, so they are escaped by hand in `escapeInvisible`.
+ * Characters a terminal renders as NOTHING, named by their Unicode class rather than
+ * listed by hand: `Cf` (format — the BOM, the zero-width family, the soft hyphen, the
+ * bidi marks/embeddings/isolates U+200E-F, U+202A-E, U+2066-9, U+061C, the invisible
+ * operators U+2061-4, U+180E, the tag characters above the BMP), `Zl`/`Zp` (the line
+ * and paragraph separators) and the variation selectors (U+FE00-F, U+E0100-EF — `Mn`,
+ * not `Cf`, and just as invisible next to the base they select). A hand list had
+ * missed the bidi marks, the invisible bytes a browser or Word paste most often
+ * carries. `JSON.stringify` leaves every one of these unescaped, so they are escaped by
+ * hand in `escapeInvisible`.
  */
-const ZERO_WIDTH = /[\u00AD\u200B-\u200D\u2060\u2028\u2029\uFEFF]/g
+const ZERO_WIDTH_CLASS = '\\p{Cf}\\p{Zl}\\p{Zp}\\p{Variation_Selector}'
 
 /**
  * Characters a terminal renders as AN ORDINARY SPACE: NBSP (what a word processor or
- * an HTML copy pastes), the fixed-width spaces, the narrow/medium/ideographic ones. A
- * tab is here too — `JSON.stringify` already shows it as `\t`, but as a KEY it must
- * count as a space so that `a\tb` pairs with `a b`.
+ * an HTML copy pastes), the fixed-width spaces, the narrow/medium/ideographic ones. ONE
+ * definition, consumed by both the key (`SPACE_LIKE`, where a tab must count as a space
+ * so that `a\tb` pairs with `a b`) and the rendering (`SPACE_LIKE_ESCAPED`, where the
+ * tab is left to `JSON.stringify`, which already spells it `\t`) — two hand-written
+ * copies of the class would let a code point be DETECTED but printed unescaped.
  */
-const SPACE_LIKE = /[\t\u00A0\u2000-\u200A\u202F\u205F\u3000]/g
+const SPACE_LIKE_CLASS = '\\u00A0\\u2000-\\u200A\\u202F\\u205F\\u3000'
+
+const ZERO_WIDTH = new RegExp(`[${ZERO_WIDTH_CLASS}]`, 'gu')
+const SPACE_LIKE = new RegExp(`[\\t${SPACE_LIKE_CLASS}]`, 'gu')
+const SPACE_LIKE_ESCAPED = new RegExp(`[${SPACE_LIKE_CLASS}]`, 'gu')
+/** Any character of either class — the test for "this line carries something invisible". */
+const INVISIBLE = new RegExp(`[${ZERO_WIDTH_CLASS}\\t${SPACE_LIKE_CLASS}]`, 'u')
 
 /**
  * What a line LOOKS like on a terminal: zero-width characters gone, space-likes
- * folded to a space, leading/trailing whitespace dropped. Two lines with the same
- * visible form are a "look-alike pair" — listed once as missing and once as extra,
- * they would print as two identical lines, which is the one shape of report AC-2's
- * "the fix is obvious without a manual diff" cannot survive.
+ * folded to a space, runs of spaces to one (a doubled space is a wider gap, which in a
+ * 50-line list reads as no gap), leading/trailing whitespace dropped. Two lines with
+ * the same visible form are a "look-alike pair" — listed once as missing and once as
+ * extra, they would print as two identical lines, which is the one shape of report
+ * AC-2's "the fix is obvious without a manual diff" cannot survive.
  */
 function visibleForm(line: string): string {
-  return line.replace(ZERO_WIDTH, '').replace(SPACE_LIKE, ' ').trim()
+  return line.replace(ZERO_WIDTH, '').replace(SPACE_LIKE, ' ').replace(/ {2,}/g, ' ').trim()
 }
 
 /**
- * The line quoted, with every invisible character spelled as `\uXXXX`. The quotes make
- * leading/trailing whitespace visible; the escapes make the rest visible.
+ * The line quoted, with every invisible character spelled as `\uXXXX` (`\u{XXXXX}`
+ * above the BMP, where one code point is two UTF-16 units and `charCodeAt` would print
+ * a lone surrogate). The quotes make leading/trailing whitespace visible; the escapes
+ * make the rest visible. A run of two or more plain spaces is spelled out too — the
+ * quotes alone cannot show its width — while a single space stays the word separator.
  */
 function escapeInvisible(line: string): string {
-  const hex = (c: string) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  const hex = (c: string) => {
+    const codePoint = (c.codePointAt(0) ?? 0).toString(16)
+    return codePoint.length > 4 ? `\\u{${codePoint}}` : `\\u${codePoint.padStart(4, '0')}`
+  }
   return JSON.stringify(line)
     .replace(ZERO_WIDTH, hex)
-    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, hex)
+    .replace(SPACE_LIKE_ESCAPED, hex)
+    .replace(/ {2,}/g, run => '\\u0020'.repeat(run.length))
 }
 
 /** The visible forms that occur on BOTH sides — each one is a look-alike pair. */
@@ -270,25 +292,36 @@ function lookAlikeForms(missing: string[], extra: string[]): Set<string> {
 }
 
 /**
- * A look-alike line is rendered escaped, every other line raw: quoting the common
- * case (a whole missing entry) would make it harder to read for no gain.
+ * A line is rendered escaped when it is one side of a look-alike pair OR carries an
+ * invisible character on its own. The second rule covers the UNPAIRED case: a tracked
+ * line that is a lone U+200B has no counterpart (not White_Space, so `contentLines`
+ * keeps it) and printed raw it is a heading followed by an apparently blank line.
+ * Every other line is raw: quoting the common case (a whole missing entry) would make
+ * it harder to read for no gain.
  */
+function needsEscaping(line: string, lookAlikes: Set<string>): boolean {
+  return lookAlikes.has(visibleForm(line)) || INVISIBLE.test(line)
+}
+
 function renderLines(label: string, lines: string[], lookAlikes: Set<string>): string {
   const header = `${lines.length} ${label} line(s):`
-  const rendered = lines.map(l => `  ${lookAlikes.has(visibleForm(l)) ? escapeInvisible(l) : l}`)
+  const rendered = lines.map(l => `  ${needsEscaping(l, lookAlikes) ? escapeInvisible(l) : l}`)
   return lines.length === 0 ? header : `${header}\n${rendered.join('\n')}`
 }
 
 /**
- * Printed once per report when at least one look-alike pair exists: it names the class
- * of problem (the pair above is not a typo the reader failed to spot) and how the pair
- * was rendered, so `"\ufeff# pair"` and `"- [PRD](...) "` read as what they are.
+ * Printed once per report when at least one line was escaped: it names the class of
+ * problem (the lines above are not a typo the reader failed to spot) and how they were
+ * rendered, so `"\ufeff# pair"` and `"- [PRD](...) "` read as what they are. The count
+ * is the number of QUOTED LINES — what the reader can check against the lists — not
+ * the number of distinct visible forms (one missing line against two extra variants is
+ * three quoted lines, not "1 pair").
  */
-function invisibleDifferenceCaution(pairCount: number): string {
+function invisibleDifferenceCaution(escapedLineCount: number): string {
   return (
-    `⚠ ${pairCount} missing/extra pair(s) differ only in characters a terminal does not show —\n` +
-    `  a byte-order mark, trailing or leading whitespace, a non-breaking or zero-width\n` +
-    `  space. Those lines are printed above in quotes, with the invisible characters\n` +
+    `⚠ ${escapedLineCount} line(s) above carry characters a terminal does not show — a\n` +
+    `  byte-order mark, a doubled, trailing or leading space, a non-breaking, zero-width\n` +
+    `  or bidi format character. They are printed in quotes, with those characters\n` +
     `  escaped as \\uXXXX, so the difference is visible.`
   )
 }
@@ -418,7 +451,10 @@ function formatDrift(
     renderLines('extra', report.extra, lookAlikes) +
       `\n  (the tracked file has these; the generator does not)`,
   )
-  if (lookAlikes.size > 0) parts.push(invisibleDifferenceCaution(lookAlikes.size))
+  const escapedLineCount = [...report.missing, ...report.extra].filter(l =>
+    needsEscaping(l, lookAlikes),
+  ).length
+  if (escapedLineCount > 0) parts.push(invisibleDifferenceCaution(escapedLineCount))
   if (report.trackedCarriesBom) parts.push(byteOrderMarkCaution())
 
   // An empty delta on an LF file leaves order/whitespace as the only explanation. On a
