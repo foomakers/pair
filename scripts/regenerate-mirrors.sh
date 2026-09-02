@@ -26,6 +26,12 @@
 # after they had sat drifted on a green `main`. So in that region drift accumulates
 # undetected until whichever run of this writer comes next, and lands there.
 #
+# The writer also reads the WHOLE target tree, untracked files included: under a
+# `behavior: "mirror"` registry a file only the target has is DELETED (an untracked
+# `.pair/knowledge/wip-draft.md` does not survive the run), and under the `add`
+# registry it is kept but INDEXED into `.pair/llms.txt`. Stash such files before
+# running (`git stash push -u -- <paths>`); `/pair-capability-publish-pr` HALTs on them.
+#
 # Two roots, and they are not the same thing:
 #   TOOLCHAIN_ROOT — where this script and the CLI that does the work live.
 #   TARGET_ROOT    — the git working tree being realigned (derived from the cwd).

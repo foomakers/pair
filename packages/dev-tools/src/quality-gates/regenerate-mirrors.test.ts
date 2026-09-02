@@ -720,6 +720,285 @@ describe('regenerate-mirrors.sh — the local, deterministic mirror remedy (#419
     SCRIPT_RUN_TIMEOUT_MS,
   )
 
+  it(
+    'deletes an uncommitted file under a mirror registry — nothing to stage, only the `-w` blob survives',
+    () => {
+      // Round-6 finding (Major), executed against the real script. The `knowledge` registry is
+      // `behavior: "mirror"` (apps/pair-cli/config.json): the target is made EQUAL to the dataset,
+      // so a file only the target has is REMOVED — including a contributor's draft that was never
+      // in the dataset. Two shapes HEAD does not know, both destroyed by the run:
+      //   `?? .pair/knowledge/wip-draft.md`     — untracked: entry DISAPPEARS after the run;
+      //   `A  .pair/knowledge/staged-draft.md`  — staged-new: entry becomes `AD`.
+      // Under step 4 as first written both are "entry changed ⇒ in the set", and the documented
+      // next step is fatal: `git add wip-draft.md` -> `fatal: pathspec ... did not match any
+      // files`, exit 128; `git add staged-draft.md` exits 0 (it stages the REMOVAL) and then the
+      // pathspec commit is `error: pathspec ... did not match any file(s) known to git`, exit 1,
+      // taking every genuine regeneration in the same set down with it. CONCRETE LOSS: Phase 1
+      // aborts AFTER the destructive run — the regenerated mirrors sit uncommitted, the branch
+      // pushes stale and its own conformance job goes red — and the draft is gone with NO report
+      // row, because `overwrote uncommitted changes in:` fires only on a digest that MOVED, never
+      // on an entry that vanished. The fix: such paths leave the stageable set and are named as
+      // `removed untracked: <path> (recover: git cat-file -p <sha> > <path>)`.
+      tmp = makeFixture()
+      write(join(tmp, '.pair/knowledge/index.md'), '# pre-existing install\n')
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'converged'])
+
+      const WIP = '.pair/knowledge/wip-draft.md'
+      const STAGED = '.pair/knowledge/staged-draft.md'
+      const CREATED = '.pair/knowledge/new-guide.md'
+      const WIP_CONTENT = '# my wip draft\n'
+      const STAGED_CONTENT = '# my staged draft\n'
+      // One genuine regeneration in the same run, so the set is MIXED: the recipe has to land
+      // this one while leaving the two removed paths out of `git add` and the pathspec.
+      write(join(tmp, 'packages/knowledge-hub/dataset/.pair/knowledge/new-guide.md'), NEW_GUIDE)
+      git(tmp, ['add', 'packages/knowledge-hub/dataset'])
+      git(tmp, ['commit', '-q', '-m', 'a new dataset file'])
+      write(join(tmp, WIP), WIP_CONTENT)
+      write(join(tmp, STAGED), STAGED_CONTENT)
+      git(tmp, ['add', STAGED])
+
+      const before = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: true,
+        nulSeparated: true,
+      })
+      expect(parsePorcelainZ(before.entries)).toEqual(
+        expect.arrayContaining([
+          { xy: '??', path: WIP },
+          { xy: 'A ', path: STAGED },
+        ]),
+      )
+      // Both have a file on disk before the run, so both are digested — with `-w`.
+      expect(before.digests.has(WIP)).toBe(true)
+      expect(before.digests.has(STAGED)).toBe(true)
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+
+      // THE EFFECT, measured: the mirror registry removed what the dataset does not ship.
+      expect(existsSync(join(tmp, WIP))).toBe(false)
+      expect(existsSync(join(tmp, STAGED))).toBe(false)
+      const afterEntries = parsePorcelainZ(
+        git(tmp, ['status', '--porcelain', '-z', '--untracked-files=all']),
+      )
+      expect(afterEntries.find(entry => entry.path === WIP)).toBeUndefined()
+      expect(afterEntries).toContainEqual({ xy: 'AD', path: STAGED })
+      expect(afterEntries).toContainEqual({ xy: '??', path: CREATED })
+
+      // THE PRE-FIX RECIPE, measured: both removed paths are in the set, and staging them is fatal.
+      const MSG = 'chore: regenerate mirrors from local dataset'
+      const head = git(tmp, ['rev-parse', 'HEAD']).trim()
+      const addWip = tryGit(tmp, ['add', WIP])
+      expect(addWip.status).toBe(128)
+      expect(addWip.stderr).toContain(`fatal: pathspec '${WIP}' did not match any files`)
+      // The staged-new shape is worse: `git add` SUCCEEDS (it stages the removal, dropping the
+      // index's only copy), and the failure moves to the commit — which aborts whole.
+      expect(tryGit(tmp, ['add', STAGED, CREATED]).status).toBe(0)
+      const refused = tryGit(tmp, ['commit', '-m', MSG, '--', STAGED, CREATED])
+      expect(refused.status).toBe(1)
+      expect(refused.stderr).toContain(
+        `pathspec '${STAGED}' did not match any file(s) known to git`,
+      )
+      expect(git(tmp, ['rev-parse', 'HEAD']).trim()).toBe(head)
+
+      // THE DOCUMENTED RECIPE: the removed paths are not in `git add` and not in the pathspec.
+      // They are reported instead, and the genuine regeneration lands.
+      git(tmp, ['add', CREATED])
+      expect(tryGit(tmp, ['diff', '--cached', '--quiet', '--', CREATED]).status).toBe(1)
+      git(tmp, ['commit', '-q', '-m', MSG, '--', CREATED])
+      expect(
+        git(tmp, ['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean),
+      ).toEqual([CREATED])
+
+      // The `recover:` recipe, applied as documented: the blob is the ONLY copy, and it is enough.
+      for (const [rel, content] of [
+        [WIP, WIP_CONTENT],
+        [STAGED, STAGED_CONTENT],
+      ] as const) {
+        const sha = before.digests.get(rel)
+        expect(sha).toBeDefined()
+        expect(git(tmp, ['cat-file', '-p', sha ?? ''])).toBe(content)
+        writeFileSync(join(tmp, rel), git(tmp, ['cat-file', '-p', sha ?? '']))
+        expect(readFileSync(join(tmp, rel), 'utf-8')).toBe(content)
+      }
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'a non-empty set whose cached diff is empty is a no-op, never a failed commit',
+    () => {
+      // Round-6 finding (Minor), executed. Three shapes where the run rewrites a path whose
+      // dataset render EQUALS HEAD — so after `git add <path>` the index equals HEAD and there is
+      // nothing to commit, while the porcelain entry DID move (so the path is in the set):
+      //   `M  a.md` staged hand-edit    -> run rewrites worktree -> `MM a.md`
+      //   `D  b.md` staged deletion     -> run recreates          -> `D  b.md` + `?? b.md`
+      //   ` M c.md` unstaged hand-edit  -> run rewrites worktree -> entry GONE
+      // MEASURED: `git add a b c` exits 0, `git diff --cached --quiet -- a b c` exits 0 (empty),
+      // and `git commit -m … -- a b c` is `nothing to commit, working tree clean`, exit 1 — a
+      // step with no branch for it aborts Phase 1 mid-way, and (a)/(c)'s hand-edits are gone from
+      // index and disk with no report row, because they entered the set via ENTRY change, not via
+      // a digest that moved on an unchanged entry. The documented recipe checks the cached diff
+      // after staging: empty ⇒ no commit, no `Mirrors:` row — but every path whose before digest
+      // differs from its after content is STILL named on the recover row.
+      tmp = makeFixture()
+      const dataset = join(tmp, 'packages/knowledge-hub/dataset')
+      const A = '.pair/knowledge/a.md'
+      const B = '.pair/knowledge/b.md'
+      const C = '.pair/knowledge/c.md'
+      const D = '.pair/knowledge/d.md'
+      for (const rel of [A, B, C]) write(join(dataset, rel), `# ${rel}\n`)
+      write(join(tmp, '.pair/knowledge/index.md'), '# pre-existing install\n')
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'converged — every render equals HEAD'])
+
+      const A_EDIT = '# staged hand-edit\n'
+      const C_EDIT = '# unstaged hand-edit\n'
+      writeFileSync(join(tmp, A), A_EDIT)
+      git(tmp, ['add', A])
+      git(tmp, ['rm', '-q', B])
+      writeFileSync(join(tmp, C), C_EDIT)
+
+      const before = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: true,
+        nulSeparated: true,
+      })
+      expect(parsePorcelainZ(before.entries)).toEqual(
+        expect.arrayContaining([
+          { xy: 'M ', path: A },
+          { xy: 'D ', path: B },
+          { xy: ' M', path: C },
+        ]),
+      )
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+
+      const afterEntries = parsePorcelainZ(
+        git(tmp, ['status', '--porcelain', '-z', '--untracked-files=all']),
+      )
+      expect(afterEntries).toContainEqual({ xy: 'MM', path: A })
+      expect(afterEntries).toContainEqual({ xy: 'D ', path: B })
+      expect(afterEntries).toContainEqual({ xy: '??', path: B })
+      expect(afterEntries.find(entry => entry.path === C)).toBeUndefined()
+
+      // THE PRE-FIX RECIPE, measured: stage the set, commit by pathspec -> exit 1, HEAD unmoved.
+      const MSG = 'chore: regenerate mirrors from local dataset'
+      const head = git(tmp, ['rev-parse', 'HEAD']).trim()
+      expect(tryGit(tmp, ['add', A, B, C]).status).toBe(0)
+      expect(tryGit(tmp, ['diff', '--cached', '--quiet', '--', A, B, C]).status).toBe(0)
+      const refused = tryGit(tmp, ['commit', '-m', MSG, '--', A, B, C])
+      expect(refused.status).toBe(1)
+      expect(refused.stdout).toContain('nothing to commit')
+      expect(git(tmp, ['rev-parse', 'HEAD']).trim()).toBe(head)
+
+      // The hand-edits are gone from disk AND index — the `-w` blob is the only copy left, and the
+      // recover row has to be emitted from the digest comparison, not from the entry comparison.
+      const after = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: false,
+        nulSeparated: true,
+      })
+      expect(git(tmp, ['hash-object', A]).trim()).not.toBe(before.digests.get(A))
+      expect(git(tmp, ['hash-object', C]).trim()).not.toBe(before.digests.get(C))
+      expect(after.digests.size).toBe(0) // the tree is clean: nothing dirty is left to digest
+      expect(git(tmp, ['cat-file', '-p', before.digests.get(A) ?? ''])).toBe(A_EDIT)
+      expect(git(tmp, ['cat-file', '-p', before.digests.get(C) ?? ''])).toBe(C_EDIT)
+      expect(before.digests.has(B)).toBe(false) // a deletion has no digest by construction
+
+      // The MIXED set: the same three no-op paths plus one genuine regeneration. The cached diff
+      // over the whole set is non-empty, the pathspec commit succeeds, and its file list is the
+      // CACHED list — not the set — which is what the Verify has to compare against.
+      write(join(dataset, D), `# ${D}\n`)
+      git(tmp, ['add', 'packages/knowledge-hub/dataset'])
+      git(tmp, ['commit', '-q', '-m', 'a new dataset file'])
+      writeFileSync(join(tmp, A), A_EDIT)
+      git(tmp, ['add', A])
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      git(tmp, ['add', A, D])
+      expect(tryGit(tmp, ['diff', '--cached', '--quiet', '--', A, D]).status).toBe(1)
+      expect(
+        git(tmp, ['diff', '--cached', '--name-only', '--', A, D]).split('\n').filter(Boolean),
+      ).toEqual([D])
+      git(tmp, ['commit', '-q', '-m', MSG, '--', A, D])
+      expect(
+        git(tmp, ['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean),
+      ).toEqual([D])
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
+  it(
+    'indexes an untracked adoption file into the generated llms.txt — stash it before the run',
+    () => {
+      // Round-6 finding (Minor), executed. The `adoption` registry is `behavior: "add"` (a file
+      // only the target has SURVIVES), and `generateLlmsTxt` (apps/pair-cli/src/registry/
+      // llms-generation.ts) indexes the WHOLE `.pair/adoption/**` tree it finds on disk —
+      // untracked files included. CONCRETE FAILURE: untracked `.pair/adoption/tech/wip-note.md`
+      // -> the run rewrites `.pair/llms.txt` with `- [adoption note](.pair/adoption/tech/
+      // wip-note.md)`. Under the staging rule `.pair/llms.txt` (entry appeared) is committed and
+      // `wip-note.md` (entry unchanged, `??`) is not: the committed index carries a dangling link
+      // and the contributor's private WIP filename lands in history. Bytes are untouched, so the
+      // story's "unstaged authored changes must be left untouched" holds — and the derived output
+      // still leaks. The remedy the skill names is measured here to its postcondition.
+      tmp = makeFixture()
+      write(join(tmp, '.pair/knowledge/index.md'), '# pre-existing install\n')
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      git(tmp, ['add', '-A'])
+      git(tmp, ['commit', '-q', '-m', 'converged'])
+      const LLMS = '.pair/llms.txt'
+      const NOTE = '.pair/adoption/tech/wip-note.md'
+      const LINK = '- [adoption note](.pair/adoption/tech/wip-note.md)'
+      expect(readFileSync(join(tmp, LLMS), 'utf-8')).not.toContain('wip-note')
+
+      write(join(tmp, NOTE), '# adoption note\n')
+      const before = snapshotTree(tmp, {
+        untrackedFilesAll: true,
+        writeBlobs: true,
+        nulSeparated: true,
+      })
+      expect(parsePorcelainZ(before.entries)).toEqual([{ xy: '??', path: NOTE }])
+
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+
+      // THE EFFECT, measured: the note survives (add behaviour) and the index now links it.
+      expect(readFileSync(join(tmp, NOTE), 'utf-8')).toBe('# adoption note\n')
+      expect(readFileSync(join(tmp, LLMS), 'utf-8')).toContain(LINK)
+      const afterEntries = parsePorcelainZ(
+        git(tmp, ['status', '--porcelain', '-z', '--untracked-files=all']),
+      )
+      expect(afterEntries).toEqual(
+        expect.arrayContaining([
+          { xy: ' M', path: LLMS },
+          { xy: '??', path: NOTE },
+        ]),
+      )
+      // ...so the staging rule commits the index WITHOUT its target: a dangling link in history.
+      const MSG = 'chore: regenerate mirrors from local dataset'
+      git(tmp, ['add', LLMS])
+      git(tmp, ['commit', '-q', '-m', MSG, '--', LLMS])
+      expect(git(tmp, ['show', `HEAD:${LLMS}`])).toContain(LINK)
+      expect(tryGit(tmp, ['cat-file', '-e', `HEAD:${NOTE}`]).status).not.toBe(0)
+
+      // THE DOCUMENTED REMEDY, applied to its postcondition: stash the untracked path, run, pop.
+      git(tmp, ['reset', '-q', '--hard', 'HEAD~1'])
+      expect(readFileSync(join(tmp, LLMS), 'utf-8')).not.toContain('wip-note')
+      git(tmp, ['stash', 'push', '-u', '-q', '--', NOTE])
+      expect(existsSync(join(tmp, NOTE))).toBe(false)
+      expect(run(tmp, isolatedHome(tmp)).status).toBe(0)
+      expect(git(tmp, ['status', '--porcelain', '-z', '--untracked-files=all'])).toBe('')
+      expect(readFileSync(join(tmp, LLMS), 'utf-8')).not.toContain('wip-note')
+      git(tmp, ['stash', 'pop', '-q'])
+      expect(readFileSync(join(tmp, NOTE), 'utf-8')).toBe('# adoption note\n')
+      expect(parsePorcelainZ(git(tmp, ['status', '--porcelain', '-z', '-uall']))).toEqual([
+        { xy: '??', path: NOTE },
+      ])
+    },
+    SCRIPT_RUN_TIMEOUT_MS,
+  )
+
   it('exits non-zero and names the reason when the dataset is missing (AC7)', () => {
     tmp = realpathSync(mkdtempSync(join(tmpdir(), 'regen-mirrors-')))
     initRepo(tmp)

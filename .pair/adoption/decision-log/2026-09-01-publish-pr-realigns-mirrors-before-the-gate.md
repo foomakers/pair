@@ -145,6 +145,37 @@ read from the adoption, never named in the skill.**
   scenario over a working installation cannot produce. Applies to
   `packages/dev-tools/src/quality-gates/regenerate-mirrors.test.ts` and, retroactively, to
   `run-format.test.ts`, which already had this shape unrecorded.
+- **What the run REMOVED leaves the stageable set and is named** (round-6 review, measured against
+  the real script). A `behavior: "mirror"` registry makes the target equal to the dataset, so a
+  contributor's untracked `.pair/knowledge/wip-draft.md` is deleted and its `??` entry disappears —
+  which puts it in the set — and `git add <path>` on it is `fatal: pathspec … did not match any
+  files`, exit 128; the staged-new shape (porcelain `A.` → `AD`, `.` marking the blank column) passes `git add` (staging the removal) and
+  fails the pathspec commit instead, exit 1, aborting every genuine regeneration in the same set.
+  Phase 1 died *after* the destructive run, and the draft was destroyed with no report row (the
+  overwrite row fires on a moved digest, not a vanished entry). Such paths go neither in `git add`
+  nor in the pathspec and are named `removed untracked: <path> (recover: git cat-file -p <sha> >
+  <path>)` from the before `-w` digest.
+- **A staged set whose cached diff is empty is a no-op, not a failed commit** (round-6 review,
+  measured). A path whose render already equals HEAD moves its entry when rewritten (`M.` → `MM`,
+  `D.` → `D.` + `??`, `.M` → gone) yet equals HEAD in the index after `git add`; `git commit … --
+  <paths>` over only such paths is `nothing to commit, working tree clean`, exit 1. The recipe now
+  runs `git diff --cached --quiet -- <paths>` after staging: empty ⇒ no commit; and the recover rows
+  are driven by the digest comparison alone, whether or not a commit was made — the two hand-edits
+  in that case are gone from disk *and* index, so a row that waited for the commit would never
+  name them. The Verify compares the commit's file list to `git diff --cached --name-only`, since a
+  mixed set commits a subset.
+- **Untracked files under the written trees HALT the step before the command runs** (round-6
+  review, measured). The writer reads the whole target tree: under a mirror registry an untracked
+  file is deleted; under the `add` registry (`.pair/adoption`) it survives but the CLI's
+  `generateLlmsTxt` indexes it, so the committed `.pair/llms.txt` carries a dangling link and the
+  contributor's private WIP filename. Bytes untouched, derived output leaked — the story's edge
+  case held on bytes only. Since the harm is decided by *which* tree the file is under and the skill
+  owns no globs, the check is scoped by the trees the adoption's `mirror-realign-command` entry
+  names (descriptive, the same clause this file already carried), HALTs on any `??`/`A.` entry
+  under them with the remedy `git stash push -u -- <paths>` / `git stash pop`, and is skipped when
+  the adoption names none — a HALT here costs nothing, since nothing has been written yet, unlike
+  the post-run HALT rejected below. Measured to its postcondition: stashed, the run leaves
+  `llms.txt` untouched; popped, the note is back.
 - A non-zero exit from the command **HALTs** before any PR side effect — the same shape as the
   gate-red HALT it now precedes.
 - This project declares `mirror-realign-command: pnpm mirrors:regenerate`.
@@ -193,9 +224,11 @@ read from the adoption, never named in the skill.**
 
 - `adoption/tech/way-of-working.md` → `## Quality Gates`: declare `mirror-realign-command`
   (`pnpm mirrors:regenerate`), state the absent-⇒-skipped default, mark the written-tree list as
-  descriptive rather than a staging rule, and state the writer/checker scope asymmetry (the guards
+  descriptive rather than a staging rule, state the writer/checker scope asymmetry (the guards
   check the dataset-sourced mirrors; the command additionally rewrites skill references across the
-  whole installed tree, which nothing verifies).
+  whole installed tree, which nothing verifies), and state that the writer reads the whole target
+  tree — untracked files are deleted under mirror registries and indexed into `.pair/llms.txt`
+  under the `add` one — so the run starts with none under the written trees.
 - `adoption/tech/way-of-working.md` → `## Quality Gates` → "Gate & tooling code": record the bounded
   vitest exception above next to the rule it qualifies, so the two are read together.
 - [2026-07-13-gate-tooling-code-in-tested-modules.md](./2026-07-13-gate-tooling-code-in-tested-modules.md):

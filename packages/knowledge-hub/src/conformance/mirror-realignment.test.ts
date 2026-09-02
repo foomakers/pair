@@ -258,6 +258,77 @@ describe('publish-pr realigns mirrors before its gate (#419)', () => {
     expect(p1).toMatch(/modified or deleted \*\*does\*\* commit by pathspec while unstaged/)
   })
 
+  it('leaves what the run REMOVED out of the stageable set, and names it with its recover sha', () => {
+    // Round-6 finding (Major). A `behavior: "mirror"` registry (apps/pair-cli/config.json —
+    // `knowledge`, `github`, `agents`) makes the target EQUAL to the dataset, so a file only the
+    // target has is deleted: a contributor's untracked `.pair/knowledge/wip-draft.md` is gone after
+    // the run, and its `??` entry has DISAPPEARED — which puts it in the step-4 set. MEASURED with
+    // the real script: `git add .pair/knowledge/wip-draft.md` -> `fatal: pathspec ... did not match
+    // any files`, exit 128; the staged-new shape (`A ` -> `AD`) passes `git add` (staging the
+    // removal) and then fails the pathspec commit, exit 1, aborting every genuine regeneration in
+    // the same set. Phase 1 dies AFTER the destructive run, and the draft is destroyed with no
+    // report row: `overwrote uncommitted changes in:` fires only on a digest that MOVED, never on an
+    // entry that vanished — though the `-w` blob exists and `git cat-file -p <sha>` prints it back.
+    // Executed end to end: regenerate-mirrors.test.ts, 'deletes an uncommitted file under a mirror
+    // registry — nothing to stage, only the `-w` blob survives'.
+    const p1 = phase1()
+    expect(p1).toMatch(/removed untracked: <path> \(recover: git cat-file -p <sha> > <path>\)/)
+    expect(p1).toMatch(/fatal: pathspec '<path>' did not match any files/)
+    // Both shapes HEAD does not know must be named, or the staged-new one re-opens the hole.
+    expect(p1).toMatch(/`\?\?` or `A\.`/)
+    // The exclusion has to reach the pathspec too, not only the `git add`.
+    expect(p1).toMatch(/neither in `git add <paths>` nor in the pathspec/)
+    // ...and the row is on the report, next to the overwrite row.
+    expect(dataset()).toMatch(
+      /removed untracked: <path> \(recover: git cat-file -p <blob-sha> > <path>\)/,
+    )
+  })
+
+  it('treats a staged set whose cached diff is empty as a no-op, never as a failed commit', () => {
+    // Round-6 finding (Minor). A path whose dataset render EQUALS HEAD moves its entry when the run
+    // rewrites it (`M ` -> `MM`; `D ` -> `D ` + `??`; ` M` -> gone), so it is in the set — but after
+    // `git add` the index equals HEAD for it. MEASURED with the real script over all three shapes
+    // at once: `git diff --cached --quiet -- a b c` exits 0 and `git commit -m … -- a b c` is
+    // `nothing to commit, working tree clean`, exit 1 — a recipe with no branch for that aborts
+    // Phase 1, and the two hand-edits are gone from disk AND index with no report row, because
+    // they entered the set through the ENTRY comparison, not through a digest moving on an
+    // unchanged entry. The recover row therefore has to be driven by the digest comparison alone,
+    // independent of how the path entered the set. Executed end to end: regenerate-mirrors.test.ts,
+    // 'a non-empty set whose cached diff is empty is a no-op, never a failed commit'.
+    const p1 = phase1()
+    expect(p1).toMatch(/`git diff --cached --quiet -- <paths>`/)
+    expect(p1).toMatch(/nothing to commit, working tree clean/)
+    // Empty ⇒ the no-op branch (silent), but the recover row is emitted regardless of the commit.
+    expect(p1).toMatch(/whether or not a commit was made/)
+    // A mixed set commits a SUBSET, so the Verify compares against the cached list, not the set.
+    expect(p1).toMatch(/`git diff --cached --name-only -- <paths>`/)
+    expect(p1).not.toMatch(/its file list equals that set exactly/)
+  })
+
+  it('HALTs before the run over untracked files under the trees the command writes into', () => {
+    // Round-6 finding (Minor). The `adoption` registry is `behavior: "add"` — a file only the
+    // target has survives — and the CLI's `generateLlmsTxt` indexes the WHOLE `.pair/adoption/**`
+    // tree it finds on disk, untracked files included. MEASURED with the real script: untracked
+    // `.pair/adoption/tech/wip-note.md` -> `.pair/llms.txt` gains
+    // `- [adoption note](.pair/adoption/tech/wip-note.md)`; under the staging rule the index is
+    // committed (entry appeared) and the note is not (entry unchanged) — a dangling link, and the
+    // contributor's private WIP filename in history. Bytes untouched, derived output leaked. The
+    // same untracked file under a MIRROR registry is deleted instead. Both are avoided by the same
+    // precondition, checked BEFORE the command runs, when a HALT still costs nothing. Executed end
+    // to end, remedy included: regenerate-mirrors.test.ts, 'indexes an untracked adoption file into
+    // the generated llms.txt — stash it before the run'.
+    const c = dataset()
+    const p1 = phase1()
+    expect(p1).toMatch(/generated index such as `llms\.txt`/)
+    expect(p1).toMatch(/`git stash push -u -- <paths>`/)
+    expect(p1).toMatch(/`git stash pop`/)
+    // The check is scoped by the trees the adoption names, and skipped when it names none.
+    expect(c).toMatch(/the trees the command writes into/)
+    expect(c).toMatch(/names no written trees[\s\S]{0,300}skipped/)
+    // A HALT condition, listed with the others.
+    expect(c).toMatch(/\*\*Untracked files under the written trees\*\* \(Phase 1\)/)
+  })
+
   it('names the commit a regeneration, never a fix (an overwritten hand-edit was restored)', () => {
     const p1 = phase1()
     expect(p1).toMatch(/regenerate mirrors from local dataset/)
@@ -328,6 +399,18 @@ describe("this repository's own wiring for the realignment (#419)", () => {
   it('declares mirror-realign-command, so the step actually runs here', () => {
     const wow = readFileSync(WAY_OF_WORKING, 'utf-8')
     expect(wow).toMatch(/\*\*`mirror-realign-command`\*\*: `pnpm mirrors:regenerate`/)
+  })
+
+  it('states that the writer deletes untracked files under mirror registries and indexes them under add ones', () => {
+    // Round-6 finding (Minor): the bullet lists where the output lands but not that the writer
+    // reads the WHOLE target tree — so an untracked adoption file is indexed into `.pair/llms.txt`,
+    // and an untracked knowledge file is deleted. Both measured in regenerate-mirrors.test.ts.
+    const wow = readFileSync(WAY_OF_WORKING, 'utf-8')
+    const gates = sectionBetween(wow, '## Quality Gates', '### Review Tier Matrix')
+    expect(gates).toMatch(/untracked[\s\S]{0,200}`\.pair\/llms\.txt`/)
+    expect(gates).toMatch(/behavior: "mirror"/)
+    expect(gates).toMatch(/behavior: "add"/)
+    expect(gates).toMatch(/git stash push -u/)
   })
 
   it('declares it under Quality Gates — the section publish-pr reads', () => {
