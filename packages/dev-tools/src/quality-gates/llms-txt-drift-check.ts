@@ -227,17 +227,23 @@ function hasIndexableSection(generated: string): boolean {
 const BYTE_ORDER_MARK = '\uFEFF'
 
 /**
- * Characters a terminal renders as NOTHING, named by their Unicode class rather than
- * listed by hand: `Cf` (format — the BOM, the zero-width family, the soft hyphen, the
- * bidi marks/embeddings/isolates U+200E-F, U+202A-E, U+2066-9, U+061C, the invisible
- * operators U+2061-4, U+180E, the tag characters above the BMP), `Zl`/`Zp` (the line
- * and paragraph separators) and the variation selectors (U+FE00-F, U+E0100-EF — `Mn`,
- * not `Cf`, and just as invisible next to the base they select). A hand list had
- * missed the bidi marks, the invisible bytes a browser or Word paste most often
- * carries. `JSON.stringify` leaves every one of these unescaped, so they are escaped by
+ * Characters a terminal renders as NOTHING, named by Unicode's own RENDERING property
+ * rather than listed by hand: `Default_Ignorable_Code_Point` — the code points Unicode
+ * defines as ignorable in display — plus `Zl`/`Zp` (the line and paragraph separators,
+ * which are not DI). DI holds the BOM, the zero-width family, the soft hyphen, the bidi
+ * marks/embeddings/isolates U+200E-F, U+202A-E, U+2066-9, U+061C, the invisible operators
+ * U+2061-4, U+180E, every variation selector (U+180B-D, U+FE00-F, U+E0100-EF), the tag
+ * characters above the BMP, and the members the format class `Cf` does NOT have: the
+ * Hangul fillers U+115F-1160, U+3164, U+FFA0, the combining grapheme joiner U+034F,
+ * U+17B4-5, and the reserved-but-ignorable U+2065, U+FFF0-8, U+E0000-E0FFF. `Cf` itself
+ * is NOT in the class: 32 of its code points (Node 24 tables — U+0600-0605, U+06DD,
+ * U+070F, U+0890-1, U+08E2, U+FFF9-B, U+110BD, U+110CD, U+13430-F) are number signs
+ * and format controls a font DOES draw, and the caution below claims the opposite of
+ * every escaped line. No DI code point is White_Space, so the space-like key is
+ * untouched. `JSON.stringify` leaves every member unescaped, so they are escaped by
  * hand in `escapeInvisible`.
  */
-const ZERO_WIDTH_CLASS = '\\p{Cf}\\p{Zl}\\p{Zp}\\p{Variation_Selector}'
+const ZERO_WIDTH_CLASS = '\\p{Default_Ignorable_Code_Point}\\p{Zl}\\p{Zp}'
 
 /**
  * Characters a terminal renders as AN ORDINARY SPACE: NBSP (what a word processor or

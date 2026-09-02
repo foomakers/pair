@@ -533,9 +533,10 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   // invisible operators U+2061–2064, U+180E and the variation selectors. Probe at the
   // reviewed head: `compareIndex('- [A](a.md)\n', '- [A\u200E](a.md)\n')` rendered BOTH
   // lines raw — two identical `- [A](a.md)` and no caution, the exact shape the
-  // look-alike rendering exists to prevent. The class is now `\p{Cf}` + `\p{Zl}` +
-  // `\p{Zp}` + `\p{Variation_Selector}` (Node 24 Unicode tables: 432 code points), so
-  // every row below is one member of the authoritative class, not a new hand entry.
+  // look-alike rendering exists to prevent. The class became Unicode's — round 7 named
+  // it `\p{Cf}` + `\p{Zl}` + `\p{Zp}` + `\p{Variation_Selector}`, round 8 (below)
+  // `\p{Default_Ignorable_Code_Point}` + `\p{Zl}` + `\p{Zp}` — so every row below is
+  // one member of the authoritative class, not a new hand entry.
   it.each([
     ['U+200E LEFT-TO-RIGHT MARK', '\u200E'],
     ['U+200F RIGHT-TO-LEFT MARK', '\u200F'],
@@ -585,11 +586,101 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   })
 
   // The paired negative: an astral character that is VISIBLE (an emoji base with no
-  // selector) is a real difference and stays raw — `\p{Cf}` must not swallow it.
+  // selector) is a real difference and stays raw — the class must not swallow it.
   it('renders a visibly different astral character raw', () => {
     const message = formatReport(compareIndex('- [A](a.md)\n', '- [A\u{1F680}](a.md)\n'), '/repo')
 
     expect(message).toContain('  - [A\u{1F680}](a.md)\n')
+    expect(message).not.toContain('"- [A')
+    expect(message).not.toContain('characters a terminal does not show')
+  })
+
+  // ---- Round 8: the class is Unicode's RENDERING-ignorable property, not its FORMAT one --
+  //
+  // `\p{Cf}` is the format class, and format is not "renders as nothing" in either
+  // direction. Measured on Node 24.15.0 (the runtime whose tables define both classes,
+  // enumerating U+0000–U+10FFFF): 4036 Default_Ignorable code points are NOT `Cf` —
+  // U+034F (Mn), U+115F–1160, U+3164, U+FFA0 (Lo — the Hangul fillers), U+17B4–5,
+  // U+180B–D, U+180F, U+FE00–F (Mn), U+2065, U+FFF0–8, U+E0000, U+E0002–1F,
+  // U+E0080–E0FFF (Cn, reserved-but-ignorable) — and 32 `Cf` code points are NOT
+  // Default_Ignorable: U+0600–0605, U+06DD, U+070F, U+0890–1, U+08E2, U+FFF9–B,
+  // U+110BD, U+110CD, U+13430–F, the number signs and format controls a font DOES draw.
+  // Probe at the reviewed head: `compareIndex('- [A](a.md)\n', '- [A͏](a.md)\n')`
+  // printed both lines RAW with no caution (two identical-looking lines — the shape
+  // round 7 fixed for U+200E), while `- [A۝](a.md)` was quoted under a caution that
+  // claimed the terminal does not show it. The class is now
+  // `\p{Default_Ignorable_Code_Point}` + `\p{Zl}` + `\p{Zp}`: every variation selector
+  // is DI (VS \ DI = 0 measured), no DI code point is White_Space (DI ∩ White_Space = 0,
+  // so the space-like key is untouched), and the caution's claim holds for every member.
+  // One row per (range × general category) of DI \ Cf.
+  it.each([
+    ['U+034F COMBINING GRAPHEME JOINER (Mn)', '͏'],
+    ['U+17B4 KHMER VOWEL INHERENT AQ (Mn)', '឴'],
+    ['U+180B MONGOLIAN FREE VARIATION SELECTOR ONE (Mn)', '᠋'],
+    ['U+115F HANGUL CHOSEONG FILLER (Lo)', 'ᅟ'],
+    ['U+1160 HANGUL JUNGSEONG FILLER (Lo)', 'ᅠ'],
+    ['U+3164 HANGUL FILLER (Lo)', 'ㅤ'],
+    ['U+FFA0 HALFWIDTH HANGUL FILLER (Lo)', 'ﾠ'],
+    ['U+2065 reserved, default-ignorable (Cn)', '⁥'],
+    ['U+FFF0 reserved, default-ignorable (Cn)', '￰'],
+    ['U+FFF8 reserved, default-ignorable (Cn)', '￸'],
+  ])('renders a %s look-alike pair escaped — Default_Ignorable but not Cf', (_name, char) => {
+    const line = '- [A](a.md)'
+    const spoiled = `- [A${char}](a.md)`
+    const hex = `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`
+
+    const report = compareIndex(`${line}\n`, `${spoiled}\n`)
+    const message = formatReport(report, '/repo')
+
+    expect(report).toMatchObject({ kind: 'drift', missing: [line], extra: [spoiled] })
+    expect(message).toContain(`  "${line}"\n`)
+    expect(message).toContain(`  "- [A${hex}](a.md)"\n`)
+    expect(message).not.toContain(`  ${spoiled}\n`)
+    expect(message).toContain('characters a terminal does not show')
+  })
+
+  it.each([
+    ['U+E0000 reserved, default-ignorable (Cn)', '\u{E0000}', 'e0000'],
+    ['U+E0002 reserved, default-ignorable (Cn)', '\u{E0002}', 'e0002'],
+    ['U+E0080 reserved, default-ignorable (Cn)', '\u{E0080}', 'e0080'],
+    ['U+E0FFF reserved, default-ignorable (Cn)', '\u{E0FFF}', 'e0fff'],
+  ])('renders an astral %s look-alike pair escaped as \\u{XXXXX}', (_name, char, hex) => {
+    const line = '- [A](a.md)'
+    const spoiled = `- [A${char}](a.md)`
+
+    const message = formatReport(compareIndex(`${line}\n`, `${spoiled}\n`), '/repo')
+
+    expect(message).toContain(`  "- [A\\u{${hex}}](a.md)"\n`)
+    expect(message).toContain(`  "${line}"\n`)
+    expect(message).toContain('characters a terminal does not show')
+  })
+
+  // The paired negative: a `Cf` code point that is NOT Default_Ignorable is one a font
+  // draws (the Arabic number signs sit over the digits that follow; END OF AYAH is a
+  // visible ornament; the interlinear annotation anchors are kept out of DI by Unicode
+  // so that an unsupported annotation does not vanish). Quoting them would keep the
+  // difference readable, but the caution's "characters a terminal does not show" would
+  // be false for the row — they stay raw. One row per range of Cf \ DI.
+  it.each([
+    ['U+0600 ARABIC NUMBER SIGN', '؀'],
+    ['U+0605 ARABIC NUMBER MARK ABOVE', '؅'],
+    ['U+06DD ARABIC END OF AYAH', '۝'],
+    ['U+070F SYRIAC ABBREVIATION MARK', '܏'],
+    ['U+0890 ARABIC POUND MARK ABOVE', '࢐'],
+    ['U+08E2 ARABIC DISPUTED END OF AYAH', '࣢'],
+    ['U+FFF9 INTERLINEAR ANNOTATION ANCHOR', '￹'],
+    ['U+FFFB INTERLINEAR ANNOTATION TERMINATOR', '￻'],
+    ['U+110BD KAITHI NUMBER SIGN', '\u{110BD}'],
+    ['U+110CD KAITHI NUMBER SIGN ABOVE', '\u{110CD}'],
+    ['U+13430 EGYPTIAN HIEROGLYPH VERTICAL JOINER', '\u{13430}'],
+    ['U+1343F EGYPTIAN HIEROGLYPH END WALLED ENCLOSURE', '\u{1343F}'],
+  ])('renders a visible %s raw — Cf but not Default_Ignorable', (_name, char) => {
+    const spoiled = `- [A${char}](a.md)`
+
+    const message = formatReport(compareIndex('- [A](a.md)\n', `${spoiled}\n`), '/repo')
+
+    expect(message).toContain(`  ${spoiled}\n`)
+    expect(message).toContain('  - [A](a.md)\n')
     expect(message).not.toContain('"- [A')
     expect(message).not.toContain('characters a terminal does not show')
   })
