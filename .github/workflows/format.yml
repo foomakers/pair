@@ -119,7 +119,17 @@ concurrency:
   group: format-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# PROBE C (temporary, reverted next commit): workflow-level permissions, inherited by
+# probe_inherit (no permissions: of its own) and REPLACED by format (its own contents: read).
+permissions:
+  contents: read
+  issues: read
+
 jobs:
+  probe_inherit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo probe-inherit
   format:
     runs-on: ubuntu-latest
     # This job runs `pnpm install`, i.e. PR-authored lifecycle scripts. It takes the
@@ -155,7 +165,7 @@ jobs:
       # offending files and exits non-zero.
       - name: Check formatting
         id: format_check
-        run: pnpm format:check
+        run: "pnpm format:check"
       # …but it does NOT name the remedy: `--list-different` prints the paths and
       # suppresses prettier's own "Run Prettier with --write to fix" line. The
       # contributor this workflow exists for (hooks not installed, or pushed with
