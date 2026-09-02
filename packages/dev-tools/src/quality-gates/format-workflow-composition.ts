@@ -110,8 +110,25 @@
  *   when the check fails — the same never-firing remedy from a one-token edit. Nor is
  *   the comparison being PRESENT enough: it must DECIDE. `&&` binds tighter than
  *   `||`, so `failure() && <scope> || steps.install.outcome == 'failure'` keeps the
- *   scope spelled exactly right and puts the broken-install annotation back; the
- *   condition is a CONJUNCTION, and `||` or a negation of the scope is rejected.
+ *   scope spelled exactly right and puts the broken-install annotation back; and a
+ *   CONJUNCT can narrow the remedy to zero — `&& github.event_name == 'push'` is false
+ *   on every pull_request run (measured: check fails, remedy skipped). The condition
+ *   is a conjunction of allow-listed terms (`failure()`, `!cancelled()`/`!success()`,
+ *   the scope equality); `||`, a negated scope and any other conjunct are rejected.
+ * - the checkout's `with:`. `uses:` was matched on the action NAME; `with: ref: main`
+ *   makes actions/checkout check out `main` instead of the PR merge ref, so a PR
+ *   carrying an unformatted file gets a SUCCESSFUL `format` context (measured on
+ *   GitHub). `repository`, `path`, `sparse-checkout` are the same loss; the checkout's
+ *   inputs are an allow-list of fetch mechanics (`checkoutInputProblems`).
+ * - `working-directory:` on the checking step, or `defaults:` on the job or the
+ *   workflow — `cd` spelled as a key, invisible to the command equality, so CI runs a
+ *   package's own `format:check` (a subset) the moment one declares the script. The
+ *   checking step carries only `name`, `id`, `run`, `timeout-minutes`
+ *   (`checkStepKeyProblems`, `defaultsProblems`).
+ * - `cancel-in-progress` and `concurrency.group` read as SUBSTRINGS. `!(github.event_name
+ *   == 'pull_request')` contains the accepted equality and inverts it; `format-${{
+ *   github.run_id }}-${{ github.ref }}` contains the ref key and is unique per run.
+ *   Both values are anchored allow-lists over the WHOLE value now.
  *
  * Structure is asserted, never exact file text: comments, step names and action
  * versions must be editable without false-failing this guard.
@@ -123,11 +140,12 @@
  * through the root scripts). Two copies of that offender list would drift, and the
  * one that drifts is always the one guarding the newer surface.
  *
- * Per the gate-tooling ADL (2026-07-13) the logic lives here as a tested module.
- * There is no CLI: unlike its siblings, this guard's only enforcement point is
- * `pnpm test`, and turbo's cache is handled by the `$TURBO_ROOT$` input entry on
- * `@pair/dev-tools#test` (turbo.json) — the same treatment `@pair/knowledge-hub#test`
- * already uses for repo-wide artifacts.
+ * Per the gate-tooling ADL (2026-07-13) the logic lives here as a tested module, with a
+ * thin `main()` CLI behind a `require.main` guard (`format-workflow:check`, run by the
+ * root `gate:composition` — AC6). Turbo's cache is handled by the `$TURBO_ROOT$` input
+ * entry on `@pair/dev-tools#test` (turbo.json) — the same treatment
+ * `@pair/knowledge-hub#test` already uses for repo-wide artifacts — so `pnpm test` is the
+ * other enforcement point and is never a stale PASS.
  */
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
@@ -167,6 +185,28 @@ export const FORMAT_JOB = 'format'
  * through the next one published.
  */
 export const ALLOWED_USES = ['actions/checkout', 'pnpm/action-setup', 'actions/setup-node'] as const
+
+/**
+ * The `with:` inputs `actions/checkout` may carry — fetch mechanics only, i.e. inputs
+ * that leave the checked-out tree as the event's ref. An ALLOW-list for the same reason
+ * `uses:` is one: the action's `ref` input "defaults to the reference or SHA for that
+ * event" (action.yml) and setting it REPLACES the PR merge ref, so a `with:` the guard
+ * never read decided WHAT `pnpm format:check` ran on. Measured on GitHub (probe run on
+ * PR #477): `with: ref: main` on the shipped checkout, a PR carrying an unformatted file
+ * → `Check formatting: success`, `format` context SUCCESS — AC2 defeated by one line.
+ * `repository` and `path` change which tree the command runs on at all; `sparse-checkout`
+ * / `sparse-checkout-cone-mode` check out a SUBSET (AC4's `--filter=` divergence spelled
+ * as an input). The toolchain actions' inputs choose versions, never the tree, and are
+ * not constrained.
+ */
+export const ALLOWED_CHECKOUT_INPUTS = [
+  'fetch-depth',
+  'fetch-tags',
+  'show-progress',
+  'persist-credentials',
+  'clean',
+  'set-safe-directory',
+] as const
 
 /**
  * The `pull_request` activity types the check must keep covering. GitHub's default
@@ -218,9 +258,24 @@ function indentOf(line: string): number {
 }
 
 /**
- * The lines under `key:` at the given indent — i.e. every following line indented
- * deeper, stopping at the first sibling or ancestor key. Blank lines inside the
- * block are kept, so a `concurrency:` block separated by one is not truncated.
+ * A `- ` item sitting at its parent key's OWN indent — YAML's indentless block
+ * sequence, which the spec permits and `yaml@2.8.2` reads identically to the indented
+ * form (measured: `branches:\n- main` and `branches:\n  - main` parse to the same
+ * value; GitHub honours it, probe run on PR #477). Nothing in this repo normalizes YAML
+ * indentation (`pnpm format:check` covers ts/tsx/js/jsx/json/html), so an editor default
+ * produces exactly this shape — and a reader that stopped at the parent's indent read a
+ * CORRECT workflow as "no branch" / "no failure-path step", the wrong cause on a right
+ * file, which is the kind of guard that gets weakened.
+ */
+function isIndentlessItem(line: string, indent: number): boolean {
+  return indentOf(line) === indent && /^\s*-\s/.test(line)
+}
+
+/**
+ * The lines under `key:` at the given indent — every following line indented deeper,
+ * plus indentless sequence items at the key's own indent, stopping at the first sibling
+ * or ancestor key. Blank lines inside the block are kept, so a `concurrency:` block
+ * separated by one is not truncated.
  */
 function blockUnder(lines: string[], key: string, indent: number): string[] | null {
   const header = new RegExp(`^ {${indent}}(?:['"]?${key}['"]?):`)
@@ -232,7 +287,7 @@ function blockUnder(lines: string[], key: string, indent: number): string[] | nu
       body.push(line)
       continue
     }
-    if (indentOf(line) <= indent) break
+    if (indentOf(line) <= indent && !isIndentlessItem(line, indent)) break
     body.push(line)
   }
   return body
@@ -286,6 +341,10 @@ function listValueOf(block: string[], key: string): string[] | null {
   const header = index === -1 ? undefined : block[index]
   if (header === undefined) return null
   const inline = header.replace(new RegExp(`^\\s*${key}:\\s*`), '').trim()
+  // An alias or anchor is content this reader cannot follow: `aliasProblems` reports
+  // it BY NAME, and reading it here as an empty list would report a second, false cause
+  // ("no branch") on top.
+  if (/^[*&]/.test(inline)) return null
   if (inline.startsWith('[')) {
     return inline
       .replace(/^\[|\]$/g, '')
@@ -293,11 +352,15 @@ function listValueOf(block: string[], key: string): string[] | null {
       .map(unquote)
       .filter(item => item !== '')
   }
-  const indent = indentOf(header)
+  return blockItems(block.slice(index + 1), indentOf(header))
+}
+
+/** The `- item` scalars of a block sequence whose parent key sits at `indent`. */
+function blockItems(lines: string[], indent: number): string[] {
   const items: string[] = []
-  for (const line of block.slice(index + 1)) {
+  for (const line of lines) {
     if (line.trim() === '') continue
-    if (indentOf(line) <= indent) break
+    if (indentOf(line) <= indent && !isIndentlessItem(line, indent)) break
     const item = /^\s*-\s*(.+)$/.exec(line)
     if (item?.[1] !== undefined) items.push(unquote(item[1]))
   }
@@ -584,12 +647,36 @@ function relocationProblems(lines: string[]): string[] {
   })
 }
 
+/**
+ * A `key: *alias` or `key: &anchor …` on ANY line — not only the structural keys, which
+ * `structuralKeys` sweeps for flow mappings. The ADL's "anchors, aliases and merge keys
+ * are rejected anywhere in the file" was true at the structural level only: `branches:
+ * *shared` fell through to `listValueOf`, which read it as an empty list and reported
+ * "does not cover `main` (no branch)" — the wrong cause on a spelling the guard cannot
+ * read. Every read key (`branches`, `types`, `tags`, `needs`, `permissions`, `group`,
+ * `cancel-in-progress`, `with`, `run`, `if`, …) now goes through the same message, which
+ * names the alias. A plain YAML scalar cannot begin with `*` or `&`, so there is no false
+ * positive on a value; shell inside a `run: |` body is masked first.
+ */
+const ALIASED_VALUE = /^\s*(?:-\s+)?(['"]?)([A-Za-z_][\w.-]*)\1:\s+([*&]\S*)/
+
+function aliasProblems(lines: string[]): string[] {
+  return withoutBlockScalars(lines).flatMap(line => {
+    const match = ALIASED_VALUE.exec(line)
+    if (match === null) return []
+    return [unreadableSpelling(match[2] ?? '', match[3] ?? '')]
+  })
+}
+
 function flowStyleProblems(lines: string[]): string[] {
-  // `workflow_dispatch:` and every other block key carries an EMPTY remainder.
+  // `workflow_dispatch:` and every other block key carries an EMPTY remainder. An alias
+  // or anchor here is `aliasProblems`' finding — reported once, not twice.
   const inlined = structuralKeys(lines).flatMap(([path, inline]) =>
-    inline === undefined || inline === '' ? [] : [unreadableSpelling(path, inline)],
+    inline === undefined || inline === '' || /^[*&]/.test(inline)
+      ? []
+      : [unreadableSpelling(path, inline)],
   )
-  return [...inlined, ...relocationProblems(lines)]
+  return [...inlined, ...aliasProblems(lines), ...relocationProblems(lines)]
 }
 
 /**
@@ -666,13 +753,28 @@ function activityTypeProblems(pullRequest: string[]): string[] {
 }
 
 /**
+ * `on:` spelled as a list of events (`- pull_request`) is valid YAML GitHub honours; a
+ * list item carries no `branches:` filter and this guard reads the trigger MAP, so it is
+ * reported as the spelling it is — not as "has no `pull_request` trigger".
+ */
+function eventListProblem(on: string[], indent: number): string | null {
+  if (keysAt(on, indent).length > 0 || !on.some(line => /^\s*-\s/.test(line))) return null
+  return (
+    'spells `on:` as a list of events (`- pull_request`): valid YAML, but a list item carries no\n' +
+    '  `branches:` filter and this guard reads the trigger MAP. Spell each event as a key\n' +
+    '  (`pull_request:` / `push:`) with its `branches:` block.'
+  )
+}
+
+/**
  * Trigger-shaped holes: the events the workflow reacts to, the branches and
  * activity types it filters them down to, and the paths it silently excludes. This
  * is the story's whole point — a check whose TRIGGER has a gap reads as enforcement
  * and is not, and EVERY key that shapes the trigger is part of that gap, not just
  * the one this story happened to start from.
  */
-function triggerProblems(clean: string, lines: string[]): string[] {
+/** The two text-level trigger holes: the fork-privileged event, and any path filter. */
+function eventAndPathProblems(clean: string): string[] {
   const problems: string[] = []
 
   if (/\bpull_request_target\b/.test(clean)) {
@@ -696,11 +798,18 @@ function triggerProblems(clean: string, lines: string[]): string[] {
         '  worth a hole.',
     )
   }
+  return problems
+}
+
+function triggerProblems(clean: string, lines: string[]): string[] {
+  const problems = eventAndPathProblems(clean)
 
   const on = blockUnder(lines, 'on', 0)
   if (on === null) return [...problems, 'has no `on:` block, so it never runs.']
 
   const triggerIndent = keyIndent(on)
+  const eventList = eventListProblem(on, triggerIndent)
+  if (eventList !== null) return [...problems, eventList]
   const pullRequest = blockUnder(on, 'pull_request', triggerIndent)
   if (pullRequest === null) {
     problems.push(
@@ -723,17 +832,33 @@ function triggerProblems(clean: string, lines: string[]): string[] {
   return [...problems, ...baseBranchProblems('push', push)]
 }
 
-/** The one accepted expression spelling: cancel WHEN the event is a pull request. */
-const CANCEL_ON_PULL_REQUEST = /github\.event_name\s*==\s*(['"])pull_request\1/
+/**
+ * The one accepted expression spelling — cancel WHEN the event is a pull request —
+ * anchored to the WHOLE value, either operand order, either quote style. The previous
+ * regex was an unanchored substring over the value, i.e. the very test the rule's own
+ * comment says is not enough: `${{ !(github.event_name == 'pull_request') }}`,
+ * `${{ … == 'pull_request' && false }}` and `${{ … == 'pull_request' || true }}` all
+ * CONTAIN the equality and all passed. Measured on GitHub (probe run on PR #477,
+ * evaluated on a pull_request event): the first two are `false` — nothing cancelled on
+ * a PR — and the third is `true` — cancelled on `main` too, so two merges a minute apart
+ * leave the first with no verdict (AC7).
+ */
+const CANCEL_ON_PULL_REQUEST =
+  /^\$\{\{\s*(?:github\.event_name\s*==\s*(['"])pull_request\1|(['"])pull_request\2\s*==\s*github\.event_name)\s*\}\}$/
 
 /**
- * The group must be keyed on the ref, INSIDE an expression. `\b` after `ref` keeps
- * `github.ref_name` and `github.ref_type` out (different contexts, not the canonical
- * key), and requiring the `${{ }}` keeps `group: format-github.ref` out — outside an
- * expression that is a constant string. `github.head_ref || github.ref` passes because
- * it contains the canonical key.
+ * The group is `<prefix>-<ref key>` and nothing more, anchored. The prefix is a constant
+ * (`format`) or `${{ github.workflow }}` — a group with NO prefix shares its namespace
+ * with any other workflow keyed on the bare ref, one token from a cross-workflow cancel.
+ * The ref key is `${{ github.ref }}` or the documented `${{ github.head_ref ||
+ * github.ref }}` fallback; `ref_name`, `head_ref` alone and `sha` are different contexts.
+ * And nothing ELSE in the value: the previous substring test accepted `format-${{
+ * github.run_id }}-${{ github.ref }}` (and `sha`, `run_number`, `run_attempt` beside the
+ * ref), each unique per run — so no two runs ever share a group and nothing is ever
+ * superseded, the "concurrency dropped" loss with the block still present (round 11).
  */
-const GROUP_KEYED_ON_REF = /\$\{\{[^}]*\bgithub\.ref\b[^}]*\}\}/
+const GROUP_KEYED_ON_REF =
+  /^(?:[A-Za-z0-9_.-]+|\$\{\{\s*github\.workflow\s*\}\})-\$\{\{\s*(?:github\.ref|github\.head_ref\s*\|\|\s*github\.ref)\s*\}\}$/
 
 /**
  * The `group:` half of the concurrency rule. Everything the doc-comment on
@@ -766,8 +891,12 @@ function groupProblems(concurrency: string[]): string[] {
       BASE_BRANCH +
       '` is in progress cancels it (the cancel is\n' +
       '  conditioned on the PR event, which that push IS) and that commit ends with no formatting\n' +
-      '  verdict — and two PRs pushed a minute apart cancel each other. Use `${{ github.ref }}` (or\n' +
-      '  `${{ github.head_ref || github.ref }}`) inside the group expression.',
+      '  verdict — and two PRs pushed a minute apart cancel each other. The accepted shape is\n' +
+      '  `<prefix>-${{ github.ref }}` (or `<prefix>-${{ github.head_ref || github.ref }}`), the prefix a\n' +
+      '  constant such as `format` or `${{ github.workflow }}`, and nothing else in the value: no prefix\n' +
+      '  collides with any other workflow keyed on the bare ref, and a per-run token beside the ref\n' +
+      '  (`github.run_id`, `github.sha`, `github.run_number`, `github.run_attempt`) makes every group\n' +
+      '  unique, so nothing is ever superseded.',
   ]
 }
 
@@ -800,7 +929,8 @@ function concurrencyProblems(lines: string[]): string[] {
     ]
   }
   const problems = groupProblems(concurrency)
-  const value = /cancel-in-progress:\s*(.+)$/m.exec(concurrency.join('\n'))?.[1]?.trim()
+  const raw = /cancel-in-progress:\s*(.+)$/m.exec(concurrency.join('\n'))?.[1]?.trim()
+  const value = raw === undefined ? undefined : unquote(raw)
   if (value === undefined) {
     return [
       ...problems,
@@ -813,10 +943,11 @@ function concurrencyProblems(lines: string[]): string[] {
     ...problems,
     `the \`concurrency\` group sets \`cancel-in-progress: ${value}\`, which does not cancel a superseded\n` +
       '  run on a pull request: that run keeps burning a runner and reporting a stale verdict for a ref\n' +
-      '  that has moved on. Accepted spellings are the literal `true`, or the EQUALITY `${{\n' +
-      "  github.event_name == 'pull_request' }}` — a negated form (`!=`) reads as conditional and is\n" +
-      `  the mitigation inverted: nothing cancelled on a PR, and on \`${BASE_BRANCH}\` two merges a minute\n` +
-      "  apart cancel each other's verdict.",
+      '  that has moved on. Accepted spellings are the literal `true`, or EXACTLY `${{\n' +
+      "  github.event_name == 'pull_request' }}` (either operand order) as the whole value — nothing\n" +
+      '  else, fail-closed: `!=`, `!( )`, `&& false` read as conditional and are the mitigation\n' +
+      `  inverted (nothing cancelled on a PR), and \`|| true\` cancels on \`${BASE_BRANCH}\` too, so two merges\n` +
+      "  a minute apart cancel each other's verdict.",
   ]
 }
 
@@ -949,18 +1080,63 @@ function scopesTo(condition: string, id: string): boolean {
  * - `!steps.<id>.outcome == 'failure'` — unary `!` binds tighter than `==`, so this
  *   compares `false` to `'failure'` and is never true on any run.
  *
- * So the structure is an allow-list too: a CONJUNCTION of terms. `&&` can only narrow
- * when the remedy fires and can never make it fire on a run the check passed, so extra
- * conjuncts stay green; `||` and a negation OF THE SCOPE do not. `!` on a status
- * function (`!cancelled()`) is left alone — it negates a function, not this scope, and
- * a guard that fails a correct workflow is the kind that gets weakened (round 4).
+ * So the structure is an allow-list too: a CONJUNCTION of allow-listed terms. "Extra
+ * `&&` terms only narrow" was the first cut, and narrowing to ZERO on the PR path IS the
+ * AC1 loss: `failure() && <scope> && github.event_name == 'push'` keeps the scope exactly
+ * right and skips the remedy on every `pull_request` run — measured on GitHub (probe run
+ * on PR #477: `Check formatting: failure`, remedy `skipped`) — so the contributor this
+ * workflow exists for reads the bare filename anyway, the identical loss `== 'success'`
+ * costs, reached through the form the guard explicitly waved through. Hence every `&&`
+ * term must be one of: `failure()`; a negated status function that is TRUE on the failure
+ * path (`!cancelled()`, `!success()` — a `!` on a function is not a `!` on the scope, and
+ * rejecting them would fail a correct workflow); or the scope equality itself. `false`,
+ * `always()` (a no-op), `!failure()` (never true beside `failure()`), any `github.*` or
+ * `steps.<other>` term, and a SECOND equality on the same context are rejected. An outer
+ * `${{ }}` and parentheses around a term are the same condition and are unwrapped.
  */
+function unwrapExpression(condition: string): string {
+  const match = /^\$\{\{([\s\S]*)\}\}$/.exec(condition.trim())
+  return match?.[1]?.trim() ?? condition.trim()
+}
+
+/** Does the opening `(` of this text close only at its very end? */
+function wrapsWhole(text: string): boolean {
+  let depth = 0
+  for (let index = 0; index < text.length; index++) {
+    if (text[index] === '(') depth++
+    else if (text[index] === ')') {
+      depth--
+      if (depth === 0 && index < text.length - 1) return false
+    }
+  }
+  return depth === 0
+}
+
+function unwrapParens(term: string): string {
+  let text = term.trim()
+  while (text.startsWith('(') && text.endsWith(')') && wrapsWhole(text)) {
+    text = text.slice(1, -1).trim()
+  }
+  return text
+}
+
 function decides(condition: string, id: string): boolean {
   // Quoted literals are DATA: `== 'failure'` must not be read as structure. Masking
   // them first is the same data/structure split `stripQuotedMessages` makes for `run:`.
   const structure = condition.replace(/'[^'\n]*'|"[^"\n]*"/g, "''")
   if (structure.includes('||')) return false
-  return !new RegExp(`!\\s*(?:\\(|steps\\.${id}\\.)`).test(structure)
+  const status = `steps\\.${id}\\.(?:outcome|conclusion)`
+  const failure = `(['"]{1,2})failure\\1`
+  const allowed = [
+    /^failure\(\)$/,
+    /^!\s*(?:cancelled|success)\(\)$/,
+    new RegExp(`^${status}\\s*==\\s*${failure}$`),
+    new RegExp(`^${failure}\\s*==\\s*${status}$`),
+  ]
+  return unwrapParens(unwrapExpression(condition))
+    .split('&&')
+    .map(unwrapParens)
+    .every(term => allowed.some(shape => shape.test(term)))
 }
 
 /**
@@ -1170,14 +1346,40 @@ function matrixProblems(host: LevelledJob): string[] {
  *
  * Hence an allow-list of the three actions the workflow needs, matched on the action
  * NAME so a version bump or a pinned SHA stays green. Adding a fourth is a deliberate
- * edit here.
+ * edit here. And the NAME is not the whole step: the checkout's `with:` decides what
+ * tree every later step sees (`checkoutInputProblems`).
  */
+function checkoutInputProblems(step: string[]): string[] {
+  const indent = keyIndent(step)
+  const inline = inlineAfter(step, 'with', indent)
+  if (inline === undefined) return []
+  // A `with:` this reader cannot look inside is rejected as such, never read as "no
+  // inputs"; an alias or anchor there is `aliasProblems`' finding.
+  if (inline !== '') return /^[*&]/.test(inline) ? [] : [unreadableSpelling('with', inline)]
+  const block = blockUnder(step, 'with', indent) ?? []
+  const foreign = keysAt(block, keyIndent(block))
+    .map(({ key }) => key)
+    .filter(key => !ALLOWED_CHECKOUT_INPUTS.some(allowed => allowed === key))
+  if (foreign.length === 0) return []
+  return [
+    `the \`actions/checkout\` step sets \`with:\` input(s) \`${foreign.join('`, `')}\`. The only inputs it may\n` +
+      `  carry are fetch mechanics (${ALLOWED_CHECKOUT_INPUTS.join(', ')}), which leave the\n` +
+      "  tree as the event's ref. `ref` REPLACES that ref — actions/checkout defaults it to the PR merge\n" +
+      "  commit — so `pnpm format:check` runs on a tree that is not the PR's: measured, `ref: main` on a\n" +
+      '  PR carrying an unformatted file reports the `format` context SUCCESSFUL (AC2). `repository`\n' +
+      '  and `path` change which tree the command runs on at all; `sparse-checkout` and\n' +
+      "  `sparse-checkout-cone-mode` check out a SUBSET (AC4's divergence spelled as an input); every\n" +
+      '  other input is rejected with them — a new input is a deliberate edit to this allow-list.',
+  ]
+}
+
 function usesProblems(lines: string[]): string[] {
   const problems: string[] = []
   for (const step of allSteps(lines)) {
     const uses = scalarAt(step, 'uses', keyIndent(step))
     if (uses === undefined) continue
     const action = (uses.split('@')[0] ?? '').toLowerCase()
+    if (action === 'actions/checkout') problems.push(...checkoutInputProblems(step))
     if (ALLOWED_USES.some(allowed => allowed === action)) continue
     problems.push(
       `a step declares \`uses: ${uses}\`, which is not one of the actions this workflow needs\n` +
@@ -1211,6 +1413,72 @@ function normalizeCommand(run: string): string {
     .trim()
     .replace(/\s+/g, ' ')
     .replace(/^pnpm run /, 'pnpm ')
+}
+
+/**
+ * The keys the checking step may carry. `working-directory:` is `cd` spelled as a key —
+ * the command equality below reads the `run:` text and cannot see it — so CI runs the
+ * directory's OWN `format:check`, a subset of the tree the developer checks. Measured
+ * against pnpm (the real producer): today no workspace package declares the script, so
+ * `cd packages/dev-tools && pnpm format:check` exits 254 (ERR_PNPM_NO_SCRIPT) — fail-
+ * closed by accident; a package.json with `"format:check": "echo SUBSET-ONLY"` runs it,
+ * exit 0. The first package to gain that script (a normal, unrelated change) turns the
+ * accident into a silent subset with the guard green — AC4's divergence reinstated through
+ * a key the `--filter=`/`cd` rule was written to catch. `shell:` and `env:` change how the
+ * one command runs; nothing here needs either. `if:` and `continue-on-error:` are owned by
+ * their own rules, which name the loss precisely, so they are not reported twice here.
+ */
+export const CHECK_STEP_KEYS = ['name', 'id', 'run', 'timeout-minutes'] as const
+const CHECK_STEP_KEYS_OWNED_ELSEWHERE = ['if', 'continue-on-error'] as const
+
+function checkStepKeyProblems(lines: string[]): string[] {
+  const host = hostJob(levelledJobs(lines))
+  const check = host?.steps.find(runsFormatCheck)
+  if (check === undefined) return []
+  const foreign = keysAt(check, keyIndent(check))
+    .map(({ key }) => key)
+    .filter(
+      key =>
+        !CHECK_STEP_KEYS.some(allowed => allowed === key) &&
+        !CHECK_STEP_KEYS_OWNED_ELSEWHERE.some(owned => owned === key),
+    )
+  if (foreign.length === 0) return []
+  return [
+    `the \`pnpm ${FORMAT_CHECK_SCRIPT}\` step carries \`${foreign.join('`, `')}\`: the checking step may carry only\n` +
+      `  \`${CHECK_STEP_KEYS.join('`, `')}\`. \`working-directory\` is \`cd\` spelled as a key — the command\n` +
+      "  equality reads the `run:` text and cannot see it — so CI runs that directory's OWN `format:check`,\n" +
+      '  a SUBSET of the tree the developer checks (today no workspace package declares one and pnpm exits\n' +
+      '  254, ERR_PNPM_NO_SCRIPT: fail-closed by accident, until the first package gains the script).\n' +
+      '  `shell` and `env` change how the one command runs; none of these is needed to run it.',
+  ]
+}
+
+/**
+ * `defaults.run.working-directory` is the same `cd` one level up (the host job) or two
+ * (the workflow), and `defaults.run.shell` the same `shell:`. Both apply to every `run:`
+ * step, the checking step included, and neither touches its text.
+ */
+function defaultsProblem(where: string): string {
+  return (
+    `${where} declares \`defaults:\`: \`defaults.run.working-directory\` moves every \`run:\` step — the\n` +
+    '  checking step included — into a directory, `cd` spelled as a key and invisible to the command\n' +
+    "  equality, so CI checks that directory's own `format:check` (a SUBSET) instead of the tree;\n" +
+    '  `defaults.run.shell` changes the shell the check runs in. Nothing here needs a default.'
+  )
+}
+
+function defaultsProblems(lines: string[]): string[] {
+  const problems: string[] = []
+  if (inlineAfter(lines, 'defaults', 0) !== undefined)
+    problems.push(defaultsProblem('the workflow'))
+  const host = hostJob(levelledJobs(lines))
+  if (
+    host !== undefined &&
+    keysAt(host.body, keyIndent(host.body)).some(({ key }) => key === 'defaults')
+  ) {
+    problems.push(defaultsProblem(`job \`${host.name}\``))
+  }
+  return problems
 }
 
 function checkCommandProblems(lines: string[]): string[] {
@@ -1371,8 +1639,11 @@ function neutralizedProblem(neutralized: FailurePathStep[], id: string): string 
     '  broken `pnpm install` "not formatted. Run `pnpm format`" — the loss the scope exists to\n' +
     '  prevent — and `|| true` annotates GREEN runs too. A negation of the scope itself\n' +
     "  (`!(<scope>)`, or `!steps.<id>.outcome == 'failure'`, which compares `false` to `'failure'`)\n" +
-    '  inverts it or makes it never true. The condition must be a CONJUNCTION: extra `&&` terms are\n' +
-    `  fine (they only narrow), \`||\` and a negated scope are not.\n${SCOPING_ADVICE}`
+    '  inverts it or makes it never true. And a conjunct can narrow the remedy to ZERO on the PR path:\n' +
+    "  `&& github.event_name == 'push'` is false on every pull_request run (measured: the remedy step is\n" +
+    '  skipped while the check fails), `&& false` always. The condition must be a CONJUNCTION of\n' +
+    '  allow-listed terms only — `failure()`, `!cancelled()`/`!success()`, and the scope equality —\n' +
+    `  with \`||\`, a negated scope and every other conjunct rejected.\n${SCOPING_ADVICE}`
   )
 }
 
@@ -1545,6 +1816,8 @@ export function checkFormatWorkflow(
     ...usesProblems(lines),
     ...stepProblems(clean, rootScripts),
     ...checkCommandProblems(lines),
+    ...checkStepKeyProblems(lines),
+    ...defaultsProblems(lines),
     ...remedyProblems(lines),
     ...remedyScopeProblems(lines),
   ]
@@ -1569,4 +1842,26 @@ export function checkThisRepoFormatWorkflow(): GateCheckResult {
     text = ''
   }
   return checkFormatWorkflow(text)
+}
+
+/**
+ * Thin CLI wrapper (the ADR-014 shape, same as `pre-push-gate-composition`): print the
+ * report and set the exit code. Wired as `@pair/dev-tools format-workflow:check`, which the
+ * root `gate:composition` runs beside `pre-push-gate:check` — so AC6's "guarded by `pnpm
+ * gate:composition`" is literally true and the guard reports as its own gate line. The
+ * `$TURBO_ROOT$` input on `@pair/dev-tools#test` is still what keeps `pnpm test` honest
+ * locally (ADL 2026-09-01-repo-wide-guard-enforced-by-turbo-root-input); this is the
+ * second enforcement point, not a replacement.
+ */
+export function main(): void {
+  const result = checkThisRepoFormatWorkflow()
+  if (!result.ok) {
+    console.error(`\n❌ format workflow composition\n\n${result.message}\n`)
+    process.exit(1)
+  }
+  console.log(`✓ format workflow composition: ${result.message}`)
+}
+
+if (require.main === module) {
+  main()
 }

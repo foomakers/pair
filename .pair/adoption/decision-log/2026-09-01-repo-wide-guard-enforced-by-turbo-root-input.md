@@ -46,10 +46,12 @@ CLI + root gate step" rule.** A guard over an artifact outside its package satis
 its owning task declares that artifact as a `$TURBO_ROOT$` input — the cache can no longer serve a
 stale PASS, which is the entire failure mode the CLI + root-step pattern was invented to avoid.
 
-For #413 this means: no `format-workflow:check` CLI, no new root script, no new `quality-gate`
-segment and no new `ci.yml` step. The guard is a vitest file, and `@pair/dev-tools#test` /
-`#test:coverage` gain **two** inputs: `$TURBO_ROOT$/.github/workflows/format.yml` and
-`$TURBO_ROOT$/package.json`.
+For #413 this means: no new root script, no new `quality-gate` segment and no new `ci.yml`
+step. The guard is a vitest file, and `@pair/dev-tools#test` / `#test:coverage` gain **two**
+inputs: `$TURBO_ROOT$/.github/workflows/format.yml` and `$TURBO_ROOT$/package.json`. (The
+first version of this decision also said "no `format-workflow:check` CLI"; see the Amendment
+below — a thin CLI now runs under the EXISTING `gate:composition` segment, without changing
+the reasoning above.)
 
 The second is not bookkeeping. Both guards in that folder resolve **script delegation** against the
 root scripts — `checkThisRepoGate` parses `package.json` outright, and `checkFormatWorkflow` defaults
@@ -72,6 +74,23 @@ The CLI + root-gate-step pattern stays mandatory for the case that produced it: 
 set cannot be expressed as task inputs, or whose failure must be diagnosable as its own CI status
 context rather than inside `pnpm test`.
 
+## Amendment — 2026-09-02 (PR #477 review round 12)
+
+Story #413's AC6 reads: check-only holds in CI "guarded by `pnpm gate:composition`". As decided
+above, the new guard was enforced through `pnpm test` only and `gate:composition` ran the
+pre-push guard alone, so the AC's named mechanism was not literally true. Resolved by wiring the
+thin CLI this ADL had declined: `@pair/dev-tools format-workflow:check` (a `main()` behind a
+`require.main` guard in the same module — the ADR-014 shape `pre-push-gate-composition` uses),
+run by the existing root `gate:composition` script beside `pre-push-gate:check`. Cost: one line
+in `packages/dev-tools/package.json`, one `&&` in the root `gate:composition` — no new root
+script, no new `quality-gate` segment, no new `ci.yml` step, so the "four wiring points"
+objection above does not apply. What the decision keeps: the `$TURBO_ROOT$` input is still
+what makes `pnpm test` (and the pre-push hook's `turbo test`) honest locally — the CLI is a
+second enforcement point, not a replacement, and the per-guard rule ("choose by what
+invalidates it") stands; a guard may use both. Smoke-tested: `pnpm gate:composition` exits 0
+on the shipped workflow and prints both guards' lines; with `with: ref: main` injected into
+`format.yml`, `format-workflow:check` exits 1 naming the input.
+
 ## Alternatives Considered
 
 - **Thin CLI + root script + `quality-gate` segment + dedicated `ci.yml` step** (the literal
@@ -90,8 +109,9 @@ context rather than inside `pnpm test`.
 
 ## Consequences
 
-- #413 ships two files plus two `turbo.json` input entries, instead of two files plus four wiring
-  points; the root `quality-gate` string and `ci.yml` are untouched by this story.
+- #413 ships two files plus two `turbo.json` input entries, plus (Amendment) one package script
+  and one `&&` in the existing `gate:composition`, instead of four wiring points; the root
+  `quality-gate` string and `ci.yml` are untouched by this story.
 - A future guard in this repo must answer "what invalidates it?" before "does it need a CLI?" —
   the way-of-working bullet now names both mechanisms, so the choice is explicit rather than
   inferred from the older of two precedents.

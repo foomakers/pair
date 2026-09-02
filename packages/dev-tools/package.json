@@ -18,7 +18,8 @@
     "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",
     "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",
     "determine-version": "ts-node src/release/determine-version.ts",
-    "pre-push-gate:check": "ts-node src/quality-gates/pre-push-gate-composition.ts"
+    "pre-push-gate:check": "ts-node src/quality-gates/pre-push-gate-composition.ts",
+    "format-workflow:check": "ts-node src/quality-gates/format-workflow-composition.ts"
   },
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",

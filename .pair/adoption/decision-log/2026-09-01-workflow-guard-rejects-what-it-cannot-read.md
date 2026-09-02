@@ -74,8 +74,19 @@ Concretely, on **both** of YAML's node positions:
   bare `-` are rejected — the contents of `steps:` are read by walking into each item,
   so an item the reader cannot follow is a whole step out of view.
 
-Anchors, aliases and merge keys are rejected anywhere in the file. An unsupported
-spelling is a reported problem, not a vacuous pass.
+Anchors, aliases and merge keys are rejected anywhere in the file — on every key the reader
+touches, with a message that names the alias (round 12: `branches: *shared` had fallen
+through to the list reader and was reported as "no branch", the wrong cause; it is now
+`aliasProblems`' finding, once). An unsupported spelling is a reported problem, not a
+vacuous pass.
+
+And "block style" means what YAML means by it: an **indentless** block sequence (a `-` item at
+the parent key's own indent — `branches:\n- main`, `steps:\n- name: …`) is block style,
+parses identically to the indented form (`yaml@2.8.2`, measured) and is honoured by GitHub
+(probe run on PR #477). Round 12 taught `blockUnder`/`listValueOf` to read it — the reader
+was reporting a CORRECT workflow as "does not cover `main` (no branch)" and "no failure-path
+step names the remedy". The bound stays: a spelling the reader cannot follow is rejected by
+name; a spelling it can follow is read.
 
 This is the direction change, not the rule count: **the reader's incompleteness fails
 CLOSED**. The same shape is why the module's other rules are allow-lists — `if:` (no
@@ -112,6 +123,17 @@ weakened or deleted.
   fails OPEN, or the first rule needing real structure (nested `with:`, matrix jobs),
   flips it without further argument. `yaml@2.8.2` is already a catalog entry, so the
   cost is one devDependency line in `@pair/dev-tools`.
+
+  **Round 12, for the human at the merge gate.** Two of its findings touched the reader,
+  neither fail-open: indentless sequences and filter-level aliases were **misdiagnosed** (a
+  correct file reported with the wrong cause), and both are now read or named. The other
+  four were rule gaps again (`with:` inputs, `working-directory`/`defaults`, remedy
+  conjuncts, anchored `cancel-in-progress`/`group`). One honest note: the trigger text above
+  names "nested `with:`" as a flip condition, and round 12 added a `with:` rule — it landed
+  as a key-NAME allow-list one level under `with:`, read by the same `blockUnder` + `keysAt`
+  every other rule uses (no values, no nesting beyond that), so no new structure was needed.
+  Whether that counts as the trigger firing is recorded here as the human's call, not
+  quietly re-set.
 
   **Rounds 7–9 did not fire it.** Their findings were RULE gaps — semantics GitHub
   defines (a tags-only `push` filter fires for tag refs only; `concurrency.group` must

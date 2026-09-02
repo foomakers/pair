@@ -54,7 +54,7 @@
 #   - `push: tags:` with no `branches:` fires for TAG refs only (release.yml's `push`
 #     runs are all tags, never `main`), so the workflow would never run on a push to
 #     `main`. A tag filter BESIDE `branches: [main]` is fine; alone it is red.
-#   - `concurrency.group` must be keyed on `${{ github.ref }}` — see the block below;
+#   - `concurrency.group` must be `<prefix>-${{ github.ref }}` — see the block below;
 #     a constant group cancels main's in-progress run on the next PR push.
 #
 # TWO MORE, for the same reason (each is one token, and each leaves the context green):
@@ -70,9 +70,25 @@
 #     `contains()` are not. And the equality must DECIDE, not merely appear: `&&`
 #     binds tighter than `||`, so `failure() && <scope> || steps.install.outcome ==
 #     'failure'` keeps the scope spelled exactly as below and annotates a broken
-#     `pnpm install` "not formatted" again. The condition is a CONJUNCTION — extra
-#     `&&` terms only narrow and are fine, `||` and a negated scope (`!(<scope>)`)
-#     are not.
+#     `pnpm install` "not formatted" again — and a CONJUNCT can narrow the remedy to
+#     zero: `&& github.event_name == 'push'` is false on every PR run (measured on
+#     this PR: check failed, remedy skipped). The condition is a conjunction of
+#     `failure()`, `!cancelled()`/`!success()` and the scope equality, nothing else.
+#
+# THREE MORE, each invisible to a rule that reads only the obvious key:
+#   - THE CHECKOUT TAKES NO `with:` BEYOND FETCH MECHANICS (`fetch-depth`, `fetch-tags`,
+#     `show-progress`, `persist-credentials`, `clean`, `set-safe-directory`). `ref: main`
+#     checks out `main` instead of the PR merge ref — measured on this PR: an
+#     unformatted file, `format` SUCCESS. `repository`, `path`, `sparse-checkout` are
+#     the same loss.
+#   - THE CHECK STEP CARRIES ONLY `name`, `id`, `run` (and `timeout-minutes`), and no
+#     `defaults:` anywhere: `working-directory` is `cd` spelled as a key, so CI would
+#     run a package's own `format:check` — a subset — the moment one declares it.
+#   - `concurrency.group` IS EXACTLY `format-${{ github.ref }}` (or the
+#     `head_ref || ref` fallback) and `cancel-in-progress` EXACTLY the equality below:
+#     a per-run token beside the ref (`run_id`, `sha`) makes every group unique, and
+#     `!(… == 'pull_request')` / `… && false` / `… || true` contain the equality and
+#     invert or void it (measured: false, false, true on a PR run).
 
 name: Format
 
