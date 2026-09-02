@@ -78,7 +78,7 @@ import {
 // `SkillMd` in its name (the context it was introduced in), `diffSkillMd` is a
 // generic compact line-diff. Reusing it keeps ONE drift-report format across
 // both mirror guards.
-import { diffSkillMd } from './skill-md-mirror'
+import { diffSkillMd, MIRROR_REGENERATE_COMMAND } from './skill-md-mirror'
 
 /**
  * One (dataset source → installed copy) pair this module guards: where the
@@ -347,7 +347,12 @@ export function orphanedMirrorEntries(
  * (`.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`);
  * it cannot fix a red here, because this repo's installed trees ARE the source
  * of truth being guarded. The remedy printed is therefore the human one — remove
- * the file, or give it a dataset source and regenerate.
+ * the file, or give it a dataset source and regenerate with
+ * `MIRROR_REGENERATE_COMMAND` and never `pair update` (#419): the ADD half of
+ * that remedy puts the file in the LOCAL dataset only, so no published release
+ * carries it and an install cannot serve it. The message itself carries the
+ * reason and no issue number — it is read by a contributor watching a gate fail,
+ * not by a maintainer reading history.
  *
  * Valid for a `behavior: "mirror"` registry, whose target is meant to be the
  * dataset's IMAGE. It would be wrong for `behavior: "add"` (`adoption`), where a
@@ -377,7 +382,8 @@ export function assertNoOrphanedMirrorEntries(
       `IMAGE, so a file only the target has is drift: 'pair update' neither writes nor removes it, ` +
       `and it goes on being read as if it were shipped content${alsoIndexed}.\n` +
       `Remedy: DELETE it, or ADD it to the dataset under ${mirror.datasetRel} and regenerate with ` +
-      `'pair update'.`,
+      `'${MIRROR_REGENERATE_COMMAND}' (#419: a file just added to the LOCAL dataset is in no ` +
+      `published release, so 'pair update' cannot install it).`,
   )
 }
 
@@ -433,7 +439,7 @@ export function assertMirrorMatches(
   if (actual === undefined) {
     throw new Error(
       `Mirror missing for dataset file '${datasetRelPath}': ${mirrorPath} does not exist. ` +
-        `Run 'pair update' to regenerate it.`,
+        `Run '${MIRROR_REGENERATE_COMMAND}' to regenerate it.`,
     )
   }
   if (actual !== expected) {
@@ -461,7 +467,7 @@ export function assertMirrorMatches(
     throw new Error(
       `Mirror ${mirrorPath} has drifted.\n` +
         `${compared}\n` +
-        `Regenerate with 'pair update' — never hand-edit the mirror.\n` +
+        `Regenerate with '${MIRROR_REGENERATE_COMMAND}' — never hand-edit the mirror.\n` +
         `--- expected (dataset -> real 'pair update' transform)\n` +
         `+++ actual (installed mirror on disk)\n` +
         `${diffSkillMd(expected, actual)}`,
