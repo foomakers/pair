@@ -3276,6 +3276,55 @@ describe('a quoted `run:` scalar, CRLF line endings and workflow-level permissio
     expect(r.message).toContain('not `pnpm format:check`')
   })
 
+  // The same quoted scalar on the INSTALL step. yaml@2.8.2 (the catalog entry) parses
+  // `run: "pnpm install"` and `run: 'pnpm install'` to the string `pnpm install`; GitHub
+  // resolves them the same way (run 33676806439). Round 13 unquoted the check command
+  // but not the setup allow-list, so a correct spelling was red with a misleading cause
+  // ("runs `"pnpm install"`: … the only shell this workflow runs is the toolchain install").
+  const INSTALL_RUN = '        run: pnpm install\n'
+  const quotedInstall: [string, string][] = [
+    ['`run: "pnpm install"` (double-quoted)', '        run: "pnpm install"\n'],
+    ["`run: 'pnpm install'` (single-quoted)", "        run: 'pnpm install'\n"],
+    ['a quoted install with a flag', '        run: "pnpm install --frozen-lockfile"\n'],
+  ]
+
+  for (const [label, run] of quotedInstall) {
+    it(`accepts ${label} on the install step`, () => {
+      const r = checkFormatWorkflow(mutate(WELL_FORMED, INSTALL_RUN, run, 'the install run'))
+      expect(r.ok, r.message).toBe(true)
+    })
+  }
+
+  it('accepts the shipped workflow with its install line quoted', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(mutate(shipped, INSTALL_RUN, '        run: "pnpm install"\n'))
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  // Quotes do not launder a foreign command: what is inside them is still read.
+  it('still rejects a quoted install with a positional argument', () => {
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, INSTALL_RUN, '        run: "pnpm install left-pad"\n', 'the install run'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('pnpm install left-pad')
+    expect(r.message).toContain('toolchain install')
+  })
+
+  it('still rejects a quoted install chained to a tree rewrite', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        INSTALL_RUN,
+        '        run: "pnpm install && git checkout origin/main -- ."\n',
+        'the install run',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('git checkout origin/main -- .')
+    expect(r.message).toContain('toolchain install')
+  })
+
   it('accepts the well-formed workflow with CRLF line endings', () => {
     const crlf = WELL_FORMED.replace(/\n/g, '\r\n')
     expect(crlf).toContain('\r\n')

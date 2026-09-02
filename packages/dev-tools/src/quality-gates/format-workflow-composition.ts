@@ -147,8 +147,8 @@
  * CRLF line endings (red with the WRONG cause, "spells `on:` as a list of events"); and
  * `permissions:` at workflow level with none on the job (red: "declares no
  * `permissions:`" — GitHub hands the workflow-level scope to every job without its own,
- * and a job's own block replaces it). `normalizeCommand` unquotes, `stripComments`
- * normalises line breaks, `permissionProblems` reads both levels.
+ * and a job's own block replaces it). `normalizeCommand` and `isSetupCommand` unquote,
+ * `stripComments` normalises line breaks, `permissionProblems` reads both levels.
  *
  * Structure is asserted, never exact file text: comments, step names and action
  * versions must be editable without false-failing this guard.
@@ -1798,7 +1798,9 @@ export const SETUP_COMMAND_LINES: readonly RegExp[] = [
 ]
 
 function isSetupCommand(run: string): boolean {
-  return run
+  // `run: "pnpm install"` is the bare command to yaml@2.8.2 and to GitHub (run
+  // 33676806439) — the same reason `normalizeCommand` unquotes. Matched pairs only.
+  return unquote(run)
     .split('\n')
     .map(line => line.trim())
     .filter(line => line !== '')
