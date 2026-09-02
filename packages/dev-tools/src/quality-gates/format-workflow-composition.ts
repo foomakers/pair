@@ -129,6 +129,26 @@
  *   == 'pull_request')` contains the accepted equality and inverts it; `format-${{
  *   github.run_id }}-${{ github.ref }}` contains the ref key and is unique per run.
  *   Both values are anchored allow-lists over the WHOLE value now.
+ * - the shell of a step that is neither the check nor its remedy. Every other surface is
+ *   an allow-list; this one was a deny-list of formatters, and the `with: ref: main` loss
+ *   has a shell spelling no formatter list names: `run: git fetch origin main && git
+ *   checkout origin/main -- .` before the check, or `pnpm install && find . -name '*.ts'
+ *   -delete` — each `ok=true` on the shipped file, each running `pnpm format:check` on a
+ *   tree that is not the PR's (AC2). The toolchain install is the whole allow-list: `pnpm
+ *   install` with flags, and the corepack fallback line by line (`setupCommandProblems`).
+ * - `prettier -w`, the documented short form of `--write`, missing from the one offender
+ *   list the AC6 ban reuses (`WRITE_MODE_FORMATTERS`, next door): `pnpm install && npx
+ *   prettier -w .` was green while `--write` was red.
+ *
+ * And three spellings the reader misreported on CORRECT workflows — each resolved by
+ * GitHub identically to the shipped one (probe run 33676806439 on PR #477), each the ADL
+ * 2026-09-01-rejects-what-it-cannot-read failure class ("a guard that false-fails gets
+ * weakened"): a quoted `run: "pnpm format:check"` (red: "runs `"pnpm format:check"`");
+ * CRLF line endings (red with the WRONG cause, "spells `on:` as a list of events"); and
+ * `permissions:` at workflow level with none on the job (red: "declares no
+ * `permissions:`" — GitHub hands the workflow-level scope to every job without its own,
+ * and a job's own block replaces it). `normalizeCommand` unquotes, `stripComments`
+ * normalises line breaks, `permissionProblems` reads both levels.
  *
  * Structure is asserted, never exact file text: comments, step names and action
  * versions must be editable without false-failing this guard.
@@ -249,8 +269,18 @@ function stripLineComment(line: string): string {
   return line
 }
 
+/**
+ * Comments stripped, line breaks normalised to `\n` first. YAML (§5.4) reads CRLF and CR
+ * as line breaks and normalises them inside block scalars — `yaml@2.8.2` parses the CRLF
+ * file to the same document, and GitHub ran it (probe run 33676806439 on PR #477, the
+ * whole file CRLF: parsed, corepack fallback executed, check passed). A `git autocrlf`
+ * checkout on Windows produces exactly this file, and `pnpm format:check` does not touch
+ * `.yml`, so nothing here normalises it back. Read raw, every line ended in `\r`, no
+ * `key:` regex anchored on `$` matched, and the guard reported a CORRECT workflow as
+ * "spells `on:` as a list of events" — the wrong cause on a right file.
+ */
 function stripComments(yamlText: string): string {
-  return yamlText.split('\n').map(stripLineComment).join('\n')
+  return yamlText.replace(/\r\n?/g, '\n').split('\n').map(stripLineComment).join('\n')
 }
 
 function indentOf(line: string): number {
@@ -951,27 +981,45 @@ function concurrencyProblems(lines: string[]): string[] {
   ]
 }
 
+/** The text of a `permissions:` value at `indent` — inline or block — or `undefined` when absent. */
+function permissionScope(lines: string[], indent: number): string | undefined {
+  const inline = inlineAfter(lines, 'permissions', indent)
+  if (inline === undefined) return undefined
+  return inline !== '' ? inline : (blockUnder(lines, 'permissions', indent) ?? []).join('\n')
+}
+
 /**
  * The token the job is handed. This job runs `pnpm install`, i.e. lifecycle scripts
  * authored by the pull request, so a write scope in reach of that is the whole of
- * AC5's exposure — and an omitted `permissions:` block silently inherits whatever
- * the repository default is (write, on a default-settings repo).
+ * AC5's exposure — and a job with no `permissions:` at EITHER level silently inherits
+ * whatever the repository default is (write, on a default-settings repo).
+ *
+ * Two levels, GitHub's rule (measured, probe run 33676806439 on PR #477): a workflow-level
+ * `permissions:` is the scope of every job that declares none of its own — a job without
+ * one was handed `Contents: read, Issues: read` from the workflow key — and a job's own
+ * block REPLACES it entirely — the job beside it, with `contents: read` of its own, was
+ * handed `Contents: read` and nothing else. Reading the job level alone reported the
+ * workflow-level spelling, a CORRECT file, as "declares no `permissions:`".
  */
-function permissionProblems(name: string, body: string[]): string[] {
-  const indent = keyIndent(body)
-  const header = body.find(line => new RegExp(`^ {${indent}}permissions:`).test(line))
-  if (header === undefined) {
+function permissionProblems(name: string, body: string[], workflow: string[]): string[] {
+  const own = permissionScope(body, keyIndent(body))
+  const inherited = permissionScope(workflow, 0)
+  if (own === undefined && inherited === undefined) {
     return [
-      `job \`${name}\` declares no \`permissions:\`, so it silently inherits the repository default\n` +
-        '  scope. It runs `pnpm install` — PR-authored lifecycle scripts — and needs nothing beyond\n' +
-        '  `contents: read`.',
+      `job \`${name}\` declares no \`permissions:\`, and neither does the workflow level, so it silently\n` +
+        '  inherits the repository default scope. It runs `pnpm install` — PR-authored lifecycle\n' +
+        '  scripts — and needs nothing beyond `contents: read`.',
     ]
   }
-  const inline = header.replace(/^\s*permissions:\s*/, '').trim()
-  const scope = inline !== '' ? inline : (blockUnder(body, 'permissions', indent) ?? []).join('\n')
+  const scope = own ?? inherited ?? ''
   if (!/\bwrite(?:-all)?\b/.test(scope)) return []
+  const where =
+    own !== undefined
+      ? `job \`${name}\` grants a WRITE scope in \`permissions:\`.`
+      : `job \`${name}\` declares no \`permissions:\` of its own and inherits a WRITE scope from the\n` +
+        '  workflow-level `permissions:`.'
   return [
-    `job \`${name}\` grants a WRITE scope in \`permissions:\`. A fork PR must be a full-strength run\n` +
+    `${where} A fork PR must be a full-strength run\n` +
       '  with nothing in reach: this job checks formatting and writes nothing, so any write scope is\n' +
       '  pure exposure to the lifecycle scripts `pnpm install` executes.',
   ]
@@ -1409,8 +1457,10 @@ function usesProblems(lines: string[]): string[] {
 export const FORMAT_CHECK_COMMAND = `pnpm ${FORMAT_CHECK_SCRIPT}`
 
 function normalizeCommand(run: string): string {
-  return run
-    .trim()
+  // `run: "pnpm format:check"` is a quoted YAML scalar GitHub resolves to the bare
+  // command (probe run 33676806439: logged as `Run pnpm format:check`); `scalarAt` unquotes
+  // `id:` for the same reason. Matched pairs only — see `unquote`.
+  return unquote(run)
     .replace(/\s+/g, ' ')
     .replace(/^pnpm run /, 'pnpm ')
 }
@@ -1517,7 +1567,7 @@ function jobProblems(clean: string, lines: string[]): string[] {
   problems.push(...conditionProblems(lines))
 
   for (const job of jobsOf(lines)) {
-    problems.push(...permissionProblems(job.name, job.body))
+    problems.push(...permissionProblems(job.name, job.body, lines))
   }
   return problems
 }
@@ -1720,6 +1770,70 @@ function remedyScopeProblems(lines: string[]): string[] {
 }
 
 /**
+ * The shell a step may run when it is neither the checking step nor a failure-path
+ * remedy: the toolchain install, line by line. An ALLOW-list, like every other surface of
+ * this workflow, and for the reason `with:` became one — the deny-list below (write-mode
+ * formatters, `${{`, `secrets.`) names FORMATTERS, and the loss it guards has a shell
+ * spelling no formatter list can name. Measured on the shipped file: `- name: Sync / run:
+ * git fetch origin main && git checkout origin/main -- .` before `Check formatting` →
+ * ok=true; `run: pnpm install && find . -name '*.ts' -not -path './node_modules/*'
+ * -delete` → ok=true. Each makes `pnpm format:check` run on a tree that is not the PR's
+ * (`git checkout <ref> -- .` overwrites every tracked file with `<ref>`'s version; `find
+ * -delete` removes them — both measured in a scratch repo), which is the identical AC2
+ * loss `with: ref: main` produced on GitHub (run 33635537234: `format` SUCCESS on an
+ * unformatted PR) and that `checkoutInputProblems` closed by allow-list.
+ *
+ * The workflow has exactly two such commands: `pnpm install` (flags only — a positional
+ * argument is `pnpm add`, which edits `package.json`) and the corepack fallback, whose
+ * lines are listed one by one. The remedy stays deny-list scanned: it runs AFTER the
+ * check, on the failure path, and its message has to be free to say what it needs to.
+ */
+export const SETUP_COMMAND_LINES: readonly RegExp[] = [
+  /^pnpm install(?:\s+--?[A-Za-z][\w-]*(?:=\S+)?)*$/,
+  /^if ! command -v pnpm >\/dev\/null 2>&1; then$/,
+  /^echo (["'])[^"'$`]*\1$/,
+  /^corepack enable(?: \|\| true)?$/,
+  /^corepack prepare pnpm@[\w.-]+ --activate(?: \|\| true)?$/,
+  /^fi$/,
+]
+
+function isSetupCommand(run: string): boolean {
+  return run
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line !== '')
+    .every(line => SETUP_COMMAND_LINES.some(pattern => pattern.test(line)))
+}
+
+/** A step that is neither the checking step nor a `failure()`-guarded remedy. */
+function isSetupStep(step: string[]): boolean {
+  if (runsFormatCheck(step)) return false
+  const condition = scalarAt(step, 'if', keyIndent(step))
+  return condition === undefined || !FAILURE_GUARD.test(condition)
+}
+
+function setupCommandProblems(lines: string[]): string[] {
+  const problems: string[] = []
+  for (const job of levelledJobs(lines)) {
+    for (const step of job.steps.filter(isSetupStep)) {
+      const foreign = extractRunBlocks(step.join('\n')).filter(run => !isSetupCommand(run))
+      if (foreign.length === 0) continue
+      problems.push(
+        `a step in job \`${job.name}\` runs \`${foreign.join(' ⏎ ').replace(/\n/g, ' ⏎ ')}\`: outside the checking\n` +
+          '  step and its failure-path remedy, the only shell this workflow runs is the toolchain install —\n' +
+          '  `pnpm install` (flags only) and the corepack fallback (`if ! command -v pnpm …; then`, a quoted\n' +
+          '  `echo`, `corepack enable`, `corepack prepare pnpm@<v> --activate`, `fi`). Anything else is a way\n' +
+          "  to change WHAT `pnpm format:check` runs on: `git checkout origin/main -- .` overwrites the PR's\n" +
+          "  files with `main`'s, `find … -delete` removes them — either makes the check pass on a tree that\n" +
+          "  is not the PR's, the AC2 loss measured with `with: ref: main`, and neither is a formatter a\n" +
+          '  deny-list could name. A new command is a deliberate edit to `SETUP_COMMAND_LINES`.',
+      )
+    }
+  }
+  return problems
+}
+
+/**
  * Quoted arguments to `echo`/`printf` are DATA, not commands: the failure-path
  * remedy has to say `pnpm format` and must not be read as running it. Only inert
  * quotes are removed — a quoted string containing `$` or a backtick can still
@@ -1815,6 +1929,7 @@ export function checkFormatWorkflow(
     ...jobProblems(clean, lines),
     ...usesProblems(lines),
     ...stepProblems(clean, rootScripts),
+    ...setupCommandProblems(lines),
     ...checkCommandProblems(lines),
     ...checkStepKeyProblems(lines),
     ...defaultsProblems(lines),

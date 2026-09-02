@@ -135,6 +135,22 @@ weakened or deleted.
   Whether that counts as the trigger firing is recorded here as the human's call, not
   quietly re-set.
 
+  **Round 13, for the same human.** Three more reader false-fails on CORRECT workflows,
+  each a spelling GitHub resolves identically to the shipped one (probe run 33676806439 on
+  PR #477): a quoted `run: "pnpm format:check"` (red, "runs `\"pnpm format:check\"`"); the
+  file with CRLF line endings (red with the WRONG cause, "spells `on:` as a list of
+  events"); `permissions:` at workflow level with none on the job (red, "declares no
+  `permissions:`" — the token log shows the job inherits the workflow scope, and a job's
+  own block replaces it). Patched in place — `normalizeCommand` unquotes, `stripComments`
+  normalises line breaks, `permissionProblems` reads both levels — because each is one
+  line and the finding's recommendation offered the patch as the first option. They are
+  recorded here as what they are: the third, fourth and fifth instance of the class the
+  trigger names, on top of round 12's two. The same round also closed the LAST deny-list
+  in the module (the shell of the non-check, non-remedy steps, now the toolchain
+  allow-list `SETUP_COMMAND_LINES`) — a rule gap, not a reader gap, and one a parser would
+  not have caught. The call stays where round 9 put it: accept the line reader, or require
+  the `yaml@2.8.2` migration before merge.
+
   **Rounds 7–9 did not fire it.** Their findings were RULE gaps — semantics GitHub
   defines (a tags-only `push` filter fires for tag refs only; `concurrency.group` must
   be keyed on the ref; the check context is the job's DISPLAY name, so `name:` and a
@@ -157,7 +173,7 @@ weakened or deleted.
 - Any contributor rewriting `format.yml` in flow style — a trigger key or a step —
   gets a red `pnpm test` with a message naming the spelling and the block-style fix;
   the workflow's own header comment says so before they start.
-- Anchors and merge keys are unavailable in this one file. It is 110 lines with one
+- Anchors and merge keys are unavailable in this one file. It is ~100 lines with one
   job; nothing in it wants an anchor.
 - The hand-rolled reader stays, and stays incomplete — but incomplete in the safe
   direction. The parser migration is a known, costed follow-on rather than an open

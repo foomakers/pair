@@ -79,7 +79,13 @@ import {
 //   - `cancel-in-progress` / `concurrency.group` matched as SUBSTRINGS, so `!(… ==
 //     'pull_request')` and `format-${{ github.run_id }}-${{ github.ref }}` passed,
 //   - an indentless block sequence or a filter-level alias reported as a DIFFERENT,
-//     false problem ("no branch") instead of read or named.
+//     false problem ("no branch") instead of read or named,
+//   - (round 13) the shell of the non-check, non-remedy steps left as the one deny-list
+//     (`git checkout origin/main -- .` before the check was green), `prettier -w` missing
+//     from the write list, and three correct spellings misreported (a quoted `run:`,
+//     CRLF line endings, workflow-level `permissions:`).
+// The module header is the rule inventory; this list is the failure modes the suites
+// below are named after.
 //
 // Structure is asserted, never exact file text: cosmetic YAML edits (comments,
 // step names, action versions) must not false-fail this guard.
@@ -900,18 +906,20 @@ describe('a failing format check tells the contributor what to run (#413)', () =
   // literal `pnpm format`, so the obvious spelling of the remedy was rejected as a
   // write-mode STEP. A quoted message is data, not a command.
   //
-  // Asserted on a step OTHER than the checking one: since AC4 became an equality on
+  // Asserted on the REMEDY step, not the checking one: since AC4 became an equality on
   // the checking step's command, `pnpm format:check || { … }` is rejected there for a
-  // different reason (it is no longer the one command a developer runs). The rule
-  // under test here is the write-mode scan, so it is exercised where that is the only
-  // rule in play — and the checking-step spelling is asserted red just below.
+  // different reason (it is no longer the one command a developer runs), and since round
+  // 13 the install step is an allow-list of toolchain commands. The remedy is the one step
+  // whose shell is read by the write-mode scan alone, so the rule under test is exercised
+  // where it is the only rule in play — and the checking-step spelling is asserted red
+  // just below.
   it('does not mistake an echoed remedy for a step that writes files', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
-        '        run: pnpm install\n',
-        '        run: pnpm install || { echo "Formatting failed. Run pnpm format and commit."; exit 1; }\n',
-        'the install step',
+        `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
+        '        run: echo "Formatting failed. Run pnpm format and commit."; exit 1\n',
+        'the remedy step',
       ),
     )
     expect(r.ok, r.message).toBe(true)
@@ -1275,7 +1283,7 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
       const extraStep = mutate(
         WELL_FORMED,
         '      - name: Check formatting\n',
-        '      - name: Say hello\n        run: echo hello\n      - name: Check formatting\n',
+        '      - name: Enable corepack\n        run: corepack enable\n      - name: Check formatting\n',
         'the checking step',
       )
       expect(checkFormatWorkflow(extraStep).ok, checkFormatWorkflow(extraStep).message).toBe(true)
@@ -1297,15 +1305,14 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
     it('does not read a `run:` block scalar body as YAML structure', () => {
       const shell = mutate(
         WELL_FORMED,
-        '      - name: Install dependencies\n        run: pnpm install\n',
-        `      - name: Install dependencies
-        run: |
+        `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
+        `        run: |
           - { a,b }
           - [ -d node_modules ] && echo cached
           -
-          pnpm install
+          echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."
 `,
-        'the install step',
+        'the remedy step',
       )
       expect(checkFormatWorkflow(shell).ok, checkFormatWorkflow(shell).message).toBe(true)
     })
@@ -1498,7 +1505,8 @@ describe('the job that reports the `format` context is named (#413)', () => {
   })
 
   // A second job beside a correctly-named host is not the loss — the context still
-  // belongs to the job that checks.
+  // belongs to the job that checks. (Its shell is an allow-listed inert echo: the
+  // toolchain allow-list applies to every non-check, non-remedy step in every job.)
   it('accepts an extra job beside a `format` host that runs the check', () => {
     const extra = mutate(
       WELL_FORMED,
@@ -1510,7 +1518,7 @@ describe('the job that reports the `format` context is named (#413)', () => {
       contents: read
     steps:
       - name: Nothing
-        run: echo ok
+        run: echo "ok"
   format:
 `,
       'the `format:` job header',
@@ -2997,11 +3005,375 @@ describe('an indentless block sequence is read, and an alias is named as one (#4
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
-        '        run: pnpm install\n',
-        '        run: |\n          case "$RUNNER_OS" in\n            Linux) echo linux ;;\n            *) echo other ;;\n          esac\n          pnpm install\n',
-        'the install step',
+        `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
+        `        run: |\n          case "$RUNNER_OS" in\n            Linux) echo linux ;;\n            *) echo "::error::Not formatted. Run 'pnpm format' locally." ;;\n          esac\n`,
+        'the remedy step',
       ),
     )
     expect(r.ok, r.message).toBe(true)
+  })
+})
+
+// Round 13. Every OTHER surface of the workflow is an allow-list; the shell of the
+// non-check, non-remedy steps was the one deny-list left (write-mode formatters, `${{`,
+// `secrets.`). Measured on the shipped file: `- name: Sync / run: git fetch origin main &&
+// git checkout origin/main -- .` before `Check formatting` → ok=true; `run: pnpm install
+// && find . -name '*.ts' -not -path './node_modules/*' -delete` → ok=true. Both make
+// `pnpm format:check` run on a tree that is not the PR's — the identical AC2 loss measured
+// with `with: ref: main` (run 33635537234) and closed by an allow-list there — spelled in
+// shell, where no formatter list can name it. The workflow has exactly two such commands:
+// `pnpm install` (flags only) and the corepack fallback.
+describe('a step outside the check and its remedy runs only the toolchain install (#413)', () => {
+  const CHECK = '      - name: Check formatting\n'
+  const INSTALL = '      - name: Install dependencies\n        run: pnpm install\n'
+  const before = (source: string, step: string) =>
+    mutate(source, CHECK, `${step}${CHECK}`, 'the checking step')
+  const install = (source: string, run: string) =>
+    mutate(
+      source,
+      INSTALL,
+      `      - name: Install dependencies\n        run: ${run}\n`,
+      'the install step',
+    )
+
+  const foreign: [string, (source: string) => string, string][] = [
+    [
+      'a sync step that replaces the PR tree with `main`',
+      source =>
+        before(
+          source,
+          '      - name: Sync\n        run: git fetch origin main && git checkout origin/main -- .\n',
+        ),
+      'git checkout origin/main -- .',
+    ],
+    [
+      'an install line that deletes files afterwards',
+      source =>
+        install(
+          source,
+          "pnpm install && find . -name '*.ts' -not -path './node_modules/*' -delete",
+        ),
+      '-delete',
+    ],
+    [
+      'an install followed by a second command on the same line',
+      source => install(source, 'pnpm install; git checkout origin/main -- .'),
+      'git checkout',
+    ],
+    [
+      'an install with a positional argument (`pnpm install <pkg>` edits package.json)',
+      source => install(source, 'pnpm install left-pad'),
+      'left-pad',
+    ],
+    [
+      'a bare echo (unquoted words are not an inert message)',
+      source => before(source, '      - name: Say hello\n        run: echo hello\n'),
+      'echo hello',
+    ],
+    [
+      'a block scalar whose lines are not all toolchain commands',
+      source =>
+        install(
+          source,
+          '|\n          pnpm install\n          curl -sSf https://example.com/fix.sh | sh',
+        ),
+      'curl',
+    ],
+    [
+      'an unconditional step AFTER the check (position does not license it)',
+      source =>
+        mutate(
+          source,
+          '      - name: Explain how to fix it\n',
+          '      - name: Tests\n        run: pnpm test\n      - name: Explain how to fix it\n',
+          'the remedy step',
+        ),
+      'pnpm test',
+    ],
+    [
+      'a step in a second job',
+      source =>
+        mutate(
+          source,
+          '\njobs:\n',
+          '\njobs:\n  other:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - run: git checkout origin/main -- .\n',
+          'the jobs key',
+        ),
+      'git checkout',
+    ],
+  ]
+
+  for (const [label, edit, needle] of foreign) {
+    it(`fails on ${label}`, () => {
+      const r = checkFormatWorkflow(edit(WELL_FORMED))
+      expect(r.ok, r.message).toBe(false)
+      expect(r.message).toContain(needle)
+      expect(r.message).toContain('toolchain install')
+    })
+  }
+
+  // The message names the loss in its shell spelling, whichever foreign command fired.
+  it('names `git checkout origin/main -- .` and `find … -delete` as the loss', () => {
+    const r = checkFormatWorkflow(install(WELL_FORMED, 'pnpm test'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('git checkout origin/main -- .')
+    expect(r.message).toContain('-delete')
+    expect(r.message).toContain('AC2')
+  })
+
+  // The two commands the workflow has, in every spelling this repo uses or may need.
+  const toolchain: [string, string][] = [
+    ['`pnpm install` with a flag', 'pnpm install --frozen-lockfile'],
+    [
+      '`pnpm install` with several flags, one valued',
+      'pnpm install --prefer-offline --reporter=append-only',
+    ],
+    [
+      'the corepack fallback block, as shipped',
+      [
+        '|',
+        '          if ! command -v pnpm >/dev/null 2>&1; then',
+        '            echo "pnpm not found in PATH; attempting to enable via corepack"',
+        '            corepack enable || true',
+        '            corepack prepare pnpm@10.15.0 --activate || true',
+        '          fi',
+      ].join('\n'),
+    ],
+    ['`corepack enable` alone', 'corepack enable'],
+    ['`corepack prepare` without the `|| true`', 'corepack prepare pnpm@10.15.0 --activate'],
+    ['a trailing shell comment on the install line', 'pnpm install # frozen by CI=true'],
+  ]
+
+  for (const [label, run] of toolchain) {
+    it(`accepts ${label}`, () => {
+      const r = checkFormatWorkflow(install(WELL_FORMED, run))
+      expect(r.ok, r.message).toBe(true)
+    })
+  }
+
+  // Allow-listing the toolchain does not retire the write scan: a write-mode formatter on
+  // the install line is reported as BOTH — the reader learns the formatter, not only "foreign".
+  it('still names a write-mode formatter beside the toolchain rejection', () => {
+    const r = checkFormatWorkflow(install(WELL_FORMED, 'pnpm install && npx prettier --write .'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier --write')
+    expect(r.message).toContain('toolchain install')
+  })
+
+  // The remedy's shell stays deny-list scanned (it runs after the check, on the failure
+  // path): its message may say what it needs to.
+  it('leaves the remedy step outside the allow-list', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
+        `        run: |\n          echo "::error::Not formatted. Run 'pnpm format' locally."\n          echo "See the step above for the files."\n          exit 1\n`,
+        'the remedy step',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  // The two reviewer probes, on the SHIPPED file.
+  it('fires on the shipped workflow when a sync step precedes the check', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      before(
+        shipped,
+        '      - name: Sync\n        run: git fetch origin main && git checkout origin/main -- .\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('git checkout origin/main -- .')
+  })
+
+  it('fires on the shipped workflow when the install line deletes files', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      install(shipped, "pnpm install && find . -name '*.ts' -not -path './node_modules/*' -delete"),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('-delete')
+  })
+})
+
+// `-w` is prettier's documented short form of `--write` (`prettier --help`: "-w, --write
+// Edit files in-place"). Measured: `run: pnpm install && npx prettier -w .` → ok=true while
+// `--write` was red — the one list the AC6 ban reuses had the long spelling only.
+describe('prettier `-w` is `--write` (#413)', () => {
+  const INSTALL = '      - name: Install dependencies\n        run: pnpm install\n'
+
+  it('fails on `npx prettier -w .` in the install step, naming the formatter', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        INSTALL,
+        '      - name: Install dependencies\n        run: pnpm install && npx prettier -w .\n',
+        'the install step',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier --write')
+  })
+
+  it('fails on `prettier -w` in the remedy step too, where no allow-list applies', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
+        `        run: npx prettier -w . && echo "::error::Not formatted. Run 'pnpm format' locally."\n`,
+        'the remedy step',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier --write')
+  })
+
+  it('fires on the shipped workflow', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      mutate(
+        shipped,
+        INSTALL,
+        '      - name: Install dependencies\n        run: pnpm install && npx prettier -w .\n',
+        'the install step',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier --write')
+  })
+})
+
+// Three reader-incompleteness false-fails on CORRECT workflows (the failure class ADL
+// 2026-09-01-workflow-guard-rejects-what-it-cannot-read names as the parser flip trigger).
+// Each is a spelling GitHub resolves identically to the shipped one — measured on run
+// 33676806439 (probe C on PR #477): `run: "pnpm format:check"` logged as `Run pnpm
+// format:check`; the whole file with CRLF line endings parsed and ran; workflow-level
+// `permissions:` was INHERITED by a job without its own (token: Contents+Issues: read) and
+// REPLACED by the job with its own (token: Contents: read only).
+describe('a quoted `run:` scalar, CRLF line endings and workflow-level permissions are read (#413)', () => {
+  const CHECK_RUN = '        run: pnpm format:check\n'
+
+  it('accepts `run: "pnpm format:check"` (double-quoted YAML scalar)', () => {
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, CHECK_RUN, '        run: "pnpm format:check"\n'),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it("accepts `run: 'pnpm format:check'` (single-quoted)", () => {
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, CHECK_RUN, "        run: 'pnpm format:check'\n"),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('still rejects a quoted command that is not THE command', () => {
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, CHECK_RUN, '        run: "pnpm format:check --filter=@pair/website"\n'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('not `pnpm format:check`')
+  })
+
+  it('accepts the well-formed workflow with CRLF line endings', () => {
+    const crlf = WELL_FORMED.replace(/\n/g, '\r\n')
+    expect(crlf).toContain('\r\n')
+    const r = checkFormatWorkflow(crlf)
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('still sees a hole through CRLF line endings', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        '  push:\n    branches:',
+        '  push:\n    paths-ignore:\n      - .changeset/**\n    branches:',
+        'the push trigger',
+      ).replace(/\n/g, '\r\n'),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('paths-ignore')
+    expect(r.message).not.toContain('list of events')
+  })
+
+  const JOB_PERMISSIONS = '    permissions:\n      contents: read\n'
+  const atWorkflowLevel = (source: string, scope: string, job: string | null) => {
+    const withoutJob = mutate(source, JOB_PERMISSIONS, job ?? '', 'the job permissions')
+    return mutate(withoutJob, '\njobs:\n', `\npermissions:\n${scope}\njobs:\n`, 'the jobs key')
+  }
+
+  it('accepts `permissions: contents: read` at workflow level with none on the job', () => {
+    const r = checkFormatWorkflow(atWorkflowLevel(WELL_FORMED, '  contents: read\n', null))
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('accepts `permissions: read-all` at workflow level', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        mutate(WELL_FORMED, JOB_PERMISSIONS, '', 'the job permissions'),
+        '\njobs:\n',
+        '\npermissions: read-all\n\njobs:\n',
+        'the jobs key',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('rejects a WRITE scope at workflow level inherited by the job, naming the level', () => {
+    const r = checkFormatWorkflow(atWorkflowLevel(WELL_FORMED, '  contents: write\n', null))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('WRITE')
+    expect(r.message).toContain('workflow-level')
+  })
+
+  it('rejects `permissions: write-all` at workflow level', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        mutate(WELL_FORMED, JOB_PERMISSIONS, '', 'the job permissions'),
+        '\njobs:\n',
+        '\npermissions: write-all\n\njobs:\n',
+        'the jobs key',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('WRITE')
+  })
+
+  it("accepts a job's own `contents: read` under a workflow-level write (the job's block REPLACES it)", () => {
+    const r = checkFormatWorkflow(
+      atWorkflowLevel(WELL_FORMED, '  contents: write\n', JOB_PERMISSIONS),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it("rejects a job's own write under a workflow-level read", () => {
+    const r = checkFormatWorkflow(
+      atWorkflowLevel(
+        WELL_FORMED,
+        '  contents: read\n',
+        '    permissions:\n      contents: write\n',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('WRITE')
+    expect(r.message).not.toContain('workflow-level')
+  })
+
+  it('still rejects no `permissions:` at either level, naming both', () => {
+    const r = checkFormatWorkflow(mutate(WELL_FORMED, JOB_PERMISSIONS, '', 'the job permissions'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('declares no `permissions:`')
+    expect(r.message).toContain('workflow level')
+  })
+
+  it('stays green on the shipped workflow under each of the three spellings', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const quoted = mutate(shipped, CHECK_RUN, '        run: "pnpm format:check"\n')
+    expect(checkFormatWorkflow(quoted).ok, checkFormatWorkflow(quoted).message).toBe(true)
+    const crlf = shipped.replace(/\n/g, '\r\n')
+    expect(checkFormatWorkflow(crlf).ok, checkFormatWorkflow(crlf).message).toBe(true)
+    const inherited = atWorkflowLevel(shipped, '  contents: read\n', null)
+    expect(checkFormatWorkflow(inherited).ok, checkFormatWorkflow(inherited).message).toBe(true)
   })
 })
