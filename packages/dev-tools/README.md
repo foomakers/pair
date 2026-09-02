@@ -4,18 +4,21 @@ Pair's own automation scripts for development and deployment — gate/tooling sc
 
 ## Tools
 
-| Script                   | Module                                     | Purpose                                                                 |
-| ------------------------ | ------------------------------------------- | ------------------------------------------------------------------------ |
-| `code-hygiene:check`     | `src/quality-gates/code-hygiene-check.ts`   | Fails if suppression markers (`@ts-ignore`, `eslint-disable`, `.skip`) are committed |
-| `sync-version`           | `src/quality-gates/sync-version-in-docs.ts` | Detects/rewrites hardcoded CLI version strings across `.md`/`.mdx` docs |
-| `benchmark-update-link`  | `src/quality-gates/benchmark-update-link.ts` | Perf gate for the CLI's `update-link` command — thresholds: <30,000ms (large KB), >100 links/sec (every size) |
-| `determine-version`      | `src/release/determine-version.ts`          | Resolves the release version from `--input-version` > `--release-tag` > `--github-ref` tag pattern, writes GITHUB_OUTPUT/GITHUB_ENV |
+| Script                  | Module                                          | Purpose                                                                                                                            | Root script             |
+| ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `code-hygiene:check`    | `src/quality-gates/code-hygiene-check.ts`       | Fails if suppression markers (`@ts-ignore`, `eslint-disable`, `.skip`) are committed                                                 | `pnpm hygiene:check`    |
+| `llms-index:check`      | `src/quality-gates/llms-txt-drift-check.ts`     | Fails if `.pair/llms.txt` is not byte-identical to what `generateLlmsTxt` emits for the tree; prints the missing/extra lines, never writes | `pnpm llms-index:check` |
+| `smoke-modes:check`     | `src/quality-gates/smoke-scenario-modes.ts`     | Fails if a `scripts/smoke-tests/` scenario is committed without its executable bit                                                   | `pnpm smoke-modes:check` |
+| `pre-push-gate:check`   | `src/quality-gates/pre-push-gate-composition.ts` | Fails if any step reachable from the root `quality-gate` chain writes files (the gate must stay check-mode)                          | `pnpm gate:composition` |
+| `sync-version`          | `src/quality-gates/sync-version-in-docs.ts`     | Detects/rewrites hardcoded CLI version strings across `.md`/`.mdx` docs                                                              | `pnpm sync-version -- <old-version>` |
+| `benchmark-update-link` | `src/quality-gates/benchmark-update-link.ts`    | Perf gate for the CLI's `update-link` command — thresholds: <30,000ms (large KB), >100 links/sec (every size)                        | `pnpm test:perf`        |
+| `determine-version`     | `src/release/determine-version.ts`              | Resolves the release version from `--input-version` > `--release-tag` > `--github-ref` tag pattern, writes GITHUB_OUTPUT/GITHUB_ENV  | — (release workflow)    |
 
-The first three are runnable via the repo-root scripts (`pnpm hygiene:check`, `pnpm sync-version -- <old-version>`, `pnpm test:perf`); `determine-version` is invoked directly by `.github/workflows/release.yml`'s "Determine version" step. All four delegate here (`pnpm --filter @pair/dev-tools <script>`).
+Every root script above delegates here (`pnpm --filter @pair/dev-tools <script>`); `determine-version` has no root alias and is invoked directly by `.github/workflows/release.yml`'s "Determine version" step. `llms-index:check` runs `ts-node -T`, deliberately: it compiles a source file from `apps/pair-cli` whose type imports resolve only in a built tree, and a gate that dies with a compiler error instead of returning a verdict is a gate contributors stop trusting.
 
 ## Folder structure
 
-- `src/quality-gates/` — repo-wide dev/CI gates (code hygiene, doc version sync, perf benchmark).
+- `src/quality-gates/` — repo-wide dev/CI gates (code hygiene, KB-index drift, smoke-scenario modes, gate composition, doc version sync, perf benchmark).
 - `src/release/` — release-pipeline decision logic (currently `determine-version`).
 
 ## Scope

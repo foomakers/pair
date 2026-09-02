@@ -1,6 +1,20 @@
 {
   "extends": "@pair/ts-config/node.json",
-  "compilerOptions": {},
+  "compilerOptions": {
+    // `composite` is inherited from the shared base, where it exists for packages that EMIT
+    // (`tsc -b`, project references, `.tsbuildinfo`). This package emits nothing: it has no
+    // `build` script, `ts:check` is `tsc --noEmit`, and no tsconfig in the repo references it.
+    // Left on, it enforces `rootDir` + "list every file" on a project that never produces
+    // output, and that is what broke `llms-txt-drift-check.ts` (#416): the drift gate imports
+    // `generateLlmsTxt` from `apps/pair-cli/src/registry/llms-generation.ts` BY SOURCE PATH —
+    // deliberately, so the gate checks `.pair/llms.txt` against the generator in the WORKING
+    // TREE and not against whatever `dist/` was last built (a gate comparing an artifact to a
+    // stale copy of its own generator is worse than no gate). tsc answered TS6059 + TS6307.
+    // Turning composite off for this one package restores the truth — it is a scripts package,
+    // not a build target — instead of bending `rootDir` around a reach-in. See ADL
+    // 2026-09-01-a-gate-imports-its-generator-by-source-and-gets-a-read-only-slice.md.
+    "composite": false
+  },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.test.ts"]
 }

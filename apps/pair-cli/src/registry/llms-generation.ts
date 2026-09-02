@@ -1,6 +1,27 @@
 import type { FileSystemService } from '@pair/content-ops'
+import type { Dirent } from 'fs'
 import { dirname, join } from 'path'
 import type { LogEntry } from '#diagnostics'
+
+/**
+ * The READ-ONLY slice of a file system the index generator needs.
+ *
+ * Declared structurally instead of taking the whole `FileSystemService` because of
+ * who else runs this generator: the `.pair/llms.txt` drift gate (#416, in
+ * `@pair/dev-tools`) calls it to compute what the tracked index SHOULD be. A gate
+ * that could regenerate the file would silently fix the drift it exists to reveal
+ * (check-only gate, ADL 2026-07-31) — so it hands in an adapter that has no
+ * `writeFile` to call. The narrowing makes "this gate cannot write" a type fact
+ * rather than a review promise.
+ *
+ * `fileSystemService` satisfies it structurally, so every existing caller is
+ * unchanged.
+ */
+export interface LlmsSourceFs {
+  exists: (path: string) => Promise<boolean>
+  readdir: (path: string) => Promise<Dirent[]>
+  readFile: (file: string) => Promise<string>
+}
 
 interface LlmsEntry {
   title: string
@@ -8,7 +29,7 @@ interface LlmsEntry {
 }
 
 async function scanSection(
-  fs: FileSystemService,
+  fs: LlmsSourceFs,
   baseDir: string,
   sectionPath: string,
 ): Promise<LlmsEntry[]> {
@@ -31,10 +52,24 @@ async function scanSection(
     }
   }
 
-  return entries.sort((a, b) => a.path.localeCompare(b.path))
+  // A fixed, content-derived order, NOT `localeCompare`: the index is a TRACKED,
+  // byte-compared artifact (#416's drift gate), so its order must be a property of the
+  // content and not of the runtime. `localeCompare` with no locale argument uses the
+  // runtime's ICU default — measured on this repo's index, 458 of 560 entries sit in a
+  // different position under ICU collation (ICU puts
+  // `.pair/adoption/product/context-map.md` before `PRD.md`, this comparator the
+  // reverse). On a Node built without full ICU the gate would then go red on an
+  // untouched tree and send the contributor to regenerate, committing
+  // environment-dependent churn.
+  //
+  // `<`/`>` on strings compares UTF-16 CODE UNITS — codepoint order for every BMP
+  // path, i.e. every path a KB has carried; the two diverge only above U+FFFF, where a
+  // surrogate pair sorts below U+E000–U+FFFF. Both orders are environment-independent,
+  // which is the invariant the ADL buys.
+  return entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 }
 
-export async function generateLlmsTxt(fs: FileSystemService, baseTarget: string): Promise<string> {
+export async function generateLlmsTxt(fs: LlmsSourceFs, baseTarget: string): Promise<string> {
   const pairDir = join(baseTarget, '.pair')
 
   const sections: { heading: string; entries: LlmsEntry[] }[] = []

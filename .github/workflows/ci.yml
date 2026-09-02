@@ -105,6 +105,17 @@ jobs:
         run: pnpm docs:staleness
       - name: Run skills-conformance check
         run: pnpm skills:conformance
+      # Same reason as the smoke-scenario step above, for the KB index (#416): the byte
+      # equality between `.pair/llms.txt` and its generator cannot be enforced by a unit
+      # test, because a KB-only change (a guideline added under `.pair/`) touches no
+      # package `turbo test` hashes — it would replay a cached PASS and the drift would
+      # ship. This step and the root `quality-gate` chain run the SAME command
+      # unconditionally, which is the whole parity point. Position in the job is free:
+      # the script runs `ts-node -T`, so it needs no build of @pair/content-ops (whose
+      # types the imported generator source references). Type-checking that source is
+      # `turbo ts:check`'s job, and THAT task carries the `^build` edge.
+      - name: Run llms-index drift check
+        run: pnpm llms-index:check
       - name: Run duplication check
         run: pnpm dup:check
       # The batch engine ships as a product artifact (#219). Its dry-run suite runs inside
