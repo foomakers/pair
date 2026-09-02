@@ -19,6 +19,7 @@ import {
   readdirSync,
   chmodSync,
   statSync,
+  symlinkSync,
 } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
@@ -376,6 +377,280 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     expect(result.message).not.toContain('CRLF')
   })
 
+  // ---- Differences a terminal cannot show -------------------------------------------
+  //
+  // AC-2 promises "the fix is obvious without a manual diff". A pair of missing/extra
+  // lines that differ only in INVISIBLE bytes breaks that promise the same way a
+  // terminator did: two identical-looking lines, one listed missing and one extra, and
+  // no hint of what to change. The producers of such bytes are editors, not git: a
+  // UTF-8 BOM (U+FEFF — Notepad, some Windows editors), a trailing space, a
+  // non-breaking space or a zero-width space pasted from a web page. Each is one row
+  // below; every row is rendered QUOTED with the invisible character escaped, and the
+  // BOM — the one with a known producer and a known fix — also gets a named caution.
+  it('names a leading byte-order mark, and renders the two look-alike lines escaped', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, '﻿' + readFileSync(tracked, 'utf-8'), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.ok).toBe(false)
+    expect(result.report).toMatchObject({
+      kind: 'drift',
+      missing: ['# pair'],
+      extra: ['﻿# pair'],
+      trackedCarriesBom: true,
+    })
+    expect(result.message).toContain('byte-order mark')
+    expect(result.message).toContain('U+FEFF')
+    // The pair is shown with the difference VISIBLE, not as two identical `# pair`s.
+    expect(result.message).toContain('"\\ufeff# pair"')
+    expect(result.message).toContain('"# pair"')
+    // Regeneration DOES fix a BOM (verified: `pair update` on a BOM-prefixed index
+    // rewrites it without one), so the call to action stays the bare imperative.
+    expect(result.message).toMatch(/^Regenerate with/m)
+  })
+
+  it('renders a trailing-space look-alike pair escaped, with a caution naming the class', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const line = '- [Product Requirements](.pair/adoption/product/PRD.md)'
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, `${line} `), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({
+      kind: 'drift',
+      missing: [line],
+      extra: [`${line} `],
+      trackedCarriesBom: false,
+    })
+    expect(result.message).toContain(`"${line} "`)
+    expect(result.message).toContain(`"${line}"`)
+    expect(result.message).toContain('differ only in characters a terminal does not show')
+    // The class caution names the BOM as one possible class; the dedicated BOM caution
+    // (which asserts the file STARTS with one) must not fire on a trailing space.
+    expect(result.message).not.toContain('starts with a byte-order mark')
+    expect(result.message).toMatch(/^Regenerate with/m)
+  })
+
+  it('renders a LEADING-space look-alike pair escaped', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const line = '- [Product Requirements](.pair/adoption/product/PRD.md)'
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, ` ${line}`), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ missing: [line], extra: [` ${line}`] })
+    expect(result.message).toContain(`" ${line}"`)
+    expect(result.message).toContain('differ only in characters a terminal does not show')
+  })
+
+  it('renders a NON-BREAKING-space look-alike pair escaped', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const line = '- [Testing Guidelines](.pair/knowledge/guidelines/testing/README.md)'
+    const nbsp = line.replace('Testing Guidelines', 'Testing Guidelines')
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, nbsp), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ missing: [line], extra: [nbsp] })
+    expect(result.message).toContain('Testing\\u00a0Guidelines')
+    expect(result.message).toContain('differ only in characters a terminal does not show')
+  })
+
+  it('renders a ZERO-WIDTH-space look-alike pair escaped', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const line = '- [How to start](.pair/knowledge/how-to/01-how-to-start.md)'
+    // A zero-width space ADDED next to the real one: the line looks identical.
+    const zw = line.replace('How to start', 'How to ​start')
+    writeFileSync(tracked, readFileSync(tracked, 'utf-8').replace(line, zw), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ missing: [line], extra: [zw] })
+    expect(result.message).toContain('How to \\u200bstart')
+    expect(result.message).toContain('differ only in characters a terminal does not show')
+  })
+
+  // The paired path: a VISIBLE difference is rendered raw. Quoting every line would
+  // make the common case (a whole missing entry) harder to read for no gain.
+  it('renders a visibly different line raw, with no invisible-character caution', async () => {
+    const root = await makeInSyncTree()
+    mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
+    writeFileSync(
+      join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
+      '# Story Local Markers\n',
+      'utf-8',
+    )
+
+    const result = await checkLlmsIndexDrift(root)
+
+    const line =
+      '- [Story Local Markers](.pair/knowledge/guidelines/collaboration/story-local-markers.md)'
+    expect(result.message).toContain(`  ${line}\n`)
+    expect(result.message).not.toContain(`"${line}"`)
+    expect(result.message).not.toContain('differ only in characters a terminal does not show')
+    expect(result.message).not.toContain('starts with a byte-order mark')
+  })
+
+  // Two look-alike pairs plus one real delta in the same report: the real one stays raw
+  // and readable, only the look-alikes are quoted.
+  it('escapes only the look-alike pairs when a real delta is present too', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    const prd = '- [Product Requirements](.pair/adoption/product/PRD.md)'
+    writeFileSync(tracked, '﻿' + readFileSync(tracked, 'utf-8').replace(prd, `${prd} `), 'utf-8')
+    mkdirSync(join(root, '.pair/knowledge/guidelines/collaboration'), { recursive: true })
+    writeFileSync(
+      join(root, '.pair/knowledge/guidelines/collaboration/story-local-markers.md'),
+      '# Story Local Markers\n',
+      'utf-8',
+    )
+
+    const result = await checkLlmsIndexDrift(root)
+
+    const real =
+      '- [Story Local Markers](.pair/knowledge/guidelines/collaboration/story-local-markers.md)'
+    expect(result.report).toMatchObject({
+      missing: ['# pair', prd, real],
+      extra: ['﻿# pair', `${prd} `],
+    })
+    expect(result.message).toContain(`  ${real}\n`)
+    expect(result.message).toContain(`"${prd} "`)
+    expect(result.message).toContain('"\\ufeff# pair"')
+    expect(result.message).toContain('2 missing/extra pair(s) differ only in characters')
+  })
+
+  // Both editor-class problems at once: the CR caution owns the precondition (git puts
+  // the CRs back; it does not put a BOM back), the BOM caution is still named.
+  it('names both a BOM and a CR when the file carries both, with the CR owning the precondition', async () => {
+    const root = await makeInSyncTree()
+    const tracked = join(root, TRACKED_INDEX_PATH)
+    writeFileSync(tracked, '﻿' + readFileSync(tracked, 'utf-8').replace(/\n/g, '\r\n'), 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ trackedCarriesBom: true, trackedCarriesCr: true })
+    expect(result.message).toContain('byte-order mark')
+    expect(result.message).toContain('CRLF')
+    expect(result.message).toContain('Once the checkout is normalized to LF, regenerate with')
+    expect(result.message).not.toMatch(/^Regenerate with/m)
+  })
+
+  it('reports a BOM-free LF file with the flag off, so the caution never fires on a normal clone', async () => {
+    const root = await makeInSyncTree()
+    writeFileSync(join(root, TRACKED_INDEX_PATH), '# pair\n', 'utf-8')
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ kind: 'drift', trackedCarriesBom: false })
+    expect(result.message).not.toContain('starts with a byte-order mark')
+  })
+
+  // ---- The tracked file cannot be read ---------------------------------------------
+  //
+  // The generator ran and the KB tree is complete: only the FILE at `.pair/llms.txt` is
+  // bad. Reported as the KB tree being unreadable ("partially unpacked install") this
+  // sends the contributor to inspect or reinstall a tree that is fine. One row per way
+  // a file at a fixed path can fail `readFile` after `stat` succeeded; the recipe named
+  // is `git checkout -- .pair/llms.txt`, verified (git 2.55) to replace a chmod-000
+  // file, a directory (empty or not) and a broken symlink at that path.
+  it('reports an EACCES on the tracked file as an unreadable INDEX, not an unreadable KB tree', async () => {
+    const root = await makeInSyncTree()
+    const trackedPath = join(root, TRACKED_INDEX_PATH)
+    const denied = Object.assign(new Error(`EACCES: permission denied, open '${trackedPath}'`), {
+      code: 'EACCES',
+    })
+    const lockedIndex: LlmsSourceFs = {
+      ...readOnlyFileSystem,
+      readFile: file => {
+        if (file === trackedPath) throw denied
+        return readOnlyFileSystem.readFile(file)
+      },
+    }
+
+    const result = await checkLlmsIndexDrift(root, lockedIndex)
+
+    expect(result.ok).toBe(false)
+    expect(result.report).toMatchObject({
+      kind: 'unreadable-index',
+      path: trackedPath,
+      detail: denied.message,
+    })
+    expect(result.message).toContain(`could not read the tracked index ${trackedPath}`)
+    expect(result.message).toContain('EACCES')
+    expect(result.message).toContain(`git checkout -- ${TRACKED_INDEX_PATH}`)
+    // Not the KB-tree diagnosis, and not the drift advice: neither applies.
+    expect(result.message).not.toContain('could not read the knowledge base')
+    expect(result.message).not.toContain('partially unpacked')
+    expect(result.message).not.toContain(REGENERATION_COMMAND)
+  })
+
+  it('reports a DIRECTORY at the tracked path (EISDIR) as an unreadable index', async () => {
+    const root = await makeInSyncTree()
+    const trackedPath = join(root, TRACKED_INDEX_PATH)
+    rmSync(trackedPath, { force: true })
+    mkdirSync(trackedPath)
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.ok).toBe(false)
+    expect(result.report).toMatchObject({ kind: 'unreadable-index', path: trackedPath })
+    expect(result.message).toContain('EISDIR')
+    expect(result.message).toContain(`could not read the tracked index ${trackedPath}`)
+    expect(result.message).toContain(`git checkout -- ${TRACKED_INDEX_PATH}`)
+    expect(result.message).not.toContain('could not read the knowledge base')
+    expect(result.message).not.toContain(REGENERATION_COMMAND)
+  })
+
+  // The real permission bit, kept beside the injected row as proof the injected error
+  // is the one the OS raises. Explicitly skipped under a uid the bit does not bind.
+  it('reports a real chmod-000 tracked file the same way', async ctx => {
+    const root = await makeInSyncTree()
+    const trackedPath = join(root, TRACKED_INDEX_PATH)
+    chmodSync(trackedPath, 0o000)
+
+    let readable = true
+    try {
+      readFileSync(trackedPath)
+    } catch {
+      readable = false
+    }
+    if (readable) {
+      chmodSync(trackedPath, 0o644)
+      ctx.skip('this uid ignores the permission bit (root) — the case cannot exist here')
+    }
+
+    try {
+      const result = await checkLlmsIndexDrift(root)
+
+      expect(result.report).toMatchObject({ kind: 'unreadable-index', path: trackedPath })
+      expect(result.message).toContain('EACCES')
+      expect(result.message).not.toContain('could not read the knowledge base')
+    } finally {
+      chmodSync(trackedPath, 0o644)
+    }
+  })
+
+  // The boundary row that is NOT unreadable-index: a dangling symlink fails `stat`
+  // (ENOENT), so `exists` is false and it is the ABSENT-file drift. Pinned here so the
+  // table of what a bad path yields is closed, not re-derived per report.
+  it('reports a DANGLING symlink at the tracked path as an absent file, not an unreadable index', async () => {
+    const root = await makeInSyncTree()
+    const trackedPath = join(root, TRACKED_INDEX_PATH)
+    rmSync(trackedPath, { force: true })
+    symlinkSync(join(root, 'nowhere.txt'), trackedPath)
+
+    const result = await checkLlmsIndexDrift(root)
+
+    expect(result.report).toMatchObject({ kind: 'drift', trackedExists: false })
+    expect(result.message).toContain('does not exist')
+  })
+
   // The story's edge case names "locale-dependent sort" verbatim. `localeCompare`
   // passes no locale and uses the runtime's ICU default, so a Node built without full
   // ICU orders the index differently and the gate goes red on an untouched tree.
@@ -507,6 +782,23 @@ describe('compareIndex — the pure line-level comparison', () => {
     expect(report).toMatchObject({ kind: 'drift', missing: [], extra: [], trackedCarriesCr: true })
   })
 
+  it('flags a leading byte-order mark on the tracked side', () => {
+    expect(compareIndex('# pair\n', '\uFEFF# pair\n')).toMatchObject({
+      kind: 'drift',
+      missing: ['# pair'],
+      extra: ['\uFEFF# pair'],
+      trackedCarriesBom: true,
+    })
+  })
+
+  it('does not flag a BOM that is not at the start — that is an ordinary look-alike line', () => {
+    expect(compareIndex('a\nb\n', 'a\n\uFEFFb\n')).toMatchObject({
+      trackedCarriesBom: false,
+      missing: ['b'],
+      extra: ['\uFEFFb'],
+    })
+  })
+
   it('flags a stray CR left at end of file', () => {
     const report = compareIndex('- [A](a.md)\n', '- [A](a.md)\n\r')
 
@@ -551,6 +843,34 @@ describe('main — the CLI wrapper', () => {
       expect(printed).toContain('EACCES')
       expect(printed).toContain('could not read the knowledge base')
       // A broken setup is not a stale index: it must NOT send anyone to regenerate.
+      expect(printed).not.toContain(REGENERATION_COMMAND)
+      // And not the OTHER unreadable thing: the index file is fine here.
+      expect(printed).not.toContain('could not read the tracked index')
+    } finally {
+      errors.mockRestore()
+      process.exitCode = previousExitCode
+    }
+  })
+
+  // The evidence command of the round-6 finding: `chmod 000 .pair/llms.txt` (here: a
+  // directory in its place, the uid-independent form) printed the KB-tree diagnosis.
+  it('exits 1 with the tracked-index diagnosis when the index file is a directory', async () => {
+    const root = await makeInSyncTree()
+    const trackedPath = join(root, TRACKED_INDEX_PATH)
+    rmSync(trackedPath, { force: true })
+    mkdirSync(trackedPath)
+
+    const previousExitCode = process.exitCode
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await main(root)
+
+      expect(process.exitCode).toBe(1)
+      const printed = errors.mock.calls.map(call => String(call[0])).join('\n')
+      expect(printed).toContain(`could not read the tracked index ${trackedPath}`)
+      expect(printed).toContain('EISDIR')
+      expect(printed).not.toContain('could not read the knowledge base')
+      expect(printed).not.toContain('partially unpacked')
       expect(printed).not.toContain(REGENERATION_COMMAND)
     } finally {
       errors.mockRestore()

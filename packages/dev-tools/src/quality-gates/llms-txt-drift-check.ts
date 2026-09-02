@@ -41,7 +41,7 @@
  * corpus); `main()` behind a `require.main` guard is the thin CLI, run as
  * `ts-node -T src/quality-gates/llms-txt-drift-check.ts` (package script
  * `llms-index:check`, delegated from the repo-root script of the same name).
- * Exit 0 = in sync, exit 1 = drift or broken setup.
+ * Exit 0 = in sync, exit 1 = drift, broken setup, or an index file that cannot be read.
  *
  * WHY `-T` (transpile-only). Unlike its siblings this gate compiles a source file
  * from ANOTHER package, and that file's first line imports `@pair/content-ops` types
@@ -115,8 +115,21 @@ export type DriftReport =
        * case where `pair update` is the WRONG advice. See `carriageReturnCaution`.
        */
       trackedCarriesCr: boolean
+      /**
+       * The tracked file starts with U+FEFF, the UTF-8 byte-order mark some editors
+       * (Notepad, several Windows editors) write in front of the text. The generator
+       * never emits one, so the first line can never match; unlike a CR, git does not
+       * put it back, so regeneration IS the fix. See `byteOrderMarkCaution`.
+       */
+      trackedCarriesBom: boolean
     }
   | { kind: 'broken-setup'; detail: string }
+  /**
+   * The generator ran — the KB tree is complete and readable — but the tracked file
+   * itself could not be read (`EACCES` on a chmod-000 file, `EISDIR` on a directory in
+   * its place). Distinct from an unreadable TREE: the remedy is one file, not a reinstall.
+   */
+  | { kind: 'unreadable-index'; path: string; detail: string }
 
 /**
  * Every terminator a text file can carry, as ONE separator: `\r\n`, bare `\r`, bare
@@ -172,8 +185,10 @@ function headings(text: string): string[] {
 /**
  * The verdict is BYTE equality (AC1); the missing/extra lists are the actionable
  * EXPLANATION of a failure (AC2), not the verdict itself. That is why two files with
- * the same lines in a different order — or differing only in trailing whitespace —
- * are still drift, reported with both lists empty and a message that says so.
+ * the same lines in a different order — or differing only in a trailing newline or a
+ * blank line — are still drift, reported with both lists empty and a message that
+ * says so. (Whitespace INSIDE a line is content: it makes the line missing on one side
+ * and extra on the other, and `formatDrift` renders that pair so the difference shows.)
  *
  * The two lists are MULTISET deltas, not set deltas. `.pair/llms.txt` is touched by
  * every ADL/guideline addition, so parallel branches conflict on it routinely and a
@@ -196,6 +211,7 @@ export function compareIndex(expected: string, actual: string | null): DriftRepo
     trackedExists: actual !== null,
     emptiedSections: headings(actual ?? '').filter(heading => !generatedHeadings.has(heading)),
     trackedCarriesCr: (actual ?? '').includes('\r'),
+    trackedCarriesBom: (actual ?? '').startsWith(BYTE_ORDER_MARK),
   }
 }
 
@@ -208,9 +224,89 @@ function hasIndexableSection(generated: string): boolean {
   return generated.includes('\n## ')
 }
 
-function renderLines(label: string, lines: string[]): string {
+const BYTE_ORDER_MARK = '\uFEFF'
+
+/**
+ * Characters a terminal renders as NOTHING: the BOM, the zero-width family, the soft
+ * hyphen, the two Unicode line/paragraph separators. `JSON.stringify` leaves every one
+ * of them unescaped, so they are escaped by hand in `escapeInvisible`.
+ */
+const ZERO_WIDTH = /[\u00AD\u200B-\u200D\u2060\u2028\u2029\uFEFF]/g
+
+/**
+ * Characters a terminal renders as AN ORDINARY SPACE: NBSP (what a word processor or
+ * an HTML copy pastes), the fixed-width spaces, the narrow/medium/ideographic ones. A
+ * tab is here too — `JSON.stringify` already shows it as `\t`, but as a KEY it must
+ * count as a space so that `a\tb` pairs with `a b`.
+ */
+const SPACE_LIKE = /[\t\u00A0\u2000-\u200A\u202F\u205F\u3000]/g
+
+/**
+ * What a line LOOKS like on a terminal: zero-width characters gone, space-likes
+ * folded to a space, leading/trailing whitespace dropped. Two lines with the same
+ * visible form are a "look-alike pair" — listed once as missing and once as extra,
+ * they would print as two identical lines, which is the one shape of report AC-2's
+ * "the fix is obvious without a manual diff" cannot survive.
+ */
+function visibleForm(line: string): string {
+  return line.replace(ZERO_WIDTH, '').replace(SPACE_LIKE, ' ').trim()
+}
+
+/**
+ * The line quoted, with every invisible character spelled as `\uXXXX`. The quotes make
+ * leading/trailing whitespace visible; the escapes make the rest visible.
+ */
+function escapeInvisible(line: string): string {
+  const hex = (c: string) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+  return JSON.stringify(line)
+    .replace(ZERO_WIDTH, hex)
+    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, hex)
+}
+
+/** The visible forms that occur on BOTH sides — each one is a look-alike pair. */
+function lookAlikeForms(missing: string[], extra: string[]): Set<string> {
+  const onMissingSide = new Set(missing.map(visibleForm))
+  return new Set(extra.map(visibleForm).filter(form => onMissingSide.has(form)))
+}
+
+/**
+ * A look-alike line is rendered escaped, every other line raw: quoting the common
+ * case (a whole missing entry) would make it harder to read for no gain.
+ */
+function renderLines(label: string, lines: string[], lookAlikes: Set<string>): string {
   const header = `${lines.length} ${label} line(s):`
-  return lines.length === 0 ? header : `${header}\n${lines.map(l => `  ${l}`).join('\n')}`
+  const rendered = lines.map(l => `  ${lookAlikes.has(visibleForm(l)) ? escapeInvisible(l) : l}`)
+  return lines.length === 0 ? header : `${header}\n${rendered.join('\n')}`
+}
+
+/**
+ * Printed once per report when at least one look-alike pair exists: it names the class
+ * of problem (the pair above is not a typo the reader failed to spot) and how the pair
+ * was rendered, so `"\ufeff# pair"` and `"- [PRD](...) "` read as what they are.
+ */
+function invisibleDifferenceCaution(pairCount: number): string {
+  return (
+    `⚠ ${pairCount} missing/extra pair(s) differ only in characters a terminal does not show —\n` +
+    `  a byte-order mark, trailing or leading whitespace, a non-breaking or zero-width\n` +
+    `  space. Those lines are printed above in quotes, with the invisible characters\n` +
+    `  escaped as \\uXXXX, so the difference is visible.`
+  )
+}
+
+/**
+ * The one invisible character with a known producer AND a known fix, so it gets a
+ * caution of its own. Unlike a CR the BOM is not something git writes back on checkout:
+ * `pair update` was run on a BOM-prefixed index and rewrote it without one, so the call
+ * to action stays the bare imperative — this caution adds no precondition.
+ */
+function byteOrderMarkCaution(): string {
+  return (
+    `⚠ The tracked file starts with a byte-order mark (U+FEFF) — the signature some\n` +
+    `  editors (Notepad, several Windows editors) write in front of UTF-8 text. The\n` +
+    `  generator never emits one, so the first line can never match. Regenerating\n` +
+    `  rewrites the file without it; if you edit the file by hand, save it as UTF-8\n` +
+    `  WITHOUT a signature.`
+  )
 }
 
 /**
@@ -313,13 +409,17 @@ function formatDrift(
     parts.push(`The tracked file ${join(baseTarget, TRACKED_INDEX_PATH)} does not exist.`)
   }
 
+  const lookAlikes = lookAlikeForms(report.missing, report.extra)
   parts.push(
-    renderLines('missing', report.missing) +
+    renderLines('missing', report.missing, lookAlikes) +
       `\n  (the generator emits these; the tracked file does not)`,
   )
   parts.push(
-    renderLines('extra', report.extra) + `\n  (the tracked file has these; the generator does not)`,
+    renderLines('extra', report.extra, lookAlikes) +
+      `\n  (the tracked file has these; the generator does not)`,
   )
+  if (lookAlikes.size > 0) parts.push(invisibleDifferenceCaution(lookAlikes.size))
+  if (report.trackedCarriesBom) parts.push(byteOrderMarkCaution())
 
   // An empty delta on an LF file leaves order/whitespace as the only explanation. On a
   // CR-carrying file the explanation is the terminator, and `carriageReturnCaution`
@@ -360,6 +460,18 @@ export function formatReport(report: DriftReport, baseTarget: string): string {
     )
   }
 
+  if (report.kind === 'unreadable-index') {
+    return (
+      `❌ llms-index: could not read the tracked index ${report.path}\n\n` +
+      `${report.detail}\n\n` +
+      `The knowledge base itself was read and indexed — only the tracked file is bad\n` +
+      `(its permission bits, or a directory in its place). That is a broken FILE, NOT a\n` +
+      `stale index and NOT a broken KB tree. Restore the committed file, then re-run:\n` +
+      `  git checkout -- ${TRACKED_INDEX_PATH}\n` +
+      `Nothing was compared and nothing was written.`
+    )
+  }
+
   return formatDrift(report, baseTarget).join('\n\n')
 }
 
@@ -387,23 +499,43 @@ export async function checkLlmsIndexDrift(
   }
 
   const trackedPath = join(baseTarget, TRACKED_INDEX_PATH)
-  const actual = (await fs.exists(trackedPath)) ? await fs.readFile(trackedPath) : null
+  let actual: string | null
+  try {
+    actual = (await fs.exists(trackedPath)) ? await fs.readFile(trackedPath) : null
+  } catch (error) {
+    // The generator has already succeeded, so this failure is the FILE's, not the tree's
+    // — letting it escape to `main`'s catch would print the KB-tree diagnosis.
+    const report: DriftReport = {
+      kind: 'unreadable-index',
+      path: trackedPath,
+      detail: errorDetail(error),
+    }
+    return { ok: false, report, message: formatReport(report, baseTarget) }
+  }
   const report = compareIndex(expected, actual)
 
   return { ok: report.kind === 'in-sync', report, message: formatReport(report, baseTarget) }
 }
 
+function errorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /**
- * The fourth outcome, and the only one that is not a verdict: the check could not run.
- * `hasIndexableSection` covers an ABSENT KB tree — `exists` returns false and the
- * generator skips the section — but not an UNREADABLE one: a `chmod 000` directory
+ * The outcome that is not a verdict: the check could not run because the KB TREE is
+ * unreadable. `hasIndexableSection` covers an ABSENT tree — `exists` returns false and
+ * the generator skips the section — but not an UNREADABLE one: a `chmod 000` directory
  * under `.pair/knowledge/guidelines/` makes `readdir` throw `EACCES` out of
  * `generateLlmsTxt`. Without this, `void main()` turned that into an unhandled
  * promise rejection stack, which is neither of the two things the message has to
  * distinguish (broken setup vs. stale index).
+ *
+ * Only the GENERATOR's failures reach this: the tracked file's own read is caught in
+ * `checkLlmsIndexDrift` and reported as `unreadable-index`, because by then the tree
+ * has been read in full and "the tree is present but unreadable" would be false.
  */
 export function formatUnreadableTree(error: unknown, baseTarget: string): string {
-  const detail = error instanceof Error ? error.message : String(error)
+  const detail = errorDetail(error)
   return (
     `❌ llms-index: could not read the knowledge base under ${join(baseTarget, '.pair')}\n\n` +
     `${detail}\n\n` +
