@@ -459,15 +459,22 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     // no copy-paste surface to assert on; the reverse sweep below pins that fact.
   ]
 
-  /** Every fenced ```markdown block of `content` that configures way-of-working.md. */
-  const wowSnippets = (content: string): string[] =>
-    [...content.matchAll(/```markdown\n([\s\S]*?)```/g)]
-      .map(m => m[1])
-      .filter(block => /adopted for project management/i.test(block))
+  /**
+   * A fenced markdown block per CommonMark: 3+ backticks or tildes, `markdown` or `md`
+   * as the info string's language (any case, trailing attributes allowed), LF or CRLF,
+   * closed by the same fence characters (`\1`: a four-backtick fence is not closed by
+   * a three-backtick run inside it). Pinned to the literal ```markdown\n, the sweep
+   * was fence-language-dependent: a guide fencing its snippet ```md shipped green.
+   */
+  const MARKDOWN_FENCE_RE = /(`{3,}|~{3,})(?:markdown|md)\b[^\n]*\r?\n([\s\S]*?)\1/gi
 
-  /** Every fenced ```markdown block, whatever it says — the copy-paste surface itself. */
+  /** Every fenced markdown block of `content` that configures way-of-working.md. */
+  const wowSnippets = (content: string): string[] =>
+    markdownFences(content).filter(block => /adopted for project management/i.test(block))
+
+  /** Every fenced markdown block, whatever it says — the copy-paste surface itself. */
   const markdownFences = (content: string): string[] =>
-    [...content.matchAll(/```markdown\n([\s\S]*?)```/g)].map(m => m[1])
+    [...content.matchAll(MARKDOWN_FENCE_RE)].map(m => m[2] ?? '')
 
   /**
    * Does a snippet DECLARE a code host? The `code-host:` key line, nothing else.
@@ -580,6 +587,84 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     it('markdownFences sees a copy-paste surface that wowSnippets is blind to', () => {
       expect(wowSnippets(JIRA_SNIPPET_OFF_PHRASE)).toEqual([])
       expect(markdownFences(JIRA_SNIPPET_OFF_PHRASE)).toHaveLength(1)
+    })
+
+    /**
+     * The fence grammar the two predicates parse (CommonMark § fenced code blocks):
+     * a run of 3+ backticks or tildes, an info string whose first word is the
+     * language, then the block. Every row is a fence a guide author could really
+     * write; the predicate must read `md` and `markdown` alike, ignore the info
+     * string's case and trailing attributes, accept CRLF, and stay blind to other
+     * languages and to a bare fence (github-implementation.md ships 18 ```bash
+     * fences, all legitimately unclassified).
+     */
+    const FENCE_ROWS: ReadonlyArray<{
+      open: string
+      close: string
+      eol: string
+      fences: number
+      why: string
+    }> = [
+      {
+        open: '```markdown',
+        close: '```',
+        eol: '\n',
+        fences: 1,
+        why: 'the form every guide uses today',
+      },
+      { open: '```md', close: '```', eol: '\n', fences: 1, why: 'short language id' },
+      { open: '```Markdown', close: '```', eol: '\n', fences: 1, why: 'capitalised language id' },
+      {
+        open: '```markdown title="way-of-working.md"',
+        close: '```',
+        eol: '\n',
+        fences: 1,
+        why: 'trailing info-string attributes',
+      },
+      { open: '```markdown', close: '```', eol: '\r\n', fences: 1, why: 'CRLF line endings' },
+      { open: '~~~markdown', close: '~~~', eol: '\n', fences: 1, why: 'tilde fence' },
+      { open: '````markdown', close: '````', eol: '\n', fences: 1, why: 'four-backtick fence' },
+      {
+        open: '```mdx',
+        close: '```',
+        eol: '\n',
+        fences: 0,
+        why: 'a different language that merely starts with md',
+      },
+      { open: '```bash', close: '```', eol: '\n', fences: 0, why: 'another language' },
+      { open: '```', close: '```', eol: '\n', fences: 0, why: 'bare fence, no language' },
+    ]
+    const fenced = (row: { open: string; close: string; eol: string }) =>
+      [
+        '# A guide.',
+        '',
+        row.open,
+        '# Way of Working',
+        '',
+        '- Jira is adopted for project management.',
+        row.close,
+        '',
+        'Prose after the block.',
+      ].join(row.eol)
+
+    for (const row of FENCE_ROWS) {
+      it(`fence grammar — ${row.why}: ${JSON.stringify(row.open)} → ${row.fences} fence(s)`, () => {
+        const content = fenced(row)
+        expect(markdownFences(content), 'markdownFences').toHaveLength(row.fences)
+        expect(wowSnippets(content), 'wowSnippets').toHaveLength(row.fences)
+        for (const block of markdownFences(content)) {
+          expect(block).toContain('# Way of Working')
+          expect(block).not.toContain('Prose after the block.')
+        }
+      })
+    }
+
+    it('a fence opened with four backticks is closed by four, not by a three-backtick run inside it', () => {
+      const content = ['````markdown', '# Outer', '```bash', 'echo hi', '```', '````', ''].join(
+        '\n',
+      )
+      expect(markdownFences(content)).toHaveLength(1)
+      expect(markdownFences(content)[0]).toContain('echo hi')
     })
 
     it('declaresCodeHost is true for a declaration, false for a prose mention', () => {
@@ -822,12 +907,31 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
    * false positive costs one qualifier on a docs line; the false negative it replaces
    * shipped an unconditional promise to every reader on a stock Linear team.
    */
-  const TRANSITION_VERBS =
-    'move|transition|advance|promote|set|put|switch|flip|shift|update|change|mark'
-  // `(?:e?[sd]|ped)?` = base | -s/-es | -d/-ed | -ped (flip → flipped).
+  /**
+   * Every inflection of every transition verb, written out rather than derived by a
+   * suffix rule: `move` + `ing` is not `moveing`, `set` has no `-ed`, `flip` doubles
+   * its consonant. The table IS the decision table the meta-test below walks.
+   */
+  const TRANSITION_VERB_FORMS: ReadonlyArray<readonly string[]> = [
+    ['move', 'moves', 'moved', 'moving'],
+    ['transition', 'transitions', 'transitioned', 'transitioning'],
+    ['advance', 'advances', 'advanced', 'advancing'],
+    ['promote', 'promotes', 'promoted', 'promoting'],
+    ['set', 'sets', 'setting'],
+    ['put', 'puts', 'putting'],
+    ['switch', 'switches', 'switched', 'switching'],
+    ['flip', 'flips', 'flipped', 'flipping'],
+    ['shift', 'shifts', 'shifted', 'shifting'],
+    ['update', 'updates', 'updated', 'updating'],
+    ['change', 'changes', 'changed', 'changing'],
+    ['mark', 'marks', 'marked', 'marking'],
+  ]
+  const TRANSITION_VERBS = TRANSITION_VERB_FORMS.flat().join('|')
+  // The state may be bare, bold, quoted or in backticks — azure-devops.mdx:81 already
+  // house-styles it as `In Review`, so the backtick form is the likeliest next phrasing.
   const promisesInReview = (line: string): boolean =>
     new RegExp(
-      `(→|->|\\b(?:${TRANSITION_VERBS})(?:e?[sd]|ped)?\\b[^|\\n]{0,40}\\b(?:to|into|as))\\s*\\**"?In Review"?`,
+      `(→|->|\\b(?:${TRANSITION_VERBS})\\b[^|\\n]{0,40}\\b(?:to|into|as))\\s*[*"\\x60]*In Review`,
       'i',
     ).test(line)
 
@@ -887,8 +991,29 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
         // Bare infinitive after a modal / imperative — same door, other end.
         'Opening a PR will switch the issue to In Review.',
         'The skill can advance the item to **In Review** on PR creation.',
+        // Backtick-delimited state — the house style azure-devops.mdx:81 already uses
+        // for `In Review`, so the most likely next phrasing of the promise.
+        'pair moves the item to `In Review` when the PR opens.',
+        'the state → `In Review` on PR open',
+        'The issue is moved to `In Review`.',
+        // Progressive aspect — a third voice the base/-s/-ed alternation let through.
+        'pair is marking the card as In Review on PR creation.',
+        'pair is moving the issue to In Review while the PR is opened.',
+        'The adapter is setting the status to "In Review".',
+        'Opening the PR is flipping the card to In Review.',
       ]) {
         expect(promisesInReview(line), line).toBe(true)
+      }
+    })
+
+    it('promisesInReview sees every inflection in the verb table, in every delimiter style', () => {
+      for (const forms of TRANSITION_VERB_FORMS) {
+        for (const form of forms) {
+          for (const state of ['In Review', '"In Review"', '**In Review**', '`In Review`']) {
+            const line = `pair ${form} the issue to ${state} when the PR opens.`
+            expect(promisesInReview(line), line).toBe(true)
+          }
+        }
       }
     })
 

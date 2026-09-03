@@ -295,3 +295,43 @@ describe('generatePathSubstitutionReplacements - external links', () => {
     expect(replacements).toHaveLength(0)
   })
 })
+
+/**
+ * github.com resolves repo paths case-sensitively; APFS does not, and `fs.stat`
+ * inherits the volume's rule. A KB link spelled `guide.md` against a file named
+ * `Guide.md` therefore passed `check:links` on a developer's Mac and 404'd for every
+ * reader on GitHub — the same local-PASS / CI-FAIL asymmetry Check 5b closes for the
+ * docs site. Real filesystem on purpose: the in-memory double is exact-match already,
+ * so it cannot reproduce the defect.
+ */
+describe('generateExistenceCheckReplacements — case-sensitive on a case-insensitive volume', () => {
+  it('reports LINK TARGET NOT FOUND for a link that resolves only by ignoring case', async () => {
+    const { mkdtemp, mkdir, writeFile, rm } = await import('fs/promises')
+    const { tmpdir } = await import('os')
+    const { join } = await import('path')
+    const { fileSystemService } = await import('../file-system/file-system-service')
+
+    const root = await mkdtemp(join(tmpdir(), 'pair-links-case-'))
+    try {
+      await mkdir(join(root, 'docs'))
+      await writeFile(join(root, 'docs', 'Guide.md'), '# Guide')
+      const file = join(root, 'index.md')
+      const lines = ['[miscased](./docs/guide.md)', '[exact](./docs/Guide.md)']
+      const links: ParsedLink[] = [
+        { href: './docs/guide.md', text: 'miscased', line: 1, start: 0, end: 27 },
+        { href: './docs/Guide.md', text: 'exact', line: 2, start: 0, end: 24 },
+      ]
+      const result = await generateExistenceCheckReplacements({
+        links,
+        file,
+        config: { docsFolders: ['docs'], datasetRoot: root, exclusionList: [] },
+        fileService: fileSystemService,
+        lines,
+      })
+      expect(result.errors.map(e => [e.type, e.lineNumber])).toEqual([['LINK TARGET NOT FOUND', 1]])
+      expect(result.replacements).toEqual([])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})

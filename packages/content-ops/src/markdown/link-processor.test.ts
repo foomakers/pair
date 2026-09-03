@@ -888,3 +888,38 @@ describe('link-processor - detectLinkStyle', () => {
     expect(await detectLinkStyle(fs, cwd)).toBe('relative')
   })
 })
+
+/**
+ * Normalization only rewrites links whose target exists. A target that exists only
+ * by ignoring case is a broken link on GitHub, so it must be left for the existence
+ * check to report, not silently re-spelled. Real filesystem: the in-memory double is
+ * exact-match already.
+ */
+describe('generateNormalizationReplacements — a target that exists only by ignoring case is not a target', () => {
+  it('does not normalize a miscased link, and still normalizes the exact one', async () => {
+    const { mkdtemp, mkdir, writeFile, rm } = await import('fs/promises')
+    const { tmpdir } = await import('os')
+    const { join } = await import('path')
+    const { fileSystemService } = await import('../file-system/file-system-service')
+
+    const root = await mkdtemp(join(tmpdir(), 'pair-normalize-case-'))
+    try {
+      await mkdir(join(root, 'docs'))
+      await writeFile(join(root, 'docs', 'Guide.md'), '# Guide')
+      const file = join(root, 'docs', 'index.md')
+      const links: ParsedLink[] = [
+        { href: './guide.md', text: 'miscased', line: 1, start: 0, end: 22 },
+        { href: './Guide.md', text: 'exact', line: 2, start: 0, end: 19 },
+      ]
+      const replacements = await generateNormalizationReplacements(
+        links,
+        file,
+        { docsFolders: ['docs'], datasetRoot: root, exclusionList: [] },
+        fileSystemService,
+      )
+      expect(replacements.map(r => [r.oldHref, r.newHref])).toEqual([['./Guide.md', 'Guide.md']])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})

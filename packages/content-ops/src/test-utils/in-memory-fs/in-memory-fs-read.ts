@@ -1,5 +1,5 @@
 import type { Dirent, Stats } from 'fs'
-import { dirname } from 'path'
+import { basename, dirname } from 'path'
 import { InMemoryFsState } from './in-memory-fs-state'
 
 /**
@@ -106,14 +106,14 @@ export async function readdir(state: InMemoryFsState, path: string): Promise<Dir
   for (const d of state.dirs) {
     if (d === resolvedPath) continue
     if (dirname(d) === resolvedPath) {
-      const name = d.replace(`${resolvedPath}/`, '')
+      const name = basename(d)
       entries.push(state.makeDirent(name, 'dir'))
     }
   }
 
   for (const filePath of state.files.keys()) {
     if (dirname(filePath) === resolvedPath) {
-      const name = filePath.replace(`${resolvedPath}/`, '')
+      const name = basename(filePath)
       entries.push(state.makeDirent(name, 'file'))
     }
   }
@@ -124,7 +124,7 @@ export async function readdir(state: InMemoryFsState, path: string): Promise<Dir
   // the guard removed (US-396 review round 4).
   for (const linkPath of state.symlinks.keys()) {
     if (dirname(linkPath) === resolvedPath) {
-      const name = linkPath.replace(`${resolvedPath}/`, '')
+      const name = basename(linkPath)
       entries.push(state.makeDirent(name, 'symlink'))
     }
   }

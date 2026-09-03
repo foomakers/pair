@@ -44,6 +44,18 @@ describe('in-memory-fs-read', () => {
       expect(entries.map(e => e.name)).toContain('subdir')
     })
 
+    it('lists ROOT entries by bare name, as fs.readdir does (never "/dir")', async () => {
+      await fs.writeFile('/dir/file1.txt', 'content1')
+      await fs.writeFile('/top.txt', 'x')
+      await fs.symlink('/dir', '/alias')
+
+      const names = (await fs.readdir('/')).map(e => e.name)
+      expect(names).toContain('dir')
+      expect(names).toContain('top.txt')
+      expect(names).toContain('alias')
+      expect(names.filter(n => n.startsWith('/'))).toEqual([])
+    })
+
     it('should return empty array for empty directory', async () => {
       await fs.mkdir('/emptydir')
       expect((await fs.readdir('/emptydir')).length).toBe(0)
