@@ -4006,4 +4006,65 @@ describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () =>
     const r = checkFormatWorkflow(shipped)
     expect(r.ok, r.message).toBe(true)
   })
+
+  // The message is the entire user-facing product of a RED gate, and its two failure modes
+  // have no other guard: it asserts things about GitHub that no rule re-measures, and
+  // prettier does not reflow a string literal, so a spliced sentence leaves a ragged line
+  // nothing in the toolchain catches.
+  describe('the rejection message says only what was measured, at one column width', () => {
+    const flat = (m: string) => m.replace(/\s+/g, ' ')
+    const rejectionFor = (value: string) => {
+      const r = checkFormatWorkflow(runsOn(readFileSync(FORMAT_WORKFLOW, 'utf-8'), value))
+      expect(r.ok, `${value}: ${r.message}`).toBe(false)
+      return r.message
+    }
+
+    // MEASURED AT THE PRODUCER. Probe run 33782665948, re-read this round with
+    // `gh api repos/foomakers/pair/actions/runs/33782665948/jobs`: job `d8-two-same-label`
+    // (`runs-on: [ubuntu-latest, ubuntu-latest]`) got runner `GitHub Actions 1000003379`,
+    // ran `Set up job` / its `echo` / `Complete job` and completed `success` — GitHub
+    // dedupes the label SET. Only the DIFFERENT-label rows sat unscheduled:
+    // `d8-two-ubuntu` and `d8-three-ubuntu` show `runner_name: ""`, zero steps, still
+    // queued 23 minutes later. So "the job never gets a runner and the context stays
+    // PENDING" is true of two DIFFERENT labels and FALSE of a repeated one — and this
+    // message tags it `(measured)`, on a value a contributor can disprove in one push.
+    it('scopes the never-starts claim to DIFFERENT labels', () => {
+      const m = flat(rejectionFor('[ubuntu-latest, ubuntu-latest]'))
+      expect(m).toMatch(/two DIFFERENT allow-listed labels are ANDed[^.]*never starts/)
+      expect(m).not.toMatch(/A list of TWO allow-listed labels[^.]*never gets a runner/)
+    })
+
+    it('names the repeated label as its own case, not as a job that never runs', () => {
+      const m = flat(rejectionFor('[ubuntu-latest, ubuntu-latest]'))
+      expect(m).toMatch(/EXACTLY ONE label/)
+      expect(m).toMatch(/repeated label is rejected too/)
+      expect(m).toMatch(/GitHub dedupes/)
+    })
+
+    // The same paragraph is printed for every rejected value, so the two rows that DO
+    // queue forever must still read as measured fact.
+    it('keeps the PENDING claim for the values that really never start', () => {
+      for (const value of ['self-hosted', '[ubuntu-latest, ubuntu-22.04]']) {
+        expect(flat(rejectionFor(value)), value).toMatch(/PENDING, never SUCCESS \(measured\)/)
+      }
+    })
+
+    // Line 0 is the file header and line 1 carries the quoted value (its width is the
+    // contributor's, not ours); the last line closes the paragraph. Everything between is
+    // body text and must render as one column (the paragraph is wrapped at 95; the floor
+    // is 80, which is where greedy wrapping lands when the next word is a long one) — a
+    // 48-char line beside 95-char neighbours is what a mid-line splice leaves behind.
+    it('wraps every body line to one column width', () => {
+      for (const value of [
+        'self-hosted',
+        '[ubuntu-latest, ubuntu-latest]',
+        '[ubuntu-latest, ubuntu-22.04]',
+      ]) {
+        for (const line of rejectionFor(value).split('\n').slice(2, -1)) {
+          expect(line.length, `${value}: ${line.length} chars — ${line}`).toBeGreaterThanOrEqual(80)
+          expect(line.length, `${value}: ${line.length} chars — ${line}`).toBeLessThanOrEqual(99)
+        }
+      }
+    })
+  })
 })

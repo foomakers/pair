@@ -1383,20 +1383,23 @@ function runsOnProblems(jobs: Job[]): string[] {
     const declared = job.body['runs-on']
     const labels = runnerLabels(declared)
     // EXACTLY ONE label, not "every label allow-listed": GitHub ANDs a label list, so a
-    // second image label narrows the runner set to empty (measured — probe run 33782665948:
-    // `[ubuntu-latest, ubuntu-22.04]` and `[ubuntu-latest, ubuntu-24.04, ubuntu-22.04]`
-    // both sat `queued`, never started, while `[ubuntu-latest]` finished). A list is one
-    // label or it is a job that never runs.
+    // second DIFFERENT image label narrows the runner set to empty (measured — probe run
+    // 33782665948: `[ubuntu-latest, ubuntu-22.04]` and `[ubuntu-latest, ubuntu-24.04,
+    // ubuntu-22.04]` both sat `queued`, never started, while `[ubuntu-latest]` finished).
+    // A REPEATED label is the one row where counting is narrower than the producer:
+    // `[ubuntu-latest, ubuntu-latest]` completed success (GitHub dedupes the set) and is
+    // rejected anyway, because the contract is one label and the direction is a false RED.
     const accepted =
       labels !== undefined && labels.length === 1 && RUNNER_LABELS.some(ok => ok === labels[0])
     if (accepted) return []
     return [
       `job \`${job.name}\` sets \`runs-on: ${describeRunsOn(declared)}\`: it may run only on a\n` +
-        `  GitHub-hosted Ubuntu runner (\`${RUNNER_LABELS.join('`, `')}\`, alone or as a one-label\n` +
-        '  list). A list of TWO allow-listed labels is not a wider choice: GitHub ANDs the labels of a\n' +
-        '  list and no hosted image carries two image labels, so the job never gets a runner and the\n' +
-        '  `format` context stays PENDING, never SUCCESS (measured). `runs-on` picks the MACHINE, which\n' +
-        '  decides what `pnpm` and `prettier` even are — the\n' +
+        `  GitHub-hosted Ubuntu runner (\`${RUNNER_LABELS.join('`, `')}\`, alone or as a\n` +
+        '  one-label list). A list must carry EXACTLY ONE label: two DIFFERENT allow-listed labels are\n' +
+        '  ANDed by GitHub and name no machine, so the job never starts and the `format` context stays\n' +
+        '  PENDING, never SUCCESS (measured). A repeated label is rejected too, though GitHub dedupes it\n' +
+        '  and the job does run (measured): ONE label is the contract, and the repeat is a spelling with\n' +
+        '  no use. `runs-on` picks the MACHINE, which decides what `pnpm` and `prettier` even are — the\n' +
         '  `container:` argument spelled as a value instead of a key — and on a PUBLIC repo a\n' +
         "  `pull_request` run executes the PR's OWN version of this file, so `self-hosted` (bare, in a\n" +
         '  label list, or through a runner `group:`) hands the `format` verdict to a machine the pull\n' +
