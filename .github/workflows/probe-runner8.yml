@@ -1,0 +1,27 @@
+# TEMPORARY probe (#413, review round 17) — reverted in the next commit.
+# Question: does a MULTI-label `runs-on` sequence of GitHub-hosted image labels
+# reach a runner, or does GitHub AND the labels and leave the job queued?
+name: Probe Runner 8
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  d8-one-ubuntu:
+    runs-on: [ubuntu-latest]
+    steps:
+      - run: echo "D8-ONE-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
+  d8-two-ubuntu:
+    runs-on: [ubuntu-latest, ubuntu-22.04]
+    steps:
+      - run: echo "D8-TWO-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
+  d8-three-ubuntu:
+    runs-on: [ubuntu-latest, ubuntu-24.04, ubuntu-22.04]
+    steps:
+      - run: echo "D8-THREE-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
+  d8-two-same-label:
+    runs-on: [ubuntu-latest, ubuntu-latest]
+    steps:
+      - run: echo "D8-DUP-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"

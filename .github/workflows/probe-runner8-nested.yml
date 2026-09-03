@@ -1,0 +1,15 @@
+# TEMPORARY probe (#413, review round 17) — reverted in the next commit.
+# Question: does GitHub accept a NESTED sequence as a `runs-on` value, or is the
+# workflow file invalid?
+name: Probe Runner 8 Nested
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  d8-nested:
+    runs-on: [[ubuntu-latest]]
+    steps:
+      - run: echo "D8-NESTED-RAN"
