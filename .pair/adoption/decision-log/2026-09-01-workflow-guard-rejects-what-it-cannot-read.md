@@ -270,6 +270,18 @@ rounds of re-deferral against a decision already made.
   property it holds. Measured after the migration: 362 tests, every RED mutation still RED with the
   same cause, and the rows that asserted the rejection of a legal spelling inverted to GREEN with
   the semantic rule asserted on the resolved value.
+- **An allow-list over ELEMENTS is not an allow-list over the VALUE** (added 2026-09-03, review
+  round 17). `runs-on` accepted any sequence whose every label was allow-listed. GitHub **ANDs**
+  the labels of a list, and no hosted image carries two image labels, so `[ubuntu-latest,
+  ubuntu-22.04]` — every element allow-listed — names NO machine: probe run
+  [33782665948](https://github.com/foomakers/pair/actions/runs/33782665948) on PR #477 left
+  `d8-two-ubuntu` and `d8-three-ubuntu` `queued`, never started, while `[ubuntu-latest]` and
+  `[ubuntu-latest, ubuntu-latest]` (GitHub dedupes) completed. The rule now COUNTS: exactly one
+  label. It is deliberately narrower than the producer on one measured row — the duplicate-label
+  spelling runs on GitHub and is rejected here — and that narrowing is the one place this module
+  fails a workflow GitHub would honour. It is accepted because the direction is a false RED with a
+  message naming the one-label spelling, never a false green, and because the alternative (dedupe
+  before counting) buys a spelling nobody writes at the cost of a second acceptance path.
 - **Two surfaces became allow-lists in the same change, both of them the "relocation" shape this
   module keeps meeting.** (a) The WORKFLOW's own keys and every JOB's, because a job-level `env:`
   reaches the checking step whatever the step-level allow-list says: measured end to end,

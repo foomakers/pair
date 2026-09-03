@@ -3840,6 +3840,19 @@ describe('a failure-path step only says what to run (#413)', () => {
 // one-element-list spellings are the SAME machine, not a weaker one; and self-hosted reads
 // today as a BLOCKED merge — the context stays PENDING, never SUCCESS — which lasts exactly
 // as long as no self-hosted runner is registered on this public repo.
+//
+// A LIST IS ANDed. Boundary proof, GitHub itself (probe workflow on this PR, run
+// 33782665948, reverted), 20 minutes after the run started:
+//   runs-on: [ubuntu-latest]                            -> `d8-one-ubuntu`       success
+//   runs-on: [ubuntu-latest, ubuntu-latest]             -> `d8-two-same-label`   success (GitHub dedupes)
+//   runs-on: [ubuntu-latest, ubuntu-22.04]              -> `d8-two-ubuntu`       still `queued`, never started
+//   runs-on: [ubuntu-latest, ubuntu-24.04, ubuntu-22.04]-> `d8-three-ubuntu`     still `queued`, never started
+// and, in a second probe workflow (run 33782655630):
+//   runs-on: [[ubuntu-latest]]                          -> the RUN failed outright, no job scheduled
+// So a value every element of which is on the allow-list can still name NO machine: the
+// rule counts labels (exactly one), it does not merely allow-list each of them. The
+// duplicate spelling is measured GREEN on GitHub and rejected here anyway — one label is
+// the contract, and the direction of that narrowing is a false red, never a false green.
 describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () => {
   const runsOn = (source: string, value: string) =>
     mutate(source, '    runs-on: ubuntu-latest\n', `    runs-on: ${value}\n`, 'the runs-on line')
@@ -3889,6 +3902,19 @@ describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () =>
     ['an empty value', ''],
     ['an empty list', '[]'],
     ['a nested sequence', '[[ubuntu-latest]]'],
+    // A LIST IS ANDed BY GITHUB (probe run 33782665948, table above): every extra label
+    // narrows the runner set, and no GitHub-hosted image carries two image labels, so a
+    // list of allow-listed labels reaches NO runner — the job queues and the `format`
+    // context stays PENDING, the same blocked-merge loss as `self-hosted`.
+    ['a two-label list of allow-listed images', '[ubuntu-latest, ubuntu-22.04]'],
+    ['a three-label list of allow-listed images', '[ubuntu-latest, ubuntu-24.04, ubuntu-22.04]'],
+    ['a two-label block sequence', '\n      - ubuntu-latest\n      - ubuntu-22.04'],
+    // MEASURED GREEN on GitHub (`d8-two-same-label` completed success — GitHub dedupes the
+    // label set): rejected anyway. The contract is ONE label, and a spelling nobody needs
+    // is not worth a second acceptance path; the direction is safe (a false red, never a
+    // false green).
+    ['the same allow-listed label twice', '[ubuntu-latest, ubuntu-latest]'],
+    ['a sequence carrying a mapping', '[{group: ubuntu-runners}]'],
   ]
 
   for (const [label, value] of rejected) {
@@ -3898,6 +3924,37 @@ describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () =>
       expect(r.message, value).toContain('runs-on')
     })
   }
+
+  // The rejection QUOTES the value back, so a non-scalar item must not flatten into the
+  // spelling the rule accepts: `[[ubuntu-latest]]` rendered as `[ubuntu-latest]` reads
+  // "you wrote `[ubuntu-latest]`, which is rejected; use `[ubuntu-latest]`".
+  const rendered: [string, string, string][] = [
+    ['a nested sequence', '[[ubuntu-latest]]', '`runs-on: [["ubuntu-latest"]]`'],
+    ['a sequence carrying a mapping', '[{group: x}]', '`runs-on: [{"group":"x"}]`'],
+    [
+      'a sequence carrying a null item',
+      '[ubuntu-latest, null]',
+      '`runs-on: [ubuntu-latest, null]`',
+    ],
+    [
+      'a two-label list',
+      '[ubuntu-latest, ubuntu-22.04]',
+      '`runs-on: [ubuntu-latest, ubuntu-22.04]`',
+    ],
+  ]
+
+  for (const [label, value, quoted] of rendered) {
+    it(`quotes ${label} back distinguishably`, () => {
+      const r = checkFormatWorkflow(runsOn(WELL_FORMED, value))
+      expect(r.ok, `${value}: ${r.message}`).toBe(false)
+      expect(r.message, value).toContain(quoted)
+    })
+  }
+
+  it('never quotes a REJECTED value back as the accepted one-label spelling', () => {
+    const r = checkFormatWorkflow(runsOn(WELL_FORMED, '[[ubuntu-latest]]'))
+    expect(r.message).not.toContain('`runs-on: [ubuntu-latest]`')
+  })
 
   it('fails when the job declares no `runs-on` at all', () => {
     const r = checkFormatWorkflow(
@@ -3935,6 +3992,13 @@ describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () =>
     const r = checkFormatWorkflow(runsOn(shipped, '[self-hosted, linux]'))
     expect(r.ok, r.message).toBe(false)
     expect(r.message).toContain('runs-on')
+  })
+
+  it('fires on the SHIPPED workflow when it is widened to a two-label list', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(runsOn(shipped, '[ubuntu-latest, ubuntu-22.04]'))
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('`runs-on: [ubuntu-latest, ubuntu-22.04]`')
   })
 
   it('accepts the shipped workflow, which runs on a GitHub-hosted Ubuntu image', () => {

@@ -165,7 +165,10 @@
  *   today that regression reads as a BLOCKED merge rather than a green check — no
  *   self-hosted runner is registered (`total_count: 0`), so the job queues and `format`
  *   stays pending (measured, probe run 33729726089) — which lasts exactly as long as that
- *   stays true.
+ *   stays true. ONE label, counted, not "every label allow-listed": GitHub ANDs a label
+ *   list, so `[ubuntu-latest, ubuntu-22.04]` names no machine at all (measured, probe run
+ *   33782665948) and its job queues forever — the same blocked-merge loss as `self-hosted`,
+ *   reached by a value every element of which is on the allow-list.
  * - `cancel-in-progress` and `concurrency.group` read as SUBSTRINGS. `!(github.event_name
  *   == 'pull_request')` contains the accepted equality and inverts it; `format-${{
  *   github.run_id }}-${{ github.ref }}` contains the ref key and is unique per run.
@@ -1317,12 +1320,25 @@ function runnerLabels(declared: unknown): string[] | undefined {
   return [String(declared)]
 }
 
-/** A `runs-on:` value as it was written, for the message that rejects it. */
+/**
+ * A `runs-on:` value as it was written, for the message that rejects it. A non-scalar
+ * ITEM of a sequence is rendered as JSON, not flattened: `String([...])` turns
+ * `[[ubuntu-latest]]` into `[ubuntu-latest]` and `[{group: x}]` into `[[object Object]]`,
+ * so the rejection quoted back a value that is itself on the allow-list — "you wrote
+ * `[ubuntu-latest]`, which is rejected; use `[ubuntu-latest]`". (GitHub rejects the nested
+ * spelling as an invalid workflow file outright — probe run 33782655630 on PR #477 failed
+ * with no job scheduled — so the reader of this message is already lost; the message must
+ * at least name what they wrote.)
+ */
 function describeRunsOn(declared: unknown): string {
   if (declared === null) return '(empty)'
-  if (Array.isArray(declared)) return `[${declared.map(item => String(item)).join(', ')}]`
+  if (Array.isArray(declared)) return `[${declared.map(describeRunsOnItem).join(', ')}]`
   if (isMapping(declared)) return `{${Object.keys(declared).join(', ')}}`
   return String(declared)
+}
+
+function describeRunsOnItem(item: unknown): string {
+  return isMapping(item) || Array.isArray(item) ? JSON.stringify(item) : String(item)
 }
 
 /**
@@ -1346,6 +1362,15 @@ function describeRunsOn(declared: unknown): string {
  * someone registers a self-hosted runner, which on a public repo is the configuration
  * GitHub itself warns against — for exactly this reason. The rule closes the gap at the
  * cheap end rather than depending on a repository setting staying the way it is.
+ *
+ * A LIST IS ANDed BY GITHUB, so the rule counts labels — it is not "every label is
+ * allow-listed". Probe run 33782665948 on PR #477: `[ubuntu-latest]` and
+ * `[ubuntu-latest, ubuntu-latest]` completed success (GitHub dedupes the set), while
+ * `[ubuntu-latest, ubuntu-22.04]` and `[ubuntu-latest, ubuntu-24.04, ubuntu-22.04]` sat
+ * `queued` and never started — no hosted image carries two image labels. The duplicate
+ * spelling is rejected anyway: the contract is ONE label, and a false RED on a spelling
+ * nobody needs costs a message, while the missing count cost a `format` context that never
+ * reaches SUCCESS.
  */
 function runsOnProblems(jobs: Job[]): string[] {
   return jobs.flatMap(job => {
@@ -1357,15 +1382,21 @@ function runsOnProblems(jobs: Job[]): string[] {
       ]
     const declared = job.body['runs-on']
     const labels = runnerLabels(declared)
+    // EXACTLY ONE label, not "every label allow-listed": GitHub ANDs a label list, so a
+    // second image label narrows the runner set to empty (measured — probe run 33782665948:
+    // `[ubuntu-latest, ubuntu-22.04]` and `[ubuntu-latest, ubuntu-24.04, ubuntu-22.04]`
+    // both sat `queued`, never started, while `[ubuntu-latest]` finished). A list is one
+    // label or it is a job that never runs.
     const accepted =
-      labels !== undefined &&
-      labels.length > 0 &&
-      labels.every(label => RUNNER_LABELS.some(ok => ok === label))
+      labels !== undefined && labels.length === 1 && RUNNER_LABELS.some(ok => ok === labels[0])
     if (accepted) return []
     return [
       `job \`${job.name}\` sets \`runs-on: ${describeRunsOn(declared)}\`: it may run only on a\n` +
         `  GitHub-hosted Ubuntu runner (\`${RUNNER_LABELS.join('`, `')}\`, alone or as a one-label\n` +
-        '  list). `runs-on` picks the MACHINE, which decides what `pnpm` and `prettier` even are — the\n' +
+        '  list). A list of TWO allow-listed labels is not a wider choice: GitHub ANDs the labels of a\n' +
+        '  list and no hosted image carries two image labels, so the job never gets a runner and the\n' +
+        '  `format` context stays PENDING, never SUCCESS (measured). `runs-on` picks the MACHINE, which\n' +
+        '  decides what `pnpm` and `prettier` even are — the\n' +
         '  `container:` argument spelled as a value instead of a key — and on a PUBLIC repo a\n' +
         "  `pull_request` run executes the PR's OWN version of this file, so `self-hosted` (bare, in a\n" +
         '  label list, or through a runner `group:`) hands the `format` verdict to a machine the pull\n' +
