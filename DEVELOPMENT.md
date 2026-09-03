@@ -121,7 +121,7 @@ Before committing, always run:
 pnpm quality-gate
 ```
 
-This runs (in order): `ts:check`, `test`, `lint`, `workflows:test`, `format:check` (prettier + markdownlint, **check mode**), `gate:composition`, `hygiene:check`, `smoke-modes:check`, `docs:staleness`, `skills:conformance`, `llms-index:check`, `dup:check`. A red `llms-index:check` means `.pair/llms.txt` no longer matches its generator: regenerate with `pair update` and commit the result (the gate prints the missing/extra lines and never writes the file).
+This runs (in order): `ts:check`, `test`, `lint`, `workflows:test`, `format:check` (prettier + markdownlint, **check mode**), `gate:composition`, `hygiene:check`, `smoke-modes:check`, `docs:staleness`, `skills:conformance`, `llms-index:check`, `dup:check`. A red `llms-index:check` means `.pair/llms.txt` no longer matches its generator: run `pnpm llms-index:regen` and commit the result (the gate prints the missing/extra lines and never writes the file; the regen script writes that one file and refuses when the report says regenerating is the wrong move).
 
 The gate never formats. It is the pre-push hook, where the commits already exist: a write-mode
 formatter would rewrite the working tree without touching what is being pushed, so it only pollutes

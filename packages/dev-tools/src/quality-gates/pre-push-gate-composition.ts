@@ -75,6 +75,9 @@ export const ROOT_PACKAGE_JSON = resolve(REPO_ROOT, 'package.json')
  * - `test:perf` (→ `benchmark-update-link.ts`) writes a scratch KB tree and
  *   `reports/performance/benchmark-report.json`. No check mode exists, so it is
  *   banned outright.
+ * - `llms-index:regen` (→ `llms-txt-regenerate.ts`) rewrites `.pair/llms.txt`. It is
+ *   the remedy `llms-index:check` prints, and putting a remedy inside the gate that
+ *   prints it is how a drift gate stops detecting drift.
  *
  * Still an explicit list rather than a `/:fix/` pattern — a guard that fires on any
  * `:fix` string, including things it has no opinion about, gets disabled — so a new
@@ -105,6 +108,14 @@ const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern:
   { name: 'sync-version', pattern: /\bsync-version\b(?![^&|;\n]*--check\b)/ },
   { name: 'test:perf', pattern: /\btest:perf\b/ },
   { name: 'benchmark-update-link', pattern: /\bbenchmark-update-link(?:\.ts)?\b/ },
+  // `llms-index:regen` (→ `llms-txt-regenerate.ts`) writes `.pair/llms.txt` (#416). It
+  // is the remedy the DRIFT GATE prints, which is exactly why it must never become a
+  // gate step: a gate that regenerated the index would silently fix the drift it exists
+  // to reveal, and the two misses this repo has on record would still be invisible. The
+  // check-only sibling `llms-index:check` is not matched — the `:regen` suffix is the
+  // whole discriminator, and it is the one a one-word edit would change.
+  { name: 'llms-index:regen', pattern: /\bllms-index:regen\b/ },
+  { name: 'llms-txt-regenerate', pattern: /\bllms-txt-regenerate(?:\.ts)?\b/ },
 ]
 
 /** The package runners a root script can delegate through. */

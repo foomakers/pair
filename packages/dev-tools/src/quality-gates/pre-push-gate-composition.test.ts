@@ -138,6 +138,18 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
     ])
   })
 
+  // `pnpm llms-index:regen` → llms-txt-regenerate.ts writes `.pair/llms.txt` (#416).
+  // It is the REMEDY the drift gate names, so the gate must keep naming it and must
+  // never RUN it: a gate that regenerated the index would hide the drift it exists to
+  // reveal. Its sibling `llms-index:check` is check-only and stays green here.
+  it('flags llms-index:regen and the module it runs, but not the check beside it', () => {
+    expect(findWriteModeFormatters('pnpm llms-index:regen')).toEqual(['llms-index:regen'])
+    expect(findWriteModeFormatters('ts-node -T src/quality-gates/llms-txt-regenerate.ts')).toEqual([
+      'llms-txt-regenerate',
+    ])
+    expect(findWriteModeFormatters('pnpm llms-index:check')).toEqual([])
+  })
+
   it('names the remedy, so a failure is actionable', () => {
     expect(PRE_PUSH_REMEDY).toContain(`pnpm ${REMEDY_SCRIPT}`)
   })

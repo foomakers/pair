@@ -130,6 +130,7 @@
 - [Decision: a quality gate imports the generator it checks by SOURCE path, and the generator hands it a read-only file-system slice](.pair/adoption/decision-log/2026-09-01-a-gate-imports-its-generator-by-source-and-gets-a-read-only-slice.md)
 - [Decision: External boundary proof prevents false equivalence](.pair/adoption/decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md)
 - [Decision: Review contract inventory prevents serial findings](.pair/adoption/decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
+- [Decision: a gate's remedy is a command its audience can run, and the remedy refuses the states its own caution warns about](.pair/adoption/decision-log/2026-09-03-a-gate-names-a-remedy-it-can-run.md)
 
 ## How-To Guides
 

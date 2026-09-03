@@ -15,6 +15,7 @@
     "mdlint:fix": "markdownlint-fix",
     "code-hygiene:check": "ts-node src/quality-gates/code-hygiene-check.ts",
     "llms-index:check": "ts-node -T src/quality-gates/llms-txt-drift-check.ts",
+    "llms-index:regen": "ts-node -T src/quality-gates/llms-txt-regenerate.ts",
     "smoke-modes:check": "ts-node src/quality-gates/smoke-scenario-modes.ts",
     "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",
     "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",

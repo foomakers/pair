@@ -27,7 +27,7 @@ before `PRD.md` (case-insensitive-ish), codepoint order the reverse (`P` = 0x50,
 
 Concrete failure with the gate in place: a contributor on a Node built without full
 ICU (`--with-intl=small-icu`, several distro and container builds) runs the gate on an
-**untouched** tree, gets red, is told "regenerate with `pair update` and commit", does
+**untouched** tree, gets red, is told "regenerate with `pnpm llms-index:regen` and commit", does
 so, and commits 458 reordered lines that flip back on the next machine. The gate's own
 message drives the churn.
 
@@ -47,10 +47,23 @@ loop. The repo had no `.gitattributes` at all, so nothing pinned the normal form
 non-blank — the deltas are computed over the non-blank lines. 562 is the ENTRY count, and
 an earlier draft of this paragraph used it for both.)
 
+**And a third axis: the path separator.** `scanSection` built each emitted entry path
+with `path.join`, which is bound to the platform — `.pair/knowledge/…` on POSIX,
+`.pair\knowledge\…` on Windows. Measured with Node's real `path.win32` bound to the
+generator against the real committed index: **all 562 entries change**, the gate reports
+562 `missing` + 562 `extra` in a 1140-line report with no caution naming the cause, and
+closes with the bare regenerate imperative. Obeying it commits an index in which every
+markdown link is broken for every other platform and every agent. The separator is also
+a SORT key — `\` is U+005C and `/` is U+002F — so `a/b.md` precedes `a5.md` on POSIX and
+follows it on Windows: the determinism rule 1 buys on the collation axis is lost on this
+one. It is an adopter-facing defect too, not only a contributor one: `generateLlmsTxt` is
+what `pair-cli install`/`update` writes, so a Windows adopter's `.pair/llms.txt` ships
+with broken links.
+
 ## Decision
 
 **Any generated artifact that is both tracked and byte-compared must be byte-reproducible
-on any machine that checks it out.** Two rules follow, one per axis of variation found:
+on any machine that checks it out.** Three rules follow, one per axis of variation found:
 
 1. **Entry order is a function of the content alone** — not `localeCompare`, not
    filesystem-walk order.
@@ -61,12 +74,12 @@ on any machine that checks it out.** Two rules follow, one per axis of variation
    (`\r\n`, bare `\r`, `\n`) before computing the missing/extra deltas (so a real drift
    stays visible under any of them), states the terminator mismatch, and puts its call to
    action behind the precondition "once the checkout is normalized to LF" — never the
-   bare `pair update`, which here is the one fix that provably cannot work. The trigger is
+   bare regenerate imperative, which here is the one fix that provably cannot work. The trigger is
    **any** `\r`, not `\r\n` alone: a bare-CR file (classic-Mac form — git never writes it,
    a hand-rolled `s/\n/\r/` does) has the same cause, the same diagnosis and the same exit,
    and under an `\n`-only split it collapses to a SINGLE segment — the whole index as one
    unreadable `extra` line, no terminator caution, and the closing advice back to the bare
-   `pair update` this rule exists to prevent. The recipe it prints is the one that was
+   regenerate imperative this rule exists to prevent. The recipe it prints is the one that was
    **run** against a `core.autocrlf=true` clone — `rm` + `git checkout --`, the one file
    and nothing else: the idiomatic `git add --renormalize` is inert when the index side is
    already LF (it stages nothing, all 583 CR-carrying lines stay on disk and the gate stays
@@ -74,6 +87,14 @@ on any machine that checks it out.** Two rules follow, one per axis of variation
    attribute overrides `autocrlf` by itself — with the config left at `true`, the two-step
    recipe alone gave `w/lf`, 0 CRs, gate green) and would rewrite repo-local git config for
    every file to fix one.
+3. **A path that is EMITTED into the artifact is built with `posix.join`; `join` stays
+   for file-system access only.** The two are different jobs and sharing one call
+   conflated them. Windows' file APIs accept either separator, so reading the tree keeps
+   the platform's own `join` and nothing about the walk changes; the entry path is
+   content, and content does not vary by host. The invariant is the same one rule 2
+   buys, which is why this is a rule of this ADL and not a new record: `/` is the
+   separator the artifact's consumers (markdown renderers, every agent resolving the
+   index, the drift gate's byte comparison) already assume.
 
 Platform scope, since the question is what makes rule 2 necessary: **LF is the repo's
 normal form on every platform**, in the index and in the working tree. Windows is not
@@ -126,6 +147,10 @@ It is kept as the stable citation key — the normative statement is this sectio
   branch). Defensible on today's evidence — CI is `ubuntu-latest`, no doc claims Windows
   — but the cost of being wrong is a contributor stuck in an unbreakable regenerate loop
   on their first gate run, and the cost of being right is two lines of config. Rejected.
+- **Normalize the separator in the GATE** (compare `\`-joined and `/`-joined paths as
+  equal): same defect as normalizing the order — the committed file's bytes would still
+  differ by machine, and the broken links would ship to adopters through
+  `pair-cli install`/`update`, which the gate never sees. Rejected.
 - **Accept CRLF in the verdict** (compare normalized text, call it in-sync): drops AC1's
   byte equality, and the tracked file's bytes would then legitimately differ by machine —
   the very property this ADL exists to protect. Rejected.
@@ -146,6 +171,13 @@ It is kept as the stable citation key — the normative statement is this sectio
 - The repo gains its first `.gitattributes`. It is inert on the current tree (no tracked
   text file carries a CR) and on macOS/Linux clones; it changes what a
   `core.autocrlf=true` clone puts in the working tree.
+- The emitted entry path is separator-independent. Covered by
+  `apps/pair-cli/src/registry/llms-generation.win32.test.ts`, which binds `path` to
+  Node's own `path.win32` (what `require('path')` returns on Windows — `lib/path.js`
+  ends `module.exports = isWindows ? win32 : posix`) and asserts the generator emits the
+  same bytes a POSIX machine emits, including sibling order. On POSIX `join` and
+  `posix.join` are the same function, so this is the only shape of test that can
+  distinguish the fixed code from the broken code on a Linux CI.
 - The drift report has one more branch: `trackedCarriesCr`. It suppresses the
   order/whitespace sentence (one cause, one diagnosis) and adds "the checkout is
   normalized to LF" to the call to action's preconditions, which now compose with the

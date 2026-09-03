@@ -156,6 +156,13 @@ structurally.
   legal because the first one was.
 - The narrowing is the reusable half: the next gate that runs production code over a
   tree it must not modify asks for a read-only slice rather than the whole service.
+- The REMEDY the gate prints (`pnpm llms-index:regen`, ADL
+  [2026-09-03-a-gate-names-a-remedy-it-can-run.md](./2026-09-03-a-gate-names-a-remedy-it-can-run.md))
+  reuses both halves of this decision — same source import, same `-T` — and declares its
+  extra power as a separate two-method `LlmsIndexSink` rather than widening
+  `LlmsSourceFs`. The type distinction between the checker and the writer is the point:
+  the check still has no write primitive to call, and the writer is the only module in
+  the folder that does.
 - The relative import hardcodes a `../../../../apps/pair-cli/...` hop. Moving either
   package breaks it loudly at compile time (not silently at runtime), which is the
   acceptable failure mode; `repo-root.ts` already carries the folder's other hop count.

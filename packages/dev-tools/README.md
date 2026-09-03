@@ -8,6 +8,7 @@ Pair's own automation scripts for development and deployment — gate/tooling sc
 | ----------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | `code-hygiene:check`    | `src/quality-gates/code-hygiene-check.ts`       | Fails if suppression markers (`@ts-ignore`, `eslint-disable`, `.skip`) are committed                                                 | `pnpm hygiene:check`    |
 | `llms-index:check`      | `src/quality-gates/llms-txt-drift-check.ts`     | Fails if `.pair/llms.txt` is not byte-identical to what `generateLlmsTxt` emits for the tree; prints the missing/extra lines, never writes | `pnpm llms-index:check` |
+| `llms-index:regen`      | `src/quality-gates/llms-txt-regenerate.ts`      | Rewrites `.pair/llms.txt` from the same generator the check runs — the remedy the check prints; refuses on a CR-carrying checkout, a sparse tree or an unreadable index/tree | `pnpm llms-index:regen` |
 | `smoke-modes:check`     | `src/quality-gates/smoke-scenario-modes.ts`     | Fails if a `scripts/smoke-tests/` scenario is committed without its executable bit                                                   | `pnpm smoke-modes:check` |
 | `pre-push-gate:check`   | `src/quality-gates/pre-push-gate-composition.ts` | Fails if any step reachable from the root `quality-gate` chain writes files (the gate must stay check-mode)                          | `pnpm gate:composition` |
 | `sync-version`          | `src/quality-gates/sync-version-in-docs.ts`     | Detects/rewrites hardcoded CLI version strings across `.md`/`.mdx` docs                                                              | `pnpm sync-version -- <old-version>` |
@@ -18,7 +19,7 @@ Every root script above delegates here (`pnpm --filter @pair/dev-tools <script>`
 
 ## Folder structure
 
-- `src/quality-gates/` — repo-wide dev/CI gates (code hygiene, KB-index drift, smoke-scenario modes, gate composition, doc version sync, perf benchmark).
+- `src/quality-gates/` — repo-wide dev/CI gates (code hygiene, KB-index drift + its regeneration remedy, smoke-scenario modes, gate composition, doc version sync, perf benchmark).
 - `src/release/` — release-pipeline decision logic (currently `determine-version`).
 
 ## Scope

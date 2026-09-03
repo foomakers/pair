@@ -69,8 +69,23 @@ export const TRACKED_INDEX_PATH = '.pair/llms.txt'
  * The command that regenerates the index — named in every drift failure, because a
  * gate that reports a stale file without saying how to refresh it teaches
  * contributors to hand-edit it, which is how it went stale in the first place.
+ *
+ * It has to be a command this gate's AUDIENCE can actually run, and that audience is
+ * this repository's contributors: `@pair/dev-tools` is `private: true` and ships in no
+ * dataset. `pair update` was not such a command — no `pair` on `PATH`, none in any
+ * workspace `node_modules/.bin` (`apps/pair-cli` publishes its bin as `pair-cli`), no
+ * root script by that name — so the printed advice answered `command not found`. And
+ * its nearest real resolution is worse than the error: `pair-cli update` with no
+ * `--source` installs the PUBLISHED knowledge base over `.pair/knowledge/**`, undoing
+ * the guideline whose addition reddened the gate.
+ *
+ * `pnpm llms-index:regen` is the root script that runs `llms-txt-regenerate.ts` — the
+ * exact inverse of this check, writing this one file and refusing on every state whose
+ * caution says not to regenerate. Two tests hold the chain together: one asserts the
+ * literal string appears in the message, one resolves the script name against the real
+ * root `package.json`.
  */
-export const REGENERATION_COMMAND = 'pair update'
+export const REGENERATION_COMMAND = 'pnpm llms-index:regen'
 
 /**
  * The read-only adapter handed to the generator. Three methods, all reads: the type
@@ -112,7 +127,7 @@ export type DriftReport =
        * The tracked file carries at least one `\r` — as `\r\n` (a `core.autocrlf=true`
        * checkout) or bare (a hand-rolled conversion). A separate fact from the two
        * deltas: it explains a byte mismatch the deltas cannot show, and it is the one
-       * case where `pair update` is the WRONG advice. See `carriageReturnCaution`.
+       * case where regenerating is the WRONG advice. See `carriageReturnCaution`.
        */
       trackedCarriesCr: boolean
       /**
@@ -335,8 +350,10 @@ function invisibleDifferenceCaution(escapedLineCount: number): string {
 /**
  * The one invisible character with a known producer AND a known fix, so it gets a
  * caution of its own. Unlike a CR the BOM is not something git writes back on checkout:
- * `pair update` was run on a BOM-prefixed index and rewrote it without one, so the call
- * to action stays the bare imperative — this caution adds no precondition.
+ * the regeneration command was run on a BOM-prefixed index and rewrote it without one
+ * (pinned by `llms-txt-regenerate.test.ts`, and re-measured end to end on the real
+ * repo), so the call to action stays the bare imperative — this caution adds no
+ * precondition.
  */
 function byteOrderMarkCaution(): string {
   return (
@@ -371,9 +388,11 @@ function sparseTreeCaution(emptiedSections: string[]): string {
  * `.gitattributes` pins the file to `eol=lf` — this caution is what a working copy
  * checked out BEFORE that pin (and not rewritten since) gets told.
  *
- * Naming `pair update` here would be the one piece of advice that cannot work: the
- * regenerated file lands as LF and the next checkout puts the CRs back. The exit is a
- * renormalization, so that is what the message names.
+ * Naming the regeneration command here would be the one piece of advice that cannot
+ * work: the regenerated file lands as LF and the next checkout puts the CRs back. The
+ * exit is a renormalization, so that is what the message names — and
+ * `regenerateLlmsIndex` REFUSES to write on this state for the same reason, so the two
+ * halves of the remedy cannot disagree.
  *
  * The recipe is the one that was RUN, not the one that reads best. `git add
  * --renormalize` is the usual advice and it is inert here: the index side is already
@@ -393,7 +412,7 @@ function sparseTreeCaution(emptiedSections: string[]): string {
  * ANY CR triggers this, not just `\r\n`. A bare-CR file is not a state git produces —
  * but the cause (a conversion outside the generator), the diagnosis and the exit are
  * identical, and the checkout named below rewrites it to LF just the same. The
- * alternative is the one report that closes with `pair update` and cannot be obeyed.
+ * alternative is the one report that closes with a regeneration that cannot be obeyed.
  */
 function carriageReturnCaution(): string {
   return (
@@ -411,7 +430,7 @@ function carriageReturnCaution(): string {
  * The LAST paragraph — the one a contributor scanning for the fix acts on, which is why
  * a caution above does not merely PRECEDE it but CHANGES it. A message that says "do
  * not regenerate: restore the tree first" and then closes with the bare imperative
- * "Regenerate with `pair update` and commit the result" contradicts itself and delivers,
+ * "Regenerate with `pnpm llms-index:regen` and commit the result" contradicts itself and delivers,
  * in its own call to action, the damage the caution exists to prevent.
  *
  * The command is named on EVERY branch (AC5 — a drift report always says how to fix

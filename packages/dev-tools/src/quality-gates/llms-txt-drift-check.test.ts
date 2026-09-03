@@ -25,6 +25,7 @@ import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ROOT_PACKAGE_JSON } from './pre-push-gate-composition'
 import {
   REGENERATION_COMMAND,
   TRACKED_INDEX_PATH,
@@ -128,7 +129,38 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     const result = await checkLlmsIndexDrift(root)
 
     expect(result.ok).toBe(false)
-    expect(result.message).toContain(REGENERATION_COMMAND)
+    // The LITERAL a contributor is meant to type, not `REGENERATION_COMMAND` compared
+    // against itself: that form was green for any value the constant could hold,
+    // including `pair update`, which named no executable anywhere in this repo and
+    // still passed a 110-case suite. The assertion has to be able to go red on the
+    // string's CONTENT.
+    expect(result.message).toContain('pnpm llms-index:regen')
+  })
+
+  it('names a command that EXISTS — a root script, resolved against the real package.json (AC5)', async () => {
+    // The producer -> published identity -> consumer chain for the advice: the root
+    // `package.json` (producer) defines the script name (published identity) that the
+    // printed remedy (consumer) tells a contributor to type. Asserted against the REAL
+    // root manifest, the way `pre-push-gate-composition` asserts its own remedy, so a
+    // renamed or deleted script turns the advice red here instead of in a shell.
+    const runnerForm = /^pnpm (?<script>[A-Za-z0-9_:.-]+)$/.exec(REGENERATION_COMMAND)
+    expect(runnerForm?.groups?.script).toBeDefined()
+
+    const rootScripts = (
+      JSON.parse(readFileSync(ROOT_PACKAGE_JSON, 'utf-8')) as {
+        scripts: Record<string, string>
+      }
+    ).scripts
+    expect(Object.keys(rootScripts)).toContain(runnerForm?.groups?.script)
+  })
+
+  it("never names `pair`, which is not this repo's binary (AC5)", async () => {
+    // `apps/pair-cli` publishes its bin as `pair-cli`; `pair` resolves nowhere — not on
+    // PATH, not in any workspace `node_modules/.bin`, not as a root script. It is also
+    // the wrong ACTION: `pair-cli update` with no `--source` installs the published
+    // knowledge base over `.pair/knowledge/**` and reverts the guideline that reddened
+    // the gate.
+    expect(REGENERATION_COMMAND).not.toMatch(/\bpair\b(?!-cli)/)
   })
 
   it('NEVER writes: a failing run leaves the tracked file byte-identical (AC5, check-only ADL)', async () => {
@@ -301,8 +333,8 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
   // The third terminator state a text file can be in: a BARE CR (classic-Mac form, what
   // a hand-rolled `s/\n/\r/` conversion leaves). Split on `\n` alone the whole file is
   // ONE segment — every generated line `missing`, a single unreadable concatenation
-  // `extra`, no terminator caution, and the report closes with the bare `pair update`
-  // the CRLF branch exists to avoid: regenerating writes LF and whatever produced the
+  // `extra`, no terminator caution, and the report closes with the bare regenerate
+  // imperative the CRLF branch exists to avoid: regenerating writes LF and whatever produced the
   // CRs puts them back. Same cause as CRLF, so the same diagnosis and the same recipe.
   it('reports a BARE-CR file as a line-ending mismatch, not one giant extra line', async () => {
     const root = await makeInSyncTree()
@@ -406,7 +438,7 @@ describe('checkLlmsIndexDrift — the committed index vs. the generator', () => 
     // The pair is shown with the difference VISIBLE, not as two identical `# pair`s.
     expect(result.message).toContain('"\\ufeff# pair"')
     expect(result.message).toContain('"# pair"')
-    // Regeneration DOES fix a BOM (verified: `pair update` on a BOM-prefixed index
+    // Regeneration DOES fix a BOM (verified: the real regeneration on a BOM-prefixed index
     // rewrites it without one), so the call to action stays the bare imperative.
     expect(result.message).toMatch(/^Regenerate with/m)
   })
