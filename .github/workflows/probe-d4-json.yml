@@ -1,0 +1,10 @@
+name: Probe D4 json step
+"on":
+  push:
+    branches:
+      - feature/US-413-ci-format-check
+jobs:
+  d4:
+    runs-on: ubuntu-latest
+    steps:
+      - { name: ok, run: echo D4-JSON-STEP-RAN }

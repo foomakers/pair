@@ -1,0 +1,13 @@
+name: Probe D2 anchor
+"on":
+  push:
+    branches: &b
+      - feature/US-413-ci-format-check
+  workflow_dispatch:
+    branches: *b
+jobs:
+  d2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ok
+        run: echo D2-ANCHOR-RAN

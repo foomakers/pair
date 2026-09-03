@@ -1,0 +1,13 @@
+name: Probe D3 merge key
+"on":
+  push:
+    branches:
+      - feature/US-413-ci-format-check
+x-base: &base
+  runs-on: ubuntu-latest
+jobs:
+  d3:
+    <<: *base
+    steps:
+      - name: ok
+        run: echo D3-MERGE-RAN

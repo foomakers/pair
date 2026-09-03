@@ -1,0 +1,8 @@
+name: Probe D1 flow
+"on": { push: { branches: [feature/US-413-ci-format-check] } }
+jobs:
+  d1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ok
+        run: echo D1-FLOW-TRIGGER-RAN

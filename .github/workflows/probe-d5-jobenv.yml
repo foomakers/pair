@@ -1,0 +1,13 @@
+name: Probe D5 job env
+"on":
+  push:
+    branches:
+      - feature/US-413-ci-format-check
+jobs:
+  d5:
+    runs-on: ubuntu-latest
+    env:
+      PROBE_D5: from-job-env
+    steps:
+      - name: ok
+        run: echo "D5-JOB-ENV=$PROBE_D5"
