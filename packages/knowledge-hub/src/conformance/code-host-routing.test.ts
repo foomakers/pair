@@ -927,11 +927,21 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
     ['mark', 'marks', 'marked', 'marking'],
   ]
   const TRANSITION_VERBS = TRANSITION_VERB_FORMS.flat().join('|')
+  /**
+   * The DETERMINER slot between the preposition and the state. English puts one there
+   * whenever the sentence names what the state belongs to — `moves the card to the In
+   * Review column`, `transitions the issue into the In Review state` — and a tail that
+   * demanded the state immediately after `to` missed every one of them. Same door as
+   * the verb-synonym and the voice gaps above, third spelling: a docs page worded with
+   * the (very natural) article shipped an unconditional promise past a green gate to a
+   * reader on a stock Linear team.
+   */
+  const DETERMINERS = ['the', 'a', 'an', 'its', 'their', 'your', 'our']
   // The state may be bare, bold, quoted or in backticks — azure-devops.mdx:81 already
   // house-styles it as `In Review`, so the backtick form is the likeliest next phrasing.
   const promisesInReview = (line: string): boolean =>
     new RegExp(
-      `(→|->|\\b(?:${TRANSITION_VERBS})\\b[^|\\n]{0,40}\\b(?:to|into|as))\\s*[*"\\x60]*In Review`,
+      `(→|->|\\b(?:${TRANSITION_VERBS})\\b[^|\\n]{0,40}\\b(?:to|into|as))\\s*(?:(?:${DETERMINERS.join('|')})\\s+)?[*"\\x60]*In Review`,
       'i',
     ).test(line)
 
@@ -1001,17 +1011,26 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
         'pair is moving the issue to In Review while the PR is opened.',
         'The adapter is setting the status to "In Review".',
         'Opening the PR is flipping the card to In Review.',
+        // Determiner between the preposition and the state — the article an English
+        // sentence takes as soon as it names what the state belongs to.
+        'pair moves the card to the In Review column when the PR opens.',
+        'Opening the PR transitions the issue into the In Review state.',
+        'The status is set to the `In Review` state on PR creation.',
+        'The publish step advances the card to its In Review column.',
+        'ENG-412 → the In Review column',
       ]) {
         expect(promisesInReview(line), line).toBe(true)
       }
     })
 
-    it('promisesInReview sees every inflection in the verb table, in every delimiter style', () => {
+    it('promisesInReview sees every inflection × determiner × delimiter in the table', () => {
       for (const forms of TRANSITION_VERB_FORMS) {
         for (const form of forms) {
-          for (const state of ['In Review', '"In Review"', '**In Review**', '`In Review`']) {
-            const line = `pair ${form} the issue to ${state} when the PR opens.`
-            expect(promisesInReview(line), line).toBe(true)
+          for (const det of ['', ...DETERMINERS.map(d => `${d} `)]) {
+            for (const state of ['In Review', '"In Review"', '**In Review**', '`In Review`']) {
+              const line = `pair ${form} the issue to ${det}${state} when the PR opens.`
+              expect(promisesInReview(line), line).toBe(true)
+            }
           }
         }
       }

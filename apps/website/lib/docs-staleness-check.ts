@@ -70,8 +70,21 @@ export const HREF_RE = /href="(\/docs[^"]*)"/g
 // could see. All three path-serving spellings are matched (`blob` for a file view,
 // `tree` for a directory, `raw` for the file bytes); matching only `blob` left the
 // same 404 reachable one URL form away.
+//
+// Three captures: KIND (`blob` decides whether a `#fragment` is a heading anchor),
+// REF, PATH.
+//
+// The REF is captured rather than pinned to `main`. Pinning it made the regex match
+// NOTHING under any other ref, so `blob/mian/README.md` — a plain typo — and
+// `blob/master/...` (this repo has no `master`) shipped as unchecked 404s: silently
+// skipping a citation is the same defect as resolving it wrongly. `findDeadRepoLinks`
+// decides per ref (resolve `main`, skip an immutable permalink, flag the rest).
+//
+// `<` and `>` are excluded alongside `)` and the quotes: `<https://…/README.md>` is a
+// CommonMark autolink — a rendered, working link — and capturing the closing `>` as
+// part of the path failed the build on it.
 export const REPO_BLOB_RE =
-  /https:\/\/github\.com\/foomakers\/pair\/(?:blob|tree|raw)\/main\/([^)\s"'`]+)/g
+  /https:\/\/github\.com\/foomakers\/pair\/(blob|tree|raw)\/([^/\s"'`<>]+)\/([^)\s"'`<>]+)/g
 
 // --- Filesystem helpers ---
 
@@ -214,21 +227,202 @@ export function existsCaseSensitive(root: string, relPath: string): boolean {
   return existsSync(dir)
 }
 
-/** Check 5b: every `{blob,tree,raw}/main/<path>` citation resolves to a real repo path. */
+/**
+ * An immutable ref — a commit sha (7-40 hex) or a version tag. A permalink is pinned
+ * ON PURPOSE and may legitimately point at a file `main` no longer has, so the working
+ * tree cannot answer for it and the citation is skipped rather than failed. Every
+ * OTHER non-`main` ref (`master`, `develop`, `mian`) is a mistake this gate reports.
+ */
+export function isPinnedRef(ref: string): boolean {
+  return /^[0-9a-f]{7,40}$/i.test(ref) || /^v?\d+(?:\.\d+)*$/.test(ref)
+}
+
+/** GitHub's own line anchor: `#L203`, `#L203-L210`, `#L203C5-L210C9`. Not a heading. */
+const LINE_ANCHOR_RE = /^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$/
+
+/**
+ * A heading's rendered TEXT: inline markup reduced to what a reader sees, because that
+ * is what github.com slugs. `#### [Templates](templates/README.md)` is anchored
+ * `#templates` on the real site — slugging the raw line instead yields
+ * `templatestemplatesreadmemd` and would fail the build on a live anchor.
+ */
+function renderedHeadingText(heading: string): string {
+  return (
+    heading
+      .replace(/`+/g, '') // code spans
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // links + images -> their text
+      .replace(/<[^>]+>/g, '') // inline HTML
+      .replace(/\*+/g, '') // asterisk emphasis / strong
+      // Underscore emphasis is word-BOUNDED: `_italic_` is markup, `snake_case` is text.
+      .replace(/(^|[^\p{L}\p{N}_])_+/gu, '$1')
+      .replace(/_+(?=[^\p{L}\p{N}_]|$)/gu, '')
+  )
+}
+
+/**
+ * github-slugger's transform — what github.com runs to build a heading anchor:
+ * lowercase, drop every character that is not a letter, digit, `_`, `-` or space, then
+ * spaces to `-`. Nothing is trimmed or collapsed afterwards, so `## 🎯 Quick Start`
+ * anchors as `-quick-start` and a removed em-dash leaves the double hyphen in
+ * `6-techrisk-matrixmd--adoption-delta` — both verified against github's own renderer.
+ */
+export function slugifyHeading(heading: string): string {
+  return renderedHeadingText(heading)
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_\- ]/gu, '')
+    .replace(/ /g, '-')
+}
+
+/** Where the markdown body starts: after YAML frontmatter, if the file opens with it. */
+function bodyStart(lines: readonly string[]): number {
+  if (lines[0]?.trim() !== '---') return 0
+  const close = lines.findIndex((l, i) => i > 0 && l.trim() === '---')
+  return close > 0 ? close + 1 : 0
+}
+
+/** A fence opener/closer: 3+ backticks or tildes, indented at most 3 spaces (CommonMark). */
+function fenceRunOf(line: string): string | undefined {
+  return /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1]
+}
+
+/** The heading TEXT a line carries, if it is an ATX heading (`## X`, optional closing `#`s). */
+function atxHeadingOf(line: string): string | undefined {
+  return /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line)?.[1]
+}
+
+/**
+ * Is `underline` a setext underline for `prev`? `===`/`---` alone under a non-blank
+ * line. A table separator carries pipes and a list/quote/heading marker leads its line,
+ * so none of them is read as a heading.
+ */
+function isSetextUnderline(underline: string, prev: string): boolean {
+  if (!/^ {0,3}(=+|-+)\s*$/.test(underline)) return false
+  return prev.trim() !== '' && !/^ {0,3}([#>|]|[-*+] |\d+\. )/.test(prev)
+}
+
+/**
+ * The markdown lines that can carry an anchor, paired with the line above them (the
+ * setext candidate): YAML frontmatter and fenced code blocks are skipped, so a
+ * `# comment` in a shell block is never read as a heading.
+ */
+function* anchorBearingLines(markdown: string): Generator<{ line: string; prev: string }> {
+  const lines = markdown.split('\n')
+  const start = bodyStart(lines)
+  let fence: string | undefined
+  for (let i = start; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    const run = fenceRunOf(line)
+    if (fence !== undefined) {
+      if (run !== undefined && run[0] === fence[0] && run.length >= fence.length) fence = undefined
+      continue
+    }
+    if (run !== undefined) {
+      fence = run
+      continue
+    }
+    yield { line, prev: i > start ? (lines[i - 1] ?? '') : '' }
+  }
+}
+
+/**
+ * Every anchor a markdown file offers: ATX (`## X`) and setext (`X` over `===`/`---`)
+ * headings, plus explicit `<a name>`/`<a id>` anchors. A repeated slug is disambiguated
+ * `-1`, `-2`, github-slugger's rule.
+ */
+export function collectHeadingSlugs(markdown: string): Set<string> {
+  const slugs = new Set<string>()
+  const seen = new Map<string, number>()
+  const add = (heading: string): void => {
+    const base = slugifyHeading(heading)
+    if (base === '') return
+    const n = seen.get(base) ?? 0
+    seen.set(base, n + 1)
+    slugs.add(n === 0 ? base : `${base}-${n}`)
+  }
+
+  for (const { line, prev } of anchorBearingLines(markdown)) {
+    const atx = atxHeadingOf(line)
+    if (atx !== undefined) add(atx)
+    else if (isSetextUnderline(line, prev)) add(prev.trim())
+    for (const m of line.matchAll(/<a\s[^>]*\b(?:name|id)="([^"]+)"/g)) {
+      if (m[1] !== undefined) slugs.add(m[1])
+    }
+  }
+  return slugs
+}
+
+/**
+ * The path and the `#fragment` a captured citation carries.
+ *
+ * The fragment is split FIRST (in a URL everything after the first `#` is the
+ * fragment), then the query is taken off the path — `?plain=1#anchor` carries both.
+ * `?plain=1` is GitHub's own spelling for the source view of a rendered markdown file;
+ * resolving it literally would fail the build on a live URL. A bare-prose citation ends
+ * in the sentence's full stop, which belongs to whichever piece ends the URL.
+ *
+ * The path is then percent-DECODED, because that is what the reader's browser resolves:
+ * `docs/my%20file.md` is the file `docs/my file.md`. A malformed escape
+ * (`100%-coverage.md`) makes `decodeURIComponent` throw — the literal is resolved then,
+ * never an exception out of a docs gate.
+ */
+export function parseCitation(raw: string): { path: string; fragment: string } {
+  const hash = raw.indexOf('#')
+  const beforeHash = hash === -1 ? raw : raw.slice(0, hash)
+  const fragment = hash === -1 ? '' : raw.slice(hash + 1).replace(/[.,;:]+$/, '')
+  const encoded = (beforeHash.split('?')[0] ?? '').replace(/[.,;:]+$/, '')
+  try {
+    return { path: decodeURIComponent(encoded), fragment }
+  } catch {
+    return { path: encoded, fragment }
+  }
+}
+
+/**
+ * Does the `#fragment` land on a real heading? Only asked where a fragment MEANS a
+ * heading: `tree/` is a directory listing, `raw/` serves bytes, and GitHub's own line
+ * anchor (`#L203`) is not a heading and never will be — failing any of those would
+ * break the build on a live URL.
+ */
+function anchorError(kind: string, path: string, fragment: string, root: string): string | null {
+  if (fragment === '' || kind !== 'blob' || !/\.mdx?$/.test(path)) return null
+  if (LINE_ANCHOR_RE.test(fragment)) return null
+  if (collectHeadingSlugs(readFileSync(join(root, path), 'utf-8')).has(fragment)) return null
+  return `${path}#${fragment} — no heading in that file slugs to it`
+}
+
+/**
+ * Check 5b: every `{blob,tree,raw}/<ref>/<path>` citation resolves to a real repo path
+ * — and, when it carries a `#fragment` into a markdown file, to a real heading.
+ *
+ * The fragment is the half the check used to drop on the floor: it proved the FILE
+ * existed and said nothing about where the reader lands. Renaming
+ * `## Callers Matrix (Scoped Capabilities)` in `skills-guide.md` dropped every reader
+ * at the top of a 200-line file while `docs:staleness` still printed PASS.
+ */
 export function findDeadRepoLinks(content: string, rel: string, root: string): string[] {
   const errors: string[] = []
   for (const m of content.matchAll(REPO_BLOB_RE)) {
-    const raw = m[1]
-    if (raw === undefined) continue
-    // Strip BOTH delimiters: an anchor (`#callers-matrix`) and a query string —
-    // `?plain=1` is GitHub's own spelling for the source view of a rendered markdown
-    // file, and REPO_BLOB_RE's character class captures it. Resolving it literally
-    // would fail the build on a live URL.
-    const path = (raw.split(/[#?]/)[0] ?? '').replace(/[.,;:]+$/, '')
+    const [, kind, ref, raw] = m
+    if (kind === undefined || ref === undefined || raw === undefined) continue
+    const { path, fragment } = parseCitation(raw)
     if (path === '') continue
+
+    if (ref !== 'main') {
+      // A permalink is pinned on purpose; anything else is a mistake this gate reports.
+      if (!isPinnedRef(ref)) {
+        errors.push(
+          `Bad ref in repo citation in ${rel}: ${kind}/${ref}/${path} — use main/ (or an immutable sha/tag permalink)`,
+        )
+      }
+      continue
+    }
     if (!existsCaseSensitive(root, path)) {
       errors.push(`Dead repo-file citation in ${rel}: ${path} does not exist in the repo`)
+      continue
     }
+    const anchor = anchorError(kind, path, fragment, root)
+    if (anchor !== null) errors.push(`Dead anchor in repo citation in ${rel}: ${anchor}`)
   }
   return errors
 }
