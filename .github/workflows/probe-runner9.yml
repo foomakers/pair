@@ -1,0 +1,33 @@
+# TEMPORARY probe (#413, review round 19) — reverted in the next commit.
+# Question: is GitHub's `runs-on` label matching CASE-INSENSITIVE? If it is,
+# `[ubuntu-latest, UBUNTU-LATEST]` is the REPEATED-label row (dedupes, job runs);
+# if it is not, `UBUNTU-LATEST` names no machine and the pair is two DIFFERENT
+# labels ANDed to the empty set (job never starts).
+name: Probe Runner 9
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  d9-control-one:
+    runs-on: [ubuntu-latest]
+    steps:
+      - run: echo "D9-CONTROL-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
+  d9-case-pair:
+    runs-on: [ubuntu-latest, UBUNTU-LATEST]
+    steps:
+      - run: echo "D9-CASE-PAIR-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
+  d9-case-alone:
+    runs-on: UBUNTU-LATEST
+    steps:
+      - run: echo "D9-CASE-ALONE-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
+  d9-case-list-alone:
+    runs-on: [UBUNTU-LATEST]
+    steps:
+      - run: echo "D9-CASE-LIST-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
+  d9-case-mixed-pair:
+    runs-on: [ubuntu-latest, Ubuntu-Latest]
+    steps:
+      - run: echo "D9-MIXED-PAIR-RAN RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT $(. /etc/os-release && echo $VERSION_ID)"
