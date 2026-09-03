@@ -128,6 +128,7 @@
 - [Decision: Review re-checks use an immutable baseline and prove provisioned artifacts](.pair/adoption/decision-log/2026-08-31-review-baseline-and-provisioned-artifact-contract.md)
 - [Decision: External boundary proof prevents false equivalence](.pair/adoption/decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md)
 - [Decision: Review contract inventory prevents serial findings](.pair/adoption/decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
+- [Decision: the review severity floor defaults to Minor — Questions are carried, never fixed](.pair/adoption/decision-log/2026-09-03-the-review-severity-floor-defaults-to-minor.md)
 
 ## How-To Guides
 

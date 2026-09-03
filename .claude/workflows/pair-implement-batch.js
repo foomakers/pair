@@ -1049,7 +1049,28 @@ const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract
 // unranked one stays unranked until the template changes, and the next caller who does pass
 // a floor gets a hard stop. Better the operator sees it on the run that generated it.
 if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
-const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
+// The floor DEFAULTS to `Minor`, so Major and Minor block and drive fix rounds while
+// everything below them is carried to the merge gate. Measured on PR #477 across three
+// cycles: the PR reached a zero-actionable APPROVED, the next round implemented review
+// Questions the reviewer had marked "No change requested", and the re-review found new
+// Minors inside the code that round had just added — three the first time, two the second.
+// Questions are, by the review template's own definition, questions FOR THE HUMAN; putting
+// them in the fix set contradicts what they are and makes convergence a moving target.
+// An explicit `severityFloor` still wins, including a lower one that restores the old
+// block-everything behaviour.
+//
+// The default is applied SOFTLY, unlike a caller-passed floor: a template whose vocabulary
+// does not declare `Minor`, or whose contract carries no ranking, falls back to no floor
+// rather than throwing. A default must never break a run that never asked for it; a floor
+// the CALLER spelled wrong still throws, because that is a configuration error they made.
+const DEFAULT_SEVERITY_FLOOR = 'Minor'
+function defaultFloor() {
+  if (!SEVERITY_SCALE.ranks) return null
+  const key = normSeverity(DEFAULT_SEVERITY_FLOOR)
+  if (!Object.hasOwn(SEVERITY_SCALE.ranks, key)) return null
+  return { name: DEFAULT_SEVERITY_FLOOR, rank: SEVERITY_SCALE.ranks[key] }
+}
+const SEVERITY_FLOOR = String(PARSED.severityFloor ?? '').trim() ? parseFloor(PARSED.severityFloor) : defaultFloor()
 
 // ── Isolation convention ───────────────────────────────────────────────────
 // The AUTHORING chain (implement -> PR -> fix) runs inside a dedicated, PERSISTENT

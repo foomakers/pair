@@ -1398,6 +1398,68 @@ test('an unknown severity blocks regardless of the floor (fail safe), and a bad 
   )
 })
 
+// ── The DEFAULT floor ──────────────────────────────────────────────────────
+// Measured across three cycles on PR #477: the PR reached APPROVED with zero actionable
+// findings, the next round implemented review Questions the reviewer had marked "No change
+// requested", and the re-review found new Minors INSIDE the code that round added (three the
+// first time, two the second). Questions are, by the review template's own definition,
+// questions for the human — putting them in the fix set contradicts what they are. The floor
+// therefore defaults to `Minor`: Major and Minor block and drive fix rounds, everything below
+// is carried to the merge gate. A caller can still pass a floor explicitly to override it.
+function contractWithQuestions() {
+  const c = validContract()
+  c.vocabulary.severities = ['Blocker', 'Major', 'Minor', 'Questions']
+  c.severityRanks = { Blocker: 4, Major: 3, Minor: 2, Questions: 1 }
+  return c
+}
+const QUESTION = { location: 'c.ts:3', severity: 'Questions', description: 'is this intended?', recommendation: 'no change requested' }
+
+test('by default a Questions-only review converges: carried to the gate, never fixed', async () => {
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: contractWithQuestions() },
+      review: { verdict: 'Rework', findings: [QUESTION, { ...QUESTION, location: 'c.ts:9' }] },
+    }),
+  })
+  const b = result.batch[0]
+  assert.equal(b.status, 'ready-for-merge', 'Questions alone do not keep the loop open')
+  assert.equal(b.acceptedFindings.length, 2, 'both Questions reach the human')
+  assert.match(b.acceptedFindings[0].disposition, /Below severity floor \(Minor\)/)
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('fix:')), 'no fix round is spent on a Question')
+})
+
+test('by default a Minor still blocks and still drives a fix round', async () => {
+  let round = 0
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: contractWithQuestions() }
+      if (opts.agentType === 'pair-reviewer')
+        return round++ === 0 ? { verdict: 'Rework', findings: [MINOR, QUESTION] } : { verdict: 'Approved', findings: [QUESTION] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('fix:')), 'the Minor drove a fix round')
+})
+
+test('a vocabulary without Minor falls back to no floor instead of throwing', async () => {
+  const c = validContract()
+  c.vocabulary.severities = ['Severe', 'Trivial']
+  c.severityRanks = { Severe: 2, Trivial: 1 }
+  const { result } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({
+      contractResult: { status: 'cache-hit', contract: c },
+      review: { verdict: 'Rework', findings: [{ location: 'x:1', severity: 'Trivial', description: 'd', recommendation: 'r' }] },
+    }),
+  })
+  assert.equal(result.batch[0].status, 'escalate', 'without a usable default every actionable finding blocks, as before')
+})
+
 // ── Options must survive a JSON-string `args` ───────────────────────────────
 // Real bug: the runtime can hand this script `args` as a JSON STRING. parseBatchArgs
 // normalized it, but severityFloor was read off the RAW value, where
