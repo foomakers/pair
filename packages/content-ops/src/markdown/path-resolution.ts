@@ -1,5 +1,6 @@
 import { join, relative, dirname } from 'path'
 import { FileSystemService } from '../file-system/file-system-service'
+import { existsCaseSensitive } from '../file-system/exists-case-sensitive'
 import { detectRepoRoot } from '../path-resolution/root-detection'
 
 export function resolveMarkdownPath(
@@ -49,7 +50,7 @@ export async function tryResolvePathVariants(context: PathResolutionContext) {
 
   for (const candidate of candidates) {
     const resolved = resolveMarkdownPath(file, candidate, docsFolders, datasetRoot)
-    if (await fileService.exists(resolved)) {
+    if (await existsCaseSensitive(fileService, resolved)) {
       return candidate
     }
   }

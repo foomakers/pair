@@ -169,3 +169,43 @@ describe('tryResolvePathVariants - preference cases', () => {
     expect(result).toBe('../../../existing.md')
   })
 })
+
+/**
+ * The variant search proposes the REWRITE `check:links` writes back into the file, so
+ * a candidate accepted by a case-insensitive `stat` would be committed as a link that
+ * 404s on GitHub. Real filesystem: the in-memory double is exact-match already.
+ */
+describe('tryResolvePathVariants — never proposes a candidate that exists only by ignoring case', () => {
+  it('returns null when the only match differs in case', async () => {
+    const { mkdtemp, mkdir, writeFile, rm } = await import('fs/promises')
+    const { tmpdir } = await import('os')
+    const { join } = await import('path')
+    const { fileSystemService } = await import('../file-system/file-system-service')
+
+    const root = await mkdtemp(join(tmpdir(), 'pair-variants-case-'))
+    try {
+      await mkdir(join(root, 'docs', 'sub'), { recursive: true })
+      await writeFile(join(root, 'docs', 'other.md'), '# Other')
+      const file = join(root, 'docs', 'sub', 'file.md')
+      const miscased = await tryResolvePathVariants({
+        file,
+        linkPath: '../Other.md',
+        docsFolders: ['docs'],
+        fileService: fileSystemService,
+        datasetRoot: root,
+      })
+      expect(miscased).toBeNull()
+      // ...while the exact spelling is still found by the same search.
+      const exact = await tryResolvePathVariants({
+        file,
+        linkPath: '../../other.md',
+        docsFolders: ['docs'],
+        fileService: fileSystemService,
+        datasetRoot: root,
+      })
+      expect(exact).toBe('../other.md')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
