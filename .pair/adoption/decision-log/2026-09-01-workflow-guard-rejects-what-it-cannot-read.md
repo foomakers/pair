@@ -282,6 +282,22 @@ rounds of re-deferral against a decision already made.
   fails a workflow GitHub would honour. It is accepted because the direction is a false RED with a
   message naming the one-label spelling, never a false green, and because the alternative (dedupe
   before counting) buys a spelling nobody writes at the cost of a second acceptance path.
+- **One canonical spelling per machine: the label comparison stays CASE-SENSITIVE** (added
+  2026-09-03, review round 19). GitHub matches `runs-on` labels **case-insensitively**: probe run
+  [33788568443](https://github.com/foomakers/pair/actions/runs/33788568443) on PR #477 ran
+  `UBUNTU-LATEST`, `[UBUNTU-LATEST]`, `[ubuntu-latest, UBUNTU-LATEST]` and `[ubuntu-latest,
+  Ubuntu-Latest]` — all four completed `success` on `RUNNER_ENVIRONMENT=github-hosted` Ubuntu
+  24.04, the machine `ubuntu-latest` reaches. So a case variant is a second SPELLING, never a
+  second image, and `[ubuntu-latest, UBUNTU-LATEST]` belongs to the dedupes-and-runs row above,
+  not to the ANDed-to-nothing one. `RUNNER_LABELS.some(ok => ok === labels[0])` is left
+  case-sensitive: this is the SAME narrowing as the duplicate-label row (a false RED, one
+  canonical spelling, `RUNNER_LABELS` the only place a machine is named), and lower-casing before
+  comparison would buy four spellings nobody writes while making the allow-list read as if it
+  covered them. The whole cost of both narrowings therefore sits in the rejection MESSAGE, which
+  must not tell those contributors that their job never starts — it says the job does run and
+  names the canonical spelling as the fix. The message is now wrapped at render time for the same
+  reason: it interpolates `RUNNER_LABELS`, so a deliberate edit to that list re-wraps the
+  paragraph instead of shipping an over-column line no formatter reflows.
 - **Two surfaces became allow-lists in the same change, both of them the "relocation" shape this
   module keeps meeting.** (a) The WORKFLOW's own keys and every JOB's, because a job-level `env:`
   reaches the checking step whatever the step-level allow-list says: measured end to end,
