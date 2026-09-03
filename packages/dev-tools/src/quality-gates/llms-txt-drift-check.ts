@@ -2,8 +2,9 @@
  * llms-txt-drift-check — the gate that keeps `.pair/llms.txt` equal to what its
  * generator emits (story #416).
  *
- * `.pair/llms.txt` is GENERATED (`writeProjectLlmsTxt`, on every `pair install` /
- * `pair update`) and also TRACKED — this repo dogfoods its own KB, so the index
+ * `.pair/llms.txt` is GENERATED (`writeProjectLlmsTxt`, on every `pair-cli install` /
+ * `pair-cli update` — `pair-cli` is the CLI's published `bin`; no `pair` executable
+ * exists, see `REGENERATION_COMMAND`) and also TRACKED — this repo dogfoods its own KB, so the index
  * every agent resolves the knowledge base through is the COMMITTED file. Until this
  * gate, nothing compared the two: add a guideline without regenerating and every
  * agent reading the index silently misses it. Two independent misses are on record
