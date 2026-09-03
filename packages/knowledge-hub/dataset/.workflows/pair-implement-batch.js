@@ -891,8 +891,24 @@ const LOOSE_REVIEW_SCHEMA = {
 }
 const FIX_SCHEMA = {
   type: 'object',
-  properties: { fixed: { type: 'boolean' }, needsHumanDecision: { type: 'boolean' } },
-  required: ['fixed'],
+  properties: {
+    fixed: { type: 'boolean' },
+    needsHumanDecision: { type: 'boolean' },
+    evidenceLedger: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          claim: { type: 'string' },
+          oracle: { type: 'string' },
+          probe: { type: 'string' },
+          observed: { type: 'string' },
+        },
+        required: ['claim', 'oracle', 'probe', 'observed'],
+      },
+    },
+  },
+  required: ['fixed', 'evidenceLedger'],
 }
 // #373: sandbox-safe continuation probe. The orchestrator has no FS/gh, so a cheap
 // agent in the worktree reports two signals used to decide whether round-0 must post
@@ -1027,12 +1043,33 @@ const TEXT_SHAPE =
 const AUTHORITATIVE_BOUNDARY_PROOF =
   'AUTHORITATIVE BOUNDARY PROOF (mandatory): when a table row, equivalence, normalization or remediation depends on an external command, service, file format or runtime, name the exact real producer/consumer that defines it and run a minimal isolated end-to-end probe for every such claim. Keep rows distinct until that boundary proves them equivalent. A unit test of the function being changed cannot establish external semantics or prove that user-facing repair advice works: apply the advice in a clean temporary environment and verify the promised postcondition.'
 
+const EMPIRICAL_EVIDENCE_LEDGER =
+  'EMPIRICAL EVIDENCE LEDGER (mandatory): before asserting or propagating a measured or factual claim in source comments, test names/comments, ADR/ADL, PR body, or a user-facing diagnostic, record Claim | authoritative oracle | exact command/fixture/revision | observed output. Counts, Unicode/category classifications, version facts and external behavior all need that proof. If evidence is absent, remove or qualify the claim. One measured output feeds every distributed restatement: never independently re-count, paraphrase, or invent a plausible explanation.'
+
+const INTERACTION_COLLISION_COMPLETENESS =
+  'INTERACTION/COLLISION COMPLETENESS (mandatory): after individual decision-table rows, add the minimal cross-product rows wherever one rule output can also be a valid input, name, state, or reservation of another. Test the actual collision resolver, including duplicate input alongside a pre-existing generated/suffixed outcome; independent happy-path rows do not prove that interaction.'
+
+const LOSSLESS_DIAGNOSTIC_CONTRACT =
+  'LOSSLESS DIAGNOSTIC CONTRACT (mandatory when reporting user input or derived identifiers): test lossless distinguishability between actual, expected and candidate values. Escape or name code points for invisible, whitespace-normalized, or confusable characters so an error cannot collapse the wrong spelling into the expected one.'
+
 const CONTRACT_INVENTORY =
   'CONTRACT INVENTORY (mandatory): before reporting findings, map each changed observable contract to its authoritative producer, inputs, consumers and representations. A FIRST review inventories every changed contract; a re-review inventories only its fix delta and directly changed boundary. For a finite protocol, parser, configuration, state transition or command-output domain, build a finite decision table of every supported state plus its invalid/boundary pair, and probe the real behavior. Report every defect that table exposes now; do not leave ordinary rows for a later review. ' +
+  EMPIRICAL_EVIDENCE_LEDGER +
+  ' ' +
+  INTERACTION_COLLISION_COMPLETENESS +
+  ' ' +
+  LOSSLESS_DIAGNOSTIC_CONTRACT +
+  ' ' +
   AUTHORITATIVE_BOUNDARY_PROOF
 
 const FINITE_STATE_COMPLETENESS =
   'FINITE-STATE COMPLETENESS (mandatory when a change parses, selects, snapshots, or branches on a finite protocol/state domain): identify the authoritative grammar or producer, make the complete decision table of supported states and invalid/boundary cases, then write and run a real test for every row before editing the canonical source. Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant. ' +
+  EMPIRICAL_EVIDENCE_LEDGER +
+  ' ' +
+  INTERACTION_COLLISION_COMPLETENESS +
+  ' ' +
+  LOSSLESS_DIAGNOSTIC_CONTRACT +
+  ' ' +
   AUTHORITATIVE_BOUNDARY_PROOF
 
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
@@ -1427,7 +1464,7 @@ async function driveStory(story) {
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
     const fix = await agentRetry(
-      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. CONVERGENCE SWEEP (mandatory): the finding location is the starting point, not the contract boundary. Before changing code, make a finite map of the same observable contract: the reported case and its paired success/failure path; any state transition or resume path the contract owns; and the canonical source plus every distributed representation of that behavior (generated asset, dataset, installed copy, or documented command). Change every map cell required for that one contract, then stop — do not use the sweep for unrelated cleanup, new behavior, or speculative hardening. For a generated/distributed artifact, resolve the canonical source from the asset registry, edit only that source, then run the declared generator/installer and inspect its output; never hand-edit a derived copy. PROVISIONED ARTIFACT CONTRACT (mandatory when a change installs, builds, publishes, names, or invokes an executable/package): map \`producer -> published identity -> consumer\` — for example installer/release step -> package manifest/bin/file/export -> workflow or user command. Prove the exact path in a clean temporary environment using the real built or installed artifact. Never stub, alias, or fake the exact producer, published identity, or consumer boundary; external effects may be isolated only after that boundary is crossed. For each logic defect, write a test that executes the real function/script against a real or realistic fixture and asserts output/side effects, never a source-string regex. Re-run the finding's evidence command and the mapped boundary cases before commit. Follow ${SK.implement} for the change itself: its TDD discipline and adoption-compliance phase are mandatory. Verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
+      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. CONVERGENCE SWEEP (mandatory): the finding location is the starting point, not the contract boundary. Before changing code, make a finite map of the same observable contract: the reported case and its paired success/failure path; any state transition or resume path the contract owns; and the canonical source plus every distributed representation of that behavior (generated asset, dataset, installed copy, or documented command). Change every map cell required for that one contract, then stop — do not use the sweep for unrelated cleanup, new behavior, or speculative hardening. For a generated/distributed artifact, resolve the canonical source from the asset registry, edit only that source, then run the declared generator/installer and inspect its output; never hand-edit a derived copy. PROVISIONED ARTIFACT CONTRACT (mandatory when a change installs, builds, publishes, names, or invokes an executable/package): map \`producer -> published identity -> consumer\` — for example installer/release step -> package manifest/bin/file/export -> workflow or user command. Prove the exact path in a clean temporary environment using the real built or installed artifact. Never stub, alias, or fake the exact producer, published identity, or consumer boundary; external effects may be isolated only after that boundary is crossed. For each logic defect, write a test that executes the real function/script against a real or realistic fixture and asserts output/side effects, never a source-string regex. Re-run the finding's evidence command and the mapped boundary cases before commit. Follow ${SK.implement} for the change itself: its TDD discipline and adoption-compliance phase are mandatory. Verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`, followed by \`## Evidence ledger, round N\` with one row per empirical/boundary claim: \`claim | oracle | probe | observed\`. Return that same ledger in \`evidenceLedger\`; return \`[]\` only when the fix made no empirical or boundary claim. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
       withModel({ agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface

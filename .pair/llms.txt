@@ -131,6 +131,7 @@
 - [Decision: a repo-wide guard is enforced by a `$TURBO_ROOT$` cache input, not necessarily by a thin CLI + root gate step](.pair/adoption/decision-log/2026-09-01-repo-wide-guard-enforced-by-turbo-root-input.md)
 - [Decision: Review contract inventory prevents serial findings](.pair/adoption/decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
 - [Decision: the format-workflow guard PARSES `format.yml` with `yaml@2.8.2`, and every rule is an allow-list over the parsed document](.pair/adoption/decision-log/2026-09-01-workflow-guard-rejects-what-it-cannot-read.md)
+- [Decision: Evidence ledger and interaction matrix prevent serial findings](.pair/adoption/decision-log/2026-09-03-evidence-ledger-and-interaction-matrix-prevent-serial-findings.md)
 - [Decision: the review severity floor defaults to Minor — Questions are carried, never fixed](.pair/adoption/decision-log/2026-09-03-the-review-severity-floor-defaults-to-minor.md)
 
 ## How-To Guides

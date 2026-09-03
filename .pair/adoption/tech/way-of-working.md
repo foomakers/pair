@@ -73,6 +73,14 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   applies the same rule only to its delta and changed boundary. See ADLs
   [2026-09-01-review-contract-inventory-prevents-serial-findings.md](../decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
   and [2026-09-01-external-boundary-proof-prevents-false-equivalence.md](../decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md).
+- **Evidence and interaction proof:** every changed measured, factual or externally-defined claim
+  carries `claim | authoritative oracle | exact command/fixture/revision | observed output`; that
+  one measurement feeds every comment, test name, ADL, PR description and diagnostic. A finite
+  table includes the minimal collision rows when one rule’s output can be another rule’s input,
+  name, state or reservation. User-facing diagnostics preserve lossless distinctions for
+  invisible, normalized or confusable characters. A missing proof or a rise in findings remains a
+  stop-and-investigate signal, never noise to suppress. See ADL
+  [2026-09-03-evidence-ledger-and-interaction-matrix-prevent-serial-findings.md](../decision-log/2026-09-03-evidence-ledger-and-interaction-matrix-prevent-serial-findings.md).
 
 ## Quality Gates
 

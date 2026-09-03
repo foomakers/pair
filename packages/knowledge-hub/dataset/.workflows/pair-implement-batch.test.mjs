@@ -1080,6 +1080,30 @@ test('review and fix exhaust finite protocol states before another round', async
   assert.ok(fix.includes('A unit test of the function being changed cannot establish external semantics'), 'the fixer cannot infer external-tool behavior from its own unit tests')
 })
 
+test('review and fix prove empirical claims, collisions, and lossless diagnostics before re-review', async () => {
+  const finding = { location: 'anchor.ts:1', severity: 'Minor', description: 'd', recommendation: 'r' }
+  let round = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const review = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
+  const fixCall = calls.find(c => c.opts.label?.startsWith('fix:'))
+  const fix = fixCall.prompt
+  assert.ok(review.includes('EMPIRICAL EVIDENCE LEDGER (mandatory)'), 'the reviewer must prove measured claims instead of repeating plausible figures')
+  assert.ok(review.includes('INTERACTION/COLLISION COMPLETENESS (mandatory)'), 'the reviewer must include overlapping state-rule rows')
+  assert.ok(fix.includes('exact command/fixture/revision'), 'the fixer records the reproducible source for each changed factual claim')
+  assert.ok(fix.includes('lossless distinguishability'), 'diagnostics retain invisible or confusable input distinctions')
+  assert.ok(fix.includes('duplicate input alongside a pre-existing generated/suffixed outcome'), 'the fixer tests rule-output collisions, not independent duplicate rows only')
+  assert.deepEqual(fixCall.opts.schema.required, ['fixed', 'evidenceLedger'], 'a fix cannot omit its evidence ledger')
+})
+
 test('re-review is anchored to the reviewed revision and checks only the fix delta plus prior findings', async () => {
   const finding = { location: 'workflow.yml:4', severity: 'Major', description: 'd', recommendation: 'r' }
   let round = 0
