@@ -92,7 +92,10 @@ const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern:
   { name: 'prettier-fix', pattern: /\bprettier-fix(?:\.sh)?\b/ },
   { name: 'markdownlint-fix', pattern: /\bmarkdownlint-fix(?:\.sh)?\b/ },
   { name: 'lint-fix', pattern: /\blint-fix(?:\.sh)?\b/ },
-  { name: 'prettier --write', pattern: /\bprettier\b[^&|;{}\n]*\s--write\b/ },
+  // `-w` is prettier's documented short form (`prettier --help`: "-w, --write  Edit files
+  // in-place"); measured, `prettier -w x.ts` rewrites the file. Reported under the long
+  // name either way — the offender is the flag's meaning, not its spelling (#413).
+  { name: 'prettier --write', pattern: /\bprettier\b[^&|;{}\n]*\s(?:--write|-w)\b/ },
   { name: 'markdownlint --fix', pattern: /\bmarkdownlint\b[^&|;{}\n]*\s--fix\b/ },
   { name: 'eslint --fix', pattern: /\beslint\b[^&|;{}\n]*\s--fix\b/ },
   // `\bsync-version\b` also matches the `sync-version-in-docs(.ts)` spelling, since

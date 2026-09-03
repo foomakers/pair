@@ -3,11 +3,28 @@ title = "pair secret-scanning allowlist"
 [extend]
 useDefault = true # keep gitleaks' built-in detection rules — this file only adds exceptions
 
-[allowlist]
+# Repo-wide exceptions: strings that are false positives WHEREVER they appear, because
+# each is a documented, synthetic, illustrative value with no real counterpart.
+[[allowlists]]
 description = "Project-specific false-positive exceptions, confirmed one at a time"
 regexes = [
   '''AKIAABCDEFGHIJKLMNOP''', # documented worked example in secret-scanning.md/ADR-015 — a synthetic, illustrative AWS-key-shaped string, not a real credential
   '''usr_abc123def456''', # placeholder userToken example in observability/structured-logging/sensitive-data-protection.md — not a real credential
   '''sess_xyz789uvw012''', # placeholder sessionToken example in the same file — not a real credential
   '''aBcD1234efGH5678ijKL''', # synthetic token-shaped value in web-cloud-environment.test.ts (credential-shape fixtures) — not a real credential
+]
+
+# PATH-SCOPED exception, `condition = "AND"` so BOTH the path and the value must match.
+# A 40-hex string is a git object id only where it is a smoke-test fixture; the same
+# literal anywhere else must still be scanned, so this allowance cannot travel.
+# (Measured against gitleaks 8.30.1: with this block the fixture path is allowed and the
+# same literal in `apps/` is still reported; scoping it as a `[[rules]] id =
+# "generic-api-key"` override instead DISABLES the built-in rule outright — 2 findings
+# became 0 on the same fixtures.)
+[[allowlists]]
+description = "smoke-test HEAD SHA fixture — a git object id, not a credential"
+condition = "AND"
+paths = ['''scripts/smoke-tests/.*''']
+regexes = [
+  '''cc1fba122f0c912ba01288fe90ab2632e7e41057''', # synthetic 40-hex HEAD SHA fixture in scripts/smoke-tests (pr-state-flow.sh, github-pr-reviews.json); matched generic-api-key only through the `TOKEN_HEAD=` variable name at commit 5e99d538 — a git object id, not a credential
 ]

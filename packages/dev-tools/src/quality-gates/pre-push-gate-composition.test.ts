@@ -421,3 +421,26 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     expect(result.ok, result.message).toBe(true)
   })
 })
+
+// `-w` is prettier's documented short form of `--write` (`prettier --help`, 3.6.2: "-w,
+// --write  Edit files in-place"); measured, `prettier -w x.ts` rewrites the file. The list
+// had the long spelling only (#413 round 13).
+describe('prettier `-w` is the write flag (#413)', () => {
+  it('flags `prettier -w`', () => {
+    expect(findWriteModeFormatters('prettier -w .')).toEqual(['prettier --write'])
+    expect(findWriteModeFormatters('npx prettier -w src')).toEqual(['prettier --write'])
+    expect(findWriteModeFormatters('pnpm exec prettier --config x -w "**/*.ts"')).toEqual([
+      'prettier --write',
+    ])
+  })
+
+  it('does not pair a `-w` from another command with a check-mode prettier', () => {
+    expect(findWriteModeFormatters('other-tool -w && prettier --check .')).toEqual([])
+    expect(findWriteModeFormatters('prettier --check . ; sleep -w')).toEqual([])
+  })
+
+  it('does not read `--write`-like or `-w`-prefixed words as the flag', () => {
+    expect(findWriteModeFormatters('prettier --log-level warn --check .')).toEqual([])
+    expect(findWriteModeFormatters('prettier -write .')).toEqual([])
+  })
+})
