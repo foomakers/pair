@@ -1,13 +1,13 @@
-name: Probe D3 merge key
+name: Probe D6c unknown top-level key
 "on":
   push:
     branches:
       - feature/US-413-ci-format-check
-x-base: &base
+x-base:
   runs-on: ubuntu-latest
 jobs:
-  d3:
-    <<: *base
+  d6c:
+    runs-on: ubuntu-latest
     steps:
       - name: ok
-        run: echo D3-MERGE-RAN
+        run: echo D6C-UNKNOWN-KEY-TOLERATED
