@@ -21,9 +21,9 @@
 # aliases, JSON steps, CRLF all resolve to the same document GitHub runs) and only
 # the meaning is constrained. That module's header is the rule inventory and the
 # reason for each rule (the exact checking command, the checkout's inputs, the
-# workflow/job/step key allow-lists, the toolchain-only install shell, the say-only
-# remedy, …); the per-block notes below say only what is not obvious from the YAML
-# itself.
+# workflow/job/step key allow-lists, the runner label below, the toolchain-only install
+# shell, the say-only remedy, …); the per-block notes below say only what is not obvious
+# from the YAML itself.
 
 name: Format
 
@@ -47,8 +47,10 @@ on:
 #
 # Hence the CONDITIONAL cancel: two merges to main a minute apart share
 # `format-refs/heads/main`, and an unconditional `true` would cancel the first
-# commit's run, leaving that commit with no formatting verdict — precisely the
-# post-merge visibility this workflow's `push` trigger exists for. On main, runs
+# commit's run, leaving that commit with no formatting verdict of its own. Main is
+# linear, so the surviving run's tree still contains that commit and the drift is
+# caught one commit later — this is the stronger of two acceptable spellings, not the
+# only correct one (the guard allow-lists a bare `true` as the weaker). On main, runs
 # queue.
 concurrency:
   group: format-${{ github.ref }}
@@ -56,6 +58,10 @@ concurrency:
 
 jobs:
   format:
+    # GitHub-hosted, and asserted as such: `runs-on` picks the machine, which decides
+    # what `pnpm` and `prettier` are and who watches the run — the `container:` question
+    # spelled as a value. On a public repo a `pull_request` run executes the PR's own
+    # copy of this file, so `self-hosted` here would be a machine the PR chose.
     runs-on: ubuntu-latest
     # This job runs `pnpm install`, i.e. PR-authored lifecycle scripts. It takes the
     # least token it can and a timeout that turns a hung install into a red instead

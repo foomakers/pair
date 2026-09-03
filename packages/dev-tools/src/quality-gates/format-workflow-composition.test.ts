@@ -84,6 +84,11 @@ import {
 //     (`git checkout origin/main -- .` before the check was green), `prettier -w` missing
 //     from the write list, and three correct spellings misreported (a quoted `run:`,
 //     CRLF line endings, workflow-level `permissions:`).
+//   - (round 16) `runs-on:` pointing off GitHub's runners. The job-key allow-list says
+//     WHICH keys a job may declare; `runs-on` is on it, so its VALUE was free — measured
+//     `ok=true` on the shipped file for `self-hosted` and for `[self-hosted, linux]`, one
+//     line relocating the check onto a machine the pull request chose (`container:` spelled
+//     as a value).
 // The module header is the rule inventory; this list is the failure modes the suites
 // below are named after.
 //
@@ -2095,9 +2100,11 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
   it('fires on the shipped workflow when a never-true `if:` is added to the job', () => {
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
     const r = checkFormatWorkflow(
-      shipped.replace(
-        '  format:\n    runs-on:',
-        "  format:\n    if: github.event_name == 'workflow_dispatch'\n    runs-on:",
+      mutate(
+        shipped,
+        'jobs:\n  format:\n',
+        "jobs:\n  format:\n    if: github.event_name == 'workflow_dispatch'\n",
+        'the shipped job header',
       ),
     )
     expect(r.ok).toBe(false)
@@ -2204,8 +2211,9 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
     const gated = mutate(
       shipped,
-      '  format:\n    runs-on: ubuntu-latest\n',
-      `  precheck:
+      'jobs:\n  format:\n',
+      `jobs:
+  precheck:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -2214,7 +2222,6 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
         run: exit 1
   format:
     needs: precheck
-    runs-on: ubuntu-latest
 `,
       'the shipped `format` job header',
     )
@@ -2483,9 +2490,11 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
   it('fires on the shipped workflow when the host job is given a display name', () => {
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
     const r = checkFormatWorkflow(
-      shipped.replace(
-        '  format:\n    runs-on: ubuntu-latest\n',
-        '  format:\n    name: Formatting\n    runs-on: ubuntu-latest\n',
+      mutate(
+        shipped,
+        'jobs:\n  format:\n',
+        'jobs:\n  format:\n    name: Formatting\n',
+        'the shipped job header',
       ),
     )
     expect(r.ok).toBe(false)
@@ -2495,9 +2504,11 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
   it('fires on the shipped workflow when the host job is given a matrix', () => {
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
     const r = checkFormatWorkflow(
-      shipped.replace(
-        '  format:\n    runs-on: ubuntu-latest\n',
-        "  format:\n    strategy:\n      matrix:\n        node: ['20']\n    runs-on: ubuntu-latest\n",
+      mutate(
+        shipped,
+        'jobs:\n  format:\n',
+        "jobs:\n  format:\n    strategy:\n      matrix:\n        node: ['20']\n",
+        'the shipped job header',
       ),
     )
     expect(r.ok).toBe(false)
@@ -2778,9 +2789,9 @@ describe('the checking step runs in the repository root, carrying only the keys 
     const r = checkFormatWorkflow(
       mutate(
         shipped,
-        JOB,
-        `${JOB}    defaults:\n      run:\n        working-directory: packages/dev-tools\n`,
-        'the host job',
+        'jobs:\n  format:\n',
+        'jobs:\n  format:\n    defaults:\n      run:\n        working-directory: packages/dev-tools\n',
+        'the shipped job header',
       ),
     )
     expect(r.ok).toBe(false)
@@ -2794,9 +2805,16 @@ describe('the checking step runs in the repository root, carrying only the keys 
 // event: `!(github.event_name == 'pull_request')` → false, `github.event_name ==
 // 'pull_request' && false` → false, `github.event_name == 'pull_request' || true` → true.
 // The first two cancel nothing on a PR (stale verdicts, superseded runs keep burning
-// runners); the third cancels on `main` too, so two merges a minute apart leave the first
-// commit with no formatting verdict (AC7). The accepted spelling is anchored to the WHOLE
-// value.
+// runners); the third cancels on `main` too, so of two merges a minute apart only the
+// second commit carries a verdict of its own.
+//
+// The allow-list has TWO members, and a bare `true` is the weaker of them, not a defect:
+// it supersedes, which is what AC7 asks, and `main` is linear, so the surviving run's tree
+// still contains the cancelled commit's changes — drift is caught one commit later. What it
+// costs is the per-commit `format` history, which is why the shipped file spells the
+// conditional. `|| true` is rejected not because it is weak but because it is NEITHER
+// member: the rule is anchored to the WHOLE value, so a spelling that merely CONTAINS one
+// of the two is a third value nobody argued for.
 describe('cancel-in-progress is an anchored allow-list, not a substring (#413)', () => {
   const cancelOf = (source: string, value: string) =>
     mutate(source, 'cancel-in-progress: true', `cancel-in-progress: ${value}`, 'cancel-in-progress')
@@ -2825,6 +2843,7 @@ describe('cancel-in-progress is an anchored allow-list, not a substring (#413)',
     '${{ github.event_name == "pull_request" }}',
     '"${{ github.event_name == \'pull_request\' }}"',
     "${{github.event_name=='pull_request'}}",
+    // The deliberate weaker member — see the block comment above this describe.
     'true',
   ]
 
@@ -3643,8 +3662,8 @@ describe('the workflow and its jobs carry only allow-listed keys (#413)', () => 
     const r = checkFormatWorkflow(
       mutate(
         shipped,
-        '  format:\n    runs-on: ubuntu-latest\n',
-        '  format:\n    env:\n      NODE_OPTIONS: --require ./scripts/shim.js\n    runs-on: ubuntu-latest\n',
+        'jobs:\n  format:\n',
+        'jobs:\n  format:\n    env:\n      NODE_OPTIONS: --require ./scripts/shim.js\n',
         'the shipped job header',
       ),
     )
@@ -3799,5 +3818,128 @@ describe('a failure-path step only says what to run (#413)', () => {
     const r = checkFormatWorkflow(remedyBody('          echo "::error::Something went wrong."\n'))
     expect(r.ok).toBe(false)
     expect(r.message).toContain('names the remedy')
+  })
+})
+
+// `jobKeyProblems` allow-lists the KEYS a job may declare and `runs-on` is on that list,
+// so until `runsOnProblems` the VALUE was free: measured on the SHIPPED file, `runs-on:
+// self-hosted` was `ok=true`, and so was `[self-hosted, linux]` — one line relocating the
+// `format` check onto a machine the pull request chose, with every other rule green. It is
+// the `container:` argument spelled as a value: the machine decides what `pnpm` and
+// `prettier` are, and on a PUBLIC repo a `pull_request` run executes the PR's OWN copy of
+// this file.
+//
+// Boundary proof, GitHub itself (probe workflow on this PR, run 33729726089, reverted):
+//   runs-on: ubuntu-24.04      -> job `d7-ubuntu-2404`      completed success (x86_64, 24.04)
+//   runs-on: ubuntu-22.04      -> job `d7-ubuntu-2204`      completed success (x86_64, 22.04)
+//   runs-on: 'ubuntu-latest'   -> job `d7-quoted-ubuntu`    completed success, RUNNER_ENVIRONMENT=github-hosted
+//   runs-on: [ubuntu-latest]   -> job `d7-list-ubuntu`      completed success, RUNNER_ENVIRONMENT=github-hosted
+//   runs-on: self-hosted       -> job `d7-self-hosted`      still `queued`, never started
+//   runs-on: [self-hosted, …]  -> job `d7-self-hosted-list` still `queued`, never started
+// (`gh api repos/foomakers/pair/actions/runners` -> `total_count: 0`.) So the quoted and
+// one-element-list spellings are the SAME machine, not a weaker one; and self-hosted reads
+// today as a BLOCKED merge — the context stays PENDING, never SUCCESS — which lasts exactly
+// as long as no self-hosted runner is registered on this public repo.
+describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () => {
+  const runsOn = (source: string, value: string) =>
+    mutate(source, '    runs-on: ubuntu-latest\n', `    runs-on: ${value}\n`, 'the runs-on line')
+
+  const accepted: [string, string][] = [
+    ['the pinned 24.04 image', 'ubuntu-24.04'],
+    ['the pinned 22.04 image', 'ubuntu-22.04'],
+    ['a single-quoted label', "'ubuntu-latest'"],
+    ['a double-quoted label', '"ubuntu-24.04"'],
+    ['a one-element flow sequence', '[ubuntu-latest]'],
+    ['a one-element block sequence', '\n      - ubuntu-latest'],
+  ]
+
+  for (const [label, value] of accepted) {
+    it(`accepts ${label}`, () => {
+      const r = checkFormatWorkflow(runsOn(WELL_FORMED, value))
+      expect(r.ok, `${value}: ${r.message}`).toBe(true)
+    })
+  }
+
+  // The parser resolves the alias, so the rule reads the LABEL, not the `*runner` text.
+  it('accepts a label reached through an anchor and an alias', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        '    runs-on: ubuntu-latest\n',
+        '    runs-on: &runner ubuntu-latest\n',
+        'the runs-on line',
+      ) +
+        '  helper:\n    runs-on: *runner\n    permissions:\n      contents: read\n    steps:\n      - run: pnpm install\n',
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  const rejected: [string, string][] = [
+    ['a bare self-hosted label', 'self-hosted'],
+    ['a self-hosted label list', '[self-hosted, linux]'],
+    ['a list that only CONTAINS an allowed label', '[ubuntu-latest, self-hosted]'],
+    ['a runner group mapping', '\n      group: ubuntu-runners'],
+    ['a runner group with labels', '\n      group: ubuntu-runners\n      labels: [ubuntu-latest]'],
+    ['another GitHub-hosted OS', 'macos-latest'],
+    ['a Windows image', 'windows-latest'],
+    ['a larger runner label', 'ubuntu-latest-4-cores'],
+    ['an arm image', 'ubuntu-24.04-arm'],
+    ['a label chosen by a repository variable', '${{ vars.RUNNER }}'],
+    ['a label chosen by a matrix', '${{ matrix.os }}'],
+    ['an empty value', ''],
+    ['an empty list', '[]'],
+    ['a nested sequence', '[[ubuntu-latest]]'],
+  ]
+
+  for (const [label, value] of rejected) {
+    it(`fails on ${label}`, () => {
+      const r = checkFormatWorkflow(runsOn(WELL_FORMED, value))
+      expect(r.ok, `${value}: ${r.message}`).toBe(false)
+      expect(r.message, value).toContain('runs-on')
+    })
+  }
+
+  it('fails when the job declares no `runs-on` at all', () => {
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, '    runs-on: ubuntu-latest\n', '', 'the runs-on line'),
+    )
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('no `runs-on:`')
+  })
+
+  // The rule is per JOB, not per host job: a second job on a machine the PR chose runs
+  // `pnpm install` — PR-authored lifecycle scripts — on that machine just the same.
+  it('fails on a SECOND job pinned to a self-hosted runner', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        'jobs:\n',
+        'jobs:\n  helper:\n    runs-on: self-hosted\n    steps:\n      - run: pnpm install\n',
+        'the jobs key',
+      ),
+    )
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('runs-on')
+    expect(r.message).toContain('helper')
+  })
+
+  it('fires on the SHIPPED workflow when it is relocated to a self-hosted runner', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(runsOn(shipped, 'self-hosted'))
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('runs-on')
+  })
+
+  it('fires on the SHIPPED workflow when it is relocated through a label list', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(runsOn(shipped, '[self-hosted, linux]'))
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('runs-on')
+  })
+
+  it('accepts the shipped workflow, which runs on a GitHub-hosted Ubuntu image', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(shipped)
+    expect(r.ok, r.message).toBe(true)
   })
 })

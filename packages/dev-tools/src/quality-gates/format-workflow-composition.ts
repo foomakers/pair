@@ -154,6 +154,18 @@
  *   third-party-code argument spelled as a job key (the image decides what `pnpm` and
  *   `prettier` even are), and `services:` with it. Hence the workflow's own keys and
  *   every job's keys are allow-lists (`workflowKeyProblems`, `jobKeyProblems`).
+ * - `runs-on:` pointing off GitHub's runners. Those two rules allow-list which KEYS may
+ *   appear; `runs-on` is on the job's list because the job needs a machine, and its VALUE
+ *   picks which one — the same "what are `pnpm` and `prettier` here" question `container:`
+ *   asks, and a machine also decides who watches the run. On a PUBLIC repo a
+ *   `pull_request` run executes the PR's own version of this file, so the value is chosen
+ *   by the pull request. `runs-on: self-hosted` (and `[self-hosted, linux]`) was `ok=true`
+ *   with every other rule green, so the value is an allow-list too: GitHub-hosted Ubuntu
+ *   labels, alone or as a one-label list (`RUNNER_LABELS`, `runsOnProblems`). On this repo
+ *   today that regression reads as a BLOCKED merge rather than a green check — no
+ *   self-hosted runner is registered (`total_count: 0`), so the job queues and `format`
+ *   stays pending (measured, probe run 33729726089) — which lasts exactly as long as that
+ *   stays true.
  * - `cancel-in-progress` and `concurrency.group` read as SUBSTRINGS. `!(github.event_name
  *   == 'pull_request')` contains the accepted equality and inverts it; `format-${{
  *   github.run_id }}-${{ github.ref }}` contains the ref key and is unique per run.
@@ -281,6 +293,10 @@ const WORKFLOW_KEYS_OWNED_ELSEWHERE = ['defaults'] as const
  * ARE — third-party code chosen by a job key, which is the `uses:` argument one level up.
  * `if`, `needs`, `strategy`, `defaults` and `continue-on-error` have their own rules and
  * are not reported twice here.
+ *
+ * This is an allow-list of KEYS. `runs-on` is on it because the job needs a machine, and
+ * its VALUE picks which — the same question `container:` asks — so that value has an
+ * allow-list of its own (`runsOnProblems`).
  */
 export const JOB_KEYS = ['name', 'runs-on', 'permissions', 'timeout-minutes', 'steps'] as const
 const JOB_KEYS_OWNED_ELSEWHERE = [
@@ -290,6 +306,19 @@ const JOB_KEYS_OWNED_ELSEWHERE = [
   'defaults',
   'continue-on-error',
 ] as const
+
+/**
+ * The machines this workflow may run on: GitHub-hosted Ubuntu images, ephemeral and
+ * owned by GitHub. Every other label — `self-hosted`, a runner `group:`, another
+ * GitHub-hosted OS (`macos-*`, `windows-*`), a larger or arm runner — is a deliberate
+ * edit to this list, because each changes what `pnpm` and `prettier` are on the machine
+ * that publishes the `format` context. Measured on GitHub (probe run 33729726089, PR
+ * #477): `ubuntu-24.04`, `ubuntu-22.04`, a quoted `'ubuntu-latest'` and the one-element
+ * list `[ubuntu-latest]` all ran on a GitHub-hosted x86_64 runner
+ * (`RUNNER_ENVIRONMENT=github-hosted`), so the list spelling is the same value, not a
+ * weaker one.
+ */
+export const RUNNER_LABELS = ['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04'] as const
 
 /**
  * Removes `#` comments from a `run:` body so a comment can neither smuggle a banned
@@ -636,13 +665,20 @@ function groupProblems(concurrency: Mapping): string[] {
  * run whose ref has already moved on: push three commits to a PR branch and only the
  * last one's verdict is worth a runner.
  *
- * Which is exactly why an UNCONDITIONAL cancel is wrong here: two merges to
- * `${BASE_BRANCH}` a minute apart share `format-refs/heads/main`, so the first
- * commit's run is cancelled and that commit carries no formatting verdict at all —
- * a dent in AC7's "drift on the base branch is visible". So the accepted spellings
+ * Which is why the shipped value is CONDITIONAL: two merges to `${BASE_BRANCH}` a
+ * minute apart share `format-refs/heads/main`, so an unconditional cancel drops the
+ * first commit's run and that commit carries no formatting verdict of its OWN.
+ *
+ * A bare `true` is nonetheless ACCEPTED, deliberately — it is the weaker choice, not a
+ * broken one, and this rule says so rather than reporting a preference as a defect. It
+ * still supersedes, which is what AC7 asks of it; and `${BASE_BRANCH}` is linear, so the
+ * surviving run's tree CONTAINS the cancelled commit's changes and drift on the base
+ * branch is still caught, one commit later. What it costs is the per-commit verdict — a
+ * hole in the `format` history, not a hole in the enforcement. So the accepted spellings
  * are an ALLOW-list of two: a literal `true` (cancel everywhere), or an EQUALITY on
  * the `pull_request` event (cancel on PRs, queue on the base branch — the shipped
- * choice). A substring test for `pull_request` is not enough: `${{ github.event_name
+ * choice, which keeps that per-commit verdict too). A substring test for `pull_request`
+ * is not enough: `${{ github.event_name
  * != 'pull_request' }}` contains it and inverts it, producing BOTH failure modes at
  * once — nothing cancelled on a PR, and the first of two merges a minute apart
  * cancelled on `main`.
@@ -675,8 +711,11 @@ function concurrencyProblems(root: Mapping): string[] {
       '  that has moved on. Accepted spellings are the literal `true`, or EXACTLY `${{\n' +
       "  github.event_name == 'pull_request' }}` (either operand order) as the whole value — nothing\n" +
       '  else, fail-closed: `!=`, `!( )`, `&& false` read as conditional and are the mitigation\n' +
-      `  inverted (nothing cancelled on a PR), and \`|| true\` cancels on \`${BASE_BRANCH}\` too, so two merges\n` +
-      "  a minute apart cancel each other's verdict.",
+      `  inverted (nothing cancelled on a PR). A bare \`true\` is accepted as the weaker of the two: it\n` +
+      `  cancels on \`${BASE_BRANCH}\` too, so of two merges a minute apart only the second commit carries a\n` +
+      '  verdict of its own — drift is still caught (the surviving run contains the earlier commit), the\n' +
+      '  per-commit history is not. Anything that merely CONTAINS one of the two spellings (`|| true`,\n' +
+      '  a negation) is a different value and is rejected.',
   ]
 }
 
@@ -1262,6 +1301,83 @@ function jobKeyProblems(jobs: Job[]): string[] {
 }
 
 /**
+ * The labels a `runs-on:` value resolves to, or `undefined` for a shape that names no
+ * label set at all — a runner `group:` mapping, which names a runner GROUP rather than a
+ * label set, or a sequence carrying something that is not a scalar. A missing key is `undefined` too and
+ * is caught by the caller before this runs; `runs-on:` with an empty value resolves to
+ * `null`, which names no machine either and comes back as `[]`.
+ */
+function runnerLabels(declared: unknown): string[] | undefined {
+  if (declared === null) return []
+  if (Array.isArray(declared))
+    return declared.every(item => item !== null && !isMapping(item) && !Array.isArray(item))
+      ? declared.map(String)
+      : undefined
+  if (isMapping(declared)) return undefined
+  return [String(declared)]
+}
+
+/** A `runs-on:` value as it was written, for the message that rejects it. */
+function describeRunsOn(declared: unknown): string {
+  if (declared === null) return '(empty)'
+  if (Array.isArray(declared)) return `[${declared.map(item => String(item)).join(', ')}]`
+  if (isMapping(declared)) return `{${Object.keys(declared).join(', ')}}`
+  return String(declared)
+}
+
+/**
+ * WHICH MACHINE runs the check. `jobKeyProblems` allow-lists the KEYS a job may declare
+ * and `runs-on` is on that list, so until this rule the value was free: `runs-on:
+ * self-hosted` — and `[self-hosted, linux]` with it — was `ok=true` on the shipped file,
+ * one line relocating the check onto a machine of the author's choosing while every other
+ * rule stayed green.
+ *
+ * It is the `container:` argument, spelled as that key's VALUE. `container:` is rejected
+ * because the image decides what `pnpm` and `prettier` even are; the machine decides the
+ * same thing, plus who watches the run. And on a PUBLIC repo a `pull_request` run executes
+ * the PR's OWN version of this workflow file, so the value is chosen by the pull request,
+ * not by the repository.
+ *
+ * On this repo TODAY the loss is a blocked merge rather than a false green:
+ * `gh api repos/foomakers/pair/actions/runners` returns `total_count: 0`, so a job pinned
+ * to `self-hosted` never gets a runner — measured, probe run 33729726089 on PR #477: the
+ * two self-hosted jobs sat `queued` while the four GitHub-hosted ones finished, and the
+ * `format` context of such a run would stay PENDING, never SUCCESS. That holds only until
+ * someone registers a self-hosted runner, which on a public repo is the configuration
+ * GitHub itself warns against — for exactly this reason. The rule closes the gap at the
+ * cheap end rather than depending on a repository setting staying the way it is.
+ */
+function runsOnProblems(jobs: Job[]): string[] {
+  return jobs.flatMap(job => {
+    if (!('runs-on' in job.body))
+      return [
+        `job \`${job.name}\` declares no \`runs-on:\`, so nothing says which machine runs it — GitHub\n` +
+          '  rejects the workflow file outright for it, and this guard would otherwise walk past the one\n' +
+          `  key that picks the machine. Set it to one of \`${RUNNER_LABELS.join('`, `')}\`.`,
+      ]
+    const declared = job.body['runs-on']
+    const labels = runnerLabels(declared)
+    const accepted =
+      labels !== undefined &&
+      labels.length > 0 &&
+      labels.every(label => RUNNER_LABELS.some(ok => ok === label))
+    if (accepted) return []
+    return [
+      `job \`${job.name}\` sets \`runs-on: ${describeRunsOn(declared)}\`: it may run only on a\n` +
+        `  GitHub-hosted Ubuntu runner (\`${RUNNER_LABELS.join('`, `')}\`, alone or as a one-label\n` +
+        '  list). `runs-on` picks the MACHINE, which decides what `pnpm` and `prettier` even are — the\n' +
+        '  `container:` argument spelled as a value instead of a key — and on a PUBLIC repo a\n' +
+        "  `pull_request` run executes the PR's OWN version of this file, so `self-hosted` (bare, in a\n" +
+        '  label list, or through a runner `group:`) hands the `format` verdict to a machine the pull\n' +
+        '  request chose. Today that reads as a BLOCKED merge rather than a green check — this repo has\n' +
+        '  no self-hosted runner registered, so the job queues forever and the context stays pending\n' +
+        '  (measured) — which lasts exactly as long as that stays true. Another GitHub-hosted OS or a\n' +
+        '  larger/arm image is a deliberate edit to `RUNNER_LABELS`, not a drive-by one.',
+    ]
+  })
+}
+
+/**
  * `defaults.run.working-directory` is the same `cd` one level up (a job) or two
  * (the workflow), and `defaults.run.shell` the same `shell:`. Both apply to every `run:`
  * step, the checking step included, and neither touches its text.
@@ -1711,6 +1827,7 @@ export function checkFormatWorkflow(
   const problems = [
     ...workflowKeyProblems(root),
     ...jobKeyProblems(jobs),
+    ...runsOnProblems(jobs),
     ...stepShapeProblems(jobs),
     ...triggerProblems(root),
     ...concurrencyProblems(root),
