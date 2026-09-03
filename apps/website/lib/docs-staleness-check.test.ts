@@ -377,6 +377,60 @@ describe('findDeadRepoLinks', () => {
     }
   })
 
+  // --- FRAGMENT: the spelling the READER'S ADDRESS BAR holds -----------------
+  //
+  // github.com percent-encodes every non-ASCII byte of an anchor in the URL it puts in
+  // the address bar, which is what a reader copy-pastes into a docs page. The path was
+  // decoded and the fragment was not, so a citation in its own canonical spelling
+  // failed the gate: `docs:staleness` exited 1 on a link that works.
+  //
+  // Both files below are REAL repo files whose live anchors were read off github.com
+  // (`gh api repos/foomakers/pair/contents/<path> -H 'Accept: application/vnd.github.html'`).
+  const IA_ASSESSMENT =
+    '.pair/adoption/decision-log/2026-07-12-docs-website-ia-restructuring-assessment.md'
+
+  it('percent-decodes the FRAGMENT, not only the path', () => {
+    // `## Option C — full Diátaxis re-org (heavier)`; github.com's anchor is
+    // `#option-c--full-diátaxis-re-org-heavier`, address bar `…di%C3%A1taxis…`.
+    const encoded = `[x](https://github.com/foomakers/pair/blob/main/${IA_ASSESSMENT}#option-c--full-di%C3%A1taxis-re-org-heavier)`
+    expect(findDeadRepoLinks(encoded, 'a.mdx', REPO_ROOT)).toEqual([])
+    const literal = `[x](https://github.com/foomakers/pair/blob/main/${IA_ASSESSMENT}#option-c--full-diátaxis-re-org-heavier)`
+    expect(findDeadRepoLinks(literal, 'a.mdx', REPO_ROOT)).toEqual([])
+  })
+
+  it('still flags a dead percent-encoded fragment, reported DECODED', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/${IA_ASSESSMENT}#option-z--full-di%C3%A1taxis-re-org-heavier)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('option-z--full-diátaxis-re-org-heavier')
+  })
+
+  it('does not throw on a malformed percent-escape in the fragment', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/${IA_ASSESSMENT}#100%-coverage)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('100%-coverage')
+  })
+
+  // The two halves compose: CLAUDE.md:59 `## 🛠️ Essential Commands` is anchored
+  // `#%EF%B8%8F-essential-commands` — decoding the fragment gets U+FE0F back, and the
+  // slug must have KEPT U+FE0F for it to land. 278 repo headings carry one of these.
+  it('resolves a variation-selector anchor in the spelling github.com serves', () => {
+    const live = `[cmds](https://github.com/foomakers/pair/blob/main/CLAUDE.md#%EF%B8%8F-essential-commands)`
+    expect(findDeadRepoLinks(live, 'page.mdx', REPO_ROOT)).toEqual([])
+  })
+
+  it('flags the variation-selector-STRIPPED anchor, which is a real 404', () => {
+    const dead = `[cmds](https://github.com/foomakers/pair/blob/main/CLAUDE.md#-essential-commands)`
+    expect(findDeadRepoLinks(dead, 'page.mdx', REPO_ROOT)).toHaveLength(1)
+  })
+
+  it('resolves a ZWJ anchor github.com keeps but github-slugger drops', () => {
+    const f = '.pair/knowledge/guidelines/quality-assurance/security/secure-development.md'
+    const live = `[x](https://github.com/foomakers/pair/blob/main/${f}#%E2%80%8D-secure-coding-standards)`
+    expect(findDeadRepoLinks(live, 'page.mdx', REPO_ROOT)).toEqual([])
+  })
+
   it('every blob citation on the real docs site resolves to a real file', () => {
     const docsDir = resolve(REPO_ROOT, 'apps/website/content/docs')
     const errors = walkMdx(docsDir).flatMap(f =>
@@ -388,16 +442,27 @@ describe('findDeadRepoLinks', () => {
 
 /**
  * GitHub's heading-anchor generation, the authoritative consumer of every `#fragment`
- * Check 5b now validates: inline markup is reduced to its rendered text, then
- * lowercase, drop everything that is not a letter/digit/`_`/`-`/space, spaces to `-`,
- * and a repeated slug gets `-1`, `-2`.
+ * Check 5b validates: inline markup is reduced to its rendered text, then lowercase,
+ * drop every character outside github's KEEP set, spaces to `-`, and a repeated slug
+ * gets `-1`, `-2`.
  *
  * EVERY expected value below is what github.com itself emits, not a reading of the
  * spec: `gh api -X POST /markdown -f text='## <heading>'` returns the rendered HTML
- * whose `id="user-content-<slug>"` is the anchor a reader's browser jumps to. The
- * rows that would have been wrong by inspection are exactly the interesting ones —
- * `[linked](url)` slugs as `a-linked-word` (not `a-linkedhttpsexamplecom-word`) and
- * `_italic_` as `italic` while `snake_case` keeps its underscore.
+ * whose `id="user-content-<slug>"` is the anchor a reader's browser jumps to.
+ *
+ * The KEEP set is a FINITE table over Unicode general categories, and the table below
+ * has a row for every cell of it — because the classes that diverge are invisible by
+ * inspection. The rule is Ruby's `\p{Word}` plus `-` and space (github's markdown
+ * pipeline is Ruby): Alphabetic (which is L **plus Nl** — `Ⅸ` survives) | Mark (Mn,
+ * Mc, Me — U+FE0F and a combining acute survive) | Nd | Connector_Punctuation (`_`) |
+ * Join_Control (ZWJ/ZWNJ). Everything else goes, including No (`①`, `½`), every other
+ * Cf (soft hyphen, RLM), Sk emoji modifiers (skin tones) and non-ASCII spaces, which
+ * are DROPPED rather than turned into `-`.
+ *
+ * `github-slugger` is NOT the oracle for these rows even though it is what this code
+ * mirrors in shape: v2.0.0 DROPS U+200D, while github.com keeps it —
+ * `.pair/knowledge/…/secure-development.md`'s `👨‍💻 **SECURE CODING STANDARDS**` is
+ * anchored `#‍-secure-coding-standards` on github.com today. github.com wins.
  */
 describe('slugifyHeading', () => {
   it.each([
@@ -414,7 +479,43 @@ describe('slugifyHeading', () => {
     ['Step-by-step', 'step-by-step'],
     ['A [linked](https://example.com) word', 'a-linked-word'],
     ['Trailing spaces   ', 'trailing-spaces'],
+
+    // --- KEEP: Mark (Mn / Mc / Me) -----------------------------------------
+    // The row that mattered: `## 🛠️ Essential Commands` is CLAUDE.md:59 and 277 more
+    // repo headings carry a variation selector. U+1F6E0 is dropped, U+FE0F is NOT, so
+    // the live anchor STARTS with U+FE0F. Dropping it made every one of those 278
+    // headings unciteable — `docs:staleness` failed the build on a working link.
+    ['🛠️ Essential Commands', '️-essential-commands'],
+    ['⚙︎ Vs15 Text', '︎-vs15-text'], // VARIATION SELECTOR-15 too, not just -16
+    ['#️⃣ Keycap Hash', '️⃣-keycap-hash'], // Me (enclosing keycap)
+    ['Qué Tal Dec', 'qué-tal-dec'], // Mn: decomposed é is NOT normalized away
+    ['कि Devanagari Mc', 'कि-devanagari-mc'], // Mc (spacing vowel sign)
+
+    // --- KEEP: Join_Control, and ONLY Join_Control among Cf ------------------
+    ['👨‍💻 Zwj Family', '‍-zwj-family'],
+    ['a‌b Zwnj', 'a‌b-zwnj'],
+    ['a­b Soft Hyphen', 'ab-soft-hyphen'], // Cf, not Join_Control -> DROPPED
+    ['a‏b Rlm', 'ab-rlm'], // Cf, not Join_Control -> DROPPED
+
+    // --- KEEP: Alphabetic includes Nl; Nd stays; No does NOT -----------------
+    ['Ⅸ Roman Nine', 'ⅸ-roman-nine'], // Nl survives (and lowercases)
+    ['１２ Fullwidth Digits', '１２-fullwidth-digits'], // Nd beyond ASCII
+    ['① Circled One', '-circled-one'], // No is DROPPED — `\p{N}` would have kept it
+    ['½ Half', '-half'],
+
+    // --- DROP: symbols, and the Sk split that no category rule predicts ------
+    ['👍🏽 Skin Tone', '-skin-tone'], // U+1F3FD is Sk and is dropped …
+    ['ˆ Modifier Circumflex', 'ˆ-modifier-circumflex'], // … but U+02C6 is Sk AND Alphabetic
     ['🚀 Emoji lead', '-emoji-lead'],
+    ['$ Dollar', '-dollar'],
+    ['a+b Plus', 'ab-plus'],
+    ['ab Private', 'ab-private'], // Co
+
+    // --- DROP: every space that is not U+0020, rather than mapping it to `-` --
+    ['Foo Bar Nbsp', 'foobar-nbsp'],
+    ['Foo　Bar Ideo', 'foobar-ideo'],
+    ['Foo\tBar Tab', 'foobar-tab'],
+    ['Foo  Bar Double', 'foo--bar-double'], // two U+0020 -> two hyphens, not collapsed
   ])('slugs %j as %j', (heading, slug) => {
     expect(slugifyHeading(heading)).toBe(slug)
   })

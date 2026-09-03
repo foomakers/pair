@@ -33,22 +33,33 @@ Check 5b resolves the whole citation.
 
 **Fragment** — validated only where a fragment means a heading: `kind === blob` **and** the path ends `.md`/`.mdx`. `tree/` is a directory listing and `raw/` serves bytes, so a fragment on either is skipped; so is GitHub's own line anchor (`#L203`, `#L203C5-L210C9`). Otherwise the file's headings are slugged and the fragment must be among them.
 
-**The slug rule is github.com's, taken from github.com.** Inline markup is reduced to rendered text first (a `[Templates](templates/README.md)` heading anchors as `#templates`, not `#templatestemplatesreadmemd`), then github-slugger's transform: lowercase, drop every character that is not a letter/digit/`_`/`-`/space, spaces to `-`, repeats disambiguated `-1`/`-2`. Every row of the unit table is what `gh api -X POST /markdown` returns for that heading — including the two that are wrong by inspection (`_italic_` slugs as `italic`, `snake_case` keeps its underscore).
+**The slug rule is github.com's, taken from github.com — and github.com is the ONLY oracle for it.** Inline markup is reduced to rendered text first (a `[Templates](templates/README.md)` heading anchors as `#templates`, not `#templatestemplatesreadmemd`), then: lowercase, drop every character outside the KEEP set, U+0020 to `-`, repeats disambiguated `-1`/`-2`. Every row of the unit table is what `gh api -X POST /markdown -f text='## <heading>'` returns for that heading — including the ones that are wrong by inspection (`_italic_` slugs as `italic`, `snake_case` keeps its underscore).
 
-Two URL spellings that were false-positive **build breaks** are fixed in the same pass: `<` / `>` are excluded from the path character class (a CommonMark autolink `<…/README.md>` used to capture `README.md>`), and the path is `decodeURIComponent`'d inside a try/catch before it is resolved (`docs/my%20file.md` is the file `docs/my file.md`; a malformed escape resolves literally rather than throwing).
+The KEEP set is **Ruby's `\p{Word}` plus `-` and U+0020** — github's markdown pipeline is Ruby — i.e. `Alphabetic | Mark | Nd | Connector_Punctuation | Join_Control`, spelled `[^\p{Alphabetic}\p{M}\p{Nd}\p{Pc}\p{Join_Control}\- ]` in JS. It is NOT "letters and digits", and the difference is invisible by inspection in three classes, each of which was a wrong anchor on real repo files:
+
+| class | github.com | evidence |
+| --- | --- | --- |
+| `\p{M}` (Mn/Mc/Me) | **keep** | 278 repo headings carry U+FE0F. `CLAUDE.md`'s `## 🛠️ Essential Commands` is `#️-essential-commands` — U+1F6E0 dropped, U+FE0F **leading the slug** |
+| `\p{Join_Control}` (ZWJ/ZWNJ) | **keep** | `secure-development.md`'s `👨‍💻 **SECURE CODING STANDARDS**` is `#‍-secure-coding-standards`; every other `Cf` (soft hyphen, RLM, ZWSP, BOM) is dropped |
+| `\p{Nl}` vs `\p{No}` | **split** | `Ⅸ` survives (Alphabetic covers Nl), `①` and `½` do not — `\p{N}` keeps both |
+
+**`github-slugger` is not the oracle, despite the shape being the same.** v2.0.0 DROPS U+200D where github.com keeps it, so mirroring the package would have reproduced the ZWJ bug. Probed over 56 category rows, `\p{Word}`+`-`+space matches github.com on 56/56 where `[^\p{L}\p{N}_\- ]` misses 16 and "letters/digits/marks/ZWJ" still misses the 4 `No` rows.
+
+Three URL spellings that were false-positive **build breaks** are fixed in the same pass: `<` / `>` are excluded from the path character class (a CommonMark autolink `<…/README.md>` used to capture `README.md>`), and **both** the path and the `#fragment` are `decodeURIComponent`'d before they are resolved, each with its own literal fallback (`docs/my%20file.md` is the file `docs/my file.md`; `#option-c--full-di%C3%A1taxis-re-org-heavier` is the anchor github.com puts in the address bar for `#option-c--full-diátaxis-re-org-heavier`; a malformed escape resolves literally rather than throwing). Decoding a fragment is unambiguous because `%` is not in the KEEP set, so it can never be part of a real slug.
 
 ## Alternatives Considered
 
 - **Document the `main`-only scope in a comment and leave the ref pinned**: the cheaper half of the review's recommendation, but it leaves `blob/mian/…` shipping as an unchecked 404 — a comment does not fail a build.
 - **Error on every non-`main` ref, permalinks included**: closes the typo hole and simultaneously breaks the build on the one legitimate non-`main` citation form. A permalink names an immutable ref precisely because the file may be gone from `main`; the working tree cannot answer for it.
-- **Depend on `github-slugger`**: correct by construction but a new runtime dependency in `apps/website` for ~10 lines, and it would still need the rendered-text reduction on top. Mirrored, and pinned to github's own renderer by test instead.
+- **Depend on `github-slugger`**: it is neither correct by construction (v2.0.0 disagrees with github.com on U+200D) nor free — a new runtime dependency in `apps/website` for ~10 lines, still needing the rendered-text reduction on top. Mirrored, and pinned to github's own renderer by test instead.
 - **Validate line anchors (`#L203`) too**: a moved line is undetectable and an out-of-range one still renders. No signal, real false-positive risk.
 
 ## Consequences
 
 - A docs citation must be spelled `blob|tree|raw/main/<path>` or use an immutable sha/tag permalink; any other ref fails `docs:staleness`.
 - Renaming a heading that a docs page cites is now a build break in `docs:staleness`, not a silent reader-facing regression — the citation and the heading move together or CI says so.
-- The slug mirror must stay honest: if github changes its anchor rule, the probed rows in `slugifyHeading`'s table are the thing to re-probe (`gh api -X POST /markdown -f text='## <heading>'`).
+- The slug mirror must stay honest, and the table is what keeps it so: `slugifyHeading`'s unit table has **one row per cell of the KEEP set** — Mn, Mc, Me, ZWJ, ZWNJ, non-Join_Control `Cf`, Nl, Nd, No, the `Sk` split (`ˆ` keeps, a skin-tone modifier drops), non-U+0020 spaces — because a single well-behaved emoji row (`🚀`, no variation selector) passed green while 278 repo headings were slugged wrong. If github changes its anchor rule, re-probe those rows with `gh api -X POST /markdown -f text='## <heading>'`, never `github-slugger`.
+- Repo-scale check, when in doubt: set-diff `collectHeadingSlugs` against github.com's own rendered blob HTML (`gh api repos/foomakers/pair/contents/<path> -H 'Accept: application/vnd.github.html'`, `href="#…"`). Across 12 mark-bearing repo files that is 328 anchors, 0 missing / 0 extra.
 
 ## Adoption Impact
 

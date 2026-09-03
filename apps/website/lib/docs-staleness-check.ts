@@ -260,17 +260,32 @@ function renderedHeadingText(heading: string): string {
 }
 
 /**
- * github-slugger's transform — what github.com runs to build a heading anchor:
- * lowercase, drop every character that is not a letter, digit, `_`, `-` or space, then
- * spaces to `-`. Nothing is trimmed or collapsed afterwards, so `## 🎯 Quick Start`
+ * What github.com's KEEP set for a heading anchor actually is: Ruby's `\p{Word}` plus
+ * `-` and U+0020 (github's markdown pipeline is Ruby). Everything else is dropped, then
+ * U+0020 becomes `-`. Nothing is trimmed or collapsed afterwards, so `## 🎯 Quick Start`
  * anchors as `-quick-start` and a removed em-dash leaves the double hyphen in
- * `6-techrisk-matrixmd--adoption-delta` — both verified against github's own renderer.
+ * `6-techrisk-matrixmd--adoption-delta`.
+ *
+ * The three classes that a `[^\p{L}\p{N}_\- ]` reading of "letters and digits" gets
+ * WRONG, each of them a false-positive build break or a missed 404:
+ *
+ * | class                       | github.com | why it is not obvious                  |
+ * | --------------------------- | ---------- | -------------------------------------- |
+ * | `\p{M}` (Mn/Mc/Me)          | KEEP       | U+FE0F rides 278 repo headings — `## 🛠️ Essential Commands` anchors `#️-essential-commands`, LEADING U+FE0F |
+ * | `\p{Join_Control}` (ZWJ/ZWNJ) | KEEP     | only these two of `Cf`; soft hyphen and RLM are dropped |
+ * | `\p{Nl}` yes, `\p{No}` no   | split      | `\p{N}` keeps `①`, github drops it — Alphabetic covers `Ⅸ` |
+ *
+ * `github-slugger@2.0.0` is NOT the oracle here despite the shape being the same: it
+ * DROPS U+200D where github.com keeps it (`secure-development.md`'s `👨‍💻 **SECURE
+ * CODING STANDARDS**` is `#‍-secure-coding-standards` on github.com). Every row of
+ * `slugifyHeading`'s unit table is github.com's own output — re-probe it, not the
+ * package, with `gh api -X POST /markdown -f text='## <heading>'`.
  */
 export function slugifyHeading(heading: string): string {
   return renderedHeadingText(heading)
     .trim()
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}_\- ]/gu, '')
+    .replace(/[^\p{Alphabetic}\p{M}\p{Nd}\p{Pc}\p{Join_Control}\- ]/gu, '')
     .replace(/ /g, '-')
 }
 
@@ -361,21 +376,30 @@ export function collectHeadingSlugs(markdown: string): Set<string> {
  * resolving it literally would fail the build on a live URL. A bare-prose citation ends
  * in the sentence's full stop, which belongs to whichever piece ends the URL.
  *
- * The path is then percent-DECODED, because that is what the reader's browser resolves:
- * `docs/my%20file.md` is the file `docs/my file.md`. A malformed escape
- * (`100%-coverage.md`) makes `decodeURIComponent` throw — the literal is resolved then,
- * never an exception out of a docs gate.
+ * BOTH halves are then percent-DECODED, because that is what the reader's browser
+ * resolves: `docs/my%20file.md` is the file `docs/my file.md`, and github.com puts
+ * `#option-c--full-di%C3%A1taxis-re-org-heavier` in the address bar for the heading it
+ * anchors `#option-c--full-diátaxis-re-org-heavier`. Decoding the path only meant a
+ * citation in its own canonical spelling failed the gate. Decoding a fragment is safe
+ * in both directions: `%` is not in the anchor KEEP set, so a literal `%` in a fragment
+ * is always an escape (or a malformed one). A malformed escape (`100%-coverage`) makes
+ * `decodeURIComponent` throw — that half resolves literally, never an exception out of
+ * a docs gate, and independently of the other half.
  */
+function decodeOrLiteral(s: string): string {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
 export function parseCitation(raw: string): { path: string; fragment: string } {
   const hash = raw.indexOf('#')
   const beforeHash = hash === -1 ? raw : raw.slice(0, hash)
   const fragment = hash === -1 ? '' : raw.slice(hash + 1).replace(/[.,;:]+$/, '')
   const encoded = (beforeHash.split('?')[0] ?? '').replace(/[.,;:]+$/, '')
-  try {
-    return { path: decodeURIComponent(encoded), fragment }
-  } catch {
-    return { path: encoded, fragment }
-  }
+  return { path: decodeOrLiteral(encoded), fragment: decodeOrLiteral(fragment) }
 }
 
 /**
