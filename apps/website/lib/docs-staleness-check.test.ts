@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { resolve, relative } from 'node:path'
 import {
   findDeadRepoLinks,
+  collectHeadingSlugs,
+  slugifyHeading,
   walkMdx,
   findSkillCountMismatches,
   findPluginSkillCountMismatches,
@@ -251,12 +253,226 @@ describe('findDeadRepoLinks', () => {
     expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toHaveLength(1)
   })
 
+  // --- URL SPELLINGS the character class used to swallow -------------------
+  //
+  // A CommonMark autolink (`<https://...>`) is a valid, rendered link on an MDX page,
+  // and `>` was not excluded from REPO_BLOB_RE's character class: the capture came out
+  // as `README.md>`, `existsCaseSensitive` said false, and `docs:staleness` failed the
+  // build on a link that works — the same false-positive class the `?plain=1` and
+  // trailing-punctuation strips were added to prevent.
+  it('resolves a CommonMark autolink citation', () => {
+    const content = `see <https://github.com/foomakers/pair/blob/main/README.md>`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toEqual([])
+  })
+
+  it('still flags a dead path inside an autolink, without the delimiter in the message', () => {
+    const content = `see <https://github.com/foomakers/pair/blob/main/READMEE.md>`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('READMEE.md')
+    expect(errs[0]).not.toContain('>')
+  })
+
+  // GitHub percent-encodes a space in a path; the raw capture is what the READER's
+  // browser decodes, so the gate must decode it before resolving against the tree.
+  it('percent-decodes the path before resolving it', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/apps/website/lib/docs-staleness-check%2Ets)`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toEqual([])
+  })
+
+  it('reports a dead percent-encoded path in its DECODED form', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/docs/my%20file.md)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('docs/my file.md')
+  })
+
+  it('does not throw on a malformed percent-escape — it resolves the literal', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/100%-coverage.md)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('100%-coverage.md')
+  })
+
+  // --- REF SEGMENT ---------------------------------------------------------
+  //
+  // Pinning the ref to `main` meant a citation under any OTHER ref matched NOTHING and
+  // shipped unchecked: `blob/mian/README.md` (a plain typo) and `blob/master/...` (the
+  // other default-branch name, which this repo does not have) both 404 for the reader
+  // while the gate printed PASS.
+  it('flags a citation under a typo’d ref', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/mian/README.md)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('mian')
+  })
+
+  it('flags a citation under master/ even when the path itself is live', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/master/README.md)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('master')
+  })
+
+  // A permalink is DELIBERATELY pinned to an immutable ref and may well point at a
+  // file `main` no longer has; the working tree cannot answer for it, so it is skipped
+  // rather than failed. Skipping it is what keeps the ref widening above from breaking
+  // the one legitimate non-`main` citation form.
+  it('skips a sha/tag permalink instead of resolving it against the working tree', () => {
+    for (const ref of ['cc1fba1', 'cc1fba122f0c912ba01288fe90ab2632e7e41057', 'v1.4.0', '0.9']) {
+      const content = `[x](https://github.com/foomakers/pair/blob/${ref}/file-deleted-long-ago.md)`
+      expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT), ref).toEqual([])
+    }
+  })
+
+  // --- FRAGMENT (Check 5b proved the FILE, never the anchor) ---------------
+  //
+  // Three shipped citations carry a fragment. The file resolving says nothing about
+  // where the reader lands: rename the `## Callers Matrix (Scoped Capabilities)`
+  // heading and every reader is dropped at the top of a 200-line file while
+  // `docs:staleness` still prints PASS.
+  const SKILLS_GUIDE = '.pair/knowledge/skills-guide.md'
+
+  it('passes a fragment that matches a real heading slug', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/${SKILLS_GUIDE}#callers-matrix-scoped-capabilities)`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toEqual([])
+  })
+
+  it('flags a fragment that matches no heading in the cited file', () => {
+    const content = `[x](https://github.com/foomakers/pair/blob/main/${SKILLS_GUIDE}#callers-matrix-renamed)`
+    const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('callers-matrix-renamed')
+  })
+
+  it('validates the fragment when a query string sits before it', () => {
+    const live = `[x](https://github.com/foomakers/pair/blob/main/${SKILLS_GUIDE}?plain=1#callers-matrix-scoped-capabilities)`
+    expect(findDeadRepoLinks(live, 'a.mdx', REPO_ROOT)).toEqual([])
+    const dead = `[x](https://github.com/foomakers/pair/blob/main/${SKILLS_GUIDE}?plain=1#nope)`
+    expect(findDeadRepoLinks(dead, 'a.mdx', REPO_ROOT)).toHaveLength(1)
+  })
+
+  it('does not mistake a sentence full stop for part of the fragment', () => {
+    const content = `see https://github.com/foomakers/pair/blob/main/${SKILLS_GUIDE}#callers-matrix-scoped-capabilities.`
+    expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)).toEqual([])
+  })
+
+  // GitHub's own line anchor. It is not a heading and never will be; failing it would
+  // break the build on a live URL.
+  it('skips a GitHub line anchor', () => {
+    for (const frag of ['L203', 'L203-L210', 'L203C5-L210C9']) {
+      const content = `[x](https://github.com/foomakers/pair/blob/main/${SKILLS_GUIDE}?plain=1#${frag})`
+      expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT), frag).toEqual([])
+    }
+  })
+
+  it('skips the fragment on tree/, raw/ and non-markdown blob targets', () => {
+    for (const url of [
+      'tree/main/apps/pair-cli#anything',
+      'raw/main/.pair/knowledge/skills-guide.md#anything',
+      'blob/main/apps/website/lib/docs-staleness-check.ts#anything',
+    ]) {
+      const content = `[x](https://github.com/foomakers/pair/${url})`
+      expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT), url).toEqual([])
+    }
+  })
+
   it('every blob citation on the real docs site resolves to a real file', () => {
     const docsDir = resolve(REPO_ROOT, 'apps/website/content/docs')
     const errors = walkMdx(docsDir).flatMap(f =>
       findDeadRepoLinks(readFileSync(f, 'utf-8'), relative(docsDir, f), REPO_ROOT),
     )
     expect(errors).toEqual([])
+  })
+})
+
+/**
+ * GitHub's heading-anchor generation, the authoritative consumer of every `#fragment`
+ * Check 5b now validates: inline markup is reduced to its rendered text, then
+ * lowercase, drop everything that is not a letter/digit/`_`/`-`/space, spaces to `-`,
+ * and a repeated slug gets `-1`, `-2`.
+ *
+ * EVERY expected value below is what github.com itself emits, not a reading of the
+ * spec: `gh api -X POST /markdown -f text='## <heading>'` returns the rendered HTML
+ * whose `id="user-content-<slug>"` is the anchor a reader's browser jumps to. The
+ * rows that would have been wrong by inspection are exactly the interesting ones —
+ * `[linked](url)` slugs as `a-linked-word` (not `a-linkedhttpsexamplecom-word`) and
+ * `_italic_` as `italic` while `snake_case` keeps its underscore.
+ */
+describe('slugifyHeading', () => {
+  it.each([
+    ['Callers Matrix (Scoped Capabilities)', 'callers-matrix-scoped-capabilities'],
+    // github.com serves exactly this for `## 6. `tech/risk-matrix.md` — Adoption Delta`
+    // (probed on the rendered blob page): backticks, `.`, `/` and the em-dash are
+    // dropped, and the double hyphen the removed em-dash leaves behind is PRESERVED.
+    ['6. `tech/risk-matrix.md` — Adoption Delta', '6-techrisk-matrixmd--adoption-delta'],
+    ['Execution Log', 'execution-log'],
+    // Emphasis markers are MARKUP (dropped with the word intact); an intraword `_` is
+    // TEXT and survives. Both rows come from github's own /markdown render.
+    ['**Bold** and _italic_', 'bold-and-italic'],
+    ['snake_case and a `code` span', 'snake_case-and-a-code-span'],
+    ['Step-by-step', 'step-by-step'],
+    ['A [linked](https://example.com) word', 'a-linked-word'],
+    ['Trailing spaces   ', 'trailing-spaces'],
+    ['🚀 Emoji lead', '-emoji-lead'],
+  ])('slugs %j as %j', (heading, slug) => {
+    expect(slugifyHeading(heading)).toBe(slug)
+  })
+})
+
+describe('collectHeadingSlugs', () => {
+  it('collects ATX headings at every level', () => {
+    const slugs = collectHeadingSlugs('# One\n\n## Two Words\n\n###### Six\n')
+    expect([...slugs]).toEqual(['one', 'two-words', 'six'])
+  })
+
+  it('ignores a `#` inside a fenced code block', () => {
+    const md = '# Real\n\n```sh\n# Not A Heading\n```\n\n~~~\n## Also Not\n~~~\n'
+    expect([...collectHeadingSlugs(md)]).toEqual(['real'])
+  })
+
+  it('ignores YAML frontmatter', () => {
+    expect([...collectHeadingSlugs('---\ntitle: X\n---\n\n# Real\n')]).toEqual(['real'])
+  })
+
+  it('collects setext headings', () => {
+    expect([...collectHeadingSlugs('Title Here\n=====\n\nSub Head\n---\n')]).toEqual([
+      'title-here',
+      'sub-head',
+    ])
+  })
+
+  it('does not read a table separator row as a setext heading', () => {
+    expect([...collectHeadingSlugs('| a | b |\n| --- | --- |\n| 1 | 2 |\n')]).toEqual([])
+  })
+
+  it('disambiguates repeated headings the way github-slugger does', () => {
+    expect([...collectHeadingSlugs('## Notes\n\n## Notes\n\n## Notes\n')]).toEqual([
+      'notes',
+      'notes-1',
+      'notes-2',
+    ])
+  })
+
+  it('collects an explicit HTML anchor', () => {
+    expect(
+      collectHeadingSlugs('<a name="manual-anchor"></a>\n\n# Real\n').has('manual-anchor'),
+    ).toBe(true)
+  })
+
+  it('finds every fragment the real docs site cites today', () => {
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ['.pair/knowledge/skills-guide.md', 'callers-matrix-scoped-capabilities'],
+      [
+        'packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md',
+        '6-techrisk-matrixmd--adoption-delta',
+      ],
+      ['qa/release-validation/CP10-web-cloud-environment.md', 'execution-log'],
+    ]
+    for (const [file, frag] of cases) {
+      const slugs = collectHeadingSlugs(readFileSync(resolve(REPO_ROOT, file), 'utf-8'))
+      expect(slugs.has(frag), `${file}#${frag}`).toBe(true)
+    }
   })
 })
 
