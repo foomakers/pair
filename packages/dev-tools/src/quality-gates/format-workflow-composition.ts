@@ -168,13 +168,7 @@
  *   stays true. ONE label, counted, not "every label allow-listed": GitHub ANDs a label
  *   list, so `[ubuntu-latest, ubuntu-22.04]` names no machine at all (measured, probe run
  *   33782665948) and its job queues forever — the same blocked-merge loss as `self-hosted`,
- *   reached by a value every element of which is on the allow-list. Counting is narrower
- *   than the producer on exactly two spellings of the SAME image, both measured GREEN and
- *   both rejected on purpose: a repeated label (GitHub dedupes it) and a case variant —
- *   `UBUNTU-LATEST`, `[ubuntu-latest, UBUNTU-LATEST]` and `[ubuntu-latest, Ubuntu-Latest]`
- *   all ran on a github-hosted Ubuntu 24.04 runner (probe run 33788568443), so GitHub
- *   matches labels case-INSENSITIVELY. Those are false REDs naming the canonical spelling,
- *   and the rejection message says so rather than claiming a job that never starts.
+ *   reached by a value every element of which is on the allow-list.
  * - `cancel-in-progress` and `concurrency.group` read as SUBSTRINGS. `!(github.event_name
  *   == 'pull_request')` contains the accepted equality and inverts it; `format-${{
  *   github.run_id }}-${{ github.ref }}` contains the ref key and is unique per run.
@@ -326,49 +320,8 @@ const JOB_KEYS_OWNED_ELSEWHERE = [
  * list `[ubuntu-latest]` all ran on a GitHub-hosted x86_64 runner
  * (`RUNNER_ENVIRONMENT=github-hosted`), so the list spelling is the same value, not a
  * weaker one.
- *
- * Matched EXACTLY, case included, while GitHub itself matches labels case-insensitively
- * (probe run 33788568443: `UBUNTU-LATEST` ran on the same github-hosted image). One
- * canonical spelling per machine keeps this list the only place a machine is named.
  */
 export const RUNNER_LABELS = ['ubuntu-latest', 'ubuntu-24.04', 'ubuntu-22.04'] as const
-
-/** `RUNNER_LABELS` as the message prints them: back-ticked, comma-separated. */
-function quotedRunnerLabels(): string {
-  return RUNNER_LABELS.map(label => `\`${label}\``).join(', ')
-}
-
-/** The column the reporter's output is wrapped to, the reporter's own `- ` included. */
-const MESSAGE_COLUMNS = 95
-
-/**
- * Wraps one problem paragraph to `MESSAGE_COLUMNS`, continuation lines indented by two
- * spaces to sit under the reporter's `- `. Greedy: a line takes the next word whenever it
- * still fits, and a word longer than the column gets a line of its own rather than being
- * broken.
- *
- * WHY THIS IS RENDERED RATHER THAN AUTHORED. A hand-wrapped literal holds its column only
- * for the text as written, and this module's messages interpolate: the job name, the value
- * quoted back to the contributor, and `RUNNER_LABELS` — whose own doc-comment invites "a
- * deliberate edit to this list". Adding one label to it lengthened a hand-wrapped line by
- * ~18 characters, so a change that touched no message text SHIPPED an over-column
- * paragraph (and turned a column test red for a reason its author never touched). Prettier
- * does not reflow string literals, so nothing in the toolchain caught it. Wrapping at
- * render time makes every interpolation re-wrap.
- */
-function wrapProblem(paragraph: string): string {
-  const words = paragraph.split(/\s+/).filter(word => word !== '')
-  return words
-    .reduce<string[]>((lines, word) => {
-      const current = lines[lines.length - 1]
-      // The first line is two characters shorter: the reporter prints it behind `- `.
-      const budget = lines.length <= 1 ? MESSAGE_COLUMNS - 2 : MESSAGE_COLUMNS
-      if (current === undefined) return [word]
-      if (`${current} ${word}`.length > budget) return [...lines, `  ${word}`]
-      return [...lines.slice(0, -1), `${current} ${word}`]
-    }, [])
-    .join('\n')
-}
 
 /**
  * Removes `#` comments from a `run:` body so a comment can neither smuggle a banned
@@ -1418,57 +1371,42 @@ function describeRunsOnItem(item: unknown): string {
  * spelling is rejected anyway: the contract is ONE label, and a false RED on a spelling
  * nobody needs costs a message, while the missing count cost a `format` context that never
  * reaches SUCCESS.
- *
- * LABEL MATCHING IS CASE-INSENSITIVE at GitHub, and this comparison is not. Probe run
- * 33788568443 on PR #477: `UBUNTU-LATEST`, `[UBUNTU-LATEST]`, `[ubuntu-latest,
- * UBUNTU-LATEST]` and `[ubuntu-latest, Ubuntu-Latest]` all completed success on
- * `RUNNER_ENVIRONMENT=github-hosted` Ubuntu 24.04 — the machine `ubuntu-latest` reaches.
- * So a case variant is a second SPELLING, never a second image: the pair belongs to the
- * dedupes-and-runs row, not to the ANDed-to-empty one. All four are rejected here for the
- * duplicate's reason (one canonical spelling), which puts the whole cost of both
- * narrowings in the MESSAGE — hence it must not tell those contributors that their job
- * never starts.
  */
 function runsOnProblems(jobs: Job[]): string[] {
   return jobs.flatMap(job => {
     if (!('runs-on' in job.body))
       return [
-        wrapProblem(
-          `job \`${job.name}\` declares no \`runs-on:\`, so nothing says which machine runs it — GitHub rejects the workflow file outright for it, and this guard would otherwise walk past the one key that picks the machine. Set it to one of ${quotedRunnerLabels()}.`,
-        ),
+        `job \`${job.name}\` declares no \`runs-on:\`, so nothing says which machine runs it — GitHub\n` +
+          '  rejects the workflow file outright for it, and this guard would otherwise walk past the one\n' +
+          `  key that picks the machine. Set it to one of \`${RUNNER_LABELS.join('`, `')}\`.`,
       ]
     const declared = job.body['runs-on']
     const labels = runnerLabels(declared)
     // EXACTLY ONE label, not "every label allow-listed": GitHub ANDs a label list, so a
-    // second label naming a DIFFERENT image narrows the runner set to empty (measured —
-    // probe run 33782665948: `[ubuntu-latest, ubuntu-22.04]` and `[ubuntu-latest,
-    // ubuntu-24.04, ubuntu-22.04]` both sat `queued`, never started, while
-    // `[ubuntu-latest]` finished).
-    //
-    // Two spellings of the SAME image are the rows where this rule is narrower than the
-    // producer, and both are rejected on purpose. `[ubuntu-latest, ubuntu-latest]`
-    // completed success (GitHub dedupes the set, probe run 33782665948); and GitHub
-    // matches labels case-INSENSITIVELY, so `UBUNTU-LATEST`, `[UBUNTU-LATEST]`,
-    // `[ubuntu-latest, UBUNTU-LATEST]` and `[ubuntu-latest, Ubuntu-Latest]` all completed
-    // success on a github-hosted Ubuntu 24.04 runner (probe run 33788568443) — the same
-    // machine `ubuntu-latest` reaches. The comparison below stays case-sensitive: the
-    // contract is ONE label in the canonical spelling, and the direction is a false RED
-    // whose message names that spelling, never a false green.
+    // second DIFFERENT image label narrows the runner set to empty (measured — probe run
+    // 33782665948: `[ubuntu-latest, ubuntu-22.04]` and `[ubuntu-latest, ubuntu-24.04,
+    // ubuntu-22.04]` both sat `queued`, never started, while `[ubuntu-latest]` finished).
+    // A REPEATED label is the one row where counting is narrower than the producer:
+    // `[ubuntu-latest, ubuntu-latest]` completed success (GitHub dedupes the set) and is
+    // rejected anyway, because the contract is one label and the direction is a false RED.
     const accepted =
       labels !== undefined && labels.length === 1 && RUNNER_LABELS.some(ok => ok === labels[0])
     if (accepted) return []
     return [
-      wrapProblem(
-        [
-          `job \`${job.name}\` sets \`runs-on: ${describeRunsOn(declared)}\`: it may run only on a GitHub-hosted Ubuntu runner (${quotedRunnerLabels()}, alone or as a one-label list), spelled exactly as listed.`,
-          'A list must carry EXACTLY ONE label: two labels naming DIFFERENT images are ANDed by GitHub and name no machine, so the job never starts and the `format` context stays PENDING, never SUCCESS (measured).',
-          'Two spellings of the SAME image are rejected too, and for those the job does run: GitHub dedupes a repeated label, and it matches labels case-INSENSITIVELY, so `[ubuntu-latest, ubuntu-latest]`, `[ubuntu-latest, UBUNTU-LATEST]` and `UBUNTU-LATEST` alone all reached a runner (measured).',
-          'They are a deliberate false RED — one label in the listed spelling is the contract — so the fix there is the spelling, not the machine.',
-          "`runs-on` picks the MACHINE, which decides what `pnpm` and `prettier` even are — the `container:` argument spelled as a value instead of a key — and on a PUBLIC repo a `pull_request` run executes the PR's OWN version of this file, so `self-hosted` (bare, in a label list, or through a runner `group:`) hands the `format` verdict to a machine the pull request chose.",
-          'Today that reads as a BLOCKED merge rather than a green check — this repo has no self-hosted runner registered, so the job queues forever and the context stays pending (measured) — which lasts exactly as long as that stays true.',
-          'Another GitHub-hosted OS or a larger/arm image is a deliberate edit to `RUNNER_LABELS`, not a drive-by one.',
-        ].join(' '),
-      ),
+      `job \`${job.name}\` sets \`runs-on: ${describeRunsOn(declared)}\`: it may run only on a\n` +
+        `  GitHub-hosted Ubuntu runner (\`${RUNNER_LABELS.join('`, `')}\`, alone or as a\n` +
+        '  one-label list). A list must carry EXACTLY ONE label: two DIFFERENT allow-listed labels are\n' +
+        '  ANDed by GitHub and name no machine, so the job never starts and the `format` context stays\n' +
+        '  PENDING, never SUCCESS (measured). A repeated label is rejected too, though GitHub dedupes it\n' +
+        '  and the job does run (measured): ONE label is the contract, and the repeat is a spelling with\n' +
+        '  no use. `runs-on` picks the MACHINE, which decides what `pnpm` and `prettier` even are — the\n' +
+        '  `container:` argument spelled as a value instead of a key — and on a PUBLIC repo a\n' +
+        "  `pull_request` run executes the PR's OWN version of this file, so `self-hosted` (bare, in a\n" +
+        '  label list, or through a runner `group:`) hands the `format` verdict to a machine the pull\n' +
+        '  request chose. Today that reads as a BLOCKED merge rather than a green check — this repo has\n' +
+        '  no self-hosted runner registered, so the job queues forever and the context stays pending\n' +
+        '  (measured) — which lasts exactly as long as that stays true. Another GitHub-hosted OS or a\n' +
+        '  larger/arm image is a deliberate edit to `RUNNER_LABELS`, not a drive-by one.',
     ]
   })
 }

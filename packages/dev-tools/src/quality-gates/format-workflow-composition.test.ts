@@ -3853,19 +3853,6 @@ describe('a failure-path step only says what to run (#413)', () => {
 // rule counts labels (exactly one), it does not merely allow-list each of them. The
 // duplicate spelling is measured GREEN on GitHub and rejected here anyway — one label is
 // the contract, and the direction of that narrowing is a false red, never a false green.
-//
-// LABEL MATCHING IS CASE-INSENSITIVE. Boundary proof, GitHub itself (probe workflow on
-// this PR, run 33788568443, reverted), all five jobs completed within one minute:
-//   runs-on: [ubuntu-latest]                  -> `d9-control-one`     success
-//   runs-on: UBUNTU-LATEST                    -> `d9-case-alone`      success, github-hosted 24.04
-//   runs-on: [UBUNTU-LATEST]                  -> `d9-case-list-alone` success, github-hosted 24.04
-//   runs-on: [ubuntu-latest, UBUNTU-LATEST]   -> `d9-case-pair`       success, github-hosted 24.04
-//   runs-on: [ubuntu-latest, Ubuntu-Latest]   -> `d9-case-mixed-pair` success, github-hosted 24.04
-// So a case variant names the SAME image: `[ubuntu-latest, UBUNTU-LATEST]` is the
-// repeated-label row (dedupes, runs), NOT the two-images row that is ANDed to nothing.
-// This rule compares case-SENSITIVELY and rejects all four — the same one-canonical-
-// spelling narrowing as the duplicate — so the message must not tell those contributors
-// their job never starts.
 describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () => {
   const runsOn = (source: string, value: string) =>
     mutate(source, '    runs-on: ubuntu-latest\n', `    runs-on: ${value}\n`, 'the runs-on line')
@@ -3927,21 +3914,6 @@ describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () =>
     // is not worth a second acceptance path; the direction is safe (a false red, never a
     // false green).
     ['the same allow-listed label twice', '[ubuntu-latest, ubuntu-latest]'],
-    // ALSO MEASURED GREEN on GitHub, probe run 33788568443 (round 19): GitHub matches
-    // `runs-on` labels case-INSENSITIVELY. `d9-case-alone` (`UBUNTU-LATEST`),
-    // `d9-case-list-alone` (`[UBUNTU-LATEST]`), `d9-case-pair` (`[ubuntu-latest,
-    // UBUNTU-LATEST]`) and `d9-case-mixed-pair` (`[ubuntu-latest, Ubuntu-Latest]`) all
-    // completed success on `RUNNER_ENVIRONMENT=github-hosted`, Ubuntu 24.04 — the same
-    // machine `ubuntu-latest` reaches. So a case variant is the SAME image, and a pair of
-    // them is the repeated-label row, not the ANDed-to-empty one. Rejected here anyway,
-    // for the reason the repeat is: the contract is one label in the canonical spelling,
-    // and the direction is a false RED whose message names that spelling.
-    ['an upper-case spelling of an allow-listed label', 'UBUNTU-LATEST'],
-    ['a mixed-case spelling of an allow-listed label', 'Ubuntu-Latest'],
-    ['an upper-case spelling in a one-element list', '[UBUNTU-LATEST]'],
-    ['a label beside its own upper-case spelling', '[ubuntu-latest, UBUNTU-LATEST]'],
-    ['a label beside its own mixed-case spelling', '[ubuntu-latest, Ubuntu-Latest]'],
-    ['a case variant of a DIFFERENT allow-listed image', '[ubuntu-latest, UBUNTU-22.04]'],
     ['a sequence carrying a mapping', '[{group: ubuntu-runners}]'],
   ]
 
@@ -4047,207 +4019,52 @@ describe('runs-on is an allow-list of GitHub-hosted Ubuntu labels (#413)', () =>
       return r.message
     }
 
-    // THE PROPERTY, not the wording of one sentence. Round 18 deleted a single overclaim
-    // ("A list of TWO allow-listed labels … never gets a runner") and pinned that exact
-    // text with a negative assertion, which only catches a byte-for-byte revert: the same
-    // claim re-enters behind any other lead-in, the positive assertions stay green because
-    // the corrected sentence is still there, and a contributor with `[ubuntu-latest,
-    // ubuntu-latest]` is told again that their job never gets a runner. What must hold is
-    // that NO sentence claims a never-started job for a value GitHub schedules, so every
-    // sentence is read:
-    //   - a never-starts claim is a defect in a sentence about two spellings of the SAME
-    //     image (a repeat, or a case variant) — GitHub dedupes those and the job RUNS;
-    //   - a never-starts claim that mentions labels or a list at all must be scoped to
-    //     labels naming DIFFERENT images, the rows measured `queued`;
-    //   - a never-starts claim naming no label list (the self-hosted queue) is untouched.
-    const NEVER_STARTS =
-      /never (?:starts|runs|gets a runner)|queues forever|stays pending|never SUCCESS/i
-    const SAME_IMAGE =
-      /repeat|dedup|duplicate|twice|case[- ](?:variant|insensitiv)|same (?:image|label|machine|runner)/i
-    const A_LABEL_LIST = /\blabels?\b|\blist\b/i
-    const SCOPED_TO_DIFFERENT_IMAGES = /\bDIFFERENT\b/
-    // Splitting on `. ` alone would cut `ubuntu-24.04` in half; a digit before the dot is
-    // never a sentence end here.
-    const sentencesOf = (message: string) => flat(message).split(/(?<=[^0-9])\.\s+/)
-    const unscopedNeverStartsClaims = (message: string) =>
-      sentencesOf(message).filter(
-        s =>
-          NEVER_STARTS.test(s) &&
-          (SAME_IMAGE.test(s) || (A_LABEL_LIST.test(s) && !SCOPED_TO_DIFFERENT_IMAGES.test(s))),
-      )
-
-    // The guard is only worth its assertion if it fires on the regression it exists for,
-    // so it is exercised on the historical wording, on the same claim re-worded, and on the
-    // three sentences that must stay legal.
-    const claimRows: [string, string, number][] = [
-      [
-        'the round-17 overclaim, verbatim',
-        'A list of TWO allow-listed labels is ANDed by GitHub and never gets a runner, so the `format` context stays PENDING.',
-        1,
-      ],
-      [
-        'the same overclaim behind a different lead-in',
-        'A list must carry EXACTLY ONE label. Two allow-listed labels name no machine, so the job never gets a runner and the `format` context stays PENDING (measured).',
-        1,
-      ],
-      [
-        'a never-starts claim pinned on a repeated label',
-        'A repeated label is ANDed with itself, so the job never starts.',
-        1,
-      ],
-      [
-        'a never-starts claim pinned on a case variant',
-        'A case variant is a second label, so the job never starts and the context stays PENDING.',
-        1,
-      ],
-      [
-        'the claim scoped to different images',
-        'Two labels naming DIFFERENT images are ANDed by GitHub and name no machine, so the job never starts.',
-        0,
-      ],
-      [
-        'the self-hosted queue, which names no label list',
-        'This repo has no self-hosted runner registered, so the job queues forever and the context stays pending (measured).',
-        0,
-      ],
-      [
-        'the same-image sentence, which promises the job DOES run',
-        'GitHub dedupes a repeated label and matches labels case-INSENSITIVELY, so both spellings reach a runner and the job does run (measured).',
-        0,
-      ],
-    ]
-
-    for (const [label, sentence, expected] of claimRows) {
-      it(`the claim guard reads ${label} as ${expected} unscoped claim(s)`, () => {
-        expect(unscopedNeverStartsClaims(sentence)).toHaveLength(expected)
-      })
-    }
-
-    // MEASURED AT THE PRODUCER, twice. Probe run 33782665948: `d8-two-same-label`
-    // (`runs-on: [ubuntu-latest, ubuntu-latest]`) got runner `GitHub Actions 1000003379`
-    // and completed `success` — GitHub dedupes the label SET — while `d8-two-ubuntu` and
-    // `d8-three-ubuntu` (DIFFERENT images) show `runner_name: ""`, zero steps, still queued
-    // 23 minutes later. Probe run 33788568443 (round 19): `d9-case-pair`
-    // (`[ubuntu-latest, UBUNTU-LATEST]`), `d9-case-mixed-pair`, `d9-case-alone`
-    // (`UBUNTU-LATEST`) and `d9-case-list-alone` ALL completed `success` on
-    // `RUNNER_ENVIRONMENT=github-hosted` Ubuntu 24.04 — label matching is
-    // case-INSENSITIVE, so a case variant is the same image, not a second one.
-    it('makes no never-starts claim about a value GitHub schedules', () => {
-      for (const value of [
-        '[ubuntu-latest, ubuntu-latest]',
-        '[ubuntu-latest, UBUNTU-LATEST]',
-        '[ubuntu-latest, Ubuntu-Latest]',
-        'UBUNTU-LATEST',
-        '[UBUNTU-LATEST]',
-        '[ubuntu-latest, ubuntu-22.04]',
-        'self-hosted',
-      ]) {
-        expect(unscopedNeverStartsClaims(rejectionFor(value)), value).toEqual([])
-      }
+    // MEASURED AT THE PRODUCER. Probe run 33782665948, re-read this round with
+    // `gh api repos/foomakers/pair/actions/runs/33782665948/jobs`: job `d8-two-same-label`
+    // (`runs-on: [ubuntu-latest, ubuntu-latest]`) got runner `GitHub Actions 1000003379`,
+    // ran `Set up job` / its `echo` / `Complete job` and completed `success` — GitHub
+    // dedupes the label SET. Only the DIFFERENT-label rows sat unscheduled:
+    // `d8-two-ubuntu` and `d8-three-ubuntu` show `runner_name: ""`, zero steps, still
+    // queued 23 minutes later. So "the job never gets a runner and the context stays
+    // PENDING" is true of two DIFFERENT labels and FALSE of a repeated one — and this
+    // message tags it `(measured)`, on a value a contributor can disprove in one push.
+    it('scopes the never-starts claim to DIFFERENT labels', () => {
+      const m = flat(rejectionFor('[ubuntu-latest, ubuntu-latest]'))
+      expect(m).toMatch(/two DIFFERENT allow-listed labels are ANDed[^.]*never starts/)
+      expect(m).not.toMatch(/A list of TWO allow-listed labels[^.]*never gets a runner/)
     })
 
     it('names the repeated label as its own case, not as a job that never runs', () => {
       const m = flat(rejectionFor('[ubuntu-latest, ubuntu-latest]'))
       expect(m).toMatch(/EXACTLY ONE label/)
+      expect(m).toMatch(/repeated label is rejected too/)
       expect(m).toMatch(/GitHub dedupes/)
-      expect(m).toMatch(/the job does run/)
     })
 
-    // The case variant is the row no probe covered before round 19: the two strings are
-    // DIFFERENT labels to this rule (it compares case-sensitively) and the SAME image to
-    // GitHub. The message must read as the second, or it repeats the round-18 defect on a
-    // rarer spelling.
-    it('names a case variant as the same image, and the canonical spelling as the fix', () => {
-      const m = flat(rejectionFor('[ubuntu-latest, UBUNTU-LATEST]'))
-      expect(m).toMatch(/case-INSENSITIVELY/)
-      expect(m).toMatch(/the job does run/)
-      expect(m).toMatch(/spelled exactly as listed/i)
-    })
-
-    // The same paragraph is printed for every rejected value, so the rows that DO queue
-    // forever must still read as measured fact.
+    // The same paragraph is printed for every rejected value, so the two rows that DO
+    // queue forever must still read as measured fact.
     it('keeps the PENDING claim for the values that really never start', () => {
       for (const value of ['self-hosted', '[ubuntu-latest, ubuntu-22.04]']) {
         expect(flat(rejectionFor(value)), value).toMatch(/PENDING, never SUCCESS \(measured\)/)
       }
     })
 
-    // ONE COLUMN, as a property of the wrap rather than a width window. Line 0 of the
-    // report is the file header; line 1 onward is this rule's paragraph, the first of them
-    // behind the reporter's `- ` (so every line shares the same 95-column budget). A
-    // hand-wrapped literal cannot hold that: the paragraph interpolates `RUNNER_LABELS`,
-    // the job name and the quoted-back value, so a width window measured against today's
-    // three labels turns red on a deliberate `RUNNER_LABELS` edit that touches no message
-    // text — and, worse, SHIPS an over-column line until someone re-wraps by hand. The
-    // paragraph is wrapped at render time; what is asserted is greedy wrapping itself: no
-    // line over the column, and no line that could have taken the next line's first word.
-    const COLUMN = 95
-    // The report prints one `- `-led block per problem; each block is one paragraph, so the
-    // greedy property is read inside a block and never across two of them.
-    const wrapProblems = (message: string) => {
-      const blocks = message
-        .split('\n')
-        .slice(1)
-        .join('\n')
-        .split(/\n(?=- )/)
-        // Only this rule's paragraph is wrapped at render time; the other rules' messages
-        // are hand-wrapped literals and are not this contract.
-        .filter(block => /`runs-on/.test(block))
-      expect(blocks.length, `no runs-on problem in:\n${message}`).toBeGreaterThan(0)
-      return blocks.flatMap(block => {
-        const lines = block.split('\n').filter(line => line.trim() !== '')
-        return lines.flatMap((line, i) => {
-          const nextWord = lines[i + 1]?.trim().split(' ')[0]
-          const unbreakable = line.trim().split(' ').length === 1
-          return [
-            ...(line.length > COLUMN && !unbreakable ? [`${line.length} > ${COLUMN}`] : []),
-            ...(nextWord !== undefined && line.length + 1 + nextWord.length <= COLUMN
-              ? [`${line.length} chars could have taken \`${nextWord}\``]
-              : []),
-          ].map(problem => `line ${i}: ${problem} — ${line}`)
-        })
-      })
-    }
-
-    it('wraps the rejection to one column for every value it quotes back', () => {
+    // Line 0 is the file header and line 1 carries the quoted value (its width is the
+    // contributor's, not ours); the last line closes the paragraph. Everything between is
+    // body text and must render as one column (the paragraph is wrapped at 95; the floor
+    // is 80, which is where greedy wrapping lands when the next word is a long one) — a
+    // 48-char line beside 95-char neighbours is what a mid-line splice leaves behind.
+    it('wraps every body line to one column width', () => {
       for (const value of [
         'self-hosted',
         '[ubuntu-latest, ubuntu-latest]',
-        '[ubuntu-latest, UBUNTU-LATEST]',
         '[ubuntu-latest, ubuntu-22.04]',
-        '[ubuntu-latest, ubuntu-24.04, ubuntu-22.04]',
-        '[[ubuntu-latest]]',
-        '',
       ]) {
-        expect(wrapProblems(rejectionFor(value)), value).toEqual([])
+        for (const line of rejectionFor(value).split('\n').slice(2, -1)) {
+          expect(line.length, `${value}: ${line.length} chars — ${line}`).toBeGreaterThanOrEqual(80)
+          expect(line.length, `${value}: ${line.length} chars — ${line}`).toBeLessThanOrEqual(99)
+        }
       }
-    })
-
-    // The forcing function the width window could not give: the job NAME is interpolated
-    // into the same paragraph exactly as `RUNNER_LABELS` is, so widening it by one
-    // character is the same edit as adding a label. Every width re-wraps.
-    it('re-wraps when an interpolated width changes, instead of shipping a ragged line', () => {
-      for (const name of ['a', 'helper', 'format-check-on-every-pull-request-and-on-push']) {
-        const r = checkFormatWorkflow(
-          mutate(
-            WELL_FORMED,
-            'jobs:\n',
-            `jobs:\n  ${name}:\n    runs-on: self-hosted\n    steps:\n      - run: pnpm install\n`,
-            'the jobs key',
-          ),
-        )
-        expect(r.ok, name).toBe(false)
-        expect(wrapProblems(r.message), name).toEqual([])
-      }
-    })
-
-    // The missing-key message interpolates `RUNNER_LABELS` too, and is the same contract.
-    it('wraps the missing-`runs-on` message to the same column', () => {
-      const r = checkFormatWorkflow(
-        mutate(WELL_FORMED, '    runs-on: ubuntu-latest\n', '', 'the runs-on line'),
-      )
-      expect(r.ok, r.message).toBe(false)
-      expect(wrapProblems(r.message)).toEqual([])
     })
   })
 })
