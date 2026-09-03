@@ -7,6 +7,29 @@
  * unformatted code with every CI check green. `.github/workflows/format.yml` is
  * the fix; this module is what stops that fix from quietly decaying.
  *
+ * THE FILE IS PARSED, NOT READ LINE BY LINE (ADL 2026-09-01
+ * `workflow-guard-rejects-what-it-cannot-read`, amended 2026-09-03). `yaml@2.8.2` — this
+ * repo's adopted parser — resolves the workflow to the same document GitHub runs, once,
+ * at the top of `checkFormatWorkflow`. Every rule below reads NODES. The hand-rolled
+ * line reader this module used between rounds 5 and 14 (`blockUnder`, `listValueOf`,
+ * `scalarAt`, `keysAt`, `stepsOf`, `withoutBlockScalars`) is retired, and with it the
+ * four rule families that existed only to reject the spellings it could not follow:
+ * flow mappings, JSON-spelled steps, anchors/aliases, indentless sequences, CRLF and
+ * quoted scalars are now READ, and their resolved values are subject to every rule
+ * here. The reader failed OPEN on those spellings (round 5: `pull_request: { branches:
+ * [main], paths-ignore: ['**\/*.md'] }` left every trigger rule passing vacuously) and
+ * then failed CLOSED on five correct ones (rounds 12–14); a parser does neither.
+ *
+ * Two properties the parse gives for free and the rules rely on:
+ *
+ * - **fail-closed on an unreadable file**: a parse error is itself a reported problem,
+ *   and so is a duplicate key (`yaml@2.8.2` rejects both) — the direction the rejection
+ *   list used to hold.
+ * - **`run:` bodies stay shell, never YAML**. The parser hands each `run:` scalar over
+ *   as a string; shell comments inside it are stripped quote-aware (`stripLineComment`),
+ *   because `#` inside quotes is not a comment to bash and cutting there once removed an
+ *   executing `prettier --write .` from view.
+ *
  * Every regression this guards against is a one-line edit that leaves the
  * workflow LOOKING like enforcement:
  *
@@ -23,23 +46,14 @@
  *   the trigger shapes the coverage.
  * - `pull_request_target` instead of `pull_request`, which hands the base repo's
  *   credentials to a fork's head commit.
- * - a trigger key respelled as a FLOW mapping. Every trigger rule above reads a
- *   BLOCK mapping, so `pull_request: { branches: [main], paths-ignore: ['**\/*.md'] }`
- *   — valid YAML GitHub honours — yields an empty block, every filter inside it reads
- *   as "absent, therefore no filter", and the four holes above walk through the one
- *   spelling nobody wrote a rule for. Flow mappings are REJECTED, not parsed
- *   (`flowStyleProblems`).
- * - the same spelling one level down, on a step. A step is a sequence ITEM, not a
- *   mapping key, so `- { name: Fix, run: npx prettier --write . }` slipped past the
- *   key-level sweep AND past both readers that look inside a step: `scalarAt(step,
- *   'uses', …)` and `extractRunBlocks` each want their key at line start, and neither
- *   finds one. Placed before the checking step that item rewrites the checkout while
- *   invisible to `usesProblems` and to the write-mode scan at once. Only a BLOCK
- *   MAPPING item is read; flow, JSON, anchored, aliased and off-line items are
- *   rejected (`relocationProblems`).
  * - a write-mode formatter, or a formatting auto-commit. The ADL 2026-07-31 ban
  *   ("the gate reports, the developer fixes deliberately") is repo-wide, not
- *   hook-specific — CI repairing the branch is the same defect one layer up.
+ *   hook-specific — CI repairing the branch is the same defect one layer up. Held by
+ *   the SHELL ALLOW-LISTS below, not by the formatter deny-list: every `run:` in this
+ *   workflow is one of three things and each is allow-listed (the checking command as
+ *   an equality, `SETUP_COMMAND_LINES` for the toolchain install, `REMEDY_COMMAND_LINES`
+ *   for the failure-path message). `findWriteModeFormatters` still runs across all of
+ *   them, as the repo-wide statement of the ban rather than as the surface that holds it.
  * - the same write, spelled `uses:` instead of `run:`. The write-mode scan reads
  *   `run:` blocks, so a formatting ACTION was invisible to it — and placed before the
  *   checking step it needs no permission at all, because it never pushes. Hence an
@@ -120,38 +134,49 @@
  *   carrying an unformatted file gets a SUCCESSFUL `format` context (measured on
  *   GitHub). `repository`, `path`, `sparse-checkout` are the same loss; the checkout's
  *   inputs are an allow-list of fetch mechanics (`checkoutInputProblems`).
- * - `working-directory:` on the checking step, or `defaults:` on the job or the
+ * - `working-directory:` on the checking step, or `defaults:` on a job or the
  *   workflow — `cd` spelled as a key, invisible to the command equality, so CI runs a
  *   package's own `format:check` (a subset) the moment one declares the script. The
  *   checking step carries only `name`, `id`, `run`, `timeout-minutes`
  *   (`checkStepKeyProblems`, `defaultsProblems`).
+ * - `env:` or `container:` on the JOB — the same relocation one level up. Every key
+ *   that decides WHAT or HOW the check runs is allow-listed on the checking STEP, and
+ *   a job-level key reaches that step anyway, so the step-level rule was bypassable by
+ *   relocation exactly as `working-directory:`/`defaults:` were. Measured end-to-end
+ *   against the repo's own pinned prettier 3.6.2: `node bin/prettier.cjs
+ *   --list-different bad.ts` prints `bad.ts` and exits 1, while
+ *   `NODE_OPTIONS=--require=./shim.js node bin/prettier.cjs --list-different bad.ts`
+ *   prints `bad.ts` and exits 0 (`shim.js` being one line: `process.on('exit', () => {
+ *   process.exitCode = 0 })`). A job-level `env: NODE_OPTIONS:` reaches the checking
+ *   step — measured on GitHub, probe run 33724282486 on PR #477, `D5-JOB-ENV=from-job-env`
+ *   logged from a step that declares no `env:` of its own — so `pnpm format:check` still
+ *   NAMES the offending file and the job goes GREEN. `container:` is the `uses:`
+ *   third-party-code argument spelled as a job key (the image decides what `pnpm` and
+ *   `prettier` even are), and `services:` with it. Hence the workflow's own keys and
+ *   every job's keys are allow-lists (`workflowKeyProblems`, `jobKeyProblems`).
  * - `cancel-in-progress` and `concurrency.group` read as SUBSTRINGS. `!(github.event_name
  *   == 'pull_request')` contains the accepted equality and inverts it; `format-${{
  *   github.run_id }}-${{ github.ref }}` contains the ref key and is unique per run.
  *   Both values are anchored allow-lists over the WHOLE value now.
- * - the shell of a step that is neither the check nor its remedy. Every other surface is
- *   an allow-list; this one was a deny-list of formatters, and the `with: ref: main` loss
- *   has a shell spelling no formatter list names: `run: git fetch origin main && git
- *   checkout origin/main -- .` before the check, or `pnpm install && find . -name '*.ts'
+ * - the shell of a step that is neither the check nor its remedy. `run:` was the last
+ *   deny-list surface in this module, and the `with: ref: main` loss has a shell
+ *   spelling no formatter list names: `run: git fetch origin main && git checkout
+ *   origin/main -- .` before the check, or `pnpm install && find . -name '*.ts'
  *   -delete` — each `ok=true` on the shipped file, each running `pnpm format:check` on a
  *   tree that is not the PR's (AC2). The toolchain install is the whole allow-list: `pnpm
  *   install` with flags, and the corepack fallback line by line (`setupCommandProblems`).
+ * - the shell of the REMEDY. It is the last surface a deny-list guarded, and the same
+ *   argument retires it: `npx dprint fmt` (a formatter no offender list names) and
+ *   `git commit -am style && git push` beside the required `pnpm format` message were
+ *   `ok=true`. The remedy says something; it does not do anything. Its shell is an
+ *   allow-list of quoted `echo`/`printf` lines (`REMEDY_COMMAND_LINES`) — which is all
+ *   it has ever contained.
  * - `prettier -w`, the documented short form of `--write`, missing from the one offender
  *   list the AC6 ban reuses (`WRITE_MODE_FORMATTERS`, next door): `pnpm install && npx
  *   prettier -w .` was green while `--write` was red.
  *
- * And three spellings the reader misreported on CORRECT workflows — each resolved by
- * GitHub identically to the shipped one (probe run 33676806439 on PR #477), each the ADL
- * 2026-09-01-rejects-what-it-cannot-read failure class ("a guard that false-fails gets
- * weakened"): a quoted `run: "pnpm format:check"` (red: "runs `"pnpm format:check"`");
- * CRLF line endings (red with the WRONG cause, "spells `on:` as a list of events"); and
- * `permissions:` at workflow level with none on the job (red: "declares no
- * `permissions:`" — GitHub hands the workflow-level scope to every job without its own,
- * and a job's own block replaces it). `normalizeCommand` and `isSetupCommand` unquote,
- * `stripComments` normalises line breaks, `permissionProblems` reads both levels.
- *
- * Structure is asserted, never exact file text: comments, step names and action
- * versions must be editable without false-failing this guard.
+ * Structure is asserted, never exact file text: comments, step names, action
+ * versions and YAML spelling must be editable without false-failing this guard.
  *
  * WRITE-MODE DETECTION IS NOT RE-IMPLEMENTED. `findWriteModeFormatters` and the
  * transitive `expandScriptReferences` come from the pre-push guard next door — the
@@ -169,6 +194,8 @@
  */
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
+
+import { parseDocument } from 'yaml'
 
 import {
   expandScriptReferences,
@@ -236,16 +263,45 @@ export const ALLOWED_CHECKOUT_INPUTS = [
 export const REQUIRED_PR_TYPES = ['opened', 'synchronize'] as const
 
 /**
- * Removes `#` comments so a comment can neither smuggle a banned pattern in nor
- * trip the guard by merely mentioning one — but only a `#` that is OUTSIDE quotes.
+ * The keys the WORKFLOW may declare. `env:` is the reason this is an allow-list: it is
+ * inherited by every job and every step, so it reaches the checking step no matter what
+ * the step-level allow-list says (see `jobKeyProblems`). `defaults:` has its own rule,
+ * which names the loss precisely, so it is not reported twice here.
+ */
+export const WORKFLOW_KEYS = ['name', 'on', 'concurrency', 'permissions', 'jobs'] as const
+const WORKFLOW_KEYS_OWNED_ELSEWHERE = ['defaults'] as const
+
+/**
+ * The keys a JOB may declare. Same allow-list discipline as `CHECK_STEP_KEYS`, one level
+ * up: `env:` on the job reaches the checking step (measured on GitHub, probe run
+ * 33724282486 — a step declaring no `env:` printed the job-level value), and
+ * `NODE_OPTIONS=--require=<shim>` makes the repo's own prettier 3.6.2 print the offending
+ * filename and exit 0 (measured against `prettier/bin/prettier.cjs`), i.e. `format` GREEN
+ * on unformatted code. `container:`/`services:` decide what `pnpm` and `prettier` even
+ * ARE — third-party code chosen by a job key, which is the `uses:` argument one level up.
+ * `if`, `needs`, `strategy`, `defaults` and `continue-on-error` have their own rules and
+ * are not reported twice here.
+ */
+export const JOB_KEYS = ['name', 'runs-on', 'permissions', 'timeout-minutes', 'steps'] as const
+const JOB_KEYS_OWNED_ELSEWHERE = [
+  'if',
+  'needs',
+  'strategy',
+  'defaults',
+  'continue-on-error',
+] as const
+
+/**
+ * Removes `#` comments from a `run:` body so a comment can neither smuggle a banned
+ * pattern in nor trip the guard by merely mentioning one — but only a `#` that is
+ * OUTSIDE quotes.
  *
- * The unconditional cut this replaces ran the wrong way. `#` inside quotes is not a
- * comment to bash (inside a `run: |` block scalar) nor to YAML (inside a quoted
- * scalar), so `echo "note # here"; prettier --write .` EXECUTES in full while the
- * guard saw only `echo "note` — the write-mode formatter stripped out of view, the
- * AC6 ban silently gone, and `pnpm format:check` passing on a tree CI had already
- * rewritten. The documented rationale only ever covered smuggling a pattern IN;
- * this is the direction that costs a rule.
+ * YAML's own comments never reach here: the parser drops them. This is the SHELL's
+ * comment rule, applied to shell text. The unconditional cut this replaces ran the wrong
+ * way: `#` inside quotes is not a comment to bash, so `echo "note # here"; prettier
+ * --write .` EXECUTES in full while the guard saw only `echo "note` — the write-mode
+ * formatter stripped out of view, the AC6 ban silently gone, and `pnpm format:check`
+ * passing on a tree CI had already rewritten.
  *
  * Bias is deliberate on the one ambiguity left: an UNBALANCED quote earlier in the
  * line leaves a later `#` unstripped, so the guard scans more text than the shell
@@ -269,246 +325,76 @@ function stripLineComment(line: string): string {
   return line
 }
 
-/**
- * Comments stripped, line breaks normalised to `\n` first. YAML (§5.4) reads CRLF and CR
- * as line breaks and normalises them inside block scalars — `yaml@2.8.2` parses the CRLF
- * file to the same document, and GitHub ran it (probe run 33676806439 on PR #477, the
- * whole file CRLF: parsed, corepack fallback executed, check passed). A `git autocrlf`
- * checkout on Windows produces exactly this file, and `pnpm format:check` does not touch
- * `.yml`, so nothing here normalises it back. Read raw, every line ended in `\r`, no
- * `key:` regex anchored on `$` matched, and the guard reported a CORRECT workflow as
- * "spells `on:` as a list of events" — the wrong cause on a right file.
- */
-function stripComments(yamlText: string): string {
-  return yamlText.replace(/\r\n?/g, '\n').split('\n').map(stripLineComment).join('\n')
+/** A `run:` body as the shell sees it: comments gone, blank edges trimmed. */
+function shellOf(run: string): string {
+  return run.split('\n').map(stripLineComment).join('\n').trim()
 }
 
-function indentOf(line: string): number {
-  return line.length - line.trimStart().length
+type Mapping = Record<string, unknown>
+
+function isMapping(value: unknown): value is Mapping {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
- * A `- ` item sitting at its parent key's OWN indent — YAML's indentless block
- * sequence, which the spec permits and `yaml@2.8.2` reads identically to the indented
- * form (measured: `branches:\n- main` and `branches:\n  - main` parse to the same
- * value; GitHub honours it, probe run on PR #477). Nothing in this repo normalizes YAML
- * indentation (`pnpm format:check` covers ts/tsx/js/jsx/json/html), so an editor default
- * produces exactly this shape — and a reader that stopped at the parent's indent read a
- * CORRECT workflow as "no branch" / "no failure-path step", the wrong cause on a right
- * file, which is the kind of guard that gets weakened.
+ * The values of a list-valued key. `null` means the key is ABSENT — for a trigger filter
+ * that means "no filter", which GitHub reads as "every value", so callers treat `null` as
+ * covering everything. A key present with an empty or null value is `[]`, which covers
+ * nothing: the two are not the same and the parser is what finally tells them apart.
  */
-function isIndentlessItem(line: string, indent: number): boolean {
-  return indentOf(line) === indent && /^\s*-\s/.test(line)
+function filterOf(block: Mapping, key: string): string[] | null {
+  if (!(key in block)) return null
+  const value = block[key]
+  if (value === null || value === undefined) return []
+  return Array.isArray(value) ? value.map(item => String(item)) : [String(value)]
 }
 
-/**
- * The lines under `key:` at the given indent — every following line indented deeper,
- * plus indentless sequence items at the key's own indent, stopping at the first sibling
- * or ancestor key. Blank lines inside the block are kept, so a `concurrency:` block
- * separated by one is not truncated.
- */
-function blockUnder(lines: string[], key: string, indent: number): string[] | null {
-  const header = new RegExp(`^ {${indent}}(?:['"]?${key}['"]?):`)
-  const start = lines.findIndex(line => header.test(line))
-  if (start === -1) return null
-  const body: string[] = []
-  for (const line of lines.slice(start + 1)) {
-    if (line.trim() === '') {
-      body.push(line)
-      continue
-    }
-    if (indentOf(line) <= indent && !isIndentlessItem(line, indent)) break
-    body.push(line)
-  }
-  return body
+/** A scalar key's value as text, or `undefined` when the key is absent. */
+function textAt(block: Mapping, key: string): string | undefined {
+  if (!(key in block)) return undefined
+  const value = block[key]
+  return value === null || value === undefined ? '' : String(value)
 }
 
-/** The text on a key's OWN line, after the colon — empty when the value is a block. */
-function inlineAfter(lines: string[], key: string, indent: number): string | undefined {
-  const header = new RegExp(`^ {${indent}}(?:['"]?${key}['"]?):(.*)$`)
-  for (const line of lines) {
-    const match = header.exec(line)
-    if (match !== null) return (match[1] ?? '').trim()
-  }
-  return undefined
+/** Every key and string scalar in the document, so a textual scan reads the whole file. */
+function everyText(node: unknown): string[] {
+  if (typeof node === 'string') return [node]
+  if (Array.isArray(node)) return node.flatMap(everyText)
+  if (isMapping(node))
+    return Object.entries(node).flatMap(([key, value]) => [key, ...everyText(value)])
+  return []
 }
 
-/** Every mapping key sitting at exactly `indent`, with the text on its own line. */
-function keysAt(block: string[], indent: number): { key: string; inline: string }[] {
-  const header = new RegExp(`^ {${indent}}(['"]?)([A-Za-z_][A-Za-z0-9_-]*)\\1:(.*)$`)
-  const found: { key: string; inline: string }[] = []
-  for (const line of block) {
-    const match = header.exec(line)
-    if (match?.[2] !== undefined) found.push({ key: match[2], inline: (match[3] ?? '').trim() })
-  }
-  return found
-}
-
-/** The smallest indent among a block's non-empty lines — its own key level. */
-function keyIndent(block: string[]): number {
-  const indents = block.filter(line => line.trim() !== '').map(indentOf)
-  return indents.length === 0 ? 0 : Math.min(...indents)
-}
-
-/**
- * A YAML scalar without its surrounding quotes. MATCHED pairs only: an `if:`
- * condition ends in a quote of its own (`… == 'failure'`) and stripping that half
- * would corrupt the value the rules read — and report it back corrupted.
- */
-function unquote(value: string): string {
-  const trimmed = value.trim()
-  return /^(['"])[\s\S]*\1$/.test(trimmed) ? trimmed.slice(1, -1) : trimmed
-}
-
-/**
- * The values a list-valued key holds inside a block: `key: [a, b]` and the block
- * sequence spelling both. `null` means the key is absent — for a trigger filter
- * that means "no filter", which GitHub reads as "every value", so callers treat
- * `null` as covering everything.
- */
-function listValueOf(block: string[], key: string): string[] | null {
-  const index = block.findIndex(line => new RegExp(`^\\s*${key}:`).test(line))
-  const header = index === -1 ? undefined : block[index]
-  if (header === undefined) return null
-  const inline = header.replace(new RegExp(`^\\s*${key}:\\s*`), '').trim()
-  // An alias or anchor is content this reader cannot follow: `aliasProblems` reports
-  // it BY NAME, and reading it here as an empty list would report a second, false cause
-  // ("no branch") on top.
-  if (/^[*&]/.test(inline)) return null
-  if (inline.startsWith('[')) {
-    return inline
-      .replace(/^\[|\]$/g, '')
-      .split(',')
-      .map(unquote)
-      .filter(item => item !== '')
-  }
-  return blockItems(block.slice(index + 1), indentOf(header))
-}
-
-/** The `- item` scalars of a block sequence whose parent key sits at `indent`. */
-function blockItems(lines: string[], indent: number): string[] {
-  const items: string[] = []
-  for (const line of lines) {
-    if (line.trim() === '') continue
-    if (indentOf(line) <= indent && !isIndentlessItem(line, indent)) break
-    const item = /^\s*-\s*(.+)$/.exec(line)
-    if (item?.[1] !== undefined) items.push(unquote(item[1]))
-  }
-  return items
-}
-
-/** The branch names a trigger block filters on. `null` — no filter, so all of them. */
-function branchesOf(block: string[]): string[] | null {
-  return listValueOf(block, 'branches')
-}
-
-/**
- * A step's lines with the leading `- ` list marker blanked out, so `- name:` and the
- * keys under it sit at ONE indent and a single `^ {n}key:` probe finds either.
- */
-function levelledStep(step: string[]): string[] {
-  const [first, ...rest] = step
-  return [(first ?? '').replace(/^(\s*)-(\s)/, '$1 $2'), ...rest]
-}
-
-/**
- * The scalar value of `key:` at exactly `indent` inside `block`, or `undefined`.
- * Unquoted, because `id: 'format_check'` is valid YAML that GitHub resolves
- * identically to the bare spelling: reading it raw made this guard red on a
- * CORRECT workflow, with a message describing a file that does declare a usable
- * id — and a gate that false-fails is the kind that gets weakened or deleted.
- */
-function scalarAt(block: string[], key: string, indent: number): string | undefined {
-  const header = block.find(line => new RegExp(`^ {${indent}}${key}:`).test(line))
-  if (header === undefined) return undefined
-  return unquote(header.replace(new RegExp(`^ {${indent}}${key}:\\s*`), ''))
-}
-
-/** Every job in the workflow, by name, with its own body lines. */
-function jobsOf(lines: string[]): { name: string; body: string[] }[] {
-  const jobs = blockUnder(lines, 'jobs', 0)
-  if (jobs === null) return []
-  const indent = keyIndent(jobs)
-  const header = new RegExp(`^ {${indent}}(['"]?)([A-Za-z0-9_-]+)\\1:`)
-  return jobs
-    .map(line => header.exec(line)?.[2])
-    .filter((name): name is string => name !== undefined)
-    .map(name => ({ name, body: blockUnder(jobs, name, indent) ?? [] }))
-}
-
-/**
- * A job's steps, one array of lines each. Split on the list markers at the steps
- * block's own indent, so a `- ` inside a nested `with:` or a block scalar does not
- * start a phantom step.
- */
-function stepsOf(job: string[]): string[][] {
-  const steps = blockUnder(job, 'steps', keyIndent(job))
-  if (steps === null) return []
-  const itemIndent = keyIndent(steps)
-  const parsed: string[][] = []
-  let current: string[] | null = null
-  for (const line of steps) {
-    if (line.trim() !== '' && indentOf(line) === itemIndent && /^\s*-\s/.test(line)) {
-      current = []
-      parsed.push(current)
-    }
-    current?.push(line)
-  }
-  return parsed
+/** Every `run:` scalar in the document, as shell text. */
+function collectRuns(node: unknown): string[] {
+  if (Array.isArray(node)) return node.flatMap(collectRuns)
+  if (!isMapping(node)) return []
+  const own = typeof node['run'] === 'string' ? [shellOf(node['run'])] : []
+  return [
+    ...own,
+    ...Object.entries(node).flatMap(([key, value]) => (key === 'run' ? [] : collectRuns(value))),
+  ]
 }
 
 /**
  * Every shell command the workflow executes: inline `run: cmd` and block scalars
- * (`run: |`) alike. What a step DOES lives here — the security and check-only
- * rules are asserted against these, not against the whole file, so an expression
- * in `concurrency.group` is not confused with one expanded into a shell.
+ * (`run: |`) alike, in document order. What a step DOES lives here — the security and
+ * check-only rules are asserted against these, not against the whole file, so an
+ * expression in `concurrency.group` is not confused with one expanded into a shell.
  */
-/** A block scalar's body (trimmed lines) and the index of the line that ended it. */
-function readBlockScalar(lines: string[], from: number, indent: number): [string, number] {
-  const body: string[] = []
-  let i = from
-  for (; i < lines.length; i++) {
-    const line = lines[i] ?? ''
-    if (line.trim() === '') {
-      body.push('')
-      continue
-    }
-    if (indentOf(line) <= indent) break
-    body.push(line.trim())
-  }
-  return [body.join('\n').trim(), i]
-}
-
-/** A `run:` line's own indent (past any `- ` list marker) and its inline remainder. */
-function runHeader(line: string): { indent: number; inline: string } | null {
-  const match = /^(\s*)(-\s+)?run:(.*)$/.exec(line)
-  if (match === null) return null
-  return {
-    indent: (match[1]?.length ?? 0) + (match[2]?.length ?? 0),
-    inline: (match[3] ?? '').trim(),
-  }
-}
-
-/** `|`, `>`, `|-`, `>2` … all mean "the body is on the following lines", not a command. */
-function isInlineCommand(remainder: string): boolean {
-  return remainder !== '' && !/^[|>][-+]?\d*$/.test(remainder)
-}
-
 export function extractRunBlocks(yamlText: string): string[] {
-  const lines = stripComments(yamlText).split('\n')
-  const blocks: string[] = []
-  for (let i = 0; i < lines.length; i++) {
-    const header = runHeader(lines[i] ?? '')
-    if (header === null) continue
-    if (isInlineCommand(header.inline)) {
-      blocks.push(header.inline)
-      continue
-    }
-    const [body, end] = readBlockScalar(lines, i + 1, header.indent)
-    blocks.push(body)
-    i = end - 1
+  const document = parseDocument(yamlText)
+  if (document.errors.length > 0) return []
+  try {
+    return collectRuns(document.toJS() as unknown)
+  } catch {
+    return []
   }
-  return blocks
+}
+
+/** The `run:` of a single parsed step, as shell text — `[]` when the step runs nothing. */
+function runsOf(step: Mapping): string[] {
+  return typeof step['run'] === 'string' ? [shellOf(step['run'])] : []
 }
 
 /** The root scripts a `pnpm <script>` step delegates through. */
@@ -520,208 +406,18 @@ export function readRootScripts(): Record<string, string> {
 }
 
 /**
- * YAML has two spellings for every mapping, and this reader understands ONE.
- *
- * `blockUnder` collects the lines indented deeper than a key, so a FLOW mapping —
- * which sits entirely on its key's own line — yields an EMPTY block. `listValueOf`
- * then finds no key inside it and returns `null`, which for a trigger filter means
- * "no filter, therefore every value": every trigger rule passes vacuously on the one
- * spelling that carries the hole. Four one-line edits, all valid YAML GitHub honours,
- * used to leave this guard green —
- *
- *   `pull_request: { branches: [main], paths-ignore: ['**\/*.md'] }` — AC3's exact
- *     hole: a markdown-only PR runs no formatting check, asserted by the guard whose
- *     entire reason for existing is that key;
- *   `pull_request: { branches: [release] }` — no PR targeting the base branch is ever
- *     checked and the `format` context never reports;
- *   `pull_request: { branches: [main], types: [closed] }` — the check runs only after
- *     the PR is closed;
- *   `push: { branches: [release] }` — AC7's post-merge visibility gone.
- *
- * (The anchored `^\s*(paths-ignore|paths):` probe misses them for the same reason: an
- * inline key is never at line start.)
- *
- * So an unsupported spelling is REJECTED, not parsed. That is the whole change of
- * direction: the reader's incompleteness now fails CLOSED (a spelling it cannot read
- * is a problem) instead of open (a spelling it cannot read is "no filter"). Teaching
- * the hand-rolled reader to parse flow style would be a second reader to keep in step
- * with the first, and the next spelling it does not know would fail open again —
- * which is the ADL 2026-07-29 argument ("a parser written to the same
- * misunderstanding validates nothing") landing on this module.
- *
- * Hence, on BOTH of YAML's node positions:
- *
- * - every structural KEY must carry a BLOCK value, i.e. nothing on its own line after
- *   the colon. Flow mappings are the spelling that motivated it; an ANCHOR
- *   (`pull_request: &filters`) and an ALIAS (`pull_request: *filters`) are the same
- *   class — they relocate content a line reader cannot follow.
- * - every sequence ITEM must be a BLOCK MAPPING (or a plain scalar, under a trigger
- *   filter). `steps:` is a sequence, and its contents are read by walking into each
- *   item — so a `- { … }`, `- [ … ]`, `- *step`, `- &step …` or bare `-` item is
- *   content relocated out of view exactly as a flow mapping is, and it hides a whole
- *   step from `usesProblems` and the write-mode scan (`relocationProblems`). A merge
- *   key (`<<: *filters`) is the same move in the third position.
- *
- * Bounded on purpose: `branches: [main]` (a flow SEQUENCE, read correctly by
- * `listValueOf`), an inline `permissions: { contents: read }` (read correctly by
- * `permissionProblems`) and shell text inside a `run:` block scalar (not YAML at all —
- * `withoutBlockScalars`) stay accepted, because a guard that fails a CORRECT workflow
- * is the kind that gets weakened.
- */
-function spellingKind(spelling: string): string {
-  if (spelling === '') return 'an off-line'
-  if (/^[{[]/.test(spelling)) return 'flow-style'
-  if (spelling.startsWith('*')) return 'an alias'
-  if (spelling.startsWith('&')) return 'an anchor'
-  return 'inline'
-}
-
-function unreadableSpelling(path: string, spelling: string, kind = spelling): string {
-  return (
-    `\`${path}\` carries ${spellingKind(kind)} value (\`${spelling}\`) where this guard reads a BLOCK. A flow\n` +
-    "  mapping lives on its key's own line, and an alias or anchor lives somewhere else entirely,\n" +
-    '  so the block under that key is EMPTY and every rule reading a key inside it sees "absent" —\n' +
-    '  which for a trigger filter means "no filter, so every value". `pull_request: { branches:\n' +
-    "  [main], paths-ignore: ['**/*.md'] }` is valid YAML GitHub honours, and it leaves a\n" +
-    '  markdown-only PR with no formatting check at all while every rule here passes. Use block\n' +
-    '  style, and no anchors: this guard rejects what it cannot read rather than guessing.'
-  )
-}
-
-/** Every key this guard reads as a block, with whatever sits on its own line. */
-function structuralKeys(lines: string[]): [string, string | undefined][] {
-  const on = blockUnder(lines, 'on', 0) ?? []
-  const jobs = blockUnder(lines, 'jobs', 0) ?? []
-  return [
-    ['on', inlineAfter(lines, 'on', 0)],
-    ['concurrency', inlineAfter(lines, 'concurrency', 0)],
-    ['jobs', inlineAfter(lines, 'jobs', 0)],
-    ...keysAt(on, keyIndent(on)).map(({ key, inline }): [string, string] => [`on.${key}`, inline]),
-    ...keysAt(jobs, keyIndent(jobs)).map(({ key, inline }): [string, string] => [
-      `jobs.${key}`,
-      inline,
-    ]),
-    ...jobsOf(lines).map((job): [string, string | undefined] => [
-      `jobs.${job.name}.steps`,
-      inlineAfter(job.body, 'steps', keyIndent(job.body)),
-    ]),
-  ]
-}
-
-/** A key whose value is a block scalar (`run: |`, `run: >-`), list item or not. */
-const BLOCK_SCALAR_HEADER = /^(\s*)(-\s+)?['"]?[A-Za-z_][\w.-]*['"]?:\s*[|>][-+]?\d*\s*$/
-
-/**
- * The file's STRUCTURAL lines, with every block-scalar body blanked out. A `run: |`
- * body is shell text, not YAML: a line inside it may legitimately begin `- {` (brace
- * expansion) or `- [` (a test), and the line-level rules below would reject a correct
- * workflow on it. What that body EXECUTES is read by `extractRunBlocks`, which is the
- * reader that belongs to it.
- */
-function withoutBlockScalars(lines: string[]): string[] {
-  const kept: string[] = []
-  let masked: number | null = null
-  for (const line of lines) {
-    if (masked !== null && (line.trim() === '' || indentOf(line) > masked)) {
-      kept.push('')
-      continue
-    }
-    masked = null
-    kept.push(line)
-    const header = BLOCK_SCALAR_HEADER.exec(line)
-    if (header !== null) masked = (header[1]?.length ?? 0) + (header[2]?.length ?? 0)
-  }
-  return kept
-}
-
-/**
- * The value of a block-SEQUENCE item, when that value is one this reader cannot follow
- * into — `null` for the two it can (`- name: Fix`, and a plain or quoted scalar such as
- * `- main` under `branches:`).
- *
- * A step is a sequence ITEM, not a mapping key, so `flowStyleProblems`' key-level sweep
- * never looked at one: `- { name: Fix, run: npx prettier --write . }` is a valid step
- * GitHub executes, `stepsOf` accepts it as a step, and then `scalarAt(step, 'uses', …)`
- * and `extractRunBlocks` both want their key at line start and find nothing. The step
- * was invisible to `usesProblems` AND to the write-mode scan at once — placed before the
- * checking step it rewrites the runner's checkout, `pnpm format:check` passes on
- * unformatted code and the `format` context goes green: the exact AC6 loss both of those
- * rules exist to prevent, through the one spelling that had no rule.
- *
- * `- [a, b]`, `- *alias`, `- &anchor` and a bare `-` (the node sits on the NEXT line)
- * are the same class and are rejected with it — the reader follows a `- ` into a block
- * mapping and nothing else.
- */
-function unreadableItem(trimmed: string): string | null {
-  const match = /^-\s*(.*)$/.exec(trimmed)
-  if (match === null) return null
-  const value = (match[1] ?? '').trim()
-  if (value === '' || /^[{[*&]/.test(value)) return value
-  return null
-}
-
-/**
- * Content relocated away from where a line reader can follow it: a `<<: *filters` merge
- * key inside a trigger block, or a sequence item that is not a block mapping. Both move
- * content out of the reader's view exactly as a flow mapping does, with the same
- * fail-OPEN result. Read on the structural lines only, so shell text inside a `run:`
- * block scalar cannot false-fail it.
- */
-function relocationProblems(lines: string[]): string[] {
-  return withoutBlockScalars(lines).flatMap(line => {
-    const trimmed = line.trim()
-    if (trimmed.startsWith('<<:')) return [unreadableSpelling('a merge key', trimmed)]
-    const item = unreadableItem(trimmed)
-    if (item !== null) return [unreadableSpelling('a sequence item', trimmed, item)]
-    return []
-  })
-}
-
-/**
- * A `key: *alias` or `key: &anchor …` on ANY line — not only the structural keys, which
- * `structuralKeys` sweeps for flow mappings. The ADL's "anchors, aliases and merge keys
- * are rejected anywhere in the file" was true at the structural level only: `branches:
- * *shared` fell through to `listValueOf`, which read it as an empty list and reported
- * "does not cover `main` (no branch)" — the wrong cause on a spelling the guard cannot
- * read. Every read key (`branches`, `types`, `tags`, `needs`, `permissions`, `group`,
- * `cancel-in-progress`, `with`, `run`, `if`, …) now goes through the same message, which
- * names the alias. A plain YAML scalar cannot begin with `*` or `&`, so there is no false
- * positive on a value; shell inside a `run: |` body is masked first.
- */
-const ALIASED_VALUE = /^\s*(?:-\s+)?(['"]?)([A-Za-z_][\w.-]*)\1:\s+([*&]\S*)/
-
-function aliasProblems(lines: string[]): string[] {
-  return withoutBlockScalars(lines).flatMap(line => {
-    const match = ALIASED_VALUE.exec(line)
-    if (match === null) return []
-    return [unreadableSpelling(match[2] ?? '', match[3] ?? '')]
-  })
-}
-
-function flowStyleProblems(lines: string[]): string[] {
-  // `workflow_dispatch:` and every other block key carries an EMPTY remainder. An alias
-  // or anchor here is `aliasProblems`' finding — reported once, not twice.
-  const inlined = structuralKeys(lines).flatMap(([path, inline]) =>
-    inline === undefined || inline === '' || /^[*&]/.test(inline)
-      ? []
-      : [unreadableSpelling(path, inline)],
-  )
-  return [...inlined, ...aliasProblems(lines), ...relocationProblems(lines)]
-}
-
-/**
  * A trigger block that does not cover the base branch reports on nothing that merges.
  *
  * Both spellings, the way `paths`/`paths-ignore` are handled together: a missing
- * filter means "every branch", so `branches-ignore` is invisible to `branchesOf` and
- * a one-line `branches-ignore: [main]` under `pull_request` would leave every PR
+ * filter means "every branch", so `branches-ignore` is invisible to a `branches:` read
+ * and a one-line `branches-ignore: [main]` under `pull_request` would leave every PR
  * targeting the base branch unchecked with this guard green. The key is rejected
  * outright rather than pattern-matched against `main` — `branches-ignore` is a glob
  * list (`ma*`, `m[a]in`), and a filter that MIGHT exclude the one branch that must
  * never be excluded buys nothing here.
  */
-function baseBranchProblems(event: string, block: string[]): string[] {
-  const ignored = listValueOf(block, 'branches-ignore')
+function baseBranchProblems(event: string, block: Mapping): string[] {
+  const ignored = filterOf(block, 'branches-ignore')
   if (ignored !== null) {
     return [
       `the \`${event}\` trigger filters with \`branches-ignore: [${ignored.join(', ')}]\`: that is the\n` +
@@ -730,7 +426,7 @@ function baseBranchProblems(event: string, block: string[]): string[] {
         `  \`branches:\` and name \`${BASE_BRANCH}\`.`,
     ]
   }
-  const branches = branchesOf(block)
+  const branches = filterOf(block, 'branches')
   if (branches === null) return tagFilterProblems(event, block)
   if (branches.includes(BASE_BRANCH)) return []
   return [
@@ -745,16 +441,16 @@ function baseBranchProblems(event: string, block: string[]): string[] {
  * that trigger workflows" § push) is: "If you define only tags/tags-ignore or only
  * branches/branches-ignore, the workflow won't run for events affecting the undefined
  * Git ref." Measured on this repo: release.yml declares `push: tags: ['v*']` and every
- * one of its `push` runs is a tag — none is `main`. So `branchesOf` returning null was
- * read as "no filter, every branch", which is exactly wrong here: the workflow never
- * runs on any push to `${BASE_BRANCH}`, post-merge drift is invisible (AC7), and the
- * guard reported it well-formed. Rejected fail-closed, in the same shape as
- * `branches-ignore`; a tag filter BESIDE a `branches:` that names the base branch stays
- * green, because with both defined the event fires for either ref kind.
+ * one of its `push` runs is a tag — none is `main`. So a missing `branches:` read as "no
+ * filter, every branch" is exactly wrong here: the workflow never runs on any push to
+ * `${BASE_BRANCH}`, post-merge drift is invisible (AC7), and the guard reported it
+ * well-formed. Rejected fail-closed, in the same shape as `branches-ignore`; a tag filter
+ * BESIDE a `branches:` that names the base branch stays green, because with both defined
+ * the event fires for either ref kind.
  */
-function tagFilterProblems(event: string, block: string[]): string[] {
+function tagFilterProblems(event: string, block: Mapping): string[] {
   return ['tags', 'tags-ignore'].flatMap(key => {
-    const tags = listValueOf(block, key)
+    const tags = filterOf(block, key)
     if (tags === null) return []
     return [
       `the \`${event}\` trigger filters with \`${key}: [${tags.join(', ')}]\` and no \`branches:\`: GitHub\n` +
@@ -771,8 +467,8 @@ function tagFilterProblems(event: string, block: string[]): string[] {
  * leaves a green `format` context on every PR — the run simply happens after the
  * PR is closed, where nobody is reading it.
  */
-function activityTypeProblems(pullRequest: string[]): string[] {
-  const types = listValueOf(pullRequest, 'types')
+function activityTypeProblems(pullRequest: Mapping): string[] {
+  const types = filterOf(pullRequest, 'types')
   if (types === null) return []
   const missing = REQUIRED_PR_TYPES.filter(type => !types.includes(type))
   if (missing.length === 0) return []
@@ -783,17 +479,26 @@ function activityTypeProblems(pullRequest: string[]): string[] {
 }
 
 /**
- * `on:` spelled as a list of events (`- pull_request`) is valid YAML GitHub honours; a
- * list item carries no `branches:` filter and this guard reads the trigger MAP, so it is
- * reported as the spelling it is — not as "has no `pull_request` trigger".
+ * The events the workflow reacts to, as a mapping from event name to its filter block.
+ *
+ * GitHub's three spellings all resolve here: `on: push`, `on: [pull_request, push]` and
+ * the block mapping. The list and scalar forms carry NO filter, which is a SUPERSET of
+ * what this guard requires (every branch, every default activity type), so they are read
+ * as such rather than rejected — the line reader used to reject them because it could
+ * only walk the mapping, which is not a property of the workflow.
  */
-function eventListProblem(on: string[], indent: number): string | null {
-  if (keysAt(on, indent).length > 0 || !on.some(line => /^\s*-\s/.test(line))) return null
-  return (
-    'spells `on:` as a list of events (`- pull_request`): valid YAML, but a list item carries no\n' +
-    '  `branches:` filter and this guard reads the trigger MAP. Spell each event as a key\n' +
-    '  (`pull_request:` / `push:`) with its `branches:` block.'
-  )
+function eventsOf(on: unknown): Mapping | null {
+  if (on === undefined || on === null) return null
+  if (typeof on === 'string') return { [on]: null }
+  if (Array.isArray(on)) return Object.fromEntries(on.map(event => [String(event), null]))
+  if (isMapping(on)) return on
+  return null
+}
+
+/** A trigger's filter block — `{}` for an event spelled with no filters at all. */
+function filtersOf(events: Mapping, event: string): Mapping {
+  const value = events[event]
+  return isMapping(value) ? value : {}
 }
 
 /**
@@ -803,11 +508,12 @@ function eventListProblem(on: string[], indent: number): string | null {
  * and is not, and EVERY key that shapes the trigger is part of that gap, not just
  * the one this story happened to start from.
  */
-/** The two text-level trigger holes: the fork-privileged event, and any path filter. */
-function eventAndPathProblems(clean: string): string[] {
-  const problems: string[] = []
+function triggerProblems(root: Mapping): string[] {
+  const events = eventsOf(root['on'])
+  if (events === null) return ['has no `on:` block, so it never runs.']
 
-  if (/\bpull_request_target\b/.test(clean)) {
+  const problems: string[] = []
+  if ('pull_request_target' in events) {
     problems.push(
       'uses `pull_request_target`: that event runs with the BASE repository token against a fork\n' +
         '  head. Use `pull_request` — this job needs no credential at all.',
@@ -817,49 +523,40 @@ function eventAndPathProblems(clean: string): string[] {
   // `paths-ignore` and `paths` are the deny-list and allow-list spelling of one
   // hole: an allow-list excludes everything it does not name, so `paths: ['**/*.ts']`
   // leaves a markdown-only or `.changeset`-only PR with no formatting check at all.
-  const pathFilter = /^\s*(?:-\s+)?(paths-ignore|paths):/m.exec(clean)
-  if (pathFilter !== null) {
-    problems.push(
-      `declares \`${pathFilter[1]}\`: trigger coverage IS check coverage. A path the trigger skips —\n` +
-        '  whether skipped by exclusion (`paths-ignore`) or by omission from an allow-list (`paths`) —\n' +
-        '  is a path the formatting check does not exist for. This is why the check is a dedicated\n' +
-        "  workflow and not a job inside ci.yml, whose workflow-level `paths-ignore: ['.changeset/**']`\n" +
-        '  a job would inherit. `pnpm format:check` costs one cold install; scoping it saves nothing\n' +
-        '  worth a hole.',
-    )
+  for (const event of Object.keys(events)) {
+    const filters = filtersOf(events, event)
+    for (const key of ['paths-ignore', 'paths']) {
+      if (!(key in filters)) continue
+      problems.push(
+        `declares \`${key}\`: trigger coverage IS check coverage. A path the trigger skips —\n` +
+          '  whether skipped by exclusion (`paths-ignore`) or by omission from an allow-list (`paths`) —\n' +
+          '  is a path the formatting check does not exist for. This is why the check is a dedicated\n' +
+          "  workflow and not a job inside ci.yml, whose workflow-level `paths-ignore: ['.changeset/**']`\n" +
+          '  a job would inherit. `pnpm format:check` costs one cold install; scoping it saves nothing\n' +
+          '  worth a hole.',
+      )
+    }
   }
-  return problems
-}
 
-function triggerProblems(clean: string, lines: string[]): string[] {
-  const problems = eventAndPathProblems(clean)
-
-  const on = blockUnder(lines, 'on', 0)
-  if (on === null) return [...problems, 'has no `on:` block, so it never runs.']
-
-  const triggerIndent = keyIndent(on)
-  const eventList = eventListProblem(on, triggerIndent)
-  if (eventList !== null) return [...problems, eventList]
-  const pullRequest = blockUnder(on, 'pull_request', triggerIndent)
-  if (pullRequest === null) {
+  if (!('pull_request' in events)) {
     problems.push(
       'has no `pull_request` trigger: the check would not run where a change is reviewed.',
     )
   } else {
+    const pullRequest = filtersOf(events, 'pull_request')
     problems.push(
       ...baseBranchProblems('pull_request', pullRequest),
       ...activityTypeProblems(pullRequest),
     )
   }
 
-  const push = blockUnder(on, 'push', triggerIndent)
-  if (push === null) {
+  if (!('push' in events)) {
     return [
       ...problems,
       `has no \`push\` trigger: formatting drift on \`${BASE_BRANCH}\` would be invisible after a merge.`,
     ]
   }
-  return [...problems, ...baseBranchProblems('push', push)]
+  return [...problems, ...baseBranchProblems('push', filtersOf(events, 'push'))]
 }
 
 /**
@@ -902,8 +599,8 @@ const GROUP_KEYED_ON_REF =
  * shipped workflow (runs 33527856271 and 33528146034, cancelled by a later push to the
  * same PR ref), so the only question is what the group is keyed on.
  */
-function groupProblems(concurrency: string[]): string[] {
-  const group = scalarAt(concurrency, 'group', keyIndent(concurrency))
+function groupProblems(concurrency: Mapping): string[] {
+  const group = textAt(concurrency, 'group')
   if (group === undefined) {
     return [
       'the `concurrency` block declares no `group:`, so nothing says which runs supersede which —\n' +
@@ -950,17 +647,19 @@ function groupProblems(concurrency: string[]): string[] {
  * once — nothing cancelled on a PR, and the first of two merges a minute apart
  * cancelled on `main`.
  */
-function concurrencyProblems(lines: string[]): string[] {
-  const concurrency = blockUnder(lines, 'concurrency', 0)
-  if (concurrency === null) {
+function concurrencyProblems(root: Mapping): string[] {
+  const declared = root['concurrency']
+  if (declared === undefined || declared === null) {
     return [
       'declares no `concurrency` group: every superseded run keeps burning a runner and reporting a\n' +
         '  stale verdict for a ref that has already moved on.',
     ]
   }
+  // `concurrency: <string>` is GitHub's shorthand for the group alone — read as such,
+  // and then it declares no `cancel-in-progress`, which is the finding below.
+  const concurrency: Mapping = isMapping(declared) ? declared : { group: String(declared) }
   const problems = groupProblems(concurrency)
-  const raw = /cancel-in-progress:\s*(.+)$/m.exec(concurrency.join('\n'))?.[1]?.trim()
-  const value = raw === undefined ? undefined : unquote(raw)
+  const value = textAt(concurrency, 'cancel-in-progress')
   if (value === undefined) {
     return [
       ...problems,
@@ -981,11 +680,16 @@ function concurrencyProblems(lines: string[]): string[] {
   ]
 }
 
-/** The text of a `permissions:` value at `indent` — inline or block — or `undefined` when absent. */
-function permissionScope(lines: string[], indent: number): string | undefined {
-  const inline = inlineAfter(lines, 'permissions', indent)
-  if (inline === undefined) return undefined
-  return inline !== '' ? inline : (blockUnder(lines, 'permissions', indent) ?? []).join('\n')
+/** A `permissions:` value as scannable text — inline mapping, block mapping or `read-all`. */
+function permissionScope(owner: Mapping): string | undefined {
+  if (!('permissions' in owner)) return undefined
+  const value = owner['permissions']
+  if (value === null || value === undefined) return ''
+  if (isMapping(value))
+    return Object.entries(value)
+      .map(([scope, level]) => `${scope}: ${String(level)}`)
+      .join('\n')
+  return String(value)
 }
 
 /**
@@ -998,12 +702,11 @@ function permissionScope(lines: string[], indent: number): string | undefined {
  * `permissions:` is the scope of every job that declares none of its own — a job without
  * one was handed `Contents: read, Issues: read` from the workflow key — and a job's own
  * block REPLACES it entirely — the job beside it, with `contents: read` of its own, was
- * handed `Contents: read` and nothing else. Reading the job level alone reported the
- * workflow-level spelling, a CORRECT file, as "declares no `permissions:`".
+ * handed `Contents: read` and nothing else.
  */
-function permissionProblems(name: string, body: string[], workflow: string[]): string[] {
-  const own = permissionScope(body, keyIndent(body))
-  const inherited = permissionScope(workflow, 0)
+function permissionProblems(name: string, body: Mapping, root: Mapping): string[] {
+  const own = permissionScope(body)
+  const inherited = permissionScope(root)
   if (own === undefined && inherited === undefined) {
     return [
       `job \`${name}\` declares no \`permissions:\`, and neither does the workflow level, so it silently\n` +
@@ -1029,31 +732,57 @@ function permissionProblems(name: string, body: string[], workflow: string[]): s
 const FAILURE_GUARD = /\bfailure\(\)/
 
 /** Does this step RUN the formatting check? (Quoted messages are data, not commands.) */
-function runsFormatCheck(step: string[]): boolean {
-  return extractRunBlocks(step.join('\n'))
+function runsFormatCheck(step: Mapping): boolean {
+  return runsOf(step)
     .map(stripQuotedMessages)
     .some(run => referencesScript(run, FORMAT_CHECK_SCRIPT))
 }
 
-/** Every step of every job, levelled so one `^ {n}key:` probe finds any of its keys. */
-function allSteps(lines: string[]): string[][] {
-  return jobsOf(lines)
-    .flatMap(job => stepsOf(job.body))
-    .map(levelledStep)
-}
-
-interface LevelledJob {
+interface Job {
   name: string
-  body: string[]
-  steps: string[][]
+  body: Mapping
+  steps: Mapping[]
 }
 
-function levelledJobs(lines: string[]): LevelledJob[] {
-  return jobsOf(lines).map(job => ({
-    name: job.name,
-    body: job.body,
-    steps: stepsOf(job.body).map(levelledStep),
-  }))
+/** Every job in the workflow, by id, with its body and its parsed steps. */
+function jobsOf(root: Mapping): Job[] {
+  const jobs = root['jobs']
+  if (!isMapping(jobs)) return []
+  return Object.entries(jobs).map(([name, declared]) => {
+    const body = isMapping(declared) ? declared : {}
+    const steps = Array.isArray(body['steps']) ? body['steps'].filter(isMapping) : []
+    return { name, body, steps }
+  })
+}
+
+/** Every step of every job. */
+function allSteps(jobs: Job[]): Mapping[] {
+  return jobs.flatMap(job => job.steps)
+}
+
+/**
+ * A `steps:` sequence whose items are not mappings. GitHub rejects the workflow outright
+ * for it (probe: a merge-keyed job and an unknown top-level key both fail the run before
+ * any job starts), and here it would be a step this guard walks past — so it is reported
+ * rather than filtered out silently.
+ */
+function stepShapeProblems(jobs: Job[]): string[] {
+  return jobs.flatMap(job => {
+    const declared = job.body['steps']
+    if (declared === undefined) return []
+    if (!Array.isArray(declared))
+      return [
+        `job \`${job.name}\` declares \`steps:\` as something other than a sequence: nothing in it is a\n` +
+          '  step this guard can read, and GitHub rejects the workflow file outright.',
+      ]
+    const foreign = declared.filter(item => !isMapping(item))
+    if (foreign.length === 0) return []
+    return [
+      `job \`${job.name}\` has ${foreign.length} \`steps:\` item(s) that are not mappings: a step is a\n` +
+        '  mapping of keys (`uses:`, `run:`, `if:`, …), so an item of any other shape carries no key this\n' +
+        '  guard reads — and GitHub rejects the workflow file for it.',
+    ]
+  })
 }
 
 /**
@@ -1062,7 +791,7 @@ function levelledJobs(lines: string[]): LevelledJob[] {
  * `remedyScopeProblems` reason from. Asserting anything about "the job named `format`"
  * instead lets a decoy carry the name while the real check publishes another context.
  */
-function hostJob(jobs: LevelledJob[]): LevelledJob | undefined {
+function hostJob(jobs: Job[]): Job | undefined {
   return jobs.find(job => job.steps.some(runsFormatCheck))
 }
 
@@ -1095,8 +824,7 @@ function referencesCheck(condition: string, id: string): boolean {
  *
  * So this is an ALLOW-list like every other rule here: equality against `'failure'`, on
  * `outcome` or `conclusion`, in either operand order, in either quote style. `contains()`
- * and every other spelling is rejected rather than reasoned about — the same
- * fail-CLOSED direction the flow-style rules take.
+ * and every other spelling is rejected rather than reasoned about — fail CLOSED.
  */
 function scopesTo(condition: string, id: string): boolean {
   const status = `steps\\.${id}\\.(?:outcome|conclusion)`
@@ -1219,21 +947,10 @@ function decides(condition: string, id: string): boolean {
  * run), NO `if:` on the step that runs `format:check`, and on every other step only a
  * condition carrying `failure()` — scoped, which `remedyScopeProblems` owns.
  */
-
-/** The jobs a job waits for, in any spelling — `null` when it waits for none. */
-function dependenciesOf(body: string[]): string[] | null {
-  const indent = keyIndent(body)
-  const header = body.find(line => new RegExp(`^ {${indent}}needs:`).test(line))
-  if (header === undefined) return null
-  const inline = unquote(header.replace(new RegExp(`^ {${indent}}needs:`), ''))
-  if (inline !== '' && !inline.startsWith('[')) return [inline]
-  return listValueOf(body, 'needs') ?? []
-}
-
-function conditionProblems(lines: string[]): string[] {
+function conditionProblems(jobs: Job[]): string[] {
   const problems: string[] = []
-  for (const job of jobsOf(lines)) {
-    const dependencies = dependenciesOf(job.body)
+  for (const job of jobs) {
+    const dependencies = filterOf(job.body, 'needs')
     if (dependencies !== null) {
       problems.push(
         `job \`${job.name}\` declares \`needs: ${dependencies.join(', ') || '(nothing readable)'}\`: a job that can be\n` +
@@ -1244,7 +961,7 @@ function conditionProblems(lines: string[]): string[] {
           '  condition written anywhere to notice. This workflow is single-job by design.',
       )
     }
-    const jobCondition = scalarAt(job.body, 'if', keyIndent(job.body))
+    const jobCondition = textAt(job.body, 'if')
     if (jobCondition !== undefined) {
       problems.push(
         `job \`${job.name}\` carries \`if: ${jobCondition}\`: a job that can be skipped is a check that\n` +
@@ -1253,8 +970,8 @@ function conditionProblems(lines: string[]): string[] {
           '  (github-implementation.md § Ordering). This job must run on every event the triggers allow.',
       )
     }
-    for (const step of stepsOf(job.body).map(levelledStep)) {
-      const condition = scalarAt(step, 'if', keyIndent(step))
+    for (const step of job.steps) {
+      const condition = textAt(step, 'if')
       if (condition === undefined) continue
       if (runsFormatCheck(step)) {
         problems.push(
@@ -1295,8 +1012,7 @@ function conditionProblems(lines: string[]): string[] {
  * nobody requires. That is the same context-deletion loss as the plain rename, and
  * worse: the rename now goes red, the decoy would not.
  */
-function jobIdentityProblems(lines: string[]): string[] {
-  const jobs = levelledJobs(lines)
+function jobIdentityProblems(jobs: Job[]): string[] {
   const host = hostJob(jobs)
   if (host !== undefined) {
     if (host.name !== FORMAT_JOB) {
@@ -1324,11 +1040,6 @@ function jobIdentityProblems(lines: string[]): string[] {
       ]
 }
 
-/** A job's `name:` — the display name GitHub publishes as its check context, if set. */
-function displayNameOf(job: LevelledJob): string | undefined {
-  return scalarAt(job.body, 'name', keyIndent(job.body))
-}
-
 /**
  * GitHub publishes the job's DISPLAY NAME as the check context, not its id — measured
  * on this repo: version.yml's job id `version` carries `name: Create version commits and
@@ -1339,9 +1050,9 @@ function displayNameOf(job: LevelledJob): string | undefined {
  * after an `echo`. Only a `name:` equal to the id is accepted: same context, nothing
  * lost.
  */
-function displayNameProblems(host: LevelledJob, jobs: LevelledJob[]): string[] {
+function displayNameProblems(host: Job, jobs: Job[]): string[] {
   const problems: string[] = []
-  const hostName = displayNameOf(host)
+  const hostName = textAt(host.body, 'name')
   if (hostName !== undefined && hostName !== FORMAT_JOB) {
     problems.push(
       `job \`${host.name}\` carries \`name: ${hostName}\`: GitHub publishes a job's display name as its check\n` +
@@ -1352,7 +1063,7 @@ function displayNameProblems(host: LevelledJob, jobs: LevelledJob[]): string[] {
   }
   for (const job of jobs) {
     if (job === host) continue
-    if (displayNameOf(job) !== FORMAT_JOB) continue
+    if (textAt(job.body, 'name') !== FORMAT_JOB) continue
     problems.push(
       `job \`${job.name}\` carries \`name: ${FORMAT_JOB}\`: GitHub publishes a job's display name as its check\n` +
         `  context, so this job publishes a SECOND \`${FORMAT_JOB}\` context beside the one that checks —\n` +
@@ -1371,9 +1082,8 @@ function displayNameProblems(host: LevelledJob, jobs: LevelledJob[]): string[] {
  * only one carrying `matrix:`: a strategy block exists to carry a matrix, and this
  * workflow has exactly one thing to run.
  */
-function matrixProblems(host: LevelledJob): string[] {
-  const strategy = inlineAfter(host.body, 'strategy', keyIndent(host.body))
-  if (strategy === undefined) return []
+function matrixProblems(host: Job): string[] {
+  if (!('strategy' in host.body)) return []
   return [
     `job \`${host.name}\` declares \`strategy:\`: a matrix suffixes its values onto the job's display name, so\n` +
       `  the published context becomes \`${FORMAT_JOB} (20)\` (or one per cell) and \`${FORMAT_JOB}\` itself stops\n` +
@@ -1397,17 +1107,18 @@ function matrixProblems(host: LevelledJob): string[] {
  * edit here. And the NAME is not the whole step: the checkout's `with:` decides what
  * tree every later step sees (`checkoutInputProblems`).
  */
-function checkoutInputProblems(step: string[]): string[] {
-  const indent = keyIndent(step)
-  const inline = inlineAfter(step, 'with', indent)
-  if (inline === undefined) return []
-  // A `with:` this reader cannot look inside is rejected as such, never read as "no
-  // inputs"; an alias or anchor there is `aliasProblems`' finding.
-  if (inline !== '') return /^[*&]/.test(inline) ? [] : [unreadableSpelling('with', inline)]
-  const block = blockUnder(step, 'with', indent) ?? []
-  const foreign = keysAt(block, keyIndent(block))
-    .map(({ key }) => key)
-    .filter(key => !ALLOWED_CHECKOUT_INPUTS.some(allowed => allowed === key))
+function checkoutInputProblems(step: Mapping): string[] {
+  if (!('with' in step)) return []
+  const inputs = step['with']
+  if (!isMapping(inputs)) {
+    return [
+      'the `actions/checkout` step declares a `with:` that is not a mapping of inputs, so no input can\n' +
+        '  be read from it and GitHub rejects the workflow file for it.',
+    ]
+  }
+  const foreign = Object.keys(inputs).filter(
+    key => !ALLOWED_CHECKOUT_INPUTS.some(allowed => allowed === key),
+  )
   if (foreign.length === 0) return []
   return [
     `the \`actions/checkout\` step sets \`with:\` input(s) \`${foreign.join('`, `')}\`. The only inputs it may\n` +
@@ -1421,10 +1132,10 @@ function checkoutInputProblems(step: string[]): string[] {
   ]
 }
 
-function usesProblems(lines: string[]): string[] {
+function usesProblems(jobs: Job[]): string[] {
   const problems: string[] = []
-  for (const step of allSteps(lines)) {
-    const uses = scalarAt(step, 'uses', keyIndent(step))
+  for (const step of allSteps(jobs)) {
+    const uses = textAt(step, 'uses')
     if (uses === undefined) continue
     const action = (uses.split('@')[0] ?? '').toLowerCase()
     if (action === 'actions/checkout') problems.push(...checkoutInputProblems(step))
@@ -1457,11 +1168,9 @@ function usesProblems(lines: string[]): string[] {
 export const FORMAT_CHECK_COMMAND = `pnpm ${FORMAT_CHECK_SCRIPT}`
 
 function normalizeCommand(run: string): string {
-  // `run: "pnpm format:check"` is a quoted YAML scalar GitHub resolves to the bare
-  // command (probe run 33676806439: logged as `Run pnpm format:check`); `scalarAt` unquotes
-  // `id:` for the same reason. Matched pairs only — see `unquote`.
-  return unquote(run)
+  return run
     .replace(/\s+/g, ' ')
+    .trim()
     .replace(/^pnpm run /, 'pnpm ')
 }
 
@@ -1481,17 +1190,14 @@ function normalizeCommand(run: string): string {
 export const CHECK_STEP_KEYS = ['name', 'id', 'run', 'timeout-minutes'] as const
 const CHECK_STEP_KEYS_OWNED_ELSEWHERE = ['if', 'continue-on-error'] as const
 
-function checkStepKeyProblems(lines: string[]): string[] {
-  const host = hostJob(levelledJobs(lines))
-  const check = host?.steps.find(runsFormatCheck)
+function checkStepKeyProblems(jobs: Job[]): string[] {
+  const check = hostJob(jobs)?.steps.find(runsFormatCheck)
   if (check === undefined) return []
-  const foreign = keysAt(check, keyIndent(check))
-    .map(({ key }) => key)
-    .filter(
-      key =>
-        !CHECK_STEP_KEYS.some(allowed => allowed === key) &&
-        !CHECK_STEP_KEYS_OWNED_ELSEWHERE.some(owned => owned === key),
-    )
+  const foreign = Object.keys(check).filter(
+    key =>
+      !CHECK_STEP_KEYS.some(allowed => allowed === key) &&
+      !CHECK_STEP_KEYS_OWNED_ELSEWHERE.some(owned => owned === key),
+  )
   if (foreign.length === 0) return []
   return [
     `the \`pnpm ${FORMAT_CHECK_SCRIPT}\` step carries \`${foreign.join('`, `')}\`: the checking step may carry only\n` +
@@ -1504,7 +1210,59 @@ function checkStepKeyProblems(lines: string[]): string[] {
 }
 
 /**
- * `defaults.run.working-directory` is the same `cd` one level up (the host job) or two
+ * The workflow's own keys, and every job's. Both are allow-lists for the reason
+ * `CHECK_STEP_KEYS` is one, one and two levels up: a key that decides WHAT or HOW the
+ * check runs is a key the step-level rule can be BYPASSED BY RELOCATION. `env:` is the
+ * measured case — a job-level `env: NODE_OPTIONS: --require ./shim.js` reaches the
+ * checking step (GitHub probe run 33724282486), and against the repo's own pinned
+ * prettier 3.6.2 that shim turns `--list-different` from "prints `bad.ts`, exit 1" into
+ * "prints `bad.ts`, exit 0": `pnpm format:check` still NAMES the file and the `format`
+ * context reports SUCCESS. `container:`/`services:` choose the image the check runs in,
+ * i.e. third-party code selected by a job key — the `uses:` argument one level up.
+ */
+function foreignKeys(
+  keys: string[],
+  allowed: readonly string[],
+  ownedElsewhere: readonly string[],
+): string[] {
+  return keys.filter(
+    key => !allowed.some(ok => ok === key) && !ownedElsewhere.some(owned => owned === key),
+  )
+}
+
+function workflowKeyProblems(root: Mapping): string[] {
+  const foreign = foreignKeys(Object.keys(root), WORKFLOW_KEYS, WORKFLOW_KEYS_OWNED_ELSEWHERE)
+  if (foreign.length === 0) return []
+  return [
+    `the workflow declares \`${foreign.join('`, `')}\` at workflow level: it may carry only\n` +
+      `  \`${WORKFLOW_KEYS.join('`, `')}\`. A workflow-level \`env:\` is inherited by every job and every step,\n` +
+      "  so it reaches the checking step whatever that step's own allow-list says — `NODE_OPTIONS:\n" +
+      "  --require ./shim.js` with a one-line shim (`process.on('exit', () => { process.exitCode = 0 })`)\n" +
+      '  makes prettier print the offending file and exit 0, so `pnpm format:check` names it and the\n' +
+      '  `format` context goes GREEN on unformatted code (measured against prettier 3.6.2). Every other\n' +
+      '  key here is a deliberate edit to this allow-list.',
+  ]
+}
+
+function jobKeyProblems(jobs: Job[]): string[] {
+  return jobs.flatMap(job => {
+    const foreign = foreignKeys(Object.keys(job.body), JOB_KEYS, JOB_KEYS_OWNED_ELSEWHERE)
+    if (foreign.length === 0) return []
+    return [
+      `job \`${job.name}\` declares \`${foreign.join('`, `')}\`: a job may carry only\n` +
+        `  \`${JOB_KEYS.join('`, `')}\`. \`env:\` on the job reaches the checking step even though that step\n` +
+        '  may declare none of its own (measured on GitHub), and `NODE_OPTIONS: --require ./shim.js` with a\n' +
+        "  one-line shim (`process.on('exit', () => { process.exitCode = 0 })`) makes prettier print the\n" +
+        '  offending file and exit 0 — `pnpm format:check` names it and the `format` context goes GREEN on\n' +
+        '  unformatted code (measured against prettier 3.6.2). `container:` and `services:` choose the\n' +
+        '  image the check runs in, which is third-party code picked by a job key — the `uses:` argument\n' +
+        '  one level up. Every other key here is a deliberate edit to this allow-list.',
+    ]
+  })
+}
+
+/**
+ * `defaults.run.working-directory` is the same `cd` one level up (a job) or two
  * (the workflow), and `defaults.run.shell` the same `shell:`. Both apply to every `run:`
  * step, the checking step included, and neither touches its text.
  */
@@ -1517,24 +1275,19 @@ function defaultsProblem(where: string): string {
   )
 }
 
-function defaultsProblems(lines: string[]): string[] {
+function defaultsProblems(root: Mapping, jobs: Job[]): string[] {
   const problems: string[] = []
-  if (inlineAfter(lines, 'defaults', 0) !== undefined)
-    problems.push(defaultsProblem('the workflow'))
-  const host = hostJob(levelledJobs(lines))
-  if (
-    host !== undefined &&
-    keysAt(host.body, keyIndent(host.body)).some(({ key }) => key === 'defaults')
-  ) {
-    problems.push(defaultsProblem(`job \`${host.name}\``))
+  if ('defaults' in root) problems.push(defaultsProblem('the workflow'))
+  for (const job of jobs) {
+    if ('defaults' in job.body) problems.push(defaultsProblem(`job \`${job.name}\``))
   }
   return problems
 }
 
-function checkCommandProblems(lines: string[]): string[] {
-  const check = allSteps(lines).find(runsFormatCheck)
+function checkCommandProblems(jobs: Job[]): string[] {
+  const check = allSteps(jobs).find(runsFormatCheck)
   if (check === undefined) return []
-  const runs = extractRunBlocks(check.join('\n'))
+  const runs = runsOf(check)
   if (runs.length === 1 && normalizeCommand(runs[0] ?? '') === FORMAT_CHECK_COMMAND) return []
   return [
     `the checking step runs \`${runs.join(' ⏎ ').replace(/\n/g, ' ⏎ ')}\`, not \`${FORMAT_CHECK_COMMAND}\`.\n` +
@@ -1553,23 +1306,27 @@ function checkCommandProblems(lines: string[]): string[] {
  * `format` (AC8), a required check that cannot fail is worse than no check, because
  * it is believed.
  */
-function jobProblems(clean: string, lines: string[]): string[] {
-  const problems: string[] = []
-
-  const advisory = /^\s*continue-on-error:\s*(?!false\b)(\S+)/m.exec(clean)
-  if (advisory !== null) {
-    problems.push(
-      `sets \`continue-on-error: ${advisory[1]}\`: the step fails and the job still reports SUCCESS, so\n` +
+function advisoryProblems(jobs: Job[]): string[] {
+  const owners: { where: Mapping }[] = [
+    ...jobs.map(job => ({ where: job.body })),
+    ...allSteps(jobs).map(step => ({ where: step })),
+  ]
+  return owners.flatMap(({ where }) => {
+    const value = textAt(where, 'continue-on-error')
+    if (value === undefined || value === 'false') return []
+    return [
+      `sets \`continue-on-error: ${value}\`: the step fails and the job still reports SUCCESS, so\n` +
         '  the `format` context goes green on unformatted code. A check that cannot fail is not a check.',
-    )
-  }
+    ]
+  })
+}
 
-  problems.push(...conditionProblems(lines))
-
-  for (const job of jobsOf(lines)) {
-    problems.push(...permissionProblems(job.name, job.body, lines))
-  }
-  return problems
+function jobProblems(root: Mapping, jobs: Job[]): string[] {
+  return [
+    ...advisoryProblems(jobs),
+    ...conditionProblems(jobs),
+    ...jobs.flatMap(job => permissionProblems(job.name, job.body, root)),
+  ]
 }
 
 /**
@@ -1579,17 +1336,19 @@ function jobProblems(clean: string, lines: string[]): string[] {
  * where it is read.
  *
  * Scanned as a MESSAGE, not a command: `pnpm format` is a write-mode formatter, so
- * the same literal is required here and banned three rules down. What separates them
+ * the same literal is required here and banned two rules down. What separates them
  * is quoting — see `stripQuotedMessages`.
  */
 const REMEDY_MENTION = new RegExp(`\\bpnpm ${REMEDY_SCRIPT}\\b(?![:\\w-])`)
 
-function remedyProblems(lines: string[]): string[] {
-  const failurePath = jobsOf(lines)
-    .flatMap(job => stepsOf(job.body))
-    .filter(step => step.some(line => /^\s*(?:-\s+)?if:.*\bfailure\(\)/.test(line)))
-    .flatMap(step => extractRunBlocks(step.join('\n')))
-    .join('\n')
+/** A step conditioned on `failure()` — the failure path, whatever else its condition says. */
+function isFailurePathStep(step: Mapping): boolean {
+  const condition = textAt(step, 'if')
+  return condition !== undefined && FAILURE_GUARD.test(condition)
+}
+
+function remedyProblems(jobs: Job[]): string[] {
+  const failurePath = allSteps(jobs).filter(isFailurePathStep).flatMap(runsOf).join('\n')
 
   if (REMEDY_MENTION.test(failurePath)) return []
   return [
@@ -1622,9 +1381,7 @@ function remedyProblems(lines: string[]): string[] {
  * forever), and the remedy ABOVE the checking step in the same job (the context is
  * not yet populated at that index). Either is AC1's exact loss: a red check hands the
  * contributor a bare filename and no instruction, with this guard reporting the
- * workflow well-formed. This module already reasons about the unpopulated-context
- * failure mode for the check step's own `if:` (see `conditionProblems`), so the
- * placement is asserted here rather than left to review.
+ * workflow well-formed.
  *
  * Silent when no step runs `format:check` at all — `stepProblems` owns that failure
  * and reporting it twice would name the wrong cause. The checking step's own `if:`
@@ -1641,15 +1398,11 @@ interface FailurePathStep {
 }
 
 /** Every `failure()`-conditioned step except the checking one (whose `if:` is `conditionProblems`'). */
-function failurePathSteps(
-  jobs: LevelledJob[],
-  hostName: string,
-  checkIndex: number,
-): FailurePathStep[] {
+function failurePathSteps(jobs: Job[], hostName: string, checkIndex: number): FailurePathStep[] {
   return jobs.flatMap(job =>
     job.steps.flatMap((step, index) => {
       if (job.name === hostName && index === checkIndex) return []
-      const condition = scalarAt(step, 'if', keyIndent(step))
+      const condition = textAt(step, 'if')
       if (condition === undefined || !FAILURE_GUARD.test(condition)) return []
       return [{ job: job.name, index, condition }]
     }),
@@ -1719,13 +1472,12 @@ function earlyStepProblem(early: FailurePathStep[], id: string, checkIndex: numb
 }
 
 /** The checking step's `id:`, when it is one a `steps.<id>` reference can name. */
-function checkStepId(check: string[]): string | null {
-  const id = scalarAt(check, 'id', keyIndent(check))
+function checkStepId(check: Mapping): string | null {
+  const id = textAt(check, 'id')
   return id !== undefined && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(id) ? id : null
 }
 
-function remedyScopeProblems(lines: string[]): string[] {
-  const jobs = levelledJobs(lines)
+function remedyScopeProblems(jobs: Job[]): string[] {
   const host = hostJob(jobs)
   if (host === undefined) return []
   const checkIndex = host.steps.findIndex(runsFormatCheck)
@@ -1772,21 +1524,20 @@ function remedyScopeProblems(lines: string[]): string[] {
 /**
  * The shell a step may run when it is neither the checking step nor a failure-path
  * remedy: the toolchain install, line by line. An ALLOW-list, like every other surface of
- * this workflow, and for the reason `with:` became one — the deny-list below (write-mode
- * formatters, `${{`, `secrets.`) names FORMATTERS, and the loss it guards has a shell
- * spelling no formatter list can name. Measured on the shipped file: `- name: Sync / run:
- * git fetch origin main && git checkout origin/main -- .` before `Check formatting` →
- * ok=true; `run: pnpm install && find . -name '*.ts' -not -path './node_modules/*'
- * -delete` → ok=true. Each makes `pnpm format:check` run on a tree that is not the PR's
- * (`git checkout <ref> -- .` overwrites every tracked file with `<ref>`'s version; `find
- * -delete` removes them — both measured in a scratch repo), which is the identical AC2
- * loss `with: ref: main` produced on GitHub (run 33635537234: `format` SUCCESS on an
- * unformatted PR) and that `checkoutInputProblems` closed by allow-list.
+ * this workflow, and for the reason `with:` became one — a deny-list names FORMATTERS,
+ * and the loss it guards has a shell spelling no formatter list can name. Measured on the
+ * shipped file: `- name: Sync / run: git fetch origin main && git checkout origin/main
+ * -- .` before `Check formatting` → ok=true; `run: pnpm install && find . -name '*.ts'
+ * -not -path './node_modules/*' -delete` → ok=true. Each makes `pnpm format:check` run on
+ * a tree that is not the PR's (`git checkout <ref> -- .` overwrites every tracked file
+ * with `<ref>`'s version; `find -delete` removes them — both measured in a scratch repo),
+ * which is the identical AC2 loss `with: ref: main` produced on GitHub (run 33635537234:
+ * `format` SUCCESS on an unformatted PR) and that `checkoutInputProblems` closed by
+ * allow-list.
  *
  * The workflow has exactly two such commands: `pnpm install` (flags only — a positional
  * argument is `pnpm add`, which edits `package.json`) and the corepack fallback, whose
- * lines are listed one by one. The remedy stays deny-list scanned: it runs AFTER the
- * check, on the failure path, and its message has to be free to say what it needs to.
+ * lines are listed one by one.
  */
 export const SETUP_COMMAND_LINES: readonly RegExp[] = [
   /^pnpm install(?:\s+--?[A-Za-z][\w-]*(?:=\S+)?)*$/,
@@ -1797,38 +1548,69 @@ export const SETUP_COMMAND_LINES: readonly RegExp[] = [
   /^fi$/,
 ]
 
-function isSetupCommand(run: string): boolean {
-  // `run: "pnpm install"` is the bare command to yaml@2.8.2 and to GitHub (run
-  // 33676806439) — the same reason `normalizeCommand` unquotes. Matched pairs only.
-  return unquote(run)
+/**
+ * The shell a FAILURE-PATH step may run: a quoted `echo`/`printf` and nothing else.
+ *
+ * This was the module's last deny-list, and it fell to its own argument. The remedy's
+ * body was scanned for write-mode FORMATTERS, so a formatter no list names walked past
+ * it: `npx dprint fmt`, and `git commit -am style && git push` beside the required
+ * `pnpm format` message, were both `ok=true` on the shipped file. (Neither loss was
+ * REALIZABLE — `permissions: contents: read` is allow-listed and enforced, and a `${{
+ * secrets.* }}` in a `run:` is rejected, so the push could not land — but "the next
+ * formatting action published walks through" is exactly the argument that retired the
+ * `uses:` and `with:` deny-lists, and it does not stop applying because a second rule
+ * happens to cover this one.)
+ *
+ * The remedy SAYS something; it does not DO anything. `stripQuotedMessages` already
+ * draws that line for the write scan, and this is the same line drawn as an allow-list:
+ * an `echo`/`printf` whose arguments are quoted and carry no `$` or backtick — i.e. no
+ * substitution, no command — plus nothing else on the line.
+ */
+export const REMEDY_COMMAND_LINES: readonly RegExp[] = [
+  /^echo(?:\s+-[A-Za-z]+)*\s+"[^"$`]*"$/,
+  /^echo(?:\s+-[A-Za-z]+)*\s+'[^'$`]*'$/,
+  /^printf(?:\s+-[A-Za-z]+)*(?:\s+(?:"[^"$`]*"|'[^'$`]*'))+$/,
+]
+
+function matchesEvery(run: string, patterns: readonly RegExp[]): boolean {
+  return run
     .split('\n')
     .map(line => line.trim())
     .filter(line => line !== '')
-    .every(line => SETUP_COMMAND_LINES.some(pattern => pattern.test(line)))
+    .every(line => patterns.some(pattern => pattern.test(line)))
 }
 
 /** A step that is neither the checking step nor a `failure()`-guarded remedy. */
-function isSetupStep(step: string[]): boolean {
-  if (runsFormatCheck(step)) return false
-  const condition = scalarAt(step, 'if', keyIndent(step))
-  return condition === undefined || !FAILURE_GUARD.test(condition)
+function isSetupStep(step: Mapping): boolean {
+  return !runsFormatCheck(step) && !isFailurePathStep(step)
 }
 
-function setupCommandProblems(lines: string[]): string[] {
+function shellProblems(jobs: Job[]): string[] {
   const problems: string[] = []
-  for (const job of levelledJobs(lines)) {
-    for (const step of job.steps.filter(isSetupStep)) {
-      const foreign = extractRunBlocks(step.join('\n')).filter(run => !isSetupCommand(run))
+  for (const job of jobs) {
+    for (const step of job.steps) {
+      if (runsFormatCheck(step)) continue
+      const setup = isSetupStep(step)
+      const patterns = setup ? SETUP_COMMAND_LINES : REMEDY_COMMAND_LINES
+      const foreign = runsOf(step).filter(run => !matchesEvery(run, patterns))
       if (foreign.length === 0) continue
+      const listed = foreign.join(' ⏎ ').replace(/\n/g, ' ⏎ ')
       problems.push(
-        `a step in job \`${job.name}\` runs \`${foreign.join(' ⏎ ').replace(/\n/g, ' ⏎ ')}\`: outside the checking\n` +
-          '  step and its failure-path remedy, the only shell this workflow runs is the toolchain install —\n' +
-          '  `pnpm install` (flags only) and the corepack fallback (`if ! command -v pnpm …; then`, a quoted\n' +
-          '  `echo`, `corepack enable`, `corepack prepare pnpm@<v> --activate`, `fi`). Anything else is a way\n' +
-          "  to change WHAT `pnpm format:check` runs on: `git checkout origin/main -- .` overwrites the PR's\n" +
-          "  files with `main`'s, `find … -delete` removes them — either makes the check pass on a tree that\n" +
-          "  is not the PR's, the AC2 loss measured with `with: ref: main`, and neither is a formatter a\n" +
-          '  deny-list could name. A new command is a deliberate edit to `SETUP_COMMAND_LINES`.',
+        setup
+          ? `a step in job \`${job.name}\` runs \`${listed}\`: outside the checking\n` +
+              '  step and its failure-path remedy, the only shell this workflow runs is the toolchain install —\n' +
+              '  `pnpm install` (flags only) and the corepack fallback (`if ! command -v pnpm …; then`, a quoted\n' +
+              '  `echo`, `corepack enable`, `corepack prepare pnpm@<v> --activate`, `fi`). Anything else is a way\n' +
+              "  to change WHAT `pnpm format:check` runs on: `git checkout origin/main -- .` overwrites the PR's\n" +
+              "  files with `main`'s, `find … -delete` removes them — either makes the check pass on a tree that\n" +
+              "  is not the PR's, the AC2 loss measured with `with: ref: main`, and neither is a formatter a\n" +
+              '  deny-list could name. A new command is a deliberate edit to `SETUP_COMMAND_LINES`.'
+          : `a failure-path step in job \`${job.name}\` runs \`${listed}\`: the remedy SAYS what to run, it\n` +
+              '  does not run anything. Its shell is an allow-list of quoted `echo`/`printf` lines carrying no\n' +
+              '  `$` and no backtick — no substitution, no second command. A deny-list of formatters waved\n' +
+              '  through `npx dprint fmt` and a `git commit -am style && git push` beside the required `pnpm\n' +
+              '  format` message, which is the same "the next one published walks through" that retired the\n' +
+              '  `uses:` and `with:` deny-lists. A new command is a deliberate edit to `REMEDY_COMMAND_LINES`.',
       )
     }
   }
@@ -1855,9 +1637,9 @@ function stripQuotedMessages(command: string): string {
  * only, so an expression in `concurrency.group` is not mistaken for one expanded
  * into a shell.
  */
-function stepProblems(clean: string, rootScripts: Record<string, string>): string[] {
+function stepProblems(root: Mapping, jobs: Job[], rootScripts: Record<string, string>): string[] {
   const problems: string[] = []
-  const rawRuns = extractRunBlocks(clean)
+  const rawRuns = allSteps(jobs).flatMap(runsOf)
   // What each step COMMANDS, with inert quoted messages removed. The injection scan
   // below deliberately keeps reading the raw text: `echo "${{ github.event.pull_request.title }}"`
   // is the classic sink precisely BECAUSE it is quoted and echoed.
@@ -1889,7 +1671,7 @@ function stepProblems(clean: string, rootScripts: Record<string, string>): strin
     )
   }
 
-  if (/\bsecrets\s*[.:]/.test(clean)) {
+  if (everyText(root).some(text => /\bsecrets\s*[.:]/.test(text))) {
     problems.push(
       'reads a secret. A fork PR must be a full-strength run with no credential in reach: nothing\n' +
         '  here needs one, so having one is pure exposure.',
@@ -1921,33 +1703,83 @@ export function checkFormatWorkflow(
     }
   }
 
-  const clean = stripComments(yamlText)
-  const lines = clean.split('\n')
+  const parsed = parseWorkflow(yamlText)
+  if (parsed.problem !== undefined) return report([parsed.problem])
+  const root = parsed.root ?? {}
+  const jobs = jobsOf(root)
+
   const problems = [
-    ...flowStyleProblems(lines),
-    ...triggerProblems(clean, lines),
-    ...concurrencyProblems(lines),
-    ...jobIdentityProblems(lines),
-    ...jobProblems(clean, lines),
-    ...usesProblems(lines),
-    ...stepProblems(clean, rootScripts),
-    ...setupCommandProblems(lines),
-    ...checkCommandProblems(lines),
-    ...checkStepKeyProblems(lines),
-    ...defaultsProblems(lines),
-    ...remedyProblems(lines),
-    ...remedyScopeProblems(lines),
+    ...workflowKeyProblems(root),
+    ...jobKeyProblems(jobs),
+    ...stepShapeProblems(jobs),
+    ...triggerProblems(root),
+    ...concurrencyProblems(root),
+    ...jobIdentityProblems(jobs),
+    ...jobProblems(root, jobs),
+    ...usesProblems(jobs),
+    ...stepProblems(root, jobs, rootScripts),
+    ...shellProblems(jobs),
+    ...checkCommandProblems(jobs),
+    ...checkStepKeyProblems(jobs),
+    ...defaultsProblems(root, jobs),
+    ...remedyProblems(jobs),
+    ...remedyScopeProblems(jobs),
   ]
 
   if (problems.length === 0) {
     return { ok: true, message: '.github/workflows/format.yml checks formatting on every PR.' }
   }
+  return report(problems)
+}
+
+function report(problems: string[]): GateCheckResult {
   return {
     ok: false,
     message:
       `.github/workflows/format.yml (#413) — ${problems.length} problem(s):\n` +
       problems.map(problem => `- ${problem}`).join('\n'),
   }
+}
+
+/**
+ * The one parse. `yaml@2.8.2` resolves anchors, aliases, flow and block style, JSON
+ * spellings, indentless sequences and CRLF to the document GitHub runs — and REFUSES a
+ * file it cannot resolve unambiguously (a duplicate key, a tab indent), which is where
+ * this guard's fail-closed direction now lives. A merge key (`<<: *base`) is left
+ * unmerged by default and surfaces as a literal `<<` key, which the workflow/job
+ * allow-lists reject — matching GitHub, which fails the run outright on it (probe run
+ * 33724280781 on PR #477: zero jobs, invalid workflow file).
+ */
+function parseProblem(cause: string): string {
+  return (
+    `is not valid YAML (${cause.split('\n')[0] ?? cause}). A file the parser cannot\n` +
+    '  resolve is a file whose shape nothing here can assert, so it is rejected rather than guessed at\n' +
+    '  — and GitHub would refuse to run it too.'
+  )
+}
+
+function parseWorkflow(yamlText: string): { root?: Mapping; problem?: string } {
+  const document = parseDocument(yamlText, { prettyErrors: false })
+  let root: unknown
+  // `toJS()` is where an UNRESOLVED alias throws (`*nowhere` with no `&nowhere`): the
+  // parse itself reports no error, so the fail-closed direction has to cover both.
+  try {
+    root = document.errors.length > 0 ? undefined : document.toJS()
+  } catch (error) {
+    return { problem: parseProblem(error instanceof Error ? error.message : String(error)) }
+  }
+  const failure = document.errors[0]
+  if (failure !== undefined) {
+    return { problem: parseProblem(failure.message.split('\n')[0] ?? failure.name) }
+  }
+  if (!isMapping(root)) {
+    return {
+      problem:
+        'does not parse to a mapping of workflow keys (`on:`, `jobs:`, …), so it declares no trigger and\n' +
+        '  no job at all.',
+    }
+  }
+  return { root }
 }
 
 /** Reads THIS repo's format workflow and checks its composition. */

@@ -8,9 +8,11 @@
 
 Active (amended 2026-09-03 — the decision this file recorded on 2026-09-01, "the guard REJECTS
 the YAML spellings it cannot read", is **superseded in place**: the parser migration it listed as
-a costed follow-on is TAKEN, and binds the remaining work of PR #477. The superseded text is kept
-below, marked as superseded, not deleted. Filename unchanged deliberately — history, the
-way-of-working link and the `.pair/llms.txt` entry all point at this path.)
+a costed follow-on is TAKEN, and **has landed in PR #477** — the module imports `yaml@2.8.2`,
+`@pair/dev-tools` declares the catalog entry, the line reader and the four spelling-rejection rule
+families are deleted, and the suite is migrated. The superseded text is kept below, marked as
+superseded, not deleted. Filename unchanged deliberately — history, the way-of-working link and
+the `.pair/llms.txt` entry all point at this path.)
 
 ## Category
 
@@ -100,9 +102,8 @@ the rule set asserts only what its author already imagined.
 **The guard PARSES `.github/workflows/format.yml` with `yaml@2.8.2`, and expresses every rule as an
 allow-list over the parsed document. The hand-rolled line reader is retired.**
 
-This is the decision that **binds the remaining work of PR #477**. At the time of this record
-(HEAD `37cf84b4`) the migration is **not yet written** — this section states what must land, not
-what has landed. Concretely:
+**This has landed** (PR #477). The list below is the migration contract as it was written, and
+each clause is now a statement about the shipped module rather than an obligation:
 
 - **One parse, at the top.** The workflow text is parsed once with `yaml@2.8.2`. A parse error is
   itself a reported problem, so an unparseable file is red — the fail-closed direction the
@@ -127,7 +128,27 @@ what has landed. Concretely:
   the migration: a rule that was an equality stays an equality, on the value the parser resolves.
 - **`run:` bodies stay shell, not YAML.** The parser hands each `run:` scalar over as a string and
   `extractRunBlocks`' consumers scan it as shell — which is exactly the boundary
-  `withoutBlockScalars` was hand-maintaining, now drawn by the parser for free.
+  `withoutBlockScalars` was hand-maintaining, now drawn by the parser for free. (`#` comments
+  inside that body are still stripped quote-aware: that is the SHELL's comment rule, applied to
+  shell text, and YAML's own comments never reach it.)
+
+**One clause of this contract was WRONG, and the boundary probe is what corrected it.** The
+contract said merge keys "are resolved by the parser to the same document GitHub runs". They are
+not, in either direction: `yaml@2.8.2` leaves `<<` unmerged by default (it surfaces as a literal
+`<<` key), and GitHub **refuses to run the file at all** — measured on PR #477, probe run
+[33724280781](https://github.com/foomakers/pair/actions/runs/33724280781), a `jobs:` block using
+`<<: *base`: zero jobs, "invalid workflow file". So `<<` stays rejected, now by the job/workflow
+key allow-list and with the producer's own verdict behind it. The same probe series settled the
+rest of the class empirically rather than by reading the spec — flow trigger mapping
+([33724282425](https://github.com/foomakers/pair/actions/runs/33724282425)), anchors
+([33724282478](https://github.com/foomakers/pair/actions/runs/33724282478)), an alias DECIDING a
+trigger ([33724282535](https://github.com/foomakers/pair/actions/runs/33724282535)), a JSON step
+([33724282504](https://github.com/foomakers/pair/actions/runs/33724282504)) and a job-level `env:`
+reaching a step ([33724282486](https://github.com/foomakers/pair/actions/runs/33724282486)) all
+RAN; an unknown top-level key
+([33724281525](https://github.com/foomakers/pair/actions/runs/33724281525)) was rejected with the
+merge key. The guard's allow-lists agree with the producer on every row.
+
 - **The test suite migrates with the module, it is not rewritten.** Every mutation case is the
   contract and stays: a mutation of the shipped workflow that was RED stays RED with the same
   cause. The cases that asserted the REJECTION of a legal spelling INVERT — a flow trigger mapping,
@@ -246,19 +267,32 @@ rounds of re-deferral against a decision already made.
   forward rather than dropped.
 - **The migration's own risk is carried by the test suite**, which is the reason it is migrated
   rather than rewritten: 321 tests over the shipped workflow and its mutations, each naming the
-  property it holds.
+  property it holds. Measured after the migration: 362 tests, every RED mutation still RED with the
+  same cause, and the rows that asserted the rejection of a legal spelling inverted to GREEN with
+  the semantic rule asserted on the resolved value.
+- **Two surfaces became allow-lists in the same change, both of them the "relocation" shape this
+  module keeps meeting.** (a) The WORKFLOW's own keys and every JOB's, because a job-level `env:`
+  reaches the checking step whatever the step-level allow-list says: measured end to end,
+  `NODE_OPTIONS=--require=<one-line shim>` makes the repo's own pinned prettier 3.6.2 print the
+  offending filename and exit **0**, so `pnpm format:check` names the file and the `format` context
+  reports SUCCESS on unformatted code — the `with: ref: main` loss class spelled as a job key.
+  `container:`/`services:` are the `uses:` third-party-code argument one level up. (b) The REMEDY's
+  shell, the module's last deny-list: a formatter no offender list names (`npx dprint fmt`) and a
+  `git commit -am style && git push` beside the required message were both green. The remedy SAYS
+  what to run; its shell is now quoted `echo`/`printf` and nothing else. With those two, the module
+  header's claim that every surface is an allow-list is true as written.
 
 ## Adoption Impact
 
-- `.pair/adoption/tech/way-of-working.md` — the `format` required-check bullet lists "the
-  block-style requirement" among the asserted properties. That clause is retired when the migration
-  lands in this PR; the rest of the bullet stands, since it defers the rule inventory to the module
-  header (one source, not restated there). **Not edited yet** — at this commit the shipped module
-  still enforces block style, and adoption records what is true now.
-- `.pair/adoption/tech/tech-stack.md` — the `yaml v2.8.2` entry currently reads "(devDependency) for
-  parsing generated YAML in tests"; it is widened to cover repo workflow guards when
-  `@pair/dev-tools` declares the catalog entry. **Not edited yet**, for the same reason: the
-  dependency is not yet declared.
+- `.pair/adoption/tech/way-of-working.md` — the `format` required-check bullet listed "the
+  block-style requirement" among the asserted properties. **Edited**: that clause is gone (there is
+  no spelling requirement), replaced by the key allow-lists, and the ADL reference now states that
+  the guard parses and that an unparseable file is itself a problem.
+- `.pair/adoption/tech/tech-stack.md` — the `yaml v2.8.2` entry read "(devDependency) for parsing
+  generated YAML in tests". **Edited**: it now covers YAML this repo generates OR consumes, and
+  names both declaring packages. `packages/dev-tools/package.json` declares `"yaml": "catalog:"`;
+  the catalog already pinned 2.8.2, so no new package resolves, and `@pair/dev-tools` is
+  `private: true`, so it stays dev-only.
 - ADL [2026-07-29](./2026-07-29-yaml-parser-for-generated-yaml-tests.md) is **extended, not
   superseded** — same parser, same argument, second consumer.
 - `.pair/llms.txt` — regenerated with the production generator (the title of this record changed).

@@ -909,16 +909,15 @@ describe('a failing format check tells the contributor what to run (#413)', () =
   // Asserted on the REMEDY step, not the checking one: since AC4 became an equality on
   // the checking step's command, `pnpm format:check || { … }` is rejected there for a
   // different reason (it is no longer the one command a developer runs), and since round
-  // 13 the install step is an allow-list of toolchain commands. The remedy is the one step
-  // whose shell is read by the write-mode scan alone, so the rule under test is exercised
-  // where it is the only rule in play — and the checking-step spelling is asserted red
-  // just below.
+  // 13 the install step is an allow-list of toolchain commands. The remedy carries the
+  // required literal inside a quoted message, so the rule under test — quoted arguments
+  // are DATA — is what decides, and the checking-step spelling is asserted red just below.
   it('does not mistake an echoed remedy for a step that writes files', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
         `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
-        '        run: echo "Formatting failed. Run pnpm format and commit."; exit 1\n',
+        '        run: echo "Formatting failed. Run pnpm format and commit."\n',
         'the remedy step',
       ),
     )
@@ -1113,157 +1112,176 @@ describe('the format workflow is safe on a fork PR by construction (#413)', () =
 // reads as blocks: each has a flow spelling GitHub honours, and each is rejected
 // rather than parsed — a hand-rolled block reader that pretends to understand flow
 // style is a second hole, not a fix.
-describe('a flow-style mapping is rejected, never parsed (#413)', () => {
-  const flowSpellings: [string, string, string][] = [
-    // [label, block-style text to replace, its flow spelling]
+// Rounds 5–6 REJECTED every spelling the hand-rolled line reader could not follow; the
+// migration to `yaml@2.8.2` (ADL 2026-09-01, amended 2026-09-03) deletes that whole rule
+// family, because the parser resolves those spellings to the same document GitHub runs.
+// So the contract inverts: a flow mapping, a JSON step, an anchor, an alias — all legal
+// YAML GitHub honours — are READ, and what decides is the SEMANTIC rule on the resolved
+// value. Correct workflow, exotic spelling: GREEN. Hole, whatever the spelling: RED, and
+// named by its cause.
+describe('a flow-style spelling is READ, and the semantic rule decides (#413)', () => {
+  // Same document as WELL_FORMED, spelled in flow/JSON style throughout — the spelling
+  // the reader used to reject wholesale, on every structural key at once.
+  const WELL_FORMED_FLOW = `name: Format
+"on": { pull_request: { branches: [main] }, push: { branches: [main] } }
+concurrency: { group: "format-\${{ github.ref }}", cancel-in-progress: true }
+jobs:
+  format:
+    {
+      runs-on: ubuntu-latest,
+      permissions: { contents: read },
+      steps:
+        [
+          { name: Checkout code, uses: actions/checkout@v4 },
+          { name: Install pnpm, uses: pnpm/action-setup@v4, with: { version: "10.15.0" } },
+          { name: Install dependencies, run: pnpm install },
+          { name: Check formatting, id: format_check, run: pnpm format:check },
+          {
+            name: Explain how to fix it,
+            if: "failure() && steps.format_check.outcome == 'failure'",
+            run: "echo \\"::error::Not formatted. Run 'pnpm format' locally and commit the result.\\"",
+          },
+        ],
+    }
+`
+
+  it('accepts a workflow spelled entirely in flow style', () => {
+    const r = checkFormatWorkflow(WELL_FORMED_FLOW)
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  // Each row is a CORRECT workflow wearing the spelling round 5 rejected by name.
+  const legalSpellings: [string, string, string][] = [
     [
-      'on: itself as a flow mapping',
+      '`on:` itself as a flow mapping',
       'on:\n  pull_request:\n    branches:\n      - main\n  push:\n    branches:\n      - main\n',
       'on: { pull_request: { branches: [main] }, push: { branches: [main] } }\n',
     ],
     [
-      'on: as a flow SEQUENCE of event names',
+      '`on:` as a flow SEQUENCE of event names (no filter is a SUPERSET of `main`)',
       'on:\n  pull_request:\n    branches:\n      - main\n  push:\n    branches:\n      - main\n',
       'on: [pull_request, push]\n',
     ],
     [
-      'pull_request as a flow mapping',
+      '`on:` as a block LIST of event names',
+      'on:\n  pull_request:\n    branches:\n      - main\n  push:\n    branches:\n      - main\n',
+      'on:\n  - pull_request\n  - push\n',
+    ],
+    [
+      '`pull_request` as a flow mapping',
       '  pull_request:\n    branches:\n      - main\n',
       '  pull_request: { branches: [main] }\n',
     ],
     [
-      'pull_request as a flow mapping spanning two lines',
+      '`pull_request` as a flow mapping spanning two lines',
       '  pull_request:\n    branches:\n      - main\n',
       '  pull_request: {\n      branches: [main] }\n',
     ],
     [
-      'push as a flow mapping',
+      '`push` as a flow mapping',
       '  push:\n    branches:\n      - main\n',
       '  push: { branches: [main] }\n',
     ],
     [
-      'concurrency as a flow mapping',
+      '`concurrency` as a flow mapping',
       'concurrency:\n  group: format-${{ github.ref }}\n  cancel-in-progress: true\n',
       'concurrency: { group: "format-${{ github.ref }}", cancel-in-progress: true }\n',
     ],
-    ['jobs as a flow mapping', 'jobs:\n  format:\n', 'jobs: { format: }\n  format:\n'],
     [
-      'the job body as a flow mapping',
-      '  format:\n    runs-on: ubuntu-latest\n',
-      '  format: { runs-on: ubuntu-latest }\n    runs-on: ubuntu-latest\n',
-    ],
-    [
-      'steps as a flow sequence',
-      '    steps:\n      - name: Checkout code\n',
-      '    steps: [{ name: Checkout code, uses: actions/checkout@v4 }]\n      - name: Checkout code\n',
+      'the checking step as a JSON-spelled sequence item',
+      '      - name: Check formatting\n        id: format_check\n        run: pnpm format:check\n',
+      '      - { "name": "Check formatting", "id": "format_check", "run": "pnpm format:check" }\n',
     ],
   ]
 
-  for (const [label, block, flow] of flowSpellings) {
-    it(`fails on ${label}`, () => {
-      const mutated = WELL_FORMED.replace(block, flow)
-      expect(mutated, `${label}: the fixture no longer contains the block spelling`).not.toBe(
-        WELL_FORMED,
-      )
+  for (const [label, block, flow] of legalSpellings) {
+    it(`accepts ${label}`, () => {
+      const mutated = mutate(WELL_FORMED, block, flow, label)
       const r = checkFormatWorkflow(mutated)
-      expect(r.ok, `${label}: ${r.message}`).toBe(false)
-      expect(r.message).toContain('flow-style')
+      expect(r.ok, `${label}: ${r.message}`).toBe(true)
     })
   }
 
-  // The four one-line edits the flow hole actually buys. All are valid YAML that
-  // GitHub honours, and all left the guard green: a markdown-only PR with no
-  // formatting check (AC3's exact hole), a trigger off the base branch so the
-  // `format` context never reports on anything that merges, a check that runs only
-  // once the PR is closed, and AC7's post-merge visibility gone.
-  it('fails on the four trigger holes a flow mapping used to hide', () => {
-    const holes = [
+  // …and the four holes that spelling used to hide are still RED — each now named by
+  // the SEMANTIC rule that owns it, not by its punctuation.
+  const flowHoles: [string, string, string, string][] = [
+    [
+      'a flow `paths-ignore`',
+      '  pull_request:\n    branches:\n      - main\n',
       "  pull_request: { branches: [main], paths-ignore: ['**/*.md'] }\n",
+      'paths-ignore',
+    ],
+    [
+      'a flow trigger off the base branch',
+      '  pull_request:\n    branches:\n      - main\n',
       '  pull_request: { branches: [release] }\n',
+      'does not cover `main` (release)',
+    ],
+    [
+      'a flow `types: [closed]`',
+      '  pull_request:\n    branches:\n      - main\n',
       '  pull_request: { branches: [main], types: [closed] }\n',
-    ]
-    for (const hole of holes) {
-      const r = checkFormatWorkflow(
-        WELL_FORMED.replace('  pull_request:\n    branches:\n      - main\n', hole),
-      )
-      expect(r.ok, `${hole}: ${r.message}`).toBe(false)
-    }
-    const push = checkFormatWorkflow(
-      WELL_FORMED.replace(
-        '  push:\n    branches:\n      - main\n',
-        '  push: { branches: [release] }\n',
-      ),
-    )
-    expect(push.ok, push.message).toBe(false)
-  })
+      'dropping opened, synchronize',
+    ],
+    [
+      'a flow `push` off the base branch',
+      '  push:\n    branches:\n      - main\n',
+      '  push: { branches: [release] }\n',
+      'does not cover `main` (release)',
+    ],
+    [
+      'a flow `concurrency.group` that is not keyed on the ref',
+      'concurrency:\n  group: format-${{ github.ref }}\n  cancel-in-progress: true\n',
+      'concurrency: { group: format, cancel-in-progress: true }\n',
+      'github.ref',
+    ],
+  ]
 
-  // An anchor, an alias and a merge key are the same class as a flow mapping: they
-  // move content somewhere a line reader cannot follow. Left unrejected they fail
-  // OPEN in the identical way — `pull_request: *filters` reads as "no filter at all",
-  // and `- *writer` under `steps:` hides a whole step from the write-mode scan.
-  it('fails on an anchor, an alias or a merge key where a block is read', () => {
-    const relocations: [string, string, string][] = [
-      [
-        'an anchor on a trigger key',
-        '  pull_request:\n    branches:\n      - main\n',
-        '  pull_request: &prfilter\n    branches:\n      - main\n',
-      ],
-      [
-        'an alias as a trigger value',
-        '  pull_request:\n    branches:\n      - main\n',
-        '  pull_request: *prfilter\n',
-      ],
-      [
-        'a merge key inside a trigger block',
-        '  pull_request:\n    branches:\n      - main\n',
-        '  pull_request:\n    <<: *prfilter\n',
-      ],
-      [
-        'an alias as a step',
-        '      - name: Checkout code\n        uses: actions/checkout@v4\n',
-        '      - *checkout_step\n',
-      ],
-    ]
-    for (const [label, block, relocated] of relocations) {
-      const mutated = WELL_FORMED.replace(block, relocated)
-      expect(mutated, `${label}: the fixture no longer contains the block spelling`).not.toBe(
-        WELL_FORMED,
-      )
-      const r = checkFormatWorkflow(mutated)
+  for (const [label, block, flow, cause] of flowHoles) {
+    it(`still fails on ${label}, naming the cause`, () => {
+      const r = checkFormatWorkflow(mutate(WELL_FORMED, block, flow, label))
       expect(r.ok, `${label}: ${r.message}`).toBe(false)
-      expect(r.message, label).toContain('BLOCK')
-    }
-  })
+      expect(r.message, label).toContain(cause)
+      expect(r.message, label).not.toContain('flow-style')
+    })
+  }
 
-  // A step is a sequence ITEM, and the sweep above reads mapping KEYS. So every step
-  // spelling that is not a block mapping walked past BOTH readers at once: `stepsOf`
-  // accepts the line as a step, `levelledStep` blanks the dash, and then
-  // `scalarAt(step, 'uses', …)` and `extractRunBlocks` each want their key at line
-  // start and find none. Placed before the checking step, such an item rewrites the
-  // runner's checkout — `pnpm format:check` then passes on unformatted code and the
-  // `format` context goes green: the AC6 loss `usesProblems` and the write-mode scan
-  // both exist to prevent, reached through the one spelling with no rule on it.
-  //
-  // Measured on the shipped workflow before the fix (`checkFormatWorkflow` returned
-  // `ok=true` on every row): a `run:` writer, a `uses:` formatter and a `uses:`
-  // auto-commit, in flow, JSON, flow-sequence, anchored and off-line spellings.
-  describe('a step is a sequence item, and only a BLOCK MAPPING item is read', () => {
-    const items: [string, string][] = [
-      ['a flow mapping running a formatter', '- { name: Fix, run: npx prettier --write . }'],
-      ['a flow mapping with no spaces', '- {run: prettier --write .}'],
-      ['the JSON spelling of the same', '- { "name": "Fix", "run": "npx prettier --write ." }'],
-      ['a flow mapping using a formatting ACTION', '- { uses: creyD/prettier_action@v4 }'],
+  // A step is a sequence ITEM. Every non-block spelling of one used to walk past
+  // `usesProblems` AND the write-mode scan at once; the parser resolves each to the
+  // same mapping, so both rules now see it. Measured `ok=true` on the shipped file
+  // before the migration, RED here for the reason the step actually is one.
+  describe('a step spelled as a flow or JSON item is read by every step rule', () => {
+    const items: [string, string, string][] = [
+      [
+        'a flow mapping running a formatter',
+        '- { name: Fix, run: npx prettier --write . }',
+        'prettier --write',
+      ],
+      ['a flow mapping with no spaces', '- {run: prettier --write .}', 'prettier --write'],
+      [
+        'the JSON spelling of the same',
+        '- { "name": "Fix", "run": "npx prettier --write ." }',
+        'prettier --write',
+      ],
+      ['a flow mapping using a formatting ACTION', '- { uses: creyD/prettier_action@v4 }', 'uses:'],
       [
         'a flow mapping using an auto-commit action',
         '- { uses: stefanzweifel/git-auto-commit-action@v5 }',
+        'uses:',
       ],
-      ['a flow SEQUENCE item', '- [a, b]'],
-      ['an anchored item whose first key shares the line', '- &fixer run: npx prettier --write .'],
-      ['an alias item', '- *fixer'],
-      ['a bare dash, with the node on the NEXT line', '-\n        { run: npx prettier --write . }'],
+      [
+        'an anchored item whose first key shares the line',
+        '- &fixer { run: npx prettier --write . }',
+        'prettier --write',
+      ],
+      [
+        'a bare dash, with the node on the NEXT line',
+        '-\n        { run: npx prettier --write . }',
+        'prettier --write',
+      ],
     ]
 
-    for (const [label, item] of items) {
+    for (const [label, item, cause] of items) {
       it(`fails on ${label}`, () => {
         const r = checkFormatWorkflow(
           WELL_FORMED.replace(
@@ -1272,13 +1290,25 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
           ),
         )
         expect(r.ok, `${label}: ${r.message}`).toBe(false)
-        expect(r.message, label).toContain('sequence item')
+        expect(r.message, label).toContain(cause)
       })
     }
 
-    // Over-reach: the two sequence-item spellings this reader DOES follow must stay
-    // green — a step written as a block mapping, and a plain scalar item under a
-    // trigger filter.
+    // A `steps:` item that is not a mapping carries no step key at all — and GitHub
+    // refuses to run the file (probe run 33724280781 on PR #477: zero jobs). Rejected
+    // here rather than filtered out silently.
+    it('fails on a sequence item that is not a mapping', () => {
+      const r = checkFormatWorkflow(
+        WELL_FORMED.replace(
+          '      - name: Check formatting\n',
+          '      - [a, b]\n      - name: Check formatting\n',
+        ),
+      )
+      expect(r.ok, r.message).toBe(false)
+      expect(r.message).toContain('not mappings')
+    })
+
+    // Over-reach: an extra block-mapping step and a second branch scalar stay green.
     it('leaves a block-mapping step and a scalar list item alone', () => {
       const extraStep = mutate(
         WELL_FORMED,
@@ -1299,28 +1329,25 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
       )
     })
 
-    // …and shell text inside a `run:` block scalar is not YAML at all: a brace
-    // expansion or a `[` test at the start of a line there must not read as an
-    // unreadable sequence item. The body's own reader is `extractRunBlocks`.
+    // …and shell text inside a `run:` block scalar is not YAML at all: the parser hands
+    // the body over as a string, so a brace expansion, a `[` test or a `*` glob inside a
+    // quoted message is shell and never a sequence item or an alias.
     it('does not read a `run:` block scalar body as YAML structure', () => {
       const shell = mutate(
         WELL_FORMED,
         `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
         `        run: |
-          - { a,b }
-          - [ -d node_modules ] && echo cached
-          -
           echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."
+          echo "Lines like - { a,b } and - [ x ] and * are shell here, not YAML."
 `,
         'the remedy step',
       )
       expect(checkFormatWorkflow(shell).ok, checkFormatWorkflow(shell).message).toBe(true)
+      expect(extractRunBlocks(shell).some(run => run.includes('- { a,b }'))).toBe(true)
     })
   })
 
-  // Over-reach guard: the rule is about the keys read as BLOCKS. A flow SEQUENCE of
-  // branch names and an inline `permissions:` map are both read correctly today, and
-  // rejecting them would fail a correct workflow.
+  // Over-reach guard: the spellings the guard always read correctly stay green.
   it('leaves the flow spellings the guard does read correctly alone', () => {
     const flowBranches = mutate(
       WELL_FORMED,
@@ -1342,6 +1369,46 @@ describe('a flow-style mapping is rejected, never parsed (#413)', () => {
       checkFormatWorkflow(inlinePermissions).ok,
       checkFormatWorkflow(inlinePermissions).message,
     ).toBe(true)
+  })
+})
+
+// The parse is the fail-closed boundary the rejection list used to be. `yaml@2.8.2`
+// refuses a document it cannot resolve unambiguously, and so does GitHub — measured on
+// PR #477: a merge-keyed job (run 33724280781) and an unknown top-level key (run
+// 33724281525) each produced a run with ZERO jobs, i.e. "invalid workflow file".
+describe('a file the parser refuses is a problem, not a pass (#413)', () => {
+  const unparseable: [string, string][] = [
+    ['a duplicate key', 'name: Format\nname: Format\n'],
+    ['a tab indent', 'on:\n\tpush:\n'],
+    ['an alias with no anchor', 'on: *nowhere\n'],
+    ['unbalanced flow punctuation', 'on: { push: { branches: [main] }\n'],
+  ]
+
+  for (const [label, text] of unparseable) {
+    it(`rejects ${label}`, () => {
+      const r = checkFormatWorkflow(text)
+      expect(r.ok, `${label}: ${r.message}`).toBe(false)
+      expect(r.message, label).toContain('not valid YAML')
+    })
+  }
+
+  it('rejects a document that is not a mapping of workflow keys', () => {
+    const r = checkFormatWorkflow('- pull_request\n- push\n')
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('mapping of workflow keys')
+  })
+
+  it('rejects a merge key, which GitHub refuses to run at all', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        'jobs:\n  format:\n',
+        'jobs:\n  base: &base\n    runs-on: ubuntu-latest\n  format:\n    <<: *base\n',
+        'the jobs block',
+      ),
+    )
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('`<<`')
   })
 })
 
@@ -2173,36 +2240,57 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
   })
 
   // The flow-mapping hole, on the file this repo actually runs. Each of the four is
-  // ONE line of valid YAML that GitHub honours, and each left `ok=true` before this
-  // round: a markdown-only PR never format-checked, no PR targeting `main` ever
-  // checked, the check running only after the PR closes, and post-merge drift on
-  // `main` invisible.
-  it('fires on the shipped workflow when a trigger is respelled as a flow mapping', () => {
+  // ONE line of valid YAML that GitHub honours, and each left `ok=true` before round 5:
+  // a markdown-only PR never format-checked, no PR targeting `main` ever checked, the
+  // check running only after the PR closes, and post-merge drift on `main` invisible.
+  // Since the parser migration the SPELLING is read and the SEMANTIC rule is what fires,
+  // so each row asserts its own cause — and the correct flow spelling stays green.
+  it('fires on the shipped workflow when a trigger is respelled as a flow mapping WITH a hole', () => {
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
-    const holes: [string, string][] = [
+    const holes: [string, string, string][] = [
       [
         '  pull_request:\n    branches:\n      - main\n',
         "  pull_request: { branches: [main], paths-ignore: ['**/*.md'] }\n",
+        'paths-ignore',
       ],
       [
         '  pull_request:\n    branches:\n      - main\n',
         '  pull_request: { branches: [release] }\n',
+        'does not cover `main` (release)',
       ],
       [
         '  pull_request:\n    branches:\n      - main\n',
         '  pull_request: { branches: [main], types: [closed] }\n',
+        'dropping opened, synchronize',
       ],
-      ['  push:\n    branches:\n      - main\n', '  push: { branches: [release] }\n'],
+      [
+        '  push:\n    branches:\n      - main\n',
+        '  push: { branches: [release] }\n',
+        'does not cover `main` (release)',
+      ],
     ]
-    for (const [block, flow] of holes) {
+    for (const [block, flow, cause] of holes) {
       const mutated = shipped.replace(block, flow)
       expect(mutated, `${flow}: the shipped file no longer contains the block spelling`).not.toBe(
         shipped,
       )
       const r = checkFormatWorkflow(mutated)
       expect(r.ok, `${flow}: ${r.message}`).toBe(false)
-      expect(r.message).toContain('flow-style')
+      expect(r.message, flow).toContain(cause)
     }
+  })
+
+  it('stays green on the shipped workflow when a correct trigger is respelled as a flow mapping', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      mutate(
+        shipped,
+        '  pull_request:\n    branches:\n      - main\n',
+        '  pull_request: { branches: [main] }\n',
+        'the shipped `pull_request` trigger',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
   })
 
   // The `uses:` writer, on the shipped file. Before the `Check formatting` step this
@@ -2262,19 +2350,22 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
     expect(r.message).toContain('is `worker`, not `format`')
   })
 
-  // Each of these was measured `ok=true` on the shipped file: a step spelled as
-  // anything but a block mapping is invisible to `usesProblems` AND to the write-mode
-  // scan, so inserted before the checking step it rewrites the checkout and the
-  // `format` context goes green on unformatted code (AC6).
+  // Each of these was measured `ok=true` on the shipped file before round 6: a step
+  // spelled as anything but a block mapping was invisible to `usesProblems` AND to the
+  // write-mode scan, so inserted before the checking step it rewrites the checkout and
+  // the `format` context goes green on unformatted code (AC6). The parser resolves each
+  // to the same mapping GitHub runs (probe run 33724282504 on PR #477: the JSON-spelled
+  // step executed), so every step rule now reads it — and names the real cause.
   it('fires on the shipped workflow when a step is spelled as a flow item', () => {
     const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
-    for (const item of [
-      '- { name: Fix, run: npx prettier --write . }',
-      '- {run: prettier --write .}',
-      '- { uses: creyD/prettier_action@v4 }',
-      '- { uses: stefanzweifel/git-auto-commit-action@v5 }',
-      '- { "name": "Fix", "run": "npx prettier --write ." }',
-    ]) {
+    const items: [string, string][] = [
+      ['- { name: Fix, run: npx prettier --write . }', 'prettier --write'],
+      ['- {run: prettier --write .}', 'prettier --write'],
+      ['- { uses: creyD/prettier_action@v4 }', 'uses:'],
+      ['- { uses: stefanzweifel/git-auto-commit-action@v5 }', 'uses:'],
+      ['- { "name": "Fix", "run": "npx prettier --write ." }', 'prettier --write'],
+    ]
+    for (const [item, cause] of items) {
       const r = checkFormatWorkflow(
         shipped.replace(
           '      - name: Check formatting\n',
@@ -2282,8 +2373,23 @@ describe('checkThisRepoFormatWorkflow reads the shipped workflow (#413)', () => 
         ),
       )
       expect(r.ok, `${item}: ${r.message}`).toBe(false)
-      expect(r.message, item).toContain('sequence item')
+      expect(r.message, item).toContain(cause)
     }
+  })
+
+  // …and a correct step spelled as a flow item stays green on the shipped file — the
+  // spelling GitHub accepted in the same probe run.
+  it('stays green on the shipped workflow when a correct step is spelled as a flow item', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      mutate(
+        shipped,
+        '      - name: Check formatting\n',
+        '      - { name: Install dependencies, run: pnpm install }\n      - name: Check formatting\n',
+        'the shipped checking step',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
   })
 
   // The shipped file's own `run: |` block scalar contains shell (`if ! command -v
@@ -2474,9 +2580,9 @@ describe('the checkout step may not choose WHAT is checked out (#413)', () => {
     }
   })
 
-  // A `with:` the reader cannot look inside is rejected as such, never read as "no
-  // inputs" — the same fail-closed direction as every other key.
-  it('fails on a flow-style `with: { ref: main }`, naming the spelling', () => {
+  // The `with:` is READ whatever its spelling — the parser resolves a flow mapping and
+  // an alias to the same inputs GitHub passes the action, so the allow-list decides.
+  it('fails on a flow-style `with: { ref: main }`, naming the input', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
@@ -2486,17 +2592,34 @@ describe('the checkout step may not choose WHAT is checked out (#413)', () => {
       ),
     )
     expect(r.ok).toBe(false)
-    expect(r.message).toContain('flow-style')
-    expect(r.message).toContain('`with`')
+    expect(r.message).toContain('with:')
+    expect(r.message).toContain('`ref`')
   })
 
-  it('fails on `with: *inputs`, naming the alias', () => {
+  it('follows `with: *inputs` to the inputs the alias names', () => {
     const r = checkFormatWorkflow(
-      mutate(WELL_FORMED, CHECKOUT, `${CHECKOUT}        with: *inputs\n`, 'the checkout step'),
+      mutate(
+        WELL_FORMED,
+        CHECKOUT,
+        `      - name: Anchor\n        uses: actions/setup-node@v4\n        with: &inputs\n          ref: main\n${CHECKOUT}        with: *inputs\n`,
+        'the checkout step',
+      ),
     )
     expect(r.ok).toBe(false)
-    expect(r.message).toContain('an alias')
-    expect(r.message).toContain('*inputs')
+    expect(r.message).toContain('with:')
+    expect(r.message).toContain('`ref`')
+  })
+
+  it('stays green on an aliased `with:` carrying only fetch mechanics', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        CHECKOUT,
+        `${CHECKOUT}        with: &inputs\n          fetch-depth: 0\n`,
+        'the checkout step',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
   })
 
   // Fetch mechanics leave the tree as the event's ref — a guard that rejected `fetch-depth: 0`
@@ -2890,10 +3013,11 @@ describe('an indentless block sequence is read, and an alias is named as one (#4
     expect(r.message).toContain('needs: precheck')
   })
 
-  // `on:` as a LIST of events is valid YAML and a valid workflow, but not one this reader
-  // follows (no filter can hang off a list item) — reported as the spelling, not as "has
-  // no pull_request trigger".
-  it('reports `on:` written as an event list as an unreadable spelling', () => {
+  // `on:` as a LIST of events is valid YAML and a valid workflow, and it carries NO
+  // filter — every branch, GitHub's default activity types — which is a SUPERSET of what
+  // this guard requires. Read, therefore, not rejected; what is still RED is a list that
+  // drops an EVENT.
+  it('accepts `on:` written as an event list', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
@@ -2902,111 +3026,154 @@ describe('an indentless block sequence is read, and an alias is named as one (#4
         'the on block',
       ),
     )
-    expect(r.ok).toBe(false)
-    expect(r.message).toContain('list of events')
-    expect(r.message).not.toContain('has no `pull_request` trigger')
+    expect(r.ok, r.message).toBe(true)
   })
 
-  // (b) an alias or anchor on ANY read key is reported as that spelling.
-  const aliased: [string, string, string, string][] = [
+  it('reads an event list that drops `push` and names THAT cause', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        'on:\n  pull_request:\n    branches:\n      - main\n  push:\n    branches:\n      - main\n',
+        'on:\n- pull_request\n',
+        'the on block',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('has no `push` trigger')
+  })
+
+  it('reads a scalar `on: pull_request` and names the missing `push`', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        'on:\n  pull_request:\n    branches:\n      - main\n  push:\n    branches:\n      - main\n',
+        'on: pull_request\n',
+        'the on block',
+      ),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('has no `push` trigger')
+  })
+})
+
+// (b) An ANCHOR names a node; an ALIAS is that node. GitHub resolves both — measured on
+// PR #477, probe run 33724282535: a workflow whose `push.branches` is `*b`, anchored on
+// `pull_request.branches`, RAN on a push to that branch — so a guard that reported the
+// alias as an unreadable spelling was reporting a CORRECT workflow red. The parser
+// resolves them and the semantic rule decides on the resolved value. Rows are the
+// decision table over that domain: the same key, aliased to a value that is fine, and
+// aliased to a value that is a hole.
+describe('an alias resolves to the value it names, and the rule decides (#413)', () => {
+  const aliased: [string, string, string, string | null][] = [
     [
-      'branches',
-      '    branches:\n      - main\n  push:',
-      '    branches: *shared\n  push:',
-      '*shared',
+      '`branches: *shared` anchored on a filter that names `main`',
+      '  pull_request:\n    branches:\n      - main\n  push:\n    branches:\n      - main\n',
+      '  pull_request:\n    branches: &shared\n      - main\n  push:\n    branches: *shared\n',
+      null,
     ],
     [
-      'types',
+      '`branches: *shared` anchored on a filter that misses `main`',
+      '  pull_request:\n    branches:\n      - main\n  push:\n    branches:\n      - main\n',
+      '  pull_request:\n    branches: &shared\n      - release\n  push:\n    branches: *shared\n',
+      'does not cover `main` (release)',
+    ],
+    [
+      '`types:` narrowed through an anchored/aliased list item',
       '  pull_request:\n    branches:\n      - main\n',
-      '  pull_request:\n    branches:\n      - main\n    types: *types\n',
-      '*types',
+      '  pull_request:\n    branches:\n      - main\n    types: [&t closed, *t]\n',
+      'dropping opened, synchronize',
     ],
     [
-      'tags',
+      '`tags: *tags` with no `branches:` beside it',
       '  push:\n    branches:\n      - main\n',
-      '  push:\n    branches:\n      - main\n    tags: *tags\n',
-      '*tags',
+      "  push:\n    tags: &tags\n      - 'v*'\n",
+      'never runs on a push to any branch',
     ],
     [
-      'needs',
+      '`needs: *deps` anchored on a job list',
       '  format:\n    runs-on: ubuntu-latest\n',
-      '  format:\n    needs: *deps\n    runs-on: ubuntu-latest\n',
-      '*deps',
+      '  precheck:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Gate\n        run: pnpm install\n  format:\n    needs: &deps\n      - precheck\n    runs-on: ubuntu-latest\n',
+      'needs: precheck',
     ],
     [
-      'permissions',
+      '`permissions: *perms` anchored on a WRITE scope',
       '    permissions:\n      contents: read\n',
-      '    permissions: *perms\n',
-      '*perms',
+      '    permissions: &perms\n      contents: write\n',
+      'WRITE',
     ],
-    ['group', 'group: format-${{ github.ref }}', 'group: *group', '*group'],
-    ['cancel-in-progress', 'cancel-in-progress: true', 'cancel-in-progress: *cancel', '*cancel'],
-    ['run', '        run: pnpm format:check\n', '        run: *check\n', '*check'],
     [
-      'if',
-      "        if: failure() && steps.format_check.outcome == 'failure'\n",
-      '        if: *guard\n',
-      '*guard',
+      '`group: *group` anchored on a constant',
+      'concurrency:\n  group: format-${{ github.ref }}\n',
+      'concurrency:\n  group: &group format\n',
+      'github.ref',
+    ],
+    [
+      '`cancel-in-progress: *cancel` anchored on `true`',
+      'concurrency:\n  group: format-${{ github.ref }}\n  cancel-in-progress: true\n',
+      'concurrency:\n  group: format-${{ github.ref }}\n  cancel-in-progress: &cancel true\n',
+      null,
+    ],
+    [
+      'an anchor on a value (`group: &g format-${{ github.ref }}`)',
+      'group: format-${{ github.ref }}',
+      'group: &g format-${{ github.ref }}',
+      null,
+    ],
+    [
+      'an anchored trigger key (`pull_request: &filters`)',
+      '  pull_request:\n',
+      '  pull_request: &filters\n',
+      null,
     ],
   ]
 
-  for (const [key, from, to, alias] of aliased) {
-    it(`names the alias on \`${key}: ${alias}\``, () => {
-      const r = checkFormatWorkflow(mutate(WELL_FORMED, from, to, `the ${key} key`))
-      expect(r.ok, `${key}: ${r.message}`).toBe(false)
-      expect(r.message, key).toContain('an alias')
-      expect(r.message, key).toContain(alias)
+  for (const [label, from, to, cause] of aliased) {
+    it(`${cause === null ? 'accepts' : 'fails on'} ${label}`, () => {
+      const r = checkFormatWorkflow(mutate(WELL_FORMED, from, to, label))
+      if (cause === null) {
+        expect(r.ok, `${label}: ${r.message}`).toBe(true)
+        return
+      }
+      expect(r.ok, `${label}: ${r.message}`).toBe(false)
+      expect(r.message, label).toContain(cause)
     })
   }
 
-  it('does not misreport `branches: *shared` as a missing branch', () => {
+  // An aliased STEP is a whole step the write-mode scan used to lose. The parser puts it
+  // back, so the alias is scanned exactly like the node it names.
+  it('follows an aliased step into the write-mode scan', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
-        '    branches:\n      - main\n  push:',
-        '    branches: *shared\n  push:',
-        'the pull_request branch filter',
+        '      - name: Check formatting\n',
+        '      - &fixer\n        name: Fix\n        run: npx prettier --write .\n      - *fixer\n      - name: Check formatting\n',
+        'the checking step',
       ),
     )
     expect(r.ok).toBe(false)
-    expect(r.message).not.toContain('no branch')
+    expect(r.message).toContain('prettier --write')
   })
 
-  it('names an anchor on a value (`group: &g format-${{ github.ref }}`)', () => {
+  it('accepts an aliased step that is an allow-listed one', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
-        'group: format-${{ github.ref }}',
-        'group: &g format-${{ github.ref }}',
-        'the group',
+        '      - name: Checkout code\n        uses: actions/checkout@v4\n',
+        '      - &checkout\n        name: Checkout code\n        uses: actions/checkout@v4\n      - *checkout\n',
+        'the checkout step',
       ),
     )
-    expect(r.ok).toBe(false)
-    expect(r.message).toContain('an anchor')
-    expect(r.message).toContain('&g')
+    expect(r.ok, r.message).toBe(true)
   })
 
-  it('reports an anchored trigger key exactly once', () => {
-    const r = checkFormatWorkflow(
-      mutate(
-        WELL_FORMED,
-        '  pull_request:\n',
-        '  pull_request: &filters\n',
-        'the pull_request key',
-      ),
-    )
-    expect(r.ok).toBe(false)
-    expect(r.message.split('an anchor value').length - 1).toBe(1)
-  })
-
-  // Shell is not YAML: a `*` at line start inside a `run: |` body (a `case` pattern) is
-  // not an alias, and a guard that fails a correct workflow is the kind that gets weakened.
+  // Shell is not YAML: the parser hands a `run:` body over as a string, so a `*` at the
+  // start of a line inside it (a `case` pattern, a glob) is never an alias.
   it('leaves a `*` inside a run block scalar alone', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
         `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
-        `        run: |\n          case "$RUNNER_OS" in\n            Linux) echo linux ;;\n            *) echo "::error::Not formatted. Run 'pnpm format' locally." ;;\n          esac\n`,
+        `        run: |\n          echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n          echo "* and & are shell here, not YAML."\n`,
         'the remedy step',
       ),
     )
@@ -3162,12 +3329,12 @@ describe('a step outside the check and its remedy runs only the toolchain instal
 
   // The remedy's shell stays deny-list scanned (it runs after the check, on the failure
   // path): its message may say what it needs to.
-  it('leaves the remedy step outside the allow-list', () => {
+  it('leaves the remedy step outside the TOOLCHAIN allow-list (it has its own)', () => {
     const r = checkFormatWorkflow(
       mutate(
         WELL_FORMED,
         `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`,
-        `        run: |\n          echo "::error::Not formatted. Run 'pnpm format' locally."\n          echo "See the step above for the files."\n          exit 1\n`,
+        `        run: |\n          echo "::error::Not formatted. Run 'pnpm format' locally."\n          echo "See the step above for the files."\n`,
         'the remedy step',
       ),
     )
@@ -3424,5 +3591,213 @@ describe('a quoted `run:` scalar, CRLF line endings and workflow-level permissio
     expect(checkFormatWorkflow(crlf).ok, checkFormatWorkflow(crlf).message).toBe(true)
     const inherited = atWorkflowLevel(shipped, '  contents: read\n', null)
     expect(checkFormatWorkflow(inherited).ok, checkFormatWorkflow(inherited).message).toBe(true)
+  })
+})
+
+// Every key that decides WHAT or HOW the check runs was allow-listed on the checking
+// STEP — and a job-level or workflow-level key reaches that step anyway, so the step
+// rule was bypassable by RELOCATION, the same shape as the `working-directory:` /
+// `defaults:` pair. `env:` is the measured case, end to end:
+//   node prettier/bin/prettier.cjs --list-different bad.ts            → prints `bad.ts`, exit 1
+//   NODE_OPTIONS=--require=$PWD/shim.js node … --list-different bad.ts → prints `bad.ts`, exit 0
+// (`shim.js` is one line: `process.on('exit', () => { process.exitCode = 0 })`; prettier
+// is the repo's own pinned 3.6.2.) And a job-level `env:` DOES reach a step that declares
+// none of its own — GitHub probe run 33724282486 on PR #477 logged `D5-JOB-ENV=from-job-env`.
+// So `pnpm format:check` still NAMES the offending file and the `format` context reports
+// SUCCESS on unformatted code: the `with: ref: main` loss class (run 33635537234), spelled
+// as a job key.
+describe('the workflow and its jobs carry only allow-listed keys (#413)', () => {
+  const JOB_HEADER = '  format:\n    runs-on: ubuntu-latest\n'
+
+  const jobKeys: [string, string][] = [
+    [
+      '`env:` carrying NODE_OPTIONS',
+      '  format:\n    env:\n      NODE_OPTIONS: --require ./scripts/shim.js\n    runs-on: ubuntu-latest\n',
+    ],
+    [
+      '`container:`, third-party code as a job key',
+      '  format:\n    container: node:20\n    runs-on: ubuntu-latest\n',
+    ],
+    [
+      '`services:`',
+      '  format:\n    services:\n      redis:\n        image: redis\n    runs-on: ubuntu-latest\n',
+    ],
+    ['`environment:`', '  format:\n    environment: production\n    runs-on: ubuntu-latest\n'],
+    ['`outputs:`', '  format:\n    outputs:\n      files: x\n    runs-on: ubuntu-latest\n'],
+    [
+      '`concurrency:` on the job',
+      '  format:\n    concurrency: format\n    runs-on: ubuntu-latest\n',
+    ],
+  ]
+
+  for (const [label, header] of jobKeys) {
+    it(`fails on a job declaring ${label}`, () => {
+      const r = checkFormatWorkflow(mutate(WELL_FORMED, JOB_HEADER, header, label))
+      expect(r.ok, `${label}: ${r.message}`).toBe(false)
+      expect(r.message, label).toContain('a job may carry only')
+    })
+  }
+
+  it('fires on the SHIPPED workflow when the job gains an `env:`', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      mutate(
+        shipped,
+        '  format:\n    runs-on: ubuntu-latest\n',
+        '  format:\n    env:\n      NODE_OPTIONS: --require ./scripts/shim.js\n    runs-on: ubuntu-latest\n',
+        'the shipped job header',
+      ),
+    )
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('`env`')
+  })
+
+  it('fails on a workflow-level `env:`, which every job and step inherits', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        'jobs:\n',
+        'env:\n  NODE_OPTIONS: --require ./scripts/shim.js\njobs:\n',
+        'the jobs key',
+      ),
+    )
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('at workflow level')
+    expect(r.message).toContain('`env`')
+  })
+
+  // GitHub itself refuses an unknown top-level key — probe run 33724281525 on PR #477
+  // (`x-base:` beside `on:`/`jobs:`) produced a run with ZERO jobs, i.e. invalid workflow
+  // file. The allow-list agrees with the producer rather than tolerating it.
+  it('fails on an unknown top-level key, which GitHub rejects outright', () => {
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, 'jobs:\n', 'x-base:\n  runs-on: ubuntu-latest\njobs:\n', 'the jobs key'),
+    )
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('at workflow level')
+    expect(r.message).toContain('`x-base`')
+  })
+
+  // Over-reach: every key the workflow legitimately carries stays green, and the keys
+  // owned by a rule of their own keep reporting THAT rule's message, not the generic one.
+  it('accepts the keys the workflow and its job actually need', () => {
+    const r = checkFormatWorkflow(
+      mutate(
+        WELL_FORMED,
+        '  format:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n',
+        '  format:\n    name: format\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    permissions:\n      contents: read\n',
+        'the job header',
+      ),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  it('accepts a workflow-level `permissions:` and `name:`', () => {
+    const r = checkFormatWorkflow(
+      mutate(WELL_FORMED, 'jobs:\n', 'permissions:\n  contents: read\njobs:\n', 'the jobs key'),
+    )
+    expect(r.ok, r.message).toBe(true)
+  })
+
+  const ownedElsewhere: [string, string, string][] = [
+    ['if', "  format:\n    if: github.event_name == 'push'\n    runs-on: ubuntu-latest\n", 'if:'],
+    [
+      'strategy',
+      '  format:\n    strategy:\n      matrix:\n        node: [20]\n    runs-on: ubuntu-latest\n',
+      'strategy',
+    ],
+    [
+      'defaults',
+      '  format:\n    defaults:\n      run:\n        working-directory: packages/dev-tools\n    runs-on: ubuntu-latest\n',
+      'defaults',
+    ],
+  ]
+
+  for (const [key, header, cause] of ownedElsewhere) {
+    it(`reports \`${key}:\` through its own rule, not the key allow-list`, () => {
+      const r = checkFormatWorkflow(mutate(WELL_FORMED, JOB_HEADER, header, key))
+      expect(r.ok, `${key}: ${r.message}`).toBe(false)
+      expect(r.message, key).toContain(cause)
+      expect(r.message, key).not.toContain('a job may carry only')
+    })
+  }
+})
+
+// The remedy's shell was the module's LAST deny-list (write-mode formatters, `${{`,
+// `secrets.`), and it fell to the argument that retired the `uses:` and `with:` ones: a
+// deny-list of formatters waves through the next formatter published. Measured on the
+// shipped file before this rule: a remedy body of `echo "::error…pnpm format"` +
+// `npx dprint fmt` + `git commit -am style && git push` → ok=TRUE. The remedy SAYS what
+// to run; it does not run anything.
+describe('a failure-path step only says what to run (#413)', () => {
+  const REMEDY = `        run: echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`
+  const remedyBody = (body: string) =>
+    mutate(WELL_FORMED, REMEDY, `        run: |\n${body}`, 'the remedy step')
+  const KEEP = `          echo "::error::Not formatted. Run 'pnpm format' locally and commit the result."\n`
+
+  const banned: [string, string][] = [
+    ['a formatter no offender list names', '          npx dprint fmt\n'],
+    ['an auto-commit', '          git commit -am style && git push\n'],
+    ['a checkout rewrite', '          git checkout origin/main -- .\n'],
+    ['a command substitution inside the message', '          echo "$(prettier --write .)"\n'],
+    ['a backtick substitution', '          echo "`prettier --write .`"\n'],
+    ['an unquoted echo argument', '          echo pnpm format && rm -rf .\n'],
+  ]
+
+  for (const [label, extra] of banned) {
+    it(`fails on a remedy that also runs ${label}`, () => {
+      const r = checkFormatWorkflow(remedyBody(`${KEEP}${extra}`))
+      expect(r.ok, `${label}: ${r.message}`).toBe(false)
+    })
+  }
+
+  it('names the remedy allow-list as the cause of the dprint row', () => {
+    const r = checkFormatWorkflow(remedyBody(`${KEEP}          npx dprint fmt\n`))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('REMEDY_COMMAND_LINES')
+  })
+
+  it('fires on the SHIPPED workflow when the remedy gains a formatter', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    const r = checkFormatWorkflow(
+      mutate(
+        shipped,
+        '          echo "::error title=Formatting check failed::The files listed in the previous step are not formatted. Run \'pnpm format\' locally, commit the result, and push again. CI never rewrites your branch."\n',
+        '          echo "::error title=Formatting check failed::The files listed in the previous step are not formatted. Run \'pnpm format\' locally, commit the result, and push again. CI never rewrites your branch."\n          npx dprint fmt\n',
+        'the shipped remedy body',
+      ),
+    )
+    expect(r.ok, r.message).toBe(false)
+    expect(r.message).toContain('REMEDY_COMMAND_LINES')
+  })
+
+  const accepted: [string, string][] = [
+    ['a single-quoted echo', `          echo '::error::Not formatted. Run pnpm format locally.'\n`],
+    ['two quoted echoes', `${KEEP}          echo "See the step above for the file list."\n`],
+    [
+      'an echo with a flag',
+      `          echo -e "::error::Not formatted. Run 'pnpm format' locally."\n`,
+    ],
+    ['a printf', `          printf '%s\\n' "::error::Not formatted. Run 'pnpm format' locally."\n`],
+  ]
+
+  for (const [label, body] of accepted) {
+    it(`accepts a remedy that is ${label}`, () => {
+      const r = checkFormatWorkflow(remedyBody(body))
+      expect(r.ok, `${label}: ${r.message}`).toBe(true)
+    })
+  }
+
+  it('accepts the shipped remedy, which is one quoted echo', () => {
+    const shipped = readFileSync(FORMAT_WORKFLOW, 'utf-8')
+    expect(checkFormatWorkflow(shipped).ok).toBe(true)
+  })
+
+  // The remedy still has to NAME the remedy — the allow-list narrows the shell, it does
+  // not replace AC1's content rule.
+  it('still fails when the allow-listed echo says nothing about `pnpm format`', () => {
+    const r = checkFormatWorkflow(remedyBody('          echo "::error::Something went wrong."\n'))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('names the remedy')
   })
 })

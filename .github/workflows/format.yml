@@ -16,11 +16,14 @@
 # THE SHAPE OF THIS FILE IS ASSERTED, so a red `pnpm test` (or `pnpm
 # gate:composition`) on an edit here is expected, not a flake: every trigger, filter,
 # key, action, input, command and condition is an allow-list, read by
-# packages/dev-tools/src/quality-gates/format-workflow-composition.ts. That module's
-# header is the rule inventory and the reason for each rule (block style only, the
-# exact checking command, the checkout's inputs, the toolchain-only install shell,
-# the scoped remedy, …); the per-block notes below say only what is not obvious from
-# the YAML itself.
+# packages/dev-tools/src/quality-gates/format-workflow-composition.ts. That guard
+# PARSES this file with `yaml@2.8.2`, so the SPELLING is free (flow style, anchors,
+# aliases, JSON steps, CRLF all resolve to the same document GitHub runs) and only
+# the meaning is constrained. That module's header is the rule inventory and the
+# reason for each rule (the exact checking command, the checkout's inputs, the
+# workflow/job/step key allow-lists, the toolchain-only install shell, the say-only
+# remedy, …); the per-block notes below say only what is not obvious from the YAML
+# itself.
 
 name: Format
 
