@@ -296,9 +296,40 @@ function bodyStart(lines: readonly string[]): number {
   return close > 0 ? close + 1 : 0
 }
 
-/** A fence opener/closer: 3+ backticks or tildes, indented at most 3 spaces (CommonMark). */
-function fenceRunOf(line: string): string | undefined {
-  return /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1]
+/**
+ * A fence marker line: 3+ backticks or tildes indented at most 3 spaces, split into the
+ * RUN and the INFO STRING after it (CommonMark § 4.5). Both halves are load-bearing —
+ * a closer may carry no info string, and a backtick fence's info string may carry no
+ * backtick — and reading the run alone gets both wrong in the direction that ships:
+ * `` ```bash `` inside an open ```markdown block was read as a closer, so the headings
+ * below it entered the slug set as anchors github.com does not serve (a dead citation
+ * then PASSES) while the real headings after the true closer fell out (a live one goes
+ * red). Probed: `# Doc` / ```` ```markdown ```` / `## Inner` / ```` ```bash ```` /
+ * `## Phantom` / ```` ``` ```` / `## Real` renders `#doc` + `#real` on github.com and
+ * gave `doc` + `phantom` here.
+ */
+function fenceMarkerOf(line: string): { run: string; info: string } | undefined {
+  const m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+  return m?.[1] === undefined ? undefined : { run: m[1], info: m[2] ?? '' }
+}
+
+/** Does this marker CLOSE the open run? Same char, at least as long, NO info string. */
+function closesFence(open: string, marker: { run: string; info: string } | undefined): boolean {
+  return (
+    marker !== undefined &&
+    marker.run[0] === open[0] &&
+    marker.run.length >= open.length &&
+    marker.info.trim() === ''
+  )
+}
+
+/**
+ * The run this marker OPENS. A backtick fence whose info string carries a backtick opens
+ * nothing — the line is ordinary paragraph text, and the headings under it are real.
+ */
+function opensFence(marker: { run: string; info: string } | undefined): string | undefined {
+  if (marker === undefined) return undefined
+  return marker.run[0] === '`' && marker.info.includes('`') ? undefined : marker.run
 }
 
 /** The heading TEXT a line carries, if it is an ATX heading (`## X`, optional closing `#`s). */
@@ -327,13 +358,14 @@ function* anchorBearingLines(markdown: string): Generator<{ line: string; prev: 
   let fence: string | undefined
   for (let i = start; i < lines.length; i++) {
     const line = lines[i] ?? ''
-    const run = fenceRunOf(line)
+    const marker = fenceMarkerOf(line)
     if (fence !== undefined) {
-      if (run !== undefined && run[0] === fence[0] && run.length >= fence.length) fence = undefined
+      if (closesFence(fence, marker)) fence = undefined
       continue
     }
-    if (run !== undefined) {
-      fence = run
+    const opened = opensFence(marker)
+    if (opened !== undefined) {
+      fence = opened
       continue
     }
     yield { line, prev: i > start ? (lines[i - 1] ?? '') : '' }
@@ -461,14 +493,45 @@ function editDistance(a: string, b: string): number {
 const MAX_ANCHOR_SUGGESTIONS = 3
 const MAX_ANCHOR_DISTANCE = 3
 
+/**
+ * How far a candidate may sit from the dead fragment: the absolute budget AND half the
+ * longer of the two, whichever is smaller.
+ *
+ * The absolute bound alone is meaningless on short strings — at 3 edits EVERY 3-code-
+ * point slug in the file is "near" any 3-code-point fragment, so `#zzz` in a file of
+ * `## Cat` / `## Dog` / `## Elk` came back "did you mean #cat or #dog or #elk?". That is
+ * worse than silence: a developer who takes the advice writes an anchor that RESOLVES,
+ * the gate then prints PASS, and the reader lands on an unrelated section — the silent
+ * wrong-destination anchor this fragment check exists to catch, induced by the check.
+ * The relative half caps the offer at a genuine near-miss (the motivating case, an
+ * invisible code point, is distance 1 on a 20-code-point slug).
+ */
+function anchorDistanceBudget(fragment: string, slug: string): number {
+  const longer = Math.max([...fragment].length, [...slug].length)
+  return Math.min(MAX_ANCHOR_DISTANCE, Math.floor(longer / 2))
+}
+
 /** The headings closest to a dead fragment: an invisible-code-point miss is distance 1. */
 function nearestSlugs(fragment: string, slugs: ReadonlySet<string>): string[] {
   return [...slugs]
     .map(slug => ({ slug, d: editDistance(fragment, slug) }))
-    .filter(c => c.d <= MAX_ANCHOR_DISTANCE)
+    .filter(c => c.d <= anchorDistanceBudget(fragment, c.slug))
     .sort((a, b) => a.d - b.d || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
     .slice(0, MAX_ANCHOR_SUGGESTIONS)
     .map(c => c.slug)
+}
+
+/**
+ * A candidate, rendered so it is both READABLE and PASTEABLE: the `\u{…}` escape makes
+ * it distinguishable from the dead spelling, and the raw `(copy: …)` form is the bytes
+ * the developer must actually type. Escape-only advice was a dead end — following it
+ * literally (`#\u{FE0F}-essential-commands`, ASCII) left the citation dead AND, being 9
+ * code points from the real slug, stripped the candidate from the second message too.
+ * Omitted when escaping is a no-op, so an ordinary typo hint stays one string.
+ */
+function renderCandidate(slug: string): string {
+  const escaped = escapeForDiagnostic(slug)
+  return escaped === slug ? `#${escaped}` : `#${escaped} (copy: #${slug})`
 }
 
 /**
@@ -483,10 +546,7 @@ function anchorError(kind: string, path: string, fragment: string, root: string)
   const slugs = collectHeadingSlugs(readFileSync(join(root, path), 'utf-8'))
   if (slugs.has(fragment)) return null
   const near = nearestSlugs(fragment, slugs)
-  const hint =
-    near.length === 0
-      ? ''
-      : `; did you mean ${near.map(s => `#${escapeForDiagnostic(s)}`).join(' or ')}?`
+  const hint = near.length === 0 ? '' : `; did you mean ${near.map(renderCandidate).join(' or ')}?`
   return `${path}#${escapeForDiagnostic(fragment)} — no heading in that file slugs to it${hint}`
 }
 
