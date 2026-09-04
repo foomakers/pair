@@ -117,6 +117,31 @@ describe('existsCaseSensitive — real filesystem', () => {
     expect(miss.siblings).toEqual(['Deep.md'])
   })
 
+  /**
+   * WHERE it stopped is an INDEX, not a name. A path may repeat a segment name
+   * (`apps/website/apps/x.md`), and a caller that re-finds the failing segment by
+   * `indexOf` rewrites the FIRST occurrence — a different path than the one being
+   * repaired. So the walk carries the depth it stopped at, and the collapsed segments
+   * it actually walked, and the caller splices rather than searches.
+   */
+  it('reports the DEPTH it stopped at, so a repeated segment name is unambiguous', () => {
+    const miss = resolveCaseSensitiveSync(root, 'Docs/Sub/Docs/x.md')
+    expect(miss.kind).toBe('missing')
+    if (miss.kind !== 'missing') return
+    expect(miss.segment).toBe('Docs')
+    expect(miss.depth).toBe(2)
+    expect(miss.segments).toEqual(['Docs', 'Sub', 'Docs', 'x.md'])
+  })
+
+  it('carries the DOT-SEGMENT-COLLAPSED segments, the ones actually walked', () => {
+    const miss = resolveCaseSensitiveSync(root, 'Docs/./Sub/../Sub/deep.md')
+    expect(miss.kind).toBe('missing')
+    if (miss.kind !== 'missing') return
+    expect(miss.segments).toEqual(['Docs', 'Sub', 'deep.md'])
+    expect(miss.depth).toBe(2)
+    expect(miss.segments[miss.depth]).toBe(miss.segment)
+  })
+
   it('reports no siblings when the parent itself cannot be listed', () => {
     // The parent here is a FILE, so `readdir` throws and there is nothing to suggest.
     const miss = resolveCaseSensitiveSync(root, 'Docs/Guide.md/extra')
