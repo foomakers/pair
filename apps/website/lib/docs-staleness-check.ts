@@ -310,12 +310,39 @@ function maskLiteralConstructs(surface: string): string {
   return out + surface.slice(at)
 }
 
+/**
+ * The scanned surface, masked BLOCK-LOCALLY.
+ *
+ * Both masked constructs may wrap a newline, so masking cannot run per leaf line —
+ * but it must not run over the whole joined document either: neither construct can
+ * cross a blank line on the real renderer, so an opener in one block pairing with a
+ * closer in another blanks every URL between them. That direction is a SILENT
+ * false-green (a dead citation shipped unchecked), which ADL 2026-09-03 names the
+ * worse one. MEASURED on the site oracle at `d745f4d1`: a probe page carrying two
+ * stray backticks in separate blocks with three URLs between them prerendered ALL
+ * THREE as `<a href>`, while the gate blanked and never checked them.
+ *
+ * The group boundary is READ FROM THE READER, never guessed from the bytes:
+ * `readMarkdown`'s leaf events carry the paragraph accumulator as it stood BEFORE the
+ * line, so `paragraph.length === 0` marks the first line of a fresh block — which is
+ * exactly where a blank line, a heading, a setext underline or a thematic break reset
+ * it. Groups are masked independently and rejoined with '\n', so the line count is
+ * unchanged and a reported line still counts.
+ */
 function linkSurface(content: string): string {
-  const lines: string[] = []
-  for (const ev of readMarkdown(content, { frontmatter: true, mdx: true })) {
-    if (ev.kind === 'leaf') lines.push(ev.text)
+  const masked: string[] = []
+  let block: string[] = []
+  const flush = (): void => {
+    if (block.length > 0) masked.push(maskLiteralConstructs(block.join('\n')))
+    block = []
   }
-  return maskLiteralConstructs(lines.join('\n'))
+  for (const ev of readMarkdown(content, { frontmatter: true, mdx: true })) {
+    if (ev.kind !== 'leaf') continue
+    if (ev.paragraph.length === 0) flush()
+    block.push(ev.text)
+  }
+  flush()
+  return masked.join('\n')
 }
 
 /**
