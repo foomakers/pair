@@ -27,7 +27,7 @@
     "hygiene:check": "pnpm --filter @pair/dev-tools code-hygiene:check",
     "smoke-modes:check": "pnpm --filter @pair/dev-tools smoke-modes:check",
     "sync-version": "pnpm --filter @pair/dev-tools sync-version",
-    "docs:staleness": "pnpm --filter @pair/website docs:staleness",
+    "docs:staleness": "turbo run docs:staleness --filter @pair/website",
     "skills:conformance": "pnpm --filter @pair/knowledge-hub skills:conformance",
     "dup:check": "jscpd apps packages",
     "quality-gate": "turbo ts:check test lint && pnpm workflows:test && pnpm format:check && pnpm gate:composition && pnpm hygiene:check && pnpm smoke-modes:check && pnpm docs:staleness && pnpm skills:conformance && pnpm dup:check",

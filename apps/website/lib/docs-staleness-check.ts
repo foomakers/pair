@@ -16,6 +16,13 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join, relative, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  readMarkdown,
+  atxHeadingText,
+  isSetextUnderline,
+  HTML_KINDS_RENDERING_ANCHORS,
+  type MarkdownEvent,
+} from '@pair/content-ops/markdown/commonmark-blocks'
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -245,18 +252,42 @@ const LINE_ANCHOR_RE = /^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$/
  * is what github.com slugs. `#### [Templates](templates/README.md)` is anchored
  * `#templates` on the real site — slugging the raw line instead yields
  * `templatestemplatesreadmemd` and would fail the build on a live anchor.
+ *
+ * A CODE SPAN is not markup, it is literal text, and stripping the two together got it
+ * wrong on a live heading: `### \`--root <issue-id>\` — subtree scope` is anchored
+ * `#--root-issue-id--subtree-scope` on github.com, and reading `<issue-id>` as inline
+ * HTML computed `#--root---subtree-scope` — a dead spelling for the one live anchor of
+ * `pair-next`'s scope argument, in three files (`.claude/skills/pair-next/SKILL.md`,
+ * its dataset mirror, `docs/reference/pair-next.mdx`). Same for `\`[a](b)\``, which
+ * github anchors `#ab` (the brackets are text, not a link), and for `\`_snake_case_\``,
+ * which keeps its underscores.
+ *
+ * So the code spans come out FIRST, as opaque placeholders carrying no character the
+ * strip chain reacts to; the chain runs on what is left — which is why a link WRAPPING
+ * a code span still resolves (`[\`Templates\`](t/README.md)` → `#templates-link`) — and
+ * their literal content goes back in afterwards. A stray unmatched backtick is not a
+ * span at all and is simply dropped, as github does.
+ *
+ * The placeholder is a PRIVATE-USE code point pair, not NUL: it must survive the chain
+ * untouched, and it must not be a character a heading could plausibly contain.
  */
+const CODE_SPAN_RE = /(`+)([\s\S]*?)\1/g
+
 function renderedHeadingText(heading: string): string {
-  return (
-    heading
-      .replace(/`+/g, '') // code spans
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // links + images -> their text
-      .replace(/<[^>]+>/g, '') // inline HTML
-      .replace(/\*+/g, '') // asterisk emphasis / strong
-      // Underscore emphasis is word-BOUNDED: `_italic_` is markup, `snake_case` is text.
-      .replace(/(^|[^\p{L}\p{N}_])_+/gu, '$1')
-      .replace(/_+(?=[^\p{L}\p{N}_]|$)/gu, '')
-  )
+  const spans: string[] = []
+  const masked = heading.replace(CODE_SPAN_RE, (_all, _ticks, body: string) => {
+    spans.push(body)
+    return `\uE000${spans.length - 1}\uE001`
+  })
+  const stripped = masked
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // links + images -> their text
+    .replace(/<[^>]+>/g, '') // inline HTML
+    .replace(/`+/g, '') // a stray, unmatched backtick
+    .replace(/\*+/g, '') // asterisk emphasis / strong
+    // Underscore emphasis is word-BOUNDED: `_italic_` is markup, `snake_case` is text.
+    .replace(/(^|[^\p{L}\p{N}_])_+/gu, '$1')
+    .replace(/_+(?=[^\p{L}\p{N}_]|$)/gu, '')
+  return stripped.replace(/\uE000(\d+)\uE001/g, (_all, i: string) => spans[Number(i)] ?? '')
 }
 
 /**
@@ -282,99 +313,35 @@ function renderedHeadingText(heading: string): string {
  * package, with `gh api -X POST /markdown -f text='## <heading>'`.
  */
 export function slugifyHeading(heading: string): string {
-  return renderedHeadingText(heading)
-    .trim()
+  // The trim is on the RAW heading, before any inline markup comes out: github trims the
+  // heading's own text and nothing after that. `## \`<x>\` vs <x>` anchors `#x-vs-` —
+  // the trailing hyphen is the space the stripped inline HTML left behind — exactly as
+  // `## 🎯 Quick Start` anchors `#-quick-start` from the space the dropped emoji left.
+  return renderedHeadingText(heading.trim())
     .toLowerCase()
     .replace(/[^\p{Alphabetic}\p{M}\p{Nd}\p{Pc}\p{Join_Control}\- ]/gu, '')
     .replace(/ /g, '-')
 }
 
-/** Where the markdown body starts: after YAML frontmatter, if the file opens with it. */
-function bodyStart(lines: readonly string[]): number {
-  if (lines[0]?.trim() !== '---') return 0
-  const close = lines.findIndex((l, i) => i > 0 && l.trim() === '---')
-  return close > 0 ? close + 1 : 0
-}
-
-/**
- * A fence marker line: 3+ backticks or tildes indented at most 3 spaces, split into the
- * RUN and the INFO STRING after it (CommonMark § 4.5). Both halves are load-bearing —
- * a closer may carry no info string, and a backtick fence's info string may carry no
- * backtick — and reading the run alone gets both wrong in the direction that ships:
- * `` ```bash `` inside an open ```markdown block was read as a closer, so the headings
- * below it entered the slug set as anchors github.com does not serve (a dead citation
- * then PASSES) while the real headings after the true closer fell out (a live one goes
- * red). Probed: `# Doc` / ```` ```markdown ```` / `## Inner` / ```` ```bash ```` /
- * `## Phantom` / ```` ``` ```` / `## Real` renders `#doc` + `#real` on github.com and
- * gave `doc` + `phantom` here.
- */
-function fenceMarkerOf(line: string): { run: string; info: string } | undefined {
-  const m = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line)
-  return m?.[1] === undefined ? undefined : { run: m[1], info: m[2] ?? '' }
-}
-
-/** Does this marker CLOSE the open run? Same char, at least as long, NO info string. */
-function closesFence(open: string, marker: { run: string; info: string } | undefined): boolean {
-  return (
-    marker !== undefined &&
-    marker.run[0] === open[0] &&
-    marker.run.length >= open.length &&
-    marker.info.trim() === ''
-  )
-}
-
-/**
- * The run this marker OPENS. A backtick fence whose info string carries a backtick opens
- * nothing — the line is ordinary paragraph text, and the headings under it are real.
- */
-function opensFence(marker: { run: string; info: string } | undefined): string | undefined {
-  if (marker === undefined) return undefined
-  return marker.run[0] === '`' && marker.info.includes('`') ? undefined : marker.run
-}
-
-/** The heading TEXT a line carries, if it is an ATX heading (`## X`, optional closing `#`s). */
-function atxHeadingOf(line: string): string | undefined {
-  return /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line)?.[1]
-}
-
-/**
- * Is `underline` a setext underline for `prev`? `===`/`---` alone under a non-blank
- * line. A table separator carries pipes and a list/quote/heading marker leads its line,
- * so none of them is read as a heading.
- */
-function isSetextUnderline(underline: string, prev: string): boolean {
-  if (!/^ {0,3}(=+|-+)\s*$/.test(underline)) return false
-  return prev.trim() !== '' && !/^ {0,3}([#>|]|[-*+] |\d+\. )/.test(prev)
-}
-
-/**
- * The markdown lines that can carry an anchor, paired with the line above them (the
- * setext candidate): YAML frontmatter and fenced code blocks are skipped, so a
- * `# comment` in a shell block is never read as a heading.
- */
-function* anchorBearingLines(markdown: string): Generator<{ line: string; prev: string }> {
-  const lines = markdown.split('\n')
-  const start = bodyStart(lines)
-  let fence: string | undefined
-  for (let i = start; i < lines.length; i++) {
-    const line = lines[i] ?? ''
-    const marker = fenceMarkerOf(line)
-    if (fence !== undefined) {
-      if (closesFence(fence, marker)) fence = undefined
-      continue
-    }
-    const opened = opensFence(marker)
-    if (opened !== undefined) {
-      fence = opened
-      continue
-    }
-    yield { line, prev: i > start ? (lines[i - 1] ?? '') : '' }
-  }
-}
-
 /**
  * Every anchor a markdown file offers: ATX (`## X`) and setext (`X` over `===`/`---`)
  * headings, plus explicit `<a name>`/`<a id>` anchors.
+ *
+ * WHICH LINES those are is `@pair/content-ops`'s `readMarkdown` — the SAME container-
+ * and HTML-block-aware CommonMark block reader the knowledge-hub conformance sweep
+ * uses, so one grammar fix lands in both. Reading lines at document level only made
+ * this gate disagree with github.com in both directions: the live
+ * `apps/pair-cli/CHANGELOG.md#release-v020---enhanced-cli-distribution--documentation`
+ * (an ATX heading inside a list item, one of five such CHANGELOGs) failed the build,
+ * while `# Doc` / `<div>` / `## InDiv` / `</div>` / `## Real` served a phantom `#indiv`
+ * that PASSES the gate and 404s for every reader.
+ *
+ * An explicit `<a name>` is read from leaf lines and from the HTML blocks github.com
+ * still renders (`HTML_KINDS_RENDERING_ANCHORS`), never from a code fence, an indented
+ * code block or an HTML comment.
+ *
+ * A SETEXT heading's text is the WHOLE paragraph above the underline, not its last
+ * line: `Some paragraph` / `line two` / `---` anchors `#some-paragraphline-two`.
  *
  * A repeated slug is disambiguated by github.com's rule, which is a SKIP-UNTIL-FREE
  * loop and not a per-base occurrence counter: the candidate `${base}-${n}` is retried
@@ -389,11 +356,49 @@ function* anchorBearingLines(markdown: string): Generator<{ line: string; prev: 
  * github.com's slugger has: an explicit `<a name>` is separate HTML it never consults,
  * so it must not push a later duplicate heading forward.
  */
-export function collectHeadingSlugs(markdown: string): Set<string> {
-  const slugs = new Set<string>()
+/**
+ * An explicit anchor is ANY tag's `id`/`name`, not only `<a>`'s, and the value may be
+ * double-quoted, single-quoted or bare: github.com rewrites every one of them to
+ * `user-content-<value>`, so `<div id="x">`, `<h2 id="x">` and `<div id=x>` are all live
+ * `#x` anchors a reader can reach. Reading `<a …>` alone called
+ * `framework-patterns/components.md`'s `id={`panel-${value}`}` dead. The bare form
+ * deliberately admits a backtick: github's HTML parser consumes it (a parse error the
+ * spec still defines), and that is the byte sequence that file actually ships.
+ *
+ * `[^>]` spans newlines on purpose — a raw tag may lay its attributes across several
+ * lines (`<div` / `role="tabpanel"` / `id={…}` / `>`), which is why an HTML block is
+ * handed to this function JOINED rather than line by line.
+ */
+const EXPLICIT_ANCHOR_RE = /<[a-zA-Z][^>]*?\s(?:name|id)=(?:"([^"]*)"|'([^']*)'|([^\s"'=<>]+))/g
+
+function explicitAnchorsIn(text: string): string[] {
+  const found: string[] = []
+  for (const m of text.matchAll(EXPLICIT_ANCHOR_RE)) {
+    const value = m[1] ?? m[2] ?? m[3]
+    if (value !== undefined && value !== '') found.push(value)
+  }
+  return found
+}
+
+/**
+ * github.com's duplicate-slug rule, as a stateful adder over one document.
+ *
+ * It is a SKIP-UNTIL-FREE loop and not a per-base occurrence counter: the candidate
+ * `${base}-${n}` is retried with a climbing `n` until it names a slug no earlier heading
+ * already took. The two agree until a heading's NATURAL slug spells a generated one —
+ * `## Foo`, `## Foo 1`, `## Foo`, `## Foo` anchors `foo`, `foo-1`, `foo-2`, `foo-3` on
+ * github.com, where a counter computes `foo-2` for the LAST heading and never emits
+ * `foo-3` at all. That is a live URL this gate would call dead, and its mirror is a
+ * citation the gate calls fine that drops the reader on the unrelated `Foo 1` heading.
+ *
+ * `taken` holds only the slugs the loop itself generated, which is the scope github's
+ * slugger has: an explicit `<a name>` is separate HTML it never consults, so it must not
+ * push a later duplicate heading forward.
+ */
+function headingSlugAdder(slugs: Set<string>): (heading: string) => void {
   const taken = new Set<string>()
   const nextIndex = new Map<string, number>()
-  const add = (heading: string): void => {
+  return heading => {
     const base = slugifyHeading(heading)
     if (base === '') return
     let slug = base
@@ -405,15 +410,47 @@ export function collectHeadingSlugs(markdown: string): Set<string> {
     taken.add(slug)
     slugs.add(slug)
   }
+}
 
-  for (const { line, prev } of anchorBearingLines(markdown)) {
-    const atx = atxHeadingOf(line)
-    if (atx !== undefined) add(atx)
-    else if (isSetextUnderline(line, prev)) add(prev.trim())
-    for (const m of line.matchAll(/<a\s[^>]*\b(?:name|id)="([^"]+)"/g)) {
-      if (m[1] !== undefined) slugs.add(m[1])
+/**
+ * The anchors ONE rendered markdown line offers: its heading (ATX, or setext over the
+ * paragraph above it) and any explicit `id`/`name` it carries. An indented code block
+ * renders as code and offers neither.
+ */
+function addLeafAnchors(
+  ev: Extract<MarkdownEvent, { kind: 'leaf' }>,
+  add: (heading: string) => void,
+  slugs: Set<string>,
+): void {
+  if (ev.indentedCode) return
+  const atx = atxHeadingText(ev.text)
+  if (atx !== undefined) add(atx)
+  else if (ev.paragraph.length > 0 && isSetextUnderline(ev.text)) add(ev.paragraph.join('\n'))
+  for (const a of explicitAnchorsIn(ev.text)) slugs.add(a)
+}
+
+export function collectHeadingSlugs(markdown: string): Set<string> {
+  const slugs = new Set<string>()
+  const add = headingSlugAdder(slugs)
+  let htmlBlock: string[] | undefined
+  const flushHtmlBlock = (): void => {
+    for (const a of htmlBlock === undefined ? [] : explicitAnchorsIn(htmlBlock.join('\n')))
+      slugs.add(a)
+    htmlBlock = undefined
+  }
+
+  for (const ev of readMarkdown(markdown, { frontmatter: true })) {
+    if (ev.kind === 'leaf') {
+      addLeafAnchors(ev, add, slugs)
+    } else if (ev.kind === 'html-open') {
+      htmlBlock = HTML_KINDS_RENDERING_ANCHORS.has(ev.htmlKind) ? [ev.text] : undefined
+    } else if (ev.kind === 'html-body') {
+      htmlBlock?.push(ev.text)
+    } else if (ev.kind === 'html-end') {
+      flushHtmlBlock()
     }
   }
+  flushHtmlBlock()
   return slugs
 }
 
@@ -544,7 +581,19 @@ function renderCandidate(slug: string): string {
 function anchorError(kind: string, path: string, fragment: string, root: string): string | null {
   if (fragment === '' || kind !== 'blob' || !/\.mdx?$/.test(path)) return null
   if (LINE_ANCHOR_RE.test(fragment)) return null
-  const slugs = collectHeadingSlugs(readFileSync(join(root, path), 'utf-8'))
+  let source: string
+  try {
+    source = readFileSync(join(root, path), 'utf-8')
+  } catch {
+    // The one remaining unguarded filesystem read on the citation path. A `.md` path
+    // that resolves to a DIRECTORY passes `existsCaseSensitive` and the extension test,
+    // then threw EISDIR with a raw stack trace out of the gate — never an exception out
+    // of a docs gate, the same standard `decodeOrLiteral` above already applies. An
+    // error rather than a crash is also the honest verdict: github.com serves such a
+    // `blob/main/<dir>` URL as a tree listing, which anchors nothing.
+    return `${path}#${escapeForDiagnostic(fragment)} — not a readable markdown file`
+  }
+  const slugs = collectHeadingSlugs(source)
   if (slugs.has(fragment)) return null
   const near = nearestSlugs(fragment, slugs)
   const hint = near.length === 0 ? '' : `; did you mean ${near.map(renderCandidate).join(' or ')}?`
