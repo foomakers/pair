@@ -30,7 +30,8 @@ import {
   checkListTargetsSamples,
 } from './docs-staleness-check'
 import { join } from 'node:path'
-import { readFileSync } from 'node:fs'
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 
 // White-box unit tests for the docs-staleness gate LOGIC. Exported functions are
 // tested directly — no spawning of any CLI/script. The thin `tsx` CLI wrapper is
@@ -402,7 +403,176 @@ describe('findDeadRepoLinks', () => {
     const content = `[x](https://github.com/foomakers/pair/blob/main/${IA_ASSESSMENT}#option-z--full-di%C3%A1taxis-re-org-heavier)`
     const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
     expect(errs).toHaveLength(1)
-    expect(errs[0]).toContain('option-z--full-diátaxis-re-org-heavier')
+    // Decoded, not `%C3%A1` — and then escaped, because `á` is not printable ASCII.
+    expect(errs[0]).toContain('option-z--full-di\\u{E1}taxis-re-org-heavier')
+    expect(errs[0]).not.toContain('%C3%A1')
+  })
+
+  /**
+   * LOSSLESS DIAGNOSTIC. The anchors this gate exists to get right differ from the
+   * dead spelling by an INVISIBLE code point, so a message that echoes the fragment
+   * raw and offers nothing else tells the developer whose build just went red that
+   * the anchor is dead and gives them no way to see why — the likely outcome is that
+   * they delete a fragment that works. Every code point outside printable ASCII is
+   * therefore rendered `\u{…}` (and a literal backslash doubled, so the escape itself
+   * cannot be spoofed), and the nearest real headings are offered.
+   */
+  const fixtureRoot = <T>(files: Readonly<Record<string, string>>, fn: (root: string) => T): T => {
+    const root = mkdtempSync(join(tmpdir(), 'staleness-anchor-'))
+    try {
+      for (const [name, body] of Object.entries(files)) writeFileSync(join(root, name), body)
+      return fn(root)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+
+  it('names the U+FE0F heading a stripped anchor was reaching for', () => {
+    const dead = `[cmds](https://github.com/foomakers/pair/blob/main/CLAUDE.md#-essential-commands)`
+    const errs = findDeadRepoLinks(dead, 'page.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('did you mean #\\u{FE0F}-essential-commands?')
+  })
+
+  it('names the ZWJ heading a stripped anchor was reaching for', () => {
+    const f = '.pair/knowledge/guidelines/quality-assurance/security/secure-development.md'
+    const dead = `[x](https://github.com/foomakers/pair/blob/main/${f}#-secure-coding-standards)`
+    const errs = findDeadRepoLinks(dead, 'page.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('did you mean #\\u{200D}-secure-coding-standards?')
+  })
+
+  const LOSSLESS_ROWS: ReadonlyArray<{
+    heading: string
+    cited: string
+    actual: string
+    candidate: string
+    why: string
+  }> = [
+    {
+      heading: '\u{FE0F} Foo',
+      cited: '-foo',
+      actual: '-foo',
+      candidate: '\\u{FE0F}-foo',
+      why: 'U+FE0F is zero-width: raw, the two spellings render identically',
+    },
+    {
+      heading: '\u{200D} Foo',
+      cited: '-foo',
+      actual: '-foo',
+      candidate: '\\u{200D}-foo',
+      why: 'ZWJ, same shape as the motivating bug',
+    },
+    {
+      heading: 'Que\u{301} Tal',
+      cited: 'qu\u{E9}-tal',
+      actual: 'qu\\u{E9}-tal',
+      candidate: 'que\\u{301}-tal',
+      why: 'precomposed vs decomposed é — confusable, not invisible',
+    },
+  ]
+
+  it('does not let a literal backslash-u spelling collide with a real escaped code point', () => {
+    const errs = fixtureRoot({ 'f.md': '## \u{FE0F} Foo\n' }, root =>
+      findDeadRepoLinks(
+        '[x](https://github.com/foomakers/pair/blob/main/f.md#\\u{FE0F}-foo)',
+        'page.mdx',
+        root,
+      ),
+    )
+    expect(errs).toHaveLength(1)
+    // The literal ASCII `\u{FE0F}` doubles its backslash; the real U+FE0F heading would
+    // print with ONE. 9 code points apart, so no candidate is offered — but the two
+    // renderings still cannot be read as the same string.
+    expect(errs[0]).toContain('f.md#\\\\u{FE0F}-foo —')
+    expect(errs[0]).not.toContain('f.md#\\u{FE0F}-foo —')
+  })
+
+  for (const row of LOSSLESS_ROWS) {
+    it(`distinguishes actual from candidate — ${row.why}`, () => {
+      const errs = fixtureRoot({ 'f.md': `## ${row.heading}\n` }, root =>
+        findDeadRepoLinks(
+          `[x](https://github.com/foomakers/pair/blob/main/f.md#${row.cited})`,
+          'page.mdx',
+          root,
+        ),
+      )
+      expect(errs).toHaveLength(1)
+      const msg = errs[0] ?? ''
+      expect(msg).toContain(`f.md#${row.actual} —`)
+      expect(msg).toContain(`did you mean #${row.candidate}?`)
+      expect(row.actual).not.toBe(row.candidate)
+    })
+  }
+
+  /**
+   * The dedup rule reaching the GATE, not just the slug set. github.com anchors the
+   * 4th heading of `## Foo` / `## Foo 1` / `## Foo` / `## Foo` as `foo-3`; a per-base
+   * counter never emits `foo-3` at all, so `docs:staleness` exited 1 on a live URL —
+   * and, mirrored, called `#foo-1` (which github gives to `Foo 1`) a fine citation
+   * for the 3rd heading, dropping the reader on the wrong section while printing PASS.
+   */
+  const DEDUP_FIXTURE = ['## Foo', '## Foo 1', '## Foo', '## Foo'].map(h => `${h}\n`).join('\n')
+
+  it('accepts the live #foo-3 a skip-until-free run produces', () => {
+    const errs = fixtureRoot({ 'f.md': DEDUP_FIXTURE }, root =>
+      findDeadRepoLinks(
+        '[x](https://github.com/foomakers/pair/blob/main/f.md#foo-3)',
+        'page.mdx',
+        root,
+      ),
+    )
+    expect(errs).toEqual([])
+  })
+
+  it('accepts every anchor github.com serves for that file, and nothing more', () => {
+    const errs = fixtureRoot({ 'f.md': DEDUP_FIXTURE }, root => ({
+      live: ['foo', 'foo-1', 'foo-2', 'foo-3'].flatMap(f =>
+        findDeadRepoLinks(
+          `[x](https://github.com/foomakers/pair/blob/main/f.md#${f})`,
+          'page.mdx',
+          root,
+        ),
+      ),
+      dead: findDeadRepoLinks(
+        '[x](https://github.com/foomakers/pair/blob/main/f.md#foo-4)',
+        'page.mdx',
+        root,
+      ),
+    }))
+    expect(errs.live).toEqual([])
+    expect(errs.dead).toHaveLength(1)
+  })
+
+  it('offers no candidate when nothing in the file is close', () => {
+    const errs = fixtureRoot({ 'f.md': '## Completely Unrelated Heading\n' }, root =>
+      findDeadRepoLinks(
+        '[x](https://github.com/foomakers/pair/blob/main/f.md#zzz)',
+        'page.mdx',
+        root,
+      ),
+    )
+    expect(errs).toEqual([
+      'Dead anchor in repo citation in page.mdx: f.md#zzz — no heading in that file slugs to it',
+    ])
+  })
+
+  it('offers at most three candidates, nearest first', () => {
+    const errs = fixtureRoot(
+      {
+        'f.md': ['## Alpha', '## Alphb', '## Alphc', '## Alphd', '## Zulu']
+          .map(h => `${h}\n`)
+          .join('\n'),
+      },
+      root =>
+        findDeadRepoLinks(
+          '[x](https://github.com/foomakers/pair/blob/main/f.md#alph)',
+          'page.mdx',
+          root,
+        ),
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('did you mean #alpha or #alphb or #alphc?')
   })
 
   it('does not throw on a malformed percent-escape in the fragment', () => {
@@ -414,7 +584,7 @@ describe('findDeadRepoLinks', () => {
 
   // The two halves compose: CLAUDE.md:59 `## 🛠️ Essential Commands` is anchored
   // `#%EF%B8%8F-essential-commands` — decoding the fragment gets U+FE0F back, and the
-  // slug must have KEPT U+FE0F for it to land. 278 repo headings carry one of these.
+  // slug must have KEPT U+FE0F for it to land. 276 repo headings carry one of these.
   it('resolves a variation-selector anchor in the spelling github.com serves', () => {
     const live = `[cmds](https://github.com/foomakers/pair/blob/main/CLAUDE.md#%EF%B8%8F-essential-commands)`
     expect(findDeadRepoLinks(live, 'page.mdx', REPO_ROOT)).toEqual([])
@@ -481,10 +651,11 @@ describe('slugifyHeading', () => {
     ['Trailing spaces   ', 'trailing-spaces'],
 
     // --- KEEP: Mark (Mn / Mc / Me) -----------------------------------------
-    // The row that mattered: `## 🛠️ Essential Commands` is CLAUDE.md:59 and 277 more
-    // repo headings carry a variation selector. U+1F6E0 is dropped, U+FE0F is NOT, so
-    // the live anchor STARTS with U+FE0F. Dropping it made every one of those 278
-    // headings unciteable — `docs:staleness` failed the build on a working link.
+    // The row that mattered: `## 🛠️ Essential Commands` is CLAUDE.md:59 and 275 more
+    // repo headings carry a variation selector (278 selectors across 276 headings — two
+    // headings carry two). U+1F6E0 is dropped, U+FE0F is NOT, so the live anchor STARTS
+    // with U+FE0F. Dropping it made every one of those 276 headings unciteable —
+    // `docs:staleness` failed the build on a working link.
     ['🛠️ Essential Commands', '️-essential-commands'],
     ['⚙︎ Vs15 Text', '︎-vs15-text'], // VARIATION SELECTOR-15 too, not just -16
     ['#️⃣ Keycap Hash', '️⃣-keycap-hash'], // Me (enclosing keycap)
@@ -503,9 +674,10 @@ describe('slugifyHeading', () => {
     ['① Circled One', '-circled-one'], // No is DROPPED — `\p{N}` would have kept it
     ['½ Half', '-half'],
 
-    // --- DROP: symbols, and the Sk split that no category rule predicts ------
+    // --- DROP: symbols; `Sk` drops, but the look-alike `Lm` is a LETTER and keeps --
     ['👍🏽 Skin Tone', '-skin-tone'], // U+1F3FD is Sk and is dropped …
-    ['ˆ Modifier Circumflex', 'ˆ-modifier-circumflex'], // … but U+02C6 is Sk AND Alphabetic
+    // U+02C6 is Lm — a modifier LETTER, so Alphabetic keeps it — unlike U+1F3FD, which is Sk.
+    ['ˆ Modifier Circumflex', 'ˆ-modifier-circumflex'],
     ['🚀 Emoji lead', '-emoji-lead'],
     ['$ Dollar', '-dollar'],
     ['a+b Plus', 'ab-plus'],
@@ -547,12 +719,68 @@ describe('collectHeadingSlugs', () => {
     expect([...collectHeadingSlugs('| a | b |\n| --- | --- |\n| 1 | 2 |\n')]).toEqual([])
   })
 
-  it('disambiguates repeated headings the way github-slugger does', () => {
-    expect([...collectHeadingSlugs('## Notes\n\n## Notes\n\n## Notes\n')]).toEqual([
-      'notes',
-      'notes-1',
-      'notes-2',
-    ])
+  /**
+   * The duplicate-slug rule is github.com's, and it is a SKIP-UNTIL-FREE loop, not a
+   * per-base occurrence counter: a candidate `${base}-${n}` that is already taken —
+   * because some other heading's NATURAL slug spells it — is skipped and `n` keeps
+   * climbing. A plain counter diverges the moment a natural slug collides with a
+   * generated one, which is a live URL the gate then calls dead (and, mirrored, a
+   * citation the gate calls fine that lands the reader on the wrong heading).
+   *
+   * Every expectation below is github.com's own output, probed with
+   * `gh api -X POST /markdown --input <(jq -Rs '{text:.}' fixture.md)` and read off
+   * the emitted `id="user-content-…"` attributes in document order.
+   */
+  const DEDUP_ROWS: ReadonlyArray<{ headings: string[]; slugs: string[]; why: string }> = [
+    {
+      headings: ['Notes', 'Notes', 'Notes'],
+      slugs: ['notes', 'notes-1', 'notes-2'],
+      why: 'plain repetition — counter and skip-loop agree',
+    },
+    {
+      headings: ['Foo', 'Foo 1', 'Foo', 'Foo'],
+      slugs: ['foo', 'foo-1', 'foo-2', 'foo-3'],
+      why: 'a natural slug OCCUPIES the first generated candidate — the counter row',
+    },
+    {
+      headings: ['Foo 1', 'Foo', 'Foo'],
+      slugs: ['foo-1', 'foo', 'foo-2'],
+      why: 'the occupier comes FIRST — the 2nd `Foo` skips past it',
+    },
+    {
+      headings: ['Foo', 'Foo', 'Foo 1'],
+      slugs: ['foo', 'foo-1', 'foo-1-1'],
+      why: 'the collision is the other way: a natural slug lands on a GENERATED one',
+    },
+    {
+      headings: ['Foo', 'Foo', 'Foo', 'Foo 1', 'Foo 1'],
+      slugs: ['foo', 'foo-1', 'foo-2', 'foo-1-1', 'foo-1-2'],
+      why: 'the suffixed slug then runs its own counter, independent of the base one',
+    },
+    {
+      headings: ['Foo 2', 'Foo', 'Foo', 'Foo'],
+      slugs: ['foo-2', 'foo', 'foo-1', 'foo-3'],
+      why: 'the loop skips a taken candidate mid-run and keeps climbing',
+    },
+  ]
+
+  for (const row of DEDUP_ROWS) {
+    it(`disambiguates ${JSON.stringify(row.headings)} as ${JSON.stringify(row.slugs)} — ${row.why}`, () => {
+      const md = row.headings.map(h => `## ${h}\n`).join('\n')
+      expect([...collectHeadingSlugs(md)]).toEqual(row.slugs)
+    })
+  }
+
+  // The collision the skip-loop must NOT see. github.com's slugger tracks only the
+  // slugs IT generated; an explicit `<a name>` is separate HTML it never consults.
+  // Probed: `<a name="foo-1"></a>` + `## Foo` + `## Foo` still anchors the headings
+  // `user-content-foo` / `user-content-foo-1`. Reading the returned Set back into the
+  // loop would have pushed the 2nd heading to `foo-2` — a wrong-destination anchor.
+  it('an explicit HTML anchor does not consume a generated slug', () => {
+    const md = '<a name="foo-1"></a>\n\n## Foo\n\n## Foo\n'
+    // Set order: the explicit anchor is seen first, then `foo`; the 2nd heading's
+    // `foo-1` is already present. Three headings' worth of slugs, two distinct.
+    expect([...collectHeadingSlugs(md)]).toEqual(['foo-1', 'foo'])
   })
 
   it('collects an explicit HTML anchor', () => {

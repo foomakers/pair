@@ -271,7 +271,7 @@ function renderedHeadingText(heading: string): string {
  *
  * | class                       | github.com | why it is not obvious                  |
  * | --------------------------- | ---------- | -------------------------------------- |
- * | `\p{M}` (Mn/Mc/Me)          | KEEP       | U+FE0F rides 278 repo headings — `## 🛠️ Essential Commands` anchors `#️-essential-commands`, LEADING U+FE0F |
+ * | `\p{M}` (Mn/Mc/Me)          | KEEP       | 278 variation selectors ride 276 repo headings — `## 🛠️ Essential Commands` anchors `#️-essential-commands`, LEADING U+FE0F |
  * | `\p{Join_Control}` (ZWJ/ZWNJ) | KEEP     | only these two of `Cf`; soft hyphen and RLM are dropped |
  * | `\p{Nl}` yes, `\p{No}` no   | split      | `\p{N}` keeps `①`, github drops it — Alphabetic covers `Ⅸ` |
  *
@@ -342,18 +342,36 @@ function* anchorBearingLines(markdown: string): Generator<{ line: string; prev: 
 
 /**
  * Every anchor a markdown file offers: ATX (`## X`) and setext (`X` over `===`/`---`)
- * headings, plus explicit `<a name>`/`<a id>` anchors. A repeated slug is disambiguated
- * `-1`, `-2`, github-slugger's rule.
+ * headings, plus explicit `<a name>`/`<a id>` anchors.
+ *
+ * A repeated slug is disambiguated by github.com's rule, which is a SKIP-UNTIL-FREE
+ * loop and not a per-base occurrence counter: the candidate `${base}-${n}` is retried
+ * with a climbing `n` until it names a slug no earlier heading already took. The two
+ * agree until a heading's NATURAL slug spells a generated one — `## Foo`, `## Foo 1`,
+ * `## Foo`, `## Foo` anchors `foo`, `foo-1`, `foo-2`, `foo-3` on github.com, where a
+ * counter computes `foo-2` for the LAST heading and never emits `foo-3` at all. That
+ * is a live URL this gate would call dead, and its mirror is a citation the gate calls
+ * fine that drops the reader on the unrelated `Foo 1` heading.
+ *
+ * `taken` holds only the slugs the loop itself generated, which is the scope
+ * github.com's slugger has: an explicit `<a name>` is separate HTML it never consults,
+ * so it must not push a later duplicate heading forward.
  */
 export function collectHeadingSlugs(markdown: string): Set<string> {
   const slugs = new Set<string>()
-  const seen = new Map<string, number>()
+  const taken = new Set<string>()
+  const nextIndex = new Map<string, number>()
   const add = (heading: string): void => {
     const base = slugifyHeading(heading)
     if (base === '') return
-    const n = seen.get(base) ?? 0
-    seen.set(base, n + 1)
-    slugs.add(n === 0 ? base : `${base}-${n}`)
+    let slug = base
+    while (taken.has(slug)) {
+      const n = (nextIndex.get(base) ?? 0) + 1
+      nextIndex.set(base, n)
+      slug = `${base}-${n}`
+    }
+    taken.add(slug)
+    slugs.add(slug)
   }
 
   for (const { line, prev } of anchorBearingLines(markdown)) {
@@ -403,6 +421,57 @@ export function parseCitation(raw: string): { path: string; fragment: string } {
 }
 
 /**
+ * A fragment, rendered so two spellings that differ only by an INVISIBLE code point
+ * cannot collapse into each other in a terminal. Printable ASCII passes through; every
+ * other code point becomes `\u{XXXX}`, and a literal backslash is doubled so the escape
+ * itself cannot be spoofed by a fragment that merely spells `\u{FE0F}` in ASCII.
+ *
+ * Without it the diagnostic is unreadable exactly where this gate matters most:
+ * `CLAUDE.md#-essential-commands` (dead) and `CLAUDE.md#️-essential-commands` (live,
+ * leading U+FE0F) print IDENTICALLY, so "no heading slugs to it" reads as a false
+ * positive and the developer deletes a working fragment.
+ */
+function escapeForDiagnostic(s: string): string {
+  let out = ''
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) ?? 0
+    if (ch === '\\') out += '\\\\'
+    else if (cp >= 0x20 && cp <= 0x7e) out += ch
+    else out += `\\u{${cp.toString(16).toUpperCase()}}`
+  }
+  return out
+}
+
+/** Levenshtein distance over CODE POINTS (an astral char is one edit, not two). */
+function editDistance(a: string, b: string): number {
+  const x = [...a]
+  const y = [...b]
+  let prev = Array.from({ length: y.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= x.length; i++) {
+    const cur = [i]
+    for (let j = 1; j <= y.length; j++) {
+      const sub = (prev[j - 1] ?? 0) + (x[i - 1] === y[j - 1] ? 0 : 1)
+      cur[j] = Math.min((prev[j] ?? 0) + 1, (cur[j - 1] ?? 0) + 1, sub)
+    }
+    prev = cur
+  }
+  return prev[y.length] ?? 0
+}
+
+const MAX_ANCHOR_SUGGESTIONS = 3
+const MAX_ANCHOR_DISTANCE = 3
+
+/** The headings closest to a dead fragment: an invisible-code-point miss is distance 1. */
+function nearestSlugs(fragment: string, slugs: ReadonlySet<string>): string[] {
+  return [...slugs]
+    .map(slug => ({ slug, d: editDistance(fragment, slug) }))
+    .filter(c => c.d <= MAX_ANCHOR_DISTANCE)
+    .sort((a, b) => a.d - b.d || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
+    .slice(0, MAX_ANCHOR_SUGGESTIONS)
+    .map(c => c.slug)
+}
+
+/**
  * Does the `#fragment` land on a real heading? Only asked where a fragment MEANS a
  * heading: `tree/` is a directory listing, `raw/` serves bytes, and GitHub's own line
  * anchor (`#L203`) is not a heading and never will be — failing any of those would
@@ -411,8 +480,14 @@ export function parseCitation(raw: string): { path: string; fragment: string } {
 function anchorError(kind: string, path: string, fragment: string, root: string): string | null {
   if (fragment === '' || kind !== 'blob' || !/\.mdx?$/.test(path)) return null
   if (LINE_ANCHOR_RE.test(fragment)) return null
-  if (collectHeadingSlugs(readFileSync(join(root, path), 'utf-8')).has(fragment)) return null
-  return `${path}#${fragment} — no heading in that file slugs to it`
+  const slugs = collectHeadingSlugs(readFileSync(join(root, path), 'utf-8'))
+  if (slugs.has(fragment)) return null
+  const near = nearestSlugs(fragment, slugs)
+  const hint =
+    near.length === 0
+      ? ''
+      : `; did you mean ${near.map(s => `#${escapeForDiagnostic(s)}`).join(' or ')}?`
+  return `${path}#${escapeForDiagnostic(fragment)} — no heading in that file slugs to it${hint}`
 }
 
 /**
