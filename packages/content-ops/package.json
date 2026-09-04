@@ -16,6 +16,11 @@
       "import": "./dist/file-system/index.js",
       "require": "./dist/file-system/index.js"
     },
+    "./markdown/commonmark-blocks": {
+      "types": "./dist/markdown/commonmark-blocks.d.ts",
+      "import": "./dist/markdown/commonmark-blocks.js",
+      "require": "./dist/markdown/commonmark-blocks.js"
+    },
     "./http": {
       "types": "./dist/http/index.d.ts",
       "import": "./dist/http/index.js",
@@ -25,6 +30,11 @@
       "types": "./dist/ops/SyncOptions.d.ts",
       "import": "./dist/ops/SyncOptions.js",
       "require": "./dist/ops/SyncOptions.js"
+    },
+    "./test-utils/commonmark-rows": {
+      "types": "./dist/test-utils/commonmark-rows.d.ts",
+      "import": "./dist/test-utils/commonmark-rows.js",
+      "require": "./dist/test-utils/commonmark-rows.js"
     },
     "./test-utils/in-memory-fs": {
       "types": "./dist/test-utils/in-memory-fs/index.d.ts",

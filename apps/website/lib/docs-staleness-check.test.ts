@@ -30,8 +30,11 @@ import {
   checkListTargetsSamples,
 } from './docs-staleness-check'
 import { join } from 'node:path'
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
+import { COMMONMARK_BLOCK_ROWS } from '@pair/content-ops/test-utils/commonmark-rows'
+import { stripFrontmatter } from '@pair/content-ops/markdown/commonmark-blocks'
 
 // White-box unit tests for the docs-staleness gate LOGIC. Exported functions are
 // tested directly — no spawning of any CLI/script. The thin `tsx` CLI wrapper is
@@ -726,6 +729,67 @@ describe('findDeadRepoLinks', () => {
     expect(errs[0]).toContain('did you mean #alpha or #alphb or #alphc?')
   })
 
+  /**
+   * The one remaining unguarded filesystem read on the citation path. A `.md` path that
+   * resolves to a DIRECTORY passes `existsCaseSensitive` and the extension test, and the
+   * read then threw EISDIR with a raw stack trace out of the gate. github.com serves
+   * such a `blob/main/<dir>` URL as a tree listing, so an error rather than a crash is
+   * also the honest verdict — and it is the standard the file already applies one
+   * function up (`decodeOrLiteral`: never an exception out of a docs gate).
+   */
+  it('reports, never throws, when a cited .md path is a directory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'docs-eisdir-'))
+    try {
+      mkdirSync(join(root, 'docs', 'weird.md'), { recursive: true })
+      const cite = `[a](https://github.com/foomakers/pair/blob/main/docs/weird.md#x)`
+      expect(() => findDeadRepoLinks(cite, 'p.mdx', root)).not.toThrow()
+      expect(findDeadRepoLinks(cite, 'p.mdx', root)).toEqual([
+        'Dead anchor in repo citation in p.mdx: docs/weird.md#x — not a readable markdown file',
+      ])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * END TO END on the live URL the gate used to break the build on: an ATX heading
+   * nested in a list item (`apps/pair-cli/CHANGELOG.md:100`). github.com serves 36
+   * anchors for that file and this citation resolves in a browser; the gate computed 35
+   * and returned "no heading in that file slugs to it" — exit 1, with no `did you mean`
+   * hint to walk it back. Four more CHANGELOGs ship the same shape.
+   */
+  it.each([
+    'apps/pair-cli/CHANGELOG.md',
+    'packages/content-ops/CHANGELOG.md',
+    'packages/knowledge-hub/CHANGELOG.md',
+    'tools/eslint-config/CHANGELOG.md',
+    'tools/prettier-config/CHANGELOG.md',
+  ])('resolves the list-item release heading cited from %s', file => {
+    const url = `https://github.com/foomakers/pair/blob/main/${file}#release-v020---enhanced-cli-distribution--documentation`
+    expect(findDeadRepoLinks(`[chg](${url})`, 'pm-tools/index.mdx', REPO_ROOT)).toEqual([])
+  })
+
+  /**
+   * ...and the mirror direction, on the shape that used to PASS: a heading inside a raw
+   * `<div>` is not a heading on github.com, so a citation to it 404s for every reader —
+   * the silent wrong-destination anchor Check 5b exists to catch.
+   */
+  it('flags a citation to a heading that only exists inside an HTML block', () => {
+    const root = mkdtempSync(join(tmpdir(), 'docs-htmlblock-'))
+    try {
+      mkdirSync(join(root, 'docs'), { recursive: true })
+      writeFileSync(join(root, 'docs', 'x.md'), '# Doc\n\n<div>\n## InDiv\n</div>\n\n## Real\n')
+      const cite = `[a](https://github.com/foomakers/pair/blob/main/docs/x.md#indiv)`
+      expect(findDeadRepoLinks(cite, 'p.mdx', root)).toEqual([
+        'Dead anchor in repo citation in p.mdx: docs/x.md#indiv — no heading in that file slugs to it',
+      ])
+      const live = `[a](https://github.com/foomakers/pair/blob/main/docs/x.md#real)`
+      expect(findDeadRepoLinks(live, 'p.mdx', root)).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('does not throw on a malformed percent-escape in the fragment', () => {
     const content = `[x](https://github.com/foomakers/pair/blob/main/${IA_ASSESSMENT}#100%-coverage)`
     const errs = findDeadRepoLinks(content, 'a.mdx', REPO_ROOT)
@@ -987,6 +1051,115 @@ describe('collectHeadingSlugs', () => {
     expect(
       collectHeadingSlugs('<a name="manual-anchor"></a>\n\n# Real\n').has('manual-anchor'),
     ).toBe(true)
+  })
+
+  /**
+   * BLOCK STRUCTURE — the shared decision table, run here against the anchor set and in
+   * `@pair/knowledge-hub` against the fenced-block bodies, because both gates sit on
+   * ONE reader (`@pair/content-ops`'s `readMarkdown`). Every value is github.com's own
+   * output for the same bytes; see the table's own header for the exact command.
+   *
+   * Reading lines at DOCUMENT level only — no list-item content columns, no blockquote
+   * markers, no HTML blocks, and a setext underline taking just the line above it —
+   * disagreed with github.com in BOTH directions on shapes this repo already ships:
+   * `- # Release v0.2.0 …` in five CHANGELOGs went missing (a live anchor called dead,
+   * exit 1 on a URL that works) while `<div>` / `## InDiv` / `</div>` served a phantom
+   * `#indiv` that PASSED the gate and 404s for every reader.
+   *
+   * `readerAnchors`, where a row sets it, is a divergence this gate knowingly keeps —
+   * on record as a row instead of latent.
+   */
+  for (const row of COMMONMARK_BLOCK_ROWS) {
+    it(`block structure [${row.name}] — ${row.why}`, () => {
+      expect([...collectHeadingSlugs(row.content)], row.name).toEqual([
+        ...(row.readerAnchors ?? row.anchors),
+      ])
+    })
+  }
+
+  /**
+   * The corpus rows the table above was derived FROM — the live instances, asserted
+   * against the real repo files rather than against a fixture, so a rewrite of either
+   * file that moves the heading reddens here.
+   *
+   * `apps/pair-cli/CHANGELOG.md` serves 36 anchors on github.com (probed at branch head
+   * `2925f9f9`; the module computed 35 before this change, missing exactly the one
+   * below). The other four CHANGELOGs carry the same `- # Release …` shape.
+   */
+  const CHANGELOG_LIST_HEADINGS: ReadonlyArray<readonly [string, string]> = [
+    ['apps/pair-cli/CHANGELOG.md', 'release-v020---enhanced-cli-distribution--documentation'],
+    [
+      'packages/content-ops/CHANGELOG.md',
+      'release-v020---enhanced-cli-distribution--documentation',
+    ],
+    [
+      'packages/knowledge-hub/CHANGELOG.md',
+      'release-v020---enhanced-cli-distribution--documentation',
+    ],
+    ['tools/eslint-config/CHANGELOG.md', 'release-v020---enhanced-cli-distribution--documentation'],
+    [
+      'tools/prettier-config/CHANGELOG.md',
+      'release-v020---enhanced-cli-distribution--documentation',
+    ],
+  ]
+
+  it.each(CHANGELOG_LIST_HEADINGS)(
+    'reads the ATX heading nested in a list item in %s',
+    (file, slug) => {
+      expect(collectHeadingSlugs(readFileSync(resolve(REPO_ROOT, file), 'utf-8')).has(slug)).toBe(
+        true,
+      )
+    },
+  )
+
+  /**
+   * The other live corpus row: `### \`--root <issue-id>\` — subtree scope`, where the
+   * `<issue-id>` sits INSIDE a code span and is therefore literal text, not inline HTML.
+   * Three files ship it, and the gate computed `#--root---subtree-scope` for all three
+   * — a dead spelling for the one live anchor of `pair-next`'s scope argument.
+   */
+  it.each([
+    '.claude/skills/pair-next/SKILL.md',
+    'packages/knowledge-hub/dataset/.skills/next/SKILL.md',
+    'apps/website/content/docs/reference/pair-next.mdx',
+  ])('reads a code span as literal text in %s', file => {
+    const slugs = collectHeadingSlugs(readFileSync(resolve(REPO_ROOT, file), 'utf-8'))
+    expect([...slugs].filter(s => s.includes('root'))).toContain('--root-issue-id--subtree-scope')
+  })
+
+  /**
+   * CORPUS SWEEP against github.com itself, for every git-tracked `*.md`/`*.mdx` that
+   * CARRIES one of these shapes — a list-item or blockquote heading, an HTML block, a
+   * setext underline. The oracle cannot run in CI (it is one `gh api -X POST /markdown`
+   * call per file), so its answers are COMMITTED, keyed by the sha1 of the file body
+   * with YAML frontmatter removed — the same body the API was given, because the
+   * `/markdown` endpoint has no frontmatter mode while github.com's blob view strips it.
+   *
+   * Keying on the content hash is what keeps this honest in both directions: editing a
+   * doc drops its row out of the fixture (the file is simply no longer asserted) instead
+   * of failing on a stale expectation, while changing the READER reddens every row at
+   * once. `pnpm --filter website docs:anchor-oracle` regenerates it.
+   *
+   * Five files failed this sweep before the reader became container-aware, and one
+   * before code spans stopped being read as inline HTML.
+   */
+  it('matches github.com\u2019s anchors on every recorded corpus file', () => {
+    const oracle = JSON.parse(
+      readFileSync(resolve(__dirname, 'github-anchor-oracle.json'), 'utf-8'),
+    ) as { readonly files: Record<string, { readonly sha1: string; readonly anchors: string[] }> }
+    const entries = Object.entries(oracle.files)
+    expect(entries.length).toBeGreaterThan(40)
+    let checked = 0
+    for (const [file, expected] of entries) {
+      const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8')
+      if (createHash('sha1').update(stripFrontmatter(src)).digest('hex') !== expected.sha1) continue
+      checked += 1
+      expect([...collectHeadingSlugs(src)], file).toEqual(expected.anchors)
+    }
+    // A wholesale docs rewrite may retire rows; an EMPTY sweep is a silently dead test.
+    expect(checked, 'recorded corpus rows still matching their file').toBeGreaterThan(
+      entries.length / 2,
+    )
   })
 
   it('finds every fragment the real docs site cites today', () => {

@@ -41,6 +41,7 @@
 - [ADR-021: Fan-out is one capability with three realizations — in-harness, external driver, degraded](.pair/adoption/tech/adr/adr-021-fan-out-three-realizations.md)
 - [ADR-022: The coverage-baseline ratchet is EXPOSED through the published CLI, not ported to a shipped shell asset](.pair/adoption/tech/adr/adr-022-coverage-ratchet-exposed-through-the-cli.md)
 - [ADR-023: The coverage-baseline ratchet ships as a GENERATED KB asset, not as a CLI command](.pair/adoption/tech/adr/adr-023-coverage-ratchet-ships-as-a-generated-kb-asset.md)
+- [ADR-024: The CommonMark block reader is ONE shared module, and github.com is its oracle](.pair/adoption/tech/adr/adr-024-commonmark-block-reader-is-one-shared-module.md)
 - [Architecture](.pair/adoption/tech/architecture.md)
 - [Automation Policy — this project's delta](.pair/adoption/tech/automation.md)
 - [Development Collaboration Context](.pair/adoption/tech/boundedcontext/development-collaboration.md)
