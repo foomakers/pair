@@ -460,13 +460,30 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
   ]
 
   /**
-   * A fenced markdown block per CommonMark: 3+ backticks or tildes, `markdown` or `md`
-   * as the info string's language (any case, trailing attributes allowed), LF or CRLF,
-   * closed by the same fence characters (`\1`: a four-backtick fence is not closed by
-   * a three-backtick run inside it). Pinned to the literal ```markdown\n, the sweep
-   * was fence-language-dependent: a guide fencing its snippet ```md shipped green.
+   * A fenced markdown block per CommonMark: 3+ backticks or tildes at the START of a
+   * line indented at most 3 spaces, optional whitespace, then `markdown` or `md` as the
+   * info string's language (any case, trailing attributes allowed), LF or CRLF, closed
+   * by a run of the same fence characters ALSO at line start under 4 spaces of indent
+   * (`\1`: a four-backtick fence is not closed by a three-backtick run inside it) — or
+   * by end of file, which is how CommonMark terminates an unclosed fence.
+   *
+   * Every clause is a real divergence this sweep had:
+   * - pinned to the literal ```markdown\n, it was fence-language-dependent (a guide
+   *   fencing its snippet ```md shipped green);
+   * - unanchored, `Open the block with ```markdown so the reader can copy it.` … later
+   *   `some inline code: ``` is the fence marker.` matched as ONE fence spanning the
+   *   prose between them, so a guide shipping NO copy-paste surface failed the
+   *   "classified or no fence at all" assertion and was told to classify a fence that
+   *   does not exist;
+   * - requiring a closer, an unclosed fence (or one whose closer is indented 4+ or sits
+   *   mid-prose, neither of which closes anything) counted 0 — a real snippet MISSED.
+   *
+   * Ground truth for every row of the grammar table below is github.com's own renderer
+   * (`gh api -X POST /markdown`, counting `highlight-text-md` blocks), not a reading of
+   * the spec.
    */
-  const MARKDOWN_FENCE_RE = /(`{3,}|~{3,})(?:markdown|md)\b[^\n]*\r?\n([\s\S]*?)\1/gi
+  const MARKDOWN_FENCE_RE =
+    /^ {0,3}(`{3,}|~{3,})[ \t]*(?:markdown|md)\b[^\n]*\r?\n([\s\S]*?)(?:^ {0,3}\1|(?![\s\S]))/gim
 
   /** Every fenced markdown block of `content` that configures way-of-working.md. */
   const wowSnippets = (content: string): string[] =>
@@ -656,6 +673,87 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
           expect(block).toContain('# Way of Working')
           expect(block).not.toContain('Prose after the block.')
         }
+      })
+    }
+
+    /**
+     * INDENTATION AND TERMINATION — the half of the CommonMark fence grammar the
+     * `open`/`close` table above cannot express, because it builds every fixture with
+     * the fence alone on its own unindented line.
+     *
+     * `fences` in every row is what github.com's renderer does with the SAME bytes:
+     * `printf '%s' <content> > c.md; jq -Rs '{text:.}' c.md > pc.json;
+     *  gh api -X POST /markdown --input pc.json | grep -c highlight-text-md`.
+     */
+    const FENCE_LAYOUT_ROWS: ReadonlyArray<{
+      content: string
+      fences: number
+      contains?: string
+      omits?: string
+      why: string
+    }> = [
+      {
+        content: [
+          'Open the block with ```markdown so the reader can copy it, then close it.',
+          '',
+          'Some prose in between.',
+          '',
+          'Later, some inline code: ``` is the fence marker.',
+          '',
+        ].join('\n'),
+        fences: 0,
+        why: 'a ```markdown mentioned MID-PROSE opens nothing — the guide ships no snippet',
+      },
+      {
+        content: '   ```markdown\n# Way of Working\n   ```\n',
+        fences: 1,
+        contains: '# Way of Working',
+        why: 'opener indented 3 spaces is still a fence',
+      },
+      {
+        content: '    ```markdown\n# Way of Working\n    ```\n',
+        fences: 0,
+        why: 'opener indented 4 spaces is an INDENTED CODE BLOCK, not a fence',
+      },
+      {
+        content: '```markdown\n# Way of Working\n   ```\n\nafter\n',
+        fences: 1,
+        contains: '# Way of Working',
+        omits: 'after',
+        why: 'closer indented 3 spaces closes',
+      },
+      {
+        content: '```markdown\n# Way of Working\n    ```\n\nafter\n',
+        fences: 1,
+        contains: 'after',
+        why: 'closer indented 4 spaces does NOT close — the block runs to EOF',
+      },
+      {
+        content: '```markdown\n# Way of Working\nthen ``` closes it.\n\nafter\n',
+        fences: 1,
+        contains: 'after',
+        why: 'a ``` mid-prose does NOT close — the block runs to EOF',
+      },
+      {
+        content: '```markdown\n# Way of Working\n',
+        fences: 1,
+        contains: '# Way of Working',
+        why: 'an unclosed fence runs to EOF, and its snippet must still be seen',
+      },
+      {
+        content: '``` markdown\n# Way of Working\n```\n',
+        fences: 1,
+        contains: '# Way of Working',
+        why: 'whitespace between the fence and the info string',
+      },
+    ]
+
+    for (const row of FENCE_LAYOUT_ROWS) {
+      it(`fence layout — ${row.why}`, () => {
+        const blocks = markdownFences(row.content)
+        expect(blocks, 'markdownFences').toHaveLength(row.fences)
+        if (row.contains !== undefined) expect(blocks[0]).toContain(row.contains)
+        if (row.omits !== undefined) expect(blocks[0]).not.toContain(row.omits)
       })
     }
 
