@@ -490,7 +490,8 @@ describe('findDeadRepoLinks', () => {
     )
     expect(errs).toHaveLength(1)
     // The literal ASCII `\u{FE0F}` doubles its backslash; the real U+FE0F heading would
-    // print with ONE. 9 code points apart, so no candidate is offered — but the two
+    // print with ONE. 8 code points apart (`editDistance`, far past the budget of 3), so
+    // no candidate is offered — but the two
     // renderings still cannot be read as the same string.
     expect(errs[0]).toContain('f.md#\\\\u{FE0F}-foo —')
     expect(errs[0]).not.toContain('f.md#\\u{FE0F}-foo —')
@@ -521,8 +522,8 @@ describe('findDeadRepoLinks', () => {
    * dead end is to take the string the message tells them to copy, put it back in the
    * citation, and re-run the real gate. Before the `copy:` form existed the escape was
    * the ONLY spelling on offer, and typing it (`#\u{FE0F}-essential-commands`, ASCII)
-   * left the developer redder than before: still dead, and now 9 code points from the
-   * real slug, so not even a candidate came back.
+   * left the developer redder than before: still dead, and now 8 code points from the
+   * real slug (`editDistance`, against a budget of 3), so not even a candidate came back.
    */
   const copySuggestion = (msg: string): string => {
     const m = /\(copy: #(.*?)\)\?/.exec(msg)
