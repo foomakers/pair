@@ -209,3 +209,53 @@ describe('HTML_KINDS_RENDERING_ANCHORS', () => {
     expect(kindOf('<![CDATA[\nx\n]]>\n')).toBe(5)
   })
 })
+
+/**
+ * `blockStart` — the reader's own answer to "does this line begin a new leaf block?".
+ *
+ * A consumer cannot derive this from `paragraph.length`: the accumulator is reset AFTER
+ * the line that ends the paragraph is emitted, so an ATX heading tight against a
+ * paragraph carries a NON-empty accumulator on its own line while being a separate
+ * block. Grouping by the accumulator therefore merges the two — measured as a silent
+ * false green in the docs link gate (ADL 2026-09-04).
+ */
+describe('readMarkdown — blockStart marks a leaf block boundary', () => {
+  const starts = (md: string, opts = {}): boolean[] =>
+    [...readMarkdown(md, opts)].filter(ev => ev.kind === 'leaf').map(ev => ev.blockStart)
+
+  it('marks a TIGHT ATX heading as a new block, where paragraph.length cannot', () => {
+    const leaves = [...readMarkdown('Para line.\n## Heading\n')].filter(ev => ev.kind === 'leaf')
+    expect(leaves.map(ev => ev.text)).toEqual(['Para line.', '## Heading'])
+    // The accumulator is the trap this field exists to avoid: NOT empty on the heading.
+    expect(leaves[1]?.paragraph).toEqual(['Para line.'])
+    expect(leaves.map(ev => ev.blockStart)).toEqual([true, true])
+  })
+
+  it('does NOT mark a paragraph continuation', () => {
+    expect(starts('One line.\nStill the same paragraph.\n')).toEqual([true, false])
+  })
+
+  it('does NOT mark a setext underline — it ends the heading it underlines', () => {
+    expect(starts('Heading text\n===\nAfter.\n')).toEqual([true, false, true])
+  })
+
+  it('marks a tight thematic break and the line after it', () => {
+    expect(starts('Para.\n***\nAfter.\n')).toEqual([true, true, true])
+  })
+
+  it('marks the first line after a blank line', () => {
+    expect(starts('A.\n\nB.\n')).toEqual([true, true, true])
+  })
+
+  it('keeps consecutive indented-code lines in ONE block', () => {
+    expect(starts('\n    code one\n    code two\n')).toEqual([true, true, false])
+  })
+
+  it('marks a lazy continuation as a continuation, not a start', () => {
+    expect(starts('> Quoted line.\nlazy continuation.\n')).toEqual([true, false])
+  })
+
+  it('marks the first leaf of a document', () => {
+    expect(starts('Only line.\n')).toEqual([true])
+  })
+})

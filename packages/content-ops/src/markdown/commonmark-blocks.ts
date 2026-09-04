@@ -408,6 +408,17 @@ export type MarkdownEvent =
       paragraph: readonly string[]
       /** An indented code block (§ 4.4): renders as code, anchors nothing. */
       indentedCode: boolean
+      /**
+       * Does this line BEGIN a leaf block, rather than continue the one before it?
+       *
+       * Not derivable from `paragraph.length`: the accumulator is reset AFTER the line
+       * that ends the paragraph is emitted, so an ATX heading tight against a paragraph
+       * carries a NON-empty `paragraph` on its own line while being a separate block.
+       * A consumer that groups leaves by block MUST read this field — grouping by the
+       * accumulator merges the two, measured as a silent false green in the docs link
+       * gate (ADL 2026-09-04).
+       */
+      blockStart: boolean
     }
 
 export interface ReadMarkdownOptions {
@@ -491,6 +502,8 @@ interface ReaderState {
   fence: OpenFence | undefined
   html: { kind: number; end: RegExp | null } | undefined
   paragraph: string[]
+  /** Was the leaf just emitted an indented-code line? Its block spans consecutive ones. */
+  indented: boolean
   /** The MDX flavour flag, constant for the whole read — see `ReadMarkdownOptions`. */
   readonly mdx: boolean
 }
@@ -509,7 +522,17 @@ function* readLazyLine(
   if (st.fence !== undefined || st.html !== undefined || st.paragraph.length === 0) return false
   const text = expandLeading(peel.rest, peel.col)
   if (!continuesParagraph(text)) return false
-  yield { kind: 'leaf', index, raw, text, paragraph: [...st.paragraph], indentedCode: false }
+  // A lazy line is a paragraph continuation by construction — never a block start.
+  yield {
+    kind: 'leaf',
+    index,
+    raw,
+    text,
+    paragraph: [...st.paragraph],
+    indentedCode: false,
+    blockStart: false,
+  }
+  st.indented = false
   st.paragraph.push(text)
   return true
 }
@@ -577,6 +600,20 @@ function* readHtmlLine(
   return true
 }
 
+/**
+ * Does this line begin a new leaf block? Asked BEFORE the line is emitted, which is the
+ * whole point: `advanceParagraph` runs after, so on an interrupting line the accumulator
+ * still holds the paragraph that line ends.
+ */
+function startsLeafBlock(st: ReaderState, text: string): boolean {
+  if (st.paragraph.length === 0) return true
+  // A setext underline is the LAST line of the heading it underlines, not a new block.
+  if (SETEXT_UNDERLINE_RE.test(text)) return false
+  // Everything else that does not continue the paragraph interrupts it: a blank line, an
+  // ATX heading, a thematic break. The heading is the only one that can carry a URL.
+  return !continuesParagraph(text)
+}
+
 /** How the leaf line just emitted leaves the paragraph for the next one. */
 function advanceParagraph(st: ReaderState, text: string): void {
   if (text.trim() === '' || atxHeadingText(text) !== undefined) st.paragraph = []
@@ -631,12 +668,34 @@ function* readOutsideLine(
   const text = expandLeading(peel.rest, peel.col)
 
   if (isIndentedCode(st, text)) {
-    yield { kind: 'leaf', index, raw, text, paragraph: [], indentedCode: true }
+    yield {
+      kind: 'leaf',
+      index,
+      raw,
+      text,
+      paragraph: [],
+      indentedCode: true,
+      blockStart: !st.indented,
+    }
+    st.indented = true
     return
   }
-  if (yield* openBlock(st, text, raw, index)) return
+  const blockStart = startsLeafBlock(st, text)
+  if (yield* openBlock(st, text, raw, index)) {
+    st.indented = false
+    return
+  }
 
-  yield { kind: 'leaf', index, raw, text, paragraph: [...st.paragraph], indentedCode: false }
+  yield {
+    kind: 'leaf',
+    index,
+    raw,
+    text,
+    paragraph: [...st.paragraph],
+    indentedCode: false,
+    blockStart,
+  }
+  st.indented = false
   advanceParagraph(st, text)
 }
 
@@ -674,6 +733,7 @@ export function* readMarkdown(
     fence: undefined,
     html: undefined,
     paragraph: [],
+    indented: false,
     mdx: options.mdx === true,
   }
 
