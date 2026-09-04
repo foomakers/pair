@@ -460,12 +460,19 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
   ]
 
   /**
-   * A fenced markdown block per CommonMark: 3+ backticks or tildes at the START of a
-   * line indented at most 3 spaces, optional whitespace, then `markdown` or `md` as the
-   * info string's language (any case, trailing attributes allowed), LF or CRLF, closed
-   * by a run of the same fence characters ALSO at line start under 4 spaces of indent
-   * (`\1`: a four-backtick fence is not closed by a three-backtick run inside it) — or
-   * by end of file, which is how CommonMark terminates an unclosed fence.
+   * Fenced code blocks per CommonMark § 4.5, read the way github.com reads them:
+   * LINE BY LINE with a single open-fence state, not with one regex over the whole
+   * document. A regex cannot express the two rules that matter here — while a fence is
+   * open NOTHING opens another one, and a closer may carry no info string — so it reads
+   * a fence marker nested inside an unrelated block as an opener, and a `` ```bash ``
+   * line inside a markdown block as a closer.
+   *
+   * OPENER: `^ {0,3}` + 3+ backticks or tildes + optional spaces/tabs + an info string
+   * whose first word is `markdown` or `md` (any case, trailing attributes allowed). A
+   * BACKTICK fence's info string may not contain a backtick; a tilde fence's may.
+   * CLOSER: `^ {0,3}` + a run of the SAME character at least as long as the opener's,
+   * then whitespace only — or end of file, which is how CommonMark terminates an
+   * unclosed fence.
    *
    * Every clause is a real divergence this sweep had:
    * - pinned to the literal ```markdown\n, it was fence-language-dependent (a guide
@@ -476,22 +483,73 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
    *   "classified or no fence at all" assertion and was told to classify a fence that
    *   does not exist;
    * - requiring a closer, an unclosed fence (or one whose closer is indented 4+ or sits
-   *   mid-prose, neither of which closes anything) counted 0 — a real snippet MISSED.
+   *   mid-prose, neither of which closes anything) counted 0 — a real snippet MISSED;
+   * - regex-only, a ```markdown line inside a ```bash heredoc example STILL opened a
+   *   phantom block (same false red, one nesting level down), and a ```bash line inside
+   *   a markdown block truncated the snippet — the half that matters, because a
+   *   `code-host:` line below such a fake closer would fall out of `snippet` and the
+   *   hosts-code assertion would pass on a guide that breaks ADR-018.
    *
    * Ground truth for every row of the grammar table below is github.com's own renderer
    * (`gh api -X POST /markdown`, counting `highlight-text-md` blocks), not a reading of
    * the spec.
    */
-  const MARKDOWN_FENCE_RE =
-    /^ {0,3}(`{3,}|~{3,})[ \t]*(?:markdown|md)\b[^\n]*\r?\n([\s\S]*?)(?:^ {0,3}\1|(?![\s\S]))/gim
+  const FENCE_LINE_RE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/
+  const MARKDOWN_INFO_RE = /^(?:markdown|md)\b/i
+
+  type FenceMarker = { run: string; info: string }
+  type OpenFence = { char: string; run: number; collect: boolean }
+
+  /** The fence run + info string a line carries, if it is a fence marker line at all. */
+  const fenceMarkerOf = (line: string): FenceMarker | undefined => {
+    const m = FENCE_LINE_RE.exec(line)
+    return m?.[1] === undefined ? undefined : { run: m[1], info: m[2] ?? '' }
+  }
+
+  /** Does this marker CLOSE the open fence? Same char, at least as long, NO info string. */
+  const closes = (open: OpenFence, marker: FenceMarker | undefined): boolean =>
+    marker !== undefined &&
+    marker.run[0] === open.char &&
+    marker.run.length >= open.run &&
+    marker.info.trim() === ''
+
+  /** The fence this marker OPENS — none for a backtick fence carrying a backtick info. */
+  const opens = (marker: FenceMarker | undefined): OpenFence | undefined => {
+    if (marker === undefined) return undefined
+    const char = marker.run[0] ?? '`'
+    if (char === '`' && marker.info.includes('`')) return undefined
+    return { char, run: marker.run.length, collect: MARKDOWN_INFO_RE.test(marker.info) }
+  }
+
+  /** Every fenced markdown block, whatever it says — the copy-paste surface itself. */
+  const markdownFences = (content: string): string[] => {
+    const lines = content.split(/\r?\n/)
+    if (lines[lines.length - 1] === '') lines.pop()
+    const blocks: string[] = []
+    let open: OpenFence | undefined
+    let body: string[] = []
+    const flush = (): void => {
+      if (open?.collect === true) blocks.push(body.map(l => `${l}\n`).join(''))
+      open = undefined
+      body = []
+    }
+    for (const line of lines) {
+      const marker = fenceMarkerOf(line)
+      if (open === undefined) {
+        open = opens(marker)
+      } else if (closes(open, marker)) {
+        flush()
+      } else if (open.collect) {
+        body.push(line)
+      }
+    }
+    flush() // EOF terminates an unclosed fence.
+    return blocks
+  }
 
   /** Every fenced markdown block of `content` that configures way-of-working.md. */
   const wowSnippets = (content: string): string[] =>
     markdownFences(content).filter(block => /adopted for project management/i.test(block))
-
-  /** Every fenced markdown block, whatever it says — the copy-paste surface itself. */
-  const markdownFences = (content: string): string[] =>
-    [...content.matchAll(MARKDOWN_FENCE_RE)].map(m => m[2] ?? '')
 
   /**
    * Does a snippet DECLARE a code host? The `code-host:` key line, nothing else.
@@ -688,8 +746,8 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     const FENCE_LAYOUT_ROWS: ReadonlyArray<{
       content: string
       fences: number
-      contains?: string
-      omits?: string
+      contains?: readonly string[]
+      omits?: readonly string[]
       why: string
     }> = [
       {
@@ -707,7 +765,7 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
       {
         content: '   ```markdown\n# Way of Working\n   ```\n',
         fences: 1,
-        contains: '# Way of Working',
+        contains: ['# Way of Working'],
         why: 'opener indented 3 spaces is still a fence',
       },
       {
@@ -718,33 +776,82 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
       {
         content: '```markdown\n# Way of Working\n   ```\n\nafter\n',
         fences: 1,
-        contains: '# Way of Working',
-        omits: 'after',
+        contains: ['# Way of Working'],
+        omits: ['after'],
         why: 'closer indented 3 spaces closes',
       },
       {
         content: '```markdown\n# Way of Working\n    ```\n\nafter\n',
         fences: 1,
-        contains: 'after',
+        contains: ['after'],
         why: 'closer indented 4 spaces does NOT close — the block runs to EOF',
       },
       {
         content: '```markdown\n# Way of Working\nthen ``` closes it.\n\nafter\n',
         fences: 1,
-        contains: 'after',
+        contains: ['after'],
         why: 'a ``` mid-prose does NOT close — the block runs to EOF',
       },
       {
         content: '```markdown\n# Way of Working\n',
         fences: 1,
-        contains: '# Way of Working',
+        contains: ['# Way of Working'],
         why: 'an unclosed fence runs to EOF, and its snippet must still be seen',
       },
       {
         content: '``` markdown\n# Way of Working\n```\n',
         fences: 1,
-        contains: '# Way of Working',
+        contains: ['# Way of Working'],
         why: 'whitespace between the fence and the info string',
+      },
+      {
+        content: '```bash\ncat <<EOF\n```markdown\n# Way of Working\n```\nEOF\n```\n',
+        fences: 0,
+        why: 'a ```markdown line INSIDE an open ```bash fence opens nothing — a heredoc example, not a copy-paste surface',
+      },
+      {
+        content: '~~~text\n```markdown\n# Way of Working\n```\n~~~\n',
+        fences: 0,
+        why: 'a ```markdown line inside an open ~~~ fence opens nothing either',
+      },
+      {
+        content:
+          '```markdown\n# Way of Working\n```bash\nstill inside per CommonMark\n```\n\nafter\n',
+        fences: 1,
+        contains: ['# Way of Working', '```bash', 'still inside per CommonMark'],
+        omits: ['after'],
+        why: 'a closer bearing an INFO STRING does not close — the ```bash line stays inside the block',
+      },
+      {
+        content: '```markdown\n# Way of Working\n`````\n\nafter\n',
+        fences: 1,
+        contains: ['# Way of Working'],
+        omits: ['after'],
+        why: 'a closer LONGER than the opener closes',
+      },
+      {
+        content: '```markdown\n# Way of Working\n~~~\n\nafter\n',
+        fences: 1,
+        contains: ['after'],
+        why: 'a closer of the OTHER fence char does not close — the block runs to EOF',
+      },
+      {
+        content: '```markdown `x`\n# Way of Working\n```\n',
+        fences: 0,
+        why: 'a BACKTICK inside a backtick fence\u2019s info string is not a fence opener at all',
+      },
+      {
+        content: '~~~markdown `x`\n# Way of Working\n~~~\n',
+        fences: 1,
+        contains: ['# Way of Working'],
+        why: '...but a TILDE fence may carry backticks in its info string',
+      },
+      {
+        content: '```markdown\n# Way of Working\n```   \n\nafter\n',
+        fences: 1,
+        contains: ['# Way of Working'],
+        omits: ['after'],
+        why: 'a closer with trailing whitespace still closes',
       },
     ]
 
@@ -752,8 +859,8 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
       it(`fence layout — ${row.why}`, () => {
         const blocks = markdownFences(row.content)
         expect(blocks, 'markdownFences').toHaveLength(row.fences)
-        if (row.contains !== undefined) expect(blocks[0]).toContain(row.contains)
-        if (row.omits !== undefined) expect(blocks[0]).not.toContain(row.omits)
+        for (const needle of row.contains ?? []) expect(blocks[0]).toContain(needle)
+        for (const needle of row.omits ?? []) expect(blocks[0]).not.toContain(needle)
       })
     }
 

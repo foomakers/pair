@@ -431,7 +431,9 @@ describe('findDeadRepoLinks', () => {
     const dead = `[cmds](https://github.com/foomakers/pair/blob/main/CLAUDE.md#-essential-commands)`
     const errs = findDeadRepoLinks(dead, 'page.mdx', REPO_ROOT)
     expect(errs).toHaveLength(1)
-    expect(errs[0]).toContain('did you mean #\\u{FE0F}-essential-commands?')
+    expect(errs[0]).toContain(
+      'did you mean #\\u{FE0F}-essential-commands (copy: #\u{FE0F}-essential-commands)?',
+    )
   })
 
   it('names the ZWJ heading a stripped anchor was reaching for', () => {
@@ -439,7 +441,9 @@ describe('findDeadRepoLinks', () => {
     const dead = `[x](https://github.com/foomakers/pair/blob/main/${f}#-secure-coding-standards)`
     const errs = findDeadRepoLinks(dead, 'page.mdx', REPO_ROOT)
     expect(errs).toHaveLength(1)
-    expect(errs[0]).toContain('did you mean #\\u{200D}-secure-coding-standards?')
+    expect(errs[0]).toContain(
+      'did you mean #\\u{200D}-secure-coding-standards (copy: #\u{200D}-secure-coding-standards)?',
+    )
   })
 
   const LOSSLESS_ROWS: ReadonlyArray<{
@@ -447,6 +451,7 @@ describe('findDeadRepoLinks', () => {
     cited: string
     actual: string
     candidate: string
+    copy: string
     why: string
   }> = [
     {
@@ -454,6 +459,7 @@ describe('findDeadRepoLinks', () => {
       cited: '-foo',
       actual: '-foo',
       candidate: '\\u{FE0F}-foo',
+      copy: '\u{FE0F}-foo',
       why: 'U+FE0F is zero-width: raw, the two spellings render identically',
     },
     {
@@ -461,6 +467,7 @@ describe('findDeadRepoLinks', () => {
       cited: '-foo',
       actual: '-foo',
       candidate: '\\u{200D}-foo',
+      copy: '\u{200D}-foo',
       why: 'ZWJ, same shape as the motivating bug',
     },
     {
@@ -468,6 +475,7 @@ describe('findDeadRepoLinks', () => {
       cited: 'qu\u{E9}-tal',
       actual: 'qu\\u{E9}-tal',
       candidate: 'que\\u{301}-tal',
+      copy: 'que\u{301}-tal',
       why: 'precomposed vs decomposed é — confusable, not invisible',
     },
   ]
@@ -500,10 +508,80 @@ describe('findDeadRepoLinks', () => {
       expect(errs).toHaveLength(1)
       const msg = errs[0] ?? ''
       expect(msg).toContain(`f.md#${row.actual} —`)
-      expect(msg).toContain(`did you mean #${row.candidate}?`)
+      // BOTH forms: the escape is what makes the two spellings distinguishable on a
+      // terminal, the `copy:` form is the bytes the developer actually has to paste.
+      expect(msg).toContain(`did you mean #${row.candidate} (copy: #${row.copy})?`)
       expect(row.actual).not.toBe(row.candidate)
     })
   }
+
+  /**
+   * THE REPAIR ADVICE MUST WORK, applied literally. The candidate is offered to a
+   * developer whose build is red; the only proof that the hint is a fix rather than a
+   * dead end is to take the string the message tells them to copy, put it back in the
+   * citation, and re-run the real gate. Before the `copy:` form existed the escape was
+   * the ONLY spelling on offer, and typing it (`#\u{FE0F}-essential-commands`, ASCII)
+   * left the developer redder than before: still dead, and now 9 code points from the
+   * real slug, so not even a candidate came back.
+   */
+  const copySuggestion = (msg: string): string => {
+    const m = /\(copy: #(.*?)\)\?/.exec(msg)
+    if (m?.[1] === undefined) throw new Error(`no copy suggestion in: ${msg}`)
+    return m[1]
+  }
+
+  for (const row of LOSSLESS_ROWS) {
+    it(`the copied candidate RESOLVES — ${row.why}`, () => {
+      const errs = fixtureRoot({ 'f.md': `## ${row.heading}\n` }, root => {
+        const first = findDeadRepoLinks(
+          `[x](https://github.com/foomakers/pair/blob/main/f.md#${row.cited})`,
+          'page.mdx',
+          root,
+        )
+        const copied = copySuggestion(first[0] ?? '')
+        return {
+          copied,
+          after: findDeadRepoLinks(
+            `[x](https://github.com/foomakers/pair/blob/main/f.md#${copied})`,
+            'page.mdx',
+            root,
+          ),
+        }
+      })
+      expect(errs.copied).toBe(row.copy)
+      expect(errs.after).toEqual([])
+    })
+  }
+
+  it('the copied candidate RESOLVES for the real VS16 heading in CLAUDE.md', () => {
+    const dead = findDeadRepoLinks(
+      '[x](https://github.com/foomakers/pair/blob/main/CLAUDE.md#-essential-commands)',
+      'page.mdx',
+      REPO_ROOT,
+    )
+    expect(dead).toHaveLength(1)
+    const copied = copySuggestion(dead[0] ?? '')
+    expect(
+      findDeadRepoLinks(
+        `[x](https://github.com/foomakers/pair/blob/main/CLAUDE.md#${copied})`,
+        'page.mdx',
+        REPO_ROOT,
+      ),
+    ).toEqual([])
+  })
+
+  it('adds no copy form when the candidate is already printable ASCII', () => {
+    const errs = fixtureRoot({ 'f.md': '## Alpha\n' }, root =>
+      findDeadRepoLinks(
+        '[x](https://github.com/foomakers/pair/blob/main/f.md#alpha-x)',
+        'page.mdx',
+        root,
+      ),
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('did you mean #alpha?')
+    expect(errs[0]).not.toContain('copy:')
+  })
 
   /**
    * The dedup rule reaching the GATE, not just the slug set. github.com anchors the
@@ -544,18 +622,90 @@ describe('findDeadRepoLinks', () => {
     expect(errs.dead).toHaveLength(1)
   })
 
-  it('offers no candidate when nothing in the file is close', () => {
-    const errs = fixtureRoot({ 'f.md': '## Completely Unrelated Heading\n' }, root =>
-      findDeadRepoLinks(
-        '[x](https://github.com/foomakers/pair/blob/main/f.md#zzz)',
-        'page.mdx',
-        root,
-      ),
-    )
-    expect(errs).toEqual([
-      'Dead anchor in repo citation in page.mdx: f.md#zzz — no heading in that file slugs to it',
-    ])
-  })
+  /**
+   * PROXIMITY IS RELATIVE TO LENGTH, not an absolute 3 edits. An absolute bound makes
+   * every 3-character slug in a file "near" any 3-character fragment — 100% of the
+   * code points differ and it is still offered. That turns the hint into the very bug
+   * the fragment half of Check 5b exists to catch: told `#cli` → "did you mean #api?",
+   * a developer writes a citation that RESOLVES, the gate prints PASS, and the reader
+   * lands on an unrelated section. A candidate must be within `MAX_ANCHOR_DISTANCE`
+   * AND within half the longer string.
+   *
+   * The old guard row (`## Completely Unrelated Heading` vs `#zzz`) could not pin this:
+   * it passed on LENGTH alone (29 vs 3), not because the rule rejects an unrelated
+   * candidate. Every row below is length-controlled.
+   */
+  const PROXIMITY_ROWS: ReadonlyArray<{
+    headings: readonly string[]
+    fragment: string
+    hint: string | null
+    why: string
+  }> = [
+    {
+      headings: ['## Zzy'],
+      fragment: 'abc',
+      hint: null,
+      why: 'EQUAL length, every code point differs — 3 edits over 3 chars is not "near"',
+    },
+    {
+      headings: ['## Cat', '## Dog', '## Elk'],
+      fragment: 'zzz',
+      hint: null,
+      why: 'the reviewer-probed case: three unrelated 3-char headings, none offered',
+    },
+    { headings: ['## Bar'], fragment: 'foo', hint: null, why: 'the 1-heading form of it' },
+    {
+      headings: ['## Api'],
+      fragment: 'apo',
+      hint: '#api',
+      why: 'a REAL short typo is still offered — 1 edit is within half of 3',
+    },
+    {
+      headings: ['## Getting Started'],
+      fragment: 'getting-startd',
+      hint: '#getting-started',
+      why: 'a long slug tolerates the full absolute budget',
+    },
+    {
+      headings: ['## Getting Started'],
+      fragment: 'getting-startedxyz',
+      hint: '#getting-started',
+      why: '3 edits over 18 code points: at MAX_ANCHOR_DISTANCE, well inside half',
+    },
+    {
+      headings: ['## Getting Started'],
+      fragment: 'getting-startedwxyz',
+      hint: null,
+      why: '4 edits — the absolute bound still caps a long string',
+    },
+    {
+      headings: ['## Completely Unrelated Heading'],
+      fragment: 'zzz',
+      hint: null,
+      why: 'the original guard row, kept: length alone already excludes it',
+    },
+  ]
+
+  for (const row of PROXIMITY_ROWS) {
+    it(`anchor proximity — ${row.why}`, () => {
+      const errs = fixtureRoot({ 'f.md': row.headings.map(h => `${h}\n`).join('\n') }, root =>
+        findDeadRepoLinks(
+          `[x](https://github.com/foomakers/pair/blob/main/f.md#${row.fragment})`,
+          'page.mdx',
+          root,
+        ),
+      )
+      expect(errs).toHaveLength(1)
+      const msg = errs[0] ?? ''
+      if (row.hint === null) {
+        expect(msg).toBe(
+          `Dead anchor in repo citation in page.mdx: f.md#${row.fragment} — no heading in that file slugs to it`,
+        )
+      } else {
+        expect(msg).toContain(`did you mean ${row.hint}?`)
+      }
+    })
+  }
 
   it('offers at most three candidates, nearest first', () => {
     const errs = fixtureRoot(
@@ -703,6 +853,55 @@ describe('collectHeadingSlugs', () => {
     const md = '# Real\n\n```sh\n# Not A Heading\n```\n\n~~~\n## Also Not\n~~~\n'
     expect([...collectHeadingSlugs(md)]).toEqual(['real'])
   })
+
+  /**
+   * FENCE STATE, the half of the fence grammar "ignores a `#` inside a fenced block"
+   * cannot reach: which line actually CLOSES the block. Getting it wrong is not a
+   * cosmetic slug-set difference — a phantom slug makes a dead citation PASS (the
+   * reader lands nowhere), and a swallowed real heading reddens a live one.
+   *
+   * `slugs` in every row is the anchor set github.com's own renderer serves for the
+   * SAME bytes: `jq -Rs '{text:.}' f.md | gh api -X POST /markdown --input -`, read as
+   * `href="#…"` in document order.
+   */
+  const FENCE_STATE_ROWS: ReadonlyArray<{ md: string; slugs: readonly string[]; why: string }> = [
+    {
+      md: '# Doc\n\n```markdown\n## Inner\n```bash\n## Phantom\n```\n\n## Real\n',
+      slugs: ['doc', 'real'],
+      why: 'a closer bearing an INFO STRING does not close — `## Phantom` stays inside, `## Real` stays outside',
+    },
+    {
+      md: '# Doc\n\n```markdown `x`\n## Inner\n```\n\n## Real\n',
+      slugs: ['doc', 'inner'],
+      why: 'a BACKTICK in a backtick fence\u2019s info string means no fence opened at all',
+    },
+    {
+      md: '# Doc\n\n```text\n## Inner\n~~~\n\n## Real\n',
+      slugs: ['doc'],
+      why: 'a closer of the OTHER fence char does not close — the block runs to EOF',
+    },
+    {
+      md: '# Doc\n\n```text\n## Inner\n`````\n\n## Real\n',
+      slugs: ['doc', 'real'],
+      why: 'a closer LONGER than the opener closes',
+    },
+    {
+      md: '# Doc\n\n````text\n## Inner\n```\n\n## Real\n',
+      slugs: ['doc'],
+      why: 'a closer SHORTER than the opener does not close',
+    },
+    {
+      md: '# Doc\n\n   ```text\n## Inner\n   ```\n\n## Real\n',
+      slugs: ['doc', 'real'],
+      why: 'opener and closer indented 3 spaces are still a fence',
+    },
+  ]
+
+  for (const row of FENCE_STATE_ROWS) {
+    it(`fence state — ${row.why}`, () => {
+      expect([...collectHeadingSlugs(row.md)]).toEqual([...row.slugs])
+    })
+  }
 
   it('ignores YAML frontmatter', () => {
     expect([...collectHeadingSlugs('---\ntitle: X\n---\n\n# Real\n')]).toEqual(['real'])
