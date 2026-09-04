@@ -941,6 +941,42 @@ describe('findDeadRepoLinks', () => {
       content: `Text \`${DEAD} {/* x */}\` end.\n`,
       hrefs: 0,
     },
+    // BLOCK-LOCAL MASKING. A code span cannot cross a blank line on the real
+    // renderer, so an opener in one block must not pair with a closer in another and
+    // blank every live URL in between — a SILENT false-green, the direction the ADL
+    // calls the worse one. Proven on the site oracle: a probe page with two stray
+    // backticks in separate blocks and three URLs between them prerenders all three
+    // as <a href>. The masking is therefore grouped by real block (readMarkdown's
+    // paragraph accumulator), never over the joined document.
+    {
+      why: 'two stray backticks in SEPARATE blocks do not span the live URL between them',
+      content: `A stray \` backtick.\n\nBare: ${DEAD}\n\nAnother stray \` backtick.\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a link destination between two block-separated stray backticks is still checked',
+      content: `Cost is 5\` wide.\n\n[x](${DEAD})\n\nUse \`pnpm\` here.\n`,
+      hrefs: 1,
+    },
+    {
+      // Mirror direction: the same for `{/*` — an unterminated opener in one block
+      // must not comment out a later block.
+      why: 'an unterminated {/* in one block does not comment out a later block',
+      content: `Text {/* opener.\n\nBare: ${DEAD}\n\nText */} closer.\n`,
+      hrefs: 1,
+    },
+    {
+      // The multi-line cases that motivated joining the surface in the first place
+      // must keep working: both constructs may still wrap a newline WITHIN one block.
+      why: 'a code span still wraps a newline inside ONE block',
+      content: `Text \`${DEAD}\nand more\` end.\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a {/* … */} still wraps newlines inside ONE block',
+      content: `{/* TODO re-enable:\n${DEAD}\n*/}\n`,
+      hrefs: 0,
+    },
   ]
 
   for (const { why, content, hrefs } of [...SURFACE_ROWS, ...INTERACTION_ROWS]) {
