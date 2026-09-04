@@ -847,10 +847,9 @@ describe('findDeadRepoLinks', () => {
       hrefs: 1,
     },
     { why: 'a {/* JSX comment */}', content: `{/* ${DEAD} */}\n`, hrefs: 0 },
-    // An `<!-- … -->` block cannot reach a reader at all: `pnpm --filter @pair/website
-    // build` FAILS on one with "Unexpected character `!` … use `{/* text */}`".
-    // `<!-- … -->` is ordinary text in MDX and IS scanned. A page carrying one cannot
-    // build: "Unexpected character `!` … use `{/* text */}`". Either answer is moot;
+    // `<!-- … -->` is ordinary text under the `mdx` flavour and IS scanned. A page
+    // carrying one cannot build at all — `pnpm --filter @pair/website build` fails with
+    // "Unexpected character `!` … use `{/* text */}`" — so either answer is moot, and
     // reporting is the non-silent one.
     { why: 'an HTML comment (unbuildable in MDX)', content: `<!--\n${DEAD}\n-->\n`, hrefs: 1 },
     { why: 'a <div> block, blank-separated', content: `<div>\n\n${DEAD}\n\n</div>\n`, hrefs: 1 },
@@ -889,9 +888,62 @@ describe('findDeadRepoLinks', () => {
       content: `> \`\`\`bash\n> ${DEAD}\n> \`\`\`\n`,
       hrefs: 0,
     },
+    // BOTH masked constructs are MULTI-LINE on the real renderer, and the surface used
+    // to be masked one leaf line at a time — so a span or a comment that WRAPPED was
+    // never masked and its URL was gated as a live link. The multi-line `{/* … */}` is
+    // THE canonical MDX way to comment something out, which is exactly when a URL sits
+    // in one. Site oracle, same probe page, same count: the multi-line span renders
+    // `<code>` (0 `<a href>`) and the multi-line comment is stripped from the payload
+    // entirely (0 occurrences of its path anywhere in the prerendered HTML).
+    {
+      why: 'a code span WRAPPING a newline',
+      content: `Text \`${DEAD}\nand more\` end.\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a {/* JSX comment */} WRAPPING newlines',
+      content: `{/* see\n${DEAD}\n*/}\n`,
+      hrefs: 0,
+    },
+    // Paired direction: masking a multi-line construct must stop at its CLOSE, not
+    // swallow the live link that follows it. Site: 0 `<a href>` for the span's URL, 1
+    // for the link's.
+    {
+      why: 'a live link AFTER a closed multi-line code span',
+      content: `Text \`${DEAD.replace('does', 'closed')}\nand more\` end.\n\n[x](${DEAD})\n`,
+      hrefs: 1,
+    },
   ]
 
-  for (const { why, content, hrefs } of SURFACE_ROWS) {
+  // INTERACTION — a code span and a JSX comment are two masking rules whose OPENER is
+  // valid text inside the other, so neither can be applied to the whole surface before
+  // the other. Both directions measured on the same probe page, `<a href>` counted in
+  // the prerendered HTML: whichever construct OPENS FIRST wins, and an opener that
+  // never closes is literal text, not a mask.
+  const INTERACTION_ROWS: ReadonlyArray<{ why: string; content: string; hrefs: number }> = [
+    {
+      // A backtick inside a comment must NOT pair with a stray backtick after it —
+      // that would blank the live URL between them (a silent miss). Site: 1.
+      why: 'a backtick inside a JSX comment does not open a span over what follows',
+      content: `{/* a comment with a \` backtick */}\n\nBare: ${DEAD}\n\nAnd a stray \` here.\n`,
+      hrefs: 1,
+    },
+    {
+      // Mirror: `{/*` inside a code span must NOT open a comment that runs to a later
+      // `*/}` in another span. Site: 1.
+      why: 'a {/* inside a code span does not open a comment over what follows',
+      content: `Text \`{/*\` end.\n\nBare: ${DEAD}\n\nText \`*/}\` end.\n`,
+      hrefs: 1,
+    },
+    {
+      // Nesting the other way: the span opens first, so the comment inside it is text.
+      why: 'a JSX comment nested INSIDE a code span',
+      content: `Text \`${DEAD} {/* x */}\` end.\n`,
+      hrefs: 0,
+    },
+  ]
+
+  for (const { why, content, hrefs } of [...SURFACE_ROWS, ...INTERACTION_ROWS]) {
     it(`${hrefs === 0 ? 'ignores' : 'checks'} a dead repo URL in ${why}`, () => {
       expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT), why).toHaveLength(hrefs)
     })
@@ -976,6 +1028,45 @@ describe('findDeadRepoLinks', () => {
     expect(errs).toHaveLength(1)
     expect(errs[0]).toContain('does not exist in the repo')
     expect(errs[0]).not.toContain('Dead anchor')
+  })
+
+  // The suggestion is spliced at the depth the walk STOPPED at, not at the first
+  // occurrence of the failing segment's NAME. `apps/website/apps/x.md` fails on its
+  // THIRD segment; re-finding `apps` by name rewrote the FIRST one and offered
+  // `app/website/apps/x.md` — a path that resolves no better than the one cited, and
+  // one the developer never wrote. The contract this check states is that the offered
+  // spelling is the one that resolves.
+  it('splices the suggestion at the segment that FAILED, not a namesake before it', () => {
+    const errs = findDeadRepoLinks(
+      `[x](https://github.com/foomakers/pair/blob/main/apps/website/apps/x.md)`,
+      'a.mdx',
+      REPO_ROOT,
+    )
+    expect(errs).toEqual([
+      'Dead repo-file citation in a.mdx: apps/website/apps/x.md does not exist in the repo (segment "apps"); did you mean apps/website/app/x.md?',
+    ])
+  })
+
+  // …and applying the offered bytes has to actually resolve. Same repeated name, a
+  // sibling that IS the answer: `apps/website/Lib/…` -> `apps/website/lib/…`, and the
+  // rewritten citation passes the check that just rejected it.
+  it('offers a repeated-segment spelling that turns the check green', () => {
+    const cited = 'apps/website/Lib/docs-staleness-check.ts'
+    const errs = findDeadRepoLinks(
+      `[x](https://github.com/foomakers/pair/blob/main/${cited})`,
+      'a.mdx',
+      REPO_ROOT,
+    )
+    expect(errs).toHaveLength(1)
+    const suggested = errs[0]?.match(/did you mean (.+)\?$/)?.[1] ?? ''
+    expect(suggested).toBe('apps/website/lib/docs-staleness-check.ts')
+    expect(
+      findDeadRepoLinks(
+        `[x](https://github.com/foomakers/pair/blob/main/${suggested})`,
+        'a.mdx',
+        REPO_ROOT,
+      ),
+    ).toEqual([])
   })
 
   // A `..` is RFC 3986 dot-segment removal — what the reader's client does before the
@@ -1388,6 +1479,25 @@ describe('findDeadLinks', () => {
   it('passes a valid JSX href and a valid markdown link (incl. anchors)', () => {
     const ok = '<Card href="/docs/reference/skills-catalog">x</Card> and [t](/docs/tutorials#top)'
     expect(findDeadLinks(ok, 'a.mdx', routes)).toHaveLength(0)
+  })
+
+  // Check 5 reads the SAME rendered surface as Check 5b, so the multi-line span and the
+  // multi-line JSX comment are literal text here too. Site oracle, same probe page:
+  // `/docs/nope-multiline` inside a wrapping code span -> 0 `<a href>`; inside a
+  // wrapping comment -> stripped from the payload entirely.
+  it('ignores a /docs target inside a code span WRAPPING a newline', () => {
+    expect(findDeadLinks('Text `[y](/docs/nope)\nand more` end.\n', 'a.mdx', routes)).toEqual([])
+  })
+
+  it('ignores a /docs target inside a {/* comment */} WRAPPING newlines', () => {
+    expect(findDeadLinks('{/* see\n[y](/docs/nope)\n*/}\n', 'a.mdx', routes)).toEqual([])
+  })
+
+  it('still flags a live /docs link after a closed multi-line code span', () => {
+    const content = 'Text `[y](/docs/also-nope)\nand more` end.\n\n[x](/docs/nope)\n'
+    expect(findDeadLinks(content, 'a.mdx', routes)).toEqual([
+      'Dead internal link in a.mdx: /docs/nope does not resolve to a docs page',
+    ])
   })
 })
 

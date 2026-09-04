@@ -19,6 +19,19 @@ export type CaseSensitiveWalk =
       readonly parent: string
       /** That directory's entry names — EMPTY when it could not be listed at all. */
       readonly siblings: readonly string[]
+      /**
+       * The segments the walk actually traversed, after dot-segment removal — the
+       * spelling a repaired path has to be rebuilt from.
+       */
+      readonly segments: readonly string[]
+      /**
+       * `segment`'s INDEX in `segments`, not its name. A path may repeat a segment
+       * name (`apps/website/apps/x.md`), and a caller that re-finds the failure by
+       * `indexOf` rewrites the FIRST occurrence — offering `app/website/apps/x.md`
+       * for a walk that stopped on the THIRD segment, a path that resolves no better
+       * than the one cited. The caller splices at this index instead.
+       */
+      readonly depth: number
     }
 
 /**
@@ -34,10 +47,10 @@ export function* caseSensitiveWalk(
   segments: readonly string[],
 ): Generator<string, CaseSensitiveWalk, readonly string[] | undefined> {
   let dir = root
-  for (const segment of segments) {
+  for (const [depth, segment] of segments.entries()) {
     const names = yield dir
     if (names === undefined || !names.includes(segment)) {
-      return { kind: 'missing', segment, parent: dir, siblings: names ?? [] }
+      return { kind: 'missing', segment, parent: dir, siblings: names ?? [], segments, depth }
     }
     dir = join(dir, segment)
   }
@@ -89,7 +102,17 @@ export function resolveCaseSensitiveSync(root: string, relPath: string): CaseSen
     step = walk.next(names)
   }
   if (step.value.kind === 'resolved' && !existsSync(step.value.path)) {
-    return { kind: 'missing', segment: relPath, parent: root, siblings: [] }
+    // A dangling symlink: `readdir` listed every segment, `stat` refuses the end of the
+    // walk. There is no ONE segment to blame and nothing to suggest, so the whole path
+    // is the segment and the listing is empty.
+    return {
+      kind: 'missing',
+      segment: relPath,
+      parent: root,
+      siblings: [],
+      segments: [relPath],
+      depth: 0,
+    }
   }
   return step.value
 }

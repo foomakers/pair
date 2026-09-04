@@ -249,16 +249,73 @@ export function findGuideCountMismatches(content: string, rel: string, actual: n
  * `!` … (note: to create a comment in MDX, use `{/* text *\/}`)" — so no reader can be
  * misled by that row either way.
  *
- * A masked span becomes a SPACE, not nothing: a space cannot join two halves of a URL,
- * and `` [`<url>`](<url>) `` — a code span INSIDE a link — must report the destination
- * exactly once, which is what both renderers serve (1 `<a href>`, not 0 and not 2).
+ * A masked construct becomes WHITESPACE, not nothing: a space cannot join two halves of
+ * a URL, and `` [`<url>`](<url>) `` — a code span INSIDE a link — must report the
+ * destination exactly once, which is what both renderers serve (1 `<a href>`, not 0 and
+ * not 2). Newlines are kept so a reported line still counts.
+ *
+ * BOTH masked constructs are MULTI-LINE, so the masking runs over the JOINED surface
+ * and not per leaf line. Masking line by line missed every wrapped one — a code span
+ * `` `<url>\nand more` `` and, worse, the canonical MDX way to comment something out:
+ *
+ *     {/* TODO re-enable when the page lands:
+ *     https://github.com/foomakers/pair/blob/main/does/not/exist.md
+ *     *\/}
+ *
+ * Through the REAL gate on the real tree that gave `FAIL — 1 issue · Dead repo-file
+ * citation`, on a URL fumadocs strips from the payload entirely.
  */
 const JSX_COMMENT_RE = /\{\/\*[\s\S]*?\*\/\}/g
 
-function* linkSurface(content: string): Generator<string> {
-  for (const ev of readMarkdown(content, { frontmatter: true, mdx: true })) {
-    if (ev.kind === 'leaf') yield ev.text.replace(CODE_SPAN_RE, ' ').replace(JSX_COMMENT_RE, ' ')
+/**
+ * The surface with every code span and every `{/* … *\/}` blanked — scanned LEFT TO
+ * RIGHT, because neither construct can be replaced globally before the other: each
+ * one's OPENER is ordinary text inside the other, and both directions are live on the
+ * real site (`<a href>` in the prerendered probe page):
+ *
+ * | bytes                                                    | site | why                          |
+ * | -------------------------------------------------------- | ---- | ---------------------------- |
+ * | `` {/* a ` comment *\/} `` … URL … a stray `` ` ``        | 1    | the comment opened first     |
+ * | `` `{/*` `` … URL … `` `*\/}` ``                           | 1    | the spans opened first       |
+ * | `` `<url> {/* x *\/}` ``                                   | 0    | the span opened first        |
+ *
+ * Masking spans first would blank the first row's URL; masking comments first would
+ * blank the second's. Both are SILENT misses — a live 404 shipped unchecked — so the
+ * rule is positional: whichever construct opens first wins and the scan resumes after
+ * its close. An opener that never closes is literal text (a stray backtick is not a
+ * span, as github does; an unterminated `{/*` cannot build at all), so the scan steps
+ * over it and keeps going.
+ */
+function maskLiteralConstructs(surface: string): string {
+  const blank = (text: string): string => text.replace(/[^\n]/g, ' ')
+  let out = ''
+  let at = 0
+  while (at < surface.length) {
+    CODE_SPAN_RE.lastIndex = at
+    const span = CODE_SPAN_RE.exec(surface)
+    JSX_COMMENT_RE.lastIndex = at
+    const comment = JSX_COMMENT_RE.exec(surface)
+    const first =
+      span === null
+        ? comment
+        : comment === null
+          ? span
+          : span.index <= comment.index
+            ? span
+            : comment
+    if (first === null) break
+    out += surface.slice(at, first.index) + blank(first[0])
+    at = first.index + first[0].length
   }
+  return out + surface.slice(at)
+}
+
+function linkSurface(content: string): string {
+  const lines: string[] = []
+  for (const ev of readMarkdown(content, { frontmatter: true, mdx: true })) {
+    if (ev.kind === 'leaf') lines.push(ev.text)
+  }
+  return maskLiteralConstructs(lines.join('\n'))
 }
 
 /**
@@ -268,7 +325,7 @@ function* linkSurface(content: string): Generator<string> {
  */
 export function findDeadLinks(content: string, rel: string, validRoutes: Set<string>): string[] {
   const errors: string[] = []
-  const surface = [...linkSurface(content)].join('\n')
+  const surface = linkSurface(content)
   for (const re of [LINK_RE, HREF_RE]) {
     for (const m of surface.matchAll(re)) {
       const raw = m[1]
@@ -688,17 +745,28 @@ function deadPathError(path: string, walk: CaseSensitiveWalk): string {
   // The candidate is offered as the WHOLE path with that one segment replaced — the
   // bytes to paste, not a fragment of them to reassemble by hand.
   const suggestions = near
-    .map(sibling => renderCandidate(replaceSegment(path, walk.segment, sibling), ''))
+    .map(sibling => renderCandidate(replaceSegment(walk, sibling), ''))
     .join(' or ')
   return `${shown} does not exist in the repo${where}; did you mean ${suggestions}?`
 }
 
-/** The path with its FIRST occurrence of `segment` (as a whole segment) replaced. */
-function replaceSegment(path: string, segment: string, replacement: string): string {
-  const parts = path.split('/')
-  const at = parts.indexOf(segment)
-  if (at === -1) return replacement
-  return [...parts.slice(0, at), replacement, ...parts.slice(at + 1)].join('/')
+/**
+ * The walked path with the segment the walk STOPPED AT replaced — spliced at its index,
+ * never re-found by name.
+ *
+ * A path may repeat a segment name. `apps/website/apps/x.md` fails on its THIRD
+ * segment, and `parts.indexOf('apps')` rewrote the FIRST: the check offered
+ * `app/website/apps/x.md`, a path that resolves no better than the one cited and one
+ * the developer never wrote. The contract here is that the offered spelling is the one
+ * that resolves (404 vs 200 on the two github.com blob URLs).
+ */
+function replaceSegment(
+  walk: Extract<CaseSensitiveWalk, { kind: 'missing' }>,
+  replacement: string,
+): string {
+  const parts = [...walk.segments]
+  parts[walk.depth] = replacement
+  return parts.join('/')
 }
 
 /**
@@ -712,7 +780,7 @@ function replaceSegment(path: string, segment: string, replacement: string): str
  */
 export function findDeadRepoLinks(content: string, rel: string, root: string): string[] {
   const errors: string[] = []
-  for (const m of [...linkSurface(content)].join('\n').matchAll(REPO_BLOB_RE)) {
+  for (const m of linkSurface(content).matchAll(REPO_BLOB_RE)) {
     const [, kind, ref, raw] = m
     if (kind === undefined || ref === undefined || raw === undefined) continue
     const { path, fragment } = parseCitation(raw)
