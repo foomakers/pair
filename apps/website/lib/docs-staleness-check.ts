@@ -322,12 +322,13 @@ function maskLiteralConstructs(surface: string): string {
  * stray backticks in separate blocks with three URLs between them prerendered ALL
  * THREE as `<a href>`, while the gate blanked and never checked them.
  *
- * The group boundary is READ FROM THE READER, never guessed from the bytes:
- * `readMarkdown`'s leaf events carry the paragraph accumulator as it stood BEFORE the
- * line, so `paragraph.length === 0` marks the first line of a fresh block — which is
- * exactly where a blank line, a heading, a setext underline or a thematic break reset
- * it. Groups are masked independently and rejoined with '\n', so the line count is
- * unchanged and a reported line still counts.
+ * The group boundary is READ FROM THE READER, never guessed from the bytes: each leaf
+ * event answers `blockStart` directly. The paragraph accumulator does NOT answer it —
+ * it is reset AFTER the line that ends the paragraph is emitted, so an ATX heading
+ * tight against a paragraph (no blank line between them) carries a non-empty
+ * accumulator on its own line while being a separate block. That heading is the only
+ * interrupting line that can itself hold a URL, and grouping it with the paragraph
+ * before it kept the false green alive for exactly that shape.
  */
 function linkSurface(content: string): string {
   const masked: string[] = []
@@ -338,7 +339,7 @@ function linkSurface(content: string): string {
   }
   for (const ev of readMarkdown(content, { frontmatter: true, mdx: true })) {
     if (ev.kind !== 'leaf') continue
-    if (ev.paragraph.length === 0) flush()
+    if (ev.blockStart) flush()
     block.push(ev.text)
   }
   flush()

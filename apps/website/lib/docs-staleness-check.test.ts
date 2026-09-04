@@ -977,6 +977,27 @@ describe('findDeadRepoLinks', () => {
       content: `{/* TODO re-enable:\n${DEAD}\n*/}\n`,
       hrefs: 0,
     },
+    // A block boundary is NOT always a blank line. An ATX heading interrupts a
+    // paragraph with no blank line between them, and it is the only interrupting line
+    // that can itself carry a URL — so a stray backtick in the paragraph must not
+    // reach into the heading and blank the citation there.
+    {
+      why: 'a stray backtick in a paragraph does not reach into a TIGHT ATX heading',
+      content: `Cost is 5\` wide.\n## See ${DEAD} \` end\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'the reverse direction: a tight ATX heading does not reach into the paragraph after it',
+      content: `## Heading with a stray \` backtick\nBare: ${DEAD} and a \` here.\n`,
+      hrefs: 1,
+    },
+    {
+      // A setext underline is the LAST line of the heading it underlines, not a new
+      // block: a code span opened on the heading text still closes on that same line.
+      why: 'a code span across a setext heading text and its underline stays ONE block',
+      content: `Text \`${DEAD}\nand more\`\n===\n`,
+      hrefs: 0,
+    },
   ]
 
   for (const { why, content, hrefs } of [...SURFACE_ROWS, ...INTERACTION_ROWS]) {
