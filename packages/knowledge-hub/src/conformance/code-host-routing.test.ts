@@ -460,21 +460,31 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
   ]
 
   /**
-   * Fenced code blocks per CommonMark § 4.5, read the way github.com reads them:
-   * LINE BY LINE with a single open-fence state, not with one regex over the whole
-   * document. A regex cannot express the two rules that matter here — while a fence is
-   * open NOTHING opens another one, and a closer may carry no info string — so it reads
-   * a fence marker nested inside an unrelated block as an opener, and a `` ```bash ``
-   * line inside a markdown block as a closer.
+   * Fenced code blocks per CommonMark § 4.5, read the way github.com reads them: LINE BY
+   * LINE, with a single open-fence state AND the containers the fence sits in, not with
+   * one regex over the whole document. A regex cannot express the rules that matter here
+   * — while a fence is open NOTHING opens another one, a closer may carry no info string,
+   * and a fence inside a blockquote or a list item wears that container's prefix on every
+   * line — so it reads a fence marker nested inside an unrelated block as an opener, a
+   * `` ```bash `` line inside a markdown block as a closer, and a blockquoted snippet as
+   * no snippet at all.
    *
-   * OPENER: `^ {0,3}` + 3+ backticks or tildes + optional spaces/tabs + an info string
-   * whose first word is `markdown` or `md` (any case, trailing attributes allowed). A
-   * BACKTICK fence's info string may not contain a backtick; a tilde fence's may.
-   * CLOSER: `^ {0,3}` + a run of the SAME character at least as long as the opener's,
-   * then whitespace only — or end of file, which is how CommonMark terminates an
-   * unclosed fence.
+   * OPENER: 3+ backticks or tildes, indented at most 3 columns PAST the container's
+   * content column, plus an info string whose first word is `markdown` or `md` (any case,
+   * trailing attributes allowed). A BACKTICK fence's info string may not contain a
+   * backtick; a tilde fence's may.
+   * CLOSER: a run of the SAME character at least as long as the opener's, same
+   * indentation rule, then whitespace only — or the end of the container (fewer
+   * blockquote markers, a line left of the list content column) or of the file, each of
+   * which terminates an unclosed fence.
+   * CONTAINERS: blockquote markers are peeled to the depth the fence was OPENED at (a
+   * `>` line inside a document-level fence is body, not a marker), list-item content
+   * columns are tracked so the 3-space rule is relative to them, and body lines lose
+   * exactly the columns the opener was indented by. Tabs advance to the next 4-column
+   * stop (§ 2.2) — indentation is columns, not characters.
    *
-   * Every clause is a real divergence this sweep had:
+   * Every clause is a real divergence this sweep had — each fixed only after github.com
+   * was asked what it does with the same bytes:
    * - pinned to the literal ```markdown\n, it was fence-language-dependent (a guide
    *   fencing its snippet ```md shipped green);
    * - unanchored, `Open the block with ```markdown so the reader can copy it.` … later
@@ -488,37 +498,201 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
    *   phantom block (same false red, one nesting level down), and a ```bash line inside
    *   a markdown block truncated the snippet — the half that matters, because a
    *   `code-host:` line below such a fake closer would fall out of `snippet` and the
-   *   hosts-code assertion would pass on a guide that breaks ADR-018.
+   *   hosts-code assertion would pass on a guide that breaks ADR-018;
+   * - container-blind, a snippet inside a blockquote or a list item indented 4+ counted
+   *   0, so a new guide pasting its way-of-working block into either one satisfied the
+   *   unclassified branch's `toEqual([])` and shipped an unasserted HALTing snippet —
+   *   verbatim the door that branch exists to close.
    *
-   * Ground truth for every row of the grammar table below is github.com's own renderer
-   * (`gh api -X POST /markdown`, counting `highlight-text-md` blocks), not a reading of
-   * the spec.
+   * Ground truth for every row of the grammar tables below is github.com's own renderer
+   * (`gh api -X POST /markdown`, counting and reading `highlight-text-md` blocks), not a
+   * reading of the spec. TWO known divergences from it survive, both ASSERTED as rows in
+   * FENCE_CONTAINER_ROWS and both over-reporting (never silent): a fence inside an HTML
+   * block (`<!-- … -->`, `<div>`, `<details>`) is seen here though github renders none,
+   * and a tab written directly after a `>` marker leaves the body one leading space short
+   * of github's. HTML blocks (§ 4.6) are not parsed.
    */
-  const FENCE_LINE_RE = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/
+  const FENCE_LINE_RE = /^( *)(`{3,}|~{3,})[ \t]*(.*)$/
   const MARKDOWN_INFO_RE = /^(?:markdown|md)\b/i
+  const BLOCKQUOTE_MARKER_RE = /^ {0,3}>/
+  const LIST_MARKER_RE = /^( *)([-*+]|\d{1,9}[.)])([ \t]+)(?=\S)/
+  const TAB_STOP = 4
 
-  type FenceMarker = { run: string; info: string }
-  type OpenFence = { char: string; run: number; collect: boolean }
+  type FenceMarker = { indent: number; run: string; info: string }
+  type OpenFence = {
+    char: string
+    run: number
+    collect: boolean
+    quote: number
+    base: number
+    dedent: number
+  }
+  type Peeled = { depth: number; rest: string; col: number }
+
+  /**
+   * The leading whitespace run rewritten as spaces, tabs advancing to the next 4-column
+   * stop from `col` (CommonMark § 2.2). Only the run: a tab INSIDE the line is content.
+   */
+  const expandLeading = (line: string, col: number): string => {
+    let out = ''
+    let c = col
+    let i = 0
+    for (; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === ' ') {
+        out += ' '
+        c += 1
+      } else if (ch === '\t') {
+        const width = TAB_STOP - (c % TAB_STOP)
+        out += ' '.repeat(width)
+        c += width
+      } else break
+    }
+    return out + line.slice(i)
+  }
+
+  /** Drop `n` columns of leading whitespace, splitting a tab that straddles the cut. */
+  const dropColumns = (line: string, n: number, col: number): string => {
+    let c = col
+    let i = 0
+    while (i < line.length && c < col + n) {
+      const ch = line[i]
+      if (ch === ' ') {
+        c += 1
+        i += 1
+      } else if (ch === '\t') {
+        const next = c + (TAB_STOP - (c % TAB_STOP))
+        if (next > col + n) return ' '.repeat(next - (col + n)) + line.slice(i + 1)
+        c = next
+        i += 1
+      } else break
+    }
+    return line.slice(i)
+  }
+
+  /** Peel up to `max` blockquote markers: how many, what is left, at which column. */
+  const peelQuotes = (line: string, max: number): Peeled => {
+    let rest = line
+    let depth = 0
+    let col = 0
+    while (depth < max) {
+      const expanded = expandLeading(rest, col)
+      const m = BLOCKQUOTE_MARKER_RE.exec(expanded)
+      if (m === null) break
+      col += m[0].length
+      // ...plus the ONE optional space that may follow the marker; a tab there is worth
+      // one column of its width, the rest of it stays as content indentation.
+      const after = expandLeading(expanded.slice(m[0].length), col)
+      const space = after.startsWith(' ') ? 1 : 0
+      rest = after.slice(space)
+      col += space
+      depth += 1
+    }
+    return { depth, rest, col }
+  }
+
+  const indentOf = (line: string): number => (/^( *)/.exec(line)?.[1] ?? '').length
+
+  /**
+   * Where a list item's marker leaves the text: the column the remainder sits at, and the
+   * item's CONTENT column — the same number, unless 5+ columns of whitespace follow the
+   * marker, which starts an indented code block inside an item whose content is one
+   * column past the marker (CommonMark § 5.2).
+   */
+  const listColumns = (m: RegExpExecArray): { column: number; content: number } => {
+    const afterMarker = (m[1] ?? '').length + (m[2] ?? '').length
+    let column = afterMarker
+    for (const ch of m[3] ?? ' ') column += ch === '\t' ? TAB_STOP - (column % TAB_STOP) : 1
+    return { column, content: column - afterMarker > 4 ? afterMarker + 1 : column }
+  }
+
+  /**
+   * Consume every list marker on the line, replacing each with the spaces it occupies so
+   * the remainder keeps its real column, and record the content indent it opens.
+   */
+  const peelListMarkers = (line: string, stack: number[]): string => {
+    let rest = line
+    for (;;) {
+      const m = LIST_MARKER_RE.exec(rest)
+      if (m === null) return rest
+      const { column, content } = listColumns(m)
+      while (stack.length > 0 && (stack[stack.length - 1] ?? 0) >= content) stack.pop()
+      stack.push(content)
+      rest = ' '.repeat(column) + rest.slice(m[0].length)
+    }
+  }
 
   /** The fence run + info string a line carries, if it is a fence marker line at all. */
   const fenceMarkerOf = (line: string): FenceMarker | undefined => {
     const m = FENCE_LINE_RE.exec(line)
-    return m?.[1] === undefined ? undefined : { run: m[1], info: m[2] ?? '' }
+    return m?.[2] === undefined
+      ? undefined
+      : { indent: (m[1] ?? '').length, run: m[2], info: m[3] ?? '' }
   }
 
   /** Does this marker CLOSE the open fence? Same char, at least as long, NO info string. */
   const closes = (open: OpenFence, marker: FenceMarker | undefined): boolean =>
     marker !== undefined &&
+    marker.indent - open.base <= 3 &&
     marker.run[0] === open.char &&
     marker.run.length >= open.run &&
     marker.info.trim() === ''
 
   /** The fence this marker OPENS — none for a backtick fence carrying a backtick info. */
-  const opens = (marker: FenceMarker | undefined): OpenFence | undefined => {
-    if (marker === undefined) return undefined
+  const opens = (
+    marker: FenceMarker | undefined,
+    quote: number,
+    base: number,
+  ): OpenFence | undefined => {
+    if (marker === undefined || marker.indent - base > 3) return undefined
     const char = marker.run[0] ?? '`'
     if (char === '`' && marker.info.includes('`')) return undefined
-    return { char, run: marker.run.length, collect: MARKDOWN_INFO_RE.test(marker.info) }
+    return {
+      char,
+      run: marker.run.length,
+      collect: MARKDOWN_INFO_RE.test(marker.info),
+      quote,
+      base,
+      dedent: marker.indent,
+    }
+  }
+
+  /** How an open fence reads the next line: as body, as its closer, or as its end. */
+  type InsideStep = { kind: 'body'; text: string } | { kind: 'close' } | { kind: 'ended' }
+
+  /**
+   * One line, read from INSIDE an open fence. `ended` is the container ending — a line
+   * carrying fewer blockquote markers, or sitting left of the list content column — which
+   * terminates the fence exactly as EOF does, and is then re-read in the closed state.
+   */
+  const readInsideFence = (open: OpenFence, raw: string): InsideStep => {
+    const inside = peelQuotes(raw, open.quote)
+    const expanded = expandLeading(inside.rest, inside.col)
+    const blank = expanded.trim() === ''
+    if (inside.depth !== open.quote || (!blank && indentOf(expanded) < open.base))
+      return { kind: 'ended' }
+    if (closes(open, fenceMarkerOf(expanded))) return { kind: 'close' }
+    // The body keeps its own bytes, minus the columns the opener was indented by (§ 4.5).
+    return { kind: 'body', text: dropColumns(inside.rest, open.dedent, inside.col) }
+  }
+
+  /** The containers open at the current line: blockquote depth + list content columns. */
+  type ContainerState = { listStack: number[]; quoteDepth: number }
+
+  /** One line, read from OUTSIDE any fence: the fence it opens, if it opens one. */
+  const readOutsideFence = (raw: string, state: ContainerState): OpenFence | undefined => {
+    const outside = peelQuotes(raw, Number.MAX_SAFE_INTEGER)
+    if (outside.depth !== state.quoteDepth) {
+      state.listStack = []
+      state.quoteDepth = outside.depth
+    }
+    const line = expandLeading(outside.rest, outside.col)
+    if (line.trim() === '') return undefined
+    const indent = indentOf(line)
+    const stack = state.listStack
+    while (stack.length > 0 && (stack[stack.length - 1] ?? 0) > indent) stack.pop()
+    const rest = peelListMarkers(line, stack)
+    return opens(fenceMarkerOf(rest), outside.depth, stack[stack.length - 1] ?? 0)
   }
 
   /** Every fenced markdown block, whatever it says — the copy-paste surface itself. */
@@ -526,6 +700,7 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     const lines = content.split(/\r?\n/)
     if (lines[lines.length - 1] === '') lines.pop()
     const blocks: string[] = []
+    const state: ContainerState = { listStack: [], quoteDepth: 0 }
     let open: OpenFence | undefined
     let body: string[] = []
     const flush = (): void => {
@@ -533,15 +708,18 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
       open = undefined
       body = []
     }
-    for (const line of lines) {
-      const marker = fenceMarkerOf(line)
-      if (open === undefined) {
-        open = opens(marker)
-      } else if (closes(open, marker)) {
+    for (const raw of lines) {
+      if (open !== undefined) {
+        const step = readInsideFence(open, raw)
+        if (step.kind === 'body') {
+          if (open.collect) body.push(step.text)
+          continue
+        }
         flush()
-      } else if (open.collect) {
-        body.push(line)
+        if (step.kind === 'close') continue
+        // `ended`: the container closed the fence, and this line is read outside it.
       }
+      open = readOutsideFence(raw, state)
     }
     flush() // EOF terminates an unclosed fence.
     return blocks
@@ -861,6 +1039,242 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
         expect(blocks, 'markdownFences').toHaveLength(row.fences)
         for (const needle of row.contains ?? []) expect(blocks[0]).toContain(needle)
         for (const needle of row.omits ?? []) expect(blocks[0]).not.toContain(needle)
+      })
+    }
+
+    /**
+     * CONTAINERS — the third half of the grammar: a fence does not only sit at column 0
+     * of the document. Inside a blockquote or a list item it keeps being a fence, and
+     * both its marker lines and its body carry the container's prefix. Missing that read
+     * a real copy-paste surface as NO fence at all, which is the silent direction: the
+     * unclassified branch below asserts `markdownFences(...) === []`, so an invisible
+     * snippet PASSES it.
+     *
+     * `fences` and `blocks` in every row are what github.com's renderer does with the
+     * SAME bytes — count and body:
+     * `printf '%s' <content> > c.md; jq -Rs '{text:.,mode:"markdown"}' c.md > pc.json;
+     *  gh api -X POST /markdown --input pc.json` → every `highlight-text-md` <pre>.
+     * `github` / `githubBlocks` appear ONLY on the rows where this reader knowingly
+     * diverges, and both of those divergences over-report (see each row's `why`).
+     */
+    const FENCE_CONTAINER_ROWS: ReadonlyArray<{
+      content: string
+      fences: number
+      github?: number
+      blocks: readonly string[]
+      githubBlocks?: readonly string[]
+      why: string
+    }> = [
+      {
+        content: '> ```markdown\n> # Way of Working\n>\n> - `pm-tool`: linear\n> ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n\n- `pm-tool`: linear\n'],
+        why: 'a fence inside a BLOCKQUOTE is a fence, and its body loses the `> ` prefix',
+      },
+      {
+        content: '> ```markdown\n> # Way of Working\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'an unclosed blockquoted fence runs to EOF',
+      },
+      {
+        content: '> ```markdown\n> # Way of Working\n\nafter\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a blank line ends the blockquote, and with it the fence',
+      },
+      {
+        content: '> ```markdown\n> # Way of Working\nlazy line\n> ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a LAZY continuation line (no `>`) stays inside the blockquoted fence',
+      },
+      {
+        content: '> ```markdown\n> # Way of Working\n```\n\nafter\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a closer OUTSIDE the blockquote does not close it — the blockquote end does',
+      },
+      {
+        content: '> > ```markdown\n> > # Way of Working\n> > ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'blockquote nested twice: both markers are peeled, neither is body',
+      },
+      {
+        content: '>```markdown\n># Way of Working\n>```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'the space after `>` is optional',
+      },
+      {
+        content: '> ~~~markdown\n> # Way of Working\n> ~~~\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'tilde fence inside a blockquote',
+      },
+      {
+        content: '> ````markdown\n> # Way of Working\n> ```\n> still inside\n> ````\n',
+        fences: 1,
+        blocks: ['# Way of Working\n```\nstill inside\n'],
+        why: 'the run-length rule holds inside a blockquote: a shorter run is body',
+      },
+      {
+        content: '> ```markdown\n> # Way of Working\n> ```bash\n> still inside\n> ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n```bash\nstill inside\n'],
+        why: 'the info-string rule holds inside a blockquote: a ```bash line does not close',
+      },
+      {
+        content: '> ```bash\n> cat <<EOF\n> ```markdown\n> # Way of Working\n> ```\n> EOF\n> ```\n',
+        fences: 0,
+        blocks: [],
+        why: 'a ```markdown line inside a blockquoted ```bash fence opens nothing',
+      },
+      {
+        content: '> ```markdown\n> > quoted line in body\n> ```\n',
+        fences: 1,
+        blocks: ['> quoted line in body\n'],
+        why: 'a `>` line in the BODY of a blockquoted fence is body, not a third marker',
+      },
+      {
+        content: '```markdown\n# Way of Working\n> not a blockquote marker\n```\n\nafter\n',
+        fences: 1,
+        blocks: ['# Way of Working\n> not a blockquote marker\n'],
+        why: 'a `>` line inside a DOCUMENT-level fence is body — the reader peels no marker it did not open with',
+      },
+      {
+        content: '> - a\n>\n>   ```markdown\n>   # Way of Working\n>   ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a list inside a blockquote: both containers are stripped',
+      },
+      {
+        content: '- a\n\n  ```markdown\n  # Way of Working\n  ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a fence in a LIST ITEM is a fence, and its body loses the item indentation',
+      },
+      {
+        content: '- a\n  - b\n\n    ```markdown\n    # Way of Working\n    ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a fence in a NESTED list item, indented 4+, is a fence and not an indented code block',
+      },
+      {
+        content: '- ```markdown\n  # Way of Working\n  ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a fence opened on the list-marker line itself',
+      },
+      {
+        content: '1. a\n\n   ```markdown\n   # Way of Working\n   ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'an ORDERED list item content column',
+      },
+      {
+        content: '- a\n\n    ```markdown\n    # Way of Working\n    ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'inside a list item the 3-space rule is RELATIVE to the content column: 2 extra is still a fence',
+      },
+      {
+        content: '- a\n\n      ```markdown\n      # Way of Working\n      ```\n',
+        fences: 0,
+        blocks: [],
+        why: '...and 4 extra is an indented code block inside the item, not a fence',
+      },
+      {
+        content: '-     ```markdown\n  # Way of Working\n  ```\n',
+        fences: 0,
+        blocks: [],
+        why: '5+ spaces after the marker start an indented code block, so the fence line opens nothing',
+      },
+      {
+        content: '- a\n\n  ```markdown\n  # Way of Working\nback at column 0\n  ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a body line left of the content column ends the item, and with it the fence',
+      },
+      {
+        content: '- a\n\n  ```markdown\n  # Way of Working\n\n  - `pm-tool`: linear\n  ```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n\n- `pm-tool`: linear\n'],
+        why: 'a blank line inside a list-item fence does NOT end it',
+      },
+      {
+        content: '- a\n\n```markdown\n# Way of Working\n```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a fence at column 0 after a list item belongs to the document, not the item',
+      },
+      {
+        content: '> quoted\n\n```markdown\n# Way of Working\n```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a document-level fence after a blockquote',
+      },
+      {
+        content: '-\ta\n\n\t```markdown\n\t# Way of Working\n\t```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        why: 'a TAB-indented list item: the tab is 4 columns, so the fence is at the content column',
+      },
+      {
+        content: '-\ta\n\n\t```markdown\n\t\t# Way of Working\n\t```\n',
+        fences: 1,
+        blocks: ['\t# Way of Working\n'],
+        why: '...and only the columns the opener consumed are stripped: the body keeps its own tab',
+      },
+      {
+        content: '```markdown\n\t# Way of Working\n```\n',
+        fences: 1,
+        blocks: ['\t# Way of Working\n'],
+        why: 'a tab in the body of a document-level fence is content, never indentation',
+      },
+      {
+        content: '\t```markdown\n\t# Way of Working\n\t```\n',
+        fences: 0,
+        blocks: [],
+        why: 'a tab-indented fence at document level is an indented code block (4 columns)',
+      },
+      {
+        content: '>\t```markdown\n>\t# Way of Working\n>\t```\n',
+        fences: 1,
+        blocks: ['# Way of Working\n'],
+        githubBlocks: [' # Way of Working'],
+        why: "TAB directly after `>`: the COUNT is github's, but the body is one leading space short of it \u2014 cmark splits that tab between the marker and the content, this reader gives the whole remainder to the content",
+      },
+      {
+        content: '<!--\n```markdown\n# Way of Working\n```\n-->\n',
+        fences: 1,
+        github: 0,
+        blocks: ['# Way of Working\n'],
+        why: 'a fence inside an HTML COMMENT: github renders no block (the comment is an HTML block, CommonMark \u00a7 4.6), this reader still sees one \u2014 over-reporting, so a guide hiding a snippet there is asked to classify it, never silently passed',
+      },
+      {
+        content: '<div>\n```markdown\n# Way of Working\n```\n</div>\n',
+        fences: 1,
+        github: 0,
+        blocks: ['# Way of Working\n'],
+        why: 'same for a raw <div> block: over-reported, never under-reported',
+      },
+      {
+        content:
+          '<details>\n<summary>s</summary>\n```markdown\n# Way of Working\n```\n</details>\n',
+        fences: 1,
+        github: 0,
+        blocks: ['# Way of Working\n'],
+        why: 'same for the <details>/<summary> pattern the KB uses for collapsed sections',
+      },
+    ]
+
+    for (const row of FENCE_CONTAINER_ROWS) {
+      it(`fence container — ${row.why}`, () => {
+        const blocks = markdownFences(row.content)
+        expect(blocks, 'markdownFences').toHaveLength(row.fences)
+        expect(blocks, 'block bodies').toEqual([...row.blocks])
       })
     }
 

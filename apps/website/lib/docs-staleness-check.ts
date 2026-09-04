@@ -525,8 +525,9 @@ function nearestSlugs(fragment: string, slugs: ReadonlySet<string>): string[] {
  * A candidate, rendered so it is both READABLE and PASTEABLE: the `\u{…}` escape makes
  * it distinguishable from the dead spelling, and the raw `(copy: …)` form is the bytes
  * the developer must actually type. Escape-only advice was a dead end — following it
- * literally (`#\u{FE0F}-essential-commands`, ASCII) left the citation dead AND, being 9
- * code points from the real slug, stripped the candidate from the second message too.
+ * literally (`#\u{FE0F}-essential-commands`, ASCII) left the citation dead AND, being 8
+ * code points from the real slug (measured with `editDistance` above; the budget is 3),
+ * stripped the candidate from the second message too.
  * Omitted when escaping is a no-op, so an ordinary typo hint stays one string.
  */
 function renderCandidate(slug: string): string {
