@@ -2,7 +2,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, mkdir, writeFile, symlink, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { existsCaseSensitive } from './exists-case-sensitive'
+import {
+  existsCaseSensitive,
+  existsCaseSensitiveSync,
+  resolveCaseSensitiveSync,
+} from './exists-case-sensitive'
 import { fileSystemService } from './file-system-service'
 import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 
@@ -49,6 +53,85 @@ describe('existsCaseSensitive — real filesystem', () => {
       expect(await existsCaseSensitive(fileSystemService, join(root, rel))).toBe(expected)
     })
   }
+
+  /**
+   * The SYNC driver over the same rows. Both drivers turn the ONE `caseSensitiveWalk`
+   * coroutine, so a segment rule deleted from it reddens here twice — and in the
+   * website's docs-staleness suite, which imports `existsCaseSensitiveSync` rather
+   * than keeping a second copy of this loop (ADR-024's rule, applied to this file).
+   */
+  for (const { rel, expected, why } of rows) {
+    it(`sync — ${why}: ${JSON.stringify(rel)} → ${expected}`, () => {
+      expect(existsCaseSensitiveSync(root, rel)).toBe(expected)
+    })
+  }
+
+  /**
+   * `..` is RFC 3986 dot-segment removal, not a traversal escape hatch, because that is
+   * what the reader's own client does before the request leaves the machine:
+   * `curl -v .../blob/main/.pair/knowledge/../knowledge/skills-guide.md` puts
+   * `GET /foomakers/pair/blob/main/.pair/knowledge/skills-guide.md` on the wire (200),
+   * and `.../blob/main/../../etc/passwd` puts `GET /foomakers/pair/etc/passwd` (404).
+   * So a collapsing `..` resolves and an ESCAPING one is dead, matching both codes.
+   */
+  const dotRows: ReadonlyArray<{ rel: string; expected: boolean; why: string }> = [
+    { rel: 'Docs/../Docs/Guide.md', expected: true, why: 'a `..` that collapses back' },
+    { rel: 'Docs/Sub/../Guide.md', expected: true, why: 'a `..` out of a subdirectory' },
+    { rel: 'Docs/../docs/Guide.md', expected: false, why: 'case still decides after the collapse' },
+    { rel: '../etc/passwd', expected: false, why: 'a `..` that escapes the root is dead' },
+    { rel: 'Docs/../../etc/passwd', expected: false, why: 'and so is one that escapes late' },
+  ]
+
+  for (const { rel, expected, why } of dotRows) {
+    it(`sync — ${why}: ${JSON.stringify(rel)} → ${expected}`, () => {
+      expect(existsCaseSensitiveSync(root, rel)).toBe(expected)
+    })
+  }
+
+  it('async collapses the same `..` in an unnormalized absolute path', async () => {
+    expect(await existsCaseSensitive(fileSystemService, `${root}/Docs/../Docs/Guide.md`)).toBe(true)
+    expect(await existsCaseSensitive(fileSystemService, `${root}/Docs/../docs/Guide.md`)).toBe(
+      false,
+    )
+  })
+
+  /**
+   * The walk keeps WHERE it stopped, which is the whole input to a "did you mean"
+   * diagnostic: the failing segment and what its parent actually lists.
+   */
+  it('reports the failing segment and its siblings', () => {
+    const miss = resolveCaseSensitiveSync(root, 'docs/Guide.md')
+    expect(miss.kind).toBe('missing')
+    if (miss.kind !== 'missing') return
+    expect(miss.segment).toBe('docs')
+    expect(miss.parent).toBe(root)
+    expect([...miss.siblings].sort()).toEqual(['Docs', 'alias'])
+  })
+
+  it('reports the DEEP failing segment, not the whole path', () => {
+    const miss = resolveCaseSensitiveSync(root, 'Docs/Sub/deep.md')
+    expect(miss.kind).toBe('missing')
+    if (miss.kind !== 'missing') return
+    expect(miss.segment).toBe('deep.md')
+    expect(miss.parent).toBe(join(root, 'Docs', 'Sub'))
+    expect(miss.siblings).toEqual(['Deep.md'])
+  })
+
+  it('reports no siblings when the parent itself cannot be listed', () => {
+    // The parent here is a FILE, so `readdir` throws and there is nothing to suggest.
+    const miss = resolveCaseSensitiveSync(root, 'Docs/Guide.md/extra')
+    expect(miss.kind).toBe('missing')
+    if (miss.kind !== 'missing') return
+    expect(miss.segment).toBe('extra')
+    expect(miss.siblings).toEqual([])
+  })
+
+  it('resolves to the absolute path it walked to', () => {
+    expect(resolveCaseSensitiveSync(root, 'Docs/Guide.md')).toEqual({
+      kind: 'resolved',
+      path: join(root, 'Docs', 'Guide.md'),
+    })
+  })
 
   it('agrees with `exists` on an exact path and disagrees only on case (APFS makes the two differ)', async () => {
     const exact = join(root, 'Docs', 'Guide.md')

@@ -10,7 +10,7 @@ import {
 import { COMMONMARK_BLOCK_ROWS } from '../test-utils/commonmark-rows'
 
 /**
- * The reader itself, against the SHARED row table — the same 107 rows the website's
+ * The reader itself, against the SHARED row table — the same rows the website's
  * docs-staleness gate and the knowledge-hub conformance sweep run, each value taken
  * from github.com's own renderer (see `../test-utils/commonmark-rows.ts` for the
  * command). This file asserts the two things a consumer derives from the reader:
@@ -69,6 +69,64 @@ describe('readMarkdown / fencedBlocks — the shared CommonMark block table', ()
       const htmlEnds = events.filter(e => e.kind === 'html-end').length
       expect(fenceEnds, `${row.name}: fence-end per fence-open`).toBe(fenceOpens)
       expect(htmlEnds, `${row.name}: html-end per html-open`).toBe(htmlOpens)
+    }
+  })
+})
+
+/**
+ * The MDX flavour. Every expectation is the REAL renderer's, read out of the
+ * prerendered `.next/server/app/docs/<page>.html` after
+ * `pnpm --filter @pair/website build` on a probe page — MDX gives indentation to JSX
+ * instead of to code blocks, and parses JSX children as ordinary markdown.
+ */
+describe('readMarkdown — the mdx flavour', () => {
+  const leaves = (md: string, mdx: boolean): string[] =>
+    [...readMarkdown(md, { mdx })]
+      .filter(ev => ev.kind === 'leaf')
+      .map(ev => (ev.kind === 'leaf' ? ev.text : ''))
+
+  it('has NO indented code blocks', () => {
+    const md = 'text\n\n    indented\n'
+    expect([...readMarkdown(md)].some(ev => ev.kind === 'leaf' && ev.indentedCode)).toBe(true)
+    expect(
+      [...readMarkdown(md, { mdx: true })].some(ev => ev.kind === 'leaf' && ev.indentedCode),
+    ).toBe(false)
+  })
+
+  it('has NO § 4.6 HTML blocks — a <div> is just a line', () => {
+    const md = '<div>\ninside\n</div>\n'
+    expect([...readMarkdown(md)].some(ev => ev.kind === 'html-open')).toBe(true)
+    expect([...readMarkdown(md, { mdx: true })].some(ev => ev.kind === 'html-open')).toBe(false)
+    expect(leaves(md, true)).toEqual(['<div>', 'inside', '</div>'])
+  })
+
+  it('keeps a FENCE inside a <div> a fence — the site renders it as code', () => {
+    const md = '<div>\n```bash\nls\n```\n</div>\n'
+    expect(fencedBlocks(md, { mdx: true })).toEqual([{ info: 'bash', body: 'ls\n' }])
+    // Without the flag the fence is swallowed by the HTML block, as § 4.6 says.
+    expect(fencedBlocks(md)).toEqual([])
+  })
+
+  it('still reads fences, containers and headings', () => {
+    const md = '- # In List\n\n> ## Quoted\n\n```md\nbody\n```\n'
+    expect(leaves(md, true)).toEqual(['# In List', '', '## Quoted', ''])
+    expect(fencedBlocks(md, { mdx: true })).toEqual([{ info: 'md', body: 'body\n' }])
+  })
+
+  it('accounts for every source line exactly once under the flag too', () => {
+    for (const row of COMMONMARK_BLOCK_ROWS) {
+      const lines = row.content.split(/\r?\n/)
+      if (lines[lines.length - 1] === '') lines.pop()
+      const seen = [...readMarkdown(row.content, { mdx: true })]
+      const lineEvents = seen.filter(e => e.kind !== 'fence-end' && e.kind !== 'html-end')
+      const closers = seen
+        .filter(e => e.kind === 'fence-end' && e.index < lines.length)
+        .map(e => e.index)
+        .filter(i => !lineEvents.some(e => e.index === i))
+      expect(
+        [...lineEvents.map(e => e.index), ...closers].sort((a, b) => a - b),
+        row.name,
+      ).toEqual(lines.map((_l, i) => i))
     }
   })
 })

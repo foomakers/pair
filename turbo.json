@@ -132,6 +132,13 @@
       "dependsOn": ["^build"],
       "cache": false
     },
+    // Same edge, same reason: the oracle regenerator imports @pair/content-ops. Without
+    // this task the documented `pnpm docs:anchor-oracle` dies with ERR_MODULE_NOT_FOUND
+    // on a clean checkout. Never cached — it POSTs to github.com and rewrites a fixture.
+    "docs:anchor-oracle": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "lint": {
       "outputs": []
     },

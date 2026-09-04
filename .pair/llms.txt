@@ -138,6 +138,7 @@
 - [Decision: a repo citation is checked ref-deep and anchor-deep, not just path-deep](.pair/adoption/decision-log/2026-09-03-repo-citations-are-checked-ref-and-anchor-deep.md)
 - [Decision: the review severity floor defaults to Minor — Questions are carried, never fixed](.pair/adoption/decision-log/2026-09-03-the-review-severity-floor-defaults-to-minor.md)
 - [Decision: Independent fix preflight prevents review churn](.pair/adoption/decision-log/2026-09-04-independent-fix-preflight-prevents-review-churn.md)
+- [Decision: A docs-site link gate reads the RENDERED surface, and its oracle is the site build](.pair/adoption/decision-log/2026-09-04-link-surface-oracle-is-the-site-build.md)
 - [Decision: Locked RED contract prevents fix regressions](.pair/adoption/decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md)
 
 ## How-To Guides

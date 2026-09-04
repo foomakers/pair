@@ -36,6 +36,27 @@ const FENCE_LINE_RE = /^( *)(`{3,}|~{3,})[ \t]*(.*)$/
 const BLOCKQUOTE_MARKER_RE = /^ {0,3}>/
 const LIST_MARKER_RE = /^( *)([-*+]|\d{1,9}[.)])([ \t]+)(?=\S)/
 
+/**
+ * May this list marker interrupt an OPEN paragraph? A bullet always may; an ORDERED
+ * item only when its start number is 1 (CommonMark § 5.3), and the number is read as a
+ * NUMBER — `01.` is 1 and interrupts.
+ *
+ * github.com's own answers, one probe per shape: `Some para` / `2. item` / `---`
+ * anchors `some-para2-item` (the marker line stayed paragraph text, and the `---`
+ * underlined BOTH lines), while `Some para` / `1. item` / `---` anchors nothing (the
+ * item opened and the `---` closed it). Opening the list anyway made the gate report a
+ * live `<file>.md#some-para2-item` as `Dead anchor … no heading in that file slugs to
+ * it`, and made the `# Not Heading` on such a line a PHANTOM anchor.
+ *
+ * The rule is per CONTAINER, not per document: it applies to the paragraph open in the
+ * containers this line MATCHED. A lazy line is therefore not the refusing case —
+ * `> Para` / `2. item` / `> ---` opens the list on github.com, because the blockquote's
+ * paragraph is not the matched container (see `continuesParagraph`).
+ */
+function interruptsParagraph(marker: string): boolean {
+  return !/^\d/.test(marker) || parseInt(marker.slice(0, -1), 10) === 1
+}
+
 /** `## X`, optional closing `#`s. `#NoSpace`, `#` alone and `####### 7` are NOT headings. */
 const ATX_HEADING_RE = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/
 /** `===`/`---` alone on a line — a setext underline ONLY over an open paragraph. */
@@ -329,9 +350,14 @@ function matchContainers(raw: string, stack: readonly Container[]): Peel {
  * item holding a block quote holding a heading, and peeling only one kind (or peeling
  * quotes before lists, once) misses it. github.com anchors that heading.
  */
-function openContainers(peel: Peel, stack: Container[]): Peel {
+function openContainers(peel: Peel, stack: Container[], paragraphOpen: boolean): Peel {
   let { rest, col } = peel
   let opened = false
+  // Opening ANY container closes the paragraph that was open outside it, so only the
+  // FIRST marker on the line can be the one interrupting a paragraph: `Some para` /
+  // `> 2. item` / `> ---` anchors nothing on github.com — the `>` interrupts, and the
+  // `2.` then opens its item inside a quote holding no paragraph.
+  let paraOpen = paragraphOpen
   for (;;) {
     const expanded = expandLeading(rest, col)
     const qm = BLOCKQUOTE_MARKER_RE.exec(expanded)
@@ -343,15 +369,17 @@ function openContainers(peel: Peel, stack: Container[]): Peel {
       col += space
       stack.push({ kind: 'quote' })
       opened = true
+      paraOpen = false
       continue
     }
     const lm = LIST_MARKER_RE.exec(expanded)
-    if (lm !== null && indentOf(expanded) <= 3) {
+    if (lm !== null && indentOf(expanded) <= 3 && (!paraOpen || interruptsParagraph(lm[2] ?? ''))) {
       const { column, content } = listColumns(lm, col)
       rest = ' '.repeat(column - content) + expanded.slice(lm[0].length)
       col += content
       stack.push({ kind: 'list', content: col })
       opened = true
+      paraOpen = false
       continue
     }
     return { rest, col, matched: opened ? -1 : peel.matched }
@@ -385,6 +413,31 @@ export type MarkdownEvent =
 export interface ReadMarkdownOptions {
   /** Skip a leading `---` YAML frontmatter block. Off by default. */
   readonly frontmatter?: boolean
+  /**
+   * MDX flavour: § 4.6 HTML blocks and § 4.4 indented code blocks DO NOT EXIST.
+   *
+   * Not a preference — measured on the real renderer. A page built with
+   * `pnpm --filter @pair/website build` and read back out of the prerendered
+   * `.next/server/app/docs/<page>.html`:
+   *
+   * | source                                | fumadocs/MDX      | github.com     |
+   * | ------------------------------------- | ----------------- | -------------- |
+   * | a 4-space-indented URL                | `<a href>` (live) | code, no link  |
+   * | a bare URL inside `<div>` / `<pre>`   | `<a href>` (live) | live / no link |
+   * | a code span inside `<div>`            | code, no link     | LIVE           |
+   * | a ```` ```bash ```` fence inside `<div>` | code, no link  | LIVE           |
+   *
+   * i.e. MDX parses JSX children as ordinary markdown (so a code span stays a code span
+   * and a fence stays a fence inside them) and gives indentation to JSX instead of to
+   * code blocks. Reading an `.mdx` page with the CommonMark rules is therefore wrong in
+   * BOTH directions at once.
+   *
+   * Scope: block CLASSIFICATION only. Fences, containers and paragraph laziness are
+   * unchanged, and an `<!-- … -->` line becomes ordinary text — a page carrying one
+   * cannot build at all ("Unexpected character `!` … use `{/* text *\/}`"), so no
+   * consumer can be misled by it.
+   */
+  readonly mdx?: boolean
 }
 
 /**
@@ -411,6 +464,12 @@ function bodyStart(lines: readonly string[]): number {
  * container prefix: `> Para` / `line two` / `> ---` is one setext heading on
  * github.com (`#paraline-two`), while `Some para` / `- item` / `---` is none at all,
  * because the list marker starts a block and the `---` then closes the item.
+ *
+ * ANY list marker disqualifies a lazy line, an ordered one starting at 2 included —
+ * `interruptsParagraph` does NOT apply here. github.com renders `> Para` / `2. item` /
+ * `> ---` as a quote, then `<ol start="2">`, then a quoted `<hr>`: anchors nothing.
+ * The interrupt rule is about the paragraph open in the containers a line MATCHED, and
+ * a lazy line matched none.
  */
 function continuesParagraph(text: string): boolean {
   return (
@@ -432,6 +491,8 @@ interface ReaderState {
   fence: OpenFence | undefined
   html: { kind: number; end: RegExp | null } | undefined
   paragraph: string[]
+  /** The MDX flavour flag, constant for the whole read — see `ReadMarkdownOptions`. */
+  readonly mdx: boolean
 }
 
 /**
@@ -523,6 +584,41 @@ function advanceParagraph(st: ReaderState, text: string): void {
   else st.paragraph.push(text)
 }
 
+/**
+ * An indented code block (§ 4.4). Absent in the mdx flavour: MDX gives indentation to
+ * JSX, so a 4-space-indented line there is ordinary content — a URL on one is LIVE.
+ */
+function isIndentedCode(st: ReaderState, text: string): boolean {
+  return !st.mdx && text.trim() !== '' && indentOf(text) >= 4 && st.paragraph.length === 0
+}
+
+/**
+ * Open the fence or HTML block this line starts, if it starts one. Returns whether it
+ * did — the caller then emits nothing further for this line.
+ */
+function* openBlock(
+  st: ReaderState,
+  text: string,
+  raw: string,
+  index: number,
+): Generator<MarkdownEvent, boolean> {
+  if (text.trim() === '') return false
+  const opened = opensFence(fenceMarkerOf(text))
+  if (opened !== undefined) {
+    st.fence = opened
+    st.paragraph = []
+    yield { kind: 'fence-open', index, raw, text, info: opened.info }
+    return true
+  }
+  const htmlStart = st.mdx ? undefined : htmlStartOf(text, st.paragraph.length > 0)
+  if (htmlStart === undefined) return false
+  st.paragraph = []
+  yield { kind: 'html-open', index, raw, text, htmlKind: htmlStart.kind }
+  if (htmlStart.end !== null && htmlStart.end.test(text)) yield { kind: 'html-end', index }
+  else st.html = htmlStart
+  return true
+}
+
 /** One line read from OUTSIDE any fence or HTML block: it may open either, or neither. */
 function* readOutsideLine(
   st: ReaderState,
@@ -530,32 +626,15 @@ function* readOutsideLine(
   raw: string,
   index: number,
 ): Generator<MarkdownEvent> {
-  const peel = openContainers(peeled, st.stack)
+  const peel = openContainers(peeled, st.stack, st.paragraph.length > 0)
   if (peel.matched === -1) st.paragraph = []
   const text = expandLeading(peel.rest, peel.col)
 
-  if (text.trim() !== '' && indentOf(text) >= 4 && st.paragraph.length === 0) {
+  if (isIndentedCode(st, text)) {
     yield { kind: 'leaf', index, raw, text, paragraph: [], indentedCode: true }
     return
   }
-
-  if (text.trim() !== '') {
-    const opened = opensFence(fenceMarkerOf(text))
-    if (opened !== undefined) {
-      st.fence = opened
-      st.paragraph = []
-      yield { kind: 'fence-open', index, raw, text, info: opened.info }
-      return
-    }
-    const htmlStart = htmlStartOf(text, st.paragraph.length > 0)
-    if (htmlStart !== undefined) {
-      st.paragraph = []
-      yield { kind: 'html-open', index, raw, text, htmlKind: htmlStart.kind }
-      if (htmlStart.end !== null && htmlStart.end.test(text)) yield { kind: 'html-end', index }
-      else st.html = htmlStart
-      return
-    }
-  }
+  if (yield* openBlock(st, text, raw, index)) return
 
   yield { kind: 'leaf', index, raw, text, paragraph: [...st.paragraph], indentedCode: false }
   advanceParagraph(st, text)
@@ -590,7 +669,13 @@ export function* readMarkdown(
   const lines = content.split(/\r?\n/)
   if (lines[lines.length - 1] === '') lines.pop()
   const start = options.frontmatter === true ? bodyStart(lines) : 0
-  const st: ReaderState = { stack: [], fence: undefined, html: undefined, paragraph: [] }
+  const st: ReaderState = {
+    stack: [],
+    fence: undefined,
+    html: undefined,
+    paragraph: [],
+    mdx: options.mdx === true,
+  }
 
   for (let index = start; index < lines.length; index++) {
     yield* readLine(st, lines[index] ?? '', index)

@@ -1,16 +1,103 @@
+import { existsSync, readdirSync } from 'fs'
 import { isAbsolute, join, normalize, parse, sep } from 'path'
-import { FileSystemService } from './file-system-service'
+import type { FileSystemService } from './file-system-service'
 
 /**
- * Case-SENSITIVE existence check, whatever the volume's own rule.
+ * Where a case-sensitive walk stopped.
  *
- * `exists` is `fs.stat`, and `fs.stat` inherits the filesystem's case rule: APFS
- * (macOS default) finds `docs/guide.md` when only `Docs/Guide.md` is on disk; ext4
- * on Linux CI and github.com both say ENOENT / 404 for the same path. A link gate
- * built on `exists` therefore printed PASS on a developer's Mac and 404'd for every
- * reader — the same local-PASS / CI-FAIL asymmetry `apps/website`'s Check 5b closes
- * for docs-site citations. Each segment is compared byte-for-byte against its
- * parent directory's listing, so the answer is the one GitHub gives on every OS.
+ * `missing` carries WHICH segment its parent does not list and WHAT that parent does
+ * list, because the caller that has to explain the failure (the docs-site citation
+ * gate) otherwise reports a whole 6-segment path as wrong when one segment is.
+ */
+export type CaseSensitiveWalk =
+  | { readonly kind: 'resolved'; readonly path: string }
+  | {
+      readonly kind: 'missing'
+      /** The first segment its parent directory does not list byte-for-byte. */
+      readonly segment: string
+      /** The directory that was listed, as an absolute path. */
+      readonly parent: string
+      /** That directory's entry names — EMPTY when it could not be listed at all. */
+      readonly siblings: readonly string[]
+    }
+
+/**
+ * The case-sensitive walk itself, as a coroutine: it yields each parent directory to
+ * list and is resumed with that directory's entry names (or `undefined` when listing
+ * threw). ONE rule, driven synchronously over `fs` by the docs-site gate and
+ * asynchronously over a `FileSystemService` by the KB link gate — the two used to be
+ * two copies of this loop in two packages, whose tests cannot see each other's
+ * regressions.
+ */
+export function* caseSensitiveWalk(
+  root: string,
+  segments: readonly string[],
+): Generator<string, CaseSensitiveWalk, readonly string[] | undefined> {
+  let dir = root
+  for (const segment of segments) {
+    const names = yield dir
+    if (names === undefined || !names.includes(segment)) {
+      return { kind: 'missing', segment, parent: dir, siblings: names ?? [] }
+    }
+    dir = join(dir, segment)
+  }
+  return { kind: 'resolved', path: dir }
+}
+
+/**
+ * The segments a path contributes to the walk, after RFC 3986 dot-segment removal —
+ * which is what `normalize` does and what the reader's own client does before the
+ * request is ever sent: `curl -v .../blob/main/.pair/knowledge/../knowledge/x.md`
+ * puts `GET /foomakers/pair/blob/main/.pair/knowledge/x.md` on the wire (HTTP 200),
+ * so collapsing is the faithful reading, not a convenience.
+ *
+ * A `..` that survives the collapse escapes the root, and stays a segment on purpose:
+ * `readdir` never lists it, so the walk reports it missing. `blob/main/../../etc/passwd`
+ * is `GET /foomakers/pair/etc/passwd` on the wire — HTTP 404, a dead citation, not a
+ * file this repo serves.
+ */
+function walkSegments(path: string): string[] {
+  return normalize(path)
+    .split(sep === '/' ? '/' : /[/\\]/)
+    .filter(s => s !== '' && s !== '.')
+}
+
+/**
+ * Case-SENSITIVE existence check over `fs`, resolving `relPath` under `root`.
+ *
+ * `existsSync` inherits the filesystem's case rule: APFS (macOS default) finds
+ * `docs/guide.md` when only `Docs/Guide.md` is on disk; ext4 on Linux CI and
+ * github.com both say ENOENT / 404 for the same path. A citation spelled
+ * `.pair/adoption/tech/ADR/adr-018-….md` therefore resolved on a developer's Mac
+ * (local `docs:staleness` printed PASS) and 404'd for every reader.
+ */
+export function existsCaseSensitiveSync(root: string, relPath: string): boolean {
+  return resolveCaseSensitiveSync(root, relPath).kind === 'resolved'
+}
+
+/** The same walk, keeping WHERE it stopped — the input to a "did you mean" diagnostic. */
+export function resolveCaseSensitiveSync(root: string, relPath: string): CaseSensitiveWalk {
+  const walk = caseSensitiveWalk(root, walkSegments(relPath))
+  let step = walk.next()
+  while (step.done !== true) {
+    let names: string[] | undefined
+    try {
+      names = readdirSync(step.value)
+    } catch {
+      names = undefined // parent is missing or not a directory
+    }
+    step = walk.next(names)
+  }
+  if (step.value.kind === 'resolved' && !existsSync(step.value.path)) {
+    return { kind: 'missing', segment: relPath, parent: root, siblings: [] }
+  }
+  return step.value
+}
+
+/**
+ * Case-SENSITIVE existence check over a `FileSystemService`, for an absolute path
+ * (a relative one is anchored to the service's cwd). Same rule, same walk — see
+ * `caseSensitiveWalk`.
  *
  * Symlinks: `readdir` lists a link by its own name, so an exact spelling through a
  * symlinked directory resolves; a dangling link is listed but fails the final
@@ -20,21 +107,18 @@ export async function existsCaseSensitive(
   fileService: FileSystemService,
   path: string,
 ): Promise<boolean> {
-  // Callers pass absolute paths; a relative one is anchored to the service's cwd.
   const resolved = isAbsolute(path) ? normalize(path) : fileService.resolve(path)
   const { root } = parse(resolved)
-  const segments = resolved.slice(root.length).split(sep).filter(Boolean)
-
-  let dir = root
-  for (const segment of segments) {
-    let names: string[]
+  const walk = caseSensitiveWalk(root, walkSegments(resolved.slice(root.length)))
+  let step = walk.next()
+  while (step.done !== true) {
+    let names: string[] | undefined
     try {
-      names = (await fileService.readdir(dir)).map(entry => entry.name)
+      names = (await fileService.readdir(step.value)).map(entry => entry.name)
     } catch {
-      return false // parent is missing or not a directory
+      names = undefined // parent is missing or not a directory
     }
-    if (!names.includes(segment)) return false
-    dir = join(dir, segment)
+    step = walk.next(names)
   }
-  return fileService.exists(dir)
+  return step.value.kind === 'resolved' && (await fileService.exists(step.value.path))
 }

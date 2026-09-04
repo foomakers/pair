@@ -23,7 +23,9 @@
  * extracted (see the module header in `../markdown/commonmark-blocks.ts`).
  *
  * `readerBlocks`/`readerAnchors` appear ONLY where this reader knowingly diverges from
- * github.com, so the cap is on record instead of latent. ONE row carries one today.
+ * github.com, so the cap is on record instead of latent. FOUR rows carry one today —
+ * `fence-container-30` (blocks) and `html-id-attributes` / `html-name-map` /
+ * `html-raw-heading` (anchors); each states its cap in its own `why`.
  */
 export interface CommonMarkBlockRow {
   /** Stable row id, so a failure names the shape and not an index. */
@@ -390,6 +392,83 @@ export const COMMONMARK_BLOCK_ROWS: readonly CommonMarkBlockRow[] = [
     name: 'setext-list-interrupt',
     why: 'a list marker interrupts the paragraph, and the `---` at column 0 then closes the item',
     content: 'Some para\n- item\n---\n\n## Real\n',
+    anchors: ['real'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-start-not-1-no-interrupt',
+    why: 'an ORDERED marker whose start number is not 1 CANNOT interrupt a paragraph (§ 5.3): the line stays paragraph text, and the `---` underlines both lines',
+    content: '# Doc\n\nSome para\n2. item\n---\n',
+    anchors: ['doc', 'some-para2-item'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-start-1-interrupts',
+    why: 'start = 1 DOES interrupt: the item opens, and the `---` at column 0 then closes it',
+    content: 'Some para\n1. item\n---\n\n## Real\n',
+    anchors: ['real'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-start-01-interrupts',
+    why: 'the start number is read as a NUMBER, not a string: `01.` is 1 and interrupts',
+    content: 'Some para\n01. item\n---\n',
+    anchors: [],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-paren-not-1-no-interrupt',
+    why: 'the `)` marker form obeys the same rule',
+    content: 'Some para\n3) item\n---\n\n## Real\n',
+    anchors: ['some-para3-item', 'real'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-not-1-multidigit',
+    why: 'a multi-digit start is still not 1',
+    content: '# Doc\n\nSome para\n10. item\n---\n',
+    anchors: ['doc', 'some-para10-item'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-not-1-repeated',
+    why: 'two non-interrupting markers in a row both stay paragraph text',
+    content: 'Some para\n2. item\n2. more\n---\n',
+    anchors: ['some-para2-item2-more'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-not-1-atx-inside',
+    why: 'the refused marker does not make the rest of its line a heading either',
+    content: 'Some para\n2. # Not Heading\n\n## Real\n',
+    anchors: ['real'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-not-1-after-blank',
+    why: 'with NO paragraph open, a non-1 start opens a list as usual',
+    content: '# Doc\n\n2. # In List\n\n## Real\n',
+    anchors: ['doc', 'in-list', 'real'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-not-1-after-quote-open',
+    why: 'opening a blockquote CLOSES the paragraph, so the marker inside it interrupts nothing and the item opens',
+    content: 'Some para\n> 2. item\n> ---\n\n## Real\n',
+    anchors: ['real'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-not-1-in-list-para',
+    why: 'the rule is per CONTAINER: a paragraph open inside a list item refuses the non-1 marker exactly as at document level',
+    content: '- Some para\n  2. item\n  ---\n\n## Real\n',
+    anchors: ['some-para2-item', 'real'],
+    markdownBlocks: [],
+  },
+  {
+    name: 'ord-not-1-lazy',
+    why: 'a LAZY line is NOT the refusing case: the blockquote paragraph is not the matched container, so `2. item` opens a list and the quote closes',
+    content: '> Para\n2. item\n> ---\n\n## Real\n',
     anchors: ['real'],
     markdownBlocks: [],
   },
