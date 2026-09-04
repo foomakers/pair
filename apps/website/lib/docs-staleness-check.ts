@@ -23,6 +23,10 @@ import {
   HTML_KINDS_RENDERING_ANCHORS,
   type MarkdownEvent,
 } from '@pair/content-ops/markdown/commonmark-blocks'
+import {
+  resolveCaseSensitiveSync,
+  type CaseSensitiveWalk,
+} from '@pair/content-ops/file-system/exists-case-sensitive'
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -194,11 +198,79 @@ export function findGuideCountMismatches(content: string, rel: string, actual: n
   return errors
 }
 
-/** Check 5: every /docs link/href in content resolves to a known route. */
+/**
+ * The lines of a page a URL written on them is actually a LINK on — everything the link
+ * checks below are allowed to see.
+ *
+ * Scanning the raw bytes gated text no reader can click, and broke builds on it. Through
+ * the REAL gate on the real tree, before this: a ```bash fence holding `gh api
+ * https://github.com/foomakers/pair/blob/main/does/not/exist.md` plus a prose code span
+ * holding `…/also/missing.md` gave `FAIL — 2 issues`, and a page teaching this gate's OWN
+ * ref rule — ``Never write `…/blob/master/README.md` — use main`` — gave `FAIL — 1 issue
+ * · Bad ref in repo citation`. So the reference page could not state the counter-example
+ * it exists to teach, and any CLI example embedding a repo URL in a fence was a mine.
+ *
+ * THE ORACLE HERE IS THE DOCS SITE ITSELF, not github.com. These pages are `.mdx`
+ * rendered by fumadocs, and on two rows the two renderers disagree — which is exactly
+ * why the site was measured rather than assumed. Counts are `<a href="…">` occurrences
+ * in the prerendered `.next/server/app/docs/__link-surface-probe.html` after
+ * `pnpm --filter @pair/website build`, one probe URL per row:
+ *
+ * | where the URL sits                        | site | github.com | read here |
+ * | ----------------------------------------- | ---- | ---------- | --------- |
+ * | prose, bare (autolink)                    | 1    | 1          | yes       |
+ * | a markdown link destination               | 1    | 1          | yes       |
+ * | an inline code span                       | 0    | 0          | no        |
+ * | a fenced code block, with or without info | 0    | 0          | no        |
+ * | a fence inside a list item / blockquote   | 0    | 0          | no        |
+ * | a 4-space-indented line                   | 1    | 0 (code)   | YES       |
+ * | a `{/* … *\/}` JSX comment                 | 0    | n/a        | no        |
+ * | bare inside `<div>` (tight or blank-sep)  | 1    | 1          | yes       |
+ * | bare inside `<pre>` (§ 4.6 kind 1)        | 1    | 0          | yes       |
+ * | bare inside `<span>` (kind 7)             | 1    | 1          | yes       |
+ * | bare inside a JSX component (`<Callout>`) | 1    | n/a        | yes       |
+ * | an `<a href>` inside `<div>`              | 1    | 1          | yes       |
+ * | a CODE SPAN inside `<div>`                | 0    | 1          | NO        |
+ * | a FENCE inside `<div>`                    | 0    | 1          | NO        |
+ *
+ * Four rows diverge, and they are why a CommonMark reading alone is wrong in BOTH
+ * directions at once: MDX gives indentation to JSX rather than to code blocks (so an
+ * indented citation IS live and skipping it ships a 404 unchecked), and MDX parses JSX
+ * children as ordinary markdown (so a code span or a fence inside a `<div>` is still
+ * code — reading that block raw, as § 4.6 says, fails the build on unclickable text).
+ *
+ * Both are one flag on the shared reader: `readMarkdown(content, { mdx: true })` — no
+ * § 4.6 HTML blocks, no § 4.4 indented code. WHICH lines are which stays
+ * `@pair/content-ops`'s reader, the ONE both this gate and the knowledge-hub sweep sit
+ * on (ADR-024), so a container-grammar fix still lands here too.
+ *
+ * An `<!-- … -->` line is then ordinary text and IS scanned; a page carrying one cannot
+ * build at all — `pnpm --filter @pair/website build` fails with "Unexpected character
+ * `!` … (note: to create a comment in MDX, use `{/* text *\/}`)" — so no reader can be
+ * misled by that row either way.
+ *
+ * A masked span becomes a SPACE, not nothing: a space cannot join two halves of a URL,
+ * and `` [`<url>`](<url>) `` — a code span INSIDE a link — must report the destination
+ * exactly once, which is what both renderers serve (1 `<a href>`, not 0 and not 2).
+ */
+const JSX_COMMENT_RE = /\{\/\*[\s\S]*?\*\/\}/g
+
+function* linkSurface(content: string): Generator<string> {
+  for (const ev of readMarkdown(content, { frontmatter: true, mdx: true })) {
+    if (ev.kind === 'leaf') yield ev.text.replace(CODE_SPAN_RE, ' ').replace(JSX_COMMENT_RE, ' ')
+  }
+}
+
+/**
+ * Check 5: every /docs link/href a reader can CLICK resolves to a known route. Read
+ * from the rendered surface (see `linkSurface`), not the raw bytes: a `/docs/...`
+ * target quoted inside a fence or a code span is literal text on the page.
+ */
 export function findDeadLinks(content: string, rel: string, validRoutes: Set<string>): string[] {
   const errors: string[] = []
+  const surface = [...linkSurface(content)].join('\n')
   for (const re of [LINK_RE, HREF_RE]) {
-    for (const m of content.matchAll(re)) {
+    for (const m of surface.matchAll(re)) {
       const raw = m[1]
       if (raw === undefined) continue
       const head = (raw.split('#')[0] ?? '').split('?')[0] ?? ''
@@ -209,29 +281,6 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
     }
   }
   return errors
-}
-
-/**
- * Case-SENSITIVE `existsSync`. github.com resolves repo paths case-sensitively; APFS
- * on macOS does not, and `existsSync` inherits the filesystem's rule. A citation
- * spelled `.pair/adoption/tech/ADR/adr-018-….md` therefore resolved on a developer's
- * Mac (local `docs:staleness` printed PASS) and 404'd for every reader — a local gate
- * disagreeing with Linux CI on exactly the 404 class Check 5b exists to catch.
- * Each segment is compared byte-for-byte against its parent directory's entries.
- */
-export function existsCaseSensitive(root: string, relPath: string): boolean {
-  let dir = root
-  for (const segment of relPath.split('/').filter(s => s !== '' && s !== '.')) {
-    let entries: string[]
-    try {
-      entries = readdirSync(dir)
-    } catch {
-      return false // parent is missing or not a directory
-    }
-    if (!entries.includes(segment)) return false
-    dir = join(dir, segment)
-  }
-  return existsSync(dir)
 }
 
 /**
@@ -324,39 +373,6 @@ export function slugifyHeading(heading: string): string {
 }
 
 /**
- * Every anchor a markdown file offers: ATX (`## X`) and setext (`X` over `===`/`---`)
- * headings, plus explicit `<a name>`/`<a id>` anchors.
- *
- * WHICH LINES those are is `@pair/content-ops`'s `readMarkdown` — the SAME container-
- * and HTML-block-aware CommonMark block reader the knowledge-hub conformance sweep
- * uses, so one grammar fix lands in both. Reading lines at document level only made
- * this gate disagree with github.com in both directions: the live
- * `apps/pair-cli/CHANGELOG.md#release-v020---enhanced-cli-distribution--documentation`
- * (an ATX heading inside a list item, one of five such CHANGELOGs) failed the build,
- * while `# Doc` / `<div>` / `## InDiv` / `</div>` / `## Real` served a phantom `#indiv`
- * that PASSES the gate and 404s for every reader.
- *
- * An explicit `<a name>` is read from leaf lines and from the HTML blocks github.com
- * still renders (`HTML_KINDS_RENDERING_ANCHORS`), never from a code fence, an indented
- * code block or an HTML comment.
- *
- * A SETEXT heading's text is the WHOLE paragraph above the underline, not its last
- * line: `Some paragraph` / `line two` / `---` anchors `#some-paragraphline-two`.
- *
- * A repeated slug is disambiguated by github.com's rule, which is a SKIP-UNTIL-FREE
- * loop and not a per-base occurrence counter: the candidate `${base}-${n}` is retried
- * with a climbing `n` until it names a slug no earlier heading already took. The two
- * agree until a heading's NATURAL slug spells a generated one — `## Foo`, `## Foo 1`,
- * `## Foo`, `## Foo` anchors `foo`, `foo-1`, `foo-2`, `foo-3` on github.com, where a
- * counter computes `foo-2` for the LAST heading and never emits `foo-3` at all. That
- * is a live URL this gate would call dead, and its mirror is a citation the gate calls
- * fine that drops the reader on the unrelated `Foo 1` heading.
- *
- * `taken` holds only the slugs the loop itself generated, which is the scope
- * github.com's slugger has: an explicit `<a name>` is separate HTML it never consults,
- * so it must not push a later duplicate heading forward.
- */
-/**
  * An explicit anchor is ANY tag's `id`/`name`, not only `<a>`'s, and the value may be
  * double-quoted, single-quoted or bare: github.com rewrites every one of them to
  * `user-content-<value>`, so `<div id="x">`, `<h2 id="x">` and `<div id=x>` are all live
@@ -429,6 +445,28 @@ function addLeafAnchors(
   for (const a of explicitAnchorsIn(ev.text)) slugs.add(a)
 }
 
+/**
+ * Every anchor a markdown file offers: ATX (`## X`) and setext (`X` over `===`/`---`)
+ * headings, plus explicit `<a name>`/`<a id>` anchors.
+ *
+ * WHICH LINES those are is `@pair/content-ops`'s `readMarkdown` — the SAME container-
+ * and HTML-block-aware CommonMark block reader the knowledge-hub conformance sweep
+ * uses, so one grammar fix lands in both. Reading lines at document level only made
+ * this gate disagree with github.com in both directions: the live
+ * `apps/pair-cli/CHANGELOG.md#release-v020---enhanced-cli-distribution--documentation`
+ * (an ATX heading inside a list item, one of five such CHANGELOGs) failed the build,
+ * while `# Doc` / `<div>` / `## InDiv` / `</div>` / `## Real` served a phantom `#indiv`
+ * that PASSES the gate and 404s for every reader.
+ *
+ * An explicit `<a name>` is read from leaf lines and from the HTML blocks github.com
+ * still renders (`HTML_KINDS_RENDERING_ANCHORS`), never from a code fence, an indented
+ * code block or an HTML comment.
+ *
+ * A SETEXT heading's text is the WHOLE paragraph above the underline, not its last
+ * line: `Some paragraph` / `line two` / `---` anchors `#some-paragraphline-two`.
+ *
+ * Repeated slugs are disambiguated by `headingSlugAdder`, which owns that rule.
+ */
 export function collectHeadingSlugs(markdown: string): Set<string> {
   const slugs = new Set<string>()
   const add = headingSlugAdder(slugs)
@@ -527,11 +565,12 @@ function editDistance(a: string, b: string): number {
   return prev[y.length] ?? 0
 }
 
-const MAX_ANCHOR_SUGGESTIONS = 3
-const MAX_ANCHOR_DISTANCE = 3
+const MAX_SUGGESTIONS = 3
+const MAX_SUGGESTION_DISTANCE = 3
 
 /**
- * How far a candidate may sit from the dead fragment: the absolute budget AND half the
+ * How far a candidate may sit from the dead spelling — a fragment against a heading
+ * slug, or a path segment against a sibling filename: the absolute budget AND half the
  * longer of the two, whichever is smaller.
  *
  * The absolute bound alone is meaningless on short strings — at 3 edits EVERY 3-code-
@@ -543,19 +582,25 @@ const MAX_ANCHOR_DISTANCE = 3
  * The relative half caps the offer at a genuine near-miss (the motivating case, an
  * invisible code point, is distance 1 on a 20-code-point slug).
  */
-function anchorDistanceBudget(fragment: string, slug: string): number {
-  const longer = Math.max([...fragment].length, [...slug].length)
-  return Math.min(MAX_ANCHOR_DISTANCE, Math.floor(longer / 2))
+function suggestionBudget(value: string, candidate: string): number {
+  const longer = Math.max([...value].length, [...candidate].length)
+  return Math.min(MAX_SUGGESTION_DISTANCE, Math.floor(longer / 2))
 }
 
-/** The headings closest to a dead fragment: an invisible-code-point miss is distance 1. */
-function nearestSlugs(fragment: string, slugs: ReadonlySet<string>): string[] {
-  return [...slugs]
-    .map(slug => ({ slug, d: editDistance(fragment, slug) }))
-    .filter(c => c.d <= anchorDistanceBudget(fragment, c.slug))
-    .sort((a, b) => a.d - b.d || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
-    .slice(0, MAX_ANCHOR_SUGGESTIONS)
-    .map(c => c.slug)
+/**
+ * The candidates closest to a dead spelling: an invisible-code-point miss is distance 1.
+ * Used for BOTH halves of a citation — the heading slugs of the cited file, and the
+ * sibling names of the directory a path segment missed in.
+ */
+function nearest(value: string, candidates: Iterable<string>): string[] {
+  return [...candidates]
+    .map(candidate => ({ candidate, d: editDistance(value, candidate) }))
+    .filter(c => c.d <= suggestionBudget(value, c.candidate))
+    .sort(
+      (a, b) => a.d - b.d || (a.candidate < b.candidate ? -1 : a.candidate > b.candidate ? 1 : 0),
+    )
+    .slice(0, MAX_SUGGESTIONS)
+    .map(c => c.candidate)
 }
 
 /**
@@ -566,10 +611,13 @@ function nearestSlugs(fragment: string, slugs: ReadonlySet<string>): string[] {
  * code points from the real slug (measured with `editDistance` above; the budget is 3),
  * stripped the candidate from the second message too.
  * Omitted when escaping is a no-op, so an ordinary typo hint stays one string.
+ *
+ * `prefix` is what the developer must type in FRONT of it — `#` for a fragment, nothing
+ * for a repo path — so both halves of a citation offer the same pasteable shape.
  */
-function renderCandidate(slug: string): string {
-  const escaped = escapeForDiagnostic(slug)
-  return escaped === slug ? `#${escaped}` : `#${escaped} (copy: #${slug})`
+function renderCandidate(value: string, prefix: string): string {
+  const escaped = escapeForDiagnostic(value)
+  return escaped === value ? `${prefix}${escaped}` : `${prefix}${escaped} (copy: ${prefix}${value})`
 }
 
 /**
@@ -595,9 +643,62 @@ function anchorError(kind: string, path: string, fragment: string, root: string)
   }
   const slugs = collectHeadingSlugs(source)
   if (slugs.has(fragment)) return null
-  const near = nearestSlugs(fragment, slugs)
-  const hint = near.length === 0 ? '' : `; did you mean ${near.map(renderCandidate).join(' or ')}?`
+  const near = nearest(fragment, slugs)
+  const hint =
+    near.length === 0
+      ? ''
+      : `; did you mean ${near.map(c => renderCandidate(c, '#')).join(' or ')}?`
   return `${path}#${escapeForDiagnostic(fragment)} — no heading in that file slugs to it${hint}`
+}
+
+/**
+ * A dead repo PATH, reported the way the fragment half already reports a dead anchor:
+ * losslessly, and naming WHICH segment missed plus what its parent directory really
+ * lists.
+ *
+ * The motivating bug is a path bug. Citing `.pair/adoption/tech/ADR/adr-018-code-host-
+ * optional-wow-override.md` (capital `ADR`) used to print only `… does not exist in the
+ * repo` — the whole 6-segment path declared wrong, with no candidate, while
+ * `resolveCaseSensitiveSync` held the answer: the segment `ADR`, in a directory that
+ * lists `adr`. `curl -s -o /dev/null -w '%{http_code}'` gives 404 on the miscased URL
+ * and 200 on the suggested one, so the offered spelling is the one that resolves.
+ *
+ * The escape is not decoration either: a segment differing from the real one only by an
+ * invisible or confusable code point prints IDENTICALLY to it, so the message reads as a
+ * false positive and the developer deletes a working citation.
+ *
+ * The budget is the SAME `suggestionBudget` the anchor half uses, for the same reason: a
+ * candidate offered from far away is advice that makes the gate pass while the citation
+ * still points somewhere else.
+ */
+function deadPathError(path: string, walk: CaseSensitiveWalk): string {
+  if (walk.kind === 'resolved') return ''
+  // A sibling that matches IGNORING CASE is not a guess, it is the answer: this walk
+  // fails on case by construction, and `ADR` vs `adr` is 3 edits over 3 code points —
+  // outside `suggestionBudget`, which is tuned for near-misses in long anchor slugs.
+  // Offering it by edit distance alone would have withheld the candidate in exactly
+  // the case the check was written for.
+  const sameIgnoringCase = walk.siblings.filter(
+    name => name.toLowerCase() === walk.segment.toLowerCase(),
+  )
+  const near = sameIgnoringCase.length > 0 ? sameIgnoringCase : nearest(walk.segment, walk.siblings)
+  const shown = escapeForDiagnostic(path)
+  const where = ` (segment "${escapeForDiagnostic(walk.segment)}")`
+  if (near.length === 0) return `${shown} does not exist in the repo${where}`
+  // The candidate is offered as the WHOLE path with that one segment replaced — the
+  // bytes to paste, not a fragment of them to reassemble by hand.
+  const suggestions = near
+    .map(sibling => renderCandidate(replaceSegment(path, walk.segment, sibling), ''))
+    .join(' or ')
+  return `${shown} does not exist in the repo${where}; did you mean ${suggestions}?`
+}
+
+/** The path with its FIRST occurrence of `segment` (as a whole segment) replaced. */
+function replaceSegment(path: string, segment: string, replacement: string): string {
+  const parts = path.split('/')
+  const at = parts.indexOf(segment)
+  if (at === -1) return replacement
+  return [...parts.slice(0, at), replacement, ...parts.slice(at + 1)].join('/')
 }
 
 /**
@@ -611,7 +712,7 @@ function anchorError(kind: string, path: string, fragment: string, root: string)
  */
 export function findDeadRepoLinks(content: string, rel: string, root: string): string[] {
   const errors: string[] = []
-  for (const m of content.matchAll(REPO_BLOB_RE)) {
+  for (const m of [...linkSurface(content)].join('\n').matchAll(REPO_BLOB_RE)) {
     const [, kind, ref, raw] = m
     if (kind === undefined || ref === undefined || raw === undefined) continue
     const { path, fragment } = parseCitation(raw)
@@ -626,8 +727,9 @@ export function findDeadRepoLinks(content: string, rel: string, root: string): s
       }
       continue
     }
-    if (!existsCaseSensitive(root, path)) {
-      errors.push(`Dead repo-file citation in ${rel}: ${path} does not exist in the repo`)
+    const walk = resolveCaseSensitiveSync(root, path)
+    if (walk.kind === 'missing') {
+      errors.push(`Dead repo-file citation in ${rel}: ${deadPathError(path, walk)}`)
       continue
     }
     const anchor = anchorError(kind, path, fragment, root)

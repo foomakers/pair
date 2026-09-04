@@ -34,6 +34,7 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { COMMONMARK_BLOCK_ROWS } from '@pair/content-ops/test-utils/commonmark-rows'
+import { isBlockStructureSensitive } from './anchor-oracle-selection'
 import { stripFrontmatter } from '@pair/content-ops/markdown/commonmark-blocks'
 
 // White-box unit tests for the docs-staleness gate LOGIC. Exported functions are
@@ -816,6 +817,178 @@ describe('findDeadRepoLinks', () => {
     expect(findDeadRepoLinks(live, 'page.mdx', REPO_ROOT)).toEqual([])
   })
 
+  // --- THE RENDERED SURFACE -------------------------------------------------
+  //
+  // A repo URL github.com renders as LITERAL TEXT is not a citation, and gating it
+  // broke the build on strings no reader can click. Through the REAL gate on the real
+  // tree, before this: a ```bash fence holding `gh api …/blob/main/does/not/exist.md`
+  // plus a prose code span holding …/also/missing.md gave `FAIL — 2 issues`, and the
+  // page teaching this gate's OWN ref rule (``Never write `…/blob/master/README.md` —
+  // use main``) gave `FAIL — 1 issue · Bad ref in repo citation`.
+  //
+  // Every row's expectation is the REAL CONSUMER's `<a href>` count for the same bytes:
+  // a probe page built with `pnpm --filter @pair/website build`, counted in the
+  // prerendered `.next/server/app/docs/__link-surface-probe.html`. The docs site is
+  // `.mdx` rendered by fumadocs, and it DISAGREES with github.com on two rows — a
+  // 4-space-indented line (MDX has no indented code: the URL is live) and `<pre>`
+  // content (JSX children, markdown-processed) — so assuming CommonMark would have been
+  // wrong in the silent direction, skipping a live 404.
+  const DEAD = 'https://github.com/foomakers/pair/blob/main/does/not/exist.md'
+
+  const SURFACE_ROWS: ReadonlyArray<{ why: string; content: string; hrefs: number }> = [
+    { why: 'prose, bare (GFM autolink)', content: `see ${DEAD} there`, hrefs: 1 },
+    { why: 'a markdown link destination', content: `[x](${DEAD})`, hrefs: 1 },
+    { why: 'an inline code span', content: `never write \`${DEAD}\` here`, hrefs: 0 },
+    { why: 'a fenced code block', content: `\`\`\`bash\ngh api ${DEAD}\n\`\`\`\n`, hrefs: 0 },
+    { why: 'a fenced block with no info string', content: `\`\`\`\n${DEAD}\n\`\`\`\n`, hrefs: 0 },
+    {
+      why: 'a 4-space-indented line — MDX has NO indented code',
+      content: `text\n\n    ${DEAD}\n`,
+      hrefs: 1,
+    },
+    { why: 'a {/* JSX comment */}', content: `{/* ${DEAD} */}\n`, hrefs: 0 },
+    // An `<!-- … -->` block cannot reach a reader at all: `pnpm --filter @pair/website
+    // build` FAILS on one with "Unexpected character `!` … use `{/* text */}`".
+    // `<!-- … -->` is ordinary text in MDX and IS scanned. A page carrying one cannot
+    // build: "Unexpected character `!` … use `{/* text */}`". Either answer is moot;
+    // reporting is the non-silent one.
+    { why: 'an HTML comment (unbuildable in MDX)', content: `<!--\n${DEAD}\n-->\n`, hrefs: 1 },
+    { why: 'a <div> block, blank-separated', content: `<div>\n\n${DEAD}\n\n</div>\n`, hrefs: 1 },
+    { why: 'a <div> block, tight', content: `<div>\n${DEAD}\n</div>\n`, hrefs: 1 },
+    {
+      why: 'a <div> block, as an href attribute',
+      content: `<div>\n<a href="${DEAD}">x</a>\n</div>\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'bare inside a <pre> block — JSX children, not preformatted',
+      content: `<pre>\n${DEAD}\n</pre>\n`,
+      hrefs: 1,
+    },
+    { why: 'bare inside a <span> (§ 4.6 kind 7)', content: `<span>${DEAD}</span>\n`, hrefs: 1 },
+    { why: 'bare inside a JSX component', content: `<Callout>${DEAD}</Callout>\n`, hrefs: 1 },
+    {
+      why: 'a FENCE inside a <div> — MDX parses JSX children as markdown',
+      content: `<div>\n\`\`\`bash\n${DEAD}\n\`\`\`\n</div>\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a CODE SPAN inside a <div> — still a code span',
+      content: `<div>\n\`${DEAD}\`\n</div>\n`,
+      hrefs: 0,
+    },
+    { why: 'a link inside a list item', content: `- item [x](${DEAD})\n`, hrefs: 1 },
+    { why: 'a link inside a blockquote', content: `> quoted [x](${DEAD})\n`, hrefs: 1 },
+    {
+      why: 'a fence inside a LIST ITEM',
+      content: `- item\n\n  \`\`\`bash\n  ${DEAD}\n  \`\`\`\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a fence inside a BLOCKQUOTE',
+      content: `> \`\`\`bash\n> ${DEAD}\n> \`\`\`\n`,
+      hrefs: 0,
+    },
+  ]
+
+  for (const { why, content, hrefs } of SURFACE_ROWS) {
+    it(`${hrefs === 0 ? 'ignores' : 'checks'} a dead repo URL in ${why}`, () => {
+      expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT), why).toHaveLength(hrefs)
+    })
+  }
+
+  // The self-defeating mirror: the reference page that teaches the ref rule must be
+  // able to spell the counter-example the rule is about.
+  it('lets a page quote the bad-ref counter-example it is teaching', () => {
+    const teaching =
+      'Never write `https://github.com/foomakers/pair/blob/master/README.md` — use main.'
+    expect(findDeadRepoLinks(teaching, 'a.mdx', REPO_ROOT)).toEqual([])
+    const live = '[x](https://github.com/foomakers/pair/blob/master/README.md)'
+    const errs = findDeadRepoLinks(live, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('Bad ref in repo citation')
+  })
+
+  // INTERACTION: a code span may sit INSIDE a link, where the SAME URL is both literal
+  // text and a live destination. github.com serves exactly one `<a href>` for it, so
+  // masking the span must not erase the destination and must not double-count it.
+  it('reports a code span inside a link exactly once — the destination', () => {
+    const url = 'https://github.com/foomakers/pair/blob/main/nope.md'
+    const errs = findDeadRepoLinks(`[\`${url}\`](${url})`, 'a.mdx', REPO_ROOT)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('nope.md')
+  })
+
+  // --- THE PATH HALF, REPORTED LOSSLESSLY -----------------------------------
+  //
+  // The motivating bug of this whole check is a PATH bug, and the path half used to
+  // print the whole path as wrong with no candidate — while the walk knew the failing
+  // segment and its parent's real listing.
+  it('names the failing SEGMENT and the spelling that resolves', () => {
+    const miscased = ADR.replace('/adr/', '/ADR/')
+    const errs = findDeadRepoLinks(
+      `[x](https://github.com/foomakers/pair/blob/main/${miscased})`,
+      'a.mdx',
+      REPO_ROOT,
+    )
+    expect(errs).toEqual([
+      `Dead repo-file citation in a.mdx: ${miscased} does not exist in the repo (segment "ADR"); did you mean ${ADR}?`,
+    ])
+  })
+
+  // Paired direction, and the trap `suggestionBudget` exists to close: advice offered
+  // from far away makes the gate pass while the citation still points elsewhere.
+  it('offers NO candidate when no sibling is near', () => {
+    const errs = findDeadRepoLinks(
+      `[x](https://github.com/foomakers/pair/blob/main/.pair/zzzz/x.md)`,
+      'a.mdx',
+      REPO_ROOT,
+    )
+    expect(errs).toEqual([
+      'Dead repo-file citation in a.mdx: .pair/zzzz/x.md does not exist in the repo (segment "zzzz")',
+    ])
+  })
+
+  // LOSSLESS on the path half too: a segment differing only by a confusable code point
+  // printed IDENTICALLY to the real one, so the message read as a false positive.
+  it('escapes a path segment that differs by an invisible code point', () => {
+    const cited = '.pair/knowledge/skills‐guide.md' // U+2010 HYPHEN, not ASCII `-`
+    const errs = findDeadRepoLinks(
+      `[x](https://github.com/foomakers/pair/blob/main/${cited})`,
+      'a.mdx',
+      REPO_ROOT,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('skills\\u{2010}guide.md does not exist in the repo')
+    expect(errs[0]).toContain('did you mean .pair/knowledge/skills-guide.md?')
+  })
+
+  // INTERACTION with the fragment half: a citation wrong in BOTH halves reports the
+  // PATH once, not one error per half — the anchor cannot be checked in a file that
+  // does not exist.
+  it('reports only the path error when both halves are wrong', () => {
+    const miscased = ADR.replace('/adr/', '/ADR/')
+    const errs = findDeadRepoLinks(
+      `[x](https://github.com/foomakers/pair/blob/main/${miscased}#no-such-heading)`,
+      'a.mdx',
+      REPO_ROOT,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('does not exist in the repo')
+    expect(errs[0]).not.toContain('Dead anchor')
+  })
+
+  // A `..` is RFC 3986 dot-segment removal — what the reader's client does before the
+  // request is sent — so one that collapses back resolves and one that ESCAPES the
+  // repo is dead. `curl -v .../blob/main/../../etc/passwd` puts
+  // `GET /foomakers/pair/etc/passwd` on the wire: HTTP 404.
+  it('resolves a collapsing `..` and reports an escaping one', () => {
+    const collapsing = `[x](https://github.com/foomakers/pair/blob/main/.pair/knowledge/../knowledge/skills-guide.md)`
+    expect(findDeadRepoLinks(collapsing, 'a.mdx', REPO_ROOT)).toEqual([])
+    const escaping = `[x](https://github.com/foomakers/pair/blob/main/../../etc/passwd)`
+    expect(findDeadRepoLinks(escaping, 'a.mdx', REPO_ROOT)).toHaveLength(1)
+  })
+
   it('every blob citation on the real docs site resolves to a real file', () => {
     const docsDir = resolve(REPO_ROOT, 'apps/website/content/docs')
     const errors = walkMdx(docsDir).flatMap(f =>
@@ -1138,17 +1311,27 @@ describe('collectHeadingSlugs', () => {
    * Keying on the content hash is what keeps this honest in both directions: editing a
    * doc drops its row out of the fixture (the file is simply no longer asserted) instead
    * of failing on a stale expectation, while changing the READER reddens every row at
-   * once. `pnpm --filter website docs:anchor-oracle` regenerates it.
+   * once. `pnpm docs:anchor-oracle` (repo root) regenerates it.
    *
    * Five files failed this sweep before the reader became container-aware, and one
    * before code spans stopped being read as inline HTML.
+   *
+   * WHICH files are recorded is `isBlockStructureSensitive`, and it is asserted here
+   * against the same predicate the generator used — because the selection used to be
+   * computed WITH the reader under test, so a file whose HTML shape the reader
+   * mis-parsed was excluded from the very sweep that would expose it. Every recorded
+   * key must still satisfy the predicate: narrowing it therefore REDDENS instead of
+   * silently shrinking the sweep.
    */
   it('matches github.com\u2019s anchors on every recorded corpus file', () => {
     const oracle = JSON.parse(
       readFileSync(resolve(__dirname, 'github-anchor-oracle.json'), 'utf-8'),
     ) as { readonly files: Record<string, { readonly sha1: string; readonly anchors: string[] }> }
     const entries = Object.entries(oracle.files)
-    expect(entries.length).toBeGreaterThan(40)
+    // Raised in lockstep with the widened predicate: the fixture went 42 -> 398 files
+    // when selection stopped consulting the reader. A floor left at 40 would have let
+    // the sweep shrink back to the reader-selected population unnoticed.
+    expect(entries.length).toBeGreaterThan(390)
     let checked = 0
     for (const [file, expected] of entries) {
       const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8')
@@ -1160,6 +1343,17 @@ describe('collectHeadingSlugs', () => {
     expect(checked, 'recorded corpus rows still matching their file').toBeGreaterThan(
       entries.length / 2,
     )
+  })
+
+  it('records only files the SELECTION predicate still admits', () => {
+    const oracle = JSON.parse(
+      readFileSync(resolve(__dirname, 'github-anchor-oracle.json'), 'utf-8'),
+    ) as { readonly files: Record<string, { readonly sha1: string; readonly anchors: string[] }> }
+    const notAdmitted = Object.keys(oracle.files).filter(file => {
+      const body = stripFrontmatter(readFileSync(resolve(REPO_ROOT, file), 'utf-8'))
+      return !isBlockStructureSensitive(body)
+    })
+    expect(notAdmitted, 'recorded files the predicate would no longer select').toEqual([])
   })
 
   it('finds every fragment the real docs site cites today', () => {

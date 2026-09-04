@@ -75,7 +75,7 @@ stops short, the row carries `readerAnchors`/`readerBlocks` and says why.
   answers for every git-tracked `*.md`/`*.mdx` whose anchor set depends on block
   structure, keyed by the sha1 of the file body so an edited doc drops out of the
   assertion instead of failing on a stale expectation. Regenerate with
-  `pnpm --filter @pair/website docs:anchor-oracle`.
+  `pnpm docs:anchor-oracle` (repo root; the package-scoped form bypasses turbo and cannot resolve `@pair/content-ops` on a clean checkout).
 - The reader is CommonMark BLOCK structure only. Inline parsing (what a heading's text
   MEANS) stays with the consumer, and the raw-HTML corners it does not reach are on
   record as rows.

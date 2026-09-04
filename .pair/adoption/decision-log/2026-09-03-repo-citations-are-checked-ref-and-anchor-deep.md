@@ -14,7 +14,7 @@ Convention Adoption
 
 ## Context
 
-The docs site cites repo files by GitHub URL (`https://github.com/foomakers/pair/blob/main/<path>`). Check 5b (`findDeadRepoLinks` in `apps/website/lib/docs-staleness-check.ts`, run by `pnpm --filter website docs:staleness`) resolved the **path** and nothing else, in two directions:
+The docs site cites repo files by GitHub URL (`https://github.com/foomakers/pair/blob/main/<path>`). Check 5b (`findDeadRepoLinks` in `apps/website/lib/docs-staleness-check.ts`, run by `pnpm docs:staleness` from the repo root — the root script goes through turbo, which builds `@pair/content-ops` first; the package-scoped `pnpm --filter website docs:staleness` bypasses turbo and dies with `ERR_MODULE_NOT_FOUND` on a clean checkout) resolved the **path** and nothing else, in two directions:
 
 - **Ref pinned to `main` in the regex.** A citation under any other ref matched nothing and shipped unchecked. `blob/mian/README.md` (a one-letter typo) and `blob/master/…` (this repo has no `master`) are 404s for every reader that the gate reported as PASS.
 - **Fragment stripped and discarded.** Three shipped citations carry one (`skills-guide.md#callers-matrix-scoped-capabilities`, `quality-model.md#6-techrisk-matrixmd--adoption-delta`, `CP10-web-cloud-environment.md#execution-log`). Renaming a cited heading drops every reader at the top of a 200-line file while `docs:staleness` still prints PASS — the same "a repo citation nothing checks" gap Check 5b was written to close, one delimiter further in.

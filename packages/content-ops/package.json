@@ -16,6 +16,11 @@
       "import": "./dist/file-system/index.js",
       "require": "./dist/file-system/index.js"
     },
+    "./file-system/exists-case-sensitive": {
+      "types": "./dist/file-system/exists-case-sensitive.d.ts",
+      "import": "./dist/file-system/exists-case-sensitive.js",
+      "require": "./dist/file-system/exists-case-sensitive.js"
+    },
     "./markdown/commonmark-blocks": {
       "types": "./dist/markdown/commonmark-blocks.d.ts",
       "import": "./dist/markdown/commonmark-blocks.js",
