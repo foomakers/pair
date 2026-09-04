@@ -43,6 +43,14 @@ async function runWorkflow({ args, dispatch }) {
       result.reviewedHead === undefined
     )
       return { ...result, reviewedHead: REVIEWED_HEAD }
+    // Fix preflight is a distinct, read-only agent. Legacy fixtures deliberately only
+    // model the outer reviewer/fixer; make their omitted preflight a clean pass while
+    // focused tests can return the real verifier shape below.
+    if (opts.agentType === 'pair-fix-verifier') {
+      if (result && typeof result === 'object' && typeof result.verified === 'boolean')
+        return result.reviewedHead === undefined ? { ...result, reviewedHead: REVIEWED_HEAD } : result
+      return { verified: true, findings: [], reviewedHead: REVIEWED_HEAD }
+    }
     return result
   }
   // Mirrors the real primitive's contract: "a thunk that throws (or whose agent errors)
@@ -1102,6 +1110,68 @@ test('review and fix prove empirical claims, collisions, and lossless diagnostic
   assert.ok(fix.includes('lossless distinguishability'), 'diagnostics retain invisible or confusable input distinctions')
   assert.ok(fix.includes('duplicate input alongside a pre-existing generated/suffixed outcome'), 'the fixer tests rule-output collisions, not independent duplicate rows only')
   assert.deepEqual(fixCall.opts.schema.required, ['fixed', 'evidenceLedger'], 'a fix cannot omit its evidence ledger')
+})
+
+test('a narrow independent preflight repairs its own delta before the next external review', async () => {
+  const original = { location: 'parser.ts:10', severity: 'Minor', description: 'original', recommendation: 'original fix' }
+  const preflightFinding = {
+    location: 'parser.ts:24',
+    severity: 'Minor',
+    description: 'list above quote is not parsed',
+    recommendation: 'VERIFY: list > quote; ORACLE: parser fixture; ASSERT: the fixture field is consumed',
+  }
+  let review = 0
+  let preflight = 0
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return review++ === 0 ? { verdict: 'Rework', findings: [original] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-fix-verifier')
+        return preflight++ === 0
+          ? { verified: false, findings: [preflightFinding] }
+          : { verified: true, findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [{ claim: 'parser behavior', oracle: 'fixture', probe: 'pnpm test', observed: 'pass' }] }
+    },
+  })
+
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 2, 'only the normal baseline and external re-review run')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 2, 'the first preflight finding is checked again after one bounded inner fix')
+  const fixes = calls.filter(c => c.opts.label?.startsWith('fix:'))
+  assert.equal(fixes.length, 2, 'the preflight finding is fixed before the external re-review')
+  assert.match(fixes[1].prompt, /list above quote is not parsed/, 'the second fix receives the concrete preflight failure')
+  const verifier = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
+  assert.deepEqual(verifier.opts.schema.required, ['verified', 'reviewedHead', 'findings'])
+  assert.match(verifier.prompt, /FIX PREFLIGHT/, 'the verifier is a narrow post-fix check, not another PR review')
+  assert.match(verifier.prompt, /fixture field.*actually consumed/i, 'declared-but-unasserted fixture data is checked')
+  assert.match(verifier.prompt, /interaction.*cross-product/i, 'new rule ordering must be checked in both directions')
+  assert.match(verifier.prompt, /evidence ledger/i, 'the fixer ledger is rerun instead of trusted')
+})
+
+test('a second preflight miss stops before it can inflate the external review trend', async () => {
+  const original = { location: 'parser.ts:10', severity: 'Minor', description: 'original', recommendation: 'original fix' }
+  const stillBroken = { location: 'parser.ts:30', severity: 'Minor', description: 'reverse nesting still fails', recommendation: 'VERIFY: list > quote; ORACLE: fixture; ASSERT: result' }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [original] }
+      if (opts.agentType === 'pair-fix-verifier') return { verified: false, findings: [stillBroken] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+
+  assert.equal(result.batch[0].status, 'failed-preflight')
+  assert.deepEqual(result.batch[0].findings, [stillBroken])
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 1, 'no external re-review is dispatched after the second local miss')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 2, 'one inner repair is the hard cap')
+  assert.ok(calls.some(c => c.opts.label?.startsWith('preflight-log:')), 'the stop is retained in the working log')
 })
 
 test('re-review is anchored to the reviewed revision and checks only the fix delta plus prior findings', async () => {

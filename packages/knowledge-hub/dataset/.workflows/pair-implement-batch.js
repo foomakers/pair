@@ -85,7 +85,7 @@ export const meta = {
 //                                 // a batch where every card failed says so, never "ready"
 // }
 //   status ∈ ready-for-merge | escalate
-//          | failed-implement | failed-pr | failed-review | failed-fix
+//          | failed-implement | failed-pr | failed-review | failed-fix | failed-preflight
 //
 // NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is #250's
 // concern, never this engine's.
@@ -817,6 +817,14 @@ const REVIEWED_HEAD_PATTERN = /^[0-9a-f]{40}$/
 // Without that baseline a later reviewer cannot distinguish the fix delta from the
 // already-audited PR surface, which turns each re-review into another full scan.
 const hasReviewEvidence = r => hasVerdict(r) && REVIEWED_HEAD_PATTERN.test(String(r.reviewedHead ?? ''))
+// A preflight is useful only when it says whether the exact head was verified and returns its
+// full finding set. A truthy `{}` would otherwise look clean and recreate the same unsafe
+// direction that `hasReviewEvidence` prevents for the outer review.
+const hasPreflightEvidence = r =>
+  !!r &&
+  typeof r.verified === 'boolean' &&
+  Array.isArray(r.findings) &&
+  REVIEWED_HEAD_PATTERN.test(String(r.reviewedHead ?? ''))
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -1011,6 +1019,18 @@ const REVIEW_SCHEMA = {
     reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
   },
   required: [...new Set([...(REVIEW_SCHEMA_BASE.required ?? []), 'verdict', 'reviewedHead'])],
+}
+// The preflight does not make a PR verdict or publish a review. Its return is intentionally
+// smaller than REVIEW_SCHEMA, but reuses the template-derived finding shape so a verifier
+// cannot invent a second severity vocabulary for an inner fix.
+const PREFLIGHT_SCHEMA = {
+  type: 'object',
+  properties: {
+    verified: { type: 'boolean' },
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    findings: REVIEW_SCHEMA_BASE.properties.findings,
+  },
+  required: ['verified', 'reviewedHead', 'findings'],
 }
 // Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,
 // required contract keys (ensure-contract.mjs's validateContract rejects any
@@ -1334,6 +1354,24 @@ async function driveStory(story) {
       accepted.push(f)
     }
   }
+  // Keep the outer review and the inner preflight on the SAME severity policy. An explicit
+  // floor is a human-selected merge rule, not something a preflight may silently override;
+  // conversely an unknown severity remains blocking in both paths (rank = Infinity).
+  const partitionFindings = (findings) => {
+    const allActionable = findings.filter((f) => !f.nonActionable)
+    const belowFloor = []
+    const actionable = []
+    for (const f of allActionable)
+      (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
+    return {
+      belowFloor,
+      actionable,
+      carried: [
+        ...findings.filter((f) => f.nonActionable),
+        ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
+      ],
+    }
+  }
   // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
   // any remediation state to synthesize — not merely whether a fix happened this run. On a
   // continuation (log present) it is seeded true so an immediate round-0 convergence still
@@ -1352,7 +1390,7 @@ async function driveStory(story) {
     // otherwise the pacing loop invites a second full audit before its delta rule.
     const reviewBase = prevFindings.length ? prevReviewedHead : baseOf(story)
     const review = await agentRetry(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${reviewBase}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
+      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${reviewBase}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ACTIONABLE-FINDING ACCEPTANCE PLAN (mandatory): end EVERY actionable \`recommendation\` with \`VERIFY: <concrete input/state -> expected outcome>; ORACLE: <exact command, fixture or authoritative source>; ASSERT: <the observable assertion that consumes that fixture/output>\`. When a changed rule can feed another rule, name the paired direction and the minimal interaction cross-product in VERIFY; a declared fixture column that no expectation reads is not a test. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
             ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}. The last complete review covered immutable head ${prevReviewedHead}. First inspect ONLY the fix delta with \`git diff ${prevReviewedHead}...origin/${story.branch} --name-status\`, then its directly changed producer/consumer contract boundaries. Do NOT re-audit the unchanged PR surface. A new finding is actionable only if it is in this delta or a contract boundary changed by this delta; otherwise report it as a Question for the human, not a new fix round.`
             : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end).`} Return findings, verdict, and \`reviewedHead\`: the lower-case 40-character SHA printed by \`git rev-parse origin/${story.branch}\` after your inspection.`,
       // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a
@@ -1398,25 +1436,11 @@ async function driveStory(story) {
       return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     const reviewedHead = String(review.reviewedHead).toLowerCase()
     const findings = review.findings ?? []
-    const allActionable = findings.filter((f) => !f.nonActionable)
-    // Below the floor: still reported, still shown to the human, just not blocking. Marked
-    // with a disposition so the merge gate can tell "we chose not to block on this" from
-    // "the reviewer judged it by-design", which are different statements.
-    // ONE predicate, two buckets — not two independent filters. `< floor` and `>= floor` are
-    // both false for a rank that is not a number (NaN, or an inherited prototype value before
-    // `Object.hasOwn` above), so the two-filter form was NOT total: such a finding landed in
-    // neither set and was recorded nowhere — not blocking, not even in `acceptedFindings`,
-    // which AC4 says never happens (#432 review round 7). Partitioning on the single
-    // below-floor test makes the complement the actionable set by construction: anything the
-    // test cannot answer YES for blocks, which is also the safe direction.
-    const belowFloor = []
-    const actionable = []
-    for (const f of allActionable)
-      (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
-    accept([
-      ...findings.filter((f) => f.nonActionable),
-      ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
-    ])
+    // Below the floor: still reported, still shown to the human, just not blocking. One
+    // partition predicate makes the complement total: an unknown/non-numeric rank blocks
+    // rather than disappearing from both the fix set and the merge-gate record.
+    const { belowFloor, actionable, carried } = partitionFindings(findings)
+    accept(carried)
     if (belowFloor.length)
       log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
     // Converge once nothing actionable remains (by-design findings don't block).
@@ -1482,6 +1506,55 @@ async function driveStory(story) {
         { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
       )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
+    }
+
+    // PRE-FLIGHT — a fresh read-only verifier audits this FIX DELTA before a costly outer
+    // re-review. The old loop trusted the fixer to check its own new helper/test/claim, so
+    // the outer reviewer became the first person able to notice a dead fixture column or a
+    // missing reverse interaction. This pass may repair one such discovery; a second miss
+    // fails closed as `failed-preflight`, without spending or inflating an external round.
+    const runPreflight = (baseHead, targets, ledgers, pass) =>
+      agentRetry(
+        `FIX PREFLIGHT (read-only; NOT a PR review) for story ${tag}, PR #${pr.prNumber}, inner pass ${pass}. ${revWtClause(story)} Inspect ONLY the delta \`git diff ${baseHead}...origin/${story.branch} --name-status\`, its directly changed producer/consumer boundaries, and the real tests/probes it adds or changes. Do NOT read ${BLIND_PATHS}, checkpoints or the working log; do NOT edit, commit, push, publish a review, post a PR comment, or merge. The prior findings being remediated are: ${JSON.stringify(targets)}. The structured evidence ledger(s) returned by the fixer are: ${JSON.stringify(ledgers)}. Re-run every stated oracle/probe yourself against this head; an evidence ledger is an input to verify, never proof by assertion. Check that every new fixture field/table column is actually consumed by an expectation (trace it to the assertion), not merely declared; that comments/test names repeat only measured claims; and that every newly introduced parser/state/normalizer rule has the paired order plus the minimal interaction cross-product whenever an output can feed another rule. For any defect, return a normal finding with its concrete failure case and a recommendation ending \`VERIFY: <input/state -> expected>; ORACLE: <command/fixture>; ASSERT: <observable assertion>\`. Return \`verified: true\` only when there are zero blocking findings under the configured severity floor (${SEVERITY_FLOOR?.name ?? 'none — every actionable finding blocks'}); otherwise return \`verified: false\`. Return the exact lower-case 40-character \`reviewedHead\` from \`git rev-parse origin/${story.branch}\`.`,
+        withModel({ agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} r${round} p${pass}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
+        hasPreflightEvidence,
+      )
+    const preflight = await runPreflight(reviewedHead, prevFindings, [fix.evidenceLedger], 0)
+    if (!hasPreflightEvidence(preflight))
+      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    const firstPreflight = partitionFindings(preflight.findings)
+    accept(firstPreflight.carried)
+    if (preflight.verified !== (firstPreflight.actionable.length === 0))
+      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
+    if (firstPreflight.belowFloor.length)
+      log(`${tag} r${round} preflight: ${firstPreflight.belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${firstPreflight.actionable.length} blocking`)
+    if (firstPreflight.actionable.length) {
+      // One and only one inner repair: the normal reviewer remains the authority on whether
+      // the whole PR converged. This only prevents obvious new fix-code mistakes from being
+      // discovered for the first time in the next external review.
+      prevFindings = [...prevFindings, ...firstPreflight.actionable]
+      const preflightFix = await agentRetry(
+        `Resume story ${tag}. ${wtClause(story)} Fix these preflight findings before any external re-review: ${JSON.stringify(prevFindings)}. This is the one bounded inner repair, not a redesign. Test first: write and run a failing test for every concrete failure, then change the canonical source only; prove both direction/order rows of every newly combined parser, state or normalization rule and trace every fixture value to its consuming assertion. Re-run every supplied VERIFY/ORACLE/ASSERT and every ledger probe. Follow ${SK.implement}, ${SK.verifyQuality}, and ${SK.recordDecision} where applicable. Commit, push, then re-invoke ${SK.publishPr} to update the current PR head. Do NOT file a card, post a remediation comment, or merge. Append a compact \`## Round ${round} / preflight 1\` table plus \`## Evidence ledger, round ${round} / preflight 1\` (\`claim | oracle | probe | observed\`) to \`${reviewLog}\`. Return the ledger in \`evidenceLedger\`; return \`[]\` only when no empirical/boundary claim changed.`,
+        withModel({ agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round} p1`, effort: 'high', schema: FIX_SCHEMA }),
+      )
+      if (!preflightFix)
+        return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog }
+      if (preflightFix.needsHumanDecision)
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+      const finalPreflight = await runPreflight(preflight.reviewedHead, firstPreflight.actionable, [fix.evidenceLedger, preflightFix.evidenceLedger], 1)
+      if (!hasPreflightEvidence(finalPreflight))
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+      const finalPreflightPartition = partitionFindings(finalPreflight.findings)
+      accept(finalPreflightPartition.carried)
+      if (finalPreflight.verified !== (finalPreflightPartition.actionable.length === 0))
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: finalPreflight.findings, acceptedFindings: accepted, reviewLog }
+      if (finalPreflightPartition.actionable.length) {
+        await agent(
+          `Story ${tag}: PRE-FLIGHT STOP. ${wtClause(story)} Append \`## Preflight stop r${round}\` to \`${reviewLog}\`: one compact row per still-open finding (${JSON.stringify(finalPreflightPartition.actionable)}), including its VERIFY/ORACLE/ASSERT. Do NOT change code, commit, push, post a PR comment, create a card, or merge.`,
+          { agentType: 'pair-implementer', phase: 'Review', label: `preflight-log:${tag} r${round}`, model: 'sonnet', effort: 'low' },
+        )
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: finalPreflightPartition.actionable, acceptedFindings: accepted, reviewLog }
+      }
     }
   }
 

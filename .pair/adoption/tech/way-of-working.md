@@ -81,6 +81,14 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   invisible, normalized or confusable characters. A missing proof or a rise in findings remains a
   stop-and-investigate signal, never noise to suppress. See ADL
   [2026-09-03-evidence-ledger-and-interaction-matrix-prevent-serial-findings.md](../decision-log/2026-09-03-evidence-ledger-and-interaction-matrix-prevent-serial-findings.md).
+- **Post-fix preflight:** before an external re-review, a separate read-only verifier inspects
+  only the new fix delta and directly changed boundaries. It reruns every returned ledger probe,
+  traces each fixture/table value to a consuming assertion, and checks paired order plus the
+  minimal interaction cross-product of new rules. It may send one bounded internal repair back
+  to the fixer; a second miss stops as `failed-preflight` without creating a new PR review round.
+  Every actionable review recommendation supplies `VERIFY: input/state -> expected`, `ORACLE:`
+  and `ASSERT:` so this check is executable rather than interpretive. See ADL
+  [2026-09-04-independent-fix-preflight-prevents-review-churn.md](../decision-log/2026-09-04-independent-fix-preflight-prevents-review-churn.md).
 
 ## Quality Gates
 

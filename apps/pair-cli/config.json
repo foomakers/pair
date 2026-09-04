@@ -60,7 +60,7 @@
       "source": ".agents",
       "behavior": "overwrite",
       "targets": [{ "path": ".claude/agents/", "mode": "canonical" }],
-      "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-contract-generator)"
+      "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-fix-verifier, pair-contract-generator)"
     }
   }
 }
