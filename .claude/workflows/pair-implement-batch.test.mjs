@@ -51,6 +51,19 @@ async function runWorkflow({ args, dispatch }) {
         return result.reviewedHead === undefined ? { ...result, reviewedHead: REVIEWED_HEAD } : result
       return { verified: true, findings: [], reviewedHead: REVIEWED_HEAD }
     }
+    // Legacy fixtures model the old one-agent fix path. Supply a valid RED handoff only
+    // when they return an unrelated fallback object; focused tests can return an explicit
+    // contract (or null, to exercise the fail-closed path) without boilerplate everywhere.
+    if (opts.agentType === 'pair-fix-test-author') {
+      if (result === null) return null
+      if (result && typeof result === 'object' && typeof result.sourceOfTruth === 'string') return result
+      return {
+        sourceOfTruth: 'canonical state transition',
+        matrix: [{ condition: 'reported case', oracle: 'fixture', expected: 'fixed behavior' }],
+        redTests: [{ file: 'fixture.test.ts', sha256: `sha256:${'0'.repeat(64)}`, command: 'pnpm test', observed: 'FAIL' }],
+        testExempt: false,
+      }
+    }
     return result
   }
   // Mirrors the real primitive's contract: "a thunk that throws (or whose agent errors)
@@ -1110,6 +1123,68 @@ test('review and fix prove empirical claims, collisions, and lossless diagnostic
   assert.ok(fix.includes('lossless distinguishability'), 'diagnostics retain invisible or confusable input distinctions')
   assert.ok(fix.includes('duplicate input alongside a pre-existing generated/suffixed outcome'), 'the fixer tests rule-output collisions, not independent duplicate rows only')
   assert.deepEqual(fixCall.opts.schema.required, ['fixed', 'evidenceLedger'], 'a fix cannot omit its evidence ledger')
+})
+
+test('a separate red-test author locks the contract before a fixer may change source', async () => {
+  const finding = {
+    location: 'reader.ts:42',
+    severity: 'Major',
+    description: 'a derived boundary disagrees with its state owner',
+    recommendation: 'VERIFY: continuation and interruption; ORACLE: reader rows; ASSERT: event stream',
+  }
+  let review = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return review++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-fix-test-author') {
+        return {
+          sourceOfTruth: 'advanceParagraph',
+          matrix: [{ condition: 'ordered marker continues', oracle: 'reader row', expected: 'same block' }],
+          redTests: [{ file: 'reader.test.ts', sha256: `sha256:${'1'.repeat(64)}`, command: 'pnpm test reader', observed: 'FAIL' }],
+          testExempt: false,
+        }
+      }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+
+  const red = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(red, 'a fix first receives an independently-authored RED contract')
+  assert.ok(fix, 'the source fixer still runs after the red contract exists')
+  assert.ok(calls.indexOf(red) < calls.indexOf(fix), 'RED and GREEN are distinct agent sessions')
+  assert.match(red.prompt, /ONLY test artifacts/i)
+  assert.match(red.prompt, /every branch that changes that owner state/i)
+  assert.match(fix.prompt, /LOCKED RED CONTRACT/i)
+  assert.match(fix.prompt, /DO NOT modify.*test/i)
+  const preflight = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
+  assert.match(preflight.prompt, /Recompute every listed.*sha256sum/i)
+  assert.match(preflight.prompt, /unlisted test artifact/i)
+})
+
+test('a missing RED contract fails closed before any source fix or external re-review', async () => {
+  const finding = { location: 'parser.ts:10', severity: 'Major', description: 'd', recommendation: 'r' }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-fix-test-author') return null
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+
+  assert.equal(result.batch[0].status, 'failed-fix')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 2, 'the RED author gets one retry')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'source cannot change without RED evidence')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 0, 'no preflight or external re-review follows')
 })
 
 test('a narrow independent preflight repairs its own delta before the next external review', async () => {

@@ -16,6 +16,10 @@ You independently verify a just-fixed PR delta before the normal external re-rev
   claims to reproduce, not author context to trust.
 - Re-run each stated oracle/probe. Trace every new fixture field, decision-table row and mock
   value to a consuming assertion; declaration alone proves nothing.
+- When dispatch includes a locked RED contract, recompute every listed `sha256sum`; any changed,
+  missing or unlisted test artifact is a blocking finding. Trace each derived predicate/event to
+  the state transition that owns it — a convenience/laziness predicate is not proof of a state
+  boundary.
 - For new parser, state, normalizer or reservation logic, check paired order and the smallest
   interaction/collision cross-product. Report concrete input/state -> wrong outcome.
 - Return only the structured preflight result requested by the workflow. `verified: true` means

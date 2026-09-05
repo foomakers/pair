@@ -89,6 +89,13 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   Every actionable review recommendation supplies `VERIFY: input/state -> expected`, `ORACLE:`
   and `ASSERT:` so this check is executable rather than interpretive. See ADL
   [2026-09-04-independent-fix-preflight-prevents-review-churn.md](../decision-log/2026-09-04-independent-fix-preflight-prevents-review-churn.md).
+- **Locked RED before GREEN:** every actionable behavior fix has two isolated sessions. A
+  test-only author first derives its matrix from the state-transition owner, writes/runs failing
+  tests and records their SHA-256; the source fixer then may edit implementation only. Preflight
+  recomputes those hashes and rejects a changed, missing or unlisted test artifact. A convenience
+  predicate (for laziness, eligibility or similar) never substitutes for the transition that
+  actually owns the state. See ADL
+  [2026-09-05-locked-red-contract-prevents-fix-regressions.md](../decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md).
 
 ## Quality Gates
 
