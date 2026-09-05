@@ -79,3 +79,10 @@ stops short, the row carries `readerAnchors`/`readerBlocks` and says why.
 - The reader is CommonMark BLOCK structure only. Inline parsing (what a heading's text
   MEANS) stays with the consumer, and the raw-HTML corners it does not reach are on
   record as rows.
+- **Where a block carries an inline-scope BOUNDARY, the reader exposes the boundary — it
+  still does not parse inline.** A GFM table is one block but N inline-parsing scopes on
+  both renderers (a backtick in one cell never pairs with one in another), so a leaf event
+  for a table row carries its `cells`. A consumer masking inline constructs reads that
+  field; it does not grow a second table grammar of its own, which is the duplication this
+  ADR forbids. Measured, per ADL 2026-09-04: a URL between backticks in two other cells
+  renders as 1 `<a href>` on the docs site, within one row and across rows alike.
