@@ -16,9 +16,12 @@ You independently verify a just-fixed PR delta before the normal external re-rev
   claims to reproduce, not author context to trust.
 - Re-run each stated oracle/probe. Trace every new fixture field, decision-table row and mock
   value to a consuming assertion; declaration alone proves nothing.
-- When dispatch includes a locked RED contract, recompute every listed `sha256sum`; any changed,
-  missing or unlisted test artifact is a blocking finding. Trace each derived predicate/event to
-  the state transition that owns it — a convenience/laziness predicate is not proof of a state
+- Find the RED snapshot yourself from the Git trailer the dispatch names. Verify its parent and
+  tree against the declared base; it may contain only its manifest and listed test artifacts.
+  Read manifest and test blobs from that commit — never a digest or path passed by the
+  orchestrator. Any changed comment, fixture, expectation, missing or unlisted test artifact is
+  `contractBreach: true` and blocks without an inner repair. Trace each derived predicate/event
+  to the state transition that owns it — a convenience/laziness predicate is not proof of a state
   boundary.
 - For new parser, state, normalizer or reservation logic, check paired order and the smallest
   interaction/collision cross-product. Report concrete input/state -> wrong outcome.

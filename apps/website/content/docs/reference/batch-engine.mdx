@@ -41,13 +41,14 @@ the install**, so they are not part of that figure. Nothing errors.
 
 Under Claude Code they are not inert, and it is worth knowing exactly what arrives.
 
-`.claude/agents/` declares five subagents, each with real tool access:
+`.claude/agents/` declares six subagents, each with real tool access:
 
 | Agent                     | Tools it declares                          | What that lets it do                                                        |
 | ------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
 | `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
 | `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); by its own instructions it does not edit, commit or merge |
 | `pair-fix-test-author`    | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write and run only failing regression tests; it cannot commit, push, post or edit production artifacts by instruction |
+| `pair-red-sealer`         | `Read, Edit, Write, Bash, Grep, Glob, Skill` | verify and locally commit only a RED test snapshot; GREEN later pushes it only as an immutable branch ancestor; it cannot push, post or edit production artifacts by instruction |
 | `pair-fix-verifier`       | `Read, Grep, Glob, Bash, Skill`            | independently preflight a just-fixed delta; rerun evidence and tests without editing, posting or merging |
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
 
@@ -55,12 +56,12 @@ Under Claude Code they are not inert, and it is worth knowing exactly what arriv
 spawns it at both of its stages. It is a host built-in of Claude Code, not a file `pair install`
 writes, so it is not in the table above — and that is precisely why it is worth naming here: it
 carries your tool configuration's **unrestricted** set, `Bash` included, which is wider than any
-of the five definitions above. What keeps that engine to PM-tool writes is the read-only clause
+of the six definitions above. What keeps that engine to PM-tool writes is the read-only clause
 in every prompt it dispatches, not a tool grant.
 
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
-authority you install. What keeps `pair-reviewer` and `pair-fix-verifier` read-only, `pair-fix-test-author` test-only, and keeps merge out of every run is
+authority you install. What keeps `pair-reviewer` and `pair-fix-verifier` read-only, `pair-fix-test-author` test-only, `pair-red-sealer` snapshot-only, and keeps merge out of every run is
 instruction — the engine's dispatched prompts and each agent's own definition — not the tool
 grant.
 

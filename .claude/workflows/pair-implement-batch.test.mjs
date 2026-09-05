@@ -64,6 +64,13 @@ async function runWorkflow({ args, dispatch }) {
         testExempt: false,
       }
     }
+    // Existing fixtures predate the local Git snapshot. Keep them focused on their own
+    // behavior while explicit snapshot tests may return a seal (or null) deliberately.
+    if (opts.agentType === 'pair-red-sealer') {
+      if (result === null) return null
+      if (result && typeof result === 'object' && result.sealed === true) return result
+      return { sealed: true, snapshot: '0'.repeat(40) }
+    }
     return result
   }
   // Mirrors the real primitive's contract: "a thunk that throws (or whose agent errors)
@@ -1154,16 +1161,19 @@ test('a separate red-test author locks the contract before a fixer may change so
   })
 
   const red = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  const sealer = calls.find(c => c.opts.agentType === 'pair-red-sealer')
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(red, 'a fix first receives an independently-authored RED contract')
+  assert.ok(sealer, 'the RED artifacts are sealed before source can change')
   assert.ok(fix, 'the source fixer still runs after the red contract exists')
-  assert.ok(calls.indexOf(red) < calls.indexOf(fix), 'RED and GREEN are distinct agent sessions')
+  assert.ok(calls.indexOf(red) < calls.indexOf(sealer), 'the RED author precedes its sealer')
+  assert.ok(calls.indexOf(sealer) < calls.indexOf(fix), 'RED, sealing, and GREEN are distinct sessions')
   assert.match(red.prompt, /ONLY test artifacts/i)
   assert.match(red.prompt, /every branch that changes that owner state/i)
-  assert.match(fix.prompt, /LOCKED RED CONTRACT/i)
+  assert.match(fix.prompt, /SEALED RED SNAPSHOT/i)
   assert.match(fix.prompt, /DO NOT modify.*test/i)
   const preflight = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
-  assert.match(preflight.prompt, /Recompute every listed.*sha256sum/i)
+  assert.match(preflight.prompt, /pair-red-snapshot/i)
   assert.match(preflight.prompt, /unlisted test artifact/i)
 })
 
@@ -3379,4 +3389,154 @@ test('US-219 AC7: every card error names the key the CALLER used — `cards[0]` 
   const noList = await expectThrow({ args: {} })
   assert.match(noList, /\{ cards: \[\.\.\.\] \}/, 'the shape to pass is the contract key')
   assert.match(noList, /stories/, 'the accepted alias is still named')
+})
+
+// ─── RED snapshot: the contract lives in Git, not in a prompt ────────────────────────
+//
+// Measured failure (#434 / PR #471, 2026-09-05). The RED contract was passed to the
+// verifier as JSON in its own prompt. The orchestrator authorised the fixer to change a
+// comment inside a frozen test file, then wrote the POST-fix hash into the verifier's
+// "expected" table. The verifier recomputed the hash, matched what it had been handed,
+// and reported no violation — correct against its input, blind to the real contract. A
+// reference the verified party can rewrite is not a reference.
+//
+// The fix is a local Git RED snapshot: a dedicated sealer commits the test artifacts and
+// the manifest, the commit carries an identifying trailer, and the verifier FINDS that
+// commit itself and reads manifest and blobs OUT OF IT. Nothing about the contract
+// travels through a prompt the orchestrator writes.
+
+const RED_TRAILER = /Pair-RED-Snapshot/i
+const A_SHA = `sha256:${'a'.repeat(64)}`
+
+function redSnapshotDispatch({ sealer, review, redTests } = {}) {
+  let seen = 0
+  const finding = { location: 'reader.ts:42', severity: 'Major', description: 'd', recommendation: 'r' }
+  return (prompt, opts) => {
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer')
+      return review ? review(seen++) : seen++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-fix-test-author')
+      return {
+        sourceOfTruth: 'advanceParagraph',
+        matrix: [{ condition: 'c', oracle: 'o', expected: 'e' }],
+        redTests: redTests ?? [{ file: 'reader.test.ts', sha256: A_SHA, command: 'pnpm test reader', observed: 'FAIL' }],
+        testExempt: false,
+      }
+    if (opts.agentType === 'pair-red-sealer') return sealer === undefined ? { sealed: true, snapshot: 'b'.repeat(40) } : sealer
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    return { fixed: true, evidenceLedger: [] }
+  }
+}
+
+test('a dedicated sealer commits the RED snapshot locally, and never pushes it', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: redSnapshotDispatch() })
+
+  const author = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  const sealer = calls.find(c => c.opts.agentType === 'pair-red-sealer')
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(sealer, 'a dedicated sealer runs between the RED author and the fixer')
+  assert.ok(calls.indexOf(author) < calls.indexOf(sealer), 'the sealer seals what the author wrote')
+  assert.ok(calls.indexOf(sealer) < calls.indexOf(fix), 'source may only change on top of a sealed snapshot')
+  // The sealer makes only a local commit. GREEN later pushes the branch containing this
+  // immutable ancestor; the sealer never publishes a separately mutable reference.
+  assert.match(sealer.prompt, /commit/i)
+  assert.match(sealer.prompt, /do not push|never push|without pushing/i)
+  // The trailer is what makes the commit findable without being told where it is.
+  assert.match(sealer.prompt, RED_TRAILER)
+  assert.match(sealer.prompt, /\bPR\b/)
+  assert.match(sealer.prompt, /round/i)
+  assert.match(sealer.prompt, /base/i)
+  assert.match(sealer.prompt, /already-sealed RED snapshot|existing sealed snapshot/i, 'a retry reuses a completed local seal')
+})
+
+test('the verifier is told to FIND the snapshot itself — no hash reaches it through the prompt', async () => {
+  // The tampering this denies: whatever the orchestrator believes the hashes to be,
+  // including a value it was handed by the very session it is verifying.
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: redSnapshotDispatch({
+      redTests: [{ file: 'reader.test.ts', sha256: A_SHA, command: 'pnpm test reader', observed: 'FAIL' }],
+    }),
+  })
+
+  const preflight = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
+  assert.ok(preflight, 'the preflight still runs')
+  assert.doesNotMatch(preflight.prompt, /sha256:[0-9a-f]{64}/i, 'no expected digest is interpolated into the prompt')
+  assert.ok(!preflight.prompt.includes(A_SHA), 'the RED author’s own digest never reaches the verifier')
+  assert.doesNotMatch(preflight.prompt, /"redTests"/, 'the manifest is not serialised into the prompt')
+  // What replaces it: locate the commit by its trailer and read the contract out of it.
+  assert.match(preflight.prompt, RED_TRAILER)
+  assert.match(preflight.prompt, /git log|git rev-list/i, 'the verifier searches the history itself')
+  assert.match(preflight.prompt, /git show|git cat-file/i, 'manifest and blobs are read FROM the commit')
+  assert.match(preflight.prompt, /do not|never/i)
+})
+
+test('the verifier compares BLOBS, so a comment-only edit to a frozen test is a breach', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: redSnapshotDispatch() })
+  const preflight = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
+
+  // The #434 escape was exactly this: "only a comment changed, no expectation moved".
+  // A byte comparison has no opinion about which bytes are load-bearing.
+  assert.match(preflight.prompt, /byte|blob|identical/i)
+  assert.match(preflight.prompt, /comment/i, 'a comment-only difference is named as a breach, not excused')
+  assert.match(preflight.prompt, /added|unlisted|new test/i, 'a test outside the manifest is also a breach')
+  assert.match(preflight.prompt, /removed|deleted|disappear/i)
+  assert.match(preflight.prompt, /parent.*base|base.*parent/i, 'the snapshot must really descend from its declared base')
+  assert.match(preflight.prompt, /git diff-tree/i, 'the snapshot tree itself is inspected')
+  assert.match(preflight.prompt, /only.*manifest|manifest.*only/i, 'source hidden in the RED commit is also a breach')
+})
+
+test('the fixer is forbidden to rewrite the snapshot as well as the tests', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: redSnapshotDispatch() })
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+
+  // Freezing the blobs is worthless if the commit holding them can be replaced.
+  assert.match(fix.prompt, /amend/i)
+  assert.match(fix.prompt, /rebase/i)
+  assert.match(fix.prompt, /reset/i)
+  assert.match(fix.prompt, /RED snapshot|snapshot commit/i)
+  assert.match(fix.prompt, /on top of|above|after the snapshot/i, 'GREEN commits stack ON the snapshot')
+})
+
+test('an unsealed snapshot fails closed: no fix, no preflight, no external review', async () => {
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: redSnapshotDispatch({ sealer: null }),
+  })
+
+  assert.equal(result.batch[0].status, 'failed-fix')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'source cannot change without a sealed snapshot')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 0, 'no preflight runs')
+  assert.equal(
+    calls.filter(c => c.opts.agentType === 'pair-reviewer').length,
+    1,
+    'only the round-0 review ran; the failure never reaches an external re-review',
+  )
+})
+
+test('a contract breach ends the run: failed-preflight, and no external re-review is spent', async () => {
+  const breach = {
+    location: 'reader.test.ts',
+    severity: 'Critical',
+    description: 'frozen test artifact differs from the RED snapshot blob',
+    recommendation: 'restore the sealed test; GREEN may not rewrite its own specification',
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) =>
+      opts.agentType === 'pair-fix-verifier'
+        ? { verified: false, contractBreach: true, findings: [breach], reviewedHead: REVIEWED_HEAD }
+        : redSnapshotDispatch()(prompt, opts),
+  })
+
+  assert.equal(result.batch[0].status, 'failed-preflight')
+  // A breach is not a finding to be repaired by the same loop that produced it: the
+  // inner repair pass must not run, and neither must the outer reviewer.
+  assert.equal(calls.filter(c => c.opts.label?.includes('p1')).length, 0, 'no inner repair pass follows a breach')
+  assert.equal(
+    calls.filter(c => c.opts.agentType === 'pair-reviewer').length,
+    1,
+    'the external reviewer is never dispatched after a contract breach',
+  )
 })

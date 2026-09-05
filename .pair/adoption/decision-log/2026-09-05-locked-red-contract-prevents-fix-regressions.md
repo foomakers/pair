@@ -23,11 +23,14 @@ before external review, but only after a commit/push and one incomplete repair c
 ## Decision
 
 For every actionable behavioral fix, dispatch a dedicated test-only RED agent before GREEN. It
-maps the canonical state owner and finite branch/boundary matrix, writes/runs failing tests, and
-returns hashes of every changed test artifact. The separate source fixer receives that immutable
-contract and may not change test artifacts. Preflight recomputes the hashes, rejects changed or
-unlisted test artifacts, and traces a derived predicate/event to the transition that owns its
-state. Pure documentation/formatting work may be test-exempt only with an explicit rationale.
+maps the canonical state owner and finite branch/boundary matrix and writes/runs failing tests. A
+separate sealer verifies those artifacts and records their manifest and blobs in one local Git
+snapshot, identified by PR, round and immutable base SHA. The source fixer commits only above
+that snapshot and may not change test artifacts. Preflight finds the snapshot from Git history,
+not an orchestrator prompt, then compares its blobs with HEAD; a changed comment, fixture,
+expectation, missing or unlisted test artifact is a `contractBreach` that stops without an inner
+repair or external re-review. Pure documentation/formatting work may be test-exempt only with an
+explicit rationale.
 
 ## Alternatives Considered
 
@@ -38,12 +41,14 @@ state. Pure documentation/formatting work may be test-exempt only with an explic
 
 ## Consequences
 
-Every behavioral fix adds one bounded RED session and a hash verification. A missing or invalid
-RED contract fails closed before source code changes or an external re-review. This reduces
-review churn; it does not claim formal proof against bugs outside the declared contract.
+Every behavioral fix adds bounded RED authoring and sealing sessions plus a Git-blob verification.
+A missing, ambiguous or invalid RED snapshot fails closed before source code changes or an
+external re-review. This reduces review churn; it does not claim formal proof against bugs outside
+the declared contract.
 
 ## Adoption Impact
 
-- `.pair/adoption/tech/way-of-working.md`: records locked RED/GREEN and hash verification.
+- `.pair/adoption/tech/way-of-working.md`: records sealed RED/GREEN and blob verification.
 - `.claude/workflows/pair-implement-batch.js` and dataset mirror: dispatch and enforce it.
-- `.claude/agents/pair-fix-test-author.md` and dataset mirror: define the isolated RED role.
+- `.claude/agents/pair-fix-test-author.md`, `pair-red-sealer.md` and dataset mirrors: define the
+  isolated RED roles.
