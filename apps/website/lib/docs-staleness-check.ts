@@ -322,13 +322,24 @@ function maskLiteralConstructs(surface: string): string {
  * stray backticks in separate blocks with three URLs between them prerendered ALL
  * THREE as `<a href>`, while the gate blanked and never checked them.
  *
- * The group boundary is READ FROM THE READER, never guessed from the bytes: each leaf
- * event answers `blockStart` directly. The paragraph accumulator does NOT answer it —
- * it is reset AFTER the line that ends the paragraph is emitted, so an ATX heading
- * tight against a paragraph (no blank line between them) carries a non-empty
- * accumulator on its own line while being a separate block. That heading is the only
- * interrupting line that can itself hold a URL, and grouping it with the paragraph
- * before it kept the false green alive for exactly that shape.
+ * The group boundary is READ FROM THE READER, never guessed from the bytes and never
+ * re-derived here (ADR-024): each leaf event answers `blockStart` directly, and a GFM
+ * table row hands over its `cells`. The paragraph accumulator does NOT answer it — it is
+ * reset AFTER the line that ends the paragraph is emitted, so a line that interrupts a
+ * paragraph with no blank line between them carries a non-empty accumulator on its own.
+ *
+ * MANY line shapes interrupt one, not just the ATX heading: a thematic break, a marker
+ * that opens a list or a block quote, a GFM table row, and — this renderer having no
+ * § 4.6 type-7 rule — ANY JSX flow element, `<div>`, `<span>` and a component alike.
+ * Each is measured on the site oracle (1 `<a href>` = the backticks did not pair = a
+ * real boundary); the partner shapes that do NOT interrupt are measured the same way
+ * and grouped with the paragraph: a 4-space-indented line and an ordered marker that
+ * cannot interrupt (`2.`, `2)`). Both directions are silent when wrong — splitting a
+ * block gates text no reader can click, merging two blanks a live citation — so the one
+ * predicate that owns the reader's paragraph accumulator owns this grouping too.
+ *
+ * A TABLE is one reader block but N inline scopes: every cell is parsed on its own, so
+ * each is masked on its own and a backtick in one never reaches a citation in another.
  */
 function linkSurface(content: string): string {
   const masked: string[] = []
@@ -339,8 +350,9 @@ function linkSurface(content: string): string {
   }
   for (const ev of readMarkdown(content, { frontmatter: true, mdx: true })) {
     if (ev.kind !== 'leaf') continue
-    if (ev.blockStart) flush()
-    block.push(ev.text)
+    if (ev.blockStart || ev.cells !== undefined) flush()
+    if (ev.cells === undefined) block.push(ev.text)
+    else for (const cell of ev.cells) masked.push(maskLiteralConstructs(cell))
   }
   flush()
   return masked.join('\n')

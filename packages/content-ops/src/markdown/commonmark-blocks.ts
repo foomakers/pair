@@ -24,9 +24,12 @@
  *
  * WHAT IS MODELLED: fenced code blocks (§ 4.5), HTML blocks (§ 4.6, all 7 types),
  * block quotes (§ 5.1), list items and their content columns (§ 5.2), indented code
- * (§ 4.4), tab stops (§ 2.2), paragraph continuation and laziness (§ 4.8/§ 5.1) —
- * enough to answer "is this line rendered markdown, and at what indentation". Inline
- * parsing is NOT here: what a heading's text MEANS is the caller's business.
+ * (§ 4.4), GFM tables (§ 4.10), tab stops (§ 2.2), paragraph continuation and laziness
+ * (§ 4.8/§ 5.1) — enough to answer "is this line rendered markdown, and at what
+ * indentation". Inline parsing is NOT here: what a heading's text MEANS is the caller's
+ * business. Where a block carries an inline-scope BOUNDARY the reader states it (a table
+ * row's `cells`) without parsing what is inside one — the boundary is block structure,
+ * and a consumer re-deriving it would be the second grammar ADR-024 forbids.
  */
 
 const TAB_STOP = 4
@@ -188,6 +191,67 @@ function htmlStartOf(
     if (start.open.test(line)) return { kind: start.kind, end: start.end }
   }
   return undefined
+}
+
+/**
+ * A JSX FLOW line under the `mdx` flavour: the whole line is complete tags — an opener
+ * (`<div>`, `<span>`, `<Callout type="info">`), a closer (`</div>`), or a pair
+ * (`<a name="x"></a>`) — and nothing else.
+ *
+ * MDX has NO § 4.6 type-7 rule, so unlike github.com every one of these ENDS an open
+ * paragraph rather than continuing it. Measured on the docs site, one probe row per
+ * shape (`pnpm --filter @pair/website build`, `<a href>` counted in the prerendered
+ * page): `Some para` with a stray backtick, then `<span>` / `<Callout>` / `<div>`
+ * carrying a URL and the closing backtick, renders the URL as **1** `<a href>` — the
+ * backticks did not pair, so the element is a separate inline scope. github.com's
+ * answer for the type-7 shapes is the opposite (`<span>x</span>` tight against a
+ * paragraph stays in it, ONE `<p>`), which is why this is flavour-conditional.
+ */
+const MDX_FLOW_LINE_RE = new RegExp(`^ {0,3}(?:(?:${HTML_OPEN_TAG}|${HTML_CLOSE_TAG})[ \\t]*)+$`)
+
+/** A GFM delimiter-row cell: hyphens, optionally colon-anchored (`:--`, `--:`, `:-:`). */
+const TABLE_DELIMITER_CELL_RE = /^:?-+:?$/
+
+/**
+ * The cells this line is made of, split on UNESCAPED pipes — GFM writes a literal `|`
+ * inside a cell as `\|`, code spans included, so the pipe is a reliable delimiter.
+ * `undefined` when the line has no table-row SHAPE at all: no outer pipe and fewer than
+ * two cells, i.e. an ordinary prose line.
+ *
+ * The cells are the row's INLINE-PARSING SCOPES, which is why they are read out at all:
+ * every cell is parsed on its own, so a backtick in one never pairs with a backtick in
+ * another (see the `cells` field on `MarkdownEvent`).
+ */
+function tableCellsOf(text: string): string[] | undefined {
+  let body = text.trim()
+  const leading = body.startsWith('|')
+  if (leading) body = body.slice(1)
+  const trailing = /(?:^|[^\\])\|$/.test(body)
+  if (trailing) body = body.slice(0, -1)
+  const cells: string[] = []
+  let cell = ''
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]
+    if (ch === '\\' && body[i + 1] === '|') {
+      cell += '\\|'
+      i += 1
+    } else if (ch === '|') {
+      cells.push(cell.trim())
+      cell = ''
+    } else cell += ch
+  }
+  cells.push(cell.trim())
+  return cells.length > 1 || leading || trailing ? cells : undefined
+}
+
+/** Is this line a GFM DELIMITER row of exactly `columns` cells? */
+function isDelimiterRow(text: string, columns: number): boolean {
+  const cells = tableCellsOf(text)
+  return (
+    cells !== undefined &&
+    cells.length === columns &&
+    cells.every(cell => TABLE_DELIMITER_CELL_RE.test(cell))
+  )
 }
 
 /**
@@ -417,8 +481,23 @@ export type MarkdownEvent =
        * A consumer that groups leaves by block MUST read this field — grouping by the
        * accumulator merges the two, measured as a silent false green in the docs link
        * gate (ADL 2026-09-04).
+       *
+       * With a paragraph open it is the exact complement of `continuesOpenParagraph` —
+       * the ONE predicate the accumulator itself is advanced by — save for the setext
+       * underline, which ends the paragraph as its OWN last line and so begins nothing.
+       * Multi-line leaves that hold no paragraph (an indented code block, a GFM table)
+       * carry their own open flag and mark only their first line.
        */
       blockStart: boolean
+      /**
+       * A GFM table row's CELLS — the row split into the scopes the renderer parses
+       * INLINE separately, present only on a table row. A backtick in one cell cannot
+       * pair with a backtick in another, so a consumer that scans inline constructs
+       * (code spans, links) MUST scan cell by cell rather than over `text`: measured on
+       * the docs site as 1 `<a href>` for a URL sat between backticks in two other
+       * cells, both within one row and across rows.
+       */
+      cells?: readonly string[]
     }
 
 export interface ReadMarkdownOptions {
@@ -504,8 +583,53 @@ interface ReaderState {
   paragraph: string[]
   /** Was the leaf just emitted an indented-code line? Its block spans consecutive ones. */
   indented: boolean
+  /** Was the leaf just emitted a GFM table row? A table spans its consecutive rows. */
+  table: boolean
+  /** Every source line, so a table header can look ahead for its delimiter row. */
+  readonly lines: readonly string[]
   /** The MDX flavour flag, constant for the whole read — see `ReadMarkdownOptions`. */
   readonly mdx: boolean
+}
+
+/**
+ * The line AFTER `index`, peeled of the container prefixes open right now — `undefined`
+ * when there is none or it leaves a container (a lazy line cannot be a delimiter row).
+ * The one lookahead the reader needs: a GFM table header row is only a header because
+ * the line under it is a delimiter row of the same width.
+ */
+function peeledNextLine(st: ReaderState, index: number): string | undefined {
+  const raw = st.lines[index + 1]
+  if (raw === undefined) return undefined
+  const peel = matchContainers(raw, st.stack)
+  return peel.matched < st.stack.length ? undefined : expandLeading(peel.rest, peel.col)
+}
+
+/** Does this line begin a block a GFM table row cannot be — the shapes that break one? */
+function startsAnotherBlock(st: ReaderState, text: string): boolean {
+  return (
+    text.trim() === '' ||
+    atxHeadingText(text) !== undefined ||
+    THEMATIC_BREAK_RE.test(text) ||
+    fenceMarkerOf(text) !== undefined ||
+    (!st.mdx && htmlStartOf(text, false) !== undefined)
+  )
+}
+
+/**
+ * The GFM table row this line is, as its cells — `undefined` when it is not one.
+ *
+ * A table OPENS on a row whose next line is a delimiter row of the same width (GFM
+ * § 4.10), and once open every following row belongs to it until a blank line or
+ * another block-level start breaks it. That first row interrupts an open paragraph on
+ * BOTH renderers: site 1 `<a href>` for a URL in the row under a paragraph carrying a
+ * stray backtick, github `<p>Cost is 5 wide.</p><table>`.
+ */
+function tableRowCells(st: ReaderState, text: string, index: number): string[] | undefined {
+  if (startsAnotherBlock(st, text)) return undefined
+  const cells = tableCellsOf(text)
+  if (cells === undefined || st.table) return cells
+  const next = peeledNextLine(st, index)
+  return next !== undefined && isDelimiterRow(next, cells.length) ? cells : undefined
 }
 
 /**
@@ -532,20 +656,34 @@ function* readLazyLine(
     indentedCode: false,
     blockStart: false,
   }
-  st.indented = false
+  endOpenLeaves(st)
   st.paragraph.push(text)
   return true
 }
 
 /**
+ * Every MULTI-LINE leaf the reader is inside ends here. Both an indented code block and
+ * a GFM table span consecutive lines and are tracked by a flag rather than by the
+ * paragraph accumulator, so every boundary that resets the accumulator must reset them
+ * too — `>     code1` / `    code2` is TWO `<pre>` blocks on github.com, and forgetting
+ * this at the container close reported the second as a continuation of the first.
+ */
+function endOpenLeaves(st: ReaderState): void {
+  st.indented = false
+  st.table = false
+}
+
+/**
  * Close the containers this line left, and with them any fence or HTML block inside
- * them — and the paragraph, which ends where its container does: `Some para` / `- item`
+ * them — and every open LEAF, which ends where its container does: `Some para` / `- item`
  * / `---` anchors NOTHING on github.com, because the `---` at column 0 closes the item
- * before it can underline `item`.
+ * before it can underline `item`, and `>     code1` / `    code2` is TWO `<pre>` blocks
+ * there, not one — the quote closing ended the first indented code block.
  */
 function* closeContainers(st: ReaderState, peel: Peel, index: number): Generator<MarkdownEvent> {
   st.stack.length = peel.matched
   st.paragraph = []
+  endOpenLeaves(st)
   if (st.fence !== undefined) {
     yield { kind: 'fence-end', index }
     st.fence = undefined
@@ -601,24 +739,63 @@ function* readHtmlLine(
 }
 
 /**
+ * Does this line CONTINUE the paragraph open above it — i.e. is it PUSHED onto the
+ * accumulator rather than ending it? THE owner of that decision, and the only one:
+ * `advanceParagraph` applies it to the state and `startsLeafBlock` reads the same answer
+ * back, so the two can never drift into calling the same line both a continuation and a
+ * block start.
+ *
+ * It is NOT `continuesParagraph`, which answers the strictly stronger LAZINESS question
+ * "may this line omit its container prefix?" and says `false` for three shapes the
+ * paragraph still absorbs — a 4-space-indented line (§ 4.4 code cannot interrupt a
+ * paragraph, and MDX has no indented code at all), an ordered marker that cannot
+ * interrupt (`openContainers` refuses to open its list), and, under CommonMark, a
+ * § 4.6 type-7 HTML line. Deriving a block boundary from it split paragraphs both
+ * renderers keep whole (ADL 2026-09-04).
+ *
+ * Lines that open a container or a fence/HTML block never reach here: `openContainers`
+ * and `openBlock` reset the accumulator themselves before this runs.
+ */
+function continuesOpenParagraph(
+  st: ReaderState,
+  text: string,
+  cells: readonly string[] | undefined,
+): boolean {
+  if (text.trim() === '' || atxHeadingText(text) !== undefined) return false
+  if (SETEXT_UNDERLINE_RE.test(text) || THEMATIC_BREAK_RE.test(text)) return false
+  // A GFM table interrupts a paragraph on both renderers.
+  if (cells !== undefined) return false
+  // ...and under MDX a JSX flow element does too, where github's type-7 rule says not.
+  return !(st.mdx && MDX_FLOW_LINE_RE.test(text))
+}
+
+/**
  * Does this line begin a new leaf block? Asked BEFORE the line is emitted, which is the
  * whole point: `advanceParagraph` runs after, so on an interrupting line the accumulator
  * still holds the paragraph that line ends.
  */
-function startsLeafBlock(st: ReaderState, text: string): boolean {
+function startsLeafBlock(
+  st: ReaderState,
+  text: string,
+  cells: readonly string[] | undefined,
+): boolean {
+  // A GFM table is ONE leaf block over its rows: only the first row begins it.
+  if (cells !== undefined) return !st.table
   if (st.paragraph.length === 0) return true
-  // A setext underline is the LAST line of the heading it underlines, not a new block.
-  if (SETEXT_UNDERLINE_RE.test(text)) return false
-  // Everything else that does not continue the paragraph interrupts it: a blank line, an
-  // ATX heading, a thematic break. The heading is the only one that can carry a URL.
-  return !continuesParagraph(text)
+  if (continuesOpenParagraph(st, text, cells)) return false
+  // A setext underline is the LAST line of the heading it underlines, not a new block —
+  // the one line that ends a paragraph while still belonging to it.
+  return !SETEXT_UNDERLINE_RE.test(text)
 }
 
 /** How the leaf line just emitted leaves the paragraph for the next one. */
-function advanceParagraph(st: ReaderState, text: string): void {
-  if (text.trim() === '' || atxHeadingText(text) !== undefined) st.paragraph = []
-  else if (SETEXT_UNDERLINE_RE.test(text) || THEMATIC_BREAK_RE.test(text)) st.paragraph = []
-  else st.paragraph.push(text)
+function advanceParagraph(
+  st: ReaderState,
+  text: string,
+  cells: readonly string[] | undefined,
+): void {
+  if (continuesOpenParagraph(st, text, cells)) st.paragraph.push(text)
+  else st.paragraph = []
 }
 
 /**
@@ -656,6 +833,26 @@ function* openBlock(
   return true
 }
 
+/** One line of an indented code block (§ 4.4): its block spans the consecutive ones. */
+function* readIndentedCodeLine(
+  st: ReaderState,
+  text: string,
+  raw: string,
+  index: number,
+): Generator<MarkdownEvent> {
+  yield {
+    kind: 'leaf',
+    index,
+    raw,
+    text,
+    paragraph: [],
+    indentedCode: true,
+    blockStart: !st.indented,
+  }
+  endOpenLeaves(st)
+  st.indented = true
+}
+
 /** One line read from OUTSIDE any fence or HTML block: it may open either, or neither. */
 function* readOutsideLine(
   st: ReaderState,
@@ -664,25 +861,21 @@ function* readOutsideLine(
   index: number,
 ): Generator<MarkdownEvent> {
   const peel = openContainers(peeled, st.stack, st.paragraph.length > 0)
-  if (peel.matched === -1) st.paragraph = []
+  // A container that really OPENS begins a block, so every open leaf ends with it.
+  if (peel.matched === -1) {
+    st.paragraph = []
+    endOpenLeaves(st)
+  }
   const text = expandLeading(peel.rest, peel.col)
 
   if (isIndentedCode(st, text)) {
-    yield {
-      kind: 'leaf',
-      index,
-      raw,
-      text,
-      paragraph: [],
-      indentedCode: true,
-      blockStart: !st.indented,
-    }
-    st.indented = true
+    yield* readIndentedCodeLine(st, text, raw, index)
     return
   }
-  const blockStart = startsLeafBlock(st, text)
+  const cells = tableRowCells(st, text, index)
+  const blockStart = startsLeafBlock(st, text, cells)
   if (yield* openBlock(st, text, raw, index)) {
-    st.indented = false
+    endOpenLeaves(st)
     return
   }
 
@@ -694,9 +887,11 @@ function* readOutsideLine(
     paragraph: [...st.paragraph],
     indentedCode: false,
     blockStart,
+    ...(cells === undefined ? {} : { cells }),
   }
-  st.indented = false
-  advanceParagraph(st, text)
+  endOpenLeaves(st)
+  st.table = cells !== undefined
+  advanceParagraph(st, text, cells)
 }
 
 /** One source line, through the three-state machine. */
@@ -734,6 +929,8 @@ export function* readMarkdown(
     html: undefined,
     paragraph: [],
     indented: false,
+    table: false,
+    lines,
     mdx: options.mdx === true,
   }
 

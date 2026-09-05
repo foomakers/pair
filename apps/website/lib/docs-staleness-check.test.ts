@@ -947,7 +947,8 @@ describe('findDeadRepoLinks', () => {
     // calls the worse one. Proven on the site oracle: a probe page with two stray
     // backticks in separate blocks and three URLs between them prerenders all three
     // as <a href>. The masking is therefore grouped by real block (readMarkdown's
-    // paragraph accumulator), never over the joined document.
+    // blockStart), never over the joined document and never by the paragraph
+    // accumulator — which is reset one line late and is not the boundary.
     {
       why: 'two stray backticks in SEPARATE blocks do not span the live URL between them',
       content: `A stray \` backtick.\n\nBare: ${DEAD}\n\nAnother stray \` backtick.\n`,
@@ -997,6 +998,125 @@ describe('findDeadRepoLinks', () => {
       why: 'a code span across a setext heading text and its underline stays ONE block',
       content: `Text \`${DEAD}\nand more\`\n===\n`,
       hrefs: 0,
+    },
+    // WHICH LINES REALLY START A BLOCK. The boundary the masking groups by is the
+    // reader's `blockStart`, and the rows below enumerate the line shapes that can carry
+    // a URL against an OPEN paragraph — the ATX heading above is not the only one, and
+    // the split is wrong in BOTH directions. Every count is the site's, one probe row
+    // per line shape in one page (`pnpm --filter @pair/website build`, `<a href>` counted
+    // in the prerendered `.next/server/app/docs/__blockstart-probe.html`): 1 means the
+    // two stray backticks did NOT pair, so the line really began a block; 0 means they
+    // did, so it did not.
+    {
+      // A 4-space-indented line cannot interrupt a paragraph on EITHER renderer (MDX has
+      // no indented code at all, and § 4.4 code needs an empty paragraph), so the code
+      // span runs across it. Splitting there gates text no reader can click.
+      why: 'a paragraph continued on a 4-space-indented line',
+      content: `Cost is 5\` wide.\n    See ${DEAD} \` end\n`,
+      hrefs: 0,
+    },
+    {
+      // `openContainers` REFUSES to open a list whose marker cannot interrupt, so this
+      // line is paragraph text — on the site as in the reader's own state.
+      why: 'a paragraph continued on a non-interrupting `2.` marker',
+      content: `Cost is 5\` wide.\n2. See ${DEAD} \` end\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a paragraph continued on a non-interrupting `2)` marker',
+      content: `Cost is 5\` wide.\n2) See ${DEAD} \` end\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'two consecutive 4-space-indented lines — ONE paragraph under MDX',
+      content: `    Cost is 5\` wide.\n    See ${DEAD} \` end\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a paragraph whose MIDDLE line is 4-space-indented',
+      content: `Cost is 5\` wide.\n    mid line\nSee ${DEAD} \` end\n`,
+      hrefs: 0,
+    },
+    // ...and the interrupt partners, which DO start a block: the same bytes with a
+    // marker that opens its container, a break, or a JSX element.
+    {
+      why: 'an interrupting `1.` marker, which does start a list',
+      content: `Cost is 5\` wide.\n1. See ${DEAD} \` end\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a bullet marker, which always interrupts',
+      content: `Cost is 5\` wide.\n- See ${DEAD} \` end\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a block quote marker, which opens its container',
+      content: `Cost is 5\` wide.\n> See ${DEAD} \` end\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a tight thematic break',
+      content: `Cost is 5\` wide.\n***\nSee ${DEAD} \` end\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a plain paragraph continuation, which does NOT start a block',
+      content: `Cost is 5\` wide.\nSee ${DEAD} \` end\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a lazy continuation of a block quote paragraph',
+      content: `> Cost is 5\` wide.\nSee ${DEAD} \` end\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a blank line before a 4-space-indented line, which does start a block',
+      content: `Cost is 5\` wide.\n\n    See ${DEAD} \` end\n`,
+      hrefs: 1,
+    },
+    // A JSX ELEMENT ends the paragraph on this renderer — all three of them, not just
+    // the § 4.6 type-6 tags. `<span>` and a component are type 7 on github.com, where
+    // they cannot interrupt a paragraph; MDX has no such rule and the site proves it.
+    // Reading them as continuations lets the paragraph's stray backtick reach into the
+    // element and blank a citation the site serves — the SILENT direction.
+    {
+      why: 'a <div> element tight against a paragraph',
+      content: `Cost is 5\` wide.\n<div>\nSee ${DEAD} \` end\n</div>\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a <span> element tight against a paragraph',
+      content: `Cost is 5\` wide.\n<span>\nSee ${DEAD} \` end\n</span>\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a JSX component tight against a paragraph',
+      content: `Cost is 5\` wide.\n<Callout>\nSee ${DEAD} \` end\n</Callout>\n`,
+      hrefs: 1,
+    },
+    // A GFM TABLE is ONE reader block but N INLINE SCOPES on the site: every cell is
+    // parsed on its own, so a backtick in one cell never pairs with a backtick in
+    // another. Masking the whole table as one scope blanks the citation between them and
+    // the gate reports PASS on a live dead link — a false GREEN, and pre-existing.
+    {
+      why: 'a table cell between two backticks in OTHER cells of the same row',
+      content: `| A | B |\n| --- | --- |\n| x \` ${DEAD} | \` y |\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a table cell between two backticks in cells of DIFFERENT rows',
+      content: `| A \` | B |\n| --- | --- |\n| ${DEAD} | \` y |\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a table row that INTERRUPTS the paragraph above it',
+      content: `Cost is 5\` wide.\n| A | B |\n| --- | --- |\n| See ${DEAD} \` | b |\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a plain table cell holding a citation, no backticks anywhere',
+      content: `| A | B |\n| --- | --- |\n| ${DEAD} | b |\n`,
+      hrefs: 1,
     },
   ]
 
