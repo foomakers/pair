@@ -114,3 +114,10 @@ configuration. A project whose skills, worktree root or base branch differ passe
 An unknown key, an empty override, or a `maxParallelism` below 1 is rejected loudly rather than
 ignored — a discarded setting would run the batch on values you did not choose while reporting
 success.
+
+### Sealed-history decisions
+
+If a review finding can only be fixed by rewriting existing Git history, the engine stops before
+it creates a RED snapshot. A human may resume with a card-level `historyDecision` containing only
+the exact lower-case full commit SHA(s) and a disposition; it can accept only those commit
+subjects. It cannot waive code, tests, docs, configuration, generated artifacts or CI findings.

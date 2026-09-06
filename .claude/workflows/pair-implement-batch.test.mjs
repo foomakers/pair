@@ -151,6 +151,7 @@ test('valid contract: reviewer schema derives from contract.json (AC1) and cache
     properties: {
       ...contract.schema.properties,
       reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
     },
     required: ['verdict', 'reviewedHead'],
   })
@@ -267,6 +268,7 @@ test('contract with usable schema but missing canonical vocabulary keys: prompt 
     properties: {
       ...contract.schema.properties,
       reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
     },
     required: ['verdict', 'reviewedHead'],
   })
@@ -2078,6 +2080,72 @@ test('needsHumanDecision spends one fix round first, then escalates if it still 
   assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'exactly ONE — the request is honoured on its second occurrence')
   assert.equal(result.batch[0].status, 'escalate', 'the escalation is deferred, never dropped')
   assert.ok(logs.some(m => /asked for a human decision/.test(m)), 'the deferral is narrated')
+})
+
+// A history rewrite is categorically unlike an ordinary design disagreement: creating a RED
+// snapshot first makes the very commits the human must decide about immutable for this cycle.
+// It must therefore stop BEFORE RED/seal/GREEN, not consume the one remedial round above.
+test('history-rewrite decision escalates before RED sealing or GREEN', async () => {
+  const f = { location: '05e95887:subject', severity: 'Minor', description: 'wrong story label', recommendation: 'rewrite the commit subject' }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return { verdict: 'Rework', findings: [f], needsHumanDecision: true, humanDecisionKind: 'history-rewrite' }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'escalate')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0, 'no RED contract is authored for a history-only decision')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0, 'no snapshot can make the decision unfixable')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'no GREEN runs before the human decision')
+})
+
+test('historyDecision is reviewer context only: exact historical subjects may be accepted, code remains actionable', async () => {
+  const commit = 'a'.repeat(40)
+  const historical = {
+    location: `${commit}:subject`, severity: 'Minor', description: 'old subject label', recommendation: 'rewrite subject',
+    nonActionable: true, disposition: 'Accepted historical trace; rewriting would alter the sealed RED base.',
+  }
+  const technical = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  let reviewerCalls = 0
+  const { result, calls } = await runWorkflow({
+    args: {
+      stories: [{
+        ...STORY,
+        historyDecision: {
+          commits: [commit],
+          disposition: 'Accepted historical trace; do not rewrite the sealed RED base.',
+        },
+      }],
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return reviewerCalls++ === 0 ? { verdict: 'Rework', findings: [historical, technical] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
+  assert.match(review.prompt, new RegExp(commit), 'the reviewer receives the exact human-authorized commit only')
+  assert.match(review.prompt, /does not waive.*code/i, 'the decision cannot waive technical work')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'the technical finding still receives GREEN')
+  assert.equal(result.batch[0].acceptedFindings.length, 1, 'only the explicitly non-actionable historical finding is carried')
+})
+
+test('historyDecision rejects a non-canonical commit identifier before agents run', async () => {
+  await assert.rejects(
+    () => runWorkflow({
+      args: { stories: [{ ...STORY, historyDecision: { commits: ['ABC'], disposition: 'accept it' } }] },
+      dispatch: stdDispatch({}),
+    }),
+    /historyDecision\.commits\[0\].*lower-case 40-character SHA/i,
+  )
 })
 
 test('a flag raised only AFTER a fix round still escalates on that round', async () => {

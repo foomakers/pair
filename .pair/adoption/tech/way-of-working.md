@@ -96,7 +96,11 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   with HEAD, and rejects a changed, missing or unlisted test artifact — including a comment. A
   fixture with no standalone failure names the RED test that consumes it; an absent or non-RED
   consumer is rejected before sealing.
-  convenience predicate (for laziness, eligibility or similar) never substitutes for the
+  A finding whose sole remediation rewrites existing Git history escalates with a typed
+  `history-rewrite` decision **before** RED authoring or sealing; a human may accept only exact
+  historical commit subjects, never a current code/test/docs/CI finding. See ADL
+  [2026-09-06-history-rewrite-escalates-before-red-seal.md](../decision-log/2026-09-06-history-rewrite-escalates-before-red-seal.md).
+  A convenience predicate (for laziness, eligibility or similar) never substitutes for the
   transition that actually owns the state. See ADL
   [2026-09-05-locked-red-contract-prevents-fix-regressions.md](../decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md).
 

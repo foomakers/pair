@@ -34,6 +34,8 @@ export const meta = {
 //                                 // A POSITIVE integer (>= 1): `0`/negative do not name a PR,
 //                                 // and `0` would skip implement AND the probe and report an
 //                                 // unbuilt story as review-approved.
+//     historyDecision?,          // narrow human decision: exact sealed-history commit subjects
+//                                 // only, { commits: [lower-case full SHA...], disposition }
 //   }],                           // every card VALUE is validated, not just its key set: id is one
 //                                 // path segment, branch/base are git refs, title/notes are plain
 //                                 // text. They reach shell command text an agent runs, so a value
@@ -122,6 +124,10 @@ export const meta = {
 // Optional { notes } = a scope directive threaded into the implement+PR prompts
 // (overrides the issue body on conflict), e.g. "resolve all findings in ONE PR,
 // do not split".
+// Optional { historyDecision } = a narrow human decision on the SUBJECTS of exact historical
+// commits when rewriting them would alter a sealed RED base. It is reviewer context, never a
+// waiver for code, docs, tests, configuration or other commits; a history-only finding without
+// it escalates before RED/seal/GREEN can make its remediation impossible in this cycle.
 //
 // #401: the input is validated LOUDLY. The previous version coerced an unparseable
 // string to `undefined` and fell through to `STORIES = []`, so a caller who
@@ -256,7 +262,7 @@ function parseBatchArgs(raw) {
     // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
     // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
     // PR for a story that already had one — the very thing this file forbids in as many words.
-    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'prNumber'], `${listKey}[${i}]`)
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'historyDecision', 'prNumber'], `${listKey}[${i}]`)
     // `#234` and `234` name the same story; normalize once so no prompt, worktree
     // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
     // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
@@ -329,6 +335,38 @@ function parseBatchArgs(raw) {
     constrain(s.base, 'base', isRef, 'a valid git ref')
     constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
     constrain(s.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
+    // A seal makes its ancestors intentionally immutable. A human can accept an exact
+    // historical commit subject as trace, but the exception must remain narrow: broad caller
+    // prose must never become a way to suppress a current-tree finding in the reviewer prompt.
+    let historyDecision
+    if (s.historyDecision !== undefined && s.historyDecision !== null) {
+      const d = s.historyDecision
+      if (!d || typeof d !== 'object' || Array.isArray(d))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision must be an object with commits + disposition, or be omitted.`,
+        )
+      rejectUnknownKeys(d, ['commits', 'disposition'], `${listKey}[${i}].historyDecision`)
+      if (!Array.isArray(d.commits) || d.commits.length === 0)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.commits must be a non-empty array of lower-case 40-character SHAs.`,
+        )
+      const commits = d.commits.map((commit, j) => {
+        if (typeof commit !== 'string' || !/^[0-9a-f]{40}$/.test(commit))
+          throw new Error(
+            `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.commits[${j}] must be a lower-case 40-character SHA.`,
+          )
+        return commit
+      })
+      if (new Set(commits).size !== commits.length)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.commits contains a duplicate SHA; name each historical commit once.`,
+        )
+      if (typeof d.disposition !== 'string' || !d.disposition.trim() || !isProse(d.disposition.trim()))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.disposition must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
+        )
+      historyDecision = { commits, disposition: d.disposition.trim() }
+    }
     // `prNumber` decides the ENTIRE lifecycle: an integer re-enters the review loop on the
     // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
     // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
@@ -365,7 +403,7 @@ function parseBatchArgs(raw) {
           `implementers in the same working tree and lose one of them. Pass each story once.`,
       )
     seenIds.set(id, i)
-    return { ...s, id }
+    return { ...s, id, historyDecision }
   })
   // Return the NORMALIZED container, not just the list. Reading a second option off the
   // raw `args` was a real bug: the runtime can hand this script a JSON STRING, and
@@ -871,6 +909,10 @@ const LOOSE_REVIEW_SCHEMA = {
     // part of the human-facing review template vocabulary.
     reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     needsHumanDecision: { type: 'boolean' },
+    // A history rewrite has to be escalated before a new RED snapshot can freeze the commits
+    // the human needs to decide about. Other human decisions retain the normal one-fix-round
+    // behavior below.
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
     findings: {
       type: 'array',
       items: {
@@ -1102,6 +1144,7 @@ const REVIEW_SCHEMA = {
   properties: {
     ...REVIEW_SCHEMA_BASE.properties,
     reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
   },
   required: [...new Set([...(REVIEW_SCHEMA_BASE.required ?? []), 'verdict', 'reviewedHead'])],
 }
@@ -1367,6 +1410,12 @@ async function driveStory(story) {
   //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
   //    posting, and comment minimizing are all delegated to agents running in the worktree.
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
+  // This is human-provided scope for a single otherwise-unfixable finding, not author context:
+  // the reviewer still derives every finding independently. Keeping it beside the review loop
+  // prevents it leaking into RED/GREEN where it could become an implementation waiver.
+  const historyDecisionClause = story.historyDecision
+    ? `EXPLICIT HUMAN HISTORY DECISION (not author handoff): commit SUBJECTS on exactly ${JSON.stringify(story.historyDecision.commits)} are accepted historical trace because changing them would rewrite a sealed RED snapshot. Their disposition is: ${JSON.stringify(story.historyDecision.disposition)}. Inspect the actual history before applying this. Only if a finding is solely a subject-line mismatch on exactly one of those commits may you return it nonActionable with that disposition. Do NOT rebase, amend, reset, or release a sealed snapshot for it. This does not waive any code, tests, docs, configuration, generated artifacts, CI behavior, or any other commit. `
+    : `HISTORY-REWRITE ESCALATION: if an actionable finding can only be fixed by rewriting, amending, or rebasing existing Git history, set needsHumanDecision: true AND humanDecisionKind: "history-rewrite". Do this before any RED snapshot; still report every other finding normally. `
   // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
   // (invisible in rendered markdown → no visible noise). The continuation probe detects a
   // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
@@ -1497,6 +1546,7 @@ async function driveStory(story) {
     // otherwise the pacing loop invites a second full audit before its delta rule.
     const reviewBase = prevFindings.length ? prevReviewedHead : baseOf(story)
     const review = await agentRetry(
+      historyDecisionClause +
       `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${reviewBase}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ACTIONABLE-FINDING ACCEPTANCE PLAN (mandatory): end EVERY actionable \`recommendation\` with \`VERIFY: <concrete input/state -> expected outcome>; ORACLE: <exact command, fixture or authoritative source>; ASSERT: <the observable assertion that consumes that fixture/output>\`. When a changed rule can feed another rule, name the paired direction and the minimal interaction cross-product in VERIFY; a declared fixture column that no expectation reads is not a test. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
             ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}. The last complete review covered immutable head ${prevReviewedHead}. First inspect ONLY the fix delta with \`git diff ${prevReviewedHead}...origin/${story.branch} --name-status\`, then its directly changed producer/consumer contract boundaries. Do NOT re-audit the unchanged PR surface. A new finding is actionable only if it is in this delta or a contract boundary changed by this delta; otherwise report it as a Question for the human, not a new fix round.`
             : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end).`} Return findings, verdict, and \`reviewedHead\`: the lower-case 40-character SHA printed by \`git rev-parse origin/${story.branch}\` after your inspection.`,
@@ -1564,10 +1614,23 @@ async function driveStory(story) {
     // escalation still happens — it is deferred by one round, not dropped. On the second
     // occurrence we stop: a flag raised again after a fix round is a genuine disagreement.
     const wantsHuman = review?.needsHumanDecision === true
-    if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
+    // A sealed snapshot deliberately freezes its base. If the reviewer identifies a finding
+    // whose ONLY remediation is rewriting that base's history, spending the normal one fix
+    // round first makes the human's legitimate options narrower. Stop before RED/seal/GREEN;
+    // this exceptional route is typed, while all other human decisions retain the measured
+    // one-round behavior below.
+    const historyRewriteDecision = wantsHuman && review?.humanDecisionKind === 'history-rewrite'
+    let mustEscalate = false
+    if (historyRewriteDecision) {
+      mustEscalate = true
+      log(`${tag} r${round}: reviewer identified a history-rewrite decision — escalating before RED sealing or GREEN`)
+    } else if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
       humanDecisionPending = true
       log(`${tag} r${round}: reviewer asked for a human decision — spending one fix round on the ${actionable.length} finding(s) first, then escalating if it still stands`)
     } else if (round >= MAX_FIX_ROUNDS || wantsHuman) {
+      mustEscalate = true
+    }
+    if (mustEscalate) {
       // #373 finding 1: emit a PR-visible escalation UNLESS this run's round-0 ALREADY posted
       // the first review (`first === true`) carrying these same findings. The gap this closes:
       // a SILENT re-review that escalates with no log — a resumed PR whose prior first review
