@@ -4,6 +4,8 @@
 
 Accepted — **amends [ADR-017](adr-017-automation-loop-pair-loop-over-atom.md)** §4 (the `pair-loop` skill's Realization rule) and retires one of its stated limitations ("No portable unattended loop"). ADR-017 §1 (`pair-next` as a frozen atom), §2 (`implement-batch` as the batch engine), §3 (context isolation as an architectural invariant) and §6 (`tech/automation.md` as the policy home) are **left intact** and are not restated here.
 
+**Amended 2026-08-28 by #441** — the second tier-1 realization landed. §7 below states how a caller decides which realization it has, and corrects one factual premise this record inherited. The three tiers, their order and every other clause are **unchanged**: #441 is the sibling #451 already reserved a slot for, not a re-framing. Whichever of the two landed second was required to amend this record rather than write a second, divergent three-tier story; this is that amendment.
+
 > Numbering note: `adr-018` is claimed by two files already merged; `019` stays free for whichever of them renumbers. This ADR takes the next number above the highest in use.
 
 ## Date
@@ -41,7 +43,7 @@ See Decision.
 
    | # | Realization | What it is | When it applies |
    | --- | --- | --- | --- |
-   | 1 | **In-harness** | The harness's own fan-out primitive — Claude Code's `Workflow` (`pair-loop` / `pair-implement-batch`), Codex subagents (#441) | The harness has one, and the team wants to use it |
+   | 1 | **In-harness** | The harness's own fan-out primitive — Claude Code's `Workflow` (`pair-loop` / `pair-implement-batch`), Codex's multi-agent subagents (#441, landed) | The **probe** finds one in this session (§7), and the team wants to use it |
    | 2 | **External driver** | `pair run` (#451): a headless process per iteration on a chosen engine, re-invoking on the continue-token. The **portable baseline** | Any environment with an engine on PATH — *including* harnesses that HAVE subagents but whose user prefers separate processes. `claude -p` and Codex are legitimate driver ENGINES, not competitors to tier 1 |
    | 3 | **Degraded** | ADR-017 §4's original rule: exactly one card per invocation, audit/checkpoint written, continue-token printed for a human/CI/cron to re-invoke | Only for a caller with neither of the above |
 
@@ -56,6 +58,30 @@ See Decision.
 5. **Merge is never automated by tier 2.** Whatever the autonomy flags, the driver stops at the gate; auto-advance authority stays exactly where `tech/automation.md` §Auto-Advance and quality-model §4 put it.
 
 6. **`pair-loop`'s Realization rule (ADR-017 §4, shipped in the skill) is amended to these three tiers**, and so is story #250's statement of it. §§1–3 and §6 of ADR-017 are unchanged.
+
+7. **A realization is PROBED, never inferred — and Codex's is the second one that exists** (added 2026-08-28, #441).
+
+   The tier table above is a preference order, not an availability claim. Which realization a caller may take is established by **probing the running session** for the primitive itself: the tool is exposed, or it is not. A product name, a version string, a documented-but-unobserved feature and a config key that merely *could* enable the mechanism are all inadmissible as evidence, and an unrecognised probe result reads as **absent**. The generic rule — probe → bind → announce → degrade, with the vendor's surface held as data — is stated once in the KB's [harness-realization convention](../../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/harness-realization.md); this clause only fixes that the capability's tiers are taken that way.
+
+   **Both tier-1 realizations are entries in that one map, Claude Code's included.** They differ in *dispatch shape* and in nothing else the rule cares about: Claude Code's `Workflow` is a **delegated run** (one call hands the whole run to a runtime that fans out itself, so the caller owns no cap and no wait bound), Codex's toolsets are **spawn/wait** (the orchestrating model starts and awaits each subagent, so it owns both). The binding reports the shape and the caller branches on *that*. Exempting the harness the skill happens to run in was tried and is a defect, not a shortcut: `bind` then answers `degraded` for a session that fans out through the workflow moments later, so the announcement written to the audit is false, the degradation branch's condition ("the probe missed") holds at the same time as the in-harness branch, and the caller is back to routing on the product name this clause exists to stop reading.
+
+   Two consequences are load-bearing:
+
+   - **The bound realization is announced before anything is dispatched**, and recorded in the run's audit. A silent fallback and a successful bind are otherwise indistinguishable in the result.
+   - **Degradation preserves the invariant.** Where no primitive binds, the caller drops to tier 2 and then tier 3. What it may never do, at any tier, is iterate several cards inside one context — that is ADR-017 §3's invariant, and dropping it would not be a lower tier but a defect.
+
+   **Why the probe rather than a version check**: the far side of this integration is observably in motion. On the build measured for #441 (`codex-cli 0.149.0`, 2026-08-22) Codex exposed *two* multi-agent toolsets — a default-on first generation (`spawn_agent`/`wait_agent`/`send_input`/`resume_agent`/`close_agent`) and a default-**off** second one behind `multi_agent_v2`, with a configurable tool namespace — while a third fan-out mechanism (`enable_fanout`) had already been withdrawn. A rule that read capability off a version would have been wrong for at least one of those three states.
+
+   **The factual correction this amendment carries**: ADL [`2026-07-11-agent-execution-layer`](../../decision-log/2026-07-11-agent-execution-layer.md) states that Claude Code's subagent and workflow primitives are ones "that other assistants (e.g. Codex) do not have". For Codex that is **no longer true**, on the evidence above; the ADL is amended in place. What remains true, and is what that record was really about, is narrower: `.claude/workflows/*.js` is a Claude-Code-specific *artifact* no other harness can execute. Codex's in-harness realization is therefore not that file ported — it is the `pair-loop` skill driving the same lane through Codex's own tools, with the lane's deterministic half in a tested module shipped as a KB asset. Both realizations validate a subagent's return against the **same** result contract; neither invents a second handoff format.
+
+8. **"One lane" is a claim about the review ↔ fix cycle and the audit, not only about the schemas** (added 2026-08-28, #441).
+
+   Two realizations of one capability may differ in dispatch mechanism and in nothing a card can feel. Four properties are therefore fixed for both, and are what a third realization would have to honour too:
+
+   - **A fix is owed by findings, never by a phase list.** Actionable findings ⇒ one fix round ⇒ **re-review**; zero actionable findings ⇒ converged and no fixer is spawned; a cap on the rounds ⇒ escalate to a human. A realization that dispatched `implement → pr → review → fix` unconditionally would both spawn a fixer on an approved PR and record a card converged on a review that ran BEFORE the fixes — and under `## Auto-Advance` the second of those merges.
+   - **A project-supplied result contract may only TIGHTEN the built-in one.** Where the project has the generated review contract on disk, both realizations validate against it; where the request carrying it is composed by a model, a contract that model can also WIDEN is not a contract.
+   - **An exclusion is scoped to the run that recorded it.** The audit is one persistent, append-only, project-relative file. A halt read out of it unscoped refuses a card in every later invocation, forever — stricter than the Claude realization, whose exclusion covers "every later iteration in the same run", and incompatible with "re-dispatch only what is unfinished".
+   - **Where the orchestrator is a MODEL, its omission must fail closed — mechanically, not in prose.** The realization whose sequencing is a model's writes its own audit, so every field the reconstruction reads back is a field a killed or careless run can omit. The load-bearing one is the review record's `action`: a completed `review` that does not say what `converge` decided is refused at write time, and on read only `converged` closes the cycle — anything else, absent included, leaves it open and re-enters the card at `review`. Read the other way round, an omitted stamp reconstructed as a *finished* review, the plan owed nothing, and the first bullet's loss happened anyway through the back door. The same rule is why the request shape rejects unknown keys at every level a model composes rather than dropping them: a silently-dropped key reinstates exactly the default it was passed to override.
 
 ## Consequences
 
@@ -74,6 +100,9 @@ See Decision.
 - **Tier 2 costs one process per iteration**: slower than an in-harness subagent for a long run, and it re-reads project context every time. That is the price of the stronger isolation, not an accident of the implementation.
 - **Tier 2 has no per-run card exclusion** (see Decision §2): the one-card path does not read the prior audit to skip already-decided cards, so an unattended tier-2 run can re-decide a parked card until its cap. Bounded, audited, and fixable in the skill — but a real difference from tier 1 today.
 - **The driver depends on per-engine stream contracts** (which event is terminal). They are engine-map data, verified against each engine, and unrecognised output is fail-closed — an iteration with no terminal event counts as failed and stops the loop.
+- **Tier 1 now has two realizations to keep in step** (added 2026-08-28, #441). Claude's runs in JS, Codex's runs as a skill over a tested asset, and "one capability" is a claim only as long as a given card comes out of both with the same outcome and an equivalent audit. Two guards hold it mechanically — the per-phase result schemas are asserted equal across the two, and the vendor surface is asserted to appear only in its data map — but the semantics of the lane itself rest on the shared `implement-batch` contract, not on a test. A third harness would want the same pair of guards, not a third re-derivation.
+- **Tier 1's wait bound is not always configurable, and the map carries a declared fallback** (added 2026-08-28, #441). One observed generation of the spawn/wait harness exposes no wait-timeout config key at all (the next generation does, and is off by default), so "read the harness's configured maximum" resolves to nothing on the session a bare run actually binds. Rather than leave the caller with an unbounded wait or an invented number — both forbidden — the surface-map entry declares the fallback, the binding reports which of the three sources produced the number, and the announcement carries it into the audit. It is a bound pair chose, stated as such and reviewable as data; the alternative was AC10 unmet on the default path.
+- **A model-driven orchestrator is less deterministic than a JS one** (added 2026-08-28, #441). Codex's tier 1 puts the arithmetic, the packet checks, the contract validation and the audit write in a tested module precisely because the surrounding sequencing is a model's. That narrows the gap; it does not close it, and it is the reason every dispatch is schema-validated and every outcome audited rather than trusted.
 
 ## Related
 
