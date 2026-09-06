@@ -23,7 +23,7 @@ export async function assertScaffoldTarget(root: string, fs: FileSystemService):
     throw new Error(
       `Refusing to scaffold a KB into ${root}: it is a configured pair project (${ADOPTION_DIRECTORY}/ exists). ` +
         'A KB is knowledge, not a configured project — scaffold it into its own directory, ' +
-        'e.g. pair scaffold-kb ../my-kb',
+        'e.g. pair-cli scaffold-kb ../my-kb',
     )
   }
 }

@@ -37,7 +37,7 @@ export function resolveInvocation(
     if (!probe(request.name)) {
       throw new Error(
         `Skill '${request.name}' is not installed (--skill never falls back). ` +
-          `Install it with \`pair install\`, or drop --skill to use the ${PREFERRED_SKILL} → ${FALLBACK_SKILL} cascade.`,
+          `Install it with \`pair-cli install\`, or drop --skill to use the ${PREFERRED_SKILL} → ${FALLBACK_SKILL} cascade.`,
       )
     }
     return { kind: 'skill', name: request.name, source: '--skill' }
@@ -49,7 +49,7 @@ export function resolveInvocation(
 
   throw new Error(
     `Neither ${PREFERRED_SKILL} nor ${FALLBACK_SKILL} is installed: there is no skill to run. ` +
-      `Run \`pair install\`, or pass --prompt to run a prompt instead.`,
+      `Run \`pair-cli install\`, or pass --prompt to run a prompt instead.`,
   )
 }
 

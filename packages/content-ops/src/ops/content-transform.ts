@@ -13,7 +13,7 @@ const collapseBlankLines = (s: string): string => s.replace(/\n{3,}/g, '\n\n')
  * Trims EXTRA trailing newlines, and only those. `collapseBlankLines` cannot: a file left
  * with a single trailing blank line ends in `\n\n`, which is two newlines, not three or
  * more. Content that ends without a newline is left exactly as it is — an earlier version
- * of this helper added one, which changed what `pair update` writes for every target and
+ * of this helper added one, which changed what `pair-cli update` writes for every target and
  * broke a test that pinned a fixture without a trailing newline.
  * A source whose LAST block is skipped always lands there — and the artifact then trips
  * `MD012/no-multiple-blanks` in the very repository that generated it (observed on

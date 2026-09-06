@@ -59,7 +59,7 @@ Contributor                 CI / Release                 Developer
     │                           │  builds + packages KB     │
     │                           │  as GitHub Release        │
     │                           │──────────────────────────▶│
-    │                           │                           │  pair install
+    │                           │                           │  pair-cli install
     │                           │                           │  downloads KB
     │                           │                           │  creates .pair/
     │                           │                           │
@@ -70,7 +70,7 @@ Contributor                 CI / Release                 Developer
 
 1. **Contributors** add or update KB content in `packages/knowledge-hub/dataset/`.
 2. **CI** packages the KB into a versioned ZIP and publishes it as a GitHub Release artifact.
-3. **Developers** run `pair install` — the CLI downloads the KB and creates the `.pair/` directory.
+3. **Developers** run `pair-cli install` — the CLI downloads the KB and creates the `.pair/` directory.
 4. **AI agents** read `.pair/` for guidelines, adoption files, and how-tos. Skills are distributed to `.claude/skills/` (and other tool directories).
 
 ## The .pair/ directory

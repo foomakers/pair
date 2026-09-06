@@ -185,7 +185,7 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
 // findSkillCountMismatches pins the "N skills" COUNTS. Neither pins the per-row
 // Command / Description CONTENT, which used to be hand-maintained and could drift
 // silently from the dataset. checkCatalogContent (Check 2c) closes that gap: the
-// Command is DERIVED from category+name (the same transform `pair update` applies)
+// Command is DERIVED from category+name (the same transform `pair-cli update` applies)
 // and the Description from the skill's frontmatter — so the dataset is the single
 // source of truth, CI-enforced. (The Composes column is NOT owned by this check.)
 
@@ -200,7 +200,7 @@ export interface ExpectedRow {
 }
 
 /**
- * category+name → the slash-command, the same name transform `pair update` applies
+ * category+name → the slash-command, the same name transform `pair-cli update` applies
  * when mirroring the dataset into `.claude/skills/`: a meta skill (its SKILL.md sits
  * at the category root, so name === category, e.g. `next`) becomes `/pair-<name>`;
  * every other skill becomes `/pair-<category>-<name>`.
@@ -433,20 +433,172 @@ export function checkCommandAnchors(commandDirs: string[], commandsDoc: string):
 }
 
 /**
- * A `pair-cli <word>` INVOCATION, as opposed to the words "pair-cli" in a sentence.
+ * A `<bin> <word>` INVOCATION, as opposed to the words "pair-cli"/"pair" in a sentence.
  *
- * Positional, deliberately, and not a list of prose words to keep extending: `pair-cli`
+ * Positional, deliberately, and not a list of prose words to keep extending: the binary
  * counts as an invocation only at the start of an inline code span or of a fenced line,
- * optionally behind `$ ` or `npx [--no] <pkg>`. That is what separates an instruction
+ * optionally behind `$ ` or a package-manager runner (`<runner> [flags] [@scope/]<bin>[@version]`).
+ * That is what separates an instruction
  * from English — "common pair-cli workflows" and "the pair-cli version it invokes" are
  * prose and must not fail the gate, while `` `pair-cli init` `` is a command that does
  * not exist. The previous shape kept a PROSE_WORDS allow-list, which is the maintenance
  * pattern where the next false positive is fixed by adding a word rather than by fixing
  * the rule; under the positional rule that list is dead and is gone.
+ *
+ * The BINARY is captured (group 1) rather than pinned to the literal `pair-cli`, because
+ * both spellings are invocations and only one of them exists: `pair` is what the docs
+ * used to say and what no `npm install` ever creates (ADL 2026-08-25 — `pair-cli` is the
+ * canonical name, no alias). Matching `pair-cli` alone made the gate structurally blind
+ * to the very drift it exists to catch (US-449).
+ *
+ * The separator between binary and command is ONE space, not `\s+`: an aligned column of
+ * whitespace is a diagram, never a command. The PM-tool pages map their hierarchy under a
+ * fenced heading (`pair                    Linear`), which `\s+` would read as "run
+ * `pair Linear`". This is a KNOWING trade, and it covers every non-single-space separator:
+ * neither `pair-cli  <cmd>` written with two spaces nor `pair-cli\t<cmd>` written with a TAB
+ * is flagged (no such form exists in the docs today — verified: `checkDocsCommands` returns
+ * `[]` for both, pinned in the suite). A tab is column alignment by definition, so the
+ * diagram rationale applies to it unchanged. Do not re-widen the separator to `\s+` or `\s`
+ * to recover either — that hands the four PM-tool diagrams back as false positives; if
+ * multi-space or tab invocations ever appear, narrow the DIAGRAM instead (e.g. require the
+ * run of whitespace to align with another line's column).
+ *
+ * The runner is a PREFIX of the binary, never a slot that consumes it. An earlier shape
+ * spelled it `npx\s+(?:--no\s+)?@?[\w/.-]+\s+` — a package token followed by a still-required
+ * literal binary — so the real form `npx --no @foomakers/pair-cli <cmd>` could not match at
+ * all and every npx-prefixed invocation in the docs was invisible to the gate. The scope
+ * (`@foomakers/`) and the version (`@latest`) therefore attach to the captured binary here,
+ * and the flags are what sit between the runner and it.
+ *
+ * The runner list is every form the docs PUBLISH, not `npx` alone. While `npx` was the only
+ * one, `pnpm dlx pair-cli install` (reference/cli/workflows.mdx), `pnpm dlx pair-cli
+ * update-link --dry-run`, `pnpm pair-cli install` (tutorials/team-setup.mdx) and `pnpm
+ * pair-cli --version` (tutorials/first-project.mdx) sat behind a runner the rule could not
+ * see: dropping the `-cli` on any of them returned `[]` and shipped green, and an unknown
+ * command behind the same runner (`pnpm dlx pair-cli kb validate`) was invisible too.
+ *
+ * `pnpm dlx` / `pnpm exec` / `yarn dlx` / `npx` consume a flag run; a BARE package manager
+ * (`pnpm <bin> <cmd>`) does not, and that asymmetry is load-bearing. `pnpm --filter <pkg>`
+ * puts a PACKAGE NAME in flag-argument position, and this repo's package is literally
+ * called `pair-cli` — reading `--filter` as a lone flag would read the filter's argument as
+ * the binary and the script name as its command, so `pnpm --filter @pair/pair-cli build`
+ * would be reported as the nonexistent command `build` on three pages that are correct as
+ * written. Both halves are pinned in the suite.
+ *
+ * A flag whose ARGUMENT is a package name is therefore consumed WITH its argument, and the
+ * runners above have exactly one: `--package`/`-p` (`RUNNER_FLAG`). Reading it as a lone
+ * flag broke both directions of the canonical npx idiom for a package whose bin differs
+ * from its name. `npx --package @foomakers/pair-cli pair-cli install` — correct as written —
+ * had `--package ` eaten as a flag, `@foomakers/` read as the scope, the first `pair-cli`
+ * read as the binary and the REAL binary token read as its command: the gate turned red on
+ * a correct page with no edit that clears it short of deleting a correct instruction. In
+ * the other direction `npx --package=@foomakers/pair-cli pair install` returned `[]`, since
+ * the flag run had no `=value` form — real drift, green, behind a LISTED runner. Both
+ * spellings and both directions are pinned. Add a runner here when the docs start
+ * publishing one, and add any flag of it that takes a package/name argument to
+ * `RUNNER_FLAG`'s first alternative — a runner whose package-argument flag is NOT listed
+ * there must not be given the flag run at all (which is what keeps bare `pnpm` out: its
+ * `--filter` is exactly such a flag and is deliberately unlisted, so the whole flag run is
+ * withheld rather than widened around it).
+ *
+ * The span rule TOKENIZES real code spans (`` `…` `` pairs, `CODE_SPAN`) and anchors the
+ * prefix at the start of the span's CONTENT — it does not scan for the prefix "after a
+ * backtick". Both weaker shapes have already misfired once each, in opposite directions:
+ *   - `` `\s* `` let a CLOSING FENCE (which ends with a backtick) cross the newline into the
+ *     paragraph below — "pair creates Markdown files" read as an invocation of `creates`;
+ *   - `` `[ \t]* `` fixed that newline but still matched after ANY backtick, so a CLOSING
+ *     INLINE span followed by prose on the SAME line did it again: `` `config.json` pair
+ *     skills resolve state `` read as an invocation of `skills`, and the gate would have
+ *     told the writer to "write `pair-cli skills`" inside an English sentence.
+ * Tokenizing removes the class rather than the two cases: the text after a closing delimiter
+ * is outside every span, and a fence (```` ``` ````) yields no span at all since a span needs
+ * a non-backtick character between its delimiters. Both cases are pinned in the suite.
+ *
+ * CommonMark's DOUBLED delimiter (`` ``pair install`` ``) is why `CODE_SPAN` implements the
+ * real closer rule — an opening RUN of N backticks closed by the first run of EXACTLY N,
+ * content free to hold runs of any OTHER length — rather than pairing single backticks. A
+ * naive `` `([^`\n]+)` `` does read a doubled span's OWN content (the attempt at the outer
+ * backtick fails, the scan retries one character on and pairs the inner delimiters), which
+ * is why this was invisible: it consumes only ONE of the two CLOSING backticks, and the
+ * leftover flips span parity for the REST OF THE LINE, so every later inline invocation on
+ * it goes unseen — no error, silent. Balancing the run alone is still not enough, because
+ * the reason an author doubles the delimiter is to quote a BACKTICKED literal, so the
+ * content holds backticks too: the two lines that carry doubled spans today
+ * (`reference/skill-management.mdx:211`, which carries two of them, and `:219`, which carries
+ * one) are all of that shape. Live, not latent — appending an inline `` `pair install` `` to
+ * either of those real lines returned `[]`, while the same text on a plain line was flagged.
+ * Doubling is still not an EXEMPTION: a page that wants to quote a wrong form deliberately
+ * writes it as unbackticked prose, which this positional rule (span content / fenced line)
+ * does not reach by construction. A fence still yields no span, now because content may
+ * neither begin nor end with a backtick.
+ *
+ * The doubled span, its backticked content and its line-mates are pinned. The fence is pinned
+ * through what it can actually change: the fence pass's own cases and the closing fence that
+ * must not reach the paragraph below. "A fence yields no span" is NOT assertable through
+ * `checkDocsCommands` — a fenced line is scanned by the fence pass regardless and errors dedup
+ * by binary+command, so the two passes reading the same line collapse to one error either way.
  */
-const INVOCATION_PREFIX = String.raw`(?:\$\s*)?(?:npx\s+(?:--no\s+)?@?[\w/.-]+\s+)?pair-cli\s+`
-const SPAN_INVOCATION = new RegExp('`\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)', 'g')
-const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.-]*)')
+/**
+ * The canonical binary name — the one place inside this package where it is written, and
+ * the alternation below is BUILT from it, so a `bin` rename is a one-line edit here. Were
+ * the alternation a literal, renaming this constant alone would leave the gate unable to
+ * see the NEW name at all (silent, the exact blindness US-449 removed) while reporting the
+ * old correct lines as wrong. `pair` stays a literal beside it because it is the known-WRONG
+ * binary, not a second name for the published one — on a future rename, add the superseded
+ * name there too for as long as the corpus still carries it.
+ *
+ * Interpolated into a regex as-is, which an npm bin name may be (`[\w.-]`-ish); a future
+ * name carrying a regex metacharacter would need escaping.
+ */
+const PUBLISHED_BIN = 'pair-cli'
+/**
+ * ONE flag of a runner's flag run. `--package`/`-p` is listed FIRST because its argument is
+ * a package NAME and must be consumed with it (see above); every other flag stands alone,
+ * in either the `--flag value` or the `--flag=value` spelling.
+ */
+const RUNNER_FLAG = String.raw`(?:(?:--package|-p)[ \t]+\S+|-{1,2}[\w-]+(?:=\S*)?)[ \t]+`
+/** `npx`/`pnpm dlx`/`pnpm exec`/`yarn dlx` take a flag run; a bare `pnpm` must not (see above). */
+const RUNNER =
+  String.raw`(?:(?:npx|pnpm[ \t]+dlx|pnpm[ \t]+exec|yarn[ \t]+dlx)[ \t]+(?:` +
+  RUNNER_FLAG +
+  String.raw`)*|pnpm[ \t]+)?`
+/**
+ * Group 1: the binary a line names — the published one (from `PUBLISHED_BIN`) or the legacy
+ * `pair` that no install creates. `PUBLISHED_BIN` is first so the longer name wins the
+ * alternation when one is a prefix of the other.
+ */
+const BINARY = `(${PUBLISHED_BIN}|pair)`
+const INVOCATION_PREFIX =
+  String.raw`(?:\$[ \t]*)?` +
+  RUNNER +
+  String.raw`(?:@[\w.-]+/)?` +
+  BINARY +
+  String.raw`(?:@[\w.-]+)? `
+/**
+ * One inline code span's CONTENT (group 2), never crossing a line. CommonMark's own closer
+ * rule: an opening RUN of N backticks (`(?<!`)` keeps the scan from starting mid-run) is
+ * closed by the first run of EXACTLY N (`\1(?!`)`), and the content between them may hold
+ * backtick runs of any other length — which is the whole reason an author doubles the
+ * delimiter. Content may neither begin nor end with a backtick, so a fence yields no span.
+ * See the doubled-delimiter paragraph above.
+ */
+const CODE_SPAN = /(?<!`)(`+)([^`\n](?:[^\n]*?[^`\n])?)\1(?!`)/g
+/**
+ * The token after the binary: a command name, OR a flag. A flag is never a command NAME,
+ * but it IS an invocation — `pair --version` is the single most copy-pasted line in the
+ * docs (9 pages carry it in its correct spelling today), and while the group was
+ * `[A-Za-z][\w.-]*` a leading `-` failed the WHOLE prefix, so `pair --version` was not
+ * seen as an invocation at all and shipped green behind a binary no `npm install`
+ * creates. The token is therefore flag-aware, and `checkDocsCommands` runs only the
+ * binary half on a `-`-leading token — otherwise the correct `pair-cli --version` would
+ * become a false "is not a command". A LETTER is required immediately after the one or
+ * two dashes, which is what a real flag looks like and what an ASCII diagram does not:
+ * `pair -> story` and a bare `pair -- install` (an argument separator, not a flag) match
+ * nothing, same trade as the single-space separator above.
+ */
+const COMMAND_TOKEN = String.raw`(-{1,2}[A-Za-z][\w-]*|[A-Za-z][\w.-]*)`
+const SPAN_INVOCATION = new RegExp('^[ \\t]*' + INVOCATION_PREFIX + COMMAND_TOKEN)
+const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + COMMAND_TOKEN)
 
 /**
  * `vX.Y.Z` / `v0.4.3` on a fenced line is printed OUTPUT, never a command — which is why
@@ -456,12 +608,14 @@ const LINE_INVOCATION = new RegExp('^\\s*' + INVOCATION_PREFIX + '([A-Za-z][\\w.
 const VERSION_STRING = /^v[\dX]/i
 
 /**
- * Check 4: every `pair-cli <command>` the docs tell a reader to run exists.
+ * Check 4: every invocation the docs tell a reader to run is one that WORKS — the right
+ * binary (`pair-cli`, never a bare `pair`), naming a command that exists.
  *
  * Scoped to the whole docs tree, not just tutorials. That widening is the point: with
  * tutorials only, 21 references to three non-existent commands (`init`, `kb validate`,
  * `kb info`) survived across eight pages — each one telling a reader to run something
- * that fails.
+ * that fails. The wrong-binary case is the same defect one level up: `pair install` is
+ * a real command behind a bin that no install creates.
  */
 export function checkDocsCommands(
   docs: { rel: string; content: string }[],
@@ -469,30 +623,62 @@ export function checkDocsCommands(
 ): string[] {
   const errors: string[] = []
   for (const { rel, content } of docs) {
-    for (const cmd of invokedCommands(content)) {
-      if (commandDirs.includes(cmd) || VERSION_STRING.test(cmd)) continue
-      errors.push(`${rel} tells the reader to run "pair-cli ${cmd}", which is not a command`)
+    for (const { bin, cmd } of invokedCommands(content)) {
+      // Ordering is load-bearing and deliberate: the version guard precedes the binary
+      // check, so `pair v0.5.0` — a version BANNER, i.e. output a reader compares against,
+      // not an invocation — is skipped whole and is the one input where a bare `pair`
+      // survives the rule. Flagging it would tell a writer to rewrite printed output.
+      if (VERSION_STRING.test(cmd)) continue
+      // A flag is an invocation but not a command name, so only the binary half applies.
+      const isFlag = cmd.startsWith('-')
+      // Wrong binary reported once and on its own: `pair kb-validate` is not ALSO an
+      // unknown command, and `pair init` should not be counted twice. ONE error, but the
+      // message still has to be honest about both halves — a prescriptive `write
+      // "pair-cli init"` for a command that does not exist sends the writer to publish a
+      // second broken invocation and buys a second red round, so the fix is only offered
+      // when there is one.
+      if (bin !== PUBLISHED_BIN) {
+        const remedy = isFlag
+          ? ''
+          : commandDirs.includes(cmd)
+            ? ` — write "${PUBLISHED_BIN} ${cmd}"`
+            : `, and "${cmd}" is not one of its commands`
+        errors.push(
+          `${rel} tells the reader to run "${bin} ${cmd}", but the published binary is ` +
+            `"${PUBLISHED_BIN}"${remedy}`,
+        )
+        continue
+      }
+      if (isFlag || commandDirs.includes(cmd)) continue
+      errors.push(`${rel} tells the reader to run "${bin} ${cmd}", which is not a command`)
     }
   }
   return errors
 }
 
-/** The commands a document actually invokes — code spans plus fenced command lines. */
-function invokedCommands(content: string): Set<string> {
-  const found = new Set<string>()
-  for (const m of content.matchAll(SPAN_INVOCATION)) {
-    if (m[1] !== undefined) found.add(m[1])
+/** One `<bin> <cmd>` a document tells the reader to run. */
+interface Invocation {
+  bin: string
+  cmd: string
+}
+
+/** The invocations a document actually makes — code spans plus fenced command lines. */
+function invokedCommands(content: string): Invocation[] {
+  const found = new Map<string, Invocation>()
+  const add = (m: RegExpMatchArray | null): void => {
+    const [, bin, cmd] = m ?? []
+    if (bin !== undefined && cmd !== undefined) found.set(`${bin} ${cmd}`, { bin, cmd })
   }
+  for (const [, , span] of content.matchAll(CODE_SPAN)) add(SPAN_INVOCATION.exec(span ?? ''))
   let inFence = false
   for (const line of content.split('\n')) {
     if (/^\s*```/.test(line)) {
       inFence = !inFence
       continue
     }
-    const m = inFence ? LINE_INVOCATION.exec(line) : null
-    if (m?.[1] !== undefined) found.add(m[1])
+    if (inFence) add(LINE_INVOCATION.exec(line))
   }
-  return found
+  return [...found.values()]
 }
 
 /** Build the set of valid /docs routes from the docs .mdx file list. */
@@ -680,7 +866,7 @@ export function checkBatchEngineWorkflows(shipped: string[], doc: string): strin
 }
 
 /**
- * The batch-engine page states WHERE `pair install` puts the engine, WHAT ships, and WHAT
+ * The batch-engine page states WHERE `pair-cli install` puts the engine, WHAT ships, and WHAT
  * authority arrives. Every one of those claims is read back from the dataset and the registries
  * rather than trusted, so renaming a target — or adding a workflow — without touching the page
  * fails here instead of leaving a doc pointing at something nobody gets.
@@ -718,7 +904,7 @@ export function batchEngineErrors(paths: {
 
 /**
  * The docs pages whose fenced sample block claims to BE the output of
- * `pair install --list-targets`. These are transcripts a reader compares their own
+ * `pair-cli install --list-targets`. These are transcripts a reader compares their own
  * terminal against line for line, so drift here does not read as a stale doc — it reads
  * as a broken install, and the reader has no way to tell the two apart.
  */
@@ -799,7 +985,7 @@ export function listTargetsSampleErrors(paths: { CLI_CONFIG: string; DOCS_DIR: s
 
 /**
  * Checks 2b + 2d — everything derived from `apps/pair-cli/config.json`: the batch-engine
- * asset paths, and the three docs pages that print `pair install --list-targets` output.
+ * asset paths, and the three docs pages that print `pair-cli install --list-targets` output.
  */
 function cliConfigDerivedErrors(
   paths: Parameters<typeof batchEngineErrors>[0] & Parameters<typeof listTargetsSampleErrors>[0],

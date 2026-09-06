@@ -1,7 +1,7 @@
 # CP8 — KB Packaging
 
 **Priority**: P1
-**Scope**: `pair package` with source and target layout modes, validation, metadata
+**Scope**: `pair-cli package` with source and target layout modes, validation, metadata
 **Preconditions**: Working CLI binary (from CP2). `$WORKDIR` created outside the repo. `$CLI` = path to working pair-cli binary. KB installed in `$WORKDIR/project-auto` (from MT-CP301).
 
 ---

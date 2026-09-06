@@ -14,7 +14,7 @@ These apply to **every** command below, not to a single one.
   and exit code 1 instead of being silently dropped. This makes each command's positional-arity
   validation reachable, and catches the classic unquoted option value (`--name Acme KB` used to
   bind `name` to `Acme` and discard `KB`). This is a behavior change — earlier releases ignored the
-  extra argument, so a wrapper or CI invocation carrying one (e.g. `pair install ./a ./b`) now
+  extra argument, so a wrapper or CI invocation carrying one (e.g. `pair-cli install ./a ./b`) now
   fails; drop the extra argument or quote the value.
   [GitHub Releases](https://github.com/foomakers/pair/releases) names the release that introduced
   it.
@@ -41,7 +41,7 @@ export interface CliOptions {
 `kb` is read by the KB pre-flight (`bootstrapEnvironment`), which runs before `install` and
 `update`: `false` skips the pre-flight fetch, and `false` together with a `url` is rejected by
 `validateCliOptions`. Both were dead through 0.4.3 — the pre-flight was unreachable, so
-`pair install --no-kb` installed a KB anyway and the conflict never fired. See the
+`pair-cli install --no-kb` installed a KB anyway and the conflict never fired. See the
 [`--no-kb` note in the CLI reference](/docs/reference/cli/commands).
 
 The conflict is checked in the CLI hook (`runKbPreflight`), **above** the pre-flight's own
@@ -280,11 +280,11 @@ the reported code (the fix AC5 required for `install`) un-swallows theirs too:
 
 | Command | Printed before and after | Exit code before | Exit code now |
 | ------- | ------------------------ | ---------------- | ------------- |
-| `pair kb-verify <kb>` | the checksum/structure failure | `0` | `1` |
-| `pair kb-info <kb>` | the KB it could not read | `0` | `1` |
-| `pair kb-cache <op>` | the cache operation that failed | `0` | `1` |
+| `pair-cli kb-verify <kb>` | the checksum/structure failure | `0` | `1` |
+| `pair-cli kb-info <kb>` | the KB it could not read | `0` | `1` |
+| `pair-cli kb-cache <op>` | the cache operation that failed | `0` | `1` |
 
-A CI step that ran `pair kb-verify ./kb` and passed while printing a checksum mismatch now
+A CI step that ran `pair-cli kb-verify ./kb` and passed while printing a checksum mismatch now
 fails that step. That is the contract these commands always described — but a pipeline
 relying on the old code turning green is the one place the change is felt.
 

@@ -301,7 +301,7 @@ describe('handleInstallCommand - real services integration', () => {
 /**
  * #257: `.pair/working/` excluded from KB registries + adoption path override (D14)
  *
- * AC3: a fresh project without a working area is not scaffolded by `pair install` —
+ * AC3: a fresh project without a working area is not scaffolded by `pair-cli install` —
  * skills create it on demand later. AC1: install never touches a pre-existing one.
  */
 describe('#257: working area exclusion on install (D14)', () => {
@@ -844,7 +844,7 @@ describe('BUG 2: dataset root validation', () => {
  *
  * `install` = first-time installation. If canonical registry targets already
  * exist, it means the project was already installed. The command should reject
- * with a message suggesting `pair update` instead. Currently it silently
+ * with a message suggesting `pair-cli update` instead. Currently it silently
  * overwrites (mirror) or skips (add) existing targets.
  */
 describe('BUG 4: install precondition — targets must not exist', () => {
@@ -1120,7 +1120,7 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
 })
 
 /**
- * #261: install records the applied KB version so a later `pair kb-info`
+ * #261: install records the applied KB version so a later `pair-cli kb-info`
  * version check has something to compare against (AC4 "record it" loop),
  * and prints a non-blocking drift hint when re-installing over a different
  * recorded version (AC3).
@@ -1320,7 +1320,7 @@ describe('install — skills registry secondary (symlink) targets', () => {
  * `resolution: 'default'` serves, so this test fails LOUDLY (with the dataset's content)
  * rather than vacuously if `--url` is ever disconnected again.
  */
-describe('US-395: `pair install --url <mirror>` installs what the mirror served', () => {
+describe('US-395: `pair-cli install --url <mirror>` installs what the mirror served', () => {
   const cwd = '/project'
   const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
   const url = 'https://mirror.internal/kb.zip'
@@ -1368,7 +1368,7 @@ describe('US-395: `pair install --url <mirror>` installs what the mirror served'
       toIncomingMessage(buildTestResponse(404)),
     ])
 
-    // Exactly what cli.ts hands the parser for `pair install --url <mirror>`:
+    // Exactly what cli.ts hands the parser for `pair-cli install --url <mirror>`:
     // the program-level options merged under the command's own.
     await handleInstallCommand(parseInstallCommand({ url }), fs, { httpClient })
 

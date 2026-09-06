@@ -23,7 +23,7 @@ import { gitCacheKey } from './git-clone'
  * Disk: one slot per distinct external source. Slots are plain directories with no
  * hidden state — `rm -rf <cacheRoot>/external` is always safe and the next install
  * re-populates. Automatic eviction is deliberately not implemented (no LRU/TTL); the
- * explicit `pair kb-cache list` / `prune` reclaims the stale leftovers instead — old CLI
+ * explicit `pair-cli kb-cache list` / `prune` reclaims the stale leftovers instead — old CLI
  * versions, pre-#395 git clones, and abandoned `.bak`/`.tmp-*` — sparing every `external/`
  * slot and anything an install in flight owns (`commands/kb-cache/inventory.ts`).
  * `.discarded-*` is left to the user. See the US-395 ADL and the source-resolution spec.
@@ -185,7 +185,7 @@ export function cacheSlotKey(source: KBSource): string {
  * a concurrency window: `resume-manager.shouldResume()` decides to resume from the
  * existence and SIZE of `<staging>.partial` alone, with no binding to the URL that produced
  * those bytes, then issues `Range: bytes=<n>-` against the NEW url. Interrupt an official
- * download and run `pair install --url https://acme…/kb.zip` at the same version, and the
+ * download and run `pair-cli install --url https://acme…/kb.zip` at the same version, and the
  * acme body is appended to the official KB's bytes and finalized as one archive.
  *
  * The version stays in the name because it is what makes a stray file in the temp directory
@@ -201,7 +201,7 @@ export function downloadStagingName(version: string, downloadUrl: string): strin
  * The override must be ABSOLUTE and must not climb with `..`, and that is enforced here
  * rather than documented: this value prefixes every slot path, and `purgeSlot` deletes a
  * slot with `rm -rf`. `PAIR_KB_CACHE_DIR=.cache/kb` would resolve slots against the
- * process cwd, so `pair install --source x.zip` run inside a repository would create and
+ * process cwd, so `pair-cli install --source x.zip` run inside a repository would create and
  * then recursively delete directories inside that repository.
  *
  * Absolute is judged by the HOST convention (`path.isAbsolute`), not by "either

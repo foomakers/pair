@@ -12,7 +12,7 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | `/record-decision` invocation contract | [record-decision-contract.md](record-decision-contract.md) | 19 skills |
 | Output Format shapes (Decision / Report) | [output-shapes.md](output-shapes.md) | 10 skills (documentation-only — no logic change) |
 | To-issues triage (extend vs create) | [to-issues-triage.md](to-issues-triage.md) | 2 composing skills (new convention — no prior duplication to extract) |
-| Guided / Quick setup duality (guided asks; quick accepts defaults) | [guided-quick-setup.md](guided-quick-setup.md) | 2 precedents (`pair package` `--interactive`; the `assess-*` cascade) — documented, not retrofitted |
+| Guided / Quick setup duality (guided asks; quick accepts defaults) | [guided-quick-setup.md](guided-quick-setup.md) | 2 precedents (`pair-cli package` `--interactive`; the `assess-*` cascade) — documented, not retrofitted |
 | Story-local (AC<n>) marker ban (rule, rationale, legitimate shapes) | [story-local-markers.md](story-local-markers.md) | 22 files across skills + KB (purged when the corpus-wide guard landed) |
 | Nested sub-documents / progressive disclosure (`references/` inside a skill dir) | [nested-sub-documents.md](nested-sub-documents.md) | 0 skills (authoring convention — describes the installed layout, not a skill step) |
 | Adoption-informed generation (decision log + ADR + context map read before drafting) | [adoption-informed-generation.md](adoption-informed-generation.md) | 3 generating skills (new convention — the reading step is defined here, never per skill) |

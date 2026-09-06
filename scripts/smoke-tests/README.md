@@ -1,6 +1,6 @@
 # Smoke Tests Suite
 
-This test suite is designed to verify the correct behavior of the `pair` CLI in simulated end-to-end scenarios. Unlike unit tests, these scripts execute the compiled binary (or entry point script) interacting with the real filesystem.
+This test suite is designed to verify the correct behavior of the pair CLI in simulated end-to-end scenarios. Unlike unit tests, these scripts execute the compiled binary (or entry point script) interacting with the real filesystem.
 
 ## Structure
 
@@ -48,17 +48,17 @@ When you run an individual scenario that requires the packaged CLI (for example 
 
 ### 2. Installation (`scenarios/install-basic.sh`)
 
-Verifies the `pair install` command:
+Verifies the `pair-cli install` command:
 
 - **Default**: Standard installation in the current directory.
-- **Custom Target**: Installation to a specific folder (`pair install ./target`).
-- **List Targets**: Verifies `pair install --list-targets` output.
+- **Custom Target**: Installation to a specific folder (`pair-cli install ./target`).
+- **List Targets**: Verifies `pair-cli install --list-targets` output.
 - **Selective Registry**: Installation of a single registry (e.g., `knowledge:.kb`).
 - **Offline Mode**: (If configured) verifies `--offline` installation using `--source`.
 
 ### 3. Packaging (`scenarios/package.sh`)
 
-Verifies the `pair package` command:
+Verifies the `pair-cli package` command:
 
 - **Basic**: Creating a zip file from a source directory.
 - **Manifest**: Verifies that `manifest.json` contains metadata passed via CLI (`--name`, `--version`, etc.).
@@ -66,7 +66,7 @@ Verifies the `pair package` command:
 
 ### 4. Link Updates (`scenarios/links.sh`)
 
-Verifies the `pair update-link` command:
+Verifies the `pair-cli update-link` command:
 
 - **Detection**: Execution in `--dry-run` to detect broken links.
 - **Fix**: Automatic repair of relative links (e.g., moving from folder A to B).
@@ -86,7 +86,7 @@ Simulates a real KB release and update flow in an **Offline** environment:
 
 ### 6. KB Validation (`scenarios/kb-validate.sh`)
 
-Verifies the `pair kb-validate` command:
+Verifies the `pair-cli kb-validate` command:
 
 - **Source Layout**: Fully validates the real KB dataset with `--layout source` — structure,
   links and metadata, no `--ignore-config` escape hatch (dogfoods the shipped KB).
@@ -103,7 +103,7 @@ Verifies the `pair kb-validate` command:
 
 ### 7. Configuration Validation (`scenarios/validate-config.sh`)
 
-Verifies the `pair validate-config` command:
+Verifies the `pair-cli validate-config` command:
 
 - **Valid**: Correct configuration.
 - **Schema Error**: Missing fields.
@@ -168,12 +168,12 @@ history matters.
 The `run-all.sh` script requires at least the path to the executable to be tested.
 
 ```bash
-./scripts/smoke-tests/run-all.sh --binary <path-to-pair-executable>
+./scripts/smoke-tests/run-all.sh --binary <path-to-pair-cli-executable>
 ```
 
 ### Options
 
-- `--binary <path>`: (Required) Path to the `pair` executable or node entry point.
+- `--binary <path>`: (Required) Path to the `pair-cli` executable or node entry point.
 - `--kb-source <path>`: (Optional but recommended) Local path to the Knowledge Hub `dataset` folder. If omitted, offline/lifecycle tests may fail or be skipped if they cannot infer it.
 - `--cleanup`: Removes the temporary test directory upon success. Useful for CI.
 

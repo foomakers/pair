@@ -138,7 +138,7 @@ async function copyDirectory(
   })
 
   // A `mirror` registry deletes what the dataset no longer ships — and until now that only
-  // happened on the content-ops generic copy path, never on `pair update`. `copyDirHelper`
+  // happened on the content-ops generic copy path, never on `pair-cli update`. `copyDirHelper`
   // is a pure source->dest copy, so a file removed from the dataset survived every update
   // forever: two how-to guides dropped in #246 were still installed ~5 months later and were
   // still advertised by `.pair/llms.txt`, pointing agents at guides the KB no longer ships.

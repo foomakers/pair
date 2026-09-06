@@ -1,13 +1,13 @@
 export const runCommandMetadata = {
   name: 'run',
   description: 'Run a pair skill headlessly on a chosen engine, re-invoked until it stops',
-  usage: 'pair run [options]',
+  usage: 'pair-cli run [options]',
   examples: [
-    'pair run --root 212 --max-iterations 5            # drive the #212 subtree, confirmations active',
-    'pair run --engine pi --root 212 --autonomous --max-iterations 3   # eligibility comes from the policy',
-    'pair run --skill pair-next --filter risk:green --max-iterations 1 # --filter needs a skill that declares it',
-    'pair run --skill pair-next --root 212 --dry-run   # resolve and print, spawn nothing',
-    'pair run --prompt "/pair-next --root 212" --max-iterations 1',
+    'pair-cli run --root 212 --max-iterations 5            # drive the #212 subtree, confirmations active',
+    'pair-cli run --engine pi --root 212 --autonomous --max-iterations 3   # eligibility comes from the policy',
+    'pair-cli run --skill pair-next --filter risk:green --max-iterations 1 # --filter needs a skill that declares it',
+    'pair-cli run --skill pair-next --root 212 --dry-run   # resolve and print, spawn nothing',
+    'pair-cli run --prompt "/pair-next --root 212" --max-iterations 1',
   ],
   options: [
     { flags: '--engine <id>', description: 'Engine to run: pi | opencode | claude' },

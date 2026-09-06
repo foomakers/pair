@@ -227,6 +227,173 @@ describe('checkDocsCommands', () => {
     )
   })
 
+  // The npx runner is a PREFIX of the binary, not a slot that swallows it: the real form
+  // docs use names the SCOPED PACKAGE (`npx --no @foomakers/pair-cli <cmd>`), and an
+  // earlier shape consumed `@foomakers/pair-cli` as the package token and then still
+  // demanded a literal binary after it — so nothing behind npx could ever match and a
+  // misspelled command shipped silently. The `npx --no pair-cli update` case above passed
+  // only by accident (`--no` swallowed as the package token), which is why it alone was
+  // false confidence.
+  it('flags a misspelled command behind npx with the scoped package', () => {
+    const errs = checkDocsCommands(
+      doc('```bash\nnpx --no @foomakers/pair-cli kb-valdate\n```'),
+      commands,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('kb-valdate')
+  })
+
+  it('flags a nonexistent command behind a bare npx', () => {
+    const errs = checkDocsCommands(doc('```bash\nnpx pair-cli bogus-command\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('bogus-command')
+  })
+
+  it('passes a real command behind npx with a versioned scoped package', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --yes @foomakers/pair-cli@latest install\n```'),
+        commands,
+      ),
+    ).toHaveLength(0)
+  })
+
+  it('flags a bare `pair` behind npx — the runner does not launder the wrong binary', () => {
+    const errs = checkDocsCommands(doc('```bash\nnpx --no @foomakers/pair install\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli install')
+  })
+
+  // US-449 round 6: npx was the ONLY runner the prefix knew, and the docs publish three
+  // other forms today — `pnpm dlx pair-cli install` (reference/cli/workflows.mdx:269),
+  // `pnpm pair-cli install` (tutorials/team-setup.mdx:48), `pnpm pair-cli --version`
+  // (tutorials/first-project.mdx:75). Drop the `-cli` on any of them and the gate returned
+  // [] — the drift this rule exists to catch, on the exact lines the site publishes.
+  it('flags a bare `pair` behind `pnpm dlx` — the form workflows.mdx publishes', () => {
+    const errs = checkDocsCommands(doc('```bash\npnpm dlx pair install\n```'), commands)
+    expect(errs).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  it('flags a bare `pair` behind a bare `pnpm` — the form team-setup.mdx publishes', () => {
+    const errs = checkDocsCommands(doc('Use `pnpm pair install` instead.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"pair install"')
+  })
+
+  it('flags a bare `pair` behind `yarn dlx` and `pnpm exec`', () => {
+    expect(checkDocsCommands(doc('```bash\nyarn dlx pair update\n```'), commands)).toHaveLength(1)
+    expect(checkDocsCommands(doc('```bash\npnpm exec pair install\n```'), commands)).toHaveLength(1)
+  })
+
+  it('sees an unknown command behind a non-npx runner too', () => {
+    const errs = checkDocsCommands(doc('```bash\npnpm dlx pair-cli kb validate\n```'), commands)
+    expect(errs).toEqual(['a.mdx tells the reader to run "pair-cli kb", which is not a command'])
+  })
+
+  it('passes the correct pnpm forms the docs already publish', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm dlx pair-cli install\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\npnpm dlx pair-cli update-link --dry-run\n```'), [
+        ...commands,
+        'update-link',
+      ]),
+    ).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npnpm pair-cli --version\n```'), commands)).toHaveLength(
+      0,
+    )
+  })
+
+  // US-449 round 7: `--package`/`-p` is the one runner flag whose ARGUMENT is a package
+  // NAME, and the flag run consumed the flag alone. So the canonical npx idiom for a
+  // package whose bin differs from its package name —
+  // `npx --package @foomakers/pair-cli pair-cli install`, a CORRECT line — had `--package `
+  // eaten as a flag, `@foomakers/` read as the scope, the first `pair-cli` read as the
+  // binary and the REAL binary token read as the command: `"pair-cli pair-cli" … is not a
+  // command`, a CI red on a correct page with no edit that clears it short of deleting a
+  // correct instruction. Same for `-p` and, since the runner list widened, for
+  // `pnpm dlx --package …`.
+  it('consumes `--package`/`-p` together with its package argument', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --package @foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+    expect(
+      checkDocsCommands(doc('```bash\nnpx -p @foomakers/pair-cli pair-cli install\n```'), commands),
+    ).toEqual([])
+    expect(
+      checkDocsCommands(
+        doc('```bash\npnpm dlx --package @foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+  })
+
+  // The other direction of the same flag: consuming the argument must not launder the
+  // WRONG binary that follows it.
+  it('still flags a bare `pair` after a consumed `--package` argument', () => {
+    expect(
+      checkDocsCommands(doc('```bash\nnpx -p @foomakers/pair-cli pair install\n```'), commands),
+    ).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  // The `--flag=value` spelling had no form at all in the flag run, so real drift shipped
+  // green behind a LISTED runner: `npx --package=@foomakers/pair-cli pair install`
+  // returned [].
+  it('accepts the `--flag=value` spelling of a runner flag', () => {
+    expect(
+      checkDocsCommands(
+        doc('```bash\nnpx --package=@foomakers/pair-cli pair install\n```'),
+        commands,
+      ),
+    ).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+    expect(
+      checkDocsCommands(
+        doc('```bash\npnpm dlx --package=@foomakers/pair-cli pair-cli install\n```'),
+        commands,
+      ),
+    ).toEqual([])
+  })
+
+  // Why the BARE package-manager form takes no flag run, while `npx`/`pnpm dlx` do:
+  // `pnpm --filter <pkg>` puts a PACKAGE NAME in flag-argument position, and this
+  // repo's package is literally called `pair-cli`. Consuming `--filter ` as a flag would
+  // read the filter's argument as the binary and the script name as its command —
+  // `pnpm --filter @pair/pair-cli build` would be reported as the nonexistent command
+  // `build`, on three pages that are correct as written.
+  it('does not read `pnpm --filter <pkg> <script>` as an invocation of the CLI', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm --filter @pair/pair-cli build\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\npnpm --filter pair-cli dev update .\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('Use `pnpm --filter` to scope a command.'), commands),
+    ).toHaveLength(0)
+  })
+
+  it('does not read a package INSTALL as an invocation', () => {
+    expect(
+      checkDocsCommands(doc('```bash\npnpm add -D @foomakers/pair-cli\n```'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('```bash\nnpm install -g @foomakers/pair-cli\n```'), commands),
+    ).toHaveLength(0)
+  })
+
   // The reason the rule is positional rather than a prose-word allow-list: these are
   // English, and an earlier list-based version had to grow a word for each of them.
   it('ignores "pair-cli" used as a noun in prose', () => {
@@ -238,8 +405,210 @@ describe('checkDocsCommands', () => {
     expect(checkDocsCommands(doc('```text\npair-cli vX.Y.Z\n```'), commands)).toHaveLength(0)
   })
 
+  // A flag is never a command NAME, so `pair-cli --version` must stay clean — but the
+  // token is still an invocation, and behind the wrong binary it is the single most
+  // copy-pasted line in the docs. The command token therefore accepts `-`-leading tokens
+  // and the command-existence half is skipped for them; only the binary half applies.
   it('ignores a flag, which is never a command name', () => {
     expect(checkDocsCommands(doc('```bash\npair-cli --version\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair-cli --help\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('Run `pair-cli --version` to check.'), commands)).toHaveLength(0)
+  })
+
+  // US-449 round 5: `pair --version` is the exact form 9 pages already carry in its
+  // CORRECT spelling, so the bare slip is one edit away — and the old command group
+  // (`[A-Za-z][\w.-]*`) could not match a leading `-`, so the whole prefix failed and the
+  // line was not seen as an invocation at all. The page shipped green telling the reader
+  // to run a binary no npm install creates.
+  it('flags a bare `pair --version` in a fence — a flag does not launder the binary', () => {
+    const errs = checkDocsCommands(doc('```bash\npair --version\n```'), commands)
+    expect(errs).toEqual([
+      'a.mdx tells the reader to run "pair --version", but the published binary is "pair-cli"',
+    ])
+  })
+
+  it('flags a bare `pair --help` in an inline span', () => {
+    const errs = checkDocsCommands(doc('Read `pair --help` for the list.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"pair --help"')
+    // The command-existence half must stay OFF for a flag: no "is not one of its
+    // commands", and no `write "pair-cli --help"` prescription either way round.
+    expect(errs[0]).not.toContain('is not one of its commands')
+  })
+
+  it('flags a bare `pair -v` short flag too', () => {
+    expect(checkDocsCommands(doc('```bash\npair -v\n```'), commands)).toHaveLength(1)
+  })
+
+  // `--` alone, or an arrow, is not a flag token: the capture needs a word character
+  // after the dashes, so fenced ASCII diagrams and prose stay clean.
+  it('does not read `pair -> x` or a bare `pair --` as an invocation', () => {
+    expect(checkDocsCommands(doc('```text\npair -> story\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair -- install\n```'), commands)).toHaveLength(0)
+  })
+
+  // US-449: the published bin is `pair-cli`; `pair` is not installed by any npm install,
+  // so a doc telling the reader to run it is a copy-paste that fails with "command not
+  // found". Before this, the gate matched the literal `pair-cli` prefix only and was
+  // structurally blind to the wrong name — the exact drift it exists to catch.
+  it('flags a bare `pair <cmd>` invocation in a span — the published bin is pair-cli', () => {
+    expect(checkDocsCommands(doc('Run `pair install` first.'), commands)).toEqual([
+      'a.mdx tells the reader to run "pair install", but the published binary is ' +
+        '"pair-cli" — write "pair-cli install"',
+    ])
+  })
+
+  it('flags a bare `pair <cmd>` invocation in a fence, even for a real command', () => {
+    const errs = checkDocsCommands(doc('```bash\npair kb-validate\n```'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli kb-validate')
+  })
+
+  it('flags a bare `pair <cmd>` behind a shell prompt', () => {
+    expect(checkDocsCommands(doc('```bash\n$ pair update\n```'), commands)).toHaveLength(1)
+  })
+
+  // The bare-`pair` case reports the binary once — it is not ALSO an unknown-command
+  // error, or every renamed line would be counted twice. The TEXT is asserted too: one
+  // error must not mean half a message. `write "pair-cli init"` for a command that does
+  // not exist is the gate telling a writer to publish a different broken invocation, and
+  // the next run answers `"pair-cli init" … is not a command` — two red rounds, the first
+  // of them wrong. Asserting the count alone is what let that ship.
+  it('reports a bare `pair <unknown>` once, and does not recommend the nonexistent command', () => {
+    const errs = checkDocsCommands(doc('Run `pair init` first.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"init" is not one of its commands')
+    expect(errs[0]).not.toContain('write "pair-cli init"')
+  })
+
+  // Why the separator is ONE space and not `\s+`: the PM-tool pages align two columns
+  // under a fenced heading (`pair                    Linear`). A run of whitespace is a
+  // diagram, never an invocation — widening to bare `pair` must not start reading them
+  // as "run `pair Linear`".
+  it('ignores an aligned column in a fenced diagram', () => {
+    const diagram =
+      '```text\npair                    Linear\n─────\nEpic                    Project\n```'
+    expect(checkDocsCommands(doc(diagram), commands)).toHaveLength(0)
+  })
+
+  // Same rule, other side: ONE literal space excludes a TAB too, for the same diagram
+  // reason — a tab is column alignment by definition. Pinned so the exclusion reads as
+  // deliberate: a later reader who finds a tab-separated invocation unflagged should
+  // narrow the diagram, not re-widen the separator to `\s`.
+  it('does not read a TAB-separated line as an invocation', () => {
+    expect(checkDocsCommands(doc('```bash\npair-cli\tbogus-tab\n```'), commands)).toHaveLength(0)
+    expect(checkDocsCommands(doc('```bash\npair-cli bogus-one\n```'), commands)).toHaveLength(1)
+  })
+
+  it('ignores "pair" used as the product name in prose', () => {
+    const prose = 'pair installs bridge files, and pair maps its hierarchy to Linear.'
+    expect(checkDocsCommands(doc(prose), commands)).toHaveLength(0)
+  })
+
+  // A CLOSING FENCE ends with a backtick. The span rule's leading `\s*` used to cross the
+  // newline from it into the paragraph below, reading "pair creates Markdown files" as an
+  // invocation of the (nonexistent) command `creates`. Latent while only `pair-cli`
+  // matched — a paragraph rarely opens with it — and immediate once bare `pair` counts.
+  it('does not let a closing fence reach into the next paragraph', () => {
+    const md = '```text\nEpic → Story\n```\n\npair creates Markdown files from the template.'
+    expect(checkDocsCommands(doc(md), commands)).toHaveLength(0)
+  })
+
+  // Same class as the closing fence, one line down and unpinned until now: a CLOSING
+  // INLINE span also ends with a backtick, so "after a backtick" read the prose that
+  // follows it as an invocation. `pair` is the product name on ~10 docs pages, so this
+  // turns a correct edit red with advice that would corrupt the sentence — "write
+  // `pair-cli skills`" inside "pair skills follow the Agent Skills standard".
+  it('does not read prose after a CLOSING inline span as an invocation', () => {
+    expect(
+      checkDocsCommands(doc('Read `config.json` pair skills resolve state.'), commands),
+    ).toHaveLength(0)
+    expect(
+      checkDocsCommands(doc('See `way-of-working.md` pair install markers here.'), commands),
+    ).toHaveLength(0)
+  })
+
+  it('still flags an invocation that OPENS its own span later on the same line', () => {
+    const errs = checkDocsCommands(doc('Read `config.json`, then run `pair install`.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('pair-cli install')
+  })
+
+  // CommonMark's DOUBLED delimiter is covered because `CODE_SPAN` closes an opening run of N
+  // backticks on the first run of exactly N. Pinned in both directions.
+  it('tokenizes a DOUBLED-backtick span, both directions', () => {
+    const errs = checkDocsCommands(doc('Run ``pair install`` now.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('write "pair-cli install"')
+    expect(checkDocsCommands(doc('Run ``pair-cli install`` now.'), commands)).toHaveLength(0)
+  })
+
+  it('flags a wrong form quoted in a doubled span — doubling is not an exemption', () => {
+    const errs = checkDocsCommands(doc('Never write ``pair init``.'), commands)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('"init" is not one of its commands')
+    // The way to show a wrong form on a docs page is unbackticked prose: the rule is
+    // positional (span content / fenced line), so prose is outside it by construction.
+    expect(checkDocsCommands(doc('Never write pair init.'), commands)).toHaveLength(0)
+  })
+
+  // The reason `CODE_SPAN` implements CommonMark's closer rule instead of stumbling into the
+  // inner pair: a naive `` `([^`\n]+)` `` consumes ONE of the two closing backticks,
+  // and the leftover backtick flips code-span parity for the REST OF THE LINE — every later
+  // inline invocation on it becomes invisible, with no error to say so. The corpus already
+  // carries inline doubled spans (`reference/skill-management.mdx`), so this is live: an
+  // author quoting a backticked literal in a doubled span and adding a real command later on
+  // the same line shipped the wrong binary green. Both spans of the line are read now.
+  it('a doubled span does not blind the REST of its line', () => {
+    const errs = checkDocsCommands(
+      doc('See ``pair-cli install`` then `pair update` next.'),
+      commands,
+    )
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('write "pair-cli update"')
+    // ANY doubled span does it, including one that names no binary at all.
+    expect(
+      checkDocsCommands(doc('Note ``config.json`` and `pair update` next.'), commands),
+    ).toEqual(errs)
+    // The paired success path: correct binary in both spans stays silent.
+    expect(
+      checkDocsCommands(doc('See ``pair-cli install`` then `pair-cli update` next.'), commands),
+    ).toHaveLength(0)
+  })
+
+  // The doubled spans the corpus ACTUALLY carries — two lines, `reference/skill-management.mdx:211`
+  // (two spans) and `:219` (one) — exist to quote a BACKTICKED literal, so their content holds
+  // backticks; the `cell` fixture below is `:211` with both of its spans, plus the invocation an
+  // author would add on the same line, and `prose` is the span-bearing clause of `:219` with that
+  // same invocation appended. Do NOT drop the appended invocation from either fixture: it IS the
+  // line-mate the parity leak used to blind, and without it the line carries no invocation at all
+  // — the loop below fails `toHaveLength(1)` and the suite goes red (measured, both). Dropping it
+  // from `cell` additionally leaves `:211` byte-for-byte, i.e. duplicates the corpus-verbatim
+  // assertion below; `prose` is only the span-bearing EXCERPT of `:219` (the corpus clause runs on
+  // `; only triple-backtick/tilde *blocks* are excluded.`), so no restored-corpus reading of it
+  // exists and it simply turns red. A delimiter run that is balanced but whose
+  // content excludes backticks still cannot pair them, and the same parity leak blinds the rest of
+  // those lines.
+  it('reads a doubled span whose CONTENT contains backticks, and the rest of its line', () => {
+    const cell = '| `` `/next` `` | `` `/pair-next` `` | Run `pair install` to apply.'
+    const prose =
+      'Inline single-backtick code spans (`` `/next` ``) are still rewritten. Run `pair install` to apply.'
+    for (const line of [cell, prose]) {
+      const errs = checkDocsCommands(doc(line), commands)
+      expect(errs).toHaveLength(1)
+      expect(errs[0]).toContain('write "pair-cli install"')
+    }
+    // The quoted literals themselves are never invocations, with or without the line-mate —
+    // this one is `:211` verbatim.
+    expect(checkDocsCommands(doc('| `` `/next` `` | `` `/pair-next` `` |'), commands)).toHaveLength(
+      0,
+    )
+    // "A fence yields no span" is deliberately NOT asserted here — through `checkDocsCommands`
+    // it is unobservable: a fenced LINE is scanned by the fence pass anyway and errors dedup by
+    // `${bin} ${cmd}`, so a fenced line the span pass also read collapses to the same single
+    // error either way. The fence's observable pins are the fence pass's own cases above and
+    // the closing-fence/next-paragraph case, which is what goes red if the span rule stops
+    // tokenizing and returns to matching "after a backtick".
   })
 })
 

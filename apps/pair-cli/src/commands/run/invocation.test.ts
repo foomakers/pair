@@ -179,7 +179,7 @@ describe('APPROVAL_DECLARING_SKILLS matches the corpus that defines it', () => {
   // apps/pair-cli/src/commands/run -> repo root
   const REPO_ROOT = join(__dirname, '..', '..', '..', '..', '..')
   const DATASET_SKILLS = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
-  /** How `pair install` names an installed skill directory: `pair-<family>-<name>`. */
+  /** How `pair-cli install` names an installed skill directory: `pair-<family>-<name>`. */
   const installedName = (family: string, name: string) => `pair-${family}-${name}`
 
   /**

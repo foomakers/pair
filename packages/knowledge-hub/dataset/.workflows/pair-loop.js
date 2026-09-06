@@ -473,7 +473,7 @@ export const APPROVAL_DECLARING_SKILLS = new Set([
  * prompt (hence the leading space).
  *
  * UNCONDITIONALLY `auto`, and that is a deliberate asymmetry with tier 2 rather
- * than an omission. Tier 2 (`pair run`) gates the posture on `--autonomous`
+ * than an omission. Tier 2 (`pair-cli run`) gates the posture on `--autonomous`
  * because it has an attended mode: a human can sit and watch one card. This
  * file has none — it is the unattended fan-out path itself (ADR-017 §4), only
  * ever reached when a fan-out runner exists, and the `pair-loop` skill takes its

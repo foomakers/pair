@@ -1,10 +1,10 @@
 export const validateConfigMetadata = {
   name: 'validate-config',
   description: 'Validate asset registry configuration and KB structure',
-  usage: 'pair validate-config [options]',
+  usage: 'pair-cli validate-config [options]',
   examples: [
-    'pair validate-config                           # Validate default config.json',
-    'pair validate-config --config ./my-config.json # Validate custom config file',
+    'pair-cli validate-config                           # Validate default config.json',
+    'pair-cli validate-config --config ./my-config.json # Validate custom config file',
   ],
   options: [{ flags: '-c, --config <file>', description: 'Path to config.json file to validate' }],
   notes: [

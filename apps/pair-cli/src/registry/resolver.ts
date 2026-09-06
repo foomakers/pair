@@ -54,7 +54,7 @@ export interface Config {
    */
   working_path?: string
   /**
-   * Tuning for `pair kb-validate`'s markdown link checking (US-188):
+   * Tuning for `pair-cli kb-validate`'s markdown link checking (US-188):
    * `optional_link_patterns` downgrades a MISSING target matching a glob to a
    * warning, so a KB can be validated in isolation. Read from the config of the
    * KB being validated (`<--path>/pair.config.json`, falling back to
@@ -62,11 +62,11 @@ export interface Config {
    */
   link_validation?: LinkValidationConfig
   /**
-   * Optional execution engine for `pair run` (US-451): `{"engine": {"id": "pi"}}`.
+   * Optional execution engine for `pair-cli run` (US-451): `{"engine": {"id": "pi"}}`.
    *
    * DELTA-ONLY (D21) — hand-written only to deviate from the schema default, so a repository
    * with no `pair.config.json` still resolves an engine and runs. Validated by
-   * `readEngineDeclaration` (`config/engine-block.ts`) and surfaced by `pair validate-config`;
+   * `readEngineDeclaration` (`config/engine-block.ts`) and surfaced by `pair-cli validate-config`;
    * `--engine` still wins over it. Deliberately NOT the home of autonomy or trust approval:
    * a committed file must never be able to grant either (AC6).
    */

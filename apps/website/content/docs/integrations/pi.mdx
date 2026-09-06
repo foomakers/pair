@@ -1,10 +1,10 @@
 ---
 title: pi
-description: Run pair on pi — skill discovery with no wiring, project trust in headless mode, and pi as a pair run engine.
+description: Run pair on pi — skill discovery with no wiring, project trust in headless mode, and pi as a pair-cli run engine.
 ---
 
 pi (`@earendil-works/pi-coding-agent`) is a **harness**: an environment configured to execute
-pair's process. It is also an **engine** [`pair run`](/docs/reference/cli/commands#run) can drive,
+pair's process. It is also an **engine** [`pair-cli run`](/docs/reference/cli/commands#run) can drive,
 which is what makes unattended delivery portable beyond Claude Code.
 
 <Callout>
@@ -18,7 +18,7 @@ which is what makes unattended delivery portable beyond Claude Code.
 ## Prerequisites
 
 - pi installed and authenticated (`pi --help` works)
-- A pair-enabled project (`pair install` completed, `.pair/` exists)
+- A pair-enabled project (`pair-cli install` completed, `.pair/` exists)
 
 ## Skill Discovery — Nothing to Wire
 
@@ -46,7 +46,7 @@ before debugging a session that behaves unexpectedly.
 ## Headless Execution and Project Trust
 
 `pi -p "<prompt>"` runs one shot non-interactively; `pi --mode json` emits a JSONL event stream
-(what `pair run` reads).
+(what `pair-cli run` reads).
 
 <Callout type="warn">
   **A headless pi run silently ignores project-local resources of an untrusted project** — including
@@ -58,21 +58,21 @@ before debugging a session that behaves unexpectedly.
   automation box.
 </Callout>
 
-`pair run` never writes that trust store. If pi has no trust decision for the project, the run
+`pair-cli run` never writes that trust store. If pi has no trust decision for the project, the run
 **fails loudly** and tells you how to provision it; `--approve-project-trust` lets you proceed
 anyway, knowing project-local resources may be ignored.
 
-## Driving pi with `pair run`
+## Driving pi with `pair-cli run`
 
 ```bash
 # One iteration, resolution printed, nothing spawned
-pair run --engine pi --root 212 --dry-run
+pair-cli run --engine pi --root 212 --dry-run
 
 # Unattended within a narrow perimeter
-pair run --engine pi --root 212 --autonomous --max-iterations 3
+pair-cli run --engine pi --root 212 --autonomous --max-iterations 3
 ```
 
-pi has **no permission prompts** by design, so it cannot run with confirmations active. `pair run`
+pi has **no permission prompts** by design, so it cannot run with confirmations active. `pair-cli run`
 therefore requires `--autonomous` explicitly for pi rather than pretending confirmations exist —
 autonomy is a decision you take, not one the driver takes for you.
 
@@ -104,7 +104,7 @@ project's skills, check project trust first — that is the usual cause.
 
 ## Related
 
-- [`pair run` reference](/docs/reference/cli/commands#run) — the driver, its perimeter and its flags
+- [`pair-cli run` reference](/docs/reference/cli/commands#run) — the driver, its perimeter and its flags
 - [opencode](/docs/integrations/opencode) — the MCP-native harness in the same framework
 - [Adding a harness](/docs/integrations/adding-a-harness) — how to bring a new engine into pair
 - [Configuration reference](/docs/reference/configuration#execution-engine-engine) — the optional `engine` key

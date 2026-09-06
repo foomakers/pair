@@ -2,7 +2,7 @@ import type { KbIdentity } from '../identity'
 
 /**
  * Seed content: written only when the path is free, never overwritten. It exists
- * so the fresh repo is immediately packageable (`pair package` rejects empty
+ * so the fresh repo is immediately packageable (`pair-cli package` rejects empty
  * registries) and so the KB conventions are visible from the first commit.
  */
 export function renderKnowledgeReadme(options: { identity: KbIdentity }): string {
@@ -58,7 +58,7 @@ export function renderExampleSkill(options: { identity: KbIdentity }): string {
     "another KB's.",
     '',
     `So this skill installs as \`${identity.skillPrefix}-example-skill\` in any consuming`,
-    "project — `pair install --source` reads this KB's `pair.config.json`, so nothing has",
+    "project — `pair-cli install --source` reads this KB's `pair.config.json`, so nothing has",
     'to be copied. A project that declares its own `skills.prefix` overrides this one.',
     '',
   ].join('\n')

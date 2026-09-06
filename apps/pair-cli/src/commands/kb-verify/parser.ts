@@ -23,7 +23,7 @@ export function parseKbVerifyCommand(
 ): KbVerifyCommandConfig {
   const packagePath = args[0]
   if (!packagePath) {
-    throw new Error('Package path is required. Usage: pair kb-verify <package-path>')
+    throw new Error('Package path is required. Usage: pair-cli kb-verify <package-path>')
   }
 
   return {

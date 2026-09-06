@@ -342,7 +342,7 @@ describe('#186: config override via options.config', () => {
  *
  * `update` = subsequent update of an already-installed project. If no
  * canonical registry targets exist, it means the project was never installed.
- * The command should reject with a message suggesting `pair install` first.
+ * The command should reject with a message suggesting `pair-cli install` first.
  * Currently it creates targets from scratch (behaves like install).
  */
 describe('BUG 4: update precondition — targets must exist', () => {
@@ -1218,7 +1218,7 @@ describe('#238: idempotent skill name registry (manifest-backed)', () => {
 /**
  * #257: `.pair/working/` excluded from KB registries + adoption path override (D14)
  *
- * Checkpoints and reports live outside every asset registry so `pair update`
+ * Checkpoints and reports live outside every asset registry so `pair-cli update`
  * never touches them — round-trip content must stay byte-identical.
  */
 describe('#257: working area excluded from update (D14)', () => {
@@ -1649,12 +1649,12 @@ describe('update — local source path styles (#199 reorg)', () => {
 })
 
 /**
- * #407 — the wiring, at the layer the story names: `pair update` reads
+ * #407 — the wiring, at the layer the story names: `pair-cli update` reads
  * `flattenDepth` from the registry config and the copy pipeline honours it.
  * Without the resolver/validation/buildCopyOptions chain the option is dropped
  * silently and this installs the sibling `pair-process-review-references/`.
  */
-describe('#407: a skill nested references/ dir installs inside the skill via pair update', () => {
+describe('#407: a skill nested references/ dir installs inside the skill via pair-cli update', () => {
   const moduleDir = '/project'
   const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
 

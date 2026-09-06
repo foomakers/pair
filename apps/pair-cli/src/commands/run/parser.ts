@@ -130,7 +130,7 @@ function resolveScope(options: ParseRunOptions): RunScopeOptions {
 }
 
 /**
- * Parses `pair run` options into a typed config. PURE — no filesystem, no PATH probe, no
+ * Parses `pair-cli run` options into a typed config. PURE — no filesystem, no PATH probe, no
  * spawn: every resolution (engine, skill, policy) happens later, in modules that take their
  * probes injected.
  *

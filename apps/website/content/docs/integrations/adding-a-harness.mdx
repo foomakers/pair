@@ -16,7 +16,7 @@ Three words that are easy to conflate and mean different things:
 | ---- | ---------- | ------- |
 | **Bridge** | The file that lets a tool discover `.pair/` | `AGENTS.md`, `.cursor/rules/` |
 | **Harness** | An environment configured to execute pair's process — config locations, skill paths, auth, model provider | Claude Code, [pi](/docs/integrations/pi), [opencode](/docs/integrations/opencode) |
-| **Engine** | A process [`pair run`](/docs/reference/cli/commands#run) can drive headlessly, one iteration at a time | `pi`, `opencode`, `claude -p` |
+| **Engine** | A process [`pair-cli run`](/docs/reference/cli/commands#run) can drive headlessly, one iteration at a time | `pi`, `opencode`, `claude -p` |
 
 A harness is usually also an engine, but the roles are independent: you may work interactively in
 one harness and drive unattended runs through another.
@@ -29,7 +29,7 @@ That capability has three realizations, in preference order
 
 1. **In-harness** — the harness's own fan-out primitive (Claude Code's `Workflow`, Codex subagents).
    Cheapest where it exists: no second executable, no stream contract.
-2. **External driver** — `pair run`: a fresh process per iteration on a chosen engine, re-invoked on
+2. **External driver** — `pair-cli run`: a fresh process per iteration on a chosen engine, re-invoked on
    the continue-token the skill prints. The **portable baseline**, and a legitimate choice even
    where subagents exist — a separate process shares no context, no tool state and no crash with
    its predecessor, which is stricter isolation than a subagent gives you.
@@ -46,7 +46,7 @@ Two levels, and they are separable — a harness is useful after level 1 alone.
 ### Level 1 — Make it a harness (no pair code changes)
 
 1. **Check skill discovery.** If the tool reads `AGENTS.md` / `.agents/skills/` /
-   `.claude/skills/`, `pair install` already put pair's skills where it looks. Most tools need
+   `.claude/skills/`, `pair-cli install` already put pair's skills where it looks. Most tools need
    nothing here.
 2. **Write down what pair needs to know about it** — config file locations and which are
    committable, skill-path declaration, context-file precedence, authentication (and whether it is
@@ -62,7 +62,7 @@ Two levels, and they are separable — a harness is useful after level 1 alone.
 
 ### Level 2 — Make it an engine (a small, contained code change)
 
-`pair run` holds every engine as **data**: one entry per engine with its executable, headless and
+`pair-cli run` holds every engine as **data**: one entry per engine with its executable, headless and
 stream flags, how a skill invocation and a prompt are handed over, the autonomy and project-trust
 postures, and which stream event is **terminal**. Adding an engine is an entry in that map — there
 are no engine-specific conditionals anywhere else in the driver.
@@ -70,7 +70,7 @@ are no engine-specific conditionals anywhere else in the driver.
 What you must be able to answer, with evidence rather than assumption:
 
 - **What is the one-shot headless invocation**, and which flag makes it emit machine-readable JSONL?
-- **Which event ends a run**, and how is a failure distinguishable from a success? `pair run` reads
+- **Which event ends a run**, and how is a failure distinguishable from a success? `pair-cli run` reads
   an explicit terminal event and **never** the exit code — an unrecognised stream is a failed
   iteration, and the loop stops. Verify this against the real tool, not its docs alone.
 - **How are confirmations expressed** — a flag, or not at all? A tool with no confirmation mechanism
@@ -86,7 +86,7 @@ What you must be able to answer, with evidence rather than assumption:
 
 ## Related
 
-- [`pair run` reference](/docs/reference/cli/commands#run)
+- [`pair-cli run` reference](/docs/reference/cli/commands#run)
 - [pi](/docs/integrations/pi) · [opencode](/docs/integrations/opencode) · [Claude Code](/docs/integrations/claude-code) · [Codex](/docs/integrations/codex)
 - [Configuration reference](/docs/reference/configuration#execution-engine-engine) — the optional `engine` key
 - [Batch engine](/docs/reference/batch-engine) — the in-harness fan-out realization

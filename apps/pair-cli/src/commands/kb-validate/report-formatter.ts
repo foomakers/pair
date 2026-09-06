@@ -157,7 +157,7 @@ function formatMetadataSection(metadata: MetadataValidationResult[]): string[] {
  * Every message is escaped through `sanitizeControlCharacters` because its text
  * quotes content from the KB being validated — a config key, a pattern, a link
  * as written — which an ESC/OSC run would turn into terminal commands (screen
- * clear, title rewrite) on `pair kb-validate --path ./a-kb-you-did-not-author`.
+ * clear, title rewrite) on `pair-cli kb-validate --path ./a-kb-you-did-not-author`.
  * The formatter's OWN colouring is applied outside the escape, so it survives.
  */
 function formatIssues(errors: string[], warnings: string[]): string[] {

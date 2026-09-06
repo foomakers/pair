@@ -37,7 +37,7 @@ Execute in order. P0 blocks release sign-off.
 | CP5 | [CP5-website-docs-completeness.md](CP5-website-docs-completeness.md) | P1 | All doc pages return 200, version consistency, internal links |
 | CP6 | [CP6-website-search-navigation.md](CP6-website-search-navigation.md) | P1 | Orama search, sidebar, prev/next, llms.txt, privacy |
 | CP7 | [CP7-registry-publish.md](CP7-registry-publish.md) | P0 | npmjs.org visibility, install from public registry |
-| CP8 | [CP8-packaging.md](CP8-packaging.md) | P1 | `pair package` with source/target layouts, metadata, validation |
+| CP8 | [CP8-packaging.md](CP8-packaging.md) | P1 | `pair-cli package` with source/target layouts, metadata, validation |
 | CP9 | [CP9-quickstart-onboarding.md](CP9-quickstart-onboarding.md) | P1 | Timed quickstart onboarding: bootstrap `$mode: quick` under 10 min, guided regression |
 | CP10 | [CP10-web-cloud-environment.md](CP10-web-cloud-environment.md) | P1 | pair from Claude Code Web: skills executable, story end-to-end to a PR, dev-server limit as expected result. **Manual, run inside the web session** |
 

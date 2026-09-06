@@ -3,7 +3,7 @@ title: Batch engine
 description: The workflow that drives a batch of cards to review-approved PRs — what installs, what runs it, and what happens under other tools.
 ---
 
-`pair install` writes two directories that carry the batch engine:
+`pair-cli install` writes two directories that carry the batch engine:
 
 | Installed to         | What it is                                        |
 | -------------------- | ------------------------------------------------- |
@@ -53,7 +53,7 @@ Under Claude Code they are not inert, and it is worth knowing exactly what arriv
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
 
 **One more agent type arrives with no definition of ours: `general-purpose`.** `pair-refine-batch`
-spawns it at both of its stages. It is a host built-in of Claude Code, not a file `pair install`
+spawns it at both of its stages. It is a host built-in of Claude Code, not a file `pair-cli install`
 writes, so it is not in the table above — and that is precisely why it is worth naming here: it
 carries your tool configuration's **unrestricted** set, `Bash` included, which is wider than any
 of the six definitions above. What keeps that engine to PM-tool writes is the read-only clause

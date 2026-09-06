@@ -639,7 +639,7 @@ describe('ONE adoption layout — no `adopted/` sub-layer in docs or the KB', ()
   const ADOPTED_SUBLAYER = /\.pair\/[\w./-]*\badopted\b/
 
   // The KB is scanned too, and it matters MORE than the docs site: the docs are read
-  // on the web, the KB is what `pair install` copies INTO an adopting project. This
+  // on the web, the KB is what `pair-cli install` copies INTO an adopting project. This
   // PR had to fix two KB guidelines (filesystem-issues.md, filesystem-tracking.md,
   // both twins) for exactly this path error, so the class is live here. Concrete
   // failure otherwise: a guideline edit reintroduces `.pair/product/adopted/current-status.md`

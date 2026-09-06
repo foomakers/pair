@@ -58,7 +58,7 @@ An already-configured project is **confirmed, not overwritten**: each phase chec
 
 ## Where the defaults come from
 
-Quick mode does not invent its own resolution order. It follows the shared Guided / Quick Setup Convention that `pair package` and the `assess-*` skills already use — highest wins:
+Quick mode does not invent its own resolution order. It follows the shared Guided / Quick Setup Convention that `pair-cli package` and the `assess-*` skills already use — highest wins:
 
 1. **Explicit argument** — anything you named in the invocation
 2. **Project state** — what is already on disk, except the decision log: `.pair/adoption/tech/**`, `.pair/adoption/product/**`, the PRD, `package.json`, lockfiles, CI workflows, `git config`

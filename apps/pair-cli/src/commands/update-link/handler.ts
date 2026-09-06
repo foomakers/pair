@@ -97,7 +97,7 @@ async function verifyKB(
   const kbPath = config.target ? fs.resolve(config.target) : fs.resolve('.pair/knowledge')
 
   if (!fs.existsSync(kbPath)) {
-    const message = `No Knowledge Base found at: ${kbPath}. Please run "pair install" first.`
+    const message = `No Knowledge Base found at: ${kbPath}. Please run "pair-cli install" first.`
     pushLog('error', message)
     throw new Error(message)
   }

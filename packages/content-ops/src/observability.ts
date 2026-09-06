@@ -61,7 +61,7 @@ function shouldLog(messageLevel: LogLevel) {
  *
  * WHY at this boundary: diagnostics routinely quote strings this process did not
  * author — a key from a config file being validated, a registry name, a package
- * manifest field. `pair kb-validate --path ./downloaded-kb` on a KB you did not
+ * manifest field. `pair-cli kb-validate --path ./downloaded-kb` on a KB you did not
  * write would otherwise let that KB's `config.json` move the cursor, clear the
  * screen, or rewrite the terminal title/clipboard through an OSC sequence, just
  * by naming a key. Escaping ONCE here means no call site has to remember.

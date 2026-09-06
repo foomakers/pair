@@ -346,13 +346,13 @@ describe('code-review-template — root/dataset structural parity (#228)', () =>
 
   // Count parity proves structure, not content. Content equality is asserted
   // against the TRANSFORM of the dataset, never against the dataset itself (#393):
-  // `pair update` rewrites every skill reference in the installed KB
+  // `pair-cli update` rewrites every skill reference in the installed KB
   // (`/assess-cost` -> `/pair-capability-assess-cost`), so the byte-equality
   // this guard originally carried was asserting that no transform exists. It held
   // only because this file was the ONE mirror in the whole KB tree left
   // untransformed — i.e. it froze the defect (an installed template naming
   // commands the reader's assistant does not expose) into an invariant, and turned
-  // every `pair update` run into a red test.
+  // every `pair-cli update` run into a red test.
   //
   // The protection it was introduced for is preserved in full: a body-only drift
   // in the mirror still fails, it just has to match the TRANSFORMED body. The

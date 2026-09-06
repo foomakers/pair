@@ -1,5 +1,5 @@
 /**
- * Mirror-equality helpers for every `pair update` TARGET whose install REWRITES
+ * Mirror-equality helpers for every `pair-cli update` TARGET whose install REWRITES
  * the content it copies — today the root `.pair/knowledge` KB tree, the
  * `.github/agents` agent files, and the two root files generated from
  * `dataset/AGENTS.md` (`AGENTS.md` and `CLAUDE.md`).
@@ -7,7 +7,7 @@
  * THE RULE THIS MODULE ENCODES (#393): **a mirror guard compares the OUTPUT of
  * the transform, never the source** — `expect(mirror).toBe(transform(dataset))`.
  * A guard asserting `mirror === dataset` asserts that no transform exists, which
- * is false for these corpora: `pair update` copies
+ * is false for these corpora: `pair-cli update` copies
  * `packages/knowledge-hub/dataset/.pair/knowledge/**` to `.pair/knowledge/**`
  * (the `knowledge` registry) and `dataset/.github/agents/**` to
  * `.github/agents/**` (the `github` registry), then rewrites, in every copied
@@ -30,7 +30,7 @@
  * the only KB file byte-identical to a source the transform would rewrite) and
  * it was the DEFECT — it documented `/assess-security`, a command no reader's
  * assistant exposes — because #228's `expect(mirror).toBe(dataset)` had frozen
- * it into an invariant, so every `pair update` run reintroduced a red test.
+ * it into an invariant, so every `pair-cli update` run reintroduced a red test.
  * `isFrozenUntransformed` names that class; plain byte-identity does not.
  *
  * The transform is NOT re-implemented here: `applyKnownMirrorTransforms`
@@ -51,7 +51,7 @@
  * `assertNoOrphanedMirrorEntries` sweeps the other way, over `installedEntries`,
  * and the pair of directions is what makes the guard a set EQUALITY.
  *
- * That reverse sweep DETECTS; it does not delete. `pair update` DOES delete an
+ * That reverse sweep DETECTS; it does not delete. `pair-cli update` DOES delete an
  * orphan under a mirror target since #393 (recorded in
  * `.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`),
  * but that is a separate mechanism on a separate tree: this module reads two
@@ -82,7 +82,7 @@ import { diffSkillMd } from './skill-md-mirror'
 
 /**
  * One (dataset source → installed copy) pair this module guards: where the
- * content comes from, where `pair update` installs it, the `asset_registries`
+ * content comes from, where `pair-cli update` installs it, the `asset_registries`
  * key that declares both, and the per-target ops the install applies on top of
  * the shared skill-reference rewrite.
  *
@@ -201,7 +201,7 @@ export type MirrorTransform = (text: string) => string
 /**
  * Builds the REAL skill-reference transform from the dataset's `.skills/` tree —
  * the `/command` reference rewrite plus the SKILL.md link-path rewrite
- * `pair update` applies to every markdown file of a non-skills registry.
+ * `pair-cli update` applies to every markdown file of a non-skills registry.
  *
  * Built once per guard run (the name/link maps are derived from a full walk of
  * `.skills/`), then applied per file. This is the shared half of the install;
@@ -220,7 +220,7 @@ export function buildMirrorTransform(skillsDir: string): MirrorTransform {
 
 /**
  * The COMPLETE install transform for one mirror and one of its files: what
- * `pair update` writes, given the dataset bytes.
+ * `pair-cli update` writes, given the dataset bytes.
  *
  * Composed in pipeline order, each op present only when the pipeline runs it:
  *
@@ -339,10 +339,10 @@ export function orphanedMirrorEntries(
  * `05-how-to-define-bounded-contexts.md` were dropped from the dataset in #246,
  * still shipped ~5 months later, and were indexed into `.pair/llms.txt` where
  * agents read them. Without this sweep the same class reopens silently on the
- * next hand-edit, bad merge, or `pair update` from an older dataset.
+ * next hand-edit, bad merge, or `pair-cli update` from an older dataset.
  *
  * DETECTION, not deletion. It reads two path lists in THIS repo and touches no
- * file. `pair update` deleting an orphan in an adopting project is the separate,
+ * file. `pair-cli update` deleting an orphan in an adopting project is the separate,
  * destructive mechanism wired in #393
  * (`.pair/adoption/decision-log/2026-08-13-pair-update-deletes-what-the-mirror-no-longer-ships.md`);
  * it cannot fix a red here, because this repo's installed trees ARE the source
@@ -374,10 +374,10 @@ export function assertNoOrphanedMirrorEntries(
       `${orphans.map(rel => `  - ${mirrorPathOf(mirror, rel)}`).join('\n')}\n` +
       `COMPARED: the installed tree vs. the files ${mirror.datasetRel} contributes (the reverse of ` +
       `the per-file mirror equality above). A '${mirror.key}' registry target is the dataset's ` +
-      `IMAGE, so a file only the target has is drift: 'pair update' neither writes nor removes it, ` +
+      `IMAGE, so a file only the target has is drift: 'pair-cli update' neither writes nor removes it, ` +
       `and it goes on being read as if it were shipped content${alsoIndexed}.\n` +
       `Remedy: DELETE it, or ADD it to the dataset under ${mirror.datasetRel} and regenerate with ` +
-      `'pair update'.`,
+      `'pair-cli update'.`,
   )
 }
 
@@ -433,7 +433,7 @@ export function assertMirrorMatches(
   if (actual === undefined) {
     throw new Error(
       `Mirror missing for dataset file '${datasetRelPath}': ${mirrorPath} does not exist. ` +
-        `Run 'pair update' to regenerate it.`,
+        `Run 'pair-cli update' to regenerate it.`,
     )
   }
   if (actual !== expected) {
@@ -461,8 +461,8 @@ export function assertMirrorMatches(
     throw new Error(
       `Mirror ${mirrorPath} has drifted.\n` +
         `${compared}\n` +
-        `Regenerate with 'pair update' — never hand-edit the mirror.\n` +
-        `--- expected (dataset -> real 'pair update' transform)\n` +
+        `Regenerate with 'pair-cli update' — never hand-edit the mirror.\n` +
+        `--- expected (dataset -> real 'pair-cli update' transform)\n` +
         `+++ actual (installed mirror on disk)\n` +
         `${diffSkillMd(expected, actual)}`,
     )

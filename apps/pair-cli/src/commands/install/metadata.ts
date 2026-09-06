@@ -1,14 +1,14 @@
 export const installMetadata = {
   name: 'install',
   description: 'Install documentation and assets from Knowledge Base source',
-  usage: 'pair install [target] [options]',
+  usage: 'pair-cli install [target] [options]',
   examples: [
-    'pair install                                    # Install from default source',
-    'pair install --source https://github.com/org/repo/releases/download/v1.0/kb.zip',
-    'pair install --source /absolute/path/to/kb     # Install from local directory',
-    'pair install --source ./relative/path/to/kb    # Install from relative directory',
-    'pair install --offline --source /local/kb      # Install offline from local source',
-    'pair install --list-targets                    # List available asset registries',
+    'pair-cli install                                    # Install from default source',
+    'pair-cli install --source https://github.com/org/repo/releases/download/v1.0/kb.zip',
+    'pair-cli install --source /absolute/path/to/kb     # Install from local directory',
+    'pair-cli install --source ./relative/path/to/kb    # Install from relative directory',
+    'pair-cli install --offline --source /local/kb      # Install offline from local source',
+    'pair-cli install --list-targets                    # List available asset registries',
   ],
   options: [
     { flags: '[target]', description: 'Target folder (omit to use defaults from config)' },

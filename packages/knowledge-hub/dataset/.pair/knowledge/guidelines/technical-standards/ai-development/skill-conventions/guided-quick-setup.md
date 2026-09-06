@@ -26,7 +26,7 @@ Neither mode is universally "the default." Each adopter **declares its own defau
 
 The shipped adopters do **not** agree on a default, which is precisely why "guided is always the default" is false:
 
-- `pair package` declares **quick** as its default — a CLI/scripting-first command runs one-shot from resolved defaults, and guided is opt-in via `--interactive`.
+- `pair-cli package` declares **quick** as its default — a CLI/scripting-first command runs one-shot from resolved defaults, and guided is opt-in via `--interactive`.
 - the `assess-*` family declares **guided** as its default (Path C — Full Assessment), and quick is opt-in via an explicit `$choice` override (Path A).
 - `bootstrap` declares **guided** as its default — human-facing first-time setup asks rather than assumes — and quick is opt-in via `$mode: quick`. Its per-adopter delta (which decision points are defaultable, which tier fills each, which stay asked) lives beside the skill in `quick-mode-defaults.md`.
 
@@ -36,13 +36,13 @@ Recommended default when adopting: a human-facing, first-time setup skill should
 
 The convention names the shape two pre-existing, independently-evolved implementations already share. It documents them; it does not rewrite them.
 
-### `pair package` — an `--interactive` flag + a `resolveDefaults()` cascade
+### `pair-cli package` — an `--interactive` flag + a `resolveDefaults()` cascade
 
 The `package` CLI command (`apps/pair-cli/src/commands/package/`) is the flag-driven form:
 
 - **Selector**: an `--interactive` / `-i` boolean flag, default `false` (`parser.ts`) — so **quick is this command's declared default**. Absent → quick (one-shot from resolved defaults); present → guided. `--interactive` is the guided selector, not a quick one.
 - **Guided flow** (`interactive.ts`, `runInteractiveFlow`): asks for each metadata field in turn (name, version, description, author, tags, license), pre-filled with the resolved default, then previews and confirms. It requires a TTY and throws `Interactive mode requires a terminal (TTY)` otherwise — the "non-interactive environment can't run guided" edge below.
-- **Shared defaults cascade** (`defaults-resolver.ts`, `resolveDefaults()` via `resolvePackageDefaults()`): precedence highest→lowest is `cliFlags > packageJson > gitConfig > preferences > hardcoded`. Both modes resolve from this same set — the quick path (`handler.ts`) takes the resolved values verbatim, the guided path pre-fills prompts with them and lets answers override. So `pair package` (no flag) in a repo whose `package.json` name is `foo` yields manifest name `foo`, not the hardcoded `kb-package`.
+- **Shared defaults cascade** (`defaults-resolver.ts`, `resolveDefaults()` via `resolvePackageDefaults()`): precedence highest→lowest is `cliFlags > packageJson > gitConfig > preferences > hardcoded`. Both modes resolve from this same set — the quick path (`handler.ts`) takes the resolved values verbatim, the guided path pre-fills prompts with them and lets answers override. So `pair-cli package` (no flag) in a repo whose `package.json` name is `foo` yields manifest name `foo`, not the hardcoded `kb-package`.
 
 ### The `assess-*` family — the Resolution Cascade
 
@@ -65,4 +65,4 @@ A future setup skill adopts this convention directly and keeps only its own spec
 ## Edge cases
 
 - **A third mode is genuinely needed** (e.g. partially-guided): the two-mode shape is the default. A skill with a real need for more documents its deviation explicitly under its own heading rather than silently diverging — same discipline the cascade uses for per-skill deltas.
-- **Non-interactive environment but guided requested**: an explicit environment signal (no TTY) must override a requested guided mode, but never silently. The generic ideal is to warn and fall back, or fail with a clear message telling the caller to pass the inputs as arguments. `pair package` currently takes the fail path: when its guided flow (`runInteractiveFlow`) detects no TTY it throws `Interactive mode requires a terminal (TTY)` — a clear TTY-required error, without falling back or restating the inputs. The precedence still holds: an explicit environment fact outranks a soft mode preference.
+- **Non-interactive environment but guided requested**: an explicit environment signal (no TTY) must override a requested guided mode, but never silently. The generic ideal is to warn and fall back, or fail with a clear message telling the caller to pass the inputs as arguments. `pair-cli package` currently takes the fail path: when its guided flow (`runInteractiveFlow`) detects no TTY it throws `Interactive mode requires a terminal (TTY)` — a clear TTY-required error, without falling back or restating the inputs. The precedence still holds: an explicit environment fact outranks a soft mode preference.

@@ -3,14 +3,14 @@ export const kbValidateMetadata = {
   description: 'Validate Knowledge Base structure and manifest',
   // No positional argument: the KB path is `--path <path>` (excess positionals are
   // rejected CLI-wide, see cli.ts `allowExcessArguments(false)`).
-  usage: 'pair kb-validate [options]',
+  usage: 'pair-cli kb-validate [options]',
   examples: [
-    'pair kb-validate',
-    'pair kb-validate --path ./my-kb',
-    'pair kb-validate --layout source',
-    'pair kb-validate --strict',
-    'pair kb-validate --skip-registries adoption,agents',
-    'pair kb-validate --optional-link-patterns "apps/**,packages/**"',
+    'pair-cli kb-validate',
+    'pair-cli kb-validate --path ./my-kb',
+    'pair-cli kb-validate --layout source',
+    'pair-cli kb-validate --strict',
+    'pair-cli kb-validate --skip-registries adoption,agents',
+    'pair-cli kb-validate --optional-link-patterns "apps/**,packages/**"',
   ],
   options: [
     {

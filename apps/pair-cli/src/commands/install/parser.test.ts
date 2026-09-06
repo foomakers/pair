@@ -180,7 +180,7 @@ describe('parseInstallCommand', () => {
 
 /**
  * US-395 review round 12: the program-level `--url` was disconnected from resolution.
- * `pair install --url <mirror>` produced `resolution: 'default'`, so the mirror archive
+ * `pair-cli install --url <mirror>` produced `resolution: 'default'`, so the mirror archive
  * bootstrap had fetched into its own identity slot was never read and the OFFICIAL KB was
  * downloaded and installed instead — silently a different KB than the user named, and a
  * hard failure behind a firewall where the mirror was the whole point.

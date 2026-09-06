@@ -1,12 +1,12 @@
 export const updateLinkMetadata = {
   name: 'update-link',
   description: 'Validate and update links in installed Knowledge Base content',
-  usage: 'pair update-link [options]',
+  usage: 'pair-cli update-link [options]',
   examples: [
-    'pair update-link                      # Validate and convert links to relative paths',
-    'pair update-link --dry-run            # Preview changes without modifying files',
-    'pair update-link --absolute           # Convert all links to absolute paths',
-    'pair update-link --log-level debug      # Show detailed processing logs',
+    'pair-cli update-link                      # Validate and convert links to relative paths',
+    'pair-cli update-link --dry-run            # Preview changes without modifying files',
+    'pair-cli update-link --absolute           # Convert all links to absolute paths',
+    'pair-cli update-link --log-level debug      # Show detailed processing logs',
   ],
   options: [
     { flags: '--relative', description: 'Convert all links to relative paths (default)' },

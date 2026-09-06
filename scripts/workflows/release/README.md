@@ -91,7 +91,7 @@ Three smoke-test scripts validate different aspects of the release:
 
 **1. Feature Testing: `smoke-test-kb-package.sh`**
 
-Tests the `pair kb package` command on any repository with `.pair/` installed.
+Tests the `pair-cli package` command on any repository with `.pair/` installed.
 
 - **Purpose**: Verify kb package feature works on installed repos
 - **Parameters**: `<repo-root> [--cleanup|-c] [--persist-logs|-p]`
@@ -110,7 +110,7 @@ Tests the `pair kb package` command on any repository with `.pair/` installed.
 
 Test the packaged release artifacts in different distribution modes:
 
-- `smoke-test-manual-artifact.sh` — test manual ZIP artifact (unzip, run CLI `--version`, run `pair install`)
+- `smoke-test-manual-artifact.sh` — test manual ZIP artifact (unzip, run CLI `--version`, run `pair-cli install`)
 - `smoke-test-npm-artifact.sh` — test registry/TGZ artifact (extract TGZ, install package, run `npm run pair:install`)
 
 Both scripts accept a `VERSION` or artifact file path as first parameter with optional flags:
@@ -177,7 +177,7 @@ PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0
   - Extracts package to temp directory
   - Verifies manifest.json structure (version, timestamp, files)
   - Creates test project with .pair/ directory
-  - Runs `pair kb package` on extracted dataset
+  - Runs `pair-cli package` on extracted dataset
   - Verifies package creation, size, manifest inclusion
 - Preserves complete directory structure from `packages/knowledge-hub/dataset/`
 - Generates manifest with recursive file scanning and per-file SHA256 checksums
