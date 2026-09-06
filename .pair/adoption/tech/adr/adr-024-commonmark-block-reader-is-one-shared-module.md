@@ -70,12 +70,33 @@ stops short, the row carries `readerAnchors`/`readerBlocks` and says why.
 - `apps/website` now depends on `@pair/content-ops`. It is a devDependency and the gate
   is a `tsx` script, so nothing enters the Next.js bundle; the cost is a build-order edge
   in turbo, made explicit rather than implicit.
+- **Every command that builds the site must go through turbo, the DEPLOY one included.**
+  `next build` type-checks `lib/**`, which imports the shared reader, so a
+  `pnpm --filter @pair/website build` on a checkout with no `packages/content-ops/dist/`
+  fails with TS2307 — measured on the Vercel `preview` job of PR #471 and reproduced
+  locally with `dist/` and `tsconfig.build.tsbuildinfo` moved aside. The `^build` edge is
+  turbo's to resolve and `pnpm --filter` resolves none of it, so
+  `apps/website/vercel.json`'s `buildCommand` is `pnpm turbo run build --filter @pair/website`
+  and the docs say the same. The local/CI surface stays green either way, which is what
+  made the deploy path the one place this could hide.
 - The oracle is a network call, so it cannot run in CI. Two things carry it offline: the
   committed row table, and `apps/website/lib/github-anchor-oracle.json` — github's
-  answers for every git-tracked `*.md`/`*.mdx` whose anchor set depends on block
-  structure, keyed by the sha1 of the file body so an edited doc drops out of the
-  assertion instead of failing on a stale expectation. Regenerate with
-  `pnpm docs:anchor-oracle` (repo root; the package-scoped form bypasses turbo and cannot resolve `@pair/content-ops` on a clean checkout).
+  answers for every git-tracked `*.md`/`*.mdx` that matches the SYNTACTIC selection
+  predicate in `apps/website/lib/anchor-oracle-selection.ts`, keyed by the sha1 of the
+  file body so an edited doc drops out of the assertion instead of failing on a stale
+  expectation. The predicate is the fixture's real boundary and it is an over-approximation
+  of "anchor set depends on block structure", never a proof of it: five signals — a
+  list-item heading, a blockquote heading, a candidate raw-HTML line, a candidate setext
+  underline, a candidate fence opener. **A block state with no signal is a hole in this
+  net, not an exclusion**, and fence parity was exactly that until 2026-09-06: the file
+  this ADR's Context is written about,
+  `.pair/knowledge/guidelines/code-design/framework-patterns/fastify.md`, matched none of
+  the first four and was absent from the fixture, so reverting the very fence rule that
+  motivated the shared reader left this sweep GREEN. Adding a signal widens the fixture
+  (398 -> 937 of 1303 tracked files) and the corpus test's floor rises with it, so it can
+  never shrink back unnoticed. Regenerate with `pnpm docs:anchor-oracle` (repo root; the
+  package-scoped form bypasses turbo and cannot resolve `@pair/content-ops` on a clean
+  checkout).
 - The reader is CommonMark BLOCK structure only. Inline parsing (what a heading's text
   MEANS) stays with the consumer, and the raw-HTML corners it does not reach are on
   record as rows.

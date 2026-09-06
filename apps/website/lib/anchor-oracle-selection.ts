@@ -23,6 +23,25 @@ const BLOCKQUOTE_HEADING = /^ *> *#{1,6} /m
 const CANDIDATE_HTML_LINE = /^ {0,3}</m
 /** ANY setext underline shape, whether or not a paragraph is open above it. */
 const CANDIDATE_SETEXT_UNDERLINE = /^ {0,3}(?:=+|-+)[ \t]*$/m
+/**
+ * ANY candidate fence opener (§ 4.5: 3+ backticks or 3+ tildes, indent <= 3). FENCE
+ * PARITY is the block state this oracle exists to pin — a heading-shaped line inside a
+ * fence is not a heading, and getting that wrong serves an anchor that 404s for every
+ * reader — yet it produced NO signal, so a file whose anchor set turns on fence state
+ * alone was excluded from the sweep.
+ *
+ * MEASURED at 965a60f2: `.pair/knowledge/guidelines/code-design/framework-patterns/fastify.md`
+ * — the file ADR-024's Context is written about, which served the two phantom anchors
+ * `#request-lifecycle-management` and `#validation-and-schema-design` in BOTH KB roots —
+ * scored false on all four signals and was absent from `github-anchor-oracle.json` (398
+ * keys). Reverting the fence rule therefore left the corpus sweep — the one net that
+ * answers to github.com — GREEN. Over the 1303 git-tracked `*.md`/`*.mdx`, the four
+ * shipped signals admit 398 and these five admit 937, so 539 files enter the sweep.
+ *
+ * Syntactic and reader-independent like its four siblings: it asks whether the BYTES
+ * could open a fence, never whether `readMarkdown` says they did.
+ */
+const CANDIDATE_FENCE_OPENER = /^ {0,3}(?:`{3,}|~{3,})/m
 
 export const ORACLE_SELECTION_SIGNALS: ReadonlyArray<{
   readonly name: string
@@ -32,11 +51,12 @@ export const ORACLE_SELECTION_SIGNALS: ReadonlyArray<{
   { name: 'blockquote heading', re: BLOCKQUOTE_HEADING },
   { name: 'candidate raw-HTML line', re: CANDIDATE_HTML_LINE },
   { name: 'candidate setext underline', re: CANDIDATE_SETEXT_UNDERLINE },
+  { name: 'candidate fence opener', re: CANDIDATE_FENCE_OPENER },
 ]
 
 /**
  * Does this file BODY (frontmatter already stripped) carry a shape whose anchors depend
- * on block structure? One of the four signals above is enough.
+ * on block structure? One of the five signals above is enough.
  */
 export function isBlockStructureSensitive(body: string): boolean {
   return ORACLE_SELECTION_SIGNALS.some(s => s.re.test(body))

@@ -268,6 +268,46 @@ export function findGuideCountMismatches(content: string, rel: string, actual: n
 const JSX_COMMENT_RE = /\{\/\*[\s\S]*?\*\/\}/g
 
 /**
+ * The next code span at or after `from`, per CommonMark § 6.1: a backtick run opens a
+ * span and the closer must be a run of EXACTLY the opener's length — a run of 2 cannot
+ * close a run of 1. A BACKREFERENCE (`` /(`+)([\s\S]*?)\1/ ``) is a DIFFERENT rule: it
+ * lets an opener of N pair with the first N backticks of any LONGER run. The direction
+ * of that bug is the silent one — the mask blanks the bytes BETWEEN the two runs, so a
+ * live citation stops being scanned and the gate prints PASS on a page that 404s.
+ *
+ * MEASURED on one paragraph, `` Use a ` here, see [dead](<repo-blob-url>) and ``double``
+ * too. ``: the backreference blanks from the stray backtick to the first backtick of the
+ * ``double`` run — URL included — and `findDeadRepoLinks` returns 0. Both real consumers
+ * say that URL is a link: the site's own installed pipeline `@mdx-js/mdx@3.1.1` +
+ * `remark-gfm@4.0.1` emits 1 `href:` (the site build is this surface's oracle, ADL
+ * 2026-09-04), and `jq -Rs '{text:.}' row.mdx | gh api -X POST /markdown --input -`
+ * emits 1 `href="…"`.
+ *
+ * An opener with no equal-length partner is literal text and the scan CONTINUES from the
+ * next run rather than stopping — which is what keeps the one-byte-apart partner green:
+ * in `` ``a`b`` `` the inner x1 IS a valid length-1 closer, so the same stray backtick
+ * that is literal above opens a real span here (both oracles: 0 hrefs). Runs are matched
+ * nearest-partner-first, so an x3 opener skips an intervening x2 run and closes on the
+ * next x3 (both oracles: 0 hrefs), and an x3 whose only later run is x2 never closes
+ * (both oracles: 1 href).
+ */
+function nextCodeSpan(surface: string, from: number): { index: number; length: number } | null {
+  const RUN_RE = /`+/g
+  RUN_RE.lastIndex = from
+  const runs: Array<{ readonly at: number; readonly len: number }> = []
+  for (let m = RUN_RE.exec(surface); m !== null; m = RUN_RE.exec(surface)) {
+    runs.push({ at: m.index, len: m[0].length })
+  }
+  for (const [i, opener] of runs.entries()) {
+    for (const closer of runs.slice(i + 1)) {
+      if (closer.len !== opener.len) continue
+      return { index: opener.at, length: closer.at + closer.len - opener.at }
+    }
+  }
+  return null
+}
+
+/**
  * The surface with every code span and every `{/* … *\/}` blanked — scanned LEFT TO
  * RIGHT, because neither construct can be replaced globally before the other: each
  * one's OPENER is ordinary text inside the other, and both directions are live on the
@@ -282,19 +322,21 @@ const JSX_COMMENT_RE = /\{\/\*[\s\S]*?\*\/\}/g
  * Masking spans first would blank the first row's URL; masking comments first would
  * blank the second's. Both are SILENT misses — a live 404 shipped unchecked — so the
  * rule is positional: whichever construct opens first wins and the scan resumes after
- * its close. An opener that never closes is literal text (a stray backtick is not a
- * span, as github does; an unterminated `{/*` cannot build at all), so the scan steps
- * over it and keeps going.
+ * its close. WHETHER a backtick run opens anything at all is `nextCodeSpan`'s run-length
+ * rule, not a backreference — and it is an input to this interleave, so the two rules
+ * have a cross-product: a stray x1 backtick that is NOT a span leaves a following
+ * `{/* … *\/}` as the first construct, while one that IS a span swallows the comment.
+ * An unterminated `{/*` cannot build at all, so the scan steps over it and keeps going.
  */
 function maskLiteralConstructs(surface: string): string {
   const blank = (text: string): string => text.replace(/[^\n]/g, ' ')
   let out = ''
   let at = 0
   while (at < surface.length) {
-    CODE_SPAN_RE.lastIndex = at
-    const span = CODE_SPAN_RE.exec(surface)
+    const span = nextCodeSpan(surface, at)
     JSX_COMMENT_RE.lastIndex = at
-    const comment = JSX_COMMENT_RE.exec(surface)
+    const found = JSX_COMMENT_RE.exec(surface)
+    const comment = found === null ? null : { index: found.index, length: found[0].length }
     const first =
       span === null
         ? comment
@@ -304,8 +346,9 @@ function maskLiteralConstructs(surface: string): string {
             ? span
             : comment
     if (first === null) break
-    out += surface.slice(at, first.index) + blank(first[0])
-    at = first.index + first[0].length
+    const end = first.index + first.length
+    out += surface.slice(at, first.index) + blank(surface.slice(first.index, end))
+    at = end
   }
   return out + surface.slice(at)
 }
@@ -416,6 +459,22 @@ const LINE_ANCHOR_RE = /^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$/
  *
  * The placeholder is a PRIVATE-USE code point pair, not NUL: it must survive the chain
  * untouched, and it must not be a character a heading could plausibly contain.
+ *
+ * SCOPE — this regex is the HEADING surface's span rule and nothing else. The LINK
+ * surface uses `nextCodeSpan` (§ 6.1 run length) because a mis-paired span there BLANKS
+ * a citation and the gate prints PASS on a live 404. Here a mis-paired span only mis-spells
+ * one slug, and every mis-spelling is caught against github.com by the corpus sweep over
+ * `github-anchor-oracle.json`, which is green on all recorded files.
+ *
+ * That said the two rules are NOT equivalent, and the gap is measured, not assumed.
+ * `## Use a ` see [x](y) and ``d`` end` (a stray x1 backtick, then an x2 span):
+ * github.com answers `#use-a--see-x-and-d-end` (the x1 never closes, so `[x](y)` is a
+ * real link), this file answers `#use-a--see-xy-and-d-end`. A SECOND § 6.1 rule is
+ * missing here too — one leading and one trailing space are stripped from a span's
+ * content — so `## Use a ` see [x](y) and ` end` is `#use-a-see-xy-and-end` on
+ * github.com and `#use-a--see-xy-and--end` here. Both need § 6.1 inline parsing in
+ * `renderedHeadingText` plus a fixture regeneration, which is a separate change from the
+ * link-surface fix this comment sits next to. Zero instances in the 937-file corpus.
  */
 const CODE_SPAN_RE = /(`+)([\s\S]*?)\1/g
 

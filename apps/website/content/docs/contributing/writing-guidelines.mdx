@@ -162,8 +162,9 @@ For targeted validation:
 # Markdown lint only
 pnpm mdlint:fix
 
-# Build the website to verify content renders
-pnpm --filter @pair/website build
+# Build the website to verify content renders (through turbo, so the
+# workspace packages it type-checks against are built first)
+pnpm turbo run build --filter @pair/website
 ```
 
 ## Best practices
