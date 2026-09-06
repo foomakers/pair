@@ -19,5 +19,7 @@ You own only the RED stage of a review-finding repair.
   interrupt/boundary partner plus any named renderer/consumer boundary.
 - Run the tests while source remains unfixed. Preserve a real RED result; do not weaken an
   expectation or replace behavior with a source-text assertion.
-- Hash every modified test artifact with `sha256sum`; return the requested matrix, failing
-  commands and hashes. The later GREEN agent may not modify these bytes.
+- Classify every modified artifact as `kind: "test"` or `kind: "fixture"`. A test supplies its
+  failing command and observed failure. A fixture supplies `consumedBy`, naming a listed RED test
+  that actually consumes it; never invent a standalone failure for data. Hash every artifact with
+  `sha256sum`. The later GREEN agent may not modify these bytes.

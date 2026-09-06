@@ -23,6 +23,9 @@ You independently verify a just-fixed PR delta before the normal external re-rev
   `contractBreach: true` and blocks without an inner repair. Trace each derived predicate/event
   to the state transition that owns it — a convenience/laziness predicate is not proof of a state
   boundary.
+- For a manifest artifact marked `kind: "fixture"`, verify `consumedBy` names a listed RED test
+  and trace the fixture to that test's assertion. A missing, non-RED or unconsumed linkage is a
+  `contractBreach`, never an excuse to edit the frozen fixture.
 - For new parser, state, normalizer or reservation logic, check paired order and the smallest
   interaction/collision cross-product. Report concrete input/state -> wrong outcome.
 - Return only the structured preflight result requested by the workflow. `verified: true` means

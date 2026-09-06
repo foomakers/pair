@@ -3407,6 +3407,7 @@ test('US-219 AC7: every card error names the key the CALLER used — `cards[0]` 
 
 const RED_TRAILER = /Pair-RED-Snapshot/i
 const A_SHA = `sha256:${'a'.repeat(64)}`
+const B_SHA = `sha256:${'b'.repeat(64)}`
 
 function redSnapshotDispatch({ sealer, review, redTests } = {}) {
   let seen = 0
@@ -3428,6 +3429,61 @@ function redSnapshotDispatch({ sealer, review, redTests } = {}) {
     return { fixed: true, evidenceLedger: [] }
   }
 }
+
+test('a RED fixture inherits its proof from the declared RED test that consumes it', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: redSnapshotDispatch({
+      redTests: [
+        { file: 'reader.test.ts', kind: 'test', sha256: A_SHA, command: 'pnpm test reader', observed: 'FAIL: fixture row is consumed' },
+        { file: 'reader.rows.json', kind: 'fixture', sha256: B_SHA, consumedBy: 'reader.test.ts' },
+      ],
+    }),
+  })
+
+  const sealer = calls.find(c => c.opts.agentType === 'pair-red-sealer')
+  assert.ok(sealer, 'the fixture contract reaches the sealer')
+  assert.match(sealer.prompt, /reader\.rows\.json/)
+  assert.match(sealer.prompt, /consumedBy.*reader\.test\.ts|reader\.test\.ts.*consumedBy/)
+  const verifier = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
+  assert.ok(verifier, 'the frozen fixture reaches P3')
+  assert.match(verifier.prompt, /kind.*fixture|fixture.*kind/i)
+  assert.match(verifier.prompt, /consumedBy/i)
+  assert.match(verifier.prompt, /contract breach/i)
+  const author = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  assert.match(author.prompt, /kind.*fixture|fixture.*kind/i)
+  assert.match(author.prompt, /consumedBy/i)
+})
+
+test('a RED fixture without a declared RED consumer fails closed before sealing', async () => {
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: redSnapshotDispatch({
+      redTests: [
+        { file: 'reader.test.ts', kind: 'test', sha256: A_SHA, command: 'pnpm test reader', observed: 'FAIL' },
+        { file: 'reader.rows.json', kind: 'fixture', sha256: B_SHA, consumedBy: 'absent.test.ts' },
+      ],
+    }),
+  })
+
+  assert.equal(result.batch[0].status, 'failed-fix')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
+})
+
+test('a RED fixture cannot inherit proof from a consumer that is not RED', async () => {
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: redSnapshotDispatch({
+      redTests: [
+        { file: 'reader.test.ts', kind: 'test', sha256: A_SHA, command: 'pnpm test reader', observed: 'PASS' },
+        { file: 'reader.rows.json', kind: 'fixture', sha256: B_SHA, consumedBy: 'reader.test.ts' },
+      ],
+    }),
+  })
+
+  assert.equal(result.batch[0].status, 'failed-fix')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
+})
 
 test('a dedicated sealer commits the RED snapshot locally, and never pushes it', async () => {
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: redSnapshotDispatch() })

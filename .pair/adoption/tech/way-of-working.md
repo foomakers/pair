@@ -94,6 +94,8 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   tests; a sealer records their manifest and blobs in one local Git snapshot; only then may the
   source fixer edit implementation. Preflight finds that snapshot itself, compares its test blobs
   with HEAD, and rejects a changed, missing or unlisted test artifact — including a comment. A
+  fixture with no standalone failure names the RED test that consumes it; an absent or non-RED
+  consumer is rejected before sealing.
   convenience predicate (for laziness, eligibility or similar) never substitutes for the
   transition that actually owns the state. See ADL
   [2026-09-05-locked-red-contract-prevents-fix-regressions.md](../decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md).

@@ -943,11 +943,14 @@ const RED_TEST_SCHEMA = {
         type: 'object',
         properties: {
           file: { type: 'string' },
+          // Omitted means `test` for contracts written before fixtures became explicit.
+          kind: { type: 'string', enum: ['test', 'fixture'] },
           sha256: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
           command: { type: 'string' },
           observed: { type: 'string' },
+          consumedBy: { type: 'string' },
         },
-        required: ['file', 'sha256', 'command', 'observed'],
+        required: ['file', 'sha256'],
       },
     },
     testExempt: { type: 'boolean' },
@@ -958,21 +961,34 @@ const RED_TEST_SCHEMA = {
 const RED_TEST_SHA256 = /^sha256:[0-9a-f]{64}$/
 const RED_SNAPSHOT_SHA = /^[0-9a-f]{40}$/
 const RED_SNAPSHOT_TRAILER = 'Pair-RED-Snapshot'
+const redArtifactKind = artifact => String(artifact?.kind ?? 'test')
+const isRedTestArtifact = artifact =>
+  redArtifactKind(artifact) === 'test' &&
+  !!String(artifact?.command ?? '').trim() &&
+  /fail/i.test(String(artifact?.observed ?? ''))
+const RED_ARTIFACT_CONTRACT =
+  'Classify EVERY redTests entry: a `kind: "test"` entry returns repository-relative `file`, `sha256sum <file>` as `sha256:<digest>`, exact `command` and observed RED failure; a `kind: "fixture"` entry returns `file`, `sha256`, and `consumedBy` naming a listed `kind: "test"` file whose command is RED. A fixture has no invented standalone failure — it inherits only that named consumer’s proven failure and remains frozen in the snapshot.'
+const FIXTURE_CONSUMPTION_PREFLIGHT =
+  'For every manifest artifact with `kind: "fixture"`, verify `consumedBy` names a listed `kind: "test"` artifact, then trace that fixture to the named RED test’s actual assertion; a fixture without that exact consumer proof is a contract breach.'
 const hasRedTestEvidence = r => {
   if (!r || !String(r.sourceOfTruth ?? '').trim() || !Array.isArray(r.matrix) || r.matrix.length === 0) return false
   if (r.testExempt === true) return !!String(r.exemptionRationale ?? '').trim()
-  return (
-    r.testExempt === false &&
-    Array.isArray(r.redTests) &&
-    r.redTests.length > 0 &&
-    r.redTests.every(
-      (t) =>
-        !!String(t?.file ?? '').trim() &&
-        RED_TEST_SHA256.test(String(t?.sha256 ?? '')) &&
-        !!String(t?.command ?? '').trim() &&
-        /fail/i.test(String(t?.observed ?? '')),
-    )
-  )
+  if (r.testExempt !== false || !Array.isArray(r.redTests) || r.redTests.length === 0) return false
+
+  const byFile = new Map()
+  for (const artifact of r.redTests) {
+    const file = String(artifact?.file ?? '').trim()
+    const kind = redArtifactKind(artifact)
+    if (!file || byFile.has(file) || !RED_TEST_SHA256.test(String(artifact?.sha256 ?? ''))) return false
+    if (kind !== 'test' && kind !== 'fixture') return false
+    byFile.set(file, artifact)
+  }
+
+  return r.redTests.every(artifact => {
+    if (redArtifactKind(artifact) === 'test') return isRedTestArtifact(artifact)
+    const consumer = byFile.get(String(artifact?.consumedBy ?? '').trim())
+    return !!consumer && isRedTestArtifact(consumer)
+  })
 }
 const RED_SNAPSHOT_SCHEMA = {
   type: 'object',
@@ -1449,7 +1465,9 @@ async function driveStory(story) {
   // discovers that object from history, rather than trusting an orchestrator-owned prompt.
   const authorRedTests = (targets, phase, baseHead) =>
     agentRetry(
-      `RED TEST CONTRACT (test-only; no implementation) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The actionable findings are: ${JSON.stringify(targets)}. Inspect the current source and the exact fix boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`; do NOT read ${BLIND_PATHS}, checkpoints or working logs. Before editing, identify the ONE canonical source of truth for every state transition/classification this fix touches. Build a finite matrix with every branch that changes that owner state, its nearest continuing and interrupting/boundary counterpart, and every renderer/consumer boundary the finding names. A predicate used for laziness, eligibility or a convenience classification is NOT automatically the state-transition oracle: derive expectations from the function that actually mutates/owns the state. Then modify ONLY test artifacts (test source, test fixture or committed oracle row): never modify production source, docs, adoption, configuration, generated assets, commits, pushes, PRs, comments, cards or merges. Run each new/changed test while the production code is still unfixed and keep it RED for the reported behavior. Do not weaken an existing expectation or replace a failing test with a source-string assertion. For every test artifact, return its repository-relative file path, \`sha256sum <file>\` as \`sha256:<digest>\`, exact failing command and observed failure. A pure documentation/formatting finding may set testExempt true only with a concrete rationale; it still needs a matrix. Return sourceOfTruth, matrix rows (condition | oracle | expected), redTests and testExempt. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
+      [RED_ARTIFACT_CONTRACT,
+      `RED TEST CONTRACT (test-only; no implementation) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The actionable findings are: ${JSON.stringify(targets)}. Inspect the current source and the exact fix boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`; do NOT read ${BLIND_PATHS}, checkpoints or working logs. Before editing, identify the ONE canonical source of truth for every state transition/classification this fix touches. Build a finite matrix with every branch that changes that owner state, its nearest continuing and interrupting/boundary counterpart, and every renderer/consumer boundary the finding names. A predicate used for laziness, eligibility or a convenience classification is NOT automatically the state-transition oracle: derive expectations from the function that actually mutates/owns the state. Then modify ONLY test artifacts (test source, test fixture or committed oracle row): never modify production source, docs, adoption, configuration, generated assets, commits, pushes, PRs, comments, cards or merges. Run each changed test while the production code is still unfixed and keep it RED for the reported behavior. Do not weaken an existing expectation or replace a failing test with a source-string assertion. Return typed \`redTests\`: every artifact has its repository-relative file path and \`sha256sum <file>\` as \`sha256:<digest>\`; a test has its exact failing command and observed failure, while a fixture declares its RED \`consumedBy\` test rather than inventing one. A pure documentation/formatting finding may set testExempt true only with a concrete rationale; it still needs a matrix. Return sourceOfTruth, matrix rows (condition | oracle | expected), redTests and testExempt. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
+      ].join('\n'),
       withModel({ agentType: 'pair-fix-test-author', phase: 'Review', label: `red-test:${tag} ${phase}`, effort: 'high', schema: RED_TEST_SCHEMA }),
       hasRedTestEvidence,
     )
@@ -1611,7 +1629,9 @@ async function driveStory(story) {
     // fails closed as `failed-preflight`, without spending or inflating an external round.
     const runPreflight = (baseHead, targets, ledgers, redPhase, pass) =>
       agentRetry(
+        [FIXTURE_CONSUMPTION_PREFLIGHT,
         `FIX PREFLIGHT (read-only; NOT a PR review) for story ${tag}, PR #${pr.prNumber}, inner pass ${pass}. ${revWtClause(story)} Inspect ONLY the delta \`git diff ${baseHead}...origin/${story.branch} --name-status\`, its directly changed producer/consumer boundaries, and the real tests/probes it adds or changes. Do NOT read ${BLIND_PATHS}, checkpoints or the working log; do NOT edit, commit, push, publish a review, post a PR comment, or merge. The prior findings being remediated are: ${JSON.stringify(targets)}. The structured evidence ledger(s) returned by the fixer are: ${JSON.stringify(ledgers)}. There is intentionally NO RED manifest, test path, digest or snapshot SHA in this prompt. Independently FIND exactly one ancestor commit in \`${baseHead}..HEAD\` with \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${redPhase}; base=${baseHead}; manifest=<path>\` in its commit message, using \`git log\` or \`git rev-list\`. Read the manifest and every recorded test blob FROM that commit using \`git show\`/\`git ls-tree\`, never an orchestrator-provided value. Verify the snapshot's parent is exactly its declared base with \`git rev-parse <snapshot>^\`; use \`git diff-tree --no-commit-id --name-only -r <base> <snapshot>\` to verify it contains only the manifest and the test artifacts listed in that manifest. Compare each listed test path byte-for-byte (Git blob identity) with HEAD: a changed comment, fixture, expectation, missing or removed file, replacement or an added/changed unlisted test artifact is a contract breach. The snapshot missing, ambiguous, malformed, not an ancestor, carrying a mismatched base or containing any other file is also a contract breach. For any breach return \`contractBreach: true\` and \`verified: false\`; it is not eligible for the inner repair. Re-run every stated oracle/probe yourself against this head; an evidence ledger is an input to verify, never proof by assertion. Check that every new fixture field/table column is actually consumed by an expectation (trace it to the assertion), not merely declared; that comments/test names repeat only measured claims; and that every newly introduced parser/state/normalizer rule has the paired order plus the minimal interaction cross-product whenever an output can feed another rule. For a derived predicate/event, trace every branch that mutates its declared source-of-truth state: it must be emitted from that transition or prove the exact same decision table, never substitute a laziness/eligibility helper for a block/state boundary. For any defect, return a normal finding with its concrete failure case and a recommendation ending \`VERIFY: <input/state -> expected>; ORACLE: <command/fixture>; ASSERT: <observable assertion>\`. Return \`verified: true\` only when there are zero blocking findings under the configured severity floor (${SEVERITY_FLOOR?.name ?? 'none — every actionable finding blocks'}); otherwise return \`verified: false\`. Return the exact lower-case 40-character \`reviewedHead\` from \`git rev-parse origin/${story.branch}\`.`,
+        ].join('\n'),
         withModel({ agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} r${round} p${pass}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
         hasPreflightEvidence,
       )

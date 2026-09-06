@@ -20,6 +20,12 @@ test and source in one session. `blockStart` consequently used a laziness predic
 the state owner and split valid paragraphs. Existing post-fix preflight stopped those regressions
 before external review, but only after a commit/push and one incomplete repair cycle.
 
+On 2026-09-06, #434 exposed a second custody gap: a committed oracle fixture was required in the
+snapshot but has no standalone failing command. The first RED author correctly supplied the
+fixture and its consumer test, but the workflow rejected it by matching `/fail/i` against every
+artifact's prose observation. Retries then changed the unsealed files and could not form a valid
+snapshot.
+
 ## Decision
 
 For every actionable behavioral fix, dispatch a dedicated test-only RED agent before GREEN. It
@@ -29,8 +35,10 @@ snapshot, identified by PR, round and immutable base SHA. The source fixer commi
 that snapshot and may not change test artifacts. Preflight finds the snapshot from Git history,
 not an orchestrator prompt, then compares its blobs with HEAD; a changed comment, fixture,
 expectation, missing or unlisted test artifact is a `contractBreach` that stops without an inner
-repair or external re-review. Pure documentation/formatting work may be test-exempt only with an
-explicit rationale.
+repair or external re-review. Every manifest artifact is typed: a `test` supplies a RED command
+and observation; a `fixture` names the declared RED test that consumes it. A fixture cannot
+inherit proof from missing or green evidence. Pure documentation/formatting work may be
+test-exempt only with an explicit rationale.
 
 ## Alternatives Considered
 
@@ -43,8 +51,9 @@ explicit rationale.
 
 Every behavioral fix adds bounded RED authoring and sealing sessions plus a Git-blob verification.
 A missing, ambiguous or invalid RED snapshot fails closed before source code changes or an
-external re-review. This reduces review churn; it does not claim formal proof against bugs outside
-the declared contract.
+external re-review. A fixture is frozen and verified like test source, while its test-specific
+proof stays attributable to the named RED consumer. This reduces review churn; it does not claim
+formal proof against bugs outside the declared contract.
 
 ## Adoption Impact
 
