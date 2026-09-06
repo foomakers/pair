@@ -26,7 +26,7 @@ Pages are `.mdx` files processed by `fumadocs-mdx`. Navigation is configured in 
 
 ```bash
 pnpm --filter @pair/website dev          # dev server (port 3000)
-pnpm --filter @pair/website build        # production build
+pnpm turbo run build --filter @pair/website  # production build — turbo, so @pair/content-ops builds first
 pnpm --filter @pair/website test         # vitest + playwright CT
 pnpm --filter @pair/website e2e          # playwright E2E (builds first)
 pnpm --filter @pair/website a11y:report  # accessibility audit
