@@ -17,6 +17,12 @@
 
 **Nothing declared here — both keys are at their defaults**, and `.pair/adoption/` is delta-only (D21, ADR-018): a key belongs in this section only when it differs from the default. `code-host` omitted ⇒ the code host **is** the PM tool (GitHub Projects hosts the repo), so this is the zero-configuration single-tool path — no dual-write, no cross-link comment, every PR/review operation on GitHub; `base-branch` omitted ⇒ `main`. A split setup (e.g. Linear for the backlog + GitHub for the code) is what makes `code-host` load-bearing. Schema and resolution rule: [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
+## Process Profile
+
+**Nothing declared here — the profile is `default`**, and `.pair/adoption/` is delta-only (D21, ADR-018): pair runs the full process end to end (it is the project that produces it), so there is no subset to declare and every catalogued step stays enabled. The section exists as the anchor a reader looks for, exactly like `## Git Workflow` above.
+
+A project that runs a subset declares it here — `profile: poc`, or `profile: custom` with a `whitelist` of step ids. Schema, built-ins and error cases: [process-profiles.md](../../knowledge/guidelines/technical-standards/ai-development/process-profiles.md); the step ids and their two representations: [step-catalogue.md](../../knowledge/guidelines/technical-standards/ai-development/step-catalogue.md).
+
 ## Story Closure (post-merge)
 
 Per merged PR, in order: **1)** squash merge, message per [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) · **2)** story: check the DoD boxes in the body, close (`completed`), write board state `Done` ([State Mapping](#state-mapping)) · **3)** cascade: epic/initiative close only when ALL sub-issues are Done · **4)** cleanup: delete branch **remote AND local** (remove any worktree holding it first), remove the story checkpoint and the PR analysis under `working/pr-analyses/` · **5)** optional P0 manual tests.

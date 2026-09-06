@@ -53,12 +53,83 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { basename, dirname, join, relative, resolve, sep } from 'path'
+// The real `pair update` dataset→`.claude/skills/**` name transform: the mirror
+// check below maps names through the production path, never a copy of it.
+import { installedSkillDir } from './skill-md-mirror'
 
 const ROOT = join(__dirname, '..', '..')
 const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
 
 // KB onboarding prose that restates skill counts (relative to ROOT). Kept in
 // lockstep with the real .skills corpus so a count sweep can't leave stale prose.
+const STEP_CATALOGUE_FILE =
+  'dataset/.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md'
+const PROCESS_PROFILES_FILE =
+  'dataset/.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md'
+const HOW_TO_DIR = 'dataset/.pair/knowledge/how-to'
+export const WOW_TEMPLATE_FILE = 'dataset/.pair/adoption/tech/way-of-working.md'
+/** This repo's OWN adoption file — the one `/next` resolves when run here. */
+export const REPO_WOW_FILE = '../../.pair/adoption/tech/way-of-working.md'
+const AGENTS_FILE = 'dataset/AGENTS.md'
+// The installed skills mirror, relative to the knowledge-hub package root.
+const MIRROR_SKILLS_DIR = join('..', '..', '.claude', 'skills')
+
+/**
+ * The GENERATED copies of the same three files — the ones `/next`, every step skill
+ * and every human actually resolve at runtime.
+ *
+ * Round 11 Major: the gate bound the dataset SOURCE of all three and left these
+ * ungoverned, contradicting the rule `checkStepMarkersInMirror` already states for
+ * skills ("the dataset copy is the SOURCE; the mirror is the copy an assistant
+ * actually loads, so it is the binding one"). A half-run `pair update` or a hand
+ * edit gave a `poc` project a HALT on every run (`unknown step id`) or an
+ * ungoverned step, with `skills:conformance` green and its PASS banner naming
+ * these very files as validated.
+ */
+const INSTALLED_KB_ROOT = join('..', '..', '.pair', 'knowledge')
+const INSTALLED_AI_DEV = `${INSTALLED_KB_ROOT}/guidelines/technical-standards/ai-development`
+const INSTALLED_STEP_CATALOGUE_FILE = `${INSTALLED_AI_DEV}/step-catalogue.md`
+const INSTALLED_PROCESS_PROFILES_FILE = `${INSTALLED_AI_DEV}/process-profiles.md`
+/** The root entrypoints a reader with NO skills installed follows (AC8). */
+const ROOT_MANUAL_PATH_FILES = [join('..', '..', 'AGENTS.md'), join('..', '..', 'CLAUDE.md')]
+
+/**
+ * Every shipped surface carrying a WORKED EXAMPLE of a profile declaration, read
+ * through the real resolver.
+ *
+ * The last three reach outside the package, exactly as the mirror check does. They
+ * carry the same declarations as the first two with no gate behind them: the docs
+ * site is the feature's public documentation (dropping one id from its `custom`
+ * example hands the inconsistency report to every reader who copies it), and this
+ * repo's own way-of-working is the file `/next` actually reads when run here.
+ * Each is swept only when present (`existsSync`), so an adopting project's
+ * knowledge-hub — which has none of them — checks exactly what it ships.
+ */
+export const PROFILE_PROSE_FILES = [
+  PROCESS_PROFILES_FILE,
+  WOW_TEMPLATE_FILE,
+  '../../apps/website/content/docs/concepts/adoption-files.mdx',
+  '../../apps/website/content/docs/reference/pair-next.mdx',
+  REPO_WOW_FILE,
+]
+
+/**
+ * The shipped way-of-working files read as DECLARATIONS — the whole document
+ * through the real resolver, not merely swept for fenced examples.
+ *
+ * Round 7 Minor: only the template was read this way. This repo's own adoption
+ * file was in the sweep list above and nowhere else, and its `## Process Profile`
+ * section carries no fenced example — so ZERO checks applied to the one thing
+ * that matters about it. `` - `profile`: `pocc` `` under that heading shipped
+ * `PASS — 44 skills conformant`, exit 0, while every `/next` run in this repo
+ * HALTed on `unknown process profile \`pocc\``. A file the PASS line names as
+ * checked is read as what it is: a declaration.
+ *
+ * A docs `.mdx` page is deliberately NOT here — its prose is not a declaration
+ * anyone resolves, only its fenced examples are, and those the sweep covers.
+ */
+export const PROFILE_DECLARATION_FILES = [WOW_TEMPLATE_FILE, REPO_WOW_FILE]
+
 const KB_PROSE_FILES = [
   'dataset/.pair/knowledge/way-of-working.md',
   'dataset/.pair/knowledge/getting-started.md',
@@ -482,6 +553,20 @@ export function isApprovalSignalFamily(rel: string): boolean {
 }
 
 /**
+ * Line endings, normalized once at every parse boundary.
+ *
+ * Round 5 Major: the line regexes in this module end in `(.*)$` with no `m` flag —
+ * `.` cannot match `\r` and `$` anchors at end-of-string, so on a CRLF file a key
+ * line or a heading line matched NOTHING and every level of the profile guard went
+ * silent at once (a `poc` declaration resolved to `default`, 12 steps, zero halts).
+ * A team on Windows gets CRLF by default (`core.autocrlf=true`), so this is the
+ * checkout `pair update` produces there, not an exotic file.
+ */
+function lf(content: string): string {
+  return content.replace(/\r\n?/g, '\n')
+}
+
+/**
  * Which lines sit inside a fenced block — the ONLY layout fact these checks still
  * consult, and only to exclude a printed sample from being read as a step that asks.
  *
@@ -489,15 +574,116 @@ export function isApprovalSignalFamily(rel: string): boolean {
  * the windows that needed it: every check is now per line, keyed on the declared
  * marker. That deletion is the point, not a side effect — a span this module no
  * longer computes is a span a future guard cannot silently widen.
+ *
+ * Both CommonMark fence characters count, and a fence closes only on the character
+ * that OPENED it — `~~~` is the standard way to nest a block that itself contains
+ * backticks, and a single toggle would have let a `~~~` line inside a ``` block
+ * close it.
+ *
+ * The run's LENGTH is tracked for the same reason (round 6 Minor): CommonMark closes
+ * a fence only on a run at least as long as the opening one, so a ```` block wrapping
+ * a ``` example — the standard way to SHOW a backticked declaration — was closed by
+ * its own inner fence and the example escaped into declaration space.
  */
+interface FenceRun {
+  char: string
+  len: number
+}
+
+/** The fence delimiter this line is, or `null` when it is not one. */
+function fenceRun(line: string): FenceRun | null {
+  const fence = /^\s*(`{3,}|~{3,})/.exec(line)
+  if (!fence) return null
+  const run = fence[1] as string
+  return { char: run[0] as string, len: run.length }
+}
+
+/** Does `run` close a fence opened by `open`? Same character, at least as long. */
+function closesFence(open: FenceRun, run: FenceRun): boolean {
+  return run.char === open.char && run.len >= open.len
+}
+
 function scanFences(lines: string[]): boolean[] {
   const inFence: boolean[] = []
-  let fence = false
+  let open: FenceRun | null = null
   lines.forEach((line, i) => {
-    if (/^\s*```/.test(line)) fence = !fence
-    inFence[i] = fence
+    const run = fenceRun(line)
+    if (run) {
+      if (open === null) open = run
+      else if (closesFence(open, run)) open = null
+    }
+    inFence[i] = open !== null
   })
   return inFence
+}
+
+/** A document read as CommonMark layout rather than as lines of text. */
+interface ProfileDocument {
+  /** Lines with HTML-comment spans blanked; fenced lines kept verbatim. */
+  lines: string[]
+  /** Which lines sit inside a fenced block, delimiters included. */
+  inFence: boolean[]
+  /** A fence or comment still open at end of file — the document is mis-formed. */
+  unterminated: 'fence' | 'comment' | null
+}
+
+/**
+ * The layout every profile reader works from: fences located, HTML comments masked,
+ * and the fact that the document never closed one of them reported rather than acted
+ * on.
+ *
+ * Round 6 Minor, twice over:
+ *
+ * - **An HTML comment is not content.** A `## Process Profile` heading parked in a
+ *   `<!-- ... -->` — the ordinary way to disable a markdown block without deleting
+ *   it — was counted as a real section, so a team trying a new profile while keeping
+ *   the old one commented out got a HALT on every run telling them to keep ONE
+ *   section, while the rendered file visibly shows one. Fences were already excluded
+ *   from heading detection for exactly this reason; a comment is the same class.
+ * - **An unterminated delimiter is not a licence to read a truncated document.** One
+ *   missing closing fence anywhere above the section left every later line "inside a
+ *   fence", so the real heading was never found and the file resolved to `default`
+ *   with the whole process re-enabled — zero halts, byte-identical to writing
+ *   nothing. It is reported here and HALTs at `profileSectionProblems`.
+ *
+ * The two states are mutually exclusive and resolved in CommonMark's order: inside a
+ * fence a comment is literal text, and inside a comment a fence line is not a fence.
+ */
+function scanProfileDocument(content: string): ProfileDocument {
+  const lines: string[] = []
+  const inFence: boolean[] = []
+  let open: FenceRun | null = null
+  let comment = false
+  for (const raw of lf(content).split('\n')) {
+    if (open !== null) {
+      const run = fenceRun(raw)
+      if (run !== null && closesFence(open, run)) open = null
+      lines.push(raw)
+      inFence.push(true)
+      continue
+    }
+    let text = raw
+    if (comment) {
+      const end = text.indexOf('-->')
+      if (end === -1) {
+        lines.push('')
+        inFence.push(false)
+        continue
+      }
+      text = text.slice(end + 3)
+      comment = false
+    }
+    text = text.replace(/<!--[\s\S]*?-->/g, '')
+    const start = text.indexOf('<!--')
+    if (start !== -1) {
+      text = text.slice(0, start)
+      comment = true
+    }
+    open = fenceRun(text)
+    lines.push(text)
+    inFence.push(open !== null)
+  }
+  return { lines, inFence, unterminated: open !== null ? 'fence' : comment ? 'comment' : null }
 }
 
 /**
@@ -802,6 +988,1531 @@ export function checkEntrypointDepth(skillsDir: string, markdownFiles: string[])
   return errors
 }
 
+// --- Process-step catalogue and profiles (#251) ---
+
+/**
+ * A process STEP: the unit a `## Process Profile` whitelists.
+ *
+ * Not a skill and not a how-to guide — BOTH of those are representations of the
+ * same step, and the two sets do not coincide. Keying the profile on either one
+ * makes a real case inexpressible: on skills, "a PoC never does DDD mapping"
+ * cannot be said (its steps are capabilities, not `process/*` skills); on how-to
+ * guides, `brainstorm` cannot be said (it has none). So the step is the unit and
+ * the catalogue carries the two representations as NULLABLE fields — which is
+ * exactly what turns the three asymmetries into data instead of conditionals in
+ * `/next` and in every step skill.
+ */
+export interface StepEntry {
+  /** Stable id — what a whitelist names. */
+  id: string
+  /** How-to filename (manual path), or null when the step has no guide. */
+  howTo: string | null
+  /** Unprefixed skill command (`/refine-story`), or null when there is none. */
+  executable: string | null
+  /**
+   * Prerequisite step ids, satisfied when the list is EMPTY or at least ONE
+   * member is enabled — an any-of, not an all-of.
+   *
+   * Any-of is what the corpus actually is, not a generalisation for its own
+   * sake: `brainstorm` and the strategic chain are alternative producers of the
+   * same input (a story tree), so `plan-stories` requires `plan-epics` OR
+   * `brainstorm`. All-of would make the shipped `poc` profile — which drops the
+   * strategic chain and keeps discovery — permanently self-inconsistent.
+   */
+  requires: string[]
+}
+
+/**
+ * The declared marker a step's executable representation carries.
+ *
+ * A marker, not a prose window, for the reason `approval-round` is one: layout is
+ * not contract, so a check keyed on a section heading widens when the prose
+ * changes shape instead of failing.
+ */
+export const STEP_MARKER = /<!--\s*process-step:\s*id=([a-z0-9-]+)\s*-->/
+
+/** The convention every step's executable representation must point at. */
+export const STEP_GATE_CONVENTION = 'process-profile-gate.md'
+
+/**
+ * The INSTALLED copy of that convention — the third governed file of this feature,
+ * and the one all twelve installed step skills point at by path.
+ *
+ * It is where everything the one-line delta does NOT say lives: the prompt
+ * wording, "enabled ⇒ proceed silently, byte for byte", the `$approval: auto` ⇒
+ * `auto=halt` resolution for unattended runs, the HALT-cases carve-out and the
+ * required-vs-optional composition rule.
+ *
+ * Round 12 Major: the installed catalogue and profile schema were bound cell for
+ * cell and this one was not bound at all. Reducing it to
+ * `# Process Profile Gate\n\nTODO` shipped `PASS — 44 skills conformant`, exit 0,
+ * with the banner naming the convention as validated — while an executor
+ * following the pointer found `TODO`, and an unattended `/pair-loop` reaching a
+ * disabled step had no `auto=halt` instruction left anywhere, so the natural
+ * default is to proceed: it runs, silently and repeatedly, a step the project
+ * declared it does not run.
+ */
+const INSTALLED_GATE_CONVENTION_FILE = `${INSTALLED_AI_DEV}/skill-conventions/${STEP_GATE_CONVENTION}`
+
+/**
+ * Everything under the first `## ` heading line matching `matches`, up to the next
+ * `## ` heading line — `null` when no such heading exists.
+ *
+ * Anchored to a LINE-START heading outside a fence, never to the first textual
+ * occurrence of the string: `content.indexOf('## ' + heading)` also matched the
+ * heading named in prose (`See \`## Process Profile\` below.`) and inside a fenced
+ * example, which made the mention the section start and the real heading its
+ * terminator — so the real declaration was never read and the file silently
+ * resolved to `default`. That cross-reference style is in use in the very files
+ * this parses (way-of-working: "exactly like `## Git Workflow` above").
+ *
+ * A section STARTS at level 2 and ENDS at level 2 **or level 1**, and the asymmetry
+ * is the point. Round 11 Minor: a `#` heading did not terminate, so everything under
+ * a later top-level section was read as still inside this one — a key there was
+ * reported as "`profile` declared more than once (2 lines)", sending the author to
+ * look for a duplicate inside a section that visibly has none. `###`+ stays INSIDE
+ * (documented at the mis-levelled-heading HALT): a sub-heading is part of its
+ * section, a level-1 heading is a document division above it.
+ */
+function sectionOfWhere(content: string, matches: (heading: string) => boolean): string | null {
+  const { lines, inFence } = scanProfileDocument(content)
+  const headingAt = (i: number, re: RegExp): string | undefined => {
+    if (inFence[i]) return undefined
+    return re.test(lines[i] as string) ? (lines[i] as string).replace(re, '').trim() : undefined
+  }
+
+  let start = -1
+  for (let i = 0; i < lines.length; i++) {
+    const h = headingAt(i, ATX_LEVEL_TWO)
+    if (h !== undefined && matches(h)) {
+      start = i
+      break
+    }
+  }
+  if (start === -1) return null
+
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (headingAt(i, ATX_LEVEL_ONE_OR_TWO) !== undefined) {
+      end = i
+      break
+    }
+  }
+  return lines.slice(start + 1, end).join('\n')
+}
+
+/** Everything under the `## <heading>` section, up to the next `## ` heading. */
+function sectionOf(content: string, heading: string): string | null {
+  return sectionOfWhere(content, h => h === heading)
+}
+
+/** Markdown table rows of a section, as trimmed cell arrays (header/rule dropped). */
+function tableRows(section: string): string[][] {
+  const rows: string[][] = []
+  for (const line of section.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('|')) continue
+    if (/^\|[\s:|-]+\|$/.test(trimmed)) continue // alignment rule
+    const cells = trimmed
+      .slice(1, trimmed.endsWith('|') ? -1 : undefined)
+      .split('|')
+      .map(c => c.trim())
+    rows.push(cells)
+  }
+  return rows
+}
+
+/** Every backticked token in a cell (`—` / prose yields none). */
+function backticked(cell: string): string[] {
+  return [...cell.matchAll(/`([^`]+)`/g)].map(m => (m[1] as string).trim())
+}
+
+/**
+ * The catalogue's `## The Catalogue` table, as data.
+ *
+ * Deliberately tolerant of the surrounding prose and strict about the row shape:
+ * a row whose first cell is not a single backticked id is not a step (the file
+ * also carries a "capabilities that are NOT steps" table, which must never be
+ * read as one).
+ */
+export function parseStepCatalogue(content: string): StepEntry[] {
+  const entries: StepEntry[] = []
+  for (const cells of tableRows(sectionOf(content, 'The Catalogue') ?? '')) {
+    if (cells.length < 4) continue
+    const ids = backticked(cells[0] as string)
+    if (ids.length !== 1) continue
+    const id = ids[0] as string
+    if (!/^[a-z][a-z0-9-]*$/.test(id)) continue
+    entries.push({
+      id,
+      howTo: backticked(cells[1] as string)[0] ?? null,
+      executable: backticked(cells[2] as string)[0] ?? null,
+      requires: backticked(cells[3] as string),
+    })
+  }
+  return entries
+}
+
+/** `'*'` = every catalogue step (the `default` profile). */
+export type ProfileWhitelist = string[] | '*'
+
+/** The built-in profiles table, as data. */
+export function parseProcessProfiles(content: string): Record<string, ProfileWhitelist> {
+  const profiles: Record<string, ProfileWhitelist> = {}
+  for (const cells of tableRows(sectionOf(content, 'Built-in Profiles') ?? '')) {
+    if (cells.length < 2) continue
+    const names = backticked(cells[0] as string)
+    if (names.length !== 1) continue
+    const name = names[0] as string
+    if (!/^[a-z][a-z0-9-]*$/.test(name)) continue
+    const tokens = backticked(cells[1] as string)
+    profiles[name] = tokens.includes('*') ? '*' : tokens
+  }
+  return profiles
+}
+
+/** The how-to guides actually on disk, as filenames. */
+export function collectHowToGuides(howToDir: string): string[] {
+  if (!existsSync(howToDir)) return []
+  return readdirSync(howToDir)
+    .filter(f => f.endsWith('.md') && f !== 'README.md')
+    .sort()
+}
+
+/**
+ * Every skill directory in the corpus, as `<category>/<name>` (or the bare
+ * `<name>` meta skill) — the same entry granularity `collectSkillFiles` walks.
+ *
+ * CAPABILITY skills are included on purpose, and both callers depend on it: two of
+ * the twelve catalogued steps — `define-subdomains` and `define-bounded-contexts`,
+ * the flagship `poc` case — have capability executables (`/map-subdomains`,
+ * `/map-contexts`). Narrowing this to `process/**` would make
+ * `checkStepMarkersInMirror` miss them on its `byCommand` lookup and `continue`
+ * past both, silently dropping the mirror marker guard for exactly those two, and
+ * would blind `checkCatalogueOrphans` to every capability step in both directions.
+ * Round 10 Minor: the function was called `collectProcessSkillDirs`, so honouring
+ * its name was a one-line "fix" away from that.
+ */
+export function collectAllSkillDirs(skillsDir: string): string[] {
+  return collectSkillFiles(skillsDir).map(f => relative(skillsDir, dirname(f)).split(sep).join('/'))
+}
+
+/** The unprefixed command a skill dir is invoked by (`process/review` → `/review`). */
+function commandOf(skillDir: string): string {
+  const parts = skillDir.split('/')
+  return `/${parts[parts.length - 1] as string}`
+}
+
+export interface CorpusSets {
+  howToGuides: string[]
+  skillDirs: string[]
+}
+
+/**
+ * The catalogue↔corpus binding, BOTH directions — the guard that stops the
+ * catalogue becoming a third, silently-drifting list alongside the skills tree
+ * and the how-to directory.
+ *
+ * Forward: every representation a row names must resolve. Reverse: every how-to
+ * guide and every `process/*` skill must be reachable from some row. The reverse
+ * half is the load-bearing one — without it a step added to the corpus is simply
+ * absent from the profile, which reads as "enabled" and is exactly the silent
+ * ungoverned step the profile exists to prevent.
+ */
+/** A claim ledger: who owns a representation, and whether two rows fight over it. */
+class Claims {
+  private readonly owners = new Map<string, string>()
+  constructor(private readonly noun: string) {}
+
+  claim(key: string, by: string): string[] {
+    const owner = this.owners.get(key)
+    this.owners.set(key, by)
+    return owner === undefined
+      ? []
+      : [`step-catalogue: ${this.noun} \`${key}\` is claimed by both \`${owner}\` and \`${by}\``]
+  }
+
+  has(key: string): boolean {
+    return this.owners.has(key)
+  }
+}
+
+/** Forward direction, one row: every representation it names must resolve. */
+function checkCatalogueRow(
+  entry: StepEntry,
+  ids: Set<string>,
+  commands: Map<string, string>,
+  claimed: { guides: Claims; skills: Claims },
+): string[] {
+  const errors: string[] = []
+  if (entry.howTo === null && entry.executable === null) {
+    errors.push(
+      `step-catalogue: step \`${entry.id}\` declares neither a how-to nor an executable — ` +
+        `a step with no representation at all cannot be run by any path`,
+    )
+  }
+  if (entry.howTo !== null) {
+    errors.push(...claimed.guides.claim(entry.howTo, entry.id))
+  }
+  if (entry.executable !== null) {
+    const dir = commands.get(entry.executable)
+    if (dir === undefined) {
+      errors.push(
+        `step-catalogue: step \`${entry.id}\` names executable \`${entry.executable}\`, which resolves to no skill in the corpus`,
+      )
+    } else {
+      errors.push(...claimed.skills.claim(dir, entry.id))
+    }
+  }
+  for (const required of entry.requires) {
+    if (!ids.has(required)) {
+      errors.push(
+        `step-catalogue: step \`${entry.id}\` requires \`${required}\`, which is not a catalogued step id`,
+      )
+    }
+  }
+  return errors
+}
+
+/** Reverse direction: a representation in the corpus that no row claims. */
+function checkCatalogueOrphans(
+  corpus: CorpusSets,
+  claimed: { guides: Claims; skills: Claims },
+): string[] {
+  const errors: string[] = []
+  for (const guide of corpus.howToGuides) {
+    if (claimed.guides.has(guide)) continue
+    errors.push(
+      `step-catalogue: how-to \`${guide}\` appears in no catalogue row — the manual path of an ` +
+        `uncatalogued step is ungoverned by every profile`,
+    )
+  }
+  for (const dir of corpus.skillDirs) {
+    if (dir.split('/')[0] !== 'process' || claimed.skills.has(dir)) continue
+    errors.push(
+      `step-catalogue: process skill \`${commandOf(dir)}\` appears in no catalogue row — a ` +
+        `process skill IS a step, so a profile could never disable it`,
+    )
+  }
+  return errors
+}
+
+/** Ids are unique — a duplicate would make a whitelist entry ambiguous. */
+function checkUniqueStepIds(entries: StepEntry[]): { ids: Set<string>; errors: string[] } {
+  const ids = new Set<string>()
+  const errors: string[] = []
+  for (const entry of entries) {
+    if (ids.has(entry.id)) {
+      errors.push(
+        `step-catalogue: duplicate step id \`${entry.id}\` — a whitelist entry would be ambiguous`,
+      )
+    }
+    ids.add(entry.id)
+  }
+  return { ids, errors }
+}
+
+export function checkStepCatalogue(entries: StepEntry[], corpus: CorpusSets): string[] {
+  const { ids, errors } = checkUniqueStepIds(entries)
+  const guides = new Set(corpus.howToGuides)
+  const commands = new Map(corpus.skillDirs.map(d => [commandOf(d), d]))
+  const claimed = { guides: new Claims('how-to'), skills: new Claims('skill') }
+
+  for (const entry of entries) {
+    if (entry.howTo !== null && !guides.has(entry.howTo)) {
+      errors.push(
+        `step-catalogue: step \`${entry.id}\` names how-to \`${entry.howTo}\`, which is not in the how-to corpus`,
+      )
+    }
+    errors.push(...checkCatalogueRow(entry, ids, commands, claimed))
+  }
+
+  // The reverse half is the load-bearing one: a step present in the corpus and
+  // absent from the catalogue reads as "enabled" to every profile, silently.
+  errors.push(...checkCatalogueOrphans(corpus, claimed))
+  return errors
+}
+
+/** The convention pointer may sit in the SKILL.md or in any file disclosed beside it. */
+function pointsAtGateConvention(skillsDir: string, dir: string): boolean {
+  // The MARKER is the entrypoint's obligation — an assistant loads SKILL.md and
+  // must be able to tell which step it is holding. The POINTER may be disclosed:
+  // progressive disclosure is a shipped layout here, and a skill under a byte
+  // budget puts its half of this convention in the sibling that already owns
+  // "a composition is missing". Resolving the obligation over the skill's whole
+  // directory is the rule `checkApprovalSignalInSubDocs` applies in reverse.
+  return collectSkillMarkdownFiles(join(skillsDir, ...dir.split('/'))).some(f =>
+    readFileSync(f, 'utf-8').includes(STEP_GATE_CONVENTION),
+  )
+}
+
+/**
+ * The two BEHAVIOURAL clauses of the delta (process-profile-gate.md, "What stays
+ * in the skill") — the sentence an executor actually reads, as opposed to the
+ * marker, which is what the machine reads.
+ *
+ * Round 11 Minor: the per-skill obligation was the marker plus the string
+ * `process-profile-gate.md` anywhere in the dir, and the sentence itself was pinned
+ * byte-for-byte for two of the twelve (`refine-story`, `map-subdomains`) in
+ * `process-profile.test.ts`. Deleting the whole delta sentence from
+ * `/implement` — dataset AND mirror — left `PASS — 44 skills conformant` and 107
+ * green conformance tests, with the skill's only instruction gone. Matched as
+ * CLAUSES, not as the snippet byte-for-byte: the corpus ships three legitimate
+ * shapes (plain, `$approval`-family, and `brainstorm`'s disclosed half), and a
+ * check that accepts one wording forces the other two to lie.
+ */
+const DELTA_CLAUSES: Array<[string, RegExp[]]> = [
+  ['DIRECT', [/\bdirect\b/i, /\bwarn/i, /confirm|halt/i]],
+  [
+    'COMPOSED',
+    [/compos/i, /never prompts?|never a prompt|no prompt|without prompting/i, /not installed/i],
+  ],
+]
+
+/**
+ * The text the delta obligation is resolved over: the skill's `## Process Profile`
+ * section plus every markdown file it discloses BESIDE it.
+ *
+ * A link that climbs out of the skill dir (`../../../.pair/knowledge/**`) is
+ * excluded on purpose — the convention itself states both clauses, so resolving
+ * through it would let any skill satisfy the check by carrying the pointer it
+ * already has to carry.
+ */
+function deltaText(skillsDir: string, dir: string, content: string): string | null {
+  const section = sectionOfWhere(content, isWowProfileHeading)
+  if (section === null) return null
+  const disclosed = [...section.matchAll(/\]\(([^)#\s]+\.md)\)/g)]
+    .map(m => m[1] as string)
+    .filter(p => !p.startsWith('/') && !p.split('/').includes('..'))
+    .map(p => join(skillsDir, ...dir.split('/'), ...p.split('/')))
+    .filter(existsSync)
+    .map(p => readFileSync(p, 'utf-8'))
+  return [section, ...disclosed].join('\n')
+}
+
+/** The delta half of one skill's obligation: the section, and what it must say. */
+function checkStepDelta(
+  skillsDir: string,
+  dir: string,
+  content: string,
+  entry: StepEntry,
+): string[] {
+  const delta = deltaText(skillsDir, dir, content)
+  if (delta === null) {
+    return [
+      `${dir}/SKILL.md: represents step \`${entry.id}\` but carries no \`## ${WOW_PROFILE_SECTION}\` ` +
+        `section — the marker's own section is where the gate delta lives ` +
+        `(skill-conventions/${STEP_GATE_CONVENTION})`,
+    ]
+  }
+  return DELTA_CLAUSES.filter(([, clauses]) => !clauses.every(c => c.test(delta))).map(
+    ([which]) =>
+      `${dir}/SKILL.md: its \`## ${WOW_PROFILE_SECTION}\` delta never states the ${which} rule — ` +
+      `the marker tells the machine which step this is, the sentence tells the executor what to ` +
+      `do when it is disabled (skill-conventions/${STEP_GATE_CONVENTION})`,
+  )
+}
+
+/**
+ * The one clause the twelve deltas CANNOT carry and only the convention states:
+ * the unattended resolution of the confirmation round (`kind=gate`, `auto=halt`).
+ */
+const GATE_UNATTENDED_CLAUSE = /auto=halt/
+
+/**
+ * The fourth rule of the convention, added with round 12's report filter and left
+ * unbound in the installed copy: a completion report's `Next:` line obeys the
+ * profile too. Deleting the paragraph from the installed file printed
+ * `PASS — 44 skills conformant`; the same deletion in the dataset copy reddens
+ * (`process-profile.test.ts`, "states the rule once, in the convention"). The pair
+ * mirrors that dataset-side assertion, so the four clauses are bound in BOTH copies.
+ */
+const GATE_REPORT_CLAUSES: RegExp[] = [/`Next:` line/, /never names a step the profile disables/]
+
+/**
+ * The installed convention read as CONTENT, not as a path that happens to exist.
+ *
+ * Same obligation `checkStepDelta` puts on each skill, applied to the file those
+ * skills delegate to — so the corpus cannot end up with twelve pointers into a
+ * document that no longer says anything, plus the `auto=halt` clause, which is
+ * the one instruction NO delta carries and therefore has no second home.
+ */
+export function checkInstalledGateConvention(content: string): string[] {
+  const errors = DELTA_CLAUSES.filter(([, clauses]) => !clauses.every(c => c.test(content))).map(
+    ([which]) =>
+      `${INSTALLED_GATE_CONVENTION_FILE}: no longer states the ${which} rule — every installed ` +
+      `step skill points here for it, so what this file stops saying is written nowhere else ` +
+      `(run \`pair update\`)`,
+  )
+  if (!GATE_UNATTENDED_CLAUSE.test(content)) {
+    errors.push(
+      `${INSTALLED_GATE_CONVENTION_FILE}: no longer resolves the gate for an UNATTENDED run ` +
+        `(\`auto=halt\`) — with the clause gone a \`$approval: auto\` run reaching a disabled step ` +
+        `has no instruction anywhere, and the natural default is to run it (run \`pair update\`)`,
+    )
+  }
+  if (!GATE_REPORT_CLAUSES.every(c => c.test(content))) {
+    errors.push(
+      `${INSTALLED_GATE_CONVENTION_FILE}: no longer states that a completion report's ` +
+        `\`Next:\` line obeys the profile — an author adding a step skill follows the installed ` +
+        `pointer, so a rule this file stops stating is read by nobody (run \`pair update\`)`,
+    )
+  }
+  return errors
+}
+
+/** One skill's marker obligations, resolved against the catalogue. */
+function checkOneStepMarker(
+  skillsDir: string,
+  dir: string,
+  content: string,
+  entry: StepEntry | undefined,
+): string[] {
+  const declared = STEP_MARKER.exec(content)?.[1]
+  const command = commandOf(dir)
+
+  if (entry === undefined) {
+    return declared === undefined
+      ? []
+      : [
+          `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but \`${command}\` is not a ` +
+            `catalogued step's executable — either catalogue the step or drop the marker`,
+        ]
+  }
+  if (declared === undefined) {
+    return [
+      `${dir}/SKILL.md: is the executable of step \`${entry.id}\` and declares no ` +
+        `\`<!-- process-step: id=${entry.id} -->\` marker (skill-conventions/${STEP_GATE_CONVENTION})`,
+    ]
+  }
+
+  const errors: string[] = []
+  if (declared !== entry.id) {
+    errors.push(
+      `${dir}/SKILL.md: declares \`process-step: id=${declared}\` but the catalogue maps ` +
+        `\`${command}\` to step \`${entry.id}\``,
+    )
+  }
+  if (!pointsAtGateConvention(skillsDir, dir)) {
+    errors.push(
+      `${dir}/SKILL.md: represents step \`${entry.id}\` but neither it nor any file disclosed ` +
+        `beside it points at skill-conventions/${STEP_GATE_CONVENTION} — the gate is written once ` +
+        `and referenced, never re-implemented per skill`,
+    )
+  }
+  errors.push(...checkStepDelta(skillsDir, dir, content, entry))
+  return errors
+}
+
+export function checkStepMarkers(entries: StepEntry[], skillsDir: string): string[] {
+  const byCommand = new Map<string, StepEntry>()
+  for (const entry of entries) {
+    if (entry.executable !== null) byCommand.set(entry.executable, entry)
+  }
+
+  const errors: string[] = []
+  for (const file of collectSkillFiles(skillsDir)) {
+    const dir = relative(skillsDir, dirname(file)).split(sep).join('/')
+    errors.push(
+      ...checkOneStepMarker(
+        skillsDir,
+        dir,
+        readFileSync(file, 'utf-8'),
+        byCommand.get(commandOf(dir)),
+      ),
+    )
+  }
+  return errors
+}
+
+/**
+ * The same marker + gate-pointer obligation, over the INSTALLED mirror.
+ *
+ * The dataset copy is the SOURCE; `.claude/skills/**` is the copy an assistant
+ * actually loads, so it is the binding one — the finding class #280 already
+ * recorded for `/next`. Without this, deleting a `<!-- process-step: id=review -->`
+ * from `.claude/skills/pair-process-review/SKILL.md` left every gate green: that
+ * skill can no longer tell which step it is, its profile gate never fires under
+ * `poc`, and nothing anywhere reports it.
+ *
+ * The dataset→mirror name mapping is not re-implemented here: `installedSkillDir`
+ * runs the real `pair update` path transform with the `skills` registry's options.
+ */
+export function checkStepMarkersInMirror(
+  entries: StepEntry[],
+  skillsDir: string,
+  mirrorDir: string,
+): string[] {
+  const byCommand = new Map(collectAllSkillDirs(skillsDir).map(d => [commandOf(d), d]))
+
+  const errors: string[] = []
+  for (const entry of entries) {
+    if (entry.executable === null) continue
+    // An executable naming no dataset skill is already `checkStepCatalogue`'s error.
+    const datasetDir = byCommand.get(entry.executable)
+    if (datasetDir === undefined) continue
+
+    const installed = installedSkillDir(datasetDir)
+    const file = join(mirrorDir, ...installed.split('/'), 'SKILL.md')
+    if (!existsSync(file)) {
+      errors.push(
+        `${installed}/SKILL.md: step \`${entry.id}\` is not installed in the skills mirror — ` +
+          `the copy assistants load carries no representation of it (run \`pair update\`)`,
+      )
+      continue
+    }
+    errors.push(
+      ...checkOneStepMarker(mirrorDir, installed, readFileSync(file, 'utf-8'), entry).map(
+        e => `mirror: ${e}`,
+      ),
+    )
+  }
+  return errors
+}
+
+/** A fenced block that already carries the section heading of its own. */
+function hasProfileHeading(block: string): boolean {
+  return block
+    .split('\n')
+    .some(line => ATX_LEVEL_TWO.test(line) && isWowProfileHeading(line.replace(ATX_LEVEL_TWO, '')))
+}
+
+/**
+ * A fenced block, whatever its fence is spelled like: both CommonMark fence
+ * characters, any info string, and a closing delimiter of the SAME character.
+ *
+ * Round 5 Major: this was ```` ```[a-z]*\n ````, so a fence whose info string was
+ * not bare lowercase (a titled one, `TEXT`, a `~~~` block) made its example
+ * invisible to the gate — while the section parser's fence skipper still skipped
+ * it, leaving it neither read as a declaration nor checked as an example. The
+ * recognizer and the skipper must accept the same fences or a shape falls between
+ * them, and a retitled fence is an ordinary docs edit on the file `pair update`
+ * writes into every adopting project.
+ */
+const FENCED_BLOCK = /^ {0,3}(`{3,}|~{3,})[^\n]*\n([\s\S]*?)^ {0,3}\1/gm
+
+/**
+ * Every fenced WORKED EXAMPLE of a profile declaration in a shipped file.
+ *
+ * A reader copies the example, not the prose around it, so an example that resolves
+ * with a warning greets them with the inconsistency report the same file documents
+ * two sections later. Extracted here so the examples go through the SAME resolver as
+ * a real adoption file, rather than being trusted because they look plausible.
+ *
+ * Round 4 Major: recognition used to require the `## Process Profile` heading INSIDE
+ * the fence. The KB schema writes its examples that way; the shipped adoption
+ * TEMPLATE does not — its heading is the section the fence sits in, and the fence
+ * holds bare key lines. So the file `pair update` writes into every adopting project
+ * had exactly zero of its examples checked, while the PR claimed all of them were.
+ * A fence carrying a `profile`/`whitelist` key line IS an example; when it brings no
+ * heading of its own it is given the one it is an example OF, so the same resolver
+ * can read it.
+ */
+export function extractProfileExamples(content: string): string[] {
+  return [...lf(content).matchAll(FENCED_BLOCK)]
+    .map(m => m[2] as string)
+    .filter(block => hasProfileHeading(block) || block.split('\n').some(isProfileKeyLine))
+    .map(block => (hasProfileHeading(block) ? block : `## ${WOW_PROFILE_SECTION}\n\n${block}`))
+}
+
+/** The AGENTS.md section a reader with no skills installed follows. */
+const MANUAL_FLOW_HEADING = 'Quick Start Process'
+
+/**
+ * The manual (no-skills) path must reach the profile before it picks a how-to guide.
+ *
+ * The step catalogue makes the step→how-to mapping EXPRESSIBLE; it does not make the
+ * manual path GOVERNED. Without a step in the flow a human actually reads, a team on
+ * `poc` follows "identify your task", opens
+ * `03-how-to-create-and-prioritize-initiatives.md` — `plan-initiatives`, disabled —
+ * and runs by hand a step the project declared it does not run, with no warning
+ * anywhere. Asserted on the SECTION, not the file: a mention parked in an appendix
+ * is not an entrypoint.
+ */
+export function checkManualPathEntrypoint(content: string, label = 'AGENTS.md'): string[] {
+  const section = sectionOfWhere(content, h => h.includes(MANUAL_FLOW_HEADING))
+  if (section === null) {
+    return [
+      `${label}: no \`## ${MANUAL_FLOW_HEADING}\` section — the manual (no-skills) path has no ` +
+        `entrypoint to govern`,
+    ]
+  }
+
+  const required: Array<[string, string]> = [
+    [`## ${WOW_PROFILE_SECTION}`, 'names the adoption section that declares the profile'],
+    ['way-of-working.md', 'points at the file the section lives in'],
+    [STEP_CATALOGUE_FILE.split('/').pop() as string, 'points at the step→how-to mapping'],
+  ]
+  return required
+    .filter(([needle]) => !section.includes(needle))
+    .map(
+      ([needle, why]) =>
+        `${label}: the ${MANUAL_FLOW_HEADING} manual flow never ${why} (\`${needle}\`) — a ` +
+        `project with no skills installed would follow a how-to guide for a disabled step`,
+    )
+}
+
+/**
+ * A built-in profile must name only catalogued steps, must not be empty, and must
+ * be PREREQUISITE-CLOSED — the same consistency `/next` reports on a custom
+ * whitelist, applied to the profiles the KB itself ships so a shipped profile
+ * cannot be the thing that trips the check.
+ */
+export function checkProcessProfiles(
+  profiles: Record<string, ProfileWhitelist>,
+  entries: StepEntry[],
+): string[] {
+  const allIds = entries.map(e => e.id)
+  const known = new Set(allIds)
+  const errors: string[] = []
+
+  for (const [name, whitelist] of Object.entries(profiles)) {
+    const enabled = whitelist === '*' ? allIds : whitelist
+    const at = `process-profiles: built-in profile \`${name}\``
+    if (enabled.length === 0) {
+      errors.push(
+        `${at} enables no step — an empty whitelist is a misconfiguration, never "everything disabled"`,
+      )
+      continue
+    }
+    for (const id of enabled) {
+      if (!known.has(id)) errors.push(`${at} names \`${id}\`, which is not a catalogued step id`)
+    }
+    for (const warning of prerequisiteWarnings(enabled, entries)) {
+      errors.push(`${at}: ${warning}`)
+    }
+  }
+  return errors
+}
+
+/** The adoption section that declares a project's profile. */
+export const WOW_PROFILE_SECTION = 'Process Profile'
+
+/**
+ * A heading's identity, stripped of decoration that carries no meaning.
+ *
+ * Emphasis markers, a trailing parenthetical and trailing punctuation are how a
+ * human decorates a heading; none of them says "a different section". The
+ * comparison stays an EQUALITY on the normalized text, never a prefix match, so
+ * `## Process Profile Gate` is still a different section.
+ *
+ * The trailing run of `#` is CommonMark's CLOSED ATX form (`## Process Profile ##`),
+ * decoration in the same sense — and unstripped it made the heading unmatched,
+ * hence the section unread and unreported.
+ *
+ * Round 13 Minor: only TRAILING decoration was stripped, so the same widening
+ * survived one notch wider — LEADING decoration (`## 🎯 Process Profile`, the house
+ * style of `AGENTS.md`'s own `## 🎯 Quick Start Process`; `## 1. Process Profile`)
+ * and INTERNAL separators (`## Process  Profile`, `## Process-Profile` — the
+ * spelling the story's own statement uses) each left the heading unmatched, the
+ * section unread, and the project silently back on all 12 steps.
+ */
+function normalizeHeading(heading: string): string {
+  return heading
+    .replace(/\s+#+\s*$/, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/[*`]/g, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/^[^a-zA-Z0-9]+/, '')
+    .replace(/^\d+[.)]\s*/, '')
+    .replace(/^[^a-zA-Z0-9]+/, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[:.\s]+$/, '')
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * The `## Process Profile` heading, matched the way the KEYS inside it are.
+ *
+ * Round 2 Minor: section detection was an exact `h === heading` while key detection
+ * is deliberately loose, so decoration one level UP reopened the hole the loose key
+ * matching closed. `## Process profile` (sentence case) over a perfectly valid
+ * `- \`profile\`: \`poc\`` resolved to `default` — every step re-enabled, zero halts,
+ * zero warnings: byte-identical to having written nothing, in the widening direction
+ * nothing downstream catches.
+ */
+export function isWowProfileHeading(heading: string): boolean {
+  return normalizeHeading(heading) === normalizeHeading(WOW_PROFILE_SECTION)
+}
+
+export interface ProfileDeclaration {
+  /** Declared profile name, or null when the section is absent / declares none. */
+  profile: string | null
+  /** Declared whitelist, or null when no `whitelist` key is present. */
+  whitelist: string[] | null
+  /** True when a `## Process Profile` section exists at all. */
+  present: boolean
+  /** Keys DETECTED on a line the value grammar rejects — resolved as a HALT. */
+  unreadable: string[]
+  /** Keys declared on MORE THAN ONE line of the section — each a HALT. */
+  duplicateKeys: Array<{ key: string; count: number }>
+  /** Problems with the SECTION itself (duplicated, mis-levelled) — each a HALT. */
+  sectionHalts: string[]
+  /** Keys whose value SPILLS past its line (wrapped, or a dangling `,`) — a HALT. */
+  spilled: string[]
+}
+
+/**
+ * A markdown ATX heading line, at any of the six levels.
+ *
+ * Up to three leading spaces are legal ATX (four makes it an indented code block),
+ * so a hand-indented heading is a heading. Reading it as prose was the same widening
+ * hole one notch narrower: `   ## Process Profile` over a valid declaration resolved
+ * to `default` with 12 steps, no halt, no warning.
+ */
+const ATX_HEADING = /^ {0,3}(#{1,6})[ \t]+(.*)$/
+
+/** The level-2 half of the same rule, used where only `##` starts a section. */
+const ATX_LEVEL_TWO = /^ {0,3}##[ \t]+/
+
+/** What ENDS a level-2 section: the next one, or the level-1 heading above them. */
+const ATX_LEVEL_ONE_OR_TWO = /^ {0,3}#{1,2}[ \t]+/
+
+/** A setext underline: the CommonMark heading form this reader does NOT accept. */
+const SETEXT_UNDERLINE = /^ {0,3}(=+|-+)[ \t]*$/
+
+/**
+ * The HALT for a document that never closes a fence or an HTML comment.
+ *
+ * Round 6 Minor: a truncated view is not a view. One missing ``` in an unrelated
+ * section above put every later line inside a fence, so the real `## Process Profile`
+ * heading was never found and the profile resolved to `default` — the whole process
+ * re-enabled on a project that declared `poc`, with nothing reported anywhere.
+ */
+function unterminatedDelimiterHalt(kind: 'fence' | 'comment'): string {
+  const what = kind === 'fence' ? 'a code fence (```` ``` ````/`~~~`)' : 'an HTML comment (`<!--`)'
+  return (
+    `the file leaves ${what} UNTERMINATED — everything after it is read as non-content, so a ` +
+    `\`## ${WOW_PROFILE_SECTION}\` section below it is not read at all and the profile it ` +
+    `declares takes effect nowhere. Close the delimiter`
+  )
+}
+
+/** `Process Profile` written as a setext heading — a text line plus its underline. */
+function isSetextProfileHeading(line: string, next: string | undefined): boolean {
+  if (next === undefined || !SETEXT_UNDERLINE.test(next)) return false
+  return line.trim() !== '' && isWowProfileHeading(line.trim())
+}
+
+/**
+ * What is wrong with the DECLARATION SITE, before a single key is read.
+ *
+ * Rounds 1 and 2 read the key loosely, then the value strictly, then the heading
+ * TEXT loosely. Two levels of the declaration were still outside that rule, and
+ * both fail in the WIDENING direction — the one direction no downstream check
+ * looks at, because a step that vanished from every suggestion is
+ * indistinguishable from a step that is not due yet:
+ *
+ * - **Declared twice.** First match won and the second section was dropped in
+ *   silence. This story makes that the likely shape: the shipped template AND
+ *   this repo's own way-of-working already carry a `## Process Profile` section
+ *   that is present and EMPTY (prose only), so a team obeying the schema — "the
+ *   profile lives only in way-of-working.md, in a `## Process Profile` section" —
+ *   by APPENDING one gets `default` with zero halts and zero warnings.
+ * - **Declared at another heading level.** `### Process Profile` is not a section
+ *   and, being unmatched, was not reported either.
+ *
+ * Deliberately NOT fixed by widening `sectionOfWhere`'s `##` regex: that predicate
+ * also decides where a section ENDS, and for `The Catalogue` / `Built-in Profiles`
+ * / `Quick Start Process` an `###` sub-heading is legitimately inside the section,
+ * not a terminator. So the mis-levelled heading is scanned for SEPARATELY and
+ * reported, and `sectionOf` keeps the semantics its other callers rely on.
+ */
+/** Every spelling of the section heading the document carries, counted by form. */
+interface ProfileHeadings {
+  /** How many `## Process Profile` headings — more than one is a HALT. */
+  atLevelTwo: number
+  /** The levels of the headings written at any OTHER level. */
+  misLevelled: number[]
+  /** How many setext-underlined ones. */
+  setext: number
+}
+
+function countProfileHeadings(lines: string[], inFence: boolean[]): ProfileHeadings {
+  const found: ProfileHeadings = { atLevelTwo: 0, misLevelled: [], setext: 0 }
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i]) continue
+    const heading = ATX_HEADING.exec(lines[i] as string)
+    if (!heading) {
+      if (isSetextProfileHeading(lines[i] as string, lines[i + 1])) found.setext++
+      continue
+    }
+    if (!isWowProfileHeading((heading[2] as string).trim())) continue
+    if ((heading[1] as string).length === 2) found.atLevelTwo++
+    else found.misLevelled.push((heading[1] as string).length)
+  }
+  return found
+}
+
+/**
+ * Which lines a `Process Profile` heading COVERS — the section every key must sit
+ * in, whatever level or form that heading was written at.
+ *
+ * Deliberately generous about the heading: a mis-levelled or setext one already has
+ * its own HALT above, and counting the keys under it as orphans too would report the
+ * same mistake twice. The span it opens ends at the next heading of the same level
+ * or higher, exactly as `sectionOfWhere` ends a level-2 section at level 1 or 2.
+ */
+function profileSectionCoverage(lines: string[], inFence: boolean[]): boolean[] {
+  const covered: boolean[] = []
+  let openLevel: number | null = null
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i]) {
+      covered[i] = openLevel !== null
+      continue
+    }
+    const heading = ATX_HEADING.exec(lines[i] as string)
+    if (heading !== null) {
+      const level = (heading[1] as string).length
+      if (isWowProfileHeading((heading[2] as string).trim())) openLevel = level
+      else if (openLevel !== null && level <= openLevel) openLevel = null
+    } else if (isSetextProfileHeading(lines[i] as string, lines[i + 1])) {
+      openLevel = 2
+    }
+    covered[i] = openLevel !== null
+  }
+  return covered
+}
+
+/** The HALT for a key line that sits under no `## Process Profile` heading at all. */
+function orphanKeyHalt(line: number, text: string): string {
+  return (
+    `a \`profile\` / \`whitelist\` key is declared OUTSIDE any \`## ${WOW_PROFILE_SECTION}\` ` +
+    `section (line ${line}: \`${text.slice(0, 80)}\`) — a key outside the section takes effect ` +
+    `nowhere: the profile resolves to \`default\` and every step is re-enabled, in silence. Put ` +
+    `the key under a \`## ${WOW_PROFILE_SECTION}\` heading — that heading exactly, since ` +
+    `\`## ${WOW_PROFILE_SECTION}s\` (plural, the schema page's own title) and ` +
+    `\`## ${WOW_PROFILE_SECTION.replace(/ /g, '')}\` are other sections`
+  )
+}
+
+/**
+ * Keys written where no `## Process Profile` heading reaches them.
+ *
+ * Round 14 Minor: every heading rule above is per-SHAPE — each round closed the
+ * spellings that round thought of, and a key line is still only ever READ inside a
+ * matched section, never REPORTED when it sits outside one. `## Process Profiles`
+ * (the plural is the KB schema page's own H1, the page the adoption template sends
+ * the author to), `## ProcessProfile`, `## Setup` and no heading at all each
+ * resolved a perfectly valid `` - `profile`: `poc` `` to `default` with 12 steps,
+ * zero halts and zero warnings — byte-identical to writing nothing, in the widening
+ * direction this module exists to close. Reporting the KEY closes plural,
+ * no-heading and unrelated-heading in one move instead of one heading shape per
+ * round.
+ *
+ * Fenced lines and masked HTML comments are excluded by the scan this reads, and a
+ * documentation TABLE row cannot match `isProfileKeyLine` (that exclusion is
+ * load-bearing since round 7) — so the shipped files, whose only key-shaped lines
+ * are inside their own fenced examples, are unaffected.
+ */
+function orphanKeyProblems(lines: string[], inFence: boolean[]): string[] {
+  const covered = profileSectionCoverage(lines, inFence)
+  const problems: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i] || covered[i] === true) continue
+    const line = lines[i] as string
+    if (isProfileKeyLine(line)) problems.push(orphanKeyHalt(i + 1, line.trim()))
+  }
+  return problems
+}
+
+export function profileSectionProblems(content: string): string[] {
+  const { lines, inFence, unterminated } = scanProfileDocument(content)
+  if (unterminated !== null) return [unterminatedDelimiterHalt(unterminated)]
+  const { atLevelTwo, misLevelled, setext } = countProfileHeadings(lines, inFence)
+
+  const problems: string[] = []
+  if (setext > 0) {
+    problems.push(
+      `\`${WOW_PROFILE_SECTION}\` is declared as a SETEXT heading (underlined with \`---\` or ` +
+        `\`===\`) — the section is \`## ${WOW_PROFILE_SECTION}\`, an ATX heading at level 2. ` +
+        `Underlined it is not read at all, and the profile it declares is silently ignored`,
+    )
+  }
+  if (atLevelTwo > 1) {
+    problems.push(
+      `\`## ${WOW_PROFILE_SECTION}\` is declared more than once (${atLevelTwo} sections) — keep ` +
+        `one section. Only the first is read, so a profile declared in a later one takes effect ` +
+        `nowhere`,
+    )
+  }
+  for (const level of misLevelled) {
+    problems.push(
+      `\`${WOW_PROFILE_SECTION}\` is declared at heading level ${level} (\`${'#'.repeat(level)}\`) ` +
+        `— the section is \`## ${WOW_PROFILE_SECTION}\`, at level 2. At any other level it is not ` +
+        `read at all, and the profile it declares is silently ignored`,
+    )
+  }
+  problems.push(...orphanKeyProblems(lines, inFence))
+  return problems
+}
+
+/**
+ * A `profile` / `whitelist` key line, however it is decorated.
+ *
+ * DETECTION is loose and ACCEPTANCE (`backticked`) stays strict, because the two
+ * answer different questions: "did the author mean to declare this key?" and "is
+ * the value readable?". A single strict regex conflated them — `- \`profile\`: poc`
+ * (value unbackticked, the shape the schema TABLE suggests) matched nothing, so the
+ * section resolved to `default` with zero halts: the profile silently WIDENED to the
+ * full 12-step process, the one direction nothing else catches.
+ *
+ * The marker class is all three CommonMark bullets. Round 4 Major: it was `[-*]`,
+ * so `+ \`profile\`: \`poc\`` — a valid list item in the exact shape the schema
+ * prescribes — resolved to `default` with every step re-enabled, zero halts, zero
+ * warnings: byte-identical to writing nothing.
+ *
+ * The key's CASE is part of its spelling, so it belongs to detection and the match
+ * is case-insensitive (round 9 Minor; the canonical spelling is restored in
+ * `readProfileKeyLine`, so nothing downstream ever sees a variant). Without the
+ * flag `- \`Profile\`: \`poc\`` was read by nothing and reported by nothing —
+ * `default`, all twelve steps, byte-identical to writing nothing — while the
+ * HEADING one line above it is matched case-insensitively for exactly this reason,
+ * and is itself Title Case (`## Process Profile`), which is where the mirrored
+ * spelling comes from. The VALUE stays strict: `` `POC` `` still HALTs as an
+ * unknown profile name.
+ *
+ * The padding inside the ticks belongs to detection too (round 10 Minor):
+ * `- \` profile \`: \`poc\`` is a bullet carrying a backticked key and a backticked
+ * value, and it matched nothing — `default`, all twelve steps, zero halts.
+ */
+const WOW_PROFILE_KEY = /^\s*[-*+]\s*\**`?[ \t]*(profile|whitelist)[ \t]*`?\**\s*:(.*)$/i
+
+/**
+ * The key itself as the two REJECTED-marker patterns below spell it, with the
+ * backticks OPTIONAL — used only where a LIST MARKER has already been matched,
+ * since the marker is the signal the backticks otherwise stand in for.
+ */
+const KEY_LOOSE = '\\**`?[ \\t]*(profile|whitelist)[ \\t]*`?\\**[ \\t]*:'
+
+/** The same key with the backticks REQUIRED — for the genuinely marker-less line. */
+const KEY_BACKTICKED = '\\**`[ \\t]*(profile|whitelist)[ \\t]*`\\**[ \\t]*:'
+
+/** An ordered-list marker (`1.` / `1)`) or a bullet, with its trailing space. */
+const ORDERED_MARKER = '\\d+[.)][ \\t]*'
+const ANY_MARKER = `(?:[-*+]|\\d+[.)])[ \\t]*`
+
+/**
+ * A key written with a marker this reader does not accept — no bullet at all, or an
+ * ordered-list one (`1.` / `1)`).
+ *
+ * The key must be BACKTICKED only on the MARKER-LESS line: with nothing opening a
+ * list item, the ticks are the sole signal separating a declaration from a sentence
+ * mentioning the key. Behind an ordered marker they are not required (round 10
+ * Minor) — `1.` IS a list marker, the very signal the requirement stood in for, and
+ * requiring both made each error axis HALT alone while their INTERSECTION was
+ * invisible: `1. profile: poc` resolved to `{ok:true, profile:'default',
+ * enabled:[all 12], warnings:[]}`, byte-identical to writing nothing, though
+ * `- profile: poc` and `1. \`profile\`: \`poc\`` each HALTed. The unbackticked value
+ * is not an exotic typo either: it is the shape the schema's own documentation TABLE
+ * suggests, the case the accepted-bullet pattern was loosened for to begin with.
+ *
+ * Such a line is DETECTED (it lands in `unreadable`, and HALTs) rather than skipped
+ * as invisible text — skipping it is the silent widening one more time, and the shape
+ * is a plausible read of the schema: a numbered list of "the two keys", or the key
+ * copied out of a fenced example without carrying its bullet along.
+ *
+ * A documentation TABLE row (`| \`profile\` | \`poc\` | … |`) is deliberately NOT
+ * matched, and provably cannot be: the pattern is `^`-anchored on the key and wants a
+ * `:` immediately after it, while a table row opens on `|` and separates its cells
+ * with `|`. That exclusion is load-bearing rather than incidental — the shipped
+ * adoption template and the KB schema both document these keys in a table inside or
+ * beside the section, so matching that row would make the shipped template HALT and
+ * the gate go red on its own files. A table row is documentation, never a declaration
+ * (pinned by a unit case). Round 7 Minor: this comment used to claim the table row as
+ * a motivating shape the pattern covers — it never did, and must not.
+ *
+ * Case-insensitive for the same reason as the accepted shape: detection must not
+ * stop at the key's spelling, or a case variant slips through one shape lower down
+ * into the same silent `default`.
+ */
+const WOW_PROFILE_KEY_OFF_MARKER = new RegExp(
+  `^[ \\t]*(?:${ORDERED_MARKER}${KEY_LOOSE}|${KEY_BACKTICKED})`,
+  'i',
+)
+
+/**
+ * A key written inside a BLOCKQUOTE, with or without a list marker of its own.
+ *
+ * Round 8 Questions: `>` is not whitespace, so such a line matched neither of the two
+ * patterns above — `> - \`profile\`: \`poc\`` under the section heading resolved to
+ * `default` with all twelve steps, zero halts and zero warnings, byte-identical to
+ * writing nothing. That is the silent WIDENING every other off-shape here HALTs on,
+ * and the shape is a plausible one: a note-styled declaration, or a key copied out of
+ * a quoted snippet.
+ *
+ * It is ruled the OPPOSITE way from the table row above, deliberately. The table row
+ * is the shape the shipped template and the KB schema use to DOCUMENT these keys, so
+ * matching it would HALT the files the gate reads; a blockquoted key is written
+ * nowhere in this corpus as documentation (`grep -rn "^> [-*+] " .pair/adoption` and
+ * the dataset copy: zero hits), so treating it as an author's decorated declaration
+ * costs nothing and closes the widening. The backticks follow the same rule as on the
+ * off-marker pattern (round 10 Minor): required when the quoted line carries no list
+ * marker of its own, optional behind one. `> - profile: poc` used to satisfy neither
+ * axis and so tripped neither — `default`, all twelve steps, zero halts — while
+ * `- profile: poc` and `> - \`profile\`: \`poc\`` each HALTed.
+ */
+const WOW_PROFILE_KEY_BLOCKQUOTED = new RegExp(
+  `^[ \\t]*(?:>[ \\t]*)+(?:${ANY_MARKER}${KEY_LOOSE}|${KEY_BACKTICKED})`,
+  'i',
+)
+
+/** An indented code block: four spaces (or a tab) of indent, CommonMark's third form. */
+const INDENTED_CODE = /^(?: {4}|\t)/
+
+/** A blockquote line: a block of its own, and never a declaration site. */
+const BLOCKQUOTE = /^[ \t]*>/
+
+/**
+ * The key name a REJECTED-marker line declares, or `null` when it declares none.
+ *
+ * Each of the two patterns is an alternation of "marker + loose key" and "no marker +
+ * backticked key", so the name lands in group 1 or group 2 depending on which arm
+ * matched; only one is ever defined.
+ */
+function rejectedKeyName(line: string): string | null {
+  const m = WOW_PROFILE_KEY_OFF_MARKER.exec(line) ?? WOW_PROFILE_KEY_BLOCKQUOTED.exec(line)
+  if (m === null) return null
+  return (m[1] ?? m[2]) as string
+}
+
+/** Does this line declare a key at all — in an accepted shape or a rejected one? */
+function isProfileKeyLine(line: string): boolean {
+  return (
+    WOW_PROFILE_KEY.test(line) ||
+    WOW_PROFILE_KEY_OFF_MARKER.test(line) ||
+    WOW_PROFILE_KEY_BLOCKQUOTED.test(line)
+  )
+}
+
+/** A new list item — the next block, never a continuation of the previous one. */
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])[ \t]/
+
+/** A thematic break (`---`, `***`, `___`): a block of its own, not spilled text. */
+const THEMATIC_BREAK = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/
+
+/**
+ * Is this line the CONTINUATION of the key line above it?
+ *
+ * A non-blank line that starts no block of its own is a lazy continuation of the
+ * preceding paragraph in CommonMark — which, after a key line, is the second half of
+ * a wrapped value. Anything that opens a block (a bullet, a heading, a thematic
+ * break, a blockquote) is not, and a blank line has already ended the paragraph.
+ *
+ * The blockquote is the other arm of the round 8 blockquote rule: a `>` line
+ * interrupts a paragraph in CommonMark, so a note written under a key line is a
+ * quotation, not the tail of a wrapped value — reading it as one HALTed a perfectly
+ * readable declaration. A blockquoted KEY still HALTs: the key scan runs first.
+ */
+function isSpilledValueLine(line: string): boolean {
+  if (line.trim() === '') return false
+  return (
+    !LIST_ITEM.test(line) &&
+    !ATX_HEADING.test(line) &&
+    !THEMATIC_BREAK.test(line) &&
+    !BLOCKQUOTE.test(line)
+  )
+}
+
+/** One declaration line, as data: which key, and its values or `null` if unreadable. */
+interface ProfileKeyLine {
+  key: 'profile' | 'whitelist'
+  values: string[] | null
+  /** The value SPILLS: it ends on a separator, so what follows it is lost. */
+  spilled?: boolean
+}
+
+/**
+ * A value list that ends on a separator — the line CONTINUES.
+ *
+ * Tested on the raw remainder, never on the residue: `.replace(/[,\s]+/g,'')` erases
+ * a trailing `,` exactly as it erases the ones BETWEEN two ids, so on the residue a
+ * wrapped line and a complete one are the same string.
+ */
+const DANGLING_SEPARATOR = /[,;]\s*$/
+
+/**
+ * The key as this module names it, whatever case the author spelled it in.
+ *
+ * Detection is case-insensitive (round 9), so the capture may read `Profile`; every
+ * consumer downstream — the duplicate-key COUNTER, the `custom`/`whitelist` checks,
+ * every HALT message — compares and prints the canonical lowercase spelling. Two
+ * lines spelling the same key differently are therefore the same key declared twice,
+ * not two keys.
+ */
+function canonicalKey(captured: string): ProfileKeyLine['key'] {
+  return captured.toLowerCase() as ProfileKeyLine['key']
+}
+
+/** What a single line of the section declares, or `null` when it declares nothing. */
+function readProfileKeyLine(line: string): ProfileKeyLine | null {
+  const key = WOW_PROFILE_KEY.exec(line)
+  if (!key) {
+    const rejected = rejectedKeyName(line)
+    return rejected === null ? null : { key: canonicalKey(rejected), values: null }
+  }
+  const name = canonicalKey(key[1] as string)
+  const rest = key[2] as string
+  if (DANGLING_SEPARATOR.test(rest)) {
+    return { key: name, values: null, spilled: true }
+  }
+  const values = backticked(rest)
+  // What the value grammar did NOT consume: backticked spans and the separators
+  // between them removed, anything left is text the reader cannot account for.
+  // Checking the RESIDUE rather than `values.length === 0` is what catches a
+  // PARTIALLY readable line — the one a hand-edit actually produces.
+  const residue = rest.replace(/`[^`]*`/g, '').replace(/[,\s]+/g, '')
+  if (name === 'profile') {
+    // A detected `profile` line with no readable value is never "no profile": that
+    // is the silent widening. More than one backticked token is equally unreadable:
+    // taking `values[0]` let `- `profile`: `poc` (not `custom`)` resolve to `poc`
+    // with nothing said about the half of the line that decided nothing.
+    return { key: 'profile', values: values.length === 1 && residue === '' ? values : null }
+  }
+  // Text the value grammar rejects — distinct from `- `whitelist`:` with nothing
+  // after it, which IS an empty whitelist and has its own HALT. Covers the fully
+  // unbackticked line AND the mixed one: without the residue check the mixed line
+  // yielded ≥1 token, passed as readable, and every bare id was dropped on the
+  // floor — a silent NARROWING, the worse direction because nothing surfaces it.
+  return { key: 'whitelist', values: residue === '' ? values : null }
+}
+
+/**
+ * The `## Process Profile` section of a way-of-working file, as data.
+ *
+ * Fenced blocks are skipped: the shipped template carries worked EXAMPLES of the
+ * very keys this reads, and an example is not a declaration.
+ *
+ * Each key is counted, because the same key on two LINES is the third level of the
+ * same hole (round 4 Major). A second SECTION halts and a `profile` LINE carrying
+ * two values halts; between them, `- \`profile\`: \`poc\`` followed by
+ * `- \`profile\`: \`custom\`` resolved LAST-WINS with nothing reported — and the
+ * outcome was order-dependent, since the reverse order tripped the "whitelist under
+ * a built-in" HALT instead.
+ */
+export function parseWowProfileSection(content: string): ProfileDeclaration {
+  const normalized = lf(content)
+  const sectionHalts = profileSectionProblems(normalized)
+  const section = sectionOfWhere(normalized, isWowProfileHeading)
+  const empty = {
+    profile: null,
+    whitelist: null,
+    unreadable: [],
+    duplicateKeys: [],
+    spilled: [],
+  }
+  if (section === null) return { ...empty, present: false, sectionHalts }
+
+  const keys = readSectionKeyLines(section)
+  const duplicateKeys = [...keys.counts]
+    .filter(([, count]) => count > 1)
+    .map(([key, count]) => ({ key, count }))
+  return {
+    profile: keys.profile,
+    whitelist: keys.whitelist,
+    present: true,
+    unreadable: [...new Set(keys.unreadable)],
+    duplicateKeys,
+    sectionHalts,
+    spilled: [...new Set(keys.spilled)],
+  }
+}
+
+/** What the key lines of one section say, before any of it is judged. */
+interface SectionKeys {
+  profile: string | null
+  whitelist: string[] | null
+  unreadable: string[]
+  spilled: string[]
+  /** How many LINES declared each key. */
+  counts: Map<string, number>
+}
+
+function readSectionKeyLines(section: string): SectionKeys {
+  const keys: SectionKeys = {
+    profile: null,
+    whitelist: null,
+    unreadable: [],
+    spilled: [],
+    counts: new Map(),
+  }
+  const lines = section.split('\n')
+  const inFence = scanFences(lines)
+  // The key whose line could still SPILL onto this one. Reset by anything that ends
+  // the key's paragraph — a blank line, a fence, a new list item, a heading.
+  let pending: string | null = null
+  for (const [i, line] of lines.entries()) {
+    // ```-fenced and ~~~-fenced blocks are examples, never declarations.
+    if (inFence[i]) {
+      pending = null
+      continue
+    }
+    const declared = readProfileKeyLine(line)
+    if (declared !== null) {
+      recordKeyLine(keys, declared, INDENTED_CODE.test(line))
+      pending = declared.key
+      continue
+    }
+    if (pending !== null && isSpilledValueLine(line)) keys.spilled.push(pending)
+    pending = null
+  }
+  return keys
+}
+
+/**
+ * One key line folded into the section's reading.
+ *
+ * Four spaces (or a tab) in front of a key is BOTH CommonMark's indented code block
+ * and an ordinary sublist item, and the line alone does not say which. Round 6 Minor:
+ * the ambiguity was resolved by SKIPPING — `default`, every step re-enabled, in
+ * silence — while the same key indented by TWO spaces read as a declaration, so which
+ * one a team got depended on their editor's Tab width. Ambiguous resolves to a HALT,
+ * per this module's asymmetric-cost rule.
+ */
+function recordKeyLine(keys: SectionKeys, declared: ProfileKeyLine, indented: boolean): void {
+  keys.counts.set(declared.key, (keys.counts.get(declared.key) ?? 0) + 1)
+  const values = indented ? null : declared.values
+  if (declared.spilled === true) keys.spilled.push(declared.key)
+  else if (values === null) keys.unreadable.push(declared.key)
+  else if (declared.key === 'profile') keys.profile = values[0] as string
+  else keys.whitelist = values
+}
+
+/** A declaration this reader COULD read — the only arm that carries a step set. */
+export interface ResolvedProfile {
+  ok: true
+  /** The profile actually in force (`default` when nothing is declared). */
+  profile: string
+  /** Enabled step ids — the whole catalogue under `default`. */
+  enabled: string[]
+  /** Inconsistencies reported with their minimal fix, never silently repaired. */
+  warnings: string[]
+}
+
+/**
+ * A declaration this reader could NOT read. It carries **no** step set, and that
+ * is the point of the split.
+ *
+ * Round 7 Questions: every HALT path used to return `enabled: allIds` alongside
+ * its messages. Today's callers all read `halts` first, so nothing was broken —
+ * but the TYPE made this module's own worst failure representable: a caller
+ * reading `resolution.enabled` without checking `resolution.halts` got the whole
+ * 12-step process on a project whose declaration was unreadable, which is the
+ * silent WIDENING every HALT message here argues against. Returning `[]` instead
+ * would only trade it for the narrowing direction. There is no honest step set
+ * behind an unreadable declaration, so the union does not offer one.
+ */
+export interface HaltedProfile {
+  ok: false
+  /** Conditions that must stop the run: a typo must never silently disable a step. */
+  halts: string[]
+}
+
+export type ProfileResolution = ResolvedProfile | HaltedProfile
+
+/** Everything a caller must surface about a resolution: its HALTs, or its warnings. */
+export function profileProblems(resolution: ProfileResolution): string[] {
+  return resolution.ok ? resolution.warnings : resolution.halts
+}
+
+/** A `whitelist` with no `profile`: it applies to `custom` alone, so it never binds. */
+const WHITELIST_WITHOUT_PROFILE =
+  `\`## ${WOW_PROFILE_SECTION}\` declares a \`whitelist\` but no \`profile\` — a whitelist ` +
+  `only applies to \`profile: custom\``
+
+/** The HALT for a key detected in a shape the value grammar rejects. */
+function unreadableShapeHalt(keys: string[]): string {
+  return (
+    `\`## ${WOW_PROFILE_SECTION}\` declares ${keys.map(k => `\`${k}\``).join(' and ')} in a shape ` +
+    `this reader does not accept — keys and values are backticked list items, at the top level ` +
+    `of the section, indented by no more than three spaces and never inside a blockquote (a ` +
+    `quotation is documentation, like the table this schema documents the keys in, so a key ` +
+    `written there configures nothing): \`- \`profile\`: \`poc\`\`, and ` +
+    `under \`custom\` \`- \`whitelist\`: \`implement\`, \`review\`\``
+  )
+}
+
+/**
+ * The HALT for a value that does not fit on its key's line.
+ *
+ * Round 6 Major: this was neither read nor reported. A whitelist wrapped onto a
+ * second line — the natural edit, since the shipped example is 131 columns wide and
+ * markdownlint's default line-length rule is 80 — resolved as the FIRST line's ids
+ * alone, zero halts, zero warnings. Four steps disappeared from every `/next`
+ * suggestion, indistinguishable from those steps not being due yet.
+ */
+function spilledValueHalt(keys: string[]): string {
+  return (
+    `\`## ${WOW_PROFILE_SECTION}\` declares ${keys.map(k => `\`${k}\``).join(' and ')} on a line ` +
+    `whose value SPILLS — it ends on a separator, or is continued on the line below. Each key is ` +
+    `ONE line, however long: read up to the wrap, everything after it is dropped from every ` +
+    `suggestion with nothing reported. Keep the whole value on the key's line`
+  )
+}
+
+/** The HALT for one key declared on several lines of the same section. */
+function duplicateKeyHalt({ key, count }: { key: string; count: number }): string {
+  return (
+    `\`## ${WOW_PROFILE_SECTION}\` declares \`${key}\` more than once (${count} lines) — keep one ` +
+    `line per key. Only the last is read, so the value declared earlier takes effect nowhere`
+  )
+}
+
+/**
+ * What is wrong with the declaration's SHAPE, before any profile name is read —
+ * ordered outside-in: WHERE the section sits, then how often each KEY is declared,
+ * then WHAT the key lines say.
+ *
+ * Every case here is a HALT with the schema handed back, never a quiet fallback to
+ * `default`: a section declared twice or at a level this reader does not treat as
+ * a section makes every key under it moot, a key declared twice makes one of the two
+ * declarations dead text, and a key the author clearly meant to declare in a shape
+ * no reader accepts is not "no declaration".
+ */
+function declarationShapeHalts(declaration: ProfileDeclaration): string[] {
+  if (declaration.sectionHalts.length > 0) return declaration.sectionHalts
+  const halts = declaration.duplicateKeys.map(duplicateKeyHalt)
+  if (declaration.spilled.length > 0) halts.push(spilledValueHalt(declaration.spilled))
+  if (declaration.unreadable.length > 0) halts.push(unreadableShapeHalt(declaration.unreadable))
+  return halts
+}
+
+/**
+ * The reference resolution of a `## Process Profile` section — the executable
+ * statement of the schema `/next` and the gate convention describe in prose.
+ *
+ * Every failure mode here is a HALT rather than a silent narrowing, for one
+ * reason: the cost of a mistake is asymmetric. A misread whitelist does not throw
+ * an error a user sees — it removes a step from every suggestion, which is
+ * indistinguishable from that step simply not being due yet.
+ *
+ * The one non-HALT is the prerequisite inconsistency: the configuration is
+ * readable, so the run continues and reports the minimal fix.
+ */
+export function resolveProcessProfile(
+  declaration: ProfileDeclaration,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): ProfileResolution {
+  const allIds = entries.map(e => e.id)
+  const known = [...Object.keys(builtIns), 'custom']
+  const halt = (...messages: string[]): HaltedProfile => ({ ok: false, halts: messages })
+  const resolved = (profile: string, enabled: string[]): ResolvedProfile => ({
+    ok: true,
+    profile,
+    enabled,
+    warnings: prerequisiteWarnings(enabled, entries),
+  })
+
+  const shape = declarationShapeHalts(declaration)
+  if (shape.length > 0) return halt(...shape)
+
+  // Absent section ⇒ `default` ⇒ today's behaviour, byte for byte (D21).
+  if (!declaration.present || declaration.profile === null) {
+    if (declaration.present && declaration.whitelist !== null)
+      return halt(WHITELIST_WITHOUT_PROFILE)
+    return { ok: true, profile: 'default', enabled: allIds, warnings: [] }
+  }
+
+  const name = declaration.profile
+  if (!known.includes(name)) {
+    return halt(
+      `unknown process profile \`${name}\` — known profiles: ${known.map(k => `\`${k}\``).join(', ')}`,
+    )
+  }
+  if (name !== 'custom') {
+    if (declaration.whitelist !== null) {
+      return halt(
+        `profile \`${name}\` is a built-in and carries its own step set — a \`whitelist\` here would ` +
+          `be silently ignored. Use \`profile: custom\` to name steps explicitly`,
+      )
+    }
+    const builtIn = builtIns[name] as ProfileWhitelist
+    return resolved(name, builtIn === '*' ? allIds : builtIn)
+  }
+  return resolveCustomWhitelist(declaration.whitelist, allIds, halt, resolved)
+}
+
+/**
+ * The HALT for a step id named twice in one whitelist, or `null` when there is none.
+ *
+ * Round 8 Minor: a repeat was neither deduped nor reported. It HALTs rather than
+ * being normalized away for two reasons. It is the SAME mistake that HALTs one level
+ * up when it is the KEY that repeats ("only the last is read"), and the one two
+ * values on a `profile` line HALT on — accepting it inside the value alone would make
+ * this reader's strictness depend on which rung of the declaration the typo landed
+ * on. And it is genuinely ambiguous: `` `implement`, `implement` `` is as plausibly a
+ * copy-paste never edited into the step actually meant as it is a harmless repeat, so
+ * deduping picks one reading and hides the other. Left unread it also corrupted what
+ * the resolution HANDS OUT — the id appeared twice in `enabled`, its prerequisite
+ * warning was emitted twice byte for byte, and every "N steps enabled" count
+ * over-counted.
+ */
+function repeatedWhitelistHalt(whitelist: string[]): string | null {
+  const repeated = [...new Set(whitelist.filter((id, i) => whitelist.indexOf(id) !== i))]
+  if (repeated.length === 0) return null
+  return (
+    `step id(s) ${repeated.map(r => `\`${r}\``).join(', ')} named more than once in the custom ` +
+    `whitelist — name each step once. A repeat is read as an edit that was never finished ` +
+    `(the second name may have been meant to be a different step), and it makes every count ` +
+    `of the enabled set wrong`
+  )
+}
+
+/** The `custom` arm: its four HALTs, then the resolution. */
+function resolveCustomWhitelist(
+  whitelist: string[] | null,
+  allIds: string[],
+  halt: (message: string) => HaltedProfile,
+  resolved: (profile: string, enabled: string[]) => ResolvedProfile,
+): ProfileResolution {
+  // NO key at all and an EMPTY one are two different mistakes, exactly as an
+  // unknown step id and an unknown profile name are: one sends the reader to write
+  // a line, the other to fill one in. A single message sent them hunting for a
+  // `whitelist` line that was not in their file.
+  if (whitelist === null) {
+    return halt(
+      `profile \`custom\` declares no \`whitelist\` — \`custom\` requires one: add ` +
+        `\`- \`whitelist\`: \`implement\`, \`review\`\` naming the steps to keep, or use a ` +
+        `built-in profile`,
+    )
+  }
+  if (whitelist.length === 0) {
+    return halt(
+      `profile \`custom\` declares an empty whitelist — read as a misconfiguration, never as ` +
+        `"every step disabled". Name the steps to keep, or remove the section to run \`default\``,
+    )
+  }
+  const unknown = whitelist.filter(id => !allIds.includes(id))
+  if (unknown.length > 0) {
+    return halt(
+      `unknown step id(s) ${unknown.map(u => `\`${u}\``).join(', ')} in the custom whitelist — ` +
+        `valid ids: ${allIds.map(i => `\`${i}\``).join(', ')}`,
+    )
+  }
+  const repeated = repeatedWhitelistHalt(whitelist)
+  if (repeated !== null) return halt(repeated)
+  return resolved('custom', whitelist)
+}
+
+/** An enabled step whose prerequisites are all disabled, with the minimal fix. */
+function prerequisiteWarnings(enabled: string[], entries: StepEntry[]): string[] {
+  const enabledSet = new Set(enabled)
+  const byId = new Map(entries.map(e => [e.id, e]))
+  const warnings: string[] = []
+  for (const id of enabled) {
+    const entry = byId.get(id)
+    if (entry === undefined || entry.requires.length === 0) continue
+    if (entry.requires.some(r => enabledSet.has(r))) continue
+    warnings.push(
+      `\`${id}\` is enabled but none of its prerequisites are — minimal fix: enable ` +
+        `${entry.requires.map(r => `\`${r}\``).join(' or ')}, or drop \`${id}\``,
+    )
+  }
+  return warnings
+}
+
 // --- Corpus walk ---
 
 /**
@@ -844,6 +2555,269 @@ export function collectSkillFiles(skillsDir: string): string[] {
   return files
 }
 
+/**
+ * Process-step catalogue ↔ corpus, the markers, the built-in profiles, and the
+ * shipped way-of-working template read through the same resolver an adopting
+ * project's file goes through.
+ *
+ * Fails CLOSED on a missing catalogue: skipping it would make "no catalogue" the
+ * one state in which no step is governed and nothing says so.
+ */
+export function checkProcessStepCorpus(skillsDir: string, proseRoot: string): string[] {
+  const cataloguePath = join(proseRoot, STEP_CATALOGUE_FILE)
+  if (!existsSync(cataloguePath)) {
+    return [
+      `${STEP_CATALOGUE_FILE}: missing — every process step is ungoverned and no profile can name one`,
+    ]
+  }
+
+  const entries = parseStepCatalogue(readFileSync(cataloguePath, 'utf-8'))
+  const errors = [
+    ...checkStepCatalogue(entries, {
+      howToGuides: collectHowToGuides(join(proseRoot, HOW_TO_DIR)),
+      skillDirs: collectAllSkillDirs(skillsDir),
+    }),
+    ...checkStepMarkers(entries, skillsDir),
+  ]
+
+  // The installed mirror, when this is the framework repo (an adopting project has
+  // no dataset to check in the first place, and `runChecks` is also driven over
+  // synthetic corpora in unit tests). Present ⇒ checked; absent ⇒ nothing to bind.
+  const mirrorDir = join(proseRoot, MIRROR_SKILLS_DIR)
+  if (existsSync(mirrorDir)) errors.push(...checkStepMarkersInMirror(entries, skillsDir, mirrorDir))
+
+  const agentsPath = join(proseRoot, AGENTS_FILE)
+  if (existsSync(agentsPath)) {
+    errors.push(...checkManualPathEntrypoint(readFileSync(agentsPath, 'utf-8')))
+  }
+
+  const profilesPath = join(proseRoot, PROCESS_PROFILES_FILE)
+  if (!existsSync(profilesPath)) {
+    errors.push(`${PROCESS_PROFILES_FILE}: missing — the catalogue has no profile schema to serve`)
+    return errors
+  }
+
+  const builtIns = parseProcessProfiles(readFileSync(profilesPath, 'utf-8'))
+  errors.push(...checkProcessProfiles(builtIns, entries))
+  errors.push(...checkShippedProfileProse(proseRoot, entries, builtIns))
+  errors.push(...checkInstalledProfileCorpus(skillsDir, proseRoot, entries, builtIns))
+  return errors
+}
+
+/** One drifted cell of the installed catalogue, reported in the reader's terms. */
+function catalogueDrift(id: string, what: string, dataset: string, installed: string): string[] {
+  return dataset === installed
+    ? []
+    : [
+        `${INSTALLED_STEP_CATALOGUE_FILE}: step \`${id}\` ${what} is \`${installed}\` in the copy ` +
+          `every reader resolves and \`${dataset}\` in the dataset — the runtime copy is not the ` +
+          `governed one (run \`pair update\`)`,
+      ]
+}
+
+/**
+ * The installed catalogue must be the dataset's, cell for cell — with executables
+ * compared through the REAL `pair update` name transform (`/review` installs as
+ * `/pair-process-review`), never re-implemented here.
+ */
+function compareInstalledCatalogue(
+  dataset: StepEntry[],
+  installed: StepEntry[],
+  skillsDir: string,
+): string[] {
+  const dirs = new Map(collectAllSkillDirs(skillsDir).map(d => [commandOf(d), d]))
+  const byId = new Map(installed.map(e => [e.id, e]))
+  const errors: string[] = []
+  for (const entry of dataset) {
+    const there = byId.get(entry.id)
+    if (there === undefined) {
+      errors.push(
+        `${INSTALLED_STEP_CATALOGUE_FILE}: the installed copy declares no step \`${entry.id}\` — ` +
+          `a step absent from the catalogue every reader resolves is ungoverned there, and no ` +
+          `profile can name it (run \`pair update\`)`,
+      )
+      continue
+    }
+    byId.delete(entry.id)
+    const dir = entry.executable === null ? undefined : dirs.get(entry.executable)
+    const executable = dir === undefined ? entry.executable : `/${installedSkillDir(dir)}`
+    errors.push(...catalogueDrift(entry.id, 'executable', `${executable}`, `${there.executable}`))
+    errors.push(...catalogueDrift(entry.id, 'how-to guide', `${entry.howTo}`, `${there.howTo}`))
+    errors.push(
+      ...catalogueDrift(entry.id, 'requires', entry.requires.join(', '), there.requires.join(', ')),
+    )
+  }
+  for (const id of byId.keys()) {
+    errors.push(
+      `${INSTALLED_STEP_CATALOGUE_FILE}: the installed copy declares step \`${id}\`, which the ` +
+        `dataset does not ship — the runtime copy is not the governed one (run \`pair update\`)`,
+    )
+  }
+  return errors
+}
+
+/** The built-in profiles, name for name and whitelist for whitelist. */
+function compareInstalledProfiles(
+  dataset: Record<string, ProfileWhitelist>,
+  installed: Record<string, ProfileWhitelist>,
+): string[] {
+  const show = (w: ProfileWhitelist | undefined): string =>
+    w === undefined ? 'absent' : w === '*' ? '*' : w.join(', ')
+  const names = [...new Set([...Object.keys(dataset), ...Object.keys(installed)])].sort()
+  return names
+    .filter(name => show(dataset[name]) !== show(installed[name]))
+    .map(
+      name =>
+        `${INSTALLED_PROCESS_PROFILES_FILE}: built-in profile \`${name}\` enables ` +
+        `\`${show(installed[name])}\` in the copy every reader resolves and ` +
+        `\`${show(dataset[name])}\` in the dataset (run \`pair update\`)`,
+    )
+}
+
+/** A generated copy the gate binds and cannot find: never a skip. */
+function missingInstalledFile(file: string): string {
+  return (
+    `${file}: bound by the profile gate but not found — this is the copy every reader resolves ` +
+    `at runtime, so its absence is a step corpus nobody can govern, not a no-op`
+  )
+}
+
+/**
+ * The GENERATED copies, bound to the dataset the same way the skills mirror is.
+ *
+ * Gated on the installed KB tree existing at all: an adopting project's
+ * knowledge-hub has none of it, and `runChecks` is also driven over synthetic
+ * corpora in unit tests. Present ⇒ each governed file inside it is REQUIRED, so a
+ * renamed or half-installed one fails closed instead of reading as clean.
+ */
+export function checkInstalledProfileCorpus(
+  skillsDir: string,
+  proseRoot: string,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): string[] {
+  if (!existsSync(join(proseRoot, INSTALLED_KB_ROOT))) return []
+
+  const errors: string[] = []
+  const read = (file: string): string | null => {
+    const path = join(proseRoot, file)
+    if (existsSync(path)) return readFileSync(path, 'utf-8')
+    errors.push(missingInstalledFile(file))
+    return null
+  }
+
+  const catalogue = read(INSTALLED_STEP_CATALOGUE_FILE)
+  if (catalogue !== null) {
+    errors.push(...compareInstalledCatalogue(entries, parseStepCatalogue(catalogue), skillsDir))
+    errors.push(
+      ...profileExampleErrors(INSTALLED_STEP_CATALOGUE_FILE, catalogue, entries, builtIns),
+    )
+  }
+  const profiles = read(INSTALLED_PROCESS_PROFILES_FILE)
+  if (profiles !== null) {
+    errors.push(...compareInstalledProfiles(builtIns, parseProcessProfiles(profiles)))
+    // Round 12 Major: the CELLS of this copy were bound and the PROSE around them
+    // was not. A `custom` worked example reading `` `spcify-prd` `` here was
+    // reported by nothing, while the identical typo in the dataset copy failed the
+    // gate — and this repo dogfoods pair, so its agents and developers read
+    // `.pair/knowledge/**`, not `dataset/**`. A reader copying that example into
+    // `way-of-working.md` HALTs on every subsequent `/next` run.
+    errors.push(
+      ...profileExampleErrors(INSTALLED_PROCESS_PROFILES_FILE, profiles, entries, builtIns),
+    )
+  }
+  const convention = read(INSTALLED_GATE_CONVENTION_FILE)
+  if (convention !== null) errors.push(...checkInstalledGateConvention(convention))
+  for (const file of ROOT_MANUAL_PATH_FILES) {
+    const content = read(file)
+    if (content !== null) errors.push(...checkManualPathEntrypoint(content, basename(file)))
+  }
+  return errors
+}
+
+/**
+ * Every worked example a governed document carries, resolved through the REAL
+ * resolver — the check that makes a shipped example a promise rather than prose.
+ *
+ * Path-based, so it applies unchanged to a DATASET copy and to its INSTALLED one:
+ * `pair update` renames executables, never step ids, and an example declares step
+ * ids.
+ */
+function profileExampleErrors(
+  file: string,
+  content: string,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): string[] {
+  const errors: string[] = []
+  extractProfileExamples(content).forEach((example, i) => {
+    const declaration = parseWowProfileSection(example)
+    const r = resolveProcessProfile(declaration, entries, builtIns)
+    // Labelled by POSITION and by the profile the example DECLARES, never by
+    // `r.profile`: every HALT path resolves to the fallback `default`, so a
+    // corrupted `custom` example used to be reported as a `default` one — and
+    // `default` accepts no whitelist at all, so the label contradicted the
+    // message and pointed a maintainer at the wrong fence.
+    const at = `worked example #${i + 1} (\`${declaration.profile ?? 'no profile'}\`)`
+    for (const problem of profileProblems(r)) errors.push(`${file}: ${at}: ${problem}`)
+  })
+  return errors
+}
+
+/** A governed file the gate names as checked and cannot find: never a skip. */
+function missingGovernedFile(file: string): string {
+  return (
+    `${file}: governed by the profile gate but not found — restore the file, or update ` +
+    `\`PROFILE_DECLARATION_FILES\` / \`PROFILE_PROSE_FILES\` if it moved on purpose`
+  )
+}
+
+/**
+ * The shipped adoption TEMPLATE and every worked EXAMPLE, read through the real
+ * resolver — a template carrying a section no reader accepts, or an example that
+ * resolves with a warning, teaches the wrong shape to every project that copies it.
+ *
+ * Round 10 Minor: both loops skipped an absent path, so a governed file that was
+ * MISSING or RENAMED was not checked and the CLI still printed the PASS banner that
+ * names all five as validated — zero errors being observationally identical to "all
+ * five clean". Two of the five reach outside the package into the docs site, so a
+ * docs-site reorganisation dropped a page out of the gate with no signal and its
+ * worked examples were free to drift. Fail closed instead (approval-rounds.md: "a
+ * guard that answers 'nothing to check' when it cannot parse its input is
+ * indistinguishable from a guard that passes").
+ */
+export function checkShippedProfileProse(
+  proseRoot: string,
+  entries: StepEntry[],
+  builtIns: Record<string, ProfileWhitelist>,
+): string[] {
+  const errors: string[] = []
+  for (const file of PROFILE_DECLARATION_FILES) {
+    const path = join(proseRoot, file)
+    if (!existsSync(path)) {
+      errors.push(missingGovernedFile(file))
+      continue
+    }
+    const wow = resolveProcessProfile(
+      parseWowProfileSection(readFileSync(path, 'utf-8')),
+      entries,
+      builtIns,
+    )
+    for (const problem of profileProblems(wow)) errors.push(`${file}: ${problem}`)
+  }
+
+  for (const file of PROFILE_PROSE_FILES) {
+    const path = join(proseRoot, file)
+    if (!existsSync(path)) {
+      // A file already reported by the declaration loop is not reported twice.
+      if (!PROFILE_DECLARATION_FILES.includes(file)) errors.push(missingGovernedFile(file))
+      continue
+    }
+    errors.push(...profileExampleErrors(file, readFileSync(path, 'utf-8'), entries, builtIns))
+  }
+  return errors
+}
+
 export function runChecks(skillsDir: string): RunResult {
   const errors: string[] = []
   const files = collectSkillFiles(skillsDir)
@@ -875,6 +2849,9 @@ export function runChecks(skillsDir: string): RunResult {
 
   const counts = countByCategory(files, skillsDir)
   const proseRoot = resolve(skillsDir, '..', '..')
+
+  errors.push(...checkProcessStepCorpus(skillsDir, proseRoot))
+
   for (const rel of KB_PROSE_FILES) {
     const abs = join(proseRoot, rel)
     if (existsSync(abs)) {
@@ -895,7 +2872,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal, process-step catalogue + markers (dataset and mirror), profile schema, both way-of-working files resolved as DECLARATIONS (shipped adoption template, this repo's own) + every shipped worked example (KB schema, adoption template, docs site, both way-of-working files), manual-path entrypoint (dataset AGENTS.md + the generated root AGENTS.md/CLAUDE.md), installed KB copies of the catalogue and the profiles incl. their worked examples, installed gate convention)`,
     )
     process.exit(0)
   } else {

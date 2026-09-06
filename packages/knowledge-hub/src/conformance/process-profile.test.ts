@@ -1,0 +1,1075 @@
+import { describe, it, expect } from 'vitest'
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
+import {
+  parseStepCatalogue,
+  parseProcessProfiles,
+  collectHowToGuides,
+  collectAllSkillDirs,
+  checkStepCatalogue,
+  checkStepMarkers,
+  checkStepMarkersInMirror,
+  checkManualPathEntrypoint,
+  checkProcessProfiles,
+  parseWowProfileSection,
+  resolveProcessProfile,
+  STEP_MARKER,
+} from '../tools/skills-conformance-check'
+import { installedSkillDir } from '../tools/skill-md-mirror'
+import { sectionBetween } from './test-utils'
+
+// Conformance guard for story #251: a `## Process Profile` section in
+// way-of-working declares which PROCESS STEPS a project runs, and `/next` never
+// proposes a disabled one.
+//
+// The unit of configuration is the STEP, never one of its two representations —
+// a how-to guide (the manual path) and an executable skill are two ways to run
+// the same step, and the two sets do not coincide (`define-subdomains` /
+// `define-bounded-contexts` are capabilities with no how-to; `brainstorm` is a
+// process skill with no how-to). The catalogue is what ties them together, so
+// those asymmetries are DECLARED DATA, not conditionals in `/next`.
+//
+// Split of duties, per the repo's "gate logic lives in a tested production
+// module" rule (ADL 2026-07-13): the mechanical catalogue↔corpus binding lives in
+// `skills-conformance-check.ts` (a module with white-box unit tests, exposed as
+// the root-gated `skills:conformance` CLI) and is only INVOKED here over the real
+// corpus. What this file owns is the prose contract — that the schema, the HALTs,
+// the gate convention and `/next`'s new resolution step actually say what the
+// story requires — which no CLI can assert.
+
+const HUB = join(__dirname, '../..')
+const DATASET = join(HUB, 'dataset')
+const KB = join(DATASET, '.pair/knowledge')
+const AI_DEV = join(KB, 'guidelines/technical-standards/ai-development')
+const CATALOGUE_PATH = join(AI_DEV, 'step-catalogue.md')
+const PROFILES_PATH = join(AI_DEV, 'process-profiles.md')
+const GATE_PATH = join(AI_DEV, 'skill-conventions/process-profile-gate.md')
+const SKILLS_DIR = join(DATASET, '.skills')
+const HOW_TO_DIR = join(KB, 'how-to')
+const WOW_TEMPLATE = join(DATASET, '.pair/adoption/tech/way-of-working.md')
+const CONVENTIONS_README = join(AI_DEV, 'skill-conventions/README.md')
+/** The PARENT index — the navigational entry point for the whole guideline family. */
+const AI_DEV_README = join(AI_DEV, 'README.md')
+const AI_DEV_README_MIRROR = join(
+  HUB,
+  '../../.pair/knowledge/guidelines/technical-standards/ai-development/README.md',
+)
+
+const NEXT_DATASET = join(SKILLS_DIR, 'next/SKILL.md')
+const MIRROR_SKILLS_DIR = join(HUB, '../../.claude/skills')
+const NEXT_MIRROR = join(MIRROR_SKILLS_DIR, 'pair-next/SKILL.md')
+const AGENTS_MD = join(DATASET, 'AGENTS.md')
+
+const read = (p: string): string => (existsSync(p) ? readFileSync(p, 'utf-8') : '')
+
+const catalogueSource = read(CATALOGUE_PATH)
+const profilesSource = read(PROFILES_PATH)
+const gateSource = read(GATE_PATH)
+
+describe('step catalogue — the unit of the profile is the step, not its representation', () => {
+  it('ships as a KB file', () => {
+    expect(existsSync(CATALOGUE_PATH)).toBe(true)
+  })
+
+  it('gives every step a stable id, both representations and its prerequisites', () => {
+    const entries = parseStepCatalogue(catalogueSource)
+    expect(entries.length).toBeGreaterThan(0)
+    for (const entry of entries) {
+      expect(entry.id).toMatch(/^[a-z][a-z0-9-]*$/)
+      // `howTo` / `executable` are nullable BY DESIGN — that nullability is what
+      // makes the three asymmetries expressible as data.
+      expect(entry).toHaveProperty('howTo')
+      expect(entry).toHaveProperty('executable')
+      expect(Array.isArray(entry.requires)).toBe(true)
+    }
+    // Ids are unique — a duplicate would make a whitelist entry ambiguous.
+    expect(new Set(entries.map(e => e.id)).size).toBe(entries.length)
+  })
+
+  it('binds to the real corpus in BOTH directions (no silent drift)', () => {
+    const entries = parseStepCatalogue(catalogueSource)
+    const errors = checkStepCatalogue(entries, {
+      howToGuides: collectHowToGuides(HOW_TO_DIR),
+      skillDirs: collectAllSkillDirs(SKILLS_DIR),
+    })
+    expect(errors).toEqual([])
+  })
+
+  it('declares the three asymmetries as DATA, not as special cases in logic', () => {
+    const byId = new Map(parseStepCatalogue(catalogueSource).map(e => [e.id, e]))
+
+    // 04 / 05: retired how-to guides, executable form is a CAPABILITY.
+    for (const id of ['define-subdomains', 'define-bounded-contexts']) {
+      const entry = byId.get(id)
+      expect(entry, `catalogue is missing the DDD-mapping step \`${id}\``).toBeDefined()
+      expect(entry?.howTo).toBeNull()
+      expect(entry?.executable).toMatch(/^\/map-/)
+    }
+
+    // brainstorm: a process SKILL with no how-to — so on a project running the
+    // manual path it is not executable at all, and must be declared unreachable.
+    const brainstorm = byId.get('brainstorm')
+    expect(brainstorm).toBeDefined()
+    expect(brainstorm?.howTo).toBeNull()
+    expect(brainstorm?.executable).toBe('/brainstorm')
+  })
+
+  it('states that a step with no representation is never proposed', () => {
+    expect(catalogueSource.toLowerCase()).toMatch(/unreachable|not executable|no representation/)
+  })
+
+  it('scopes itself: a capability that is not a step is out of the profile', () => {
+    // The catalogue is the boundary that makes "is `/estimate` governed?" answerable.
+    expect(catalogueSource).toMatch(/`\/estimate`|`\/classify`/)
+    expect(catalogueSource.toLowerCase()).toMatch(/not a step|outside the profile|never a step/)
+  })
+})
+
+describe('step markers — every executable representation declares its step id', () => {
+  it('carries a marker on each catalogued executable, and on nothing else', () => {
+    const entries = parseStepCatalogue(catalogueSource)
+    expect(checkStepMarkers(entries, SKILLS_DIR)).toEqual([])
+  })
+
+  it('carries it in the INSTALLED MIRROR too — the copy an assistant actually loads', () => {
+    // The dataset copy is the source; the mirror is the binding one (same finding
+    // class as #280's `brainstorm-phases.test.ts:820`). Guarded here AND in
+    // `skills:conformance`, so dropping a marker from `.claude/skills/**` during a
+    // regeneration is a red gate, not a silently ungoverned step.
+    const entries = parseStepCatalogue(catalogueSource)
+    expect(checkStepMarkersInMirror(entries, SKILLS_DIR, MIRROR_SKILLS_DIR)).toEqual([])
+  })
+
+  it('uses a declared marker, not a prose window', () => {
+    // Same contract shape as the approval-round marker: attachment is line
+    // identity, so a reworded section cannot silently widen the check.
+    //
+    // Round 7 Minor: this asserted `STEP_MARKER.source` contained the literal
+    // 'process-step' — true of a correct marker AND of a broken one (drop the
+    // `id=` capture, widen `[a-z0-9-]+` to `.*`: both stay green). Asserted on
+    // behaviour instead; each of the three cases below fails under one of those
+    // edits.
+    expect(STEP_MARKER.exec('<!-- process-step: id=refine-story -->')?.[1]).toBe('refine-story')
+    expect(STEP_MARKER.test('This step carries a process-step marker for refine-story.')).toBe(
+      false,
+    )
+    expect(STEP_MARKER.test('<!-- process-step: refine-story -->')).toBe(false)
+    expect(STEP_MARKER.test('<!-- process-step: id=Refine Story -->')).toBe(false)
+  })
+})
+
+describe('profile schema — built-in profiles and their normative error cases', () => {
+  it('ships as a KB file', () => {
+    expect(existsSync(PROFILES_PATH)).toBe(true)
+  })
+
+  it('declares `default`, `poc` and `custom`', () => {
+    expect(profilesSource).toMatch(/`default`/)
+    expect(profilesSource).toMatch(/`poc`/)
+    expect(profilesSource).toMatch(/`custom`/)
+  })
+
+  it('states that an ABSENT section means `default` — today’s behaviour unchanged', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/absent|no `?## process profile`? section|omitted/)
+    expect(lower).toMatch(/convention over configuration|d21/)
+  })
+
+  it('states the three HALTs as normative rules, not reader inference', () => {
+    const lower = profilesSource.toLowerCase()
+    // Unknown profile name -> HALT listing the known profiles.
+    expect(profilesSource).toMatch(/HALT/)
+    expect(lower).toMatch(/unknown profile/)
+    expect(lower).toMatch(/known profiles|list.*profiles/)
+    // Unknown step id -> HALT listing the valid ids. A typo must not silently
+    // disable a step.
+    expect(lower).toMatch(/unknown (step )?id/)
+    expect(lower).toMatch(/valid ids|list.*ids/)
+    // The two messages are deliberately different.
+    expect(lower).toMatch(/different message|not the same mistake|two different/)
+  })
+
+  // Round 3 Minor: the two remaining shapes of the widening hole. Both are
+  // normative rules a reader executes, so both are stated in the schema rather
+  // than left as behaviour only the reference resolver knows about.
+  // Round 7 Questions: the reference resolver's HALT arm used to carry the full
+  // catalogue as `enabled`, so a caller reading it without checking `halts` got
+  // the whole process back. The type no longer offers one — and the prose readers
+  // are held to the same rule, since `/next` resolves the profile by reading this.
+  it('states that a HALT yields NO step set — neither `default` nor an empty one', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/no step set/)
+    expect(lower).toMatch(/never continue on `?default`?/)
+  })
+
+  it('states that the section is exactly ONE, at heading level `##`', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/more than once|declared twice|second .*section/)
+    expect(lower).toMatch(/heading level|level `?##`?|any level other/)
+    // Both HALT — never a quiet fallback to `default`.
+    expect(profilesSource).toMatch(/MORE THAN ONCE\*\*\s*\|\s*\*\*HALT/)
+    expect(profilesSource).toMatch(/other than `## `\*\*|other than `##`\*\*/)
+  })
+
+  // Round 4 Major: the two shapes between the section level and the value level —
+  // one key on two LINES, and a key whose list marker this reader does not accept.
+  it('states that a key is declared ONCE, on a `-`/`*`/`+` list item', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/twice|more than once/)
+    expect(profilesSource).toMatch(/`-`, `\*` or `\+`|`-` \/ `\*` \/ `\+`/)
+    expect(lower).toMatch(/no bullet|bullet-less|numbered|ordered/)
+  })
+
+  // Round 5: the three CommonMark facts the reader has to know before any of the
+  // rules above can fire at all — how the heading may be spelled, which blocks are
+  // examples, and that a CRLF file is the same file.
+  it('states the setext heading as a HALT alongside the mis-levelled one', () => {
+    expect(profilesSource).toMatch(/SETEXT\*\*[^|]*\|\s*\*\*HALT/)
+    expect(profilesSource.toLowerCase()).toMatch(/underlined with `?-{3}`?/)
+  })
+
+  it('states that all three code-block forms are examples, never declarations', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/code-block forms are examples|never declarations/)
+    expect(profilesSource).toContain('`~~~`')
+    expect(lower).toMatch(/four-space-indented|four-space indent|indented/)
+  })
+
+  // Round 6: the four shapes between "the section exists" and "its keys are read"
+  // that the prose did not cover — a value spilling past its line, a key indented
+  // into sublist/code ambiguity, a nested fence, and a delimiter never closed.
+  it('states that a SPILLED value HALTs rather than being read up to the wrap', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/spill/)
+    expect(lower).toMatch(/wrapp?ed|wrap/)
+    expect(profilesSource).toMatch(/SPILLED[^|]*\|\s*\*\*HALT/)
+  })
+
+  it('states that a key indented by four spaces or a tab HALTs', () => {
+    expect(profilesSource).toMatch(/INDENTED[^|]*\|\s*\*\*HALT/)
+    expect(profilesSource.toLowerCase()).toMatch(/sublist/)
+  })
+
+  // Round 8: the two shapes the schema had no position on. A blockquoted key was
+  // read as neither a declaration nor a problem — the silent widening — while the
+  // table-row exclusion it must be distinguished from was enforced in code and
+  // stated nowhere. Both directions are written down here, together, because the
+  // rule is the distinction and not either half.
+  it('states that a key inside a BLOCKQUOTE HALTs, and a table row does not', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(profilesSource).toMatch(/BLOCKQUOTE[^|]*\|\s*\*\*HALT/)
+    expect(lower).toMatch(/table row/)
+    expect(lower).toMatch(/documentation is never configuration|no declaration, and no halt/)
+  })
+
+  // Round 9: the key's SPELLING is case-insensitive, its VALUE is not. Undocumented,
+  // the rule was also unimplemented — `- `Profile`: `poc`` resolved to `default` with
+  // all twelve steps and nothing reported, while the heading one line above it is
+  // matched case-insensitively for exactly the reason stated there.
+  it('states that a key is detected whatever its CASE, and its value is not', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/case-insensitiv|whatever its case|regardless of case/)
+    // In the error table, as its own row — and the one row whose outcome is not a HALT.
+    expect(profilesSource).toMatch(/CASE[^|]*\|\s*\*\*read/)
+    expect(lower).toMatch(/value|`poc`/)
+  })
+
+  it('states that a step id repeated in a whitelist HALTs rather than being deduped', () => {
+    expect(profilesSource).toMatch(/MORE THAN ONCE\*\* in a whitelist[^|]*\|\s*\*\*HALT/)
+    expect(profilesSource.toLowerCase()).toMatch(/never deduped|not deduped/)
+  })
+
+  it('states the CommonMark fence-length rule', () => {
+    expect(profilesSource.toLowerCase()).toMatch(/at least as long/)
+  })
+
+  it('states that HTML comments are masked and an unterminated one HALTs', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/html comments? (are|is) not content|html comments are masked|masked/)
+    expect(profilesSource).toMatch(/UNTERMINATED[^|]*\|\s*\*\*HALT/)
+  })
+
+  it('states that line endings are normalized before anything is read', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/line endings are normalized/)
+    expect(lower).toMatch(/crlf/)
+  })
+
+  it('accepts the closed-ATX and indented spellings of the heading', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/closed-atx/)
+    expect(lower).toMatch(/three spaces/)
+  })
+
+  it('treats an empty whitelist as a misconfiguration, never as “everything disabled”', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/empty (custom )?whitelist/)
+    expect(lower).toMatch(/misconfiguration/)
+    expect(lower).toMatch(/never .*everything disabled|not .*everything disabled|not "?all/)
+  })
+
+  it('resolves every built-in profile against the catalogue, prerequisite-closed', () => {
+    const entries = parseStepCatalogue(catalogueSource)
+    const profiles = parseProcessProfiles(profilesSource)
+    expect(Object.keys(profiles)).toEqual(expect.arrayContaining(['default', 'poc']))
+    expect(checkProcessProfiles(profiles, entries)).toEqual([])
+  })
+
+  it('`poc` proposes no DDD-mapping step and no strategic planning (epic #204 AC4)', () => {
+    const profiles = parseProcessProfiles(profilesSource)
+    const poc = profiles['poc']
+    expect(Array.isArray(poc)).toBe(true)
+    const enabled = new Set(poc as string[])
+    for (const disabled of [
+      'define-subdomains',
+      'define-bounded-contexts',
+      'plan-initiatives',
+      'plan-epics',
+    ]) {
+      expect(enabled.has(disabled), `\`poc\` must not enable \`${disabled}\``).toBe(false)
+    }
+    // …while the delivery steps stay on: `poc` is a subset, not a different process.
+    for (const kept of ['refine-story', 'plan-tasks', 'implement', 'review']) {
+      expect(enabled.has(kept), `\`poc\` must keep \`${kept}\``).toBe(true)
+    }
+  })
+
+  // Round 14 Minor: the schema states the heading rules per SHAPE, so a key under a
+  // heading no rule names — `## Process Profiles`, this page's own title — was read
+  // by nothing and reported by nothing. The reader now reports the KEY; the schema
+  // says so where an author looks the section up.
+  it('HALTs on a key written under no `## Process Profile` section at all', () => {
+    expect(profilesSource).toMatch(/## Process Profiles/)
+    expect(profilesSource).toMatch(/## ProcessProfile/)
+    expect(profilesSource.toLowerCase()).toMatch(/no such section|no heading|under no/)
+  })
+
+  it('says the guidelines still apply to the code a `poc` project produces', () => {
+    expect(profilesSource.toLowerCase()).toMatch(/guidelines still apply/)
+  })
+
+  it('states the profile lives ONLY in adoption; the KB owns schema + built-ins (D19)', () => {
+    expect(profilesSource).toMatch(/D19/)
+    expect(profilesSource).toMatch(/way-of-working/)
+  })
+})
+
+describe('direct-invocation gate — written once as a convention, referenced everywhere', () => {
+  it('ships as a skill-conventions file', () => {
+    expect(existsSync(GATE_PATH)).toBe(true)
+  })
+
+  it('is listed in the skill-conventions index', () => {
+    expect(read(CONVENTIONS_README)).toContain('process-profile-gate.md')
+  })
+
+  // Round 10 Minor: the indexing convention was followed at the INNER level and
+  // dropped at the outer one. The ai-development README enumerates every sibling in
+  // its directory, so this branch's two new files were invisible from the only
+  // navigational index at that level — and AC8's manual-path reader is precisely
+  // the one who browses guidelines instead of running skills. Both copies, so the
+  // mirror cannot drift either.
+  it.each([
+    ['root', AI_DEV_README_MIRROR],
+    ['dataset', AI_DEV_README],
+  ])('the two new guideline files are listed in the %s ai-development index', (_, index) => {
+    const listing = read(index)
+    expect(listing).toContain('process-profiles.md')
+    expect(listing).toContain('step-catalogue.md')
+  })
+
+  it('gates DIRECT invocation: warn that the step is disabled, then confirm', () => {
+    const lower = gateSource.toLowerCase()
+    expect(lower).toMatch(/direct(ly)? invok|direct invocation/)
+    expect(lower).toMatch(/warn/)
+    expect(lower).toMatch(/confirm/)
+  })
+
+  it('carves the composition case OUT: a composed disabled step never prompts', () => {
+    const lower = gateSource.toLowerCase()
+    expect(lower).toMatch(/compos/)
+    expect(lower).toMatch(/never prompt|no prompt|without prompting/)
+    // It degrades through the path that already exists for a skill that is not
+    // installed — deliberately NOT a second degradation mechanism.
+    expect(gateSource).toContain('graceful-degradation.md')
+    expect(lower).toMatch(/not installed/)
+  })
+
+  it('leaves an enabled step (or an absent section) byte-for-byte unchanged', () => {
+    expect(gateSource.toLowerCase()).toMatch(/unchanged|proceeds? silently|no prompt/)
+  })
+
+  // Round 4 Minor: the convention's "what stays in the skill" snippet is the file
+  // the NEXT author copies from, and it prescribed a delta none of the 12 shipped
+  // skills carries. `checkOneStepMarker` only requires the marker plus a pointer
+  // anywhere in the dir, so a 13th, differently-worded delta would land green and
+  // the convention would drift from the corpus it governs. Pinned to the real one.
+  // Round 10 Minor: ONE snippet was pinned, and the section said "nothing else is
+  // per-skill" — but the corpus ships TWO delta shapes. A step skill in an
+  // `$approval` family (`assess-`, `map-`) must carry the `auto=halt` marker on
+  // that same line, because "asks for confirmation" matches APPROVAL_ROUND_PATTERNS;
+  // an author copying the first shape into a family skill gets three
+  // `skills:conformance` errors off a delta they followed literally. Both shapes are
+  // pinned, in the order the section presents them.
+  const DELTA_VARIANTS: Array<[string, string, string]> = [
+    ['non-family', 'process/refine-story/SKILL.md', '<!-- process-step: id=refine-story -->'],
+    [
+      '`$approval` family',
+      'capability/map-subdomains/SKILL.md',
+      '<!-- process-step: id=define-subdomains -->',
+    ],
+  ]
+
+  it.each(DELTA_VARIANTS.map(([label], i) => [label, i] as [string, number]))(
+    'prescribes the %s delta the corpus actually ships, not a paraphrase of it',
+    (_, i) => {
+      const [, file, marker] = DELTA_VARIANTS[i] as [string, string, string]
+      const snippet = [...gateSource.matchAll(/```markdown\n([\s\S]*?)```/g)][i]?.[1]?.trim()
+      const skill = read(join(SKILLS_DIR, file))
+      const from = skill.indexOf(marker)
+      expect(from).toBeGreaterThan(-1)
+      expect(snippet).toBe(skill.slice(from, skill.indexOf('\n## ', from)).trim())
+    },
+  )
+
+  it('says the family variant carries the approval-round marker and the `$approval` row', () => {
+    const section = gateSource.slice(gateSource.indexOf('## What stays in the skill'))
+    expect(section).toContain('<!-- approval-round: kind=gate; auto=halt -->')
+    expect(section).toContain('`$approval`')
+    expect(section).toContain('approval-rounds.md')
+    expect(section).toMatch(/assess-/)
+  })
+})
+
+// Round 7 Minor: AC7 and the convention put the check on the COMPOSING skill,
+// before composing (process-profile-gate.md). `brainstorm` states that at its
+// composition sites; the other four composers stated it only in their top delta,
+// while their algorithms kept deciding on installation ALONE. An executor
+// following refine-story's numbered algorithm under `poc` composes
+// `/map-subdomains` and runs DDD mapping on a project that declared it does none
+// — the one path that reaches DDD mapping under `poc`, since `/next` has no
+// cascade row for it (epic #204 AC4).
+describe('composers name the profile AT the composition site, not only in their delta', () => {
+  const CLAUSE = /disabled by the project['’]s \[process profile\]/
+  const copies = (name: string): Array<[string, string]> => [
+    [`dataset ${name}`, read(join(SKILLS_DIR, `process/${name}/SKILL.md`))],
+    [`mirror ${name}`, read(join(MIRROR_SKILLS_DIR, `pair-process-${name}/SKILL.md`))],
+  ]
+  const COMPOSER_NAMES = ['refine-story', 'plan-tasks', 'plan-epics', 'bootstrap']
+  const composers = COMPOSER_NAMES.flatMap(copies)
+  const entries = parseStepCatalogue(catalogueSource)
+
+  /**
+   * The composed step ids a composer DECLARES, read from its own delta rather than
+   * listed here — a composer that starts composing a step is covered the day its
+   * delta says so.
+   */
+  const composedIds = (content: string): string[] => {
+    const line = content.split('\n').find(l => l.includes('composer of')) ?? ''
+    const after = line.slice(line.indexOf('composer of'))
+    const clause = after.slice(0, after.indexOf('. ') + 1)
+    return [...clause.matchAll(/`([a-z][a-z0-9-]+)`/g)].map(m => m[1] as string)
+  }
+
+  /**
+   * Every accepted spelling of a catalogued executable, in the `## Composed Skills`
+   * table's first cell — the dataset form and the installed one, mapped through the
+   * REAL `pair update` transform rather than a prefix regex.
+   */
+  const STEP_BY_CELL = new Map<string, string>(
+    entries.flatMap(e => {
+      if (e.executable === null) return []
+      const dir = collectAllSkillDirs(SKILLS_DIR).find(
+        d => d.split('/').pop() === e.executable?.slice(1),
+      )
+      const cells = [`\`${e.executable}\``]
+      if (dir !== undefined) cells.push(`\`/${installedSkillDir(dir)}\``)
+      return cells.map(c => [c, e.id] as [string, string])
+    }),
+  )
+
+  /**
+   * The catalogued steps a skill composes, read from its `## Composed Skills` table
+   * — the SAME fact declared twice in one file, independently of the delta line.
+   *
+   * Round 12 Minor: `composedIds` derives the guard's subject list from the very
+   * line under test, so shrinking the claim shrank the guard with it, silently.
+   * Rewriting `plan-tasks`' delta to "a composer of the context-mapping
+   * capability" and gutting its Step 2.5 beat (dataset AND mirror) left
+   * `pnpm skills:conformance` at `PASS — 44 skills conformant`, exit 0, and this
+   * file at `Tests 112 passed` — DOWN from 114, because the two `it.each` cases
+   * for `plan-tasks` ceased to exist and nothing reads the count. A `custom`
+   * project whitelisting `plan-tasks` without `define-bounded-contexts` (legal:
+   * `plan-tasks` requires `refine-story`, and AC9 is report-don't-repair) then
+   * gets bounded-context mapping performed on a project that declared it does no
+   * DDD, with no prompt and no note.
+   *
+   * Only a `Skill`-headed table is a composition: the two `/map-*` capabilities
+   * head theirs `Caller` — who composes THEM — and reading those rows would invert
+   * the relation.
+   */
+  const composedFromTable = (content: string): string[] => {
+    const from = content.indexOf('\n## Composed Skills')
+    if (from === -1) return []
+    const to = content.indexOf('\n## ', from + 1)
+    const rows = content
+      .slice(from, to === -1 ? undefined : to)
+      .split('\n')
+      .filter(l => l.startsWith('|'))
+    if (!/^\|\s*Skill\s*\|/.test(rows[0] ?? '')) return []
+    const ids = rows
+      .slice(2)
+      .map(r => STEP_BY_CELL.get((r.split('|')[1] ?? '').trim()))
+      .filter((id): id is string => id !== undefined)
+    return [...new Set(ids)]
+  }
+
+  /**
+   * The catalogued steps a skill's ALGORITHM actually composes — every catalogued
+   * executable named as the object of a composition verb in the text before
+   * `## Graceful Degradation`.
+   *
+   * Round 13 Minor: round 12 stopped the delta from de-scoping the guard alone by
+   * cross-checking it against `## Composed Skills` — but both are DECLARATIONS by
+   * the same author in the same file, editable in one pass. Deleting
+   * `define-subdomains` from `/bootstrap`'s `composer of` clause AND deleting its
+   * `` | `/map-subdomains` | Capability | … | `` table row (dataset AND mirror —
+   * two edits, no third) left this file at `Tests 147 passed`, all green, DOWN
+   * from 149: the two cases for that beat ceased to exist and nothing reads the
+   * count. A third edit then gutted the Phase-3.5.1 beat to decide on installation
+   * alone and still landed green, reintroducing the round-11 failure — a `custom`
+   * project whitelisting `bootstrap` without `define-subdomains` (legal: AC9 is
+   * report-don't-repair) gets subdomain mapping performed on a project that
+   * declared it does no DDD, with no prompt and no note.
+   *
+   * The algorithm is not a third declaration of the same claim: after those two
+   * edits the beat still literally reads "Compose `/map-subdomains`", so the step
+   * stays in scope and the third edit reddens. Dropping the composition FROM the
+   * algorithm is not a de-scoping — it is the skill ceasing to compose that step.
+   */
+  const COMPOSITION = /compos\w*[^.;:\n—]{0,60}/gi
+  const composedFromAlgorithm = (content: string): string[] => {
+    const cut = content.indexOf('## Graceful Degradation')
+    const ids = new Set<string>()
+    for (const [phrase] of content.slice(0, cut === -1 ? undefined : cut).matchAll(COMPOSITION)) {
+      for (const [cell, id] of STEP_BY_CELL) if (phrase.includes(cell)) ids.add(id)
+    }
+    return [...ids]
+  }
+
+  // Round 11 Major: the assertion was ONE clause anywhere before the degradation
+  // section — so `/bootstrap`, which declares three composed steps, satisfied it
+  // with its two `map-*` beats while Phase 0 Step 0.1 still read "**Act** (missing
+  // or template): Compose `/specify-prd`." A `custom` project that whitelists
+  // `bootstrap` without `specify-prd` (legal, reported-not-fatal per AC9) got a
+  // full interactive PRD-authoring session — a step it declared it does not run —
+  // with no prompt and no note. Per composed step id now, not per file.
+  //
+  // Round 13: that per-id list is the UNION of the three sources — the delta, the
+  // table and the algorithm — so no single declaration can shrink it.
+  const perComposedStep = composers.flatMap(([label, content]) => {
+    const self = label.split(' ')[1] as string
+    const ids = [
+      ...new Set([
+        ...composedIds(content),
+        ...composedFromTable(content),
+        ...composedFromAlgorithm(content),
+      ]),
+    ].filter(id => id !== self)
+    return ids.map(id => [`${label} → ${id}`, content, id] as [string, string, string])
+  })
+
+  it('every composed id a delta declares is a catalogued step', () => {
+    const ids = new Set(entries.map(e => e.id))
+    expect(perComposedStep.length).toBeGreaterThan(0)
+    for (const [label, , id] of perComposedStep) expect(ids.has(id), label).toBe(true)
+  })
+
+  it.each(perComposedStep)('%s: states it in the ALGORITHM, at that beat', (_, content, id) => {
+    const cut = content.indexOf('## Graceful Degradation')
+    expect(cut).toBeGreaterThan(-1)
+    // The beat is the `##`/`###` block that composes the step: the executable's
+    // name (the mirror prefixes it, hence the bare form) and the clause must be in
+    // the SAME block, so a clause parked at another step's beat does not count.
+    const needle = (entries.find(e => e.id === id)?.executable ?? '').replace('/', '')
+    expect(needle).not.toBe('')
+    const blocks = content.slice(0, cut).split(/^#{2,4} /m)
+    expect(blocks.some(b => b.includes(needle) && CLAUSE.test(b))).toBe(true)
+  })
+
+  // The two halves of the round-12 fix: a per-FILE floor (a composer whose delta
+  // stops naming ids de-scopes itself to zero, not to "nothing to check"), and the
+  // cross-check that the delta covers what the file's own Composed Skills table
+  // says it composes (so dropping ONE id of two fails as well).
+  it.each(composers)('%s: its delta still names composed step ids', (_, content) => {
+    expect(composedIds(content).length).toBeGreaterThan(0)
+  })
+
+  it.each(composers)('%s: its delta covers every catalogued step its table names', (_, content) => {
+    const fromTable = composedFromTable(content)
+    expect(fromTable.length).toBeGreaterThan(0)
+    const declared = new Set(composedIds(content))
+    for (const id of fromTable) expect(declared.has(id), `undeclared: ${id}`).toBe(true)
+  })
+
+  // …and the list of composers itself is derived from the corpus, so a 13th
+  // composer cannot be added without either entering this guard or being named
+  // here. `brainstorm` is the one documented exception: its delta and its
+  // composition beats are disclosed to `degradation.md` under a byte budget (ADL
+  // 2026-08-28), and the test below pins that half.
+  it('the composer list is the corpus’s, not this file’s', () => {
+    const stepDirs = collectAllSkillDirs(SKILLS_DIR).filter(d =>
+      entries.some(e => e.executable === `/${d.split('/').pop()}`),
+    )
+    const found = stepDirs
+      .filter(d => composedFromTable(read(join(SKILLS_DIR, d, 'SKILL.md'))).length > 0)
+      .map(d => d.split('/').pop() as string)
+    expect(new Set(found)).toEqual(new Set([...COMPOSER_NAMES, 'brainstorm']))
+  })
+
+  it.each(composers)('%s: states it in the graceful-degradation entry too', (_, content) => {
+    const section = sectionBetween(content, '## Graceful Degradation', '\n## ')
+    expect(section).toMatch(CLAUSE)
+  })
+
+  // The precedent this mirrors — kept in the same test so removing one side of
+  // the pair is visible.
+  it('brainstorm keeps its own composition-site statement', () => {
+    const degradation = read(join(SKILLS_DIR, 'process/brainstorm/degradation.md'))
+    expect(degradation).toMatch(/process profile/i)
+    expect(degradation.toLowerCase()).toContain('before composing')
+  })
+})
+
+/**
+ * Round 12 Minor: three surfaces were governed — `/next`'s cascade + fallback,
+ * direct invocation (the gate), composition (the composing skill's beat) — and a
+ * fourth was not: the completion report a step prints, which names the next skill
+ * in prose and was filtered by nothing.
+ *
+ * Concrete case, on a configuration this branch itself ships as a worked example:
+ * `custom` with `specify-prd, plan-initiatives, plan-epics, plan-stories,
+ * refine-story, plan-tasks, implement, review` — every prerequisite satisfied,
+ * `define-subdomains` / `define-bounded-contexts` excluded (the flagship "we do no
+ * DDD" case). `/plan-initiatives` is ENABLED there, so it runs with no warning at
+ * all and its report ended `└── Next: /map-subdomains (scoped to this initiative)
+ * or /plan-epics` — an enabled skill telling the project to run a DDD step it
+ * declared it does not run. `/next`'s Step 5 fallback, the same prose-names-a-skill
+ * shape, got an explicit "never name a disabled step" rule; the reports did not.
+ *
+ * Derived from the corpus, not from a list: any step skill whose Output Format
+ * names a catalogued executable on its `Next:` line owes the filter sentence.
+ */
+describe('a completion report names no disabled step, exactly as `/next` Step 5', () => {
+  const entries = parseStepCatalogue(catalogueSource)
+  const FILTER = /`Next:` line[^\n]*\[process profile\]/
+  const executables = entries.flatMap(e => {
+    if (e.executable === null) return []
+    const dir = collectAllSkillDirs(SKILLS_DIR).find(
+      d => d.split('/').pop() === e.executable?.slice(1),
+    )
+    return dir === undefined ? [e.executable] : [e.executable, `/${installedSkillDir(dir)}`]
+  })
+
+  /** A `Next:` line inside `## Output Format` that names a catalogued step. */
+  const namesAStep = (content: string): boolean => {
+    const from = content.indexOf('\n## Output Format')
+    if (from === -1) return false
+    const to = content.indexOf('\n## ', from + 1)
+    return content
+      .slice(from, to === -1 ? undefined : to)
+      .split('\n')
+      .filter(l => l.includes('Next:'))
+      .some(l => executables.some(x => l.includes(x)))
+  }
+
+  const reporters = collectAllSkillDirs(SKILLS_DIR)
+    .filter(d => entries.some(e => e.executable === `/${d.split('/').pop()}`))
+    .flatMap(d => [
+      [`dataset ${d}`, read(join(SKILLS_DIR, d, 'SKILL.md'))] as [string, string],
+      [`mirror ${d}`, read(join(MIRROR_SKILLS_DIR, installedSkillDir(d), 'SKILL.md'))] as [
+        string,
+        string,
+      ],
+    ])
+    .filter(([, content]) => namesAStep(content))
+
+  it('finds the reports that name a catalogued step at all', () => {
+    expect(reporters.length).toBeGreaterThan(0)
+  })
+
+  it.each(reporters)('%s: filters its `Next:` line by the profile', (_, content) => {
+    expect(content).toMatch(FILTER)
+  })
+
+  it('states the rule once, in the convention', () => {
+    const section = gateSource.slice(gateSource.indexOf('## What stays in the skill'))
+    expect(section).toMatch(/`Next:` line/)
+    expect(section).toMatch(/never names a step the profile disables/)
+  })
+})
+
+describe('way-of-working — the `## Process Profile` adoption section', () => {
+  const template = read(WOW_TEMPLATE)
+
+  it('documents the section in the shipped adoption template', () => {
+    expect(template).toContain('## Process Profile')
+  })
+
+  it('marks it optional, absence meaning `default`', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    expect(section).toMatch(/Optional/)
+    expect(section.toLowerCase()).toMatch(/omitted|absent/)
+    expect(section).toMatch(/`default`/)
+  })
+
+  it('shows the `poc` and `custom` shapes with a whitelist example', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    expect(section).toMatch(/`poc`/)
+    expect(section).toMatch(/`custom`/)
+    expect(section).toMatch(/whitelist/)
+  })
+
+  // Round 8: this template is itself read as a declaration by the gate, and it
+  // documents the two keys in a TABLE — so the shape it must not treat as a
+  // declaration is one of its own, and the shape it must HALT on is one an author
+  // could plausibly write two lines below. Both are stated where they are read.
+  it('tells an author that a blockquoted key HALTs and a table row is documentation', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/blockquote/)
+    expect(lower).toMatch(/table/)
+    expect(lower).toMatch(/twice/)
+  })
+
+  // Round 9: the template's own key column is headed `Key` in Title Case, which is
+  // where the mirrored spelling comes from — so the case rule is stated where it is
+  // read.
+  it('tells an author the key is read whatever its case, and the value is not', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    expect(section.toLowerCase()).toMatch(/case-insensitiv|whatever its case|regardless of case/)
+  })
+
+  it('points at the KB schema rather than restating it', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    expect(section).toContain('process-profiles.md')
+  })
+
+  // Round 14 Minor: the template told every adopting project "a key is a plain list
+  // item at the top level of this section", while the reader deliberately reads a
+  // NESTED one (two spaces is a key, four spaces or a tab HALTs, so the profile does
+  // not depend on the author's Tab width). An author who believed the template parked
+  // their old choice as a sub-bullet note and got "`profile` is declared more than
+  // once" on a file the template called well-formed. The behaviour is right; the
+  // prose was not.
+  it('describes the indent rule the reader implements, not a stricter one', () => {
+    const section = sectionBetween(template, '## Process Profile', '\n## ')
+    // The real reader, on the shape the old wording called out of bounds.
+    const nested = resolveProcessProfile(
+      parseWowProfileSection('## Process Profile\n\n- keys:\n  - `profile`: `poc`\n'),
+      parseStepCatalogue(catalogueSource),
+      parseProcessProfiles(profilesSource),
+    )
+    expect(nested.ok && nested.profile).toBe('poc')
+    expect(section).not.toMatch(/top level/)
+    expect(section.toLowerCase()).toMatch(/nested/)
+    expect(section.toLowerCase()).toMatch(/four spaces/)
+  })
+})
+
+describe('/next resolves the profile and never proposes a disabled step', () => {
+  const sources: Array<[string, string]> = [
+    ['dataset', read(NEXT_DATASET)],
+    ['mirror', read(NEXT_MIRROR)],
+  ]
+
+  it.each(sources)('%s: resolves the profile before the cascade', (_, content) => {
+    expect(content).toMatch(/## Process Profile|Resolve the Process Profile/)
+    expect(content).toContain('process-profiles.md')
+    expect(content).toContain('step-catalogue.md')
+  })
+
+  it.each(sources)('%s: absent section ⇒ `default` ⇒ the whole cascade (AC1)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/no `?## process profile`? section|absent|omitted/)
+    expect(section).toMatch(/`default`/)
+    expect(section.toLowerCase()).toMatch(/unchanged|every step|full process/)
+  })
+
+  it.each(sources)('%s: drops a disabled candidate instead of erroring (AC4)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/skipped|dropped|never (proposed|suggested)/)
+    expect(section.toLowerCase()).toMatch(/not an error|never an error/)
+  })
+
+  it.each(sources)('%s: HALTs on an unknown id and on an unknown name (AC5)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section).toMatch(/HALT/)
+    expect(section.toLowerCase()).toMatch(/unknown profile/)
+    expect(section.toLowerCase()).toMatch(/unknown (step )?id/)
+  })
+
+  it.each(sources)('%s: a HALT yields no step set, not `default` (round 7)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/no step set/)
+    expect(section.toLowerCase()).toMatch(/never continue on `?default`?/)
+  })
+
+  it.each(sources)('%s: HALTs on a duplicated or mis-levelled section', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/more than one `?## process profile`?/)
+    expect(section.toLowerCase()).toMatch(/level other than `?##`?|### process profile/)
+  })
+
+  // Round 4 Major: the KEY level, between the SECTION level (round 3) and the
+  // VALUE level (round 2). Both new rules are normative for the LLM path too —
+  // `/next` is the executing reader, the resolver only the reference one.
+  it.each(sources)(
+    '%s: HALTs on a key declared twice, and on an off-shape marker',
+    (_, content) => {
+      const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+      const lower = section.toLowerCase()
+      expect(lower).toMatch(/same key .*twice|key .*more than once|twice .*same section/)
+      expect(lower).toMatch(/`?[-*+]`?|bullet/)
+      expect(lower).toMatch(/no bullet|bullet-less|numbered|ordered/)
+    },
+  )
+
+  // Round 5: the executing reader needs the same three CommonMark facts the
+  // schema now states — a setext heading is a HALT, a code block of any of the
+  // three forms is an example, and a CRLF file is read as the LF one.
+  it.each(sources)('%s: HALTs on a setext heading and normalizes line endings', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/setext/)
+    expect(lower).toMatch(/line endings|crlf/)
+    expect(lower).toMatch(/code-block forms|examples rather than declarations/)
+  })
+
+  // Round 8: the executing reader carries the same two rules — the blockquote
+  // HALTs, the documentation table row does not, and a repeated step id is never
+  // deduped away.
+  it.each(sources)('%s: HALTs on a blockquoted key but not on a table row', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/blockquote/)
+    expect(lower).toMatch(/table row/)
+  })
+
+  // Round 9: the executing reader carries the same rule — a case-variant KEY is the
+  // key, a case-variant VALUE is not the value.
+  it.each(sources)('%s: reads a key whatever its case, and a value strictly', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/case-insensitiv|whatever its case|regardless of case/)
+    expect(lower).toMatch(/`profile`|`whitelist`/)
+  })
+
+  it.each(sources)('%s: HALTs on a step id named more than once', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    const lower = section.toLowerCase()
+    expect(lower).toMatch(/named more than once|more than once in the whitelist/)
+    expect(lower).toMatch(/never deduped|not deduped/)
+  })
+
+  it.each(sources)('%s: HALTs on an empty custom whitelist (AC10)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/empty/)
+    expect(section.toLowerCase()).toMatch(/misconfiguration/)
+  })
+
+  it.each(sources)('%s: flags a disabled prerequisite with the minimal fix (AC9)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/prerequisite/)
+    expect(section.toLowerCase()).toMatch(/minimal fix/)
+    // Flagged, never silently repaired.
+    expect(section.toLowerCase()).toMatch(/never silently|not silently/)
+  })
+
+  // Round 7 Minor: Step 3 carried an explicit "every row below is subject to the
+  // enabled step set" reminder and Step 2 carried none, though Step 0.5 says the
+  // set is carried into Steps 2–5 and rows 1–2 map to `specify-prd`/`bootstrap`.
+  // The contrast invited the reading that only Step 3's rows are filtered — a
+  // `custom` profile omitting `specify-prd` on a template PRD would then be
+  // proposed `/specify-prd`, a step the project explicitly disabled (AC4).
+  it.each(sources)('%s: repeats the profile filter under BOTH cascade tables', (_, content) => {
+    for (const [step, until] of [
+      ['### Step 2: Cascade', '\n### Step 3'],
+      ['### Step 3: Cascade', '\n### Step 4'],
+    ]) {
+      const section = sectionBetween(content, step as string, until as string)
+      expect(section, `${step} states no profile filter`).toMatch(/Profile filter/)
+      expect(section.toLowerCase()).toMatch(/step 0\.5/)
+      expect(section.toLowerCase()).toMatch(/skipped|never proposed/)
+    }
+  })
+
+  it.each(sources)('%s: maps its cascade rows to step ids as data', (_, content) => {
+    // Rows 12–16 are capabilities that are NOT steps and are never filtered —
+    // the mapping table is what makes that explicit instead of implied.
+    expect(content).toMatch(/Step id/)
+    expect(content.toLowerCase()).toMatch(/rows? 12[–-]16|not steps|never filtered/)
+  })
+
+  /** Every catalogued executable, in the spelling THIS copy of `/next` uses. */
+  const STEP_BY_EXECUTABLE = new Map<string, string>(
+    parseStepCatalogue(catalogueSource).flatMap(e => {
+      if (e.executable === null) return []
+      const dir = collectAllSkillDirs(SKILLS_DIR).find(
+        d => d.split('/').pop() === e.executable?.slice(1),
+      )
+      const names = [e.executable]
+      if (dir !== undefined) names.push(`/${installedSkillDir(dir)}`)
+      return names.map(n => [n, e.id] as [string, string])
+    }),
+  )
+
+  /** Every `| N | condition | `/skill` | rationale |` row of the two cascade tables. */
+  const cascadeRows = (content: string): Array<{ row: number; executable: string }> => {
+    const region = sectionBetween(content, '### Step 2: Cascade', '\n### Step 4')
+    return region
+      .split('\n')
+      .filter(l => /^\|\s*\d+\s*\|/.test(l))
+      .flatMap(l => {
+        const cells = l.split('|')
+        const executable = /`(\/[a-z][a-z0-9-]*)`/.exec(cells[3] ?? '')
+        if (executable === null) return []
+        return [{ row: Number((cells[1] as string).trim()), executable: executable[1] as string }]
+      })
+  }
+
+  /**
+   * The `Row → step id` table as a lookup: row number → step id, or `null` where it
+   * says the row is not a step. A row the table never names is absent from the map.
+   */
+  const rowToStepId = (content: string): Map<number, string | null> => {
+    const region = sectionBetween(content, '**Row → step id.**', '\n### Step 1')
+    const mapping = new Map<number, string | null>()
+    for (const line of region.split('\n')) {
+      if (!/^\|\s*\d/.test(line)) continue
+      const [, rows, step] = line.split('|')
+      const id = /`([a-z][a-z0-9-]*)`/.exec(step ?? '')
+      const numbers = [...(rows ?? '').matchAll(/(\d+)(?:\s*[–-]\s*(\d+))?/g)].flatMap(m => {
+        const from = Number(m[1])
+        const to = m[2] === undefined ? from : Number(m[2])
+        return Array.from({ length: to - from + 1 }, (_, k) => from + k)
+      })
+      for (const n of numbers) mapping.set(n, id === null ? null : (id[1] as string))
+    }
+    return mapping
+  }
+
+  // Round 14 Minor: this table IS the filter's lookup ("nothing about it is inferred
+  // from a row's wording"), and the only guard on it asserted that the literal string
+  // `Step id` appeared somewhere in the file. Deleting the `| 10 `/plan-tasks` |` and
+  // `| 11 `/refine-story` |` mapping rows from BOTH copies left this file at
+  // `Tests 149 passed` and `skills:conformance` at exit 0 — the mapping table
+  // contributes no per-row cases at all. An executor following Step 0.5 literally
+  // then finds rows 10/11 unmapped and treats them like rows 12–16 ("not steps,
+  // therefore never filtered"), so a `custom` project whitelisting `implement` and
+  // `review` alone — the delivery-only shape the shipped docs advertise — is proposed
+  // `/plan-tasks` on a Ready story and `/refine-story` on a Draft one, two steps it
+  // declared it does not run, with no prompt and no note (AC4 broken, silently).
+  //
+  // Subjects come from the CORPUS, like the reporters guard: every cascade row whose
+  // Suggestion cell names a catalogued executable, resolved through the real
+  // `installedSkillDir` for the mirror.
+  it.each(sources)('%s: maps EVERY cascade row that proposes a step (AC4)', (_, content) => {
+    const rows = cascadeRows(content)
+    const mapping = rowToStepId(content)
+    const steps = rows.filter(r => STEP_BY_EXECUTABLE.has(r.executable))
+    // Fail closed: a parse that finds nothing is not a table that is correct.
+    expect(rows.length).toBeGreaterThanOrEqual(11)
+    expect(steps.length).toBeGreaterThanOrEqual(8)
+    for (const { row, executable } of steps) {
+      const expected = STEP_BY_EXECUTABLE.get(executable) as string
+      expect(
+        mapping.get(row),
+        `cascade row ${row} proposes \`${executable}\` — step \`${expected}\` — but the ` +
+          `Row → step id table maps that row to ${JSON.stringify(mapping.get(row) ?? null)}. ` +
+          `An unmapped row is read as "not a step, therefore never filtered".`,
+      ).toBe(expected)
+    }
+  })
+
+  // The other direction: a row the table calls "not a step" must not be one.
+  it.each(sources)('%s: calls no catalogued step a non-step in that table', (_, content) => {
+    const mapping = rowToStepId(content)
+    for (const { row, executable } of cascadeRows(content)) {
+      if (mapping.get(row) !== null) continue
+      expect(
+        STEP_BY_EXECUTABLE.has(executable),
+        `row ${row} proposes \`${executable}\`, a catalogued step, while the mapping table ` +
+          `declares that row is not one`,
+      ).toBe(false)
+    }
+  })
+
+  it.each(sources)('%s: HALTs on a key under no section at all (round 14)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section).toMatch(/## Process Profiles/)
+    expect(section).toMatch(/## ProcessProfile/)
+    expect(section.toLowerCase()).toMatch(/no heading whatever|no heading at all|under no/)
+  })
+
+  it.each(sources)('%s: keeps the profile stateless, re-read every run', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section.toLowerCase()).toMatch(/every (run|invocation)|re-?read|never cached/)
+  })
+
+  // Round 2 Major (a): Step 0.5 scoped its filter to "Steps 2–4" while Step 5 names
+  // skills unconditionally, so the fallback printed `/pair-process-plan-stories` and
+  // `/pair-process-review` verbatim even when the profile disabled them — AC4 says a
+  // disabled step is never suggested, and the fallback is not a row.
+  it.each(sources)('%s: carries the enabled set into the FALLBACK too (AC4)', (_, content) => {
+    const section = sectionBetween(content, 'Resolve the Process Profile', '\n### Step 1')
+    expect(section).toMatch(/Steps? 2[–-]5/)
+    expect(section.toLowerCase()).toMatch(/fallback/)
+  })
+
+  it.each(sources)('%s: the fallback names only enabled steps (AC4)', (_, content) => {
+    const section = sectionBetween(content, '### Step 5: Fallback', '\n## ')
+    expect(section.toLowerCase()).toMatch(/enabled/)
+    expect(section.toLowerCase()).toMatch(/disabled/)
+  })
+
+  // Round 2 Major (b): under `poc`, rows 3–4 are dropped and row 5 needs epics, so a
+  // fresh project fell through to a fallback recommending `plan-stories` — whose only
+  // enabled producer of input is `brainstorm`, a step `/next` proposes nowhere else.
+  it.each(sources)('%s: the fallback has a backlog entry point under `poc`', (_, content) => {
+    const section = sectionBetween(content, '### Step 5: Fallback', '\n## ')
+    // Dataset names skills bare, the mirror carries the install prefix.
+    expect(section).toMatch(/\/(pair-process-)?brainstorm/)
+    expect(section).toMatch(/`poc`/)
+  })
+})
+
+describe('the manual (no-skills) path is governed by the same profile (AC8)', () => {
+  it('the catalogue names the how-to guide as the step’s other representation', () => {
+    const entries = parseStepCatalogue(catalogueSource)
+    const withHowTo = entries.filter(e => e.howTo !== null)
+    // Every how-to guide on disk is reachable from a step id.
+    expect(withHowTo.length).toBe(collectHowToGuides(HOW_TO_DIR).length)
+  })
+
+  it('the schema says the profile governs the step, not one representation', () => {
+    const lower = profilesSource.toLowerCase()
+    expect(lower).toMatch(/how-to/)
+    expect(lower).toMatch(/no skills installed|without skills|manual path/)
+  })
+
+  // The catalogue makes the mapping EXPRESSIBLE; it does not make the manual path
+  // GOVERNED. The entrypoint a human with no skills reads is AGENTS.md's manual
+  // flow — without a step there, a `poc` team follows step "identify your task",
+  // opens `03-how-to-create-and-prioritize-initiatives.md` and runs a disabled step.
+  it('AGENTS.md’s manual flow sends the reader to the profile before picking a how-to', () => {
+    expect(checkManualPathEntrypoint(read(AGENTS_MD))).toEqual([])
+  })
+
+  it('the manual step names the section, the file and the catalogue', () => {
+    const section = sectionBetween(read(AGENTS_MD), '## 🎯 Quick Start Process', '\n## ')
+    expect(section).toContain('## Process Profile')
+    expect(section).toContain('way-of-working.md')
+    expect(section).toContain('step-catalogue.md')
+  })
+})

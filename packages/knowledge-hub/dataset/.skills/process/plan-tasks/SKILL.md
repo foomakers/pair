@@ -1,13 +1,19 @@
 ---
 name: plan-tasks
 description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues are created. Composes /write-issue."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
 # /plan-tasks — Task Breakdown
 
 Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Adds an integrated Technical Analysis + Task Breakdown section to the story issue body (the skill composes the full updated body; write-issue overwrites it, it does not append). Tasks live inside the story — no separate task issues are created in the PM tool.
+
+## Process Profile
+
+<!-- process-step: id=plan-tasks -->
+
+Executable form of the **`plan-tasks`** step, and a composer of `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 
@@ -64,8 +70,8 @@ Transform a refined user story into specific, actionable implementation tasks. T
 
 ### Step 2.5: Context Mapping (scoped)
 
-1. **Check**: Is `/map-contexts` installed?
-2. **Skip**: If not installed → warn and proceed to Step 3 without context mapping.
+1. **Check**: Is `/map-contexts` installed, and is `define-bounded-contexts` enabled by the project's process profile?
+2. **Skip**: If not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) → skip with a note and proceed to Step 3 without context mapping. A composed disabled step never prompts.
 3. **Act**: Compose `/map-contexts` with `$scope` set to the bounded contexts/services touched by this story (from Step 2's mapping) — not `all` — full-catalog remapping stays `/bootstrap`-only.
 4. **Verify**: Bounded context catalog delta (if any) approved by developer. Task breakdown always proceeds to Step 3 regardless of the context-mapping outcome.
 
@@ -147,6 +153,8 @@ TASK BREAKDOWN COMPLETE:
 └── Next:       /implement to start task execution
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## HALT Conditions
 
 - **No Refined stories in backlog** (Step 0) — nothing to break down.
@@ -159,6 +167,7 @@ TASK BREAKDOWN COMPLETE:
 
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/write-issue` not installed / PM tool not accessible → produce the task breakdown content, ask developer to update manually) for the standard scenarios. Additional cases:
 
+- **`/map-contexts` not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)** (Step 2.5): the task breakdown is still produced; context mapping is skipped with a note, never a HALT.
 - If adoption files (architecture, tech-stack, bounded contexts) are not found, skip technical context alignment and warn.
 
 ## Notes

@@ -1,13 +1,19 @@
 ---
 name: pair-process-plan-initiatives
 description: "Turns a PRD into prioritized (P0/P1/P2) strategic initiatives through structured analysis and validation. Composes /pair-capability-write-issue."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-process-plan-initiatives — Strategic Initiative Creation
 
 Transform Product Requirements Documents into strategic initiatives through PRD analysis, prioritization, and collaborative validation. Composes `/pair-capability-write-issue` for PM tool integration.
+
+## Process Profile
+
+<!-- process-step: id=plan-initiatives -->
+
+Executable form of the **`plan-initiatives`** step. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 
@@ -124,6 +130,8 @@ INITIATIVES COMPLETE:
 ├── PM Tool:  [adopted tool]
 └── Next:     /map-subdomains (scoped to this initiative) or /plan-epics
 ```
+
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
 
 ## HALT Conditions
 

@@ -1,7 +1,7 @@
 ---
 name: brainstorm
 description: "Runs discovery in three fixed phases — grill interview, domain integration, backlog tree triage — on a free theme or an existing `$root` issue, landing an integrated Draft epic/story tree while leaving the PRD untouched. Invoke to open a new feature area or to deepen an existing epic/story ('brainstorm the notifications area', 'explore what is missing under #205'); level (broad/punctual) and orientation (functional/technical) are deduced from the root's type and tags, or asked as the first interview question when no root is given (or its type label is unrecognized). Composes /grill, /map-subdomains, /map-contexts, /plan-epics, /plan-stories."
-version: 0.2.0
+version: 0.3.0
 author: Foomakers
 ---
 
@@ -12,6 +12,12 @@ Turn a rough theme — or an existing epic/story — into an **integrated Draft 
 Discovery is **parametrized**, not a fixed script: with `$root` the level, orientation and phase-3 writer are deduced from the root's type and tags (or asked, on the fallback row); without it, the level is the first question — [parametrization.md](parametrization.md). **Per-phase idempotency** ([convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md), itemized list in [resume.md](resume.md)): each phase checks its own output first, so a re-run resumes at the first unfinished phase instead of re-interviewing, re-placing or re-triaging.
 
 Discovery is also the **only** new process skill (D24): every phase delegates to existing capabilities — brainstorm owns the phase order, the parametrization, and nothing else.
+
+## Process Profile
+
+<!-- process-step: id=brainstorm -->
+
+Executable form of the **`brainstorm`** step. Gate and composer rule: [degradation.md](degradation.md).
 
 ## Composed Skills
 
@@ -37,7 +43,7 @@ Discovery is also the **only** new process skill (D24): every phase delegates to
 
 ## Parametrization (level · orientation · writer)
 
-Deduction inputs, in precedence order: **argument > tags > issue type**. The type decides the level **and** the phase-3 writer; tags decide the orientation. **Most specific row wins**, and the tag row is a **modifier**, not a competing row: it flips the orientation and adds `/map-contexts`, leaving level and writer to the base row. Every invocation matches **exactly one base row** — a type row, the **fallback row** (a `$root` with no recognized type label), or the no-`$root` row — so the triple is never left unresolved. It is always **stated up-front** as a proposal the developer can override.
+Deduction inputs, in precedence order: **argument > tags > issue type**. Every invocation matches **exactly one base row**, so the triple is never left unresolved, and it is always **stated up-front** as a proposal the developer can override.
 
 > **The matrix is normative and lives in [parametrization.md](parametrization.md)** — one row per `$root` signal, with the phase-2 capability, the phase-3 writer and the parent it receives, plus the rationale for the fallback row and for keying the writer on type rather than level. **Step 0 item 4 reads it on every run**; never resolve the triple from memory.
 
@@ -131,6 +137,8 @@ BRAINSTORM COMPLETE:
 └── Next:        [/refine-story on the first Draft story | /plan-stories on the first Draft epic (initiative-root discovery stops at epics)]
 ```
 
+The `Next:` line names only steps enabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md): a disabled one is dropped, and when none is left the line names no skill.
+
 ## HALT Conditions
 
 - **`$root` not found** (Step 0) — the id does not resolve to an issue; report it and stop, never guess a root.
@@ -154,6 +162,5 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 ## Notes
 
 - **Composes, never re-derives**: the interview is `/grill`'s, the domain placement `/map-*`'s, the writes `/plan-epics`/`/plan-stories`' (which own the to-issues triage). Brainstorm owns the phase order and the level/orientation parametrization only (D24).
-- **Branch-specific reference lives beside the skill**, per progressive disclosure: the normative deduction matrix and its rationale in [parametrization.md](parametrization.md), the per-phase resume list in [resume.md](resume.md). The algorithm here stays the path every run walks.
 - **The PRD is never modified** — R3.4: discovery writes to the backlog and to domain context files; product-vision changes are surfaced as a `/specify-prd` recommendation.
 - **Modifies PM tool state** (phase 3, via the composed plan-* skills) **and adoption files** (phase 2, context map + domain catalogs).

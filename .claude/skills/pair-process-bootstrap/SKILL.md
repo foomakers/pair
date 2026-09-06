@@ -1,13 +1,19 @@
 ---
 name: pair-process-bootstrap
 description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /pair-process-specify-prd, /pair-capability-setup-pm, /pair-capability-record-decision, assess-* (optional), /pair-capability-setup-harness (optional, agent harness configuration)."
-version: 0.8.0
+version: 0.9.0
 author: Foomakers
 ---
 
 # /pair-process-bootstrap — Project Bootstrap
 
 Orchestrate the complete project setup sequence. Transforms a PRD into a fully configured project with adopted standards, quality gates, and PM tool integration. Each phase checks output existence before acting — re-invocation resumes from the first incomplete phase.
+
+## Process Profile
+
+<!-- process-step: id=bootstrap -->
+
+Executable form of the **`bootstrap`** step, and a composer of `specify-prd`, `define-subdomains`, `define-bounded-contexts`. A **direct** invocation while a step is disabled by the project's profile warns and asks for confirmation; a **composed** one never prompts — it degrades exactly as a step that is not installed. No section ⇒ no-op. See [process-profile gate](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md).
 
 ## Composed Skills
 
@@ -53,7 +59,7 @@ One entry point, two resolution depths. Quick mode is **additive**: a second res
 1. **Check**: Does [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) exist and is it populated (not a template)?
    - A file is a template if it contains `[Product/feature name]` or `[Creation date]`.
 2. **Skip** (populated PRD): Extract project name and key constraints. Move to Phase 1.
-3. **Act** (missing or template): Compose `/pair-process-specify-prd`.
+3. **Act** (missing or template): Is `specify-prd` **disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)**? Disabled → treat exactly as `/pair-process-specify-prd` not installed (Graceful Degradation below: HALT at Phase 0, pointing at how-to-01), never a prompt. Otherwise compose `/pair-process-specify-prd`.
    - Wait for PRD approval before proceeding.
 4. **Verify**: PRD exists and is populated. If not → **HALT**.
 
@@ -223,15 +229,15 @@ Runs after architecture and tech-stack are adopted (Step 3.1) — both are prere
 
 ### Step 3.5.1: Subdomain Placement
 
-1. **Check**: Is `/pair-capability-map-subdomains` installed? Does [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain) already contain populated entries?
-2. **Skip**: If not installed → warn and proceed to Step 3.5.2 without subdomain placement. If already populated → proceed to Step 3.5.2.
+1. **Check**: Is `/pair-capability-map-subdomains` installed and `define-subdomains` enabled by the project's process profile? Does [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain) already contain populated entries?
+2. **Skip**: If not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) → skip with a note and proceed to Step 3.5.2 without subdomain placement. If already populated → proceed to Step 3.5.2.
 3. **Act**: Compose `/pair-capability-map-subdomains` with `$scope: all` — the only caller allowed a full-catalog run. Uses PRD (always present at this point); falls back to "system areas" if no initiatives exist yet.
 4. **Verify**: Subdomain catalog created/updated, or fallback noted. Proceed regardless of outcome.
 
 ### Step 3.5.2: Bounded Context Placement
 
-1. **Check**: Is `/pair-capability-map-contexts` installed? Does [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext) already contain populated entries?
-2. **Skip**: If not installed → warn and proceed to **Phase 3.6** without context mapping. If already populated → proceed to **Phase 3.6**.
+1. **Check**: Is `/pair-capability-map-contexts` installed and `define-bounded-contexts` enabled by the project's process profile? Does [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext) already contain populated entries?
+2. **Skip**: If not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md) → skip with a note and proceed to **Phase 3.6** without context mapping. If already populated → proceed to **Phase 3.6**.
 3. **Act**: Compose `/pair-capability-map-contexts` with `$scope: all` — the only caller allowed a full-catalog run. Uses the subdomain catalog (Step 3.5.1) plus architecture.md and tech-stack.md (Step 3.1).
 4. **Verify**: Bounded context catalog created/updated, or fallback noted. Domain modeling never blocks bootstrap completion — proceed to **Phase 3.6** regardless of outcome. **No exit path of this phase routes past Phase 3.6** — not the not-installed warning, not the already-populated skip, not this normal completion: Phase 3.6 proposes its rows from what was just mapped, so jumping over it would strand the phase that consumes this one's output.
 
@@ -429,7 +435,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
 - **/record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/pair-capability-record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
-- **/map-subdomains or /pair-capability-map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
+- **/map-subdomains or /pair-capability-map-contexts not installed, or disabled by the project's [process profile](../../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md)**: Skip the corresponding step in Phase 3.5 with a note. Domain modeling never blocks bootstrap completion.
 - **Quality model doc not installed** (Phase 3.6): the phase-level precondition (Step 3.6.0, first check) skips the phase with a warning, reported as `skipped — quality model not installed` in the Step 4.3 `Classification:` line (its third whole-phase value) — the model owns the schema of both sections, so there is nothing to author a delta against. Never blocks.
 - **`tech/risk-matrix.md` present but malformed** (Phase 3.6): the phase-level parse precondition (Step 3.6.0) runs ahead of both steps' presence checks and skips the **whole phase**, reporting `skipped — file malformed` — the §6 resolution already warns and falls back to KB defaults entirely, so the file is neither rewritten over a parse the phase does not trust nor written into inertly.
 - **No TTY (CI, piped stdin)**: guided cannot run — warn and run `$mode: quick` instead, never hang on input that cannot arrive. If a still-asked decision (PM tool, undetectable stack) is then unresolvable → **HALT**.

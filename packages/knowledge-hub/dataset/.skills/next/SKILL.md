@@ -1,7 +1,7 @@
 ---
 name: next
 description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.5.1
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -121,6 +121,50 @@ Run this before every other step, on **every** invocation — the result is neve
 
 The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) and Step 4 row 16 (`/grill`). Step 2 and rows 12–15 (project-wide) are not surfaced under a scope; rows 3–5 are evaluated **root-relatively** (epic root → row 5 only; story root → skipped) — see Step 3. A scope **presupposes an established project** (adoption files populated, a real backlog): on a fresh template project `--root`/`--filter` are never passed — Step 2 fresh-project detection governs and steers to `/bootstrap`, so the Step 3 "all adoption files populated" premise always holds under a scope. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
 
+### Step 0.5: Resolve the Process Profile
+
+A project may run a **subset** of the process. Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) → `## Process Profile`, resolve it against the [step catalogue](../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md) per the [profile schema](../../.pair/knowledge/guidelines/technical-standards/ai-development/process-profiles.md), and carry the resulting **enabled step set** into Steps 2–5 — the cascade rows AND the Step 5 fallback, which names skills in prose and is therefore not covered by the row filter. Like Step 0, this runs on **every invocation** and is **re-read every run, never cached** — an edit to way-of-working takes effect on the next run.
+
+1. **No `## Process Profile` section** → the profile is `default`: **every** catalogued step is enabled and the whole cascade below runs **unchanged**, exactly as it did before profiles existed. This is the overwhelmingly common case; skip straight to Step 1.
+2. **`profile: default` / `poc`** → the built-in step set from the schema. **`profile: custom`** → the declared `whitelist`.
+3. **Validate, and HALT rather than narrow quietly** — a misread profile does not surface as an error a user sees, it removes a step from every suggestion, which looks exactly like that step not being due yet. **A HALT resolves to no step set at all** — stop and report, never continue on `default` and never on an empty set:
+   - **unknown profile name** → **HALT**, listing the known profiles (`default`, `poc`, `custom`);
+   - **unknown step id** in the whitelist → **HALT**, listing the valid ids from the catalogue. Deliberately a *different* message from the one above: a typo in a step id and a profile that does not exist are not the same mistake, and one generic message sends the reader to the wrong file. A typo must never resolve to "disabled";
+   - **a step id named more than once** in the whitelist → **HALT** naming it, never deduped in silence. The same mistake HALTs one level up when it is the *key* that repeats; a repeat is as likely an edit never finished (the second name was to become a different step) as a harmless one; and unread it emits that step's prerequisite warning twice byte for byte and makes every "N steps enabled" count wrong;
+   - **no `whitelist` key** under `custom` → **HALT**: `custom` requires one. Deliberately a different message from the next line — "you wrote none" is not "you wrote an empty one", and one message sends the reader hunting for a line their file does not have;
+   - **empty whitelist** under `custom` → **HALT** as a **misconfiguration**, never read as "every step disabled";
+   - **`whitelist` under a built-in profile, or with no `profile` key** → **HALT**: it would otherwise be silently ignored;
+   - **a key in a shape the schema does not accept** (`- profile: poc`, value unbackticked; a bolded key is fine) → **HALT** restating the shape. Read the key **loosely** and its value **strictly**: an unreadable line treated as "no declaration" resolves to `default`, which **widens** the profile to the whole process silently — the one direction of failure nothing downstream catches. The key's **case** is on the loose side, like the heading's: `` - `Profile`: `poc` `` and `` - `Whitelist`: … `` are those keys, read **case-insensitively** and reported under their canonical spelling — while `` - `profile`: `POC` `` is still an unknown profile name and **HALTs**;
+   - **the same key declared twice** in one section (two `profile` lines, or two `whitelist` lines) → **HALT** naming the key. Only the last would be read, so the earlier declaration takes effect nowhere, and which HALT fired used to depend on the two lines' order. A key is **one line, on a `-`, `*` or `+` list item**: a key written with **no bullet** or with an ordered-list marker (`1.`, `1)`) is a **HALT** too, never invisible text, backticked or not — the two errors compose rather than cancel, so `1. profile: poc` HALTs exactly as ``1. `profile`: `poc``` does; backticks are required only where there is no marker at all — reading it as prose resolves the section to `default` and re-widens the project to the whole process. A key inside a **blockquote** (`` > - `profile`: `poc` ``) **HALTs** for the same reason (`>` is not indentation, and nothing in the corpus writes a blockquoted list item); a key inside a documentation **table row** (`` | `profile` | `poc` | ``) is the deliberate opposite — **no declaration and no HALT**, because that is the shape the schema and the adoption template use to document these keys;
+   - **more than one `## Process Profile` section**, the heading at **any level other than `##`** (`### Process Profile`), or the heading written as **setext** (`Process Profile` underlined with `---` / `===`) → **HALT**. Same widening hole one level further up: only the first section is read and the rest is dropped in silence, and a heading at the wrong level or in the wrong form is neither a section nor a reported problem. The adoption template ships an empty `## Process Profile` section already, so *appending* a second is the likelier edit — check the count, the level and the form before reading the keys. Decoration does not change the section: `## Process Profile ##` (closed ATX) and up to three spaces of indent are the same heading.
+   - **a key under no `## Process Profile` section at all** — under `## Process Profiles` (plural), `## ProcessProfile`, an unrelated heading, or no heading whatever → **HALT** naming the line. Every rule above is about the heading's shape and closes only the spellings it names, while a key was read solely INSIDE a matched section and reported nowhere outside one: the same silent `default`. A key-shaped line inside a code block, an HTML comment or a table row is not one;
+   - **a value that SPILLS past its key's line** — wrapped onto the next line, or ending on a dangling `,` — → **HALT**. Read up to the wrap the line looks complete, so the ids after it are dropped from every suggestion with nothing reported; and a long `custom` whitelist under an 80-column lint rule makes wrapping the natural edit. A key that is **indented by four spaces or a tab** → **HALT** as well: indented code block or sublist item, the line does not say which, and the same key indented by two spaces IS read — so skipping it makes the profile depend on the author's Tab width;
+   - **Read the file as CommonMark, not as lines of text**: normalize line endings first (a CRLF checkout — the Windows default — otherwise matches no key and no heading at all, and the whole section resolves to `default` in silence), and treat all three code-block forms (```` ``` ````, `~~~`, four-space indent) as EXAMPLES rather than declarations — a fence closing only on a run of the same character **at least as long** as the one that opened it, so a **four-backtick** fence wrapping a ```` ``` ```` example keeps it an example. **HTML comments are masked** before anything is read (a commented-out section is not a second section), and a fence or comment the file never CLOSES is a **HALT**: everything after it reads as non-content, so the real section is not found and nothing else would report that the file was never read.
+4. **Filter, don't fail.** Any candidate row whose step is disabled is **SKIPPED** — dropped from the cascade and never proposed. A disabled step is **not an error**: evaluation simply continues to the next row, so enabled steps chain correctly across the gaps. **The Step 5 fallback is bound by the same rule**: it is prose, not a row, so apply the filter to it explicitly (Step 5).
+5. **Prerequisite consistency (report, don't repair).** Prerequisites are an **any-of**: satisfied when the step's `Requires` list is empty or **at least one** listed step is enabled. For each enabled step whose list is entirely disabled, report the inconsistency with the **minimal fix** — the configuration is readable, so the run continues, and it is **never silently** repaired nor silently tolerated:
+
+   > `plan-stories` is enabled but none of its prerequisites are — minimal fix: enable `plan-epics` or `brainstorm`, or drop `plan-stories`
+
+**Row → step id.** The filter is a lookup, not a judgement — this table is the mapping, so nothing about it is inferred from a row's wording:
+
+| Cascade row                             | Step id                                          |
+| --------------------------------------- | -------------------------------------------------- |
+| 1 `/specify-prd`                        | `specify-prd`                                      |
+| 2 `/bootstrap`                          | `bootstrap`                                        |
+| 3 `/plan-initiatives`                   | `plan-initiatives`                                 |
+| 4 `/plan-epics`                         | `plan-epics`                                       |
+| 5 `/plan-stories`                       | `plan-stories`                                     |
+| 6 `/review`                             | `review`                                           |
+| 7 `/checkpoint`                         | *(none — not a step, therefore never filtered)*    |
+| 8, 9 `/implement`                       | `implement`                                        |
+| 10 `/plan-tasks`                        | `plan-tasks`                                       |
+| 11 `/refine-story`                      | `refine-story`                                     |
+| 12–16                                   | *(none — not steps, therefore never filtered)*     |
+
+Row 7 and rows 12–16 propose **capabilities that are not steps** ([why](../../.pair/knowledge/guidelines/technical-standards/ai-development/step-catalogue.md#what-this-catalogue-does-not-govern)): the profile governs the process a team runs, not every tool a skill reaches for, so those rows are never filtered by it. `/brainstorm` and `/map-subdomains` / `/map-contexts` are steps but have no cascade row — nothing to filter there either; their profile handling is the [process-profile gate](../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/process-profile-gate.md) at invocation.
+
+Under `poc` this is what makes the guarantee hold end to end: rows 3 and 4 are dropped, and no DDD-mapping step is reachable from `/next` at all.
+
 ### Step 1: Read Adoption Files
 
 Read the following files and classify each as **populated** or **template**:
@@ -143,6 +187,8 @@ Read the following files and classify each as **populated** or **template**:
 | 1   | PRD.md is template                                        | `/specify-prd`    | Product vision must come first   |
 | 2   | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap`      | Project needs foundational setup |
 
+**Profile filter**: both rows above are subject to the enabled step set resolved in Step 0.5 (row 1 → `specify-prd`, row 2 → `bootstrap`) — a row whose step is disabled is skipped, never proposed, and evaluation continues at the next row. Stated here as well as under Step 3 because the filter is not a Step 3 rule: Step 0.5 carries the set into Steps 2–5.
+
 If any of the above matched, output the suggestion and stop.
 
 > DDD domain mapping (`/map-subdomains`, `/map-contexts`) is a scoped capability, not a mandatory fresh-project step — it is invoked by `/plan-initiatives`, `/plan-epics`, `/refine-story`, `/plan-tasks`, or `/bootstrap` when they touch a capability/context, not suggested directly here. Projects without DDD artifacts fall back to "system areas" gracefully — no HALT.
@@ -156,6 +202,8 @@ All adoption files are populated. Query the PM tool to determine backlog state �
 - **`--filter`-only (no root)** → there is no subtree; rows 3–5, being project-wide structural detectors, are not surfaced (a scoped run is a backlog-item query).
 
 Rows 12–15 are likewise project-wide and not surfaced under a scope; when the candidate set yields no actionable item, Step 0 item 5's clean exit governs (see Step 0).
+
+**Profile filter**: every row below is additionally subject to the enabled step set resolved in Step 0.5 — a row whose step is disabled is skipped, never proposed, and evaluation continues at the next row.
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
@@ -179,7 +227,7 @@ Rows 12–15 are likewise project-wide and not surfaced under a scope; when the 
 
 ### Step 4: Capability Skill Suggestions
 
-If no process skill matched in Steps 2-3, check for capability skill opportunities (same rule: evaluate in order, stop at the first match):
+If no process skill matched in Steps 2-3, check for capability skill opportunities (same rule: evaluate in order, stop at the first match). These rows propose capabilities that are **not steps**, so the Step 0.5 profile filter never applies to them:
 
 | #   | Condition                                                                | Suggestion           | Rationale                                      |
 | --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
@@ -197,6 +245,19 @@ If no condition matched in Steps 2-4:
 > Consider: starting a new iteration with `/plan-stories`, or running `/review`
 > to check for open items.
 
+**The fallback names skills, so the Step 0.5 filter applies here too** — and it is prose, not a row, so it is applied explicitly, in this order:
+
+1. **Never name a disabled step.** Drop it from the sentence. If both named steps are disabled, the sentence is empty — go to rule 2.
+2. **Never name a step whose input cannot exist.** `/plan-stories` needs epics. On a backlog with no epics, rows 3–4 normally fire first; a profile may disable them, and then nothing upstream covers the empty backlog. In that case name the enabled step that **produces** a backlog — `/brainstorm`, which has no cascade row and is otherwise never proposed anywhere.
+3. If neither rule leaves a candidate, **report the state and propose no skill**. An empty backlog under a profile with no reachable entry point is a configuration to fix, not a step to run.
+
+| Profile   | Backlog                | Fallback names                                                                       |
+| --------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| `default` | any                    | `/plan-stories` + `/review`, verbatim above (row 3 covers the empty-backlog case first) |
+| `poc`     | epics exist            | `/plan-stories` + `/review`                                                            |
+| `poc`     | no epics               | `/brainstorm` — rows 3–4 are disabled and row 5 needs epics, so it is the only enabled producer of the input `/plan-stories` requires |
+| `custom`  | any                    | rules 1–3 above, in order                                                              |
+
 ## Output Format
 
 Present results as:
@@ -209,6 +270,7 @@ PROJECT STATE:
 ├── Bounded Contexts: [populated | template]
 ├── PM Tool: [tool name | not configured]
 ├── Scope: [full backlog | root #ID (subtree) | filter <tag> | root #ID ∩ <tag>]
+├── Profile: [default (no section) | poc | custom — N/M steps enabled]
 └── Backlog: [summary of current items — within scope]
 
 RECOMMENDATION: /skill-name
@@ -225,6 +287,7 @@ See [graceful degradation](../../.pair/knowledge/guidelines/technical-standards/
 
 - **Argument edge cases** (see Step 0): `--root` not found → HALT, no action; `--root` resolves to a Done issue → report and exit; `--filter` (or the subtree) matches nothing → report `no matching issues` and exit cleanly (an empty result is not an error).
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
+- If way-of-working.md has no `## Process Profile` section, the `default` profile applies — every step enabled, cascade unchanged. This is the zero-configuration default, not a degradation; the profile's own error cases (unknown name/id, empty whitelist) HALT instead, per Step 0.5.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
 - If way-of-working.md declares no `code-host`, the code host is the PM tool — likewise the zero-configuration default, not a degradation. If a **declared** code host is unreachable, skip row 6's open-PR detection (say so) and evaluate the remaining rows from PM-tool state; never HALT a read-only recommendation over it.
 - If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.
