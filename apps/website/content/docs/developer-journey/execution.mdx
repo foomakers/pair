@@ -51,6 +51,14 @@ Every new module file must have a corresponding unit test file (1:1 mapping). Mo
 
 With commit-per-task, the developer gets a checkpoint between every task — the AI presents a summary and waits for confirmation before committing.
 
+### Progress Feedback: Ticks and One Comment
+
+While the skill works through the breakdown, the story reports its own progress. As each task completes, its checklist item in the story's **Task Breakdown** is ticked — located by task ID, patched one line at a time, never rewriting another section — and the outcome is queued. At the end of the run, the queue is flushed as **one comment**: a headline, one line per task, everything longer collapsed in `<details>`.
+
+The cadence is one comment per run iteration, so a supervised (unattended) run reports at task granularity without turning the story into a comment feed. A task that failed or was skipped is recorded in the comment and its checklist item stays unticked — a story that stopped halfway looks different from one that finished.
+
+The feedback is annotation, never a gate: a locator mismatch, a body edited concurrently, or a tracker write that does not land is retried once, then reported in the comment, and the run carries on. That holds through the writer too — the tick is composed with `$on-failure: report`, so a tracker error comes back as an outcome to record rather than as a halt that would stop the story it only annotates. Three rules make that safe, and the shipped guideline `task-progress-feedback.md` (installed into your project at `.pair/knowledge/guidelines/collaboration/project-management-tool/`, listed in the [guidelines catalog](/docs/reference/guidelines-catalog)) states them in full: the item is located by **task ID**, never by position or title; the write is **diff-checked** to exactly one changed line, one checkbox per write, or it is abandoned rather than sent; a conflicting body is re-read and re-located, never re-patched from the stale snapshot.
+
 ### Closing Phase: Checkpoint + PR
 
 After all tasks are complete, the skill's closing phase splits the handoff from the publish so the PR is always built on a clean context:
