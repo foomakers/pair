@@ -1,5 +1,6 @@
 import { dirname } from 'path'
 import { FileSystemService } from '../file-system/file-system-service'
+import { existsCaseSensitive } from '../file-system/exists-case-sensitive'
 import { extractLinks as parseExtractLinks } from './markdown-parser'
 import { resolveMarkdownPath } from './path-resolution'
 import { convertToRelative } from '../path-resolution'
@@ -195,7 +196,7 @@ async function tryPushRelativeNormalization(params: {
   const { query } = params
   let relFromHost = convertToRelative(hostDir, absTarget)
   if (!relFromHost.startsWith('..')) {
-    if (!(await fileService.exists(absTarget))) return false
+    if (!(await existsCaseSensitive(fileService, absTarget))) return false
     // preserve anchors but do not introduce a leading './' that wasn't present
     // if the original link didn't start with './', strip the './' prefix
     if (!linkPath.startsWith('./') && relFromHost.startsWith('./')) {
@@ -266,7 +267,7 @@ async function tryPushSingleFileNormalization(params: {
   const { replacements, lnk, linkPath, absTarget, fileService, normalized, relToDocs } = params
   const base = relToDocs
   if (base === 'index.md') return
-  if (!(await fileService.exists(absTarget))) return
+  if (!(await existsCaseSensitive(fileService, absTarget))) return
   if (linkPath !== normalized) {
     pushNormalizedReplacement({
       replacements,

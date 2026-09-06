@@ -1,7 +1,15 @@
 ---
 title: Filesystem
-description: Configure pair to manage work items as Markdown files in your repository — zero external dependencies.
+description: Configure pair to manage work items as Markdown files in your repository — no PM tool account (a code-host is still declared).
 ---
+
+## Why this tracker exists
+
+Every other tool in the [PM tools overview](/docs/pm-tools) starts with an account. Sign up, create a workspace, provision an API key, wire an MCP server — and only then can pair file your first story. That is a reasonable price for a team. It is a poor one for a developer trying pair out on a Saturday, for anyone working offline, and for an air-gapped environment where "create an account" is not a step that exists.
+
+The filesystem tracker removes the account. Your backlog is Markdown in your repository; an item's **status is the directory it sits in**, so a transition is a `git mv` and your board history is your commit history. Nothing to provision, nothing to reach over the network, and no second system that can disagree with your code about what shipped.
+
+That choice has one consequence worth stating up front, because it decides how you configure the rest of your project: **a directory of Markdown files hosts no pull requests.** pair used to read a single `pm-tool` field for both backlog work and code work, which quietly assumed the tracker also owned your repository — true on GitHub, false here. So a filesystem project is a two-tool project by construction: declare a [code host](/docs/concepts/code-host) alongside it (per [ADR-018](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md)) and pair routes item state to the files and branch/PR/review work to that host. Skip the declaration and pair stops with a setup pointer before its first PR operation, rather than routing a pull request at a folder.
 
 ## Configuration
 
@@ -11,14 +19,22 @@ Add these lines to `.pair/adoption/tech/way-of-working.md`:
 - Filesystem is adopted for project management, using markdown files and folder organization.
   The backlog is managed in `.pair/adoption/product/backlog/` directory structure.
   See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
+
+## Git Workflow
+
+- `code-host`: `github` — repository `<org>/<repo>`.
+- `base-branch`: `main`.
 ```
+
+Item and state operations go to the files; branch, PR, review and merge operations go to the code host. `## Git Workflow` is not optional here — a directory hosts no pull requests, so there is nothing for pair to fall back to when the field is absent.
 
 ### Prerequisites
 
 - A pair-enabled project (`pair-cli install` completed)
-- No external tools, accounts, or API keys needed
+- No PM tool account, API key or MCP server — the backlog is files in your repo
+- An account on the code host you declare above (GitHub by default), because that is where branches, PRs and review live — a self-hosted or on-prem git host is a valid `code-host` too: pair ships a KB implementation guide for GitHub and Azure DevOps only, so for anything else it warns once and proceeds best-effort through that host's own CLI/API, which is never a HALT by itself
 
-This is the **zero-dependency option** — everything lives in your repository as version-controlled Markdown files. Ideal for solo developers, offline work, or projects that don't need a separate PM tool.
+This is the **zero-PM-dependency option** — every work item lives in your repository as version-controlled Markdown, and the only external account is the one your pull requests already needed. Ideal for solo developers, offline backlog work, or projects that don't need a separate PM tool.
 
 ## Mapping Model
 

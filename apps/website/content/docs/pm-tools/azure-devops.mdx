@@ -3,6 +3,16 @@ title: Azure DevOps
 description: Configure pair to manage work items with Azure DevOps Boards — setup, mapping model, state mapping, and first-run walkthrough.
 ---
 
+## Why this guide is mostly about vocabulary
+
+Azure DevOps is the second tool that needs no `code-host` declaration: Boards and Repos are the same product, so the backlog and the pull request live together and the optional split introduced by [ADR-018](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md) resolves to the zero-configuration path — omit the field and the code host is the PM tool ([Code host vs PM tool](/docs/concepts/code-host) states the routing rule).
+
+The friction here is a different one, and it is the reason this page carries a State Mapping section the GitHub guide does not need. pair's skills reason in five canonical macrostates (`Draft`, `Ready`, `In Progress`, `Review`, `Done`) — an internal vocabulary, so a skill never has to know your board's column names. Azure Boards has its own vocabulary and it is not that one: a Scrum process's forward flow is `New` / `Approved` / `Committed` / `Done` (Agile's is `New` / `Active` / `Resolved` / `Closed`; both also ship `Removed`, which is off that flow — see State Mapping), and teams commonly add a review column — the mapping below shows one. The naive fix — teach each skill Azure's words — would have to be repeated in every skill and redone for every custom process.
+
+So the mapping is declared **once**, in your adoption file, and skills read and write board state exclusively through it. The same reasoning covers the work item types: pair's Initiative → Epic → Story → Task ladder is mapped onto Azure's Epic → Feature → PBI → Task rather than assumed, which is what lets an Agile process (User Story instead of Product Backlog Item) or a custom process work by overriding a table instead of patching pair.
+
+One consequence you inherit from Azure's model: board membership here is **implicit** — a work item belongs to its team project the moment it is created, so there is no "add it to the board" step. What decides whether your team actually *sees* it is the **area path** — a work item whose area falls outside the ones your team's board is configured for is created, assigned, and invisible. pair therefore passes `--area` on every create rather than accepting the project default (per the [pm-adapter-visibility-contract](https://github.com/foomakers/pair/blob/main/.pair/adoption/decision-log/2026-07-31-pm-adapter-visibility-contract.md) decision record: an adapter with implicit membership must still name the field that decides the read view).
+
 ## Configuration
 
 Add these lines to `.pair/adoption/tech/way-of-working.md`:
@@ -66,6 +76,10 @@ Azure Boards columns rarely match pair's canonical states (`Draft`, `Ready`, `In
 
 Skills read and write board states exclusively through this map. Extra columns can stay unmapped — pair ignores them.
 
+`Removed` — stock in both the Scrum and the Agile process — is the example of a column deliberately left out of the table. pair's five macrostates exist so a skill can decide something, and a removed item asks nothing of any skill, so there is no sixth macrostate to map it onto ([canonical-states.md](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) records this). A `Removed` item is read as unmapped and ignored rather than mistaken for `Done`, and the guide's own backlog queries exclude it (`AND [System.State] <> 'Removed'`).
+
+The example above is a Scrum board that has *added* an `In Review` column; no out-of-box Azure process ships one. Map `Review` to whatever your board actually has — writing a state your process does not define is rejected by Azure (`az boards work-item update --state "In Review"` fails on a stock Scrum project).
+
 ### Status Transitions
 
 | pair Action | Azure Boards Effect |
@@ -115,6 +129,6 @@ pair creates Product Backlog Items as children of the feature, sets priority, an
 ## Related
 
 - [PM Tools overview](/docs/pm-tools) — choosing the right tool
-- [Filesystem](/docs/pm-tools/filesystem) — zero-dependency alternative
+- [Filesystem](/docs/pm-tools/filesystem) — zero-PM-dependency alternative (backlog in your repo; still declares a `code-host`)
 - [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option
 - [Linear](/docs/pm-tools/linear) — dedicated PM tool option

@@ -13,7 +13,7 @@ This guide provides comprehensive instructions for integrating pair with filesys
 - **Local Control**: All project management files are version-controlled with your code
 - **Hierarchical Organization**: Clear folder structure reflecting Initiative → Epic → User Story → Task hierarchy
 - **Markdown Native**: Human-readable files that integrate naturally with documentation
-- **No External Dependencies**: Works without internet connectivity or external tool configuration
+- **No PM-tool dependency**: the backlog needs no network or external tool — branch/PR/review still route to the `code-host` declared in [Step 1](#step-1-configure-way-of-workingmd), which is **not optional here**
 - **Full Customization**: Complete control over templates and organization structure
 
 ## Prerequisites
@@ -35,7 +35,7 @@ This guide provides comprehensive instructions for integrating pair with filesys
 
 ### Step 1: Configure way-of-working.md
 
-Update your project's way-of-working configuration to specify filesystem:
+Update your project's way-of-working configuration to specify filesystem — and, because filesystem hosts no code, the code host:
 
 ```markdown
 # Way of Working
@@ -43,7 +43,14 @@ Update your project's way-of-working configuration to specify filesystem:
 - Filesystem is adopted for project management, using markdown files and folder organization.
 - The backlog is managed in `.pair/adoption/product/backlog/` directory structure.
 - See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
+
+## Git Workflow
+
+- `code-host`: `github` — repository `<org>/<repo>`.
+- `base-branch`: `main`.
 ```
+
+`code-host` is optional in general — omitted, it resolves to the PM tool — but **not optional here**: filesystem owns no repositories, branches or pull requests, so there is nothing to fall back to and a PR operation without it HALTs before it starts (see the [code-host resolution rule](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)).
 
 ### Step 2: Verify Directory Structure
 

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync, readdirSync } from 'fs'
 import { join, relative } from 'path'
+import { fencedBlocks } from '@pair/content-ops/markdown/commonmark-blocks'
+import {
+  COMMONMARK_BLOCK_ROWS,
+  type CommonMarkBlockRow,
+} from '@pair/content-ops/test-utils/commonmark-rows'
 
 // Story #236 — code host separate from PM tool (WoW override), GitHub + Linear
 // reference case. Four invariants, all content invariants on the source-of-record
@@ -44,6 +49,19 @@ const allSkillDocs = (): string[] => {
       const abs = join(dir, entry.name)
       if (entry.isDirectory()) return walk(abs)
       return entry.isFile() && entry.name.endsWith('.md') ? [relative(root, abs)] : []
+    })
+  return walk(root).sort()
+}
+
+/** Every `.mdx` page of the docs site, recursively, as repo-root-relative paths. */
+const DOCS_ROOT = 'apps/website/content/docs'
+const allDocsPages = (): string[] => {
+  const root = join(REPO_ROOT, DOCS_ROOT)
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+      const abs = join(dir, entry.name)
+      if (entry.isDirectory()) return walk(abs)
+      return entry.isFile() && entry.name.endsWith('.mdx') ? [relative(REPO_ROOT, abs)] : []
     })
   return walk(root).sort()
 }
@@ -426,6 +444,342 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     // ...and an omitted code-host there HALTs rather than resolving to filesystem.
     expect(page).toMatch(/filesystem[^\n]*\|[\s\S]{0,80}HALT/i)
   })
+
+  /**
+   * The COPY-PASTE surface, not the prose. `/pair-capability-setup-pm` applies the
+   * tool's implementation guide, so the fenced `way-of-working.md` snippet in that
+   * guide is what actually lands in an adopter's adoption file. A hosts-no-code
+   * guide whose snippet omits `## Git Workflow` therefore ships a configuration
+   * that HALTs on the project's first `/pair-capability-publish-pr` — the guide is
+   * correct in prose and wrong in the block the reader copies.
+   *
+   * Both roots are asserted, because the installed `.pair/knowledge` copy is what
+   * an adopting project reads (the dataset one is only what pair ships).
+   */
+  const WOW_SNIPPET_GUIDES: ReadonlyArray<{ guide: string; hostsCode: boolean }> = [
+    { guide: 'filesystem-implementation.md', hostsCode: false },
+    { guide: 'linear-implementation.md', hostsCode: false },
+    { guide: 'azure-devops-implementation.md', hostsCode: true },
+    // github-implementation.md carries no way-of-working snippet at all, so there is
+    // no copy-paste surface to assert on; the reverse sweep below pins that fact.
+  ]
+
+  /**
+   * Every fenced ```markdown block of a guide — the copy-paste surface itself, whatever
+   * it says.
+   *
+   * The CommonMark § 4.5/§ 4.6/§ 5 BLOCK GRAMMAR behind it is not written here: it is
+   * `readMarkdown`/`fencedBlocks` in `@pair/content-ops`, the SAME reader the website's
+   * docs-staleness gate uses to decide which lines can carry a heading anchor. It used
+   * to be written twice, and the cost was measured: the `` ```bash ``-is-not-a-closer
+   * defect was found and fixed HERE, then had to be found again in the production gate,
+   * where it was serving two phantom anchors and swallowing two real headings in
+   * `framework-patterns/fastify.md`. The round after that added containers here only,
+   * and the gate went on failing a live `apps/pair-cli/CHANGELOG.md` anchor. One module,
+   * one grammar, one fix — and one shared row table (`COMMONMARK_BLOCK_ROWS`) both
+   * suites run, so deleting a container rule reddens both.
+   *
+   * What this file still owns is the FILTER: which info strings count as a way-of-working
+   * snippet (`markdown` or `md`, any case, trailing attributes allowed) — the language
+   * question, not the block-structure question.
+   */
+  const MARKDOWN_INFO_RE = /^(?:markdown|md)\b/i
+
+  const markdownFences = (content: string): string[] =>
+    fencedBlocks(content)
+      .filter(block => MARKDOWN_INFO_RE.test(block.info))
+      .map(block => block.body)
+
+  /** Every fenced markdown block of `content` that configures way-of-working.md. */
+  const wowSnippets = (content: string): string[] =>
+    markdownFences(content).filter(block => /adopted for project management/i.test(block))
+
+  /**
+   * Does a snippet DECLARE a code host? The `code-host:` key line, nothing else.
+   *
+   * NOT the `## Git Workflow` heading: `way-of-working-pm-resolution.md` § Section
+   * ownership gives that heading BOTH `code-host` and `base-branch`, and its
+   * `base-branch` resolution names `## Git Workflow` → `base-branch` as *the current
+   * placement*. A hosts-code guide documenting a non-default base branch therefore
+   * ships the heading with no code host in it — legal, and the recommended placement.
+   * Keying on the heading accused exactly that guide of declaring a code host.
+   *
+   * Step 4 of the resolution rule also PERMITS a `code-host` naming the same tool as
+   * `pm-tool` ("treat it exactly as if it were omitted") — still a declaration, so
+   * still off the zero-configuration path a hosts-code guide must show; and a prose
+   * mention of the word inside the block is not a declaration at all.
+   */
+  const declaresCodeHost = (snippet: string): boolean =>
+    /^\s*[-*]?\s*`?code-host`?\s*:/m.test(snippet)
+
+  for (const { guide, hostsCode } of WOW_SNIPPET_GUIDES) {
+    for (const [rootLabel, root] of [
+      ['dataset', DATASET],
+      ['installed', REPO_ROOT],
+    ] as const) {
+      it(`${guide} (${rootLabel}) — the way-of-working snippet ${
+        hostsCode
+          ? 'ships no `code-host` declaration (it shows the zero-config path)'
+          : 'declares code-host (or the first PR HALTs)'
+      }`, () => {
+        const snippets = wowSnippets(read(root, `${PM_TOOL_KB}/${guide}`))
+        expect(snippets.length, `${guide} has no way-of-working snippet`).toBeGreaterThan(0)
+        const snippet = snippets.join('\n')
+        if (hostsCode) {
+          // ADR-018: the tool IS the code host, so the SHIPPED snippet must show the
+          // zero-configuration path. Asserted on the declaration, not on the substring:
+          // the explicit-but-equal form is legal per the resolution rule's step 4, and
+          // a prose mention inside the block is not a declaration either.
+          expect(declaresCodeHost(snippet), `${guide}: snippet declares a code host`).toBe(false)
+        } else {
+          expect(snippet, guide).toMatch(/^##\s+Git Workflow\s*$/m)
+          expect(snippet, guide).toContain('`code-host`')
+          expect(snippet, guide).toContain('`base-branch`')
+        }
+      })
+    }
+  }
+
+  for (const { guide } of WOW_SNIPPET_GUIDES.filter(g => !g.hostsCode)) {
+    it(`${guide} says WHY the field is not optional there (HALT, not preference)`, () => {
+      for (const [rootLabel, root] of [
+        ['dataset', DATASET],
+        ['installed', REPO_ROOT],
+      ] as const) {
+        const content = read(root, `${PM_TOOL_KB}/${guide}`)
+        expect(content, `${guide}/${rootLabel}`).toMatch(/hosts? no code|owns? no repositor/i)
+        expect(content, `${guide}/${rootLabel}`).toContain('HALT')
+      }
+    })
+  }
+
+  /**
+   * Closes the door WOW_SNIPPET_GUIDES leaves open: it is a hand-written list, so a
+   * NEW tracker guide (`jira-implementation.md`, …) shipping a HALTing snippet would
+   * be silently unasserted. Read the directory instead of naming files: anything not
+   * classified above must prove it has no copy-paste surface at all. Subsumes the
+   * github-implementation.md reverse case, which is unclassified by design.
+   *
+   * The unclassified branch asserts NO ```markdown fence at all, not "no fence whose
+   * wording `wowSnippets` recognises". `wowSnippets` keys on the phrase `adopted for
+   * project management`, a convention no gate enforces — a new guide worded `Jira is
+   * the project management tool for this project.` would be invisible to it and ship
+   * an unasserted HALTing snippet. Phrasing-independence is free here:
+   * github-implementation.md carries zero ```markdown fences today.
+   */
+  it('every *-implementation.md guide is classified or ships NO markdown fence at all (no unasserted door)', () => {
+    const classified = new Set(WOW_SNIPPET_GUIDES.map(g => g.guide))
+    for (const [rootLabel, root] of [
+      ['dataset', DATASET],
+      ['installed', REPO_ROOT],
+    ] as const) {
+      const guides = readdirSync(join(root, PM_TOOL_KB))
+        .filter(name => name.endsWith('-implementation.md'))
+        .sort()
+      expect(guides.length, `${rootLabel}: no PM implementation guides found`).toBeGreaterThan(0)
+      expect(guides, `${rootLabel}`).toEqual(expect.arrayContaining([...classified]))
+      for (const guide of guides.filter(g => !classified.has(g))) {
+        expect(
+          markdownFences(read(root, `${PM_TOOL_KB}/${guide}`)),
+          `${guide} (${rootLabel}) ships a fenced \`\`\`markdown block but is not classified in WOW_SNIPPET_GUIDES — classify it with its hostsCode value`,
+        ).toEqual([])
+      }
+    }
+  })
+
+  /**
+   * The two predicates the sweep above rests on, executed against realistic guide
+   * text rather than trusted by inspection.
+   */
+  describe('the sweep predicates', () => {
+    const JIRA_SNIPPET_OFF_PHRASE = [
+      '# A guide worded off the `adopted for project management` convention.',
+      '',
+      '```markdown',
+      '# Way of Working',
+      '',
+      '- Jira is the project management tool for this project.',
+      '```',
+    ].join('\n')
+
+    it('markdownFences sees a copy-paste surface that wowSnippets is blind to', () => {
+      expect(wowSnippets(JIRA_SNIPPET_OFF_PHRASE)).toEqual([])
+      expect(markdownFences(JIRA_SNIPPET_OFF_PHRASE)).toHaveLength(1)
+    })
+
+    /**
+     * The fence grammar the two predicates parse (CommonMark § fenced code blocks):
+     * a run of 3+ backticks or tildes, an info string whose first word is the
+     * language, then the block. Every row is a fence a guide author could really
+     * write; the predicate must read `md` and `markdown` alike, ignore the info
+     * string's case and trailing attributes, accept CRLF, and stay blind to other
+     * languages and to a bare fence (github-implementation.md ships 18 ```bash
+     * fences, all legitimately unclassified).
+     */
+    const FENCE_ROWS: ReadonlyArray<{
+      open: string
+      close: string
+      eol: string
+      fences: number
+      why: string
+    }> = [
+      {
+        open: '```markdown',
+        close: '```',
+        eol: '\n',
+        fences: 1,
+        why: 'the form every guide uses today',
+      },
+      { open: '```md', close: '```', eol: '\n', fences: 1, why: 'short language id' },
+      { open: '```Markdown', close: '```', eol: '\n', fences: 1, why: 'capitalised language id' },
+      {
+        open: '```markdown title="way-of-working.md"',
+        close: '```',
+        eol: '\n',
+        fences: 1,
+        why: 'trailing info-string attributes',
+      },
+      { open: '```markdown', close: '```', eol: '\r\n', fences: 1, why: 'CRLF line endings' },
+      { open: '~~~markdown', close: '~~~', eol: '\n', fences: 1, why: 'tilde fence' },
+      { open: '````markdown', close: '````', eol: '\n', fences: 1, why: 'four-backtick fence' },
+      {
+        open: '```mdx',
+        close: '```',
+        eol: '\n',
+        fences: 0,
+        why: 'a different language that merely starts with md',
+      },
+      { open: '```bash', close: '```', eol: '\n', fences: 0, why: 'another language' },
+      { open: '```', close: '```', eol: '\n', fences: 0, why: 'bare fence, no language' },
+    ]
+    const fenced = (row: { open: string; close: string; eol: string }) =>
+      [
+        '# A guide.',
+        '',
+        row.open,
+        '# Way of Working',
+        '',
+        '- Jira is adopted for project management.',
+        row.close,
+        '',
+        'Prose after the block.',
+      ].join(row.eol)
+
+    for (const row of FENCE_ROWS) {
+      it(`fence grammar — ${row.why}: ${JSON.stringify(row.open)} → ${row.fences} fence(s)`, () => {
+        const content = fenced(row)
+        expect(markdownFences(content), 'markdownFences').toHaveLength(row.fences)
+        expect(wowSnippets(content), 'wowSnippets').toHaveLength(row.fences)
+        for (const block of markdownFences(content)) {
+          expect(block).toContain('# Way of Working')
+          expect(block).not.toContain('Prose after the block.')
+        }
+      })
+    }
+
+    /**
+     * INDENTATION, TERMINATION AND CONTAINERS — the two halves of the CommonMark fence
+     * grammar the `open`/`close` table above cannot express, because it builds every
+     * fixture with the fence alone on its own unindented line. A fence does not only
+     * sit at column 0 of the document: inside a blockquote or a list item it keeps
+     * being a fence, and both its marker lines and its body carry the container's
+     * prefix. Missing that read a real copy-paste surface as NO fence at all, which is
+     * the silent direction — the unclassified branch below asserts
+     * `markdownFences(...) === []`, so an invisible snippet PASSES it.
+     *
+     * These rows are NOT local: they are `COMMONMARK_BLOCK_ROWS` in `@pair/content-ops`,
+     * the one table the website's docs-staleness gate runs too (there against
+     * `collectHeadingSlugs`, here against `markdownFences`). Every value in it is
+     * github.com's own output for the same bytes. Deleting a container rule from the
+     * shared reader reddens BOTH suites, which is the whole reason it was extracted:
+     * the grammar used to be written twice, and the second copy kept the bug the first
+     * one had already been fixed for.
+     *
+     * `readerBlocks`, where a row sets it, is a divergence from github.com this reader
+     * knowingly keeps — on record as a row instead of latent.
+     */
+    const asBlocks = (row: CommonMarkBlockRow): readonly string[] =>
+      row.readerBlocks ?? row.markdownBlocks
+
+    for (const row of COMMONMARK_BLOCK_ROWS) {
+      it(`block structure [${row.name}] — ${row.why}`, () => {
+        expect(markdownFences(row.content), `${row.name}: fenced markdown blocks`).toEqual([
+          ...asBlocks(row),
+        ])
+      })
+    }
+
+    it('a fence opened with four backticks is closed by four, not by a three-backtick run inside it', () => {
+      const content = ['````markdown', '# Outer', '```bash', 'echo hi', '```', '````', ''].join(
+        '\n',
+      )
+      expect(markdownFences(content)).toHaveLength(1)
+      expect(markdownFences(content)[0]).toContain('echo hi')
+    })
+
+    it('declaresCodeHost is true for a declaration, false for a prose mention', () => {
+      expect(
+        declaresCodeHost('# Way of Working\n\n## Git Workflow\n\n- `code-host`: `github`.'),
+      ).toBe(true)
+      // The explicit-but-equal form the resolution rule permits (step 4) — still a
+      // declaration, so still off the zero-config path a hosts-code guide must show.
+      expect(declaresCodeHost('- `code-host`: `azure-devops`.')).toBe(true)
+      // ...but a mention is not a declaration: this must NOT redden a hosts-code guide.
+      expect(
+        declaresCodeHost(
+          '- Azure DevOps is adopted for project management.\n  It hosts code, so no `code-host` line is needed.',
+        ),
+      ).toBe(false)
+    })
+
+    // `## Git Workflow` owns base-branch too, and that is its CURRENT placement per the
+    // resolution rule — so a hosts-code guide documenting `develop` ships the heading
+    // with no code host under it. Keying the predicate on the heading called that guide
+    // a code-host declaration and reddened the gate on legal, recommended content.
+    it('declaresCodeHost is false for a Git Workflow section that only sets base-branch', () => {
+      expect(
+        declaresCodeHost(
+          [
+            '- Azure DevOps is adopted for project management.',
+            '  Organization: <org>. Project: <project>.',
+            '',
+            '## Git Workflow',
+            '',
+            '- `base-branch`: `develop`.',
+          ].join('\n'),
+        ),
+      ).toBe(false)
+    })
+  })
+
+  /**
+   * The Key Benefits a reader reaches BEFORE Step 1 must not sell away the field
+   * Step 1 makes mandatory: a bullet promising "no external dependencies" invites an
+   * agent applying the guide to treat `## Git Workflow` as inapplicable offline, copy
+   * the snippet without it, and HALT on the project's first PR operation.
+   */
+  const NO_DEP_CLAIM = /(no|zero)\s+external\s+dependenc/i
+
+  it('no hosts-no-code PM surface sells an unqualified "no external dependencies" benefit', () => {
+    const surfaces = [
+      ...WOW_SNIPPET_GUIDES.filter(g => !g.hostsCode).map(g => `${PM_TOOL_KB}/${g.guide}`),
+      `${PM_TOOL_KB}/README.md`,
+    ]
+    for (const [rootLabel, root] of [
+      ['dataset', DATASET],
+      ['installed', REPO_ROOT],
+    ] as const) {
+      for (const rel of surfaces) {
+        const offending = read(root, rel)
+          .split('\n')
+          .filter(line => NO_DEP_CLAIM.test(line))
+        expect(
+          offending,
+          `${rel} (${rootLabel}) claims no external dependencies — a code-host is still required (ADR-018)`,
+        ).toEqual([])
+      }
+    }
+  })
 })
 
 describe('code-host / PM-tool split — the machine-read slots are actually machine-readable (#236, AC3)', () => {
@@ -504,6 +858,259 @@ describe('code-host / PM-tool split — the machine-read slots are actually mach
     // "host **no code**" — the claim is emphasised in the prose, so allow the
     // bold markers between the verb and the phrase.
     expect(page).toMatch(/(Filesystem|Linear)[\s\S]{0,400}hosts? \*{0,2}no code/i)
+  })
+
+  /**
+   * The Supported Options comparison table answers "does this option make me sign up
+   * for anything?" in one scannable column. A hosts-no-code tracker still requires a
+   * code-host account, so a BARE `No` in External Service is the same unqualified
+   * claim the prose surfaces dropped (ADR-018) — in the highest-traffic form.
+   */
+  it('no hosts-no-code row in the Supported Options table sells a bare "External Service: No"', () => {
+    const page = read(REPO_ROOT, 'apps/website/content/docs/pm-tools/index.mdx')
+    const rows = page
+      .split('\n')
+      .filter(line => /^\|\s*\[/.test(line))
+      .map(line =>
+        line
+          .split('|')
+          .slice(1, -1)
+          .map(cell => cell.trim()),
+      )
+    expect(rows.length, 'Supported Options table not found — has the shape moved?').toBeGreaterThan(
+      0,
+    )
+    const hostsNoCode = rows.filter(cells => /^No\b/i.test(cells[3] ?? ''))
+    expect(hostsNoCode.length, 'no hosts-no-code row found in the table').toBeGreaterThan(0)
+    for (const cells of hostsNoCode) {
+      expect(
+        cells[2],
+        `${cells[0]}: unqualified External Service cell — a code-host account is still required (ADR-018)`,
+      ).not.toMatch(/^No\.?$/i)
+    }
+  })
+
+  /**
+   * ADR-018 scopes the no-mirroring rule to "PR states (draft / ready / approved /
+   * merged)" and says in the same breath that macrostate transitions ALWAYS happen on
+   * the PM tool. A docs page that drops the parenthetical reads as "the board is never
+   * written on a PR event", which its own Status Transitions table contradicts one
+   * screen down (`Create PR | … status → "In Review"`). Every board-level claim on the
+   * docs surface must therefore carry the enumeration.
+   *
+   * The detector matches `never mirrored onto <anything>`, not the literal noun "the
+   * board": a page naturally names its own tracker (`never mirrored onto Linear`,
+   * `never mirrored onto Boards`) and pinning the noun let exactly that phrasing ship
+   * unscoped. Row-scoped mentions with no `onto` (linear.mdx's Review table cell,
+   * `review state is never mirrored`) stay out of scope — the row names the event.
+   *
+   * The surface is the WHOLE docs tree, walked, not `pm-tools/` plus a hand-appended
+   * page: the claim's natural home also includes `concepts/pr-state-flow.mdx` (where
+   * `reference/guidelines-catalog.mdx` routes readers for exactly this topic), and any
+   * page named rather than walked is a door the sweep does not watch.
+   */
+  it('every "never mirrored onto X" claim on the docs site is scoped to PR states', () => {
+    const pages = allDocsPages()
+    let claims = 0
+    for (const rel of pages) {
+      for (const line of read(REPO_ROOT, rel).split('\n')) {
+        if (!/never mirrored onto/i.test(line)) continue
+        claims++
+        expect(
+          line,
+          `${rel}: unscoped no-mirroring claim — name the PR states (draft / ready / approved / merged) it covers`,
+        ).toMatch(/draft/i)
+      }
+    }
+    expect(claims, 'no no-mirroring claim found at all — has the wording moved?').toBeGreaterThan(0)
+  })
+
+  /**
+   * The `In Review` transition is CONDITIONAL: `linear-implementation.md` § State
+   * Mapping says a team without an `In Review` state has none mapped to `Review`, and
+   * skills report the gap instead of guessing. A page that promises the transition flat
+   * ("moves the issue to In Review when the PR opens") tells a reader on a stock Linear
+   * team — Backlog / Todo / In Progress / Done — to expect something that will never
+   * happen, and contradicts the very table it points at.
+   *
+   * Detector: a TRANSITION to the state (`→ In Review`, `moves … to "In Review"`), not
+   * the bare words — a state-mapping table row or a glossary mention asserts nothing.
+   * The qualifier must sit on the CLAIM's own line: the defect this closes is precisely
+   * a flat promise followed a line later by its negation, which a window would accept.
+   *
+   * The verb alternation covers the SYNONYMS that express the same transition, not the
+   * two phrasings that happen to be on the site today. Pinning it to `move` reproduced,
+   * on the wording axis, the unwatched door the sweep above closed on the path axis: a
+   * page worded `pair transitions the issue to In Review` shipped an unconditional
+   * promise past a green gate. The gap is capped at 40 non-pipe characters and the
+   * preposition must sit immediately before the state, which is what keeps bare
+   * state-mapping rows (`| In Review | Review |`) and glossary mentions out.
+   *
+   * The alternation is also VOICE-independent: verbs carry an inflection suffix rather
+   * than a hard-coded `s`, so `is moved to`, `gets marked as`, `is updated to` and the
+   * bare infinitive after a modal (`will switch … to`) count as the same promise as the
+   * present tense. Passive is arguably the MORE natural voice for docs prose describing
+   * what the tool does to the card, so a present-tense-only list left the sweep's own
+   * headline case — `The issue is moved to In Review when the PR opens.` — unwatched.
+   * Accepted trade-off: a purely descriptive past-participle line (`issues moved to In
+   * Review by hand are left untouched`) owes no qualifier yet trips the detector. A
+   * false positive costs one qualifier on a docs line; the false negative it replaces
+   * shipped an unconditional promise to every reader on a stock Linear team.
+   */
+  /**
+   * Every inflection of every transition verb, written out rather than derived by a
+   * suffix rule: `move` + `ing` is not `moveing`, `set` has no `-ed`, `flip` doubles
+   * its consonant. The table IS the decision table the meta-test below walks.
+   */
+  const TRANSITION_VERB_FORMS: ReadonlyArray<readonly string[]> = [
+    ['move', 'moves', 'moved', 'moving'],
+    ['transition', 'transitions', 'transitioned', 'transitioning'],
+    ['advance', 'advances', 'advanced', 'advancing'],
+    ['promote', 'promotes', 'promoted', 'promoting'],
+    ['set', 'sets', 'setting'],
+    ['put', 'puts', 'putting'],
+    ['switch', 'switches', 'switched', 'switching'],
+    ['flip', 'flips', 'flipped', 'flipping'],
+    ['shift', 'shifts', 'shifted', 'shifting'],
+    ['update', 'updates', 'updated', 'updating'],
+    ['change', 'changes', 'changed', 'changing'],
+    ['mark', 'marks', 'marked', 'marking'],
+  ]
+  const TRANSITION_VERBS = TRANSITION_VERB_FORMS.flat().join('|')
+  /**
+   * The DETERMINER slot between the preposition and the state. English puts one there
+   * whenever the sentence names what the state belongs to — `moves the card to the In
+   * Review column`, `transitions the issue into the In Review state` — and a tail that
+   * demanded the state immediately after `to` missed every one of them. Same door as
+   * the verb-synonym and the voice gaps above, third spelling: a docs page worded with
+   * the (very natural) article shipped an unconditional promise past a green gate to a
+   * reader on a stock Linear team.
+   */
+  const DETERMINERS = ['the', 'a', 'an', 'its', 'their', 'your', 'our']
+  // The state may be bare, bold, quoted or in backticks — azure-devops.mdx:81 already
+  // house-styles it as `In Review`, so the backtick form is the likeliest next phrasing.
+  const promisesInReview = (line: string): boolean =>
+    new RegExp(
+      `(→|->|\\b(?:${TRANSITION_VERBS})\\b[^|\\n]{0,40}\\b(?:to|into|as))\\s*(?:(?:${DETERMINERS.join('|')})\\s+)?[*"\\x60]*In Review`,
+      'i',
+    ).test(line)
+
+  /**
+   * Is the promise scoped to teams that actually have the state? The qualifier must
+   * CONDITION the transition. `default teams` alone does not: it is a bare noun phrase
+   * that reads the same in a sentence asserting the opposite (`Linear's default teams
+   * move the issue to In Review`), so keying on it excused the exact claim this sweep
+   * exists to catch.
+   */
+  const scopesInReviewToTeamsThatHaveIt = (line: string): boolean =>
+    /only if|if the team|where the team|teams? (that|which) have/i.test(line)
+
+  it('every "→ In Review" promise on the docs site says the state is not guaranteed', () => {
+    let claims = 0
+    const unconditional: string[] = []
+    for (const rel of allDocsPages()) {
+      const lines = read(REPO_ROOT, rel).split('\n')
+      for (const [i, line] of lines.entries()) {
+        if (!promisesInReview(line)) continue
+        claims++
+        if (!scopesInReviewToTeamsThatHaveIt(line)) unconditional.push(`${rel}:${i + 1}`)
+      }
+    }
+    expect(
+      unconditional,
+      'unconditional "In Review" promise — Linear\'s default teams ship no such state (see the Status Transitions table)',
+    ).toEqual([])
+    expect(claims, 'no In Review transition found at all — has the wording moved?').toBeGreaterThan(
+      0,
+    )
+  })
+
+  /**
+   * The two predicates above, executed against realistic page text rather than trusted
+   * by inspection — including the phrasings that slipped the `move`-only detector.
+   */
+  describe('the In Review sweep predicates', () => {
+    it('promisesInReview sees the transition however the sentence words its verb', () => {
+      for (const line of [
+        'When the PR opens, pair transitions the issue to In Review.',
+        'Opening the PR moves the issue to "In Review".',
+        'The skill advances the item to **In Review** on PR creation.',
+        'pair sets the status to "In Review" when the PR opens.',
+        'The adapter updates the work item to In Review.',
+        'It marks the issue as In Review as soon as the PR is ready.',
+        'PR URL commented on ENG-412; ENG-412 → In Review',
+        // Passive / past participle — the more natural voice for docs prose about
+        // what the tool does to the card, and the form a present-tense-only
+        // alternation lets through.
+        'The issue is moved to In Review when the PR opens.',
+        'The issue is transitioned to In Review when the PR opens.',
+        'The card gets marked as In Review as soon as the PR is ready.',
+        'The status is updated to In Review.',
+        'The item is flipped to "In Review" by the publish step.',
+        'Once the PR is ready the card is switched to In Review.',
+        // Bare infinitive after a modal / imperative — same door, other end.
+        'Opening a PR will switch the issue to In Review.',
+        'The skill can advance the item to **In Review** on PR creation.',
+        // Backtick-delimited state — the house style azure-devops.mdx:81 already uses
+        // for `In Review`, so the most likely next phrasing of the promise.
+        'pair moves the item to `In Review` when the PR opens.',
+        'the state → `In Review` on PR open',
+        'The issue is moved to `In Review`.',
+        // Progressive aspect — a third voice the base/-s/-ed alternation let through.
+        'pair is marking the card as In Review on PR creation.',
+        'pair is moving the issue to In Review while the PR is opened.',
+        'The adapter is setting the status to "In Review".',
+        'Opening the PR is flipping the card to In Review.',
+        // Determiner between the preposition and the state — the article an English
+        // sentence takes as soon as it names what the state belongs to.
+        'pair moves the card to the In Review column when the PR opens.',
+        'Opening the PR transitions the issue into the In Review state.',
+        'The status is set to the `In Review` state on PR creation.',
+        'The publish step advances the card to its In Review column.',
+        'ENG-412 → the In Review column',
+      ]) {
+        expect(promisesInReview(line), line).toBe(true)
+      }
+    })
+
+    it('promisesInReview sees every inflection × determiner × delimiter in the table', () => {
+      for (const forms of TRANSITION_VERB_FORMS) {
+        for (const form of forms) {
+          for (const det of ['', ...DETERMINERS.map(d => `${d} `)]) {
+            for (const state of ['In Review', '"In Review"', '**In Review**', '`In Review`']) {
+              const line = `pair ${form} the issue to ${det}${state} when the PR opens.`
+              expect(promisesInReview(line), line).toBe(true)
+            }
+          }
+        }
+      }
+    })
+
+    it('promisesInReview ignores a state-mapping row and a glossary mention', () => {
+      for (const line of [
+        '| In Review    | Review      |',
+        'pair skills never reason in board labels like "Todo" or "In Review".',
+        'Map `Review` to whatever your board actually has; `az boards work-item update --state "In Review"` fails on a stock Scrum project.',
+        'Linear\'s default teams ship no "In Review" state; a skill reports the gap.',
+      ]) {
+        expect(promisesInReview(line), line).toBe(false)
+      }
+    })
+
+    it('a bare "default teams" does not scope a promise it is the subject of', () => {
+      const inverted = "Linear's default teams move the issue to In Review."
+      expect(promisesInReview(inverted)).toBe(true)
+      expect(scopesInReviewToTeamsThatHaveIt(inverted)).toBe(false)
+      // ...while the real conditional forms on the site still count as scoped.
+      expect(
+        scopesInReviewToTeamsThatHaveIt('ENG-412 → In Review (only if the team has that state)'),
+      ).toBe(true)
+      expect(
+        scopesInReviewToTeamsThatHaveIt(
+          'the table moves the issue to "In Review", on teams that have that state',
+        ),
+      ).toBe(true)
+    })
   })
 
   it('the Linear guide says who provisions the chromatic risk:/cost: labels', () => {

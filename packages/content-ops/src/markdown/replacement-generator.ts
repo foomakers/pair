@@ -10,6 +10,7 @@ import {
 import { ErrorLog } from '../observability'
 import { Replacement } from './replacement-applier'
 import { isExternalLink, stripAnchor } from '../file-system/file-system-utils'
+import { existsCaseSensitive } from '../file-system/exists-case-sensitive'
 import { resolveMarkdownPath, tryResolvePathVariants } from './path-resolution'
 import { convertToRelative } from '../path-resolution'
 
@@ -88,7 +89,7 @@ async function processLinkExistence(
     config.datasetRoot,
   )
 
-  if (await fileService.exists(absTarget)) return undefined
+  if (await existsCaseSensitive(fileService, absTarget)) return undefined
 
   const fixed = await tryResolvePathVariants({
     file,

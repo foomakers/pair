@@ -123,6 +123,22 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    // The docs-staleness gate reads its CommonMark block reader from @pair/content-ops
+    // (one grammar, two consumers — see the module header), so it needs that package
+    // BUILT. `dependsOn: ["^build"]` is what makes `pnpm docs:staleness` work on a clean
+    // checkout; `cache: false` is deliberate — a gate that replays a cached PASS after
+    // the docs it checks changed is a false green, and its inputs are the whole repo.
+    "docs:staleness": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    // Same edge, same reason: the oracle regenerator imports @pair/content-ops. Without
+    // this task the documented `pnpm docs:anchor-oracle` dies with ERR_MODULE_NOT_FOUND
+    // on a clean checkout. Never cached — it POSTs to github.com and rewrites a fixture.
+    "docs:anchor-oracle": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
     "lint": {
       "outputs": []
     },

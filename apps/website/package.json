@@ -23,7 +23,8 @@
     "prettier:check": "prettier-check",
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix",
-    "docs:staleness": "tsx lib/docs-staleness-check.ts"
+    "docs:staleness": "tsx lib/docs-staleness-check.ts",
+    "docs:anchor-oracle": "tsx scripts/generate-anchor-oracle.ts"
   },
   "dependencies": {
     "@pair/brand": "workspace:*",
@@ -38,6 +39,7 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@pair/content-ops": "workspace:*",
     "@pair/eslint-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",

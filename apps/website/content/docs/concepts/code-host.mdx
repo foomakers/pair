@@ -10,6 +10,8 @@ pair distinguishes two tools that are usually the same one:
 
 On GitHub or Azure DevOps these coincide, so you configure nothing. On Linear, Jira or the `filesystem` tracker they cannot: those tools host no code. That is what the optional `code-host` field is for.
 
+The routing rule below — including why the field is optional, why no PM tool's own VCS integration is used, and why PR state (draft / ready / approved / merged) is never mirrored onto the board — is recorded in [ADR-018](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md). This page states the rule; the ADR states the alternatives it was chosen over.
+
 ## Zero Configuration by Default
 
 Omit `code-host` and **the code host is your PM tool**. Behavior is identical to a single-tool project — there is nothing to migrate and nothing to declare.
@@ -86,7 +88,7 @@ The cycle then runs across both tools:
 /pair-process-refine-story    → story refined on Linear (ENG-412 → Todo)
 /pair-process-implement       → ENG-412 → In Progress on Linear; branch on GitHub
 /pair-capability-publish-pr   → PR on GitHub with "Refs: ENG-412";
-                                PR URL commented on ENG-412; ENG-412 → In Review
+                                PR URL commented on ENG-412; ENG-412 → In Review (only if the team has that state)
 /pair-process-review          → review + merge on GitHub; ENG-412 → Done on Linear
 ```
 
