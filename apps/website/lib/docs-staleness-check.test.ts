@@ -1120,7 +1120,130 @@ describe('findDeadRepoLinks', () => {
     },
   ]
 
-  for (const { why, content, hrefs } of [...SURFACE_ROWS, ...INTERACTION_ROWS]) {
+  // --- BACKTICK RUN LENGTH (CommonMark § 6.1) --------------------------------
+  //
+  // A code span's closer must be a backtick run of EXACTLY the opener's length; a run
+  // of 2 cannot close a run of 1. The shipped mask closes on a BACKREFERENCE, so an
+  // opener of N pairs with the FIRST N backticks of any LONGER run — it blanks the URL
+  // between them and the gate prints PASS on a live 404. The direction is always the
+  // silent one: every disagreement below is the gate reporting FEWER errors than the
+  // page has clickable dead links, never a false build break.
+  //
+  // Run lengths are written out (`x1`, `x2`, `x3` of U+0060) because one, two and three
+  // backticks in a fixture string are visually confusable and the whole table turns on
+  // telling them apart.
+  //
+  // Every count is the REAL CONSUMER's, measured twice on the same bytes and agreeing
+  // on every row:
+  //   MDX — the site's own installed pipeline, `@mdx-js/mdx@3.1.1` compiled with
+  //         `remark-gfm@4.0.1`, counting `href:` in the emitted JSX (ADL 2026-09-04:
+  //         the site build is this surface's oracle);
+  //   GH  — `jq -Rs '{text:.}' row.mdx | gh api -X POST /markdown --input -`,
+  //         counting `href="<url>"`.
+  const CODE_SPAN_RUN_ROWS: ReadonlyArray<{ why: string; content: string; hrefs: number }> = [
+    {
+      // THE DEFECT. Opener x1, and the only later runs are x2 — nothing can close it,
+      // so the backtick is literal text and the citation is live.
+      why: 'an opener run of x1 whose only later run is x2 — it never closes',
+      content: `Use a \` here, see [dead](${DEAD}) and \`\`double\`\` too.`,
+      hrefs: 1,
+    },
+    {
+      // Same shape through GFM's bare literal autolink, the other way a citation reaches
+      // a reader.
+      why: 'the same x1-then-x2 shape around a BARE (GFM autolink) citation',
+      content: `Use a \` here, see ${DEAD} and \`\`double\`\` too.`,
+      hrefs: 1,
+    },
+    {
+      // Nearest continuing partner: the same opener with a real x1 closer after the URL.
+      why: 'an opener run of x1 closed by a later run of x1',
+      content: `Use a \` here, see [dead](${DEAD}) and \` too.`,
+      hrefs: 0,
+    },
+    {
+      why: 'an opener run of x2 whose only later run is x1 — it never closes',
+      content: `Use a \`\`double here, see [dead](${DEAD}) and \` single too.`,
+      hrefs: 1,
+    },
+    {
+      why: 'an opener run of x2 closed by a later run of x2',
+      content: `Use a \`\`double here, see [dead](${DEAD}) and \`\`close\`\` too.`,
+      hrefs: 0,
+    },
+    {
+      why: 'an opener run of x3 whose only later run is x2 — it never closes',
+      content: `Use a \`\`\`triple here, see [dead](${DEAD}) and \`\`two\`\` too.`,
+      hrefs: 1,
+    },
+    {
+      // The x2 run is SKIPPED, not treated as a closer, and the x3 after it closes.
+      why: 'an opener run of x3 that skips an x2 run and closes on a later x3',
+      content: `Use a \`\`\`triple here, see [dead](${DEAD}) and \`\`two\`\` and \`\`\`close\`\`\` too.`,
+      hrefs: 0,
+    },
+    {
+      // The paired direction of row 1, one byte apart: the x1 inside ``a`b`` IS a valid
+      // length-1 closer, so the SAME opener that was literal above opens a real span
+      // here and the citation is code, not a link.
+      why: 'an opener run of x1 closed by the x1 INSIDE a later x2-delimited span',
+      content: `Use a \` here, see [dead](${DEAD}) and \`\`a\`b\`\` too.`,
+      hrefs: 0,
+    },
+    {
+      why: 'an opener run of x1 that skips two x2 runs and closes on a far x1',
+      content: `Use a \` here and \`\`two\`\` then [dead](${DEAD}) then \` end.`,
+      hrefs: 0,
+    },
+    {
+      why: 'an opener run of x2 that skips an x1 run and closes on a later x2',
+      content: `Use a \`\` here and \` then [dead](${DEAD}) then \`\` end.`,
+      hrefs: 0,
+    },
+    {
+      // Boundary: no following run at all. This is the one case the shipped rule
+      // already gets right, and the module comment states as if it were the whole rule.
+      why: 'an opener run of x1 with no further backtick anywhere',
+      content: `Use a \` here, see [dead](${DEAD}) and no more ticks.`,
+      hrefs: 1,
+    },
+    {
+      why: 'no backtick anywhere (control)',
+      content: `Plain, see [dead](${DEAD}) and nothing else.`,
+      hrefs: 1,
+    },
+    // INTERACTION — run length is an input to the two rules that already share this
+    // surface, so the cross-product rows are the ones that decide a live citation.
+    {
+      // The masks interleave positionally, so WHICH construct opens first depends on
+      // whether the x1 opener is a span at all. It is not (its only later runs are x2),
+      // so the comment opens first, is blanked, and the scan resumes on a live URL.
+      why: 'a literal x1 backtick BEFORE a {/* comment */}, with an x2 span after the citation',
+      content: `A stray \` then {/* c */} then [dead](${DEAD}) and \`\`d\`\` end.`,
+      hrefs: 1,
+    },
+    {
+      // A table row is N inline scopes, so per-cell masking already stops a backtick in
+      // one cell reaching another — it does NOT help when the whole shape is in ONE cell.
+      why: 'the x1-then-x2 shape entirely INSIDE one table cell',
+      content: `| A | B |\n| --- | --- |\n| x \` [dead](${DEAD}) \`\`d\`\` | b |\n`,
+      hrefs: 1,
+    },
+    {
+      // Block-local masking already covers the across-blocks spelling; it is the
+      // WITHIN-one-block spelling above that is open, and these two are one blank line
+      // apart. Kept as the continuing partner so the two nets stay distinguishable.
+      why: 'the same x1 and x2 runs split across blocks, which block-locality already covers',
+      content: `A stray \` backtick.\n\nBare: ${DEAD}\n\nUse \`\`dbl\`\` there.\n`,
+      hrefs: 1,
+    },
+  ]
+
+  for (const { why, content, hrefs } of [
+    ...SURFACE_ROWS,
+    ...INTERACTION_ROWS,
+    ...CODE_SPAN_RUN_ROWS,
+  ]) {
     it(`${hrefs === 0 ? 'ignores' : 'checks'} a dead repo URL in ${why}`, () => {
       expect(findDeadRepoLinks(content, 'a.mdx', REPO_ROOT), why).toHaveLength(hrefs)
     })
@@ -1596,10 +1719,14 @@ describe('collectHeadingSlugs', () => {
       readFileSync(resolve(__dirname, 'github-anchor-oracle.json'), 'utf-8'),
     ) as { readonly files: Record<string, { readonly sha1: string; readonly anchors: string[] }> }
     const entries = Object.entries(oracle.files)
-    // Raised in lockstep with the widened predicate: the fixture went 42 -> 398 files
-    // when selection stopped consulting the reader. A floor left at 40 would have let
-    // the sweep shrink back to the reader-selected population unnoticed.
-    expect(entries.length).toBeGreaterThan(390)
+    // Raised in lockstep with the widened predicate, twice: 42 -> 398 when selection
+    // stopped consulting the reader, and again when a FENCE signal was added — a file
+    // whose anchor set depends on fence parity alone matched none of the first four
+    // signals. A floor left below the previous population lets the sweep shrink back
+    // unnoticed, which is how fastify.md stayed outside it. MEASURED at HEAD 965a60f2
+    // over `git ls-files '*.md' '*.mdx'` (1303 files): the four shipped signals admit
+    // 398, and adding `/^ {0,3}(?:`{3,}|~{3,})/m` admits 937.
+    expect(entries.length).toBeGreaterThan(398)
     let checked = 0
     for (const [file, expected] of entries) {
       const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8')
@@ -1611,6 +1738,42 @@ describe('collectHeadingSlugs', () => {
     expect(checked, 'recorded corpus rows still matching their file').toBeGreaterThan(
       entries.length / 2,
     )
+  })
+
+  /**
+   * The corpus sweep's blind spot, named. `fastify.md` is the file ADR-024's Context is
+   * written about — an info-string-bearing ```` ```typescript ```` line read as CLOSING
+   * a fence made it serve `#request-lifecycle-management` and
+   * `#validation-and-schema-design`, two anchors github.com does not have, in both KB
+   * roots. Its anchor set depends on FENCE state and on nothing else, so it matches none
+   * of the four shipped selection signals and is not a key here: revert the fence rule
+   * and this sweep — the one net that answers to github.com — stays GREEN.
+   *
+   * MEASURED at HEAD 965a60f2, `gh api -X POST /markdown` on the frontmatter-stripped
+   * body, read as `(id|name)="user-content-…"` in document order: 30 anchors, and
+   * NEITHER phantom slug among them. `grep -cE '^#{1,6} '` on the same file: 38.
+   */
+  it('records the fence-sensitive file ADR-024 is written about', () => {
+    const oracle = JSON.parse(
+      readFileSync(resolve(__dirname, 'github-anchor-oracle.json'), 'utf-8'),
+    ) as { readonly files: Record<string, { readonly sha1: string; readonly anchors: string[] }> }
+    const file = '.pair/knowledge/guidelines/code-design/framework-patterns/fastify.md'
+    const row = oracle.files[file]
+    expect(row, `${file} recorded in github-anchor-oracle.json`).toBeDefined()
+    // github.com's own answer, not ours: the two phantoms must be absent from what was
+    // recorded, so a reverted fence rule reddens this row instead of agreeing with it.
+    expect(row?.anchors, 'phantom anchors in the recorded oracle row').not.toContain(
+      'request-lifecycle-management',
+    )
+    expect(row?.anchors, 'phantom anchors in the recorded oracle row').not.toContain(
+      'validation-and-schema-design',
+    )
+    const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8')
+    expect(
+      createHash('sha1').update(stripFrontmatter(src)).digest('hex'),
+      'recorded row is for the file as it stands',
+    ).toBe(row?.sha1)
+    expect([...collectHeadingSlugs(src)], file).toEqual(row?.anchors)
   })
 
   it('records only files the SELECTION predicate still admits', () => {
@@ -1675,6 +1838,31 @@ describe('findDeadLinks', () => {
     expect(findDeadLinks(content, 'a.mdx', routes)).toEqual([
       'Dead internal link in a.mdx: /docs/nope does not resolve to a docs page',
     ])
+  })
+
+  // The SAME run-length defect, on the OTHER consumer of `linkSurface`. Check 5 is
+  // exposed identically for `/docs/...` targets, so the fix must be in the shared mask,
+  // not in one caller. Site oracle, same pipeline as the Check 5b table
+  // (`@mdx-js/mdx@3.1.1` + `remark-gfm@4.0.1`): both live rows compile to
+  // `href: "/docs/nope"`, which is a route this suite's `routes` set does not have.
+  it('flags a /docs target after an x1 backtick whose only later run is x2', () => {
+    const content = 'Use a ` here, see [y](/docs/nope) and ``double`` too.'
+    expect(findDeadLinks(content, 'a.mdx', routes)).toEqual([
+      'Dead internal link in a.mdx: /docs/nope does not resolve to a docs page',
+    ])
+  })
+
+  it('flags a /docs target after an x3 backtick run whose only later run is x2', () => {
+    const content = 'Use a ```triple here, see [y](/docs/nope) and ``two`` too.'
+    expect(findDeadLinks(content, 'a.mdx', routes)).toEqual([
+      'Dead internal link in a.mdx: /docs/nope does not resolve to a docs page',
+    ])
+  })
+
+  // Continuing partner: an x1 opener with a real x1 closer IS a span, and the target
+  // inside it is literal text (site: 0 `href:`).
+  it('ignores a /docs target inside an x1-opened span closed by a later x1 run', () => {
+    expect(findDeadLinks('Use a `[y](/docs/nope)` here.', 'a.mdx', routes)).toEqual([])
   })
 })
 
