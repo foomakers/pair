@@ -30,7 +30,7 @@
 - `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
 - `$BASE_URL/docs/getting-started/checklist`
 
-**Concepts** (12 pages):
+**Concepts** (13 pages):
 
 - `$BASE_URL/docs/concepts`
 - `$BASE_URL/docs/concepts/ai-assisted-sdlc`
@@ -43,6 +43,7 @@
 - `$BASE_URL/docs/concepts/code-host`
 - `$BASE_URL/docs/concepts/definition-of-ready-and-done`
 - `$BASE_URL/docs/concepts/pr-state-flow`
+- `$BASE_URL/docs/concepts/review-identity`
 - `$BASE_URL/docs/concepts/tag-driven-gates`
 
 **Process Lifecycle** (5 pages):
@@ -138,13 +139,13 @@
 
 ### Expected Result
 
-- All 84 URLs return HTTP 200
+- All 85 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 84 pages
+- Total: 85 pages
 
 ---
 

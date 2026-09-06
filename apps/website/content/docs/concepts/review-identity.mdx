@@ -1,0 +1,96 @@
+---
+title: Dedicated Review Identity
+description: Who executes the review's code-host writes — the session token by default, a dedicated identity when a project provisions one — plus the one adoption-gated row that lets a light PR merge without human action.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+The [PR state flow](/docs/concepts/pr-state-flow) decides **what** a pull request's state is. This page is about **who acts**: which credential writes the review verdict, the `pair-review` check, and the audit comment to the code host.
+
+By default nobody special does. The flow writes with the **session token** — whoever is running it — and the check is a commit status. The verdict is the host's native action (approve / request changes) when the session account is reviewing someone else's pull request; only when the account running the flow authored the pull request does the host reject the action, and the verdict is then recorded as a comment-form review led by its verdict token. That works, it is the default, and nothing below is required to use pair.
+
+A project that wants more can provision a **dedicated review identity**: a code-host App installation, or a machine account. The flow then executes its host writes as that identity instead.
+
+## Three modes, and no fourth
+
+| Mode | When | What happens |
+| --- | --- | --- |
+| `session` | nothing configured — **the default** | Today's behavior, unchanged: session token, `pair-review` as a commit status, native verdict — except on a self-authored pull request, where the host rejects it and the verdict is a comment-form review. Not an error and not reported as a degradation. |
+| `identity` | configured and usable | Host writes execute as the identity. A blocking verdict becomes a **native REQUEST_CHANGES** — the reviewer is no longer the author, so the host accepts the real event. An **approving** verdict becomes a native APPROVE only where the light row below authorizes it, and a comment-form review otherwise. An App identity publishes `pair-review` as a **check run** instead of a commit status. Every action is attributable to the identity in the host's own records. |
+| `halt` | configured but unusable — invalid credential, missing permission, unknown health | The flow **stops**, with a pointer to the host setup guide. |
+
+<Callout type="warn">
+  **A broken identity never falls back to the session user.** If a project says "review as this
+  identity" and the credential does not work, the flow halts instead of quietly writing the review
+  under the human whose token happened to be loaded. A review recorded against someone who did not
+  perform it is worse than a review that did not happen — and misattribution is exactly what a
+  dedicated identity exists to remove.
+</Callout>
+
+**Usable is checked on every run, not remembered from setup.** Health is two questions with two homes: the cheap, artifact-free probes — does the credential authenticate, is it scoped to this repository, are the required grants observable without writing — run before *every* review and publish; the probes that must write something to prove a write grant run **once, at setup**, because they leave artifacts on a real pull request that cannot be removed. Anything a read cannot prove at run time is covered by one rule: a permission error met *mid-write* halts, reported against the artifact that failed — never retried under the session token, and never a published check implying a review that did not land.
+
+**The identity must not be an account that opens pull requests.** Hosts reject a review action on your own pull request, so an identity that is also the author cannot deliver the verdict as a native review at all — it degrades to the comment form, and the light row's approval is unobtainable there. This bites the obvious setup: an unattended pipeline that already runs under one credential and then names that same principal as its review identity. It applies to **both** forms — an app opens pull requests under its own bot login, exactly as a machine user does — so the per-run health check compares the identity against the pull request's author and halts before any write. Provision a separate one.
+
+**Turning it on with pull requests already open: drain them first.** The `pair-review` required check has two forms — an app identity publishes it as a check run, every other mode as a commit status — and the form is resolved twice on a pull request's life, once when it is published and once when it is reviewed. Change the setting in between and one required context ends up with two independent records, only one of which the flow will ever update again; a host that honours the stale one blocks the merge with nothing in the flow to clear it. Merge or close what is open before switching, or follow the host guide's supersede step. One producer per required context.
+
+The resolution is one shipped, host-agnostic projection (`review-identity.sh`), so the publishing skill and the reviewing skill cannot disagree about who is acting on the same pull request. Which identity form to use, which permissions to grant, and where the credential lives are host concerns and live in the code host's implementation guide.
+
+## What it does not change
+
+An identity approval **still does not satisfy the 🔴 explicit human approval**. `pair-explicit-approval` counts approvals from accounts where `user.type == "User"`, and it excludes the review identity — but by two different clauses, because the two forms are two different account kinds:
+
+| Identity form | Account type on the reviews API | What excludes it |
+| --- | --- | --- |
+| App installation | `"Bot"` | the account-type clause. Automatic, nothing to configure. |
+| Machine **user** account | `"User"` — an ordinary user | its **login**. You must provision it as a **repository variable** (`REVIEW_IDENTITY_LOGIN`) — the gate job reads it from there, so exporting it in your shell or CI environment does not arm the clause; until the variable is set, that account's approval satisfies the 🔴 gate exactly like a human's. |
+
+<Callout type="warn">
+  **A machine user is not a "Bot" to the API.** Only a host App types as `"Bot"`. If you run the
+  bot-account form, the login exclusion is the whole containment — so the flow reads the repository
+  variable back on every run and treats an identity whose login is not provisioned there (or which
+  names a different account) as **unusable**, halting rather than reviewing with the 🔴 gate silently
+  open.
+</Callout>
+
+That the identity cannot grant the human gate is deliberate rather than an oversight: it buys a native verdict and per-identity auditability, not the right to sign for a person. A `risk:red` pull request still needs a **second human account**, exactly as before. The two mechanisms stay side by side — the identity signs the ordinary review, a human signs the 🔴 one.
+
+## Light auto-approval (off unless you declare it)
+
+One optional row builds on the identity. When **all four** of these hold, the identity submits the approving review, so the pull request is mergeable with no human action:
+
+1. the project's adoption declares the `light` family in `## Tag Projection`,
+2. the pull request carries the `light` tag,
+3. its tier is **below 🔴**, and
+4. the state is already `ready-to-merge` (green gates, approving verdict).
+
+<Callout>
+  **Adoption is the gate, the label is not.** A hand-applied `light` label on a project that declares
+  no `light` projection triggers nothing at all. That is what contains the obvious abuse — tagging a
+  pull request to get it approved — and it is why the declaration is one of the four conditions rather
+  than a convenience.
+</Callout>
+
+<Callout type="warn">
+  **Once you declare the family, `light` becomes a merge-authorizing label.** The containment above
+  holds on projects that never opted in. On one that has — and that requires an approving review to
+  merge — nothing verifies *who* applied the tag: anyone who can label a pull request can label their
+  own, and the identity's approving review then satisfies that requirement with no second person.
+  Declaring the family means access-controlling the label: apply it from classification, restrict and
+  audit manual application, and treat it as a permission rather than a hint. 🔴 is unaffected — `light`
+  is inert there.
+</Callout>
+
+Four properties are worth stating plainly:
+
+- **Zero criteria.** Nothing here computes "lightness". The row reads a tag produced upstream by classification, a declaration made in adoption, the tier, and the state — it never inspects the change.
+- **It is a sibling, not a rewrite.** The state synthesis table is untouched; this row consumes its output. A green or yellow pull request still reaches `ready-to-merge` the same way, and a human still presses merge unless this row supplied the host's required approval.
+- **It is the only thing that authorizes the identity's approving review.** Outside the row an approving verdict by the identity is published as a comment-form review, so the identity never satisfies a host's required-approvals rule on your project's behalf. Without that, the four conditions would gate nothing — any approving review satisfies the host rule on its own.
+- **Most restrictive wins.** `light` on a 🔴 — or on an untagged pull request, which is fail-safe 🔴 — is inert.
+
+Every identity review writes an audit comment naming the tag, the declaration, the tier and the state — the authorized approval, the approving verdict it did *not* authorize, and the block — so the reason is reconstructable from the pull request alone.
+
+## Related
+
+- [PR State Flow](/docs/concepts/pr-state-flow) — the states, the required checks, and the 🔴 rule this page extends
+- [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) — where the `risk:*` tag the flow reads comes from
+- [Quality Model](/docs/reference/quality-model) — the per-tier requirements, including the 🔴 explicit approval
