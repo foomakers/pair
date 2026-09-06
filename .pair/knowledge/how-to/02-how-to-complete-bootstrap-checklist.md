@@ -89,7 +89,7 @@ See `/pair-process-bootstrap` Phase 3.5 for operational details.
 
 Runs after domain modeling, so the criticality rows are **proposed from** the subdomains and bounded contexts just mapped instead of asked from nothing.
 
-1. Offer the `## Criticality Table` and `## Overrides` sections of `tech/risk-matrix.md` — the two classification-delta sections nothing else authors (`/pair-capability-classify` self-proposes `## Tag Projection` only).
+1. Offer the `## Criticality Table` and `## Overrides` sections of `tech/risk-matrix.md` — the two classification-delta sections nothing else authors (`/pair-capability-classify` self-proposes `## Tag Projection` only), **for the families this phase asks about**. `## Overrides` also holds a dimension-resolution family (today `business-impact.trivial-diff`, [quality model](../guidelines/quality-assurance/quality-model.md) §6) that this phase does **not** ask about: it is hand-authored from the example asset, so having answered the questions below does not mean the section is complete.
 2. Confirmed sections are written with the same propose-then-write-if-confirmed registry pattern `/pair-capability-classify` uses for its own section — registry state, so not via `/pair-capability-record-decision`.
 3. Strictly opt-in: the file is optional by design, so declining writes nothing and classification resolves from KB defaults. Never blocks bootstrap completion.
 

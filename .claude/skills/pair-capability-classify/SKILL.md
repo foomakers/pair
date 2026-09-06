@@ -102,7 +102,7 @@ CLASSIFY ([refinement | review]):
 | --- | --- | --- | --- |
 | Service/domain criticality | [g/y/r] | [Criticality Table | KB default] | |
 | Change/diff risk | [g/y/r] | [story scope | diff footprint] | |
-| Business impact | [g/y/r] | [subdomain class] | |
+| Business impact | [g/y/r] | [subdomain class | Overrides: business-impact.trivial-diff] | |
 | Security relevance | [g/y/r] | [path heuristic | assess-security verdict] | |
 | Coupling balance | [g/y/r | not assessed] | [subdomain volatility + integrations | assess-coupling verdict | absent] | |
 

@@ -241,7 +241,7 @@ Runs after architecture and tech-stack are adopted (Step 3.1) — both are prere
 
 Runs **after Phase 3.5**: the subdomains and bounded contexts just mapped are what the criticality rows are proposed *from*, so the developer confirms a list instead of inventing one. Earlier in the flow there is no domain model to read.
 
-`tech/risk-matrix.md` holds up to three independent sections (quality-model §6). `## Tag Projection` is `/pair-capability-classify`'s own — it self-proposes that section on its first run (§5) and this phase **leaves it untouched**. The other two — `## Criticality Table` (§3.1) and `## Overrides` (§4) — have no guided authoring path anywhere else: this phase is it.
+`tech/risk-matrix.md` holds up to three independent sections (quality-model §6). `## Tag Projection` is `/pair-capability-classify`'s own — it self-proposes that section on its first run (§5) and this phase **leaves it untouched**. The other two — `## Criticality Table` (§3.1) and `## Overrides` (§4) — have no guided authoring path anywhere else: this phase is it, for the families it asks about. `## Overrides` also holds a **dimension-resolution** family (§6, today `business-impact.trivial-diff`) that this phase does **not** ask about: it is hand-authored from the example asset, and the offer below neither proposes it nor re-opens for it.
 
 **Absence stays legitimate.** The file is optional by design: absent, classification resolves entirely from KB defaults and nothing fails (quality-model §6, D21). This phase exists to make the delta easy to author, **never to make it expected** — declining is a fully supported outcome, no Definition of Done may come to require these sections, and the offer says so out loud.
 
