@@ -52,7 +52,7 @@ export const meta = {
 //                                 // against a foreign scale.
 //   model?,                       // legacy global override: fable | haiku | sonnet | opus
 //   models?,                      // role-scoped override. Keys: implementation, pr, reviewer,
-//                                 // red, redVerifier, seal, green, preflight. A role key wins
+//                                 // redMapper, red, redVerifier, seal, green, preflight. A role key wins
 //                                 // over `model`; use this for an A/B trial without changing the
 //                                 // independent reviewer or evidence chain.
 //   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS (skill names,
@@ -540,7 +540,7 @@ function parseBatchArgs(raw) {
           `An empty string is a value the caller wrote, and reading it as absent would run the batch on a setting nobody chose.`,
       )
   }
-  const modelRoles = ['implementation', 'pr', 'reviewer', 'red', 'redVerifier', 'seal', 'green', 'preflight']
+  const modelRoles = ['implementation', 'pr', 'reviewer', 'redMapper', 'red', 'redVerifier', 'seal', 'green', 'preflight']
   let models
   if (a.models !== undefined && a.models !== null) {
     if (typeof a.models !== 'object' || Array.isArray(a.models))
@@ -1423,6 +1423,54 @@ const hasRedContractVerification = r =>
   !!r &&
   typeof r.verified === 'boolean' &&
   Array.isArray(r.findings)
+// The mapper owns neither tests nor source. It turns a behavior finding into an explicit finite
+// discriminator domain before a RED author chooses examples, so completeness is a checked input
+// rather than a claim the author can make after writing a convenient subset.
+const RED_DOMAIN_MAPPER_SCHEMA = {
+  type: 'object',
+  properties: {
+    domains: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string' },
+          discriminator: { type: 'string' },
+          rows: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                condition: { type: 'string' },
+                oracle: { type: 'string' },
+                expected: { type: 'string' },
+              },
+              required: ['condition', 'oracle', 'expected'],
+            },
+          },
+        },
+        required: ['owner', 'discriminator', 'rows'],
+      },
+    },
+  },
+  required: ['domains'],
+}
+const hasRedDomainEvidence = result =>
+  !!result &&
+  Array.isArray(result.domains) &&
+  result.domains.length > 0 &&
+  result.domains.every(domain => {
+    if (!domain || !isProse(String(domain.owner ?? '').trim()) || !isProse(String(domain.discriminator ?? '').trim())) return false
+    if (!Array.isArray(domain.rows) || domain.rows.length < 2) return false
+    const conditions = new Set()
+    return domain.rows.every(row => {
+      if (!row) return false
+      const condition = String(row.condition ?? '').trim()
+      if (!isProse(condition) || conditions.has(condition)) return false
+      conditions.add(condition)
+      return isProse(String(row.oracle ?? '').trim()) && isProse(String(row.expected ?? '').trim())
+    })
+  })
 // Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,
 // required contract keys (ensure-contract.mjs's validateContract rejects any
 // contract missing either) — so whenever a contract IS present, both are
@@ -1827,10 +1875,17 @@ async function driveStory(story) {
   // The fixer cannot author its own specification. RED writes only tests; a distinct sealer
   // snapshots their exact bytes in Git before GREEN sees the source task. The verifier later
   // discovers that object from history, rather than trusting an orchestrator-owned prompt.
-  const authorRedTests = (targets, phase, baseHead, repairFindings = []) =>
+  const mapRedDomain = (targets, phase, baseHead) =>
+    agentRetry(
+      `RED DOMAIN MAP (read-only, pre-RED) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The targets are: ${JSON.stringify(targets)}. Inspect current source and the exact boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Before any test author can choose examples, identify the function/event that actually mutates each affected state. For every behavioral parser, state, normalizer or reservation target, return a finite domain: one owner, one named discriminator, and mutually exclusive rows covering every lexical/state form the owner recognizes, including the ordinary complement. Derive categories from the grammar or state transition, not examples that happen to be in the finding. Add the smallest cross-product wherever one row's output becomes another rule's input; each row must carry its authoritative oracle and measured expected result. For a non-behavioral target, still map its factual alternatives and exact authoritative probe. Return only { domains: [{ owner, discriminator, rows: [{ condition, oracle, expected }] }] }. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
+      withModel('redMapper', { agentType: 'pair-red-domain-mapper', phase: 'Review', label: `red-map:${tag} ${phase}`, effort: 'high', schema: RED_DOMAIN_MAPPER_SCHEMA }),
+      hasRedDomainEvidence,
+    )
+  const authorRedTests = (targets, phase, baseHead, domainMap, repairFindings = []) =>
     agentRetry(
       [RED_ARTIFACT_CONTRACT,
       'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
+      `INDEPENDENT FINITE DOMAIN MAP (mandatory): ${JSON.stringify(domainMap)}. Make EVERY mapped row an actual RED assertion or a fixture row consumed by one. Do not collapse rows because their output happens to agree today; the map is the completeness boundary, not illustrative advice.`,
       repairFindings.length
         ? `RED CONTRACT REPAIR 1 OF ${MAX_RED_CONTRACT_REPAIRS}: the independent verifier rejected an UNSEALED, test-only contract. Its measured missing rows are: ${JSON.stringify(repairFindings)}. They are mandatory targets together with the original findings. Existing uncommitted test changes are untrusted evidence: inspect every dirty path, re-run each oracle while source is still unfixed, and return fresh hashes/observations for every artifact retained in this replacement contract. Do not treat the prior matrix, its prose, or a passing test as proof. Modify ONLY test artifacts; do not edit production, docs, adoption, configuration, commits, pushes, PRs, comments, cards or merges.`
         : 'This is the first RED contract; no prior unsealed contract may be reused as evidence.',
@@ -1839,11 +1894,11 @@ async function driveStory(story) {
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-test:${tag} ${phase}`, effort: 'high', schema: RED_TEST_SCHEMA }),
       hasRedTestEvidence,
     )
-  const verifyRedContract = (redContract, targets, phase, baseHead) =>
+  const verifyRedContract = (redContract, targets, phase, baseHead, domainMap) =>
     agentRetry(
       [RED_ARTIFACT_CONTRACT,
       'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
-      `RED CONTRACT VERIFIER (read-only, pre-seal) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The author returned: ${JSON.stringify(redContract)}. The findings are: ${JSON.stringify(targets)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Independently inspect the uncommitted diff and current source. Re-run every matrix oracle and every RED command yourself while production remains unfixed. Treat an unsupported claim (for example “does not compile”) as a finding unless its stated oracle demonstrates it. Verify every test/fixture path is repository-relative and every fixture is consumed by the exact failing assertion named in \`consumedBy\`. Verify fixScope has one owner, one mode, and only the exact paths needed by that contract: \`behavioral\` may not add/move/split production modules; \`structural\` must have a structural RED assertion. For parser/state rules, prove the full boundary and smallest rule-interaction cross-product from the actual state owner, not a downstream consumer. Return \`verified: true\` only when the whole RED contract is independently reproducible and complete; otherwise return \`verified: false\` with concrete findings.`,
+      `RED CONTRACT VERIFIER (read-only, pre-seal) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The author returned: ${JSON.stringify(redContract)}. The findings are: ${JSON.stringify(targets)}. The independent finite domain map is: ${JSON.stringify(domainMap)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Independently inspect the uncommitted diff and current source. Re-derive the owner/discriminator domain from the grammar or state transition; reject the map itself if it omits a recognized form, even when every mapped row has a test. Re-run every matrix oracle and every RED command yourself while production remains unfixed. Every domain-map row must have a real RED assertion/consumed fixture; a missing row is a contract finding even if neighbouring examples pass. Treat an unsupported claim (for example “does not compile”) as a finding unless its stated oracle demonstrates it. Verify every test/fixture path is repository-relative and every fixture is consumed by the exact failing assertion named in \`consumedBy\`. Verify fixScope has one owner, one mode, and only the exact paths needed by that contract: \`behavioral\` may not add/move/split production modules; \`structural\` must have a structural RED assertion. For parser/state rules, prove the full boundary and smallest rule-interaction cross-product from the actual state owner, not a downstream consumer. Return \`verified: true\` only when the whole RED contract is independently reproducible and complete; otherwise return \`verified: false\` with concrete findings.`,
       ].join('\n'),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
       hasRedContractVerification,
@@ -2011,20 +2066,23 @@ async function driveStory(story) {
     prevFindings = actionable
     prevReviewedHead = reviewedHead
     cycleHasRemediation = true
+    const redDomainMap = await mapRedDomain(prevFindings, `r${round}`, reviewedHead)
+    if (!hasRedDomainEvidence(redDomainMap))
+      return { story, prNumber: pr.prNumber, status: 'failed-red-domain', findings: prevFindings, acceptedFindings: accepted, reviewLog }
     let redTargets = prevFindings
-    let redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead)
+    let redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead, redDomainMap)
     if (!hasRedTestEvidence(redTest))
       return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: prevFindings, acceptedFindings: accepted, reviewLog }
-    let redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead)
+    let redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead, redDomainMap)
     for (let repair = 0; repair < MAX_RED_CONTRACT_REPAIRS && (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0); repair++) {
       const repairFindings = redVerification?.findings?.length ? redVerification.findings : []
       if (!repairFindings.length) break
       log(`${tag} r${round}: RED verifier rejected the unsealed contract; authoring bounded test-only repair ${repair + 1}/${MAX_RED_CONTRACT_REPAIRS}`)
       redTargets = [...redTargets, ...repairFindings]
-      redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead, repairFindings)
+      redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead, redDomainMap, repairFindings)
       if (!hasRedTestEvidence(redTest))
         return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: redTargets, acceptedFindings: accepted, reviewLog }
-      redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead)
+      redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead, redDomainMap)
     }
     if (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0)
       return {

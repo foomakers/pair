@@ -63,6 +63,23 @@ async function runWorkflow({ args, dispatch }) {
         historyDecisionValid: true,
       }
     }
+    // The mapper turns a parser/state finding into a finite owner-domain before a test
+    // author writes RED. Legacy fixtures get a small valid map; focused tests can prove
+    // mapper failure or a specific measured row without rebuilding every old dispatch.
+    if (opts.agentType === 'pair-red-domain-mapper') {
+      if (result === null) return null
+      if (result && typeof result === 'object' && Array.isArray(result.domains)) return result
+      return {
+        domains: [{
+          owner: 'canonical state transition',
+          discriminator: 'state boundary',
+          rows: [
+            { condition: 'continue', oracle: 'fixture', expected: 'continues' },
+            { condition: 'interrupt', oracle: 'fixture', expected: 'interrupts' },
+          ],
+        }],
+      }
+    }
     // RED has a distinct, read-only verifier before its snapshot is committed. Existing
     // tests that do not care about it receive a valid check; focused tests return it directly.
     if (opts.agentType === 'pair-red-contract-verifier') {
@@ -2567,6 +2584,27 @@ test('models.green isolates an A/B trial to GREEN; reviewer, RED and P3 keep the
   assert.equal(p3.opts.model, undefined)
 })
 
+test('models.redMapper is an isolated mapper trial', async () => {
+  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  let round = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY], models: { redMapper: 'fable' } },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const mapper = calls.find(c => c.opts.agentType === 'pair-red-domain-mapper')
+  const red = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  const verifier = calls.find(c => c.opts.agentType === 'pair-red-contract-verifier')
+  assert.equal(mapper.opts.model, 'fable')
+  assert.equal(red.opts.model, undefined)
+  assert.equal(verifier.opts.model, undefined)
+})
+
 test('an unverified RED contract fails before it can be sealed or reach GREEN', async () => {
   const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
   const { result, calls } = await runWorkflow({
@@ -2621,6 +2659,85 @@ test('the RED verifier gets one test-only contract repair before a seal or GREEN
   assert.ok(calls.indexOf(verifiers[1]) < calls.indexOf(sealer), 'no seal precedes the second verifier')
   assert.ok(calls.indexOf(sealer) < calls.indexOf(green), 'GREEN remains after the sealed repaired contract')
   assert.match(green.prompt, /owner to consumer collision/i, 'GREEN receives the verifier-derived boundary too')
+})
+
+test('a read-only domain mapper binds RED and its verifier to the complete measured domain', async () => {
+  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
+  const map = {
+    domains: [{
+      owner: 'readExpressionLine',
+      discriminator: 'first closer tail token',
+      rows: [
+        { condition: 'only whitespace follows the closer', oracle: 'real compiler', expected: 'bare boundary' },
+        { condition: 'a multiline comment opener follows the closer', oracle: 'real compiler', expected: 'comment masks its later closer' },
+      ],
+    }],
+  }
+  let review = 0
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return review++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-red-domain-mapper') return map
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+  const mapper = calls.find(c => c.opts.agentType === 'pair-red-domain-mapper')
+  const author = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  const verifier = calls.find(c => c.opts.agentType === 'pair-red-contract-verifier')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(mapper, 'a read-only map precedes every behavioral RED contract')
+  assert.ok(calls.indexOf(mapper) < calls.indexOf(author))
+  assert.match(author.prompt, /multiline comment opener follows the closer/i)
+  assert.match(verifier.prompt, /multiline comment opener follows the closer/i)
+  assert.doesNotMatch(calls.find(c => c.opts.agentType === 'pair-reviewer').prompt, /multiline comment opener follows the closer/i, 'the external review remains blind')
+})
+
+test('a missing finite domain stops before RED, seal or GREEN', async () => {
+  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-red-domain-mapper') return null
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-red-domain')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0)
+})
+
+test('a one-row domain is invalid before RED, seal or GREEN', async () => {
+  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
+  const incomplete = {
+    domains: [{
+      owner: 'readExpressionLine',
+      discriminator: 'first closer tail token',
+      rows: [{ condition: 'only whitespace follows the closer', oracle: 'real compiler', expected: 'bare boundary' }],
+    }],
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-red-domain-mapper') return incomplete
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-red-domain')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
 })
 
 test('a second rejected RED contract fails closed without a third author or any seal', async () => {

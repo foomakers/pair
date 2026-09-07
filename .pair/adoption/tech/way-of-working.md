@@ -90,17 +90,23 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   Every actionable review recommendation supplies `VERIFY: input/state -> expected`, `ORACLE:`
   and `ASSERT:` so this check is executable rather than interpretive. See ADL
   [2026-09-04-independent-fix-preflight-prevents-review-churn.md](../decision-log/2026-09-04-independent-fix-preflight-prevents-review-churn.md).
-- **Locked RED before GREEN:** every actionable behavior fix has four isolated stages. A
-  test-only author derives its matrix from the state-transition owner, declares one typed scope
+- **Locked RED before GREEN:** every actionable behavior fix starts with an independent read-only
+  domain mapper, then has four isolated stages. The mapper identifies the actual state-transition
+  owner, one named discriminator and mutually exclusive/exhaustive grammar or state rows — including
+  the ordinary complement and the smallest interaction cross-product. It emits no tests or edits.
+  A test-only author turns every mapped row into a RED assertion or a consumed fixture, then derives
+  its matrix from that state-transition owner and declares one typed scope
   (`behavioral` or `structural`, never both) and writes/runs failing tests; an independent
-  read-only verifier reproduces the matrix/oracles and rejects an incomplete contract; only then
+  read-only verifier independently re-derives the domain, reproduces the matrix/oracles and rejects
+  any omitted/unrepresented mapped row or incomplete contract; only then
   does a sealer record its manifest and blobs in one local Git snapshot and permit the source
   fixer to edit implementation. A behavioral scope cannot add, move or split production modules.
   Preflight finds that snapshot itself, compares its test blobs with HEAD, and rejects a changed,
   missing or unlisted test artifact — including a comment. A
   fixture with no standalone failure names the RED test that consumes it; an absent or non-RED
   consumer is rejected before sealing.
-  A rejected RED contract may return once to a fresh test-only author with the verifier's measured
+  An absent or invalid map is `failed-red-domain` before RED, sealing or GREEN. A rejected RED
+  contract may return once to a fresh test-only author with the verifier's measured
   missing rows; it is independently re-verified before any seal. A second rejection is terminal.
   This bounded repair never applies after GREEN or P3, and never changes source, history or the PR.
   A finding whose sole remediation rewrites existing Git history escalates with a typed
