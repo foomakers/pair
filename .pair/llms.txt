@@ -141,8 +141,8 @@
 - [Decision: A docs-site link gate reads the RENDERED surface, and its oracle is the site build](.pair/adoption/decision-log/2026-09-04-link-surface-oracle-is-the-site-build.md)
 - [Decision: Locked RED contract prevents fix regressions](.pair/adoption/decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md)
 - [Decision: History rewrite escalates before RED sealing](.pair/adoption/decision-log/2026-09-06-history-rewrite-escalates-before-red-seal.md)
-- [Decision: The docs-site repo-citation resolver is its own module, re-exported by the gate](.pair/adoption/decision-log/2026-09-07-repo-citations-is-its-own-module.md)
 - [Decision: Bind history dispositions and P3 evidence to machine-verifiable inputs](.pair/adoption/decision-log/2026-09-07-history-and-p3-evidence-carry-forward.md)
+- [Decision: The docs-site repo-citation resolver is its own module, re-exported by the gate](.pair/adoption/decision-log/2026-09-07-repo-citations-is-its-own-module.md)
 - [Decision: Sealed fix v2 stops before regression](.pair/adoption/decision-log/2026-09-07-sealed-fix-v2-stops-before-regression.md)
 
 ## How-To Guides
