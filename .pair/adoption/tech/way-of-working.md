@@ -100,6 +100,9 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   missing or unlisted test artifact — including a comment. A
   fixture with no standalone failure names the RED test that consumes it; an absent or non-RED
   consumer is rejected before sealing.
+  A rejected RED contract may return once to a fresh test-only author with the verifier's measured
+  missing rows; it is independently re-verified before any seal. A second rejection is terminal.
+  This bounded repair never applies after GREEN or P3, and never changes source, history or the PR.
   A finding whose sole remediation rewrites existing Git history escalates with a typed
   `history-rewrite` decision **before** RED authoring or sealing; a human may accept only exact
   historical commit subjects, never a current code/test/docs/CI finding. The workflow — not a

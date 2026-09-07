@@ -2585,6 +2585,70 @@ test('an unverified RED contract fails before it can be sealed or reach GREEN', 
   assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'no GREEN follows an unverified RED contract')
 })
 
+test('the RED verifier gets one test-only contract repair before a seal or GREEN', async () => {
+  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  const contractMiss = {
+    location: 'src/a.test.ts:9',
+    severity: 'Major',
+    description: 'the RED matrix omits the owner to consumer collision',
+    recommendation: 'add the measured collision row and keep it RED',
+  }
+  let review = 0
+  let verifier = 0
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return review++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-red-contract-verifier')
+        return verifier++ === 0 ? { verified: false, findings: [contractMiss] } : { verified: true, findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+  const authors = calls.filter(c => c.opts.agentType === 'pair-fix-test-author')
+  const verifiers = calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier')
+  const sealer = calls.find(c => c.opts.agentType === 'pair-red-sealer')
+  const green = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(authors.length, 2, 'the verifier may request one fresh RED contract')
+  assert.equal(verifiers.length, 2, 'the repaired contract is independently re-verified')
+  assert.match(authors[1].prompt, /RED CONTRACT REPAIR 1/i)
+  assert.match(authors[1].prompt, /owner to consumer collision/i)
+  assert.match(authors[1].prompt, /untrusted/i)
+  assert.ok(calls.indexOf(authors[1]) < calls.indexOf(sealer), 'the repaired contract seals only after verification')
+  assert.ok(calls.indexOf(verifiers[1]) < calls.indexOf(sealer), 'no seal precedes the second verifier')
+  assert.ok(calls.indexOf(sealer) < calls.indexOf(green), 'GREEN remains after the sealed repaired contract')
+  assert.match(green.prompt, /owner to consumer collision/i, 'GREEN receives the verifier-derived boundary too')
+})
+
+test('a second rejected RED contract fails closed without a third author or any seal', async () => {
+  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  const contractMiss = {
+    location: 'src/a.test.ts:9',
+    severity: 'Major',
+    description: 'the RED matrix omits the owner to consumer collision',
+    recommendation: 'add the measured collision row and keep it RED',
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-red-contract-verifier') return { verified: false, findings: [contractMiss] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-red-contract')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 2, 'one repair is bounded; a third author is forbidden')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier').length, 2)
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0, 'no repeatedly rejected contract is sealed')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'GREEN never sees a rejected contract')
+})
+
 test('RED requires one typed scope before it can reach the independent verifier', async () => {
   const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
   const invalidRed = {

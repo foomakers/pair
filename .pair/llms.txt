@@ -138,6 +138,7 @@
 - [Decision: History rewrite escalates before RED sealing](.pair/adoption/decision-log/2026-09-06-history-rewrite-escalates-before-red-seal.md)
 - [Decision: Bind history dispositions and P3 evidence to machine-verifiable inputs](.pair/adoption/decision-log/2026-09-07-history-and-p3-evidence-carry-forward.md)
 - [Decision: Rebase invalidates sealed fix custody](.pair/adoption/decision-log/2026-09-07-rebase-invalidates-sealed-custody.md)
+- [Decision: RED verifier repairs one unsealed contract](.pair/adoption/decision-log/2026-09-07-red-verifier-repairs-one-unsealed-contract.md)
 - [Decision: Sealed fix v2 stops before regression](.pair/adoption/decision-log/2026-09-07-sealed-fix-v2-stops-before-regression.md)
 
 ## How-To Guides

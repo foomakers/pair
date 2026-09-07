@@ -124,6 +124,11 @@ The RED contract names one owner, one mode (`behavioral` or `structural`) and ex
 behavioral fix cannot hide a module extraction or refactor. The first actionable preflight result
 stops as `failed-preflight`; the next attempt must begin with fresh RED, not an internal repair.
 
+If the RED verifier rejects an unsealed test-only contract, the engine gives a fresh RED author
+one bounded repair using the verifier's measured missing rows, then independently verifies it
+again. A second rejection is `failed-red-contract`: no seal, GREEN, push or review runs. This
+exception exists only before a source change; P3 remains terminal.
+
 ### Carrying verified P3 evidence
 
 A card may pass `requiredFindings`: a compact P3 observation with `observedHead`, finding fields,
