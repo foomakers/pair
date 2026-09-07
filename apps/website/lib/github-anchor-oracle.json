@@ -3267,13 +3267,15 @@
       ]
     },
     ".pair/knowledge/guidelines/code-design/framework-patterns/fastify.md": {
-      "sha1": "c41e96eceb92e654f5f5de414941d3d1e8c03a8d",
+      "sha1": "5e425ce7c51f00c1b187d0ad92643f4e1fc82b07",
       "anchors": [
         "fastify-patterns",
         "overview",
         "plugin-architecture",
         "1-plugin-structure-and-encapsulation",
         "feature-based-organization",
+        "request-lifecycle-management",
+        "validation-and-schema-design",
         "error-handling-strategy",
         "performance-optimization-strategies",
         "caching-patterns",

@@ -131,6 +131,205 @@ describe('readMarkdown — the mdx flavour', () => {
   })
 })
 
+/**
+ * THE MDX FLOW EXPRESSION — the block state the `mdx` flavour still hands to the
+ * consumer's leaf-text mask, and the one place that mask cannot reach.
+ *
+ * `{/* … *\/}` is MDX's only comment. It is a FLOW EXPRESSION: the compiler
+ * (`@mdx-js/mdx@3.1.1`, the docs site's installed pipeline) consumes every line from the
+ * opener to the line carrying its `*\/}` as ONE expression node and emits nothing for it.
+ * A fence marker on one of those lines is therefore text inside a comment, never a fence.
+ * This reader decides fence state BEFORE any consumer sees leaf text, so when it opens a
+ * fence at that marker the region runs to the next bare fence line — usually EOF — and
+ * every citation after the comment is swallowed as `fence-body` while the site renders
+ * it as a live `<a href>`. The direction is the SILENT one: a 404 shipped PASS.
+ *
+ * Every `site` value below is `compile(src, { remarkPlugins: [remarkGfm] })` from the
+ * worktree's installed `@mdx-js/mdx@3.1.1` + `remark-gfm@4.0.1`, counting `href: "` in
+ * the emitted JSX (ADL 2026-09-04: the site build is this surface's oracle). The one
+ * `mdx: false` row is github.com (`gh api -X POST /markdown`): there `{/*` is plain
+ * paragraph text, the fence interrupts it, and the response carries 1 `<pre>`.
+ *
+ * Shapes the compiler REJECTS are not rows: an opener with no `*\/}` anywhere, an opener
+ * that starts mid-line, a `*\/}` followed by more text on its line, and a bare `{`
+ * template literal all fail with "Unexpected end of file in expression" / "Could not
+ * parse expression with acorn" — a page carrying one cannot build, so no reader can be
+ * misled by it. The unterminated opener IS kept as a boundary row: the reader must not
+ * comment out the rest of the document on a page the site refuses to build.
+ */
+describe('readMarkdown — the mdx flavour: a flow expression owns the lines it spans', () => {
+  const URL = 'https://github.com/foomakers/pair/blob/main/does/not/exist.md'
+  const DEAD = `See ${URL}`
+
+  /** The kind of the ONE event that carries the citation line. */
+  const kindOf = (md: string, mdx: boolean, needle = URL): string => {
+    const hits = [...readMarkdown(md, { mdx })].filter(
+      ev => 'text' in ev && typeof ev.text === 'string' && ev.text.includes(needle),
+    )
+    if (hits.length !== 1)
+      throw new Error(`expected 1 event carrying ${needle}, got ${hits.length}`)
+    return hits[0]?.kind ?? ''
+  }
+
+  const ROWS: ReadonlyArray<{
+    why: string
+    content: string
+    mdx: boolean
+    /** The event kind the citation line must arrive as: `leaf` = scanned, `fence-body` = code. */
+    citation: 'leaf' | 'fence-body'
+    site: string
+  }> = [
+    {
+      // THE DEFECT: the ```` ```bash ```` line is a comment line, not a fence opener.
+      why: 'a fence opener INSIDE a multi-line {/* … */}, citation after a blank line',
+      content: `{/*\n\`\`\`bash\n*/}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      why: 'the same, citation TIGHT against the */} line',
+      content: `{/*\n\`\`\`bash\n*/}\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      // Nearest continuing partner: a fence that OPENS AND CLOSES inside the comment
+      // leaves the reader's fence state balanced by luck — the citation is scanned today
+      // and must stay scanned.
+      why: 'a fence opened AND closed inside a {/* … */}',
+      content: `{/*\n\`\`\`bash\necho\n\`\`\`\n*/}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      why: 'a TILDE fence opener inside a {/* … */}',
+      content: `{/*\n~~~\n*/}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      why: 'a BARE ``` opener inside a {/* … */}',
+      content: `{/*\n\`\`\`\n*/}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      why: 'an x4 ```` opener inside a {/* … */}',
+      content: `{/*\n\`\`\`\`\n*/}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      // The opener line may carry text after `{/*`; the region still starts there.
+      why: 'an opener line with trailing comment text, fence opener inside',
+      content: `{/* TODO\n\`\`\`bash\n*/}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      why: 'a {/* … */} indented two spaces, fence opener inside',
+      content: `  {/*\n  \`\`\`bash\n  */}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      // The closer may sit on the fence-shaped line itself: the region ends THERE.
+      why: 'the */} closer on the same line as the fence opener',
+      content: `{/*\n\`\`\`bash */}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      // A real, closed fence BEFORE the comment must not change the answer.
+      why: 'a real closed fence, then a {/* … */} holding a fence opener, then the citation',
+      content: `\`\`\`bash\nx\n\`\`\`\n\n{/*\n\`\`\`bash\n*/}\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: 1 href',
+    },
+    {
+      // Interrupt partner: a comment that CLOSES on its own line leaves the next line
+      // to the ordinary grammar, so a fence there is a fence and its body is code.
+      why: 'a one-line {/* x */} followed by a REAL fence holding the citation',
+      content: `{/* x */}\n\`\`\`bash\n${DEAD}\n\`\`\`\n`,
+      mdx: true,
+      citation: 'fence-body',
+      site: 'site: 0 href',
+    },
+    {
+      // Interrupt partner the other way round: inside a REAL fence, `{/*` is code.
+      why: 'a real fence whose body spells {/*, */} and the citation',
+      content: `\`\`\`bash\n{/*\n*/}\n${DEAD}\n\`\`\`\n`,
+      mdx: true,
+      citation: 'fence-body',
+      site: 'site: 0 href',
+    },
+    {
+      // BOUNDARY: unbuildable on the site (no `*/}` anywhere). The reader must not
+      // swallow the rest of the page; the citation line is still a scanned leaf.
+      why: 'an UNTERMINATED {/* — the site refuses the page; the reader keeps scanning',
+      content: `{/* opener\n\n${DEAD}\n`,
+      mdx: true,
+      citation: 'leaf',
+      site: 'site: compile error (unbuildable)',
+    },
+    {
+      // FLAVOUR BOUNDARY: github.com has no expressions. `{/*` is paragraph text, the
+      // fence interrupts the paragraph, and the citation is code.
+      why: 'the same bytes WITHOUT the mdx flag — github.com renders the fence',
+      content: `{/*\n\`\`\`bash\n*/}\n\n${DEAD}\n`,
+      mdx: false,
+      citation: 'fence-body',
+      site: 'github.com: 1 <pre>',
+    },
+  ]
+
+  for (const row of ROWS) {
+    it(`reads the citation as ${row.citation} after ${row.why} (${row.site})`, () => {
+      expect(kindOf(row.content, row.mdx), row.why).toBe(row.citation)
+    })
+  }
+
+  it('a fence opener inside a {/* … */} does not disarm a REAL fence later on the page', () => {
+    // Two citations: the first is prose after the comment (scanned), the second is the
+    // body of a genuine fence (code). Site: 1 href.
+    const md = `{/*\n\`\`\`bash\n*/}\n\n${DEAD}\n\n\`\`\`bash\n${URL}/second\n\`\`\`\n`
+    const carriers = [...readMarkdown(md, { mdx: true })].filter(
+      ev => 'text' in ev && typeof ev.text === 'string' && ev.text.includes(URL),
+    )
+    expect(carriers.map(ev => ev.kind)).toEqual(['leaf', 'fence-body'])
+  })
+
+  it('accounts for every source line exactly once across every expression row', () => {
+    // Whatever the reader emits for the lines INSIDE an expression, each source line
+    // must still surface exactly once — the invariant the shared table already holds
+    // the reader to, extended to this state.
+    for (const row of ROWS) {
+      const lines = row.content.split(/\r?\n/)
+      if (lines[lines.length - 1] === '') lines.pop()
+      const seen = [...readMarkdown(row.content, { mdx: row.mdx })]
+      const lineEvents = seen.filter(e => e.kind !== 'fence-end' && e.kind !== 'html-end')
+      const closers = seen
+        .filter(e => e.kind === 'fence-end' && e.index < lines.length)
+        .map(e => e.index)
+        .filter(i => !lineEvents.some(e => e.index === i))
+      expect(
+        [...lineEvents.map(e => e.index), ...closers].sort((a, b) => a - b),
+        row.why,
+      ).toEqual(lines.map((_l, i) => i))
+    }
+  })
+})
+
 describe('readMarkdown — frontmatter', () => {
   it('skips YAML frontmatter only when asked', () => {
     const md = '---\ntitle: X\n---\n\n# Real\n'

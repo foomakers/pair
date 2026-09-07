@@ -31,6 +31,7 @@ import {
 } from './docs-staleness-check'
 import { join } from 'node:path'
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { COMMONMARK_BLOCK_ROWS } from '@pair/content-ops/test-utils/commonmark-rows'
@@ -1118,6 +1119,123 @@ describe('findDeadRepoLinks', () => {
       content: `| A | B |\n| --- | --- |\n| ${DEAD} | b |\n`,
       hrefs: 1,
     },
+    // A {/* … */} IS A FLOW EXPRESSION, and the reader decides fence state BEFORE the
+    // comment mask ever sees leaf text. `@mdx-js/mdx@3.1.1` consumes every line from the
+    // opener to the line carrying `*/}` as ONE node, so a fence marker on one of those
+    // lines is comment text — yet the reader opens a fence there, the region runs to the
+    // next bare fence line (usually EOF), and every citation after the comment is
+    // swallowed as fence body: Check 5 and 5b are DISARMED for the rest of the page.
+    // Every count below is the site's own installed pipeline (`compile(src,
+    // { remarkPlugins: [remarkGfm] })`, `href: "` counted) on exactly these bytes.
+    // Rows the compiler REJECTS (opener mid-line, text after `*/}`, no `*/}` at all, a
+    // bare `{` template literal) are not rows — a page carrying one cannot build.
+    {
+      // THE DEFECT. Site: 1. Gate: 0 — the URL is fence body.
+      why: 'a fence opener INSIDE a multi-line JSX comment, citation after a blank line',
+      content: `{/*\n\`\`\`bash\n*/}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a fence opener inside a JSX comment, citation TIGHT against the */} line',
+      content: `{/*\n\`\`\`bash\n*/}\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      // Nearest continuing partner: balanced fence markers inside the comment. Site: 1.
+      why: 'a fence opened AND closed inside a multi-line JSX comment',
+      content: `{/*\n\`\`\`bash\necho\n\`\`\`\n*/}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a TILDE fence opener inside a JSX comment',
+      content: `{/*\n~~~\n*/}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a BARE ``` opener inside a JSX comment',
+      content: `{/*\n\`\`\`\n*/}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'an x4 ```` opener inside a JSX comment',
+      content: `{/*\n\`\`\`\`\n*/}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a JSX comment whose opener line carries trailing text, fence opener inside',
+      content: `{/* TODO\n\`\`\`bash\n*/}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a JSX comment indented two spaces, fence opener inside',
+      content: `  {/*\n  \`\`\`bash\n  */}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a JSX comment whose */} sits on the fence-shaped line itself',
+      content: `{/*\n\`\`\`bash */}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a fence opener inside a JSX comment, then a [link](…) citation',
+      content: `{/*\n\`\`\`bash\n*/}\n\n[x](${DEAD})\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a fence opener inside a JSX comment, then a heading carrying the citation',
+      content: `{/*\n\`\`\`bash\n*/}\n\n## See ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      // The comment must not disarm a REAL fence later on the page either: the prose
+      // citation is live (1), the fenced one is code (0). Site: 1.
+      why: 'a fence opener inside a JSX comment, a prose citation, then a REAL fence holding another',
+      content: `{/*\n\`\`\`bash\n*/}\n\nSee ${DEAD}\n\n\`\`\`bash\n${DEAD}\n\`\`\`\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a real closed fence, then a JSX comment holding a fence opener, then the citation',
+      content: `\`\`\`bash\nx\n\`\`\`\n\n{/*\n\`\`\`bash\n*/}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'two JSX comments, the FIRST holding a fence opener, citation between them',
+      content: `{/*\n\`\`\`bash\n*/}\n\nSee ${DEAD}\n\n{/* other */}\n`,
+      hrefs: 1,
+    },
+    // Container cross-products: the container's own close happens to end the phantom
+    // fence today, so both pass — they pin that a reader modelling the expression keeps
+    // agreeing with the site. Site: 1 each.
+    {
+      why: 'a fence opener inside a JSX comment inside a LIST item',
+      content: `- {/*\n  \`\`\`bash\n  */}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    {
+      why: 'a fence opener inside a JSX comment inside a BLOCK QUOTE',
+      content: `> {/*\n> \`\`\`bash\n> */}\n\nSee ${DEAD}\n`,
+      hrefs: 1,
+    },
+    // Interrupt partners: where the fence is REAL, its body stays code.
+    {
+      // A comment that closes on its own line hands the next line to the grammar.
+      why: 'a one-line JSX comment followed by a REAL fence holding the citation',
+      content: `{/* x */}\n\`\`\`bash\nSee ${DEAD}\n\`\`\`\n`,
+      hrefs: 0,
+    },
+    {
+      why: 'a REAL fence whose body spells {/*, */} and the citation',
+      content: `\`\`\`bash\n{/*\n*/}\n${DEAD}\n\`\`\`\n`,
+      hrefs: 0,
+    },
+    {
+      // Both answer 0, for different reasons today (site: commented out; gate: fence
+      // body). A reader that models the expression must still say 0 — the second
+      // comment is a comment.
+      why: 'a fence opener inside a JSX comment, then the citation inside a LATER comment',
+      content: `{/*\n\`\`\`bash\n*/}\n\n{/* ${DEAD} */}\n`,
+      hrefs: 0,
+    },
   ]
 
   // --- BACKTICK RUN LENGTH (CommonMark § 6.1) --------------------------------
@@ -1467,6 +1585,37 @@ describe('slugifyHeading', () => {
     ['Foo　Bar Ideo', 'foobar-ideo'],
     ['Foo\tBar Tab', 'foobar-tab'],
     ['Foo  Bar Double', 'foo--bar-double'], // two U+0020 -> two hyphens, not collapsed
+
+    // --- CODE SPANS pair by RUN LENGTH (§ 6.1), not by backreference ----------
+    // Every row is github.com's own `id="user-content-…"` for `## <heading>`, read
+    // from `printf '## %s\n' "$h" | jq -Rs '{text:.}' | gh api -X POST /markdown --input -`.
+    // Written out: x1 / x2 / x3 are runs of one, two, three U+0060.
+    //
+    // An x1 opener whose only later runs are LONGER never closes: it is literal text,
+    // so `[x](y)` after it is a real link whose text is `x`.
+    ['Use a ` see [x](y) and ``d`` end', 'use-a--see-x-and-d-end'],
+    // …and when a later x1 DOES close it, § 6.1 strips ONE leading and ONE trailing
+    // space from the span's content — so ` see [x](y) and ` becomes `see [x](y) and`.
+    ['Use a ` see [x](y) and ` end', 'use-a-see-xy-and-end'],
+    // The strip needs BOTH sides: a one-sided space stays, and an all-space span is
+    // left alone.
+    ['Use ` a ` end', 'use-a-end'],
+    ['Use ` a` end', 'use--a-end'],
+    ['Use `a ` end', 'use-a--end'],
+    ['Use `  ` end', 'use----end'],
+    // Longer runs: an x3 opener skips an intervening x2 and closes on the next x3; the
+    // content ` a `` b ` loses its outer spaces and its inner backticks.
+    ['Use ``` a `` b ``` end', 'use-a--b-end'],
+    // An x2 span whose content is a lone x1 (with its guard spaces stripped).
+    ['Use `` ` `` end', 'use--end'],
+    // An x1 span whose content is a lone x2.
+    ['Use ` `` ` end', 'use--end'],
+    // A stray x1 (no x1 partner) followed by a real link and a real x2 span.
+    ['Use ` [x](y) `` z `` end', 'use--x-z-end'],
+    // Continuing partners the old rule already got right, kept so the new one cannot lose them.
+    ['Use ``a`b`` end', 'use-ab-end'],
+    ['Use `a ``b`` c` end', 'use-a-b-c-end'],
+    ['`--root <issue-id>` — subtree scope', '--root-issue-id--subtree-scope'],
   ])('slugs %j as %j', (heading, slug) => {
     expect(slugifyHeading(heading)).toBe(slug)
   })
@@ -1719,14 +1868,26 @@ describe('collectHeadingSlugs', () => {
       readFileSync(resolve(__dirname, 'github-anchor-oracle.json'), 'utf-8'),
     ) as { readonly files: Record<string, { readonly sha1: string; readonly anchors: string[] }> }
     const entries = Object.entries(oracle.files)
-    // Raised in lockstep with the widened predicate, twice: 42 -> 398 when selection
-    // stopped consulting the reader, and again when a FENCE signal was added — a file
-    // whose anchor set depends on fence parity alone matched none of the first four
-    // signals. A floor left below the previous population lets the sweep shrink back
-    // unnoticed, which is how fastify.md stayed outside it. MEASURED at HEAD 965a60f2
-    // over `git ls-files '*.md' '*.mdx'` (1303 files): the four shipped signals admit
-    // 398, and adding `/^ {0,3}(?:`{3,}|~{3,})/m` admits 937.
-    expect(entries.length).toBeGreaterThan(398)
+    // The population is MEASURED, not floored: the fixture must hold exactly the files
+    // the shipped predicate admits over `git ls-files '*.md' '*.mdx'` today — the same
+    // selection the generator ran. A constant floor is a knife edge: `> 398` let a
+    // regeneration that dropped 538 of 937 keys (e.g. a fence regex narrowed to
+    // backticks) pass, the silent shrink ADR-024 says cannot happen. MEASURED at 3fe84f00:
+    // 1303 tracked files, 937 admitted, 937 keys.
+    const admitted = execFileSync('git', ['ls-files', '*.md', '*.mdx'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      maxBuffer: 64 * 1024 * 1024,
+    })
+      .split('\n')
+      .filter(Boolean)
+      .filter(file =>
+        isBlockStructureSensitive(
+          stripFrontmatter(readFileSync(resolve(REPO_ROOT, file), 'utf-8')),
+        ),
+      ).length
+    expect(entries.length, 'recorded keys vs files the predicate admits today').toBe(admitted)
+    expect(admitted).toBeGreaterThanOrEqual(937)
     let checked = 0
     for (const [file, expected] of entries) {
       const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8')
@@ -1741,39 +1902,57 @@ describe('collectHeadingSlugs', () => {
   })
 
   /**
-   * The corpus sweep's blind spot, named. `fastify.md` is the file ADR-024's Context is
-   * written about — an info-string-bearing ```` ```typescript ```` line read as CLOSING
-   * a fence made it serve `#request-lifecycle-management` and
-   * `#validation-and-schema-design`, two anchors github.com does not have, in both KB
-   * roots. Its anchor set depends on FENCE state and on nothing else, so it matches none
-   * of the four shipped selection signals and is not a key here: revert the fence rule
-   * and this sweep — the one net that answers to github.com — stays GREEN.
+   * The fence-sensitive file ADR-024 is written about, CORRECTED. `fastify.md` line 93
+   * spelled ```` ```text ```` where the CLOSER of the ```` ```text ```` block opened at
+   * line 80 belongs; per CommonMark § 4.5 a marker carrying an info string cannot close,
+   * so github.com rendered lines 80-115 as ONE code block and served neither
+   * `#request-lifecycle-management` nor `#validation-and-schema-design` — in BOTH KB
+   * roots every adopter installs. The gate modelled that faithfully, i.e. it pinned a
+   * broken document.
    *
-   * MEASURED at HEAD 965a60f2, `gh api -X POST /markdown` on the frontmatter-stripped
-   * body, read as `(id|name)="user-content-…"` in document order: 30 anchors, and
-   * NEITHER phantom slug among them. `grep -cE '^#{1,6} '` on the same file: 38.
+   * MEASURED at 3fe84f00 on the ONE-character correction (`sed '93s/^```text$/```/'`),
+   * `jq -Rs '{text:.}' | gh api -X POST /markdown --input -`, `(id|name)="user-content-…"`
+   * in document order: 32 anchors, both slugs at positions 6 and 7; the frontmatter-
+   * stripped body's sha1 is `5e425ce7c51f00c1b187d0ad92643f4e1fc82b07`. The row in
+   * `github-anchor-oracle.json` carries that answer, so the corpus sweep skips the file
+   * until the content matches and THIS test fails until it does.
    */
-  it('records the fence-sensitive file ADR-024 is written about', () => {
+  it('records the fence-sensitive file ADR-024 is written about — corrected', () => {
     const oracle = JSON.parse(
       readFileSync(resolve(__dirname, 'github-anchor-oracle.json'), 'utf-8'),
     ) as { readonly files: Record<string, { readonly sha1: string; readonly anchors: string[] }> }
-    const file = '.pair/knowledge/guidelines/code-design/framework-patterns/fastify.md'
-    const row = oracle.files[file]
-    expect(row, `${file} recorded in github-anchor-oracle.json`).toBeDefined()
-    // github.com's own answer, not ours: the two phantoms must be absent from what was
-    // recorded, so a reverted fence rule reddens this row instead of agreeing with it.
-    expect(row?.anchors, 'phantom anchors in the recorded oracle row').not.toContain(
+    const installed = '.pair/knowledge/guidelines/code-design/framework-patterns/fastify.md'
+    const dataset = `packages/knowledge-hub/dataset/${installed}`
+    const row = oracle.files[installed]
+    expect(row, `${installed} recorded in github-anchor-oracle.json`).toBeDefined()
+    expect(row?.anchors, 'github.com anchors of the corrected file').toContain(
       'request-lifecycle-management',
     )
-    expect(row?.anchors, 'phantom anchors in the recorded oracle row').not.toContain(
+    expect(row?.anchors, 'github.com anchors of the corrected file').toContain(
       'validation-and-schema-design',
     )
-    const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8')
-    expect(
-      createHash('sha1').update(stripFrontmatter(src)).digest('hex'),
-      'recorded row is for the file as it stands',
-    ).toBe(row?.sha1)
-    expect([...collectHeadingSlugs(src)], file).toEqual(row?.anchors)
+    for (const file of [dataset, installed]) {
+      const src = readFileSync(resolve(REPO_ROOT, file), 'utf-8')
+      // Exactly one ```` ```text ```` opener: the second one at :93 is the defect.
+      expect(
+        src.split('\n').filter(l => /^```text$/.test(l)).length,
+        `${file}: lines that are exactly \`\`\`text`,
+      ).toBe(1)
+      expect(
+        createHash('sha1').update(stripFrontmatter(src)).digest('hex'),
+        `${file}: recorded row is for the corrected file`,
+      ).toBe(row?.sha1)
+      const slugs = collectHeadingSlugs(src)
+      expect(
+        slugs.has('request-lifecycle-management'),
+        `${file}#request-lifecycle-management`,
+      ).toBe(true)
+      expect(
+        slugs.has('validation-and-schema-design'),
+        `${file}#validation-and-schema-design`,
+      ).toBe(true)
+      expect([...slugs], file).toEqual(row?.anchors)
+    }
   })
 
   it('records only files the SELECTION predicate still admits', () => {
