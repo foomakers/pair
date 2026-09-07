@@ -103,8 +103,16 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   A finding whose sole remediation rewrites existing Git history escalates with a typed
   `history-rewrite` decision **before** RED authoring or sealing; a human may accept only exact
   historical commit subjects, never a current code/test/docs/CI finding. The workflow — not a
-  reviewer’s prose grouping — applies that decision to one or more exact declared SHAs. See ADL
-  [2026-09-06-history-rewrite-escalates-before-red-seal.md](../decision-log/2026-09-06-history-rewrite-escalates-before-red-seal.md).
+  reviewer’s prose grouping — applies that decision to one or more exact declared SHAs. If a
+  reviewer omits the typed metadata but its untyped subject-only finding names unambiguous
+  authorized SHA prefixes, the engine resolves that narrow case; an explicit technical finding,
+  unknown SHA or missing subject evidence remains actionable. See ADLs
+  [2026-09-06-history-rewrite-escalates-before-red-seal.md](../decision-log/2026-09-06-history-rewrite-escalates-before-red-seal.md)
+  and [2026-09-07-history-and-p3-evidence-carry-forward.md](../decision-log/2026-09-07-history-and-p3-evidence-carry-forward.md).
+  A verified P3 regression can enter a card as `requiredFindings` with its exact `observedHead`,
+  oracle, probe and result. The independent reviewer remains blind; once, on that exact head,
+  the engine gives the evidence to RED. A different head stops as `failed-required-findings`,
+  never treats stale evidence as a current specification.
   A convenience predicate (for laziness, eligibility or similar) never substitutes for the
   transition that actually owns the state. See ADL
   [2026-09-05-locked-red-contract-prevents-fix-regressions.md](../decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md).

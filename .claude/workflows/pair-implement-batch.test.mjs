@@ -2242,6 +2242,118 @@ test('an unapproved typed history finding escalates before RED even when reviewe
   assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'history cannot reach GREEN unsanctioned')
 })
 
+test('an authorized history decision applies when the reviewer omits typed metadata but names only its subjects', async () => {
+  const commits = ['a'.repeat(40), 'b'.repeat(40)]
+  const historical = {
+    location: `${commits[0].slice(0, 8)}, ${commits[1].slice(0, 8)}: subject`,
+    severity: 'Minor',
+    description: 'the two historical commit subjects use a stale label',
+    recommendation: 'rewrite both commit subjects',
+  }
+  const technical = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  let reviewerCalls = 0
+  const { result, calls } = await runWorkflow({
+    args: {
+      stories: [{
+        ...STORY,
+        historyDecision: { commits, disposition: 'Accepted historical trace; do not rewrite the sealed base.' },
+      }],
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return reviewerCalls++ === 0
+          ? { verdict: 'Rework', findings: [historical, technical], needsHumanDecision: true, humanDecisionKind: 'history-rewrite' }
+          : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(result.batch[0].acceptedFindings.length, 1, 'the engine carries the authorized history finding')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'only technical work reaches GREEN')
+})
+
+test('an ambiguous history SHA prefix never consumes more than one approved subject', async () => {
+  const commits = ['a'.repeat(40), `${'a'.repeat(39)}b`]
+  const historical = {
+    location: `${'a'.repeat(8)}: subject`,
+    severity: 'Minor',
+    description: 'the historical commit subject uses a stale label',
+    recommendation: 'rewrite the commit subject',
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [{ ...STORY, historyDecision: { commits, disposition: 'Must not apply.' } }] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return { verdict: 'Rework', findings: [historical], needsHumanDecision: true, humanDecisionKind: 'history-rewrite' }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'escalate')
+  assert.equal(result.batch[0].acceptedFindings.length, 0)
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+})
+
+test('a verified current-head finding reaches RED even when the fresh reviewer omits it', async () => {
+  const required = {
+    observedHead: REVIEWED_HEAD,
+    location: 'src/parser.ts:42',
+    severity: 'Major',
+    description: 'a known false green remains live',
+    recommendation: 'preserve trailing text after a closer',
+    oracle: 'real renderer',
+    probe: 'known fixture',
+    observed: 'site=1 href, gate=0',
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [{ ...STORY, requiredFindings: [required] }] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const red = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.ok(red, 'the known P3 result cannot disappear because a reviewer missed it')
+  assert.match(red.prompt, /a known false green remains live/)
+  assert.match(red.prompt, /real renderer/)
+  assert.doesNotMatch(review.prompt, /a known false green remains live/, 'the independent reviewer stays blind')
+})
+
+test('a required finding tied to a different head fails before RED rather than applying stale evidence', async () => {
+  const required = {
+    observedHead: 'b'.repeat(40),
+    location: 'src/parser.ts:42',
+    severity: 'Major',
+    description: 'a known false green remains live',
+    recommendation: 'preserve trailing text after a closer',
+    oracle: 'real renderer',
+    probe: 'known fixture',
+    observed: 'site=1 href, gate=0',
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [{ ...STORY, requiredFindings: [required] }] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-required-findings')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+})
+
 test('models.green isolates an A/B trial to GREEN; reviewer, RED and P3 keep their role defaults', async () => {
   const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
   let round = 0

@@ -34,8 +34,10 @@ export const meta = {
 //                                 // A POSITIVE integer (>= 1): `0`/negative do not name a PR,
 //                                 // and `0` would skip implement AND the probe and report an
 //                                 // unbuilt story as review-approved.
-//     historyDecision?,          // narrow human decision: exact sealed-history commit subjects
-//                                 // only, { commits: [lower-case full SHA...], disposition }
+    //     historyDecision?,          // narrow human decision: exact sealed-history commit subjects
+    //                                 // only, { commits: [lower-case full SHA...], disposition }
+    //     requiredFindings?,         // verified P3 evidence that RED must re-prove on its exact
+    //                                 // observedHead; it stays outside reviewer context.
 //   }],                           // every card VALUE is validated, not just its key set: id is one
 //                                 // path segment, branch/base are git refs, title/notes are plain
 //                                 // text. They reach shell command text an agent runs, so a value
@@ -132,6 +134,9 @@ export const meta = {
 // commits when rewriting them would alter a sealed RED base. It is reviewer context, never a
 // waiver for code, docs, tests, configuration or other commits; a history-only finding without
 // it escalates before RED/seal/GREEN can make its remediation impossible in this cycle.
+// Optional { requiredFindings } = verified P3 observations: the engine gives them to RED once
+// on their exact measured head after the independent reviewer has stayed blind. A stale head
+// fails closed rather than treating prior evidence as a current defect.
 //
 // #401: the input is validated LOUDLY. The previous version coerced an unparseable
 // string to `undefined` and fell through to `STORIES = []`, so a caller who
@@ -266,7 +271,7 @@ function parseBatchArgs(raw) {
     // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
     // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
     // PR for a story that already had one — the very thing this file forbids in as many words.
-    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'historyDecision', 'prNumber'], `${listKey}[${i}]`)
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'historyDecision', 'requiredFindings', 'prNumber'], `${listKey}[${i}]`)
     // `#234` and `234` name the same story; normalize once so no prompt, worktree
     // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
     // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
@@ -371,6 +376,46 @@ function parseBatchArgs(raw) {
         )
       historyDecision = { commits, disposition: d.disposition.trim() }
     }
+    // A verified P3 result must not disappear merely because a later independent reviewer
+    // sampled a different portion of the same head. Keep it outside reviewer context (the
+    // review remains blind), but make the RED owner re-prove it on the exact head where it was
+    // measured. A different head is not "probably close enough": that would turn old evidence
+    // into a new specification without rerunning its oracle.
+    let requiredFindings = []
+    if (s.requiredFindings !== undefined && s.requiredFindings !== null) {
+      if (!Array.isArray(s.requiredFindings) || s.requiredFindings.length === 0)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings must be a non-empty array when provided.`,
+        )
+      const requiredKeys = new Set()
+      requiredFindings = s.requiredFindings.map((finding, j) => {
+        if (!finding || typeof finding !== 'object' || Array.isArray(finding))
+          throw new Error(`implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}] must be an object.`)
+        rejectUnknownKeys(
+          finding,
+          ['observedHead', 'location', 'severity', 'description', 'recommendation', 'oracle', 'probe', 'observed'],
+          `${listKey}[${i}].requiredFindings[${j}]`,
+        )
+        if (typeof finding.observedHead !== 'string' || !/^[0-9a-f]{40}$/.test(finding.observedHead))
+          throw new Error(
+            `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}].observedHead must be the lower-case 40-character SHA on which its oracle was measured.`,
+          )
+        const normalized = { observedHead: finding.observedHead }
+        for (const key of ['location', 'severity', 'description', 'recommendation', 'oracle', 'probe', 'observed']) {
+          const value = finding[key]
+          if (typeof value !== 'string' || !value.trim() || !isProse(value.trim()))
+            throw new Error(
+              `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}].${key} must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
+            )
+          normalized[key] = value.trim()
+        }
+        const key = `${normalized.observedHead}\u0000${normalized.location}\u0000${normalized.description}\u0000${normalized.recommendation}`
+        if (requiredKeys.has(key))
+          throw new Error(`implement-batch: ${listKey}[${i}] (#${id}) requiredFindings contains the same measured finding more than once.`)
+        requiredKeys.add(key)
+        return normalized
+      })
+    }
     // `prNumber` decides the ENTIRE lifecycle: an integer re-enters the review loop on the
     // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
     // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
@@ -407,7 +452,7 @@ function parseBatchArgs(raw) {
           `implementers in the same working tree and lose one of them. Pass each story once.`,
       )
     seenIds.set(id, i)
-    return { ...s, id, historyDecision }
+    return { ...s, id, historyDecision, requiredFindings }
   })
   // Return the NORMALIZED container, not just the list. Reading a second option off the
   // raw `args` was a real bug: the runtime can hand this script a JSON STRING, and
@@ -830,15 +875,39 @@ const withModel = (role, opts) => {
   return model ? { ...opts, model } : opts
 }
 const HISTORY_SUBJECT_SHA = /^[0-9a-f]{40}$/
+const HISTORY_SUBJECT_CUE = /\b(?:commit\s+(?:subject|message|label)|subject(?:[-\s]?line)?)\b/i
+const historyText = finding =>
+  [finding?.location, finding?.description, finding?.recommendation]
+    .filter((value) => typeof value === 'string')
+    .join(' ')
+// The structured fields are the preferred reviewer result. A model may still omit optional
+// metadata while stating the exact authorized commit subjects in its ordinary finding text.
+// That omission must not turn an already authorized subject-only decision into another human
+// escalation. The fallback is intentionally narrow: only an untyped finding, carrying a subject
+// cue and one or more unambiguous prefixes of the supplied full SHAs, qualifies. An explicitly
+// technical finding, an unknown full SHA or absent subject evidence stays actionable.
+function textualHistorySubjects(finding, approved) {
+  if (finding?.kind !== undefined || !HISTORY_SUBJECT_CUE.test(historyText(finding))) return []
+  const tokens = historyText(finding).match(/\b[0-9a-f]{8,40}\b/g) ?? []
+  if (tokens.some((token) => token.length === 40 && !approved.has(token))) return []
+  const matches = tokens.map((token) => [...approved].filter((sha) => sha.startsWith(token)))
+  if (matches.some((subjects) => subjects.length !== 1)) return []
+  return [...new Set(matches.flat())]
+}
 // A reviewer classifies the finding; it does not get to grant the human's exception. Applying
 // the exact SHA set here makes a two-commit decision as deterministic as a one-commit decision
 // and fails closed for an omitted, malformed or broader subject set.
 function applyHistoryDecision(findings, decision) {
   const approved = new Set(decision?.commits ?? [])
   let unresolved = false
+  let recognizedHistory = false
   const normalized = findings.map((finding) => {
-    if (finding?.kind !== 'history-subject') return finding
-    const subjects = Array.isArray(finding.historySubjects) ? finding.historySubjects : []
+    const typed = finding?.kind === 'history-subject'
+    const subjects = typed
+      ? (Array.isArray(finding.historySubjects) ? finding.historySubjects : [])
+      : textualHistorySubjects(finding, approved)
+    if (!typed && subjects.length === 0) return finding
+    recognizedHistory = true
     const valid =
       subjects.length > 0 &&
       new Set(subjects).size === subjects.length &&
@@ -850,7 +919,7 @@ function applyHistoryDecision(findings, decision) {
     }
     return { ...finding, nonActionable: true, disposition: decision.disposition }
   })
-  return { findings: normalized, unresolved }
+  return { findings: normalized, unresolved, recognizedHistory }
 }
 // Rounds of autonomous fix<->re-review before escalating to a human. Caller-configurable
 // (`args.pipeline.maxFixRounds`); pair's own 3 is the default and the measured one. Raised
@@ -1573,6 +1642,11 @@ async function driveStory(story) {
   let humanDecisionPending = false
   let prevFindings = []
   let prevReviewedHead = null
+  // A P3 result is evidence, not reviewer context. It is injected exactly once, after the
+  // fresh reviewer has remained blind, and then survives as an ordinary prior finding for the
+  // re-review. Re-injecting it after GREEN would force a second fix even when its RED test
+  // proved the defect closed.
+  let pendingRequiredFindings = [...(story.requiredFindings ?? [])]
   // ACCUMULATES across rounds — never reassigned. A finding accepted in round 0 (by-design, or
   // below the floor) is not re-raised by the round-1 reviewer, because round 1 only sees the
   // fixed code and has no memory of what the human was already told would be carried. So a
@@ -1620,6 +1694,7 @@ async function driveStory(story) {
   const authorRedTests = (targets, phase, baseHead) =>
     agentRetry(
       [RED_ARTIFACT_CONTRACT,
+      'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
       `RED TEST CONTRACT (test-only; no implementation) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The actionable findings are: ${JSON.stringify(targets)}. Inspect the current source and the exact fix boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`; do NOT read ${BLIND_PATHS}, checkpoints or working logs. Before editing, identify the ONE canonical source of truth for every state transition/classification this fix touches. Build a finite matrix with every branch that changes that owner state, its nearest continuing and interrupting/boundary counterpart, and every renderer/consumer boundary the finding names. A predicate used for laziness, eligibility or a convenience classification is NOT automatically the state-transition oracle: derive expectations from the function that actually mutates/owns the state. Declare \`fixScope\` before editing: one owner, exactly one \`mode\` (\`behavioral\` or \`structural\`), and exact repository-relative \`allowedPaths\`. Do not combine a behavior repair with extraction/refactor: return no contract and ask for a separate structural round. Then modify ONLY test artifacts (test source, test fixture or committed oracle row): never modify production source, docs, adoption, configuration, generated assets, commits, pushes, PRs, comments, cards or merges. Run each changed test while the production code is still unfixed and keep it RED for the reported behavior. Do not weaken an existing expectation or replace a failing test with a source-string assertion. Return typed \`redTests\`: every artifact has its repository-relative file path and \`sha256sum <file>\` as \`sha256:<digest>\`; a test has its exact failing command and observed failure, while a fixture declares its RED \`consumedBy\` test rather than inventing one. A pure documentation/formatting finding may set testExempt true only with a concrete rationale; it still needs a matrix. Return sourceOfTruth, fixScope, matrix rows (condition | oracle | expected), redTests and testExempt. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
       ].join('\n'),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-test:${tag} ${phase}`, effort: 'high', schema: RED_TEST_SCHEMA }),
@@ -1628,6 +1703,7 @@ async function driveStory(story) {
   const verifyRedContract = (redContract, targets, phase, baseHead) =>
     agentRetry(
       [RED_ARTIFACT_CONTRACT,
+      'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
       `RED CONTRACT VERIFIER (read-only, pre-seal) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The author returned: ${JSON.stringify(redContract)}. The findings are: ${JSON.stringify(targets)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Independently inspect the uncommitted diff and current source. Re-run every matrix oracle and every RED command yourself while production remains unfixed. Treat an unsupported claim (for example “does not compile”) as a finding unless its stated oracle demonstrates it. Verify every test/fixture path is repository-relative and every fixture is consumed by the exact failing assertion named in \`consumedBy\`. Verify fixScope has one owner, one mode, and only the exact paths needed by that contract: \`behavioral\` may not add/move/split production modules; \`structural\` must have a structural RED assertion. For parser/state rules, prove the full boundary and smallest rule-interaction cross-product from the actual state owner, not a downstream consumer. Return \`verified: true\` only when the whole RED contract is independently reproducible and complete; otherwise return \`verified: false\` with concrete findings.`,
       ].join('\n'),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
@@ -1706,7 +1782,18 @@ async function driveStory(story) {
       return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     const reviewedHead = String(review.reviewedHead).toLowerCase()
     const historyResolution = applyHistoryDecision(review.findings ?? [], story.historyDecision)
-    const findings = historyResolution.findings
+    const staleRequired = pendingRequiredFindings.filter((finding) => finding.observedHead !== reviewedHead)
+    if (staleRequired.length)
+      return {
+        story,
+        prNumber: pr.prNumber,
+        status: 'failed-required-findings',
+        findings: staleRequired,
+        acceptedFindings: accepted,
+        reviewLog: cycleHasRemediation ? reviewLog : undefined,
+      }
+    const findings = [...historyResolution.findings, ...pendingRequiredFindings]
+    pendingRequiredFindings = []
     // Below the floor: still reported, still shown to the human, just not blocking. One
     // partition predicate makes the complement total: an unknown/non-numeric rank blocks
     // rather than disappearing from both the fix set and the merge-gate record.
@@ -1733,13 +1820,13 @@ async function driveStory(story) {
     // round first makes the human's legitimate options narrower. Stop before RED/seal/GREEN;
     // this exceptional route is typed, while all other human decisions retain the measured
     // one-round behavior below.
-    const reviewerUsedTypedHistory = findings.some((finding) => finding?.kind === 'history-subject')
+    const reviewerUsedRecognizedHistory = historyResolution.recognizedHistory
     // A legacy reviewer may still raise the generic flag beside a correctly typed, authorized
     // history finding. The typed engine decision is authoritative in that narrow case; an
     // untyped history-rewrite request still fails closed because no exact SHA set was supplied.
     const historyRewriteDecision =
       historyResolution.unresolved ||
-      (wantsHuman && review?.humanDecisionKind === 'history-rewrite' && !reviewerUsedTypedHistory)
+      (wantsHuman && review?.humanDecisionKind === 'history-rewrite' && !reviewerUsedRecognizedHistory)
     let mustEscalate = false
     if (historyRewriteDecision) {
       mustEscalate = true

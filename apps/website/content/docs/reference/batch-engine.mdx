@@ -123,6 +123,14 @@ The RED contract names one owner, one mode (`behavioral` or `structural`) and ex
 behavioral fix cannot hide a module extraction or refactor. The first actionable preflight result
 stops as `failed-preflight`; the next attempt must begin with fresh RED, not an internal repair.
 
+### Carrying verified P3 evidence
+
+A card may pass `requiredFindings`: a compact P3 observation with `observedHead`, finding fields,
+oracle, probe and observed result. The reviewer does not receive it, preserving its independent
+sample. On the same reviewed SHA the engine gives it once to RED, which must rerun the oracle and
+make the case red even if the reviewer missed it. A different SHA stops as
+`failed-required-findings`; old evidence never silently becomes a new specification.
+
 `model` remains a legacy global override. For a measured trial use `models`, for example
 `{ models: { green: "fable" } }`: that changes only GREEN, leaving the independent reviewer,
 RED and preflight on their declared models.

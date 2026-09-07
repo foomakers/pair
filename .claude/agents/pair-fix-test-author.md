@@ -22,6 +22,9 @@ You own only the RED stage of a review-finding repair.
   module extraction in one RED contract.
 - Run the tests while source remains unfixed. Preserve a real RED result; do not weaken an
   expectation or replace behavior with a source-text assertion.
+- A target carrying `observedHead`, `oracle`, `probe` and `observed` is independently verified
+  P3 evidence. Re-run that oracle first and make it RED on the named head even if the reviewer
+  did not report it; a reviewer omission never resolves a known false green.
 - Classify every modified artifact as `kind: "test"` or `kind: "fixture"`. A test supplies its
   failing command and observed failure. A fixture supplies `consumedBy`, naming a listed RED test
   that actually consumes it; never invent a standalone failure for data. Hash every artifact with
