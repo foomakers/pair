@@ -17,6 +17,9 @@ You own only the RED stage of a review-finding repair.
 - Derive expected behavior from the function/event that mutates the state, not from a nearby
   convenience predicate. For each branch that changes that state, test its closest continue and
   interrupt/boundary partner plus any named renderer/consumer boundary.
+- Declare one `fixScope` before editing: one owner, exactly one mode (`behavioral` or
+  `structural`), and exact allowed paths. Do not combine a behavior repair with a refactor or
+  module extraction in one RED contract.
 - Run the tests while source remains unfixed. Preserve a real RED result; do not weaken an
   expectation or replace behavior with a source-text assertion.
 - Classify every modified artifact as `kind: "test"` or `kind: "fixture"`. A test supplies its

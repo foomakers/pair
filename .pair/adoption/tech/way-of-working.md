@@ -84,21 +84,26 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 - **Post-fix preflight:** before an external re-review, a separate read-only verifier inspects
   only the new fix delta and directly changed boundaries. It reruns every returned ledger probe,
   traces each fixture/table value to a consuming assertion, and checks paired order plus the
-  minimal interaction cross-product of new rules. It may send one bounded internal repair back
-  to the fixer; a second miss stops as `failed-preflight` without creating a new PR review round.
+  minimal interaction cross-product of new rules. Its first actionable finding stops immediately
+  as `failed-preflight`: it never starts a hidden second RED/GREEN repair or creates a new PR
+  review round. The next attempt starts a fresh RED contract.
   Every actionable review recommendation supplies `VERIFY: input/state -> expected`, `ORACLE:`
   and `ASSERT:` so this check is executable rather than interpretive. See ADL
   [2026-09-04-independent-fix-preflight-prevents-review-churn.md](../decision-log/2026-09-04-independent-fix-preflight-prevents-review-churn.md).
-- **Locked RED before GREEN:** every actionable behavior fix has three isolated stages. A
-  test-only author derives its matrix from the state-transition owner and writes/runs failing
-  tests; a sealer records their manifest and blobs in one local Git snapshot; only then may the
-  source fixer edit implementation. Preflight finds that snapshot itself, compares its test blobs
-  with HEAD, and rejects a changed, missing or unlisted test artifact — including a comment. A
+- **Locked RED before GREEN:** every actionable behavior fix has four isolated stages. A
+  test-only author derives its matrix from the state-transition owner, declares one typed scope
+  (`behavioral` or `structural`, never both) and writes/runs failing tests; an independent
+  read-only verifier reproduces the matrix/oracles and rejects an incomplete contract; only then
+  does a sealer record its manifest and blobs in one local Git snapshot and permit the source
+  fixer to edit implementation. A behavioral scope cannot add, move or split production modules.
+  Preflight finds that snapshot itself, compares its test blobs with HEAD, and rejects a changed,
+  missing or unlisted test artifact — including a comment. A
   fixture with no standalone failure names the RED test that consumes it; an absent or non-RED
   consumer is rejected before sealing.
   A finding whose sole remediation rewrites existing Git history escalates with a typed
   `history-rewrite` decision **before** RED authoring or sealing; a human may accept only exact
-  historical commit subjects, never a current code/test/docs/CI finding. See ADL
+  historical commit subjects, never a current code/test/docs/CI finding. The workflow — not a
+  reviewer’s prose grouping — applies that decision to one or more exact declared SHAs. See ADL
   [2026-09-06-history-rewrite-escalates-before-red-seal.md](../decision-log/2026-09-06-history-rewrite-escalates-before-red-seal.md).
   A convenience predicate (for laziness, eligibility or similar) never substitutes for the
   transition that actually owns the state. See ADL

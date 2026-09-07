@@ -51,14 +51,24 @@ async function runWorkflow({ args, dispatch }) {
         return result.reviewedHead === undefined ? { ...result, reviewedHead: REVIEWED_HEAD } : result
       return { verified: true, findings: [], reviewedHead: REVIEWED_HEAD }
     }
+    // RED has a distinct, read-only verifier before its snapshot is committed. Existing
+    // tests that do not care about it receive a valid check; focused tests return it directly.
+    if (opts.agentType === 'pair-red-contract-verifier') {
+      if (result && typeof result === 'object' && typeof result.verified === 'boolean') return result
+      return { verified: true, findings: [] }
+    }
     // Legacy fixtures model the old one-agent fix path. Supply a valid RED handoff only
     // when they return an unrelated fallback object; focused tests can return an explicit
     // contract (or null, to exercise the fail-closed path) without boilerplate everywhere.
     if (opts.agentType === 'pair-fix-test-author') {
       if (result === null) return null
-      if (result && typeof result === 'object' && typeof result.sourceOfTruth === 'string') return result
+      if (result && typeof result === 'object' && typeof result.sourceOfTruth === 'string')
+        return result.fixScope === undefined
+          ? { ...result, fixScope: { owner: 'canonical state transition', mode: 'behavioral', allowedPaths: ['src/fixture.ts'] } }
+          : result
       return {
         sourceOfTruth: 'canonical state transition',
+        fixScope: { owner: 'canonical state transition', mode: 'behavioral', allowedPaths: ['src/fixture.ts'] },
         matrix: [{ condition: 'reported case', oracle: 'fixture', expected: 'fixed behavior' }],
         redTests: [{ file: 'fixture.test.ts', sha256: `sha256:${'0'.repeat(64)}`, command: 'pnpm test', observed: 'FAIL' }],
         testExempt: false,
@@ -138,6 +148,26 @@ function validContract() {
 }
 
 const STORY = { id: '292', title: 'T', branch: 'feat/#292-x' }
+const HISTORY_FINDING_PROPERTIES = {
+  kind: { type: 'string', enum: ['technical', 'history-subject'] },
+  historySubjects: { type: 'array', items: { type: 'string', pattern: '^[0-9a-f]{40}$' } },
+}
+const reviewSchemaWithOrchestration = contract => ({
+  ...contract.schema,
+  properties: {
+    ...contract.schema.properties,
+    findings: {
+      ...contract.schema.properties.findings,
+      items: {
+        ...contract.schema.properties.findings.items,
+        properties: { ...contract.schema.properties.findings.items.properties, ...HISTORY_FINDING_PROPERTIES },
+      },
+    },
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
+  },
+  required: ['verdict', 'reviewedHead'],
+})
 
 test('valid contract: reviewer schema derives from contract.json (AC1) and cache-hit is reported (AC2)', async () => {
   const contract = validContract()
@@ -146,15 +176,7 @@ test('valid contract: reviewer schema derives from contract.json (AC1) and cache
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract } }),
   })
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
-  assert.deepEqual(rev.opts.schema, {
-    ...contract.schema,
-    properties: {
-      ...contract.schema.properties,
-      reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
-      humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
-    },
-    required: ['verdict', 'reviewedHead'],
-  })
+  assert.deepEqual(rev.opts.schema, reviewSchemaWithOrchestration(contract))
   assert.ok(rev.prompt.includes('Blocker'), 'severity vocabulary threaded from the contract')
   assert.ok(rev.prompt.includes('Rework'), 'verdict vocabulary threaded from the contract')
   assert.deepEqual(result.contracts, [{ name: 'code-review', status: 'cache-hit' }])
@@ -263,15 +285,7 @@ test('contract with usable schema but missing canonical vocabulary keys: prompt 
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   // Schema is still enum-locked from the (structurally usable) contract, with
   // the orchestration-owned reviewed revision layered on top.
-  assert.deepEqual(rev.opts.schema, {
-    ...contract.schema,
-    properties: {
-      ...contract.schema.properties,
-      reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
-      humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
-    },
-    required: ['verdict', 'reviewedHead'],
-  })
+  assert.deepEqual(rev.opts.schema, reviewSchemaWithOrchestration(contract))
   // ...but the prompt vocabulary text falls back to the documented defaults,
   // since verdictOptions/severities (the canonical keys it's threaded from)
   // are absent. In practice ensure-contract.mjs's validateContract now rejects
@@ -1199,7 +1213,7 @@ test('a missing RED contract fails closed before any source fix or external re-r
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 0, 'no preflight or external re-review follows')
 })
 
-test('a narrow independent preflight repairs its own delta before the next external review', async () => {
+test('a narrow independent preflight stops at its first delta finding before another review', async () => {
   const original = { location: 'parser.ts:10', severity: 'Minor', description: 'original', recommendation: 'original fix' }
   const preflightFinding = {
     location: 'parser.ts:24',
@@ -1225,12 +1239,12 @@ test('a narrow independent preflight repairs its own delta before the next exter
     },
   })
 
-  assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 2, 'only the normal baseline and external re-review run')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 2, 'the first preflight finding is checked again after one bounded inner fix')
+  assert.equal(result.batch[0].status, 'failed-preflight')
+  assert.deepEqual(result.batch[0].findings, [preflightFinding])
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 1, 'P3 is terminal; no external re-review runs')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 1, 'the first preflight finding is not silently repaired')
   const fixes = calls.filter(c => c.opts.label?.startsWith('fix:'))
-  assert.equal(fixes.length, 2, 'the preflight finding is fixed before the external re-review')
-  assert.match(fixes[1].prompt, /list above quote is not parsed/, 'the second fix receives the concrete preflight failure')
+  assert.equal(fixes.length, 1, 'P3 never starts a hidden second GREEN round')
   const verifier = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
   assert.deepEqual(verifier.opts.schema.required, ['verified', 'reviewedHead', 'findings'])
   assert.match(verifier.prompt, /FIX PREFLIGHT/, 'the verifier is a narrow post-fix check, not another PR review')
@@ -1239,7 +1253,7 @@ test('a narrow independent preflight repairs its own delta before the next exter
   assert.match(verifier.prompt, /evidence ledger/i, 'the fixer ledger is rerun instead of trusted')
 })
 
-test('a second preflight miss stops before it can inflate the external review trend', async () => {
+test('a P3 miss stops before it can inflate the external review trend', async () => {
   const original = { location: 'parser.ts:10', severity: 'Minor', description: 'original', recommendation: 'original fix' }
   const stillBroken = { location: 'parser.ts:30', severity: 'Minor', description: 'reverse nesting still fails', recommendation: 'VERIFY: list > quote; ORACLE: fixture; ASSERT: result' }
   const { result, calls } = await runWorkflow({
@@ -1256,9 +1270,9 @@ test('a second preflight miss stops before it can inflate the external review tr
 
   assert.equal(result.batch[0].status, 'failed-preflight')
   assert.deepEqual(result.batch[0].findings, [stillBroken])
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 1, 'no external re-review is dispatched after the second local miss')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 2, 'one inner repair is the hard cap')
-  assert.ok(calls.some(c => c.opts.label?.startsWith('preflight-log:')), 'the stop is retained in the working log')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 1, 'no external re-review is dispatched after a local miss')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-verifier').length, 1, 'there is no inner repair')
+  assert.equal(calls.some(c => c.opts.label?.startsWith('preflight-log:')), false, 'the verifier is read-only')
 })
 
 test('re-review is anchored to the reviewed revision and checks only the fix delta plus prior findings', async () => {
@@ -2133,7 +2147,7 @@ test('historyDecision is reviewer context only: exact historical subjects may be
   })
   const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.match(review.prompt, new RegExp(commit), 'the reviewer receives the exact human-authorized commit only')
-  assert.match(review.prompt, /does not waive.*code/i, 'the decision cannot waive technical work')
+  assert.match(review.prompt, /mixed code\/docs\/test\/CI.*technical/i, 'the decision cannot waive technical work')
   assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'the technical finding still receives GREEN')
   assert.equal(result.batch[0].acceptedFindings.length, 1, 'only the explicitly non-actionable historical finding is carried')
 })
@@ -2146,6 +2160,172 @@ test('historyDecision rejects a non-canonical commit identifier before agents ru
     }),
     /historyDecision\.commits\[0\].*lower-case 40-character SHA/i,
   )
+})
+
+test('a multi-SHA historyDecision is applied by the engine, not left to reviewer grouping', async () => {
+  const commits = ['a'.repeat(40), 'b'.repeat(40)]
+  const historical = {
+    kind: 'history-subject',
+    historySubjects: commits,
+    location: 'history:subjects',
+    severity: 'Minor',
+    description: 'two old commit subjects use a stale label',
+    recommendation: 'rewrite both subjects',
+  }
+  const technical = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  let reviewerCalls = 0
+  const { result, calls } = await runWorkflow({
+    args: {
+      stories: [{
+        ...STORY,
+        historyDecision: { commits, disposition: 'Accepted historical trace; do not rewrite the sealed base.' },
+      }],
+    },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer')
+        return reviewerCalls++ === 0 ? { verdict: 'Rework', findings: [historical, technical] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'only the technical finding reaches GREEN')
+  assert.equal(result.batch[0].acceptedFindings.length, 1, 'the two-SHA history finding is carried once')
+  assert.equal(result.batch[0].acceptedFindings[0].nonActionable, true, 'the engine—not free prose—sets disposition')
+  assert.equal(result.batch[0].acceptedFindings[0].disposition, 'Accepted historical trace; do not rewrite the sealed base.')
+})
+
+test('an authorized typed history finding cannot be re-escalated by the legacy generic flag', async () => {
+  const commit = 'a'.repeat(40)
+  const history = {
+    kind: 'history-subject', historySubjects: [commit], location: `${commit}:subject`, severity: 'Minor',
+    description: 'old subject label', recommendation: 'rewrite subject',
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [{ ...STORY, historyDecision: { commits: [commit], disposition: 'Accepted history.' } }] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [history], needsHumanDecision: true, humanDecisionKind: 'history-rewrite' }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(result.batch[0].acceptedFindings[0].disposition, 'Accepted history.')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+})
+
+test('an unapproved typed history finding escalates before RED even when reviewer omits needsHumanDecision', async () => {
+  const commit = 'c'.repeat(40)
+  const history = {
+    kind: 'history-subject',
+    historySubjects: [commit],
+    location: `${commit}:subject`,
+    severity: 'Minor',
+    description: 'subject needs rewrite',
+    recommendation: 'rewrite commit subject',
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [history], needsHumanDecision: false }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'escalate')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0, 'history cannot reach RED unsanctioned')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'history cannot reach GREEN unsanctioned')
+})
+
+test('models.green isolates an A/B trial to GREEN; reviewer, RED and P3 keep their role defaults', async () => {
+  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  let round = 0
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY], models: { green: 'fable' } },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const green = calls.find(c => c.opts.label === 'fix:#292 r1')
+  const red = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
+  const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
+  const p3 = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
+  assert.equal(green.opts.model, 'fable')
+  assert.equal(red.opts.model, undefined)
+  assert.equal(review.opts.model, undefined)
+  assert.equal(p3.opts.model, undefined)
+})
+
+test('an unverified RED contract fails before it can be sealed or reach GREEN', async () => {
+  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-red-contract-verifier') return { verified: false, findings: [finding] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-red-contract')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0, 'no unverified test contract is sealed')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'no GREEN follows an unverified RED contract')
+})
+
+test('RED requires one typed scope before it can reach the independent verifier', async () => {
+  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  const invalidRed = {
+    sourceOfTruth: 'state owner',
+    fixScope: { owner: 'state owner', mode: 'both', allowedPaths: ['src/a.ts'] },
+    matrix: [{ condition: 'bad state', oracle: 'test', expected: 'fixed' }],
+    redTests: [{ file: 'src/a.test.ts', sha256: `sha256:${'0'.repeat(64)}`, command: 'pnpm test', observed: 'FAIL' }],
+    testExempt: false,
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-fix-test-author') return invalidRed
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-fix')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier').length, 0, 'an ambiguous scope is rejected before verification')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0, 'an ambiguous scope is never sealed')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'an ambiguous scope cannot reach GREEN')
+})
+
+test('P3 finding fails closed; it never receives a hidden automatic second GREEN round', async () => {
+  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
+  const p3Finding = { location: 'src/b.ts:1', severity: 'Major', description: 'fix regression', recommendation: 'repair it' }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-fix-verifier') return { verified: false, findings: [p3Finding] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-preflight')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1, 'P3 does not start a second hidden RED contract')
+  assert.equal(calls.filter(c => c.opts.label?.includes('p1')).length, 0, 'P3 does not start a second hidden GREEN round')
 })
 
 test('a flag raised only AFTER a fix round still escalates on that round', async () => {

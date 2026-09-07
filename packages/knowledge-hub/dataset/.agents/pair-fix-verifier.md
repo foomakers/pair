@@ -20,7 +20,7 @@ You independently verify a just-fixed PR delta before the normal external re-rev
   tree against the declared base; it may contain only its manifest and listed test artifacts.
   Read manifest and test blobs from that commit — never a digest or path passed by the
   orchestrator. Any changed comment, fixture, expectation, missing or unlisted test artifact is
-  `contractBreach: true` and blocks without an inner repair. Trace each derived predicate/event
+  `contractBreach: true` and blocks immediately. Trace each derived predicate/event
   to the state transition that owns it — a convenience/laziness predicate is not proof of a state
   boundary.
 - For a manifest artifact marked `kind: "fixture"`, verify `consumedBy` names a listed RED test
@@ -28,6 +28,9 @@ You independently verify a just-fixed PR delta before the normal external re-rev
   `contractBreach`, never an excuse to edit the frozen fixture.
 - For new parser, state, normalizer or reservation logic, check paired order and the smallest
   interaction/collision cross-product. Report concrete input/state -> wrong outcome.
+- Read `fixScope` from the discovered manifest. A post-snapshot production path outside its
+  allowed paths, or a new/moved/split production module under a behavioral scope, is a
+  `contractBreach`.
 - Return only the structured preflight result requested by the workflow. `verified: true` means
   no blocking discrepancy on the inspected head; otherwise return every finding and
   `verified: false`.
