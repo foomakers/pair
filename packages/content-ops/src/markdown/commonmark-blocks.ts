@@ -463,6 +463,13 @@ export type MarkdownEvent =
   | { kind: 'html-open'; index: number; raw: string; text: string; htmlKind: number }
   | { kind: 'html-body'; index: number; raw: string; text: string; htmlKind: number }
   | { kind: 'html-end'; index: number }
+  /**
+   * One line of an MDX flow expression (`mdx` flavour only): `{/* … *\/}`, MDX's only
+   * comment, from its opener line to the line carrying `*\/}` inclusive. The compiler
+   * (`@mdx-js/mdx@3.1.1`) consumes those lines as ONE expression node and renders
+   * nothing, so a fence marker on one of them is comment text — never a fence.
+   */
+  | { kind: 'expression'; index: number; raw: string; text: string }
   | {
       kind: 'leaf'
       index: number
@@ -526,6 +533,11 @@ export interface ReadMarkdownOptions {
    * unchanged, and an `<!-- … -->` line becomes ordinary text — a page carrying one
    * cannot build at all ("Unexpected character `!` … use `{/* text *\/}`"), so no
    * consumer can be misled by it.
+   *
+   * The ONE block MDX adds is read: a `{/* … *\/}` FLOW EXPRESSION — MDX's only comment
+   * — spans every line from its opener to the line carrying `*\/}` and is emitted as
+   * `expression` events, never as a fence, a paragraph or a leaf (see
+   * `readExpressionLine`).
    */
   readonly mdx?: boolean
 }
@@ -585,6 +597,8 @@ interface ReaderState {
   indented: boolean
   /** Was the leaf just emitted a GFM table row? A table spans its consecutive rows. */
   table: boolean
+  /** Inside a multi-line `{/* … *\/}` flow expression (`mdx` flavour only)? */
+  expression: boolean
   /** Every source line, so a table header can look ahead for its delimiter row. */
   readonly lines: readonly string[]
   /** The MDX flavour flag, constant for the whole read — see `ReadMarkdownOptions`. */
@@ -643,7 +657,8 @@ function* readLazyLine(
   raw: string,
   index: number,
 ): Generator<MarkdownEvent, boolean> {
-  if (st.fence !== undefined || st.html !== undefined || st.paragraph.length === 0) return false
+  if (st.fence !== undefined || st.html !== undefined || st.expression) return false
+  if (st.paragraph.length === 0) return false
   const text = expandLeading(peel.rest, peel.col)
   if (!continuesParagraph(text)) return false
   // A lazy line is a paragraph continuation by construction — never a block start.
@@ -684,6 +699,10 @@ function* closeContainers(st: ReaderState, peel: Peel, index: number): Generator
   st.stack.length = peel.matched
   st.paragraph = []
   endOpenLeaves(st)
+  // A lazy line inside an expression is a compile error on the site ("Unexpected lazy
+  // line in expression in container"), so no built page reaches here; the expression
+  // ends with its container, as a fence does.
+  st.expression = false
   if (st.fence !== undefined) {
     yield { kind: 'fence-end', index }
     st.fence = undefined
@@ -692,6 +711,69 @@ function* closeContainers(st: ReaderState, peel: Peel, index: number): Generator
     yield { kind: 'html-end', index }
     st.html = undefined
   }
+}
+
+/** The opener of an MDX flow expression that is a comment: `{/*` first on its line. */
+const MDX_COMMENT_OPEN_RE = /^[ \t]*\{\/\*/
+/** The closer of that comment, anywhere on the line (`*\/}`). */
+const MDX_COMMENT_CLOSE = '*/}'
+
+/**
+ * Does this line OPEN a multi-line `{/* … *\/}` flow expression (`mdx` flavour only)?
+ *
+ * MDX's only comment is a FLOW EXPRESSION: `@mdx-js/mdx@3.1.1` (the docs site's
+ * installed pipeline) consumes every line from the opener to the line carrying `*\/}`
+ * as ONE expression node and emits nothing for it. Reading those lines with the block
+ * grammar was measured as the SILENT direction — a ```` ```bash ```` line inside the
+ * comment opened a fence the compiler never saw, the region ran to EOF, and every
+ * citation after the comment was `fence-body` while the site rendered it as a live
+ * `<a href>` (site 1 href, gate 0 errors).
+ *
+ * Measured on that compiler, `compile(src, { remarkPlugins: [remarkGfm] })`, `href: "`
+ * counted (ADL 2026-09-04: the site build is the link surface's oracle):
+ *
+ * | shape                                                    | site                      |
+ * | -------------------------------------------------------- | ------------------------- |
+ * | `{/*` / ```` ```bash ```` / `*\/}` / blank / URL          | 1 href                    |
+ * | the same with `~~~`, bare ```` ``` ````, x4 ```` ```` ```` | 1 href each               |
+ * | opener carrying text (`{/* TODO`), indented, tab-indented | 1 href each              |
+ * | `*\/}` on the fence-shaped line itself                    | 1 href                    |
+ * | inside a list item / block quote (prefixed on every line) | 1 href each              |
+ * | `Para` / `{/* c *\/}` / `After`                           | TWO `<p>` — it INTERRUPTS |
+ * | stray backticks across a tight comment                   | 1 href — no pairing       |
+ * | one-line `{/* x *\/}` then a REAL fence holding the URL   | 0 href — the fence is real|
+ * | `{/*` with no `*\/}` anywhere                             | compile error, unbuildable|
+ * | opener mid-line; text after `*\/}`; bare `{` template     | compile error, unbuildable|
+ * | closer at column 0 inside a list item (lazy)             | compile error, unbuildable|
+ *
+ * So the opener ENDS an open paragraph (it is a block boundary, like a fence), the
+ * region is closed by the FIRST later line carrying `*\/}`, and an opener with NO closer
+ * anywhere below is left to the ordinary grammar: the site refuses that page, and the
+ * reader must not comment out the rest of a document the consumer never builds.
+ *
+ * Only the comment form is modelled. A bare `{ … }` expression holding a fence-shaped
+ * line does not compile ("Could not parse expression with acorn"), so no built page can
+ * carry one.
+ */
+function opensExpression(st: ReaderState, text: string, index: number): boolean {
+  if (!st.mdx || !MDX_COMMENT_OPEN_RE.test(text)) return false
+  if (text.includes(MDX_COMMENT_CLOSE)) return true
+  return st.lines.slice(index + 1).some(line => line.includes(MDX_COMMENT_CLOSE))
+}
+
+/**
+ * One line read from INSIDE an open `{/* … *\/}` flow expression: the region ends WITH
+ * the line carrying `*\/}` — that line is still comment, the next is ordinary grammar.
+ */
+function* readExpressionLine(
+  st: ReaderState,
+  peel: Peel,
+  raw: string,
+  index: number,
+): Generator<MarkdownEvent> {
+  const text = expandLeading(peel.rest, peel.col)
+  yield { kind: 'expression', index, raw, text }
+  if (text.includes(MDX_COMMENT_CLOSE)) st.expression = false
 }
 
 /** One line read from INSIDE an open fence: its closer, or its body (§ 4.5 dedent). */
@@ -868,6 +950,14 @@ function* readOutsideLine(
   }
   const text = expandLeading(peel.rest, peel.col)
 
+  if (opensExpression(st, text, index)) {
+    // A flow expression is a block boundary: the paragraph above it ends here.
+    st.paragraph = []
+    endOpenLeaves(st)
+    st.expression = true
+    yield* readExpressionLine(st, peel, raw, index)
+    return
+  }
   if (isIndentedCode(st, text)) {
     yield* readIndentedCodeLine(st, text, raw, index)
     return
@@ -894,12 +984,16 @@ function* readOutsideLine(
   advanceParagraph(st, text, cells)
 }
 
-/** One source line, through the three-state machine. */
+/** One source line, through the state machine. */
 function* readLine(st: ReaderState, raw: string, index: number): Generator<MarkdownEvent> {
   const peel = matchContainers(raw, st.stack)
   if (peel.matched < st.stack.length) {
     if (yield* readLazyLine(st, peel, raw, index)) return
     yield* closeContainers(st, peel, index)
+  }
+  if (st.expression) {
+    yield* readExpressionLine(st, peel, raw, index)
+    return
   }
   if (st.fence !== undefined) {
     yield* readFenceLine(st, peel, raw, index)
@@ -912,8 +1006,8 @@ function* readLine(st: ReaderState, raw: string, index: number): Generator<Markd
 /**
  * Read `content` as CommonMark BLOCKS, one event per source line.
  *
- * A three-state machine — inside a fence, inside an HTML block, or outside both —
- * wrapped in the container matcher, because every one of those states can sit inside a
+ * A state machine — inside a fence, inside an HTML block, inside an MDX flow expression
+ * (`mdx` flavour), or outside all three — wrapped in the container matcher, because every one of those states can sit inside a
  * block quote or a list item and must end where its container does.
  */
 export function* readMarkdown(
@@ -930,6 +1024,7 @@ export function* readMarkdown(
     paragraph: [],
     indented: false,
     table: false,
+    expression: false,
     lines,
     mdx: options.mdx === true,
   }

@@ -90,7 +90,7 @@ plugins/
     orders.service.ts
     orders.routes.ts
 
-```text
+```
 
 ## Request Lifecycle Management
 

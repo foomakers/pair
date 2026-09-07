@@ -26,7 +26,13 @@ The cost of two copies was measured on this branch, twice:
 1. The `` ```bash ``-is-not-a-closer defect was found and fixed in the conformance
    helper. It was still live in the production gate, where
    `framework-patterns/fastify.md` was serving two phantom anchors and swallowing two
-   real headings in both KB roots — found again, one round later.
+   real headings in both KB roots — found again, one round later. (The document itself
+   was also wrong — its line 93 spelled ```` ```text ```` where the closer of the block
+   opened at line 80 belongs, so github.com rendered lines 80-115 as one code block and
+   `## Request Lifecycle Management` / `## Validation and Schema Design` were unreachable.
+   Corrected in the dataset on 2026-09-07 and re-installed through the real `pair update`
+   transform; github.com now serves 32 anchors for it, both headings included, and
+   `github-anchor-oracle.json` carries that answer.)
 2. Container awareness (blockquote peeling, list content columns, tab stops) was then
    added to the conformance helper ONLY. The production gate stayed document-level, so
    the live
@@ -43,8 +49,16 @@ that works, a false GREEN drops a reader on a page that does not exist.
 **One module owns the grammar**: `@pair/content-ops`'s
 `src/markdown/commonmark-blocks.ts` — `readMarkdown` (a per-line event stream over
 fenced code § 4.5, HTML blocks § 4.6 types 1-7, block quotes, list-item content columns,
-indented code, tab stops, paragraph continuation and laziness) plus `fencedBlocks` and
-`stripFrontmatter` derived from it. Both gates consume it; neither reimplements it.
+indented code, tab stops, paragraph continuation and laziness — and, in its `mdx`
+flavour, the `{/* … */}` flow expression, MDX's only comment, which spans every line
+from its opener to the line carrying `*/}` and is emitted as `expression` events so a
+fence marker inside it can never open a fence) plus `fencedBlocks` and
+`stripFrontmatter` derived from it. Block STATE is the reader's alone: a consumer's
+leaf-text mask (the docs gate's `{/* … */}` regex) runs after the reader has decided
+fence state and cannot undo it — measured on the docs site's installed
+`@mdx-js/mdx@3.1.1`: a ```` ```bash ```` line inside a multi-line comment renders
+nothing, yet the reader opened a fence there and every citation after the comment was
+swallowed (site 1 `<a href>`, gate 0 errors). Both gates consume it; neither reimplements it.
 `apps/website` takes `@pair/content-ops` as a devDependency for this, and
 `turbo.json`'s `docs:staleness` task gains `dependsOn: ["^build"]` so the gate still
 runs on a clean checkout.
@@ -93,8 +107,12 @@ stops short, the row carries `readerAnchors`/`readerBlocks` and says why.
   `.pair/knowledge/guidelines/code-design/framework-patterns/fastify.md`, matched none of
   the first four and was absent from the fixture, so reverting the very fence rule that
   motivated the shared reader left this sweep GREEN. Adding a signal widens the fixture
-  (398 -> 937 of 1303 tracked files) and the corpus test's floor rises with it, so it can
-  never shrink back unnoticed. Regenerate with `pnpm docs:anchor-oracle` (repo root; the
+  (398 -> 937 of 1303 tracked files). The corpus test does NOT guard the population with
+  a constant floor — `> 398` let a regeneration that dropped 538 of 937 keys pass — it
+  asserts the fixture's key count EQUALS the number of files the shipped predicate admits
+  over `git ls-files '*.md' '*.mdx'` today (and that this is >= 937), so a regeneration
+  that shrinks the sweep, by any amount, is red (measured: a 399-key fixture fails with
+  `expected 399 to be 937`). Regenerate with `pnpm docs:anchor-oracle` (repo root; the
   package-scoped form bypasses turbo and cannot resolve `@pair/content-ops` on a clean
   checkout).
 - The reader is CommonMark BLOCK structure only. Inline parsing (what a heading's text
