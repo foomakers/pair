@@ -35,7 +35,9 @@ export const meta = {
 //                                 // and `0` would skip implement AND the probe and report an
 //                                 // unbuilt story as review-approved.
     //     historyDecision?,          // narrow human decision: exact sealed-history commit subjects
-    //                                 // only, { commits: [lower-case full SHA...], disposition }
+    //                                 // only, { reviewedHead, commits: [lower-case full SHA...], disposition }
+    //     custodyReset?,             // explicit human reset after a rebase rewrites sealed commits:
+    //                                 // { baselineHead, invalidatedSnapshots, reason }
     //     requiredFindings?,         // verified P3 evidence that RED must re-prove on its exact
     //                                 // observedHead; it stays outside reviewer context.
 //   }],                           // every card VALUE is validated, not just its key set: id is one
@@ -131,9 +133,14 @@ export const meta = {
 // (overrides the issue body on conflict), e.g. "resolve all findings in ONE PR,
 // do not split".
 // Optional { historyDecision } = a narrow human decision on the SUBJECTS of exact historical
-// commits when rewriting them would alter a sealed RED base. It is reviewer context, never a
-// waiver for code, docs, tests, configuration or other commits; a history-only finding without
-// it escalates before RED/seal/GREEN can make its remediation impossible in this cycle.
+// commits when rewriting them would alter a sealed RED base. `reviewedHead` binds it to the
+// branch ancestry that was actually inspected; a rebase makes it stale rather than silently
+// carrying the exception to replacement commits. It is reviewer context, never a waiver for
+// code, docs, tests, configuration or other commits; a history-only finding without it
+// escalates before RED/seal/GREEN can make its remediation impossible in this cycle.
+// Optional { custodyReset } = the only way to resume a PR whose prior RED snapshots were
+// rewritten by a completed rebase. It names every invalidated snapshot and a baseline that must
+// remain an ancestor; a changed head or missing snapshot fails closed before review.
 // Optional { requiredFindings } = verified P3 observations: the engine gives them to RED once
 // on their exact measured head after the independent reviewer has stayed blind. A stale head
 // fails closed rather than treating prior evidence as a current defect.
@@ -271,7 +278,7 @@ function parseBatchArgs(raw) {
     // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
     // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
     // PR for a story that already had one — the very thing this file forbids in as many words.
-    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'historyDecision', 'requiredFindings', 'prNumber'], `${listKey}[${i}]`)
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'historyDecision', 'custodyReset', 'requiredFindings', 'prNumber'], `${listKey}[${i}]`)
     // `#234` and `234` name the same story; normalize once so no prompt, worktree
     // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
     // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
@@ -354,7 +361,11 @@ function parseBatchArgs(raw) {
         throw new Error(
           `implement-batch: ${listKey}[${i}] (#${id}) historyDecision must be an object with commits + disposition, or be omitted.`,
         )
-      rejectUnknownKeys(d, ['commits', 'disposition'], `${listKey}[${i}].historyDecision`)
+      rejectUnknownKeys(d, ['reviewedHead', 'commits', 'disposition'], `${listKey}[${i}].historyDecision`)
+      if (typeof d.reviewedHead !== 'string' || !/^[0-9a-f]{40}$/.test(d.reviewedHead))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.reviewedHead must be the lower-case 40-character SHA whose ancestry authorised this decision.`,
+        )
       if (!Array.isArray(d.commits) || d.commits.length === 0)
         throw new Error(
           `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.commits must be a non-empty array of lower-case 40-character SHAs.`,
@@ -374,8 +385,48 @@ function parseBatchArgs(raw) {
         throw new Error(
           `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.disposition must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
         )
-      historyDecision = { commits, disposition: d.disposition.trim() }
+      historyDecision = { reviewedHead: d.reviewedHead, commits, disposition: d.disposition.trim() }
     }
+    // A rebase changes commit identities, including a local RED snapshot's direct parent.
+    // It is never a harmless retry: the human must explicitly retire the exact rewritten
+    // snapshots, while the custody verifier proves that reset's baseline is still ancestral.
+    let custodyReset
+    if (s.custodyReset !== undefined && s.custodyReset !== null) {
+      const reset = s.custodyReset
+      if (!reset || typeof reset !== 'object' || Array.isArray(reset))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset must be an object with baselineHead, invalidatedSnapshots + reason, or be omitted.`,
+        )
+      rejectUnknownKeys(reset, ['baselineHead', 'invalidatedSnapshots', 'reason'], `${listKey}[${i}].custodyReset`)
+      if (typeof reset.baselineHead !== 'string' || !/^[0-9a-f]{40}$/.test(reset.baselineHead))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.baselineHead must be a lower-case 40-character SHA.`,
+        )
+      if (!Array.isArray(reset.invalidatedSnapshots) || reset.invalidatedSnapshots.length === 0)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.invalidatedSnapshots must name every rewritten snapshot SHA.`,
+        )
+      const invalidatedSnapshots = reset.invalidatedSnapshots.map((snapshot, j) => {
+        if (typeof snapshot !== 'string' || !/^[0-9a-f]{40}$/.test(snapshot))
+          throw new Error(
+            `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.invalidatedSnapshots[${j}] must be a lower-case 40-character SHA.`,
+          )
+        return snapshot
+      })
+      if (new Set(invalidatedSnapshots).size !== invalidatedSnapshots.length)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.invalidatedSnapshots contains a duplicate SHA.`,
+        )
+      if (typeof reset.reason !== 'string' || !reset.reason.trim() || !isProse(reset.reason.trim()))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.reason must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
+        )
+      custodyReset = { baselineHead: reset.baselineHead, invalidatedSnapshots, reason: reset.reason.trim() }
+    }
+    if (historyDecision && custodyReset && historyDecision.reviewedHead !== custodyReset.baselineHead)
+      throw new Error(
+        `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.reviewedHead and custodyReset.baselineHead must name the same baseline.`,
+      )
     // A verified P3 result must not disappear merely because a later independent reviewer
     // sampled a different portion of the same head. Keep it outside reviewer context (the
     // review remains blind), but make the RED owner re-prove it on the exact head where it was
@@ -441,6 +492,10 @@ function parseBatchArgs(raw) {
           `that already has one, and \`0\` or a negative would SKIP implement and the PR entirely and report a story ` +
           `that was never built as review-approved. Pass the real PR number, or omit the key entirely to start a fresh story.`,
       )
+    if (custodyReset && !isPosInt(s.prNumber))
+      throw new Error(
+        `implement-batch: ${listKey}[${i}] (#${id}) custodyReset is only valid while resuming an existing PR (prNumber must be positive).`,
+      )
     // Two cards with the same id resolve to the SAME worktree path, so under an unbounded cap
     // two implementers would interleave `git worktree add`/checkout/commit in one working tree
     // and one card's committed work would be lost. `died` also mis-reports: it matches on the
@@ -452,7 +507,7 @@ function parseBatchArgs(raw) {
           `implementers in the same working tree and lose one of them. Pass each story once.`,
       )
     seenIds.set(id, i)
-    return { ...s, id, historyDecision, requiredFindings }
+    return { ...s, id, historyDecision, custodyReset, requiredFindings }
   })
   // Return the NORMALIZED container, not just the list. Reading a second option off the
   // raw `args` was a real bug: the runtime can hand this script a JSON STRING, and
@@ -1186,7 +1241,7 @@ const hasSealedRedSnapshot = r => r?.sealed === true && RED_SNAPSHOT_SHA.test(St
 const redSnapshotManifestPath = (prNumber, phase) =>
   `.pair/red-snapshots/pr-${prNumber}-${String(phase).replace(/[^a-zA-Z0-9._-]/g, '-')}.json`
 const sealedRedSnapshot = ({ prNumber, phase, baseHead }) =>
-  `SEALED RED SNAPSHOT (mandatory): before editing source, independently find the ONE ancestor commit in \`${baseHead}..HEAD\` carrying the exact \`${RED_SNAPSHOT_TRAILER}: pr=${prNumber}; phase=${phase}; base=${baseHead}; manifest=<path>\` trailer. Read its manifest and test blobs with \`git show\`/\`git ls-tree\`; do not accept a manifest, digest, test path or snapshot id from this prompt. Read its \`fixScope\` too: it is one owner, one mode and its allowed production paths. A \`behavioral\` scope may not create, move or split production modules; a \`structural\` scope may do that only where its RED contract names the structural proof. Change implementation/adoption only inside that scope. Do NOT modify, format, rename, regenerate, delete or weaken any test artifact recorded by that snapshot, and do NOT amend, rebase, reset, replace or otherwise rewrite the snapshot commit. Commit GREEN strictly on top of it. Remove only the transient manifest path named by the snapshot in the GREEN commit, preserving the immutable ancestor for P3. If discovery is missing, ambiguous or contradictory, return needsHumanDecision — never repair the evidence.`
+  `SEALED RED SNAPSHOT (mandatory): before editing source, independently find the ONE ancestor commit in \`${baseHead}..HEAD\` carrying the exact \`${RED_SNAPSHOT_TRAILER}: pr=${prNumber}; phase=${phase}; base=${baseHead}; manifest=<path>\` trailer. Read its manifest and test blobs with \`git show\`/\`git ls-tree\`; do not accept a manifest, digest, test path or snapshot id from this prompt. Read its \`fixScope\` too: it is one owner, one mode and its allowed production paths. A \`behavioral\` scope may not create, move or split production modules; a \`structural\` scope may do that only where its RED contract names the structural proof. This snapshot governs ONLY the exact \`${baseHead}..HEAD\` transition and retires after its immediately following P3 succeeds; an older phase is historical evidence, never a later test-blob breach. Change implementation/adoption only inside that scope. Do NOT modify, format, rename, regenerate, delete or weaken any test artifact recorded by this snapshot, and do NOT amend, rebase, reset, replace or otherwise rewrite this snapshot commit. Commit GREEN strictly on top of it. Remove only the transient manifest path named by the snapshot in the GREEN commit, preserving the immutable ancestor for P3. If discovery is missing, ambiguous or contradictory, return needsHumanDecision — never repair the evidence.`
 // #373: sandbox-safe continuation probe. The orchestrator has no FS/gh, so a cheap
 // agent in the worktree reports two signals used to decide whether round-0 must post
 // a fresh first review:
@@ -1203,6 +1258,32 @@ const PROBE_SCHEMA = {
   properties: { logExists: { type: 'boolean' }, firstReviewPosted: { type: 'boolean' } },
   required: ['logExists', 'firstReviewPosted'],
 }
+// A Git rebase rewrites a snapshot commit and its direct parent. The workflow sandbox cannot
+// inspect Git, so a read-only verifier supplies this compact custody fact before any reviewer
+// can spend a full pass. It does not decide whether to reset: the engine compares its complete
+// measured set to the human-provided reset, and otherwise stops.
+const CUSTODY_SCHEMA = {
+  type: 'object',
+  properties: {
+    valid: { type: 'boolean' },
+    head: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    invalidatedSnapshots: { type: 'array', items: { type: 'string', pattern: '^[0-9a-f]{40}$' } },
+    resetBaselineAncestor: { type: 'boolean' },
+    historyDecisionValid: { type: 'boolean' },
+  },
+  required: ['valid', 'head', 'invalidatedSnapshots', 'resetBaselineAncestor', 'historyDecisionValid'],
+}
+const hasCustodyEvidence = result =>
+  !!result &&
+  typeof result.valid === 'boolean' &&
+  REVIEWED_HEAD_PATTERN.test(String(result.head ?? '')) &&
+  Array.isArray(result.invalidatedSnapshots) &&
+  new Set(result.invalidatedSnapshots).size === result.invalidatedSnapshots.length &&
+  result.invalidatedSnapshots.every((snapshot) => RED_SNAPSHOT_SHA.test(String(snapshot ?? ''))) &&
+  typeof result.resetBaselineAncestor === 'boolean' &&
+  typeof result.historyDecisionValid === 'boolean'
+const sameShaSet = (actual, expected) =>
+  actual.length === expected.length && actual.every((sha) => expected.includes(sha))
 
 // ── Phase 0: ensure machine contracts (md template → contract.json) ────────
 // The KB markdown template is the single source of truth; the machine contract
@@ -1527,6 +1608,56 @@ async function driveStory(story) {
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
   }
 
+  // A rebase is not a transparent transport for either a SHA-scoped human exception or a
+  // snapshot commit: both identities change. Verify the remote branch's history before an
+  // independent review is spent. This probe deliberately reads only Git custody, never source
+  // or a working log, so it cannot bias the reviewer or invent a product finding.
+  const custody = await agentRetry(
+    [
+      `CUSTODY PROBE (read-only; no code review) for story ${tag}, PR #${pr.prNumber}.`,
+      revWtClauseBase(story),
+      `Inspect ONLY Git history on origin/${story.branch}. Find every ancestor commit whose message has a ${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; ...; base=<sha>; ... trailer.`,
+      'For each, parse the declared base and verify its DIRECT PARENT with git rev-parse <snapshot>^ equals that base.',
+      'First collect every mismatched snapshot in chronological order. A mismatch is retired only when a LATER still-valid snapshot has an exact supersedes=<comma-separated full snapshot SHAs> field equal to ALL EARLIER MISMATCHED SNAPSHOTS. A partial, extra, duplicate or malformed list retires none; a successor whose own parent mismatches is not valid and cannot retire anything.',
+      'Return only live mismatches as invalidatedSnapshots, and set valid: true only when that set is empty. Historical retired snapshots are not test-blob breaches in a later phase.',
+      `The branch head is head from git rev-parse origin/${story.branch}.`,
+      story.custodyReset
+        ? `A human supplied this possible reset: ${JSON.stringify(story.custodyReset)}. Verify git merge-base --is-ancestor ${story.custodyReset.baselineHead} origin/${story.branch}; return that boolean as resetBaselineAncestor. Do NOT treat a reset as valid merely because its prose sounds plausible: report the complete observed invalidated set exactly.`
+        : 'No custody reset was supplied; return resetBaselineAncestor: true.',
+      story.historyDecision
+        ? `A human supplied this exact-SHA history decision: ${JSON.stringify(story.historyDecision)}. Verify its reviewedHead AND every named commit are ancestors of origin/${story.branch} using git merge-base --is-ancestor <sha> origin/${story.branch}; return true as historyDecisionValid only when every command succeeds. A matching patch-id or subject is evidence for a human to issue a NEW decision, never permission to map an old SHA automatically.`
+        : 'No history decision was supplied; return historyDecisionValid: true.',
+      'Do NOT inspect source, tests, PR comments, checkpoints or working logs.',
+      'Do NOT edit, rebase, reset, commit, push, publish, label, comment, create a card or merge.',
+      'Return { valid, head, invalidatedSnapshots, resetBaselineAncestor, historyDecisionValid }.',
+    ].join(' '),
+    withModel('preflight', { agentType: 'pair-custody-verifier', phase: 'Custody', label: `custody:${tag}`, effort: 'medium', schema: CUSTODY_SCHEMA }),
+    hasCustodyEvidence,
+  )
+  if (!hasCustodyEvidence(custody))
+    return { story, prNumber: pr.prNumber, status: 'failed-custody' }
+  const invalidatedSnapshots = custody.invalidatedSnapshots
+  if (custody.valid !== (invalidatedSnapshots.length === 0))
+    return { story, prNumber: pr.prNumber, status: 'failed-custody', findings: invalidatedSnapshots }
+  if (invalidatedSnapshots.length) {
+    const reset = story.custodyReset
+    if (!reset)
+      return { story, prNumber: pr.prNumber, status: 'seal-invalidated', findings: invalidatedSnapshots }
+    if (!custody.resetBaselineAncestor || !sameShaSet(invalidatedSnapshots, reset.invalidatedSnapshots))
+      return { story, prNumber: pr.prNumber, status: 'failed-custody-reset', findings: invalidatedSnapshots }
+    log(`${tag}: human custody reset accepted for ${invalidatedSnapshots.length} rewritten snapshot(s) at ancestral baseline ${reset.baselineHead}`)
+  } else if (story.custodyReset) {
+    // A reset with nothing measured would turn a serious history rewrite into a reusable
+    // generic waiver. It must name an actual, complete invalidation set.
+    return { story, prNumber: pr.prNumber, status: 'failed-custody-reset' }
+  }
+  if (story.historyDecision && !custody.historyDecisionValid)
+    return { story, prNumber: pr.prNumber, status: 'stale-history-decision' }
+  // A reset retires its old chain through the first valid successor, not every later RED
+  // round in this invocation. Keeping this state locally preserves retry safety inside the
+  // sealer while preventing a repeated supersession claim once the successor exists.
+  let pendingCustodyReset = invalidatedSnapshots.length ? story.custodyReset : undefined
+
   // 3. REVIEW <-> FIX loop — reviewer is independent & BLIND to the handoff.
   //    Converges when every ACTIONABLE finding is resolved. Findings the reviewer
   //    marks nonActionable (by-design / won't-fix, justified) don't block: they're
@@ -1588,7 +1719,7 @@ async function driveStory(story) {
   // the reviewer still derives every finding independently. Keeping it beside the review loop
   // prevents it leaking into RED/GREEN where it could become an implementation waiver.
   const historyDecisionClause = story.historyDecision
-    ? `EXPLICIT HUMAN HISTORY DECISION (not author handoff): commit SUBJECTS on ${JSON.stringify(story.historyDecision.commits)} are accepted historical trace because changing them would rewrite a sealed RED snapshot. Their disposition is: ${JSON.stringify(story.historyDecision.disposition)}. Inspect actual history. For a finding solely about one or more of those exact subject lines, return \`kind: "history-subject"\` and \`historySubjects\` containing every exact affected lower-case SHA. Do NOT set nonActionable: the engine applies the decision only when every named SHA is in this list. A mixed code/docs/test/CI or other-commit finding is technical, not history-subject. Do NOT rebase, amend, reset, or release a sealed snapshot. `
+    ? `EXPLICIT HUMAN HISTORY DECISION (not author handoff): reviewed baseline ${story.historyDecision.reviewedHead}; commit SUBJECTS on ${JSON.stringify(story.historyDecision.commits)} are accepted historical trace because changing them would rewrite a sealed RED snapshot. Their disposition is: ${JSON.stringify(story.historyDecision.disposition)}. Custody independently proved this baseline and every named SHA are still ancestors of the current branch. Inspect actual history. For a finding solely about one or more of those exact subject lines, return \`kind: "history-subject"\` and \`historySubjects\` containing every exact affected lower-case SHA. Do NOT set nonActionable: the engine applies the decision only when every named SHA is in this list. A mixed code/docs/test/CI or other-commit finding is technical, not history-subject. A patch-id or matching subject after a rebase does NOT extend this decision; it needs a new human decision. Do NOT rebase, amend, reset, or release a sealed snapshot. `
     : `HISTORY-REWRITE ESCALATION: if an actionable finding can only be fixed by rewriting, amending, or rebasing existing Git history, set needsHumanDecision: true AND humanDecisionKind: "history-rewrite". Do this before any RED snapshot; still report every other finding normally. `
   // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
   // (invisible in rendered markdown → no visible noise). The continuation probe detects a
@@ -1709,10 +1840,16 @@ async function driveStory(story) {
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
       hasRedContractVerification,
     )
-  const sealRedSnapshot = (redContract, phase, baseHead) => {
+  const sealRedSnapshot = (redContract, phase, baseHead, custodyReset) => {
     const manifestPath = redSnapshotManifestPath(pr.prNumber, phase)
+    // The reset becomes durable only through the first valid successor snapshot. The exact
+    // set is then discoverable from Git on later invocations; callers never keep a reusable
+    // waiver in prose or carry it across another rebase.
+    const supersedes = custodyReset
+      ? `; supersedes=${custodyReset.invalidatedSnapshots.join(',')}`
+      : ''
     return agentRetry(
-      `SEAL RED SNAPSHOT (local Git commit; no implementation) for story ${tag}, PR #${pr.prNumber}, round ${phase}. ${wtClause(story)} The independent RED author returned this contract: ${JSON.stringify(redContract)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. First search for an already-sealed RED snapshot with exact \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}\`, parent \`${baseHead}\`, matching manifest and matching listed test blobs. If it exists, return it unchanged: this makes a lost agent response retry-safe. Otherwise verify \`git rev-parse HEAD\` is exactly \`${baseHead}\`; otherwise return no seal. Verify every listed test artifact has the stated SHA-256 and that the uncommitted diff contains only those test artifacts. Write the contract verbatim as \`${manifestPath}\`, then create ONE LOCAL commit containing exactly those test artifacts plus that manifest. The test suite is expected to fail, so use \`git commit --no-verify\` solely for this local RED snapshot. Its message MUST carry exactly \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}\`. Never modify production source, docs, adoption, configuration or generated assets; never amend, rebase or reset; never push, post, publish, create a card or merge. Return \`sealed: true\` and the lower-case 40-character \`snapshot\` from \`git rev-parse HEAD\` only after verifying the commit, trailer, manifest and blob paths. ${TEXT_SHAPE}`,
+      `SEAL RED SNAPSHOT (local Git commit; no implementation) for story ${tag}, PR #${pr.prNumber}, round ${phase}. ${wtClause(story)} The independent RED author returned this contract: ${JSON.stringify(redContract)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. First search for an already-sealed RED snapshot with exact \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}${supersedes}\`, parent \`${baseHead}\`, matching manifest and matching listed test blobs. If it exists, return it unchanged: this makes a lost agent response retry-safe. Otherwise verify \`git rev-parse HEAD\` is exactly \`${baseHead}\`; otherwise return no seal. Verify every listed test artifact has the stated SHA-256 and that the uncommitted diff contains only those test artifacts. Write the contract verbatim as \`${manifestPath}\`, then create ONE LOCAL commit containing exactly those test artifacts plus that manifest. The test suite is expected to fail, so use \`git commit --no-verify\` solely for this local RED snapshot. Its message MUST carry exactly \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}${supersedes}\`. ${custodyReset ? `This is the first valid successor after an accepted human reset: its exact supersedes=${custodyReset.invalidatedSnapshots.join(',')} field retires only those snapshots. Do not add, remove, shorten or broaden that field; only a still-valid successor may retire an older snapshot.` : 'Do not invent a supersedes field: a normal RED snapshot retires nothing.'} Never modify production source, docs, adoption, configuration or generated assets; never amend, rebase or reset; never push, post, publish, create a card or merge. Return \`sealed: true\` and the lower-case 40-character \`snapshot\` from \`git rev-parse HEAD\` only after verifying the commit, trailer, manifest and blob paths. ${TEXT_SHAPE}`,
       withModel('seal', { agentType: 'pair-red-sealer', phase: 'Review', label: `red-seal:${tag} ${phase}`, effort: 'medium', schema: RED_SNAPSHOT_SCHEMA }),
       hasSealedRedSnapshot,
     )
@@ -1781,6 +1918,10 @@ async function driveStory(story) {
       // accepted finding always reaches the human; a failure is not an exception to that.
       return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     const reviewedHead = String(review.reviewedHead).toLowerCase()
+    // The custody probe and first review must name one immutable remote head. If it moved in
+    // between, neither its snapshot ancestry nor a human decision can safely be reused.
+    if (round === 0 && reviewedHead !== custody.head)
+      return { story, prNumber: pr.prNumber, status: 'failed-custody', acceptedFindings: accepted }
     const historyResolution = applyHistoryDecision(review.findings ?? [], story.historyDecision)
     const staleRequired = pendingRequiredFindings.filter((finding) => finding.observedHead !== reviewedHead)
     if (staleRequired.length)
@@ -1875,9 +2016,10 @@ async function driveStory(story) {
         acceptedFindings: accepted,
         reviewLog,
       }
-    const redSnapshot = await sealRedSnapshot(redTest, `r${round}`, reviewedHead)
+    const redSnapshot = await sealRedSnapshot(redTest, `r${round}`, reviewedHead, pendingCustodyReset)
     if (!hasSealedRedSnapshot(redSnapshot))
       return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    pendingCustodyReset = undefined
     log(`${tag} r${round}: sealed RED snapshot ${redSnapshot.snapshot}`)
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.

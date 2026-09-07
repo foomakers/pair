@@ -41,12 +41,13 @@ the install**, so they are not part of that figure. Nothing errors.
 
 Under Claude Code they are not inert, and it is worth knowing exactly what arrives.
 
-`.claude/agents/` declares six subagents, each with real tool access:
+`.claude/agents/` declares eight subagents, each with real tool access:
 
 | Agent                     | Tools it declares                          | What that lets it do                                                        |
 | ------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
 | `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
 | `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); by its own instructions it does not edit, commit or merge |
+| `pair-custody-verifier`   | `Read, Grep, Glob, Bash, Skill`            | verify snapshot parentage, retirement and exact SHA decisions before review; it is read-only and cannot edit, commit, push, post, rebase or merge |
 | `pair-fix-test-author`    | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write and run only failing regression tests; it cannot commit, push, post or edit production artifacts by instruction |
 | `pair-red-contract-verifier` | `Read, Grep, Glob, Bash, Skill`          | independently reproduce the RED contract before it is sealed; it is read-only and cannot edit, commit, push, post or merge |
 | `pair-red-sealer`         | `Read, Edit, Write, Bash, Grep, Glob, Skill` | verify and locally commit only a RED test snapshot; GREEN later pushes it only as an immutable branch ancestor; it cannot push, post or edit production artifacts by instruction |
@@ -62,7 +63,7 @@ in every prompt it dispatches, not a tool grant.
 
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
-authority you install. What keeps `pair-reviewer`, `pair-red-contract-verifier` and `pair-fix-verifier` read-only, `pair-fix-test-author` test-only, `pair-red-sealer` snapshot-only, and keeps merge out of every run is
+authority you install. What keeps `pair-reviewer`, `pair-custody-verifier`, `pair-red-contract-verifier` and `pair-fix-verifier` read-only, `pair-fix-test-author` test-only, `pair-red-sealer` snapshot-only, and keeps merge out of every run is
 instruction — the engine's dispatched prompts and each agent's own definition — not the tool
 grant.
 
@@ -139,7 +140,20 @@ RED and preflight on their declared models.
 
 If a review finding can only be fixed by rewriting existing Git history, the engine stops before
 it creates a RED snapshot. A human may resume with a card-level `historyDecision` containing only
-the exact lower-case full commit SHA(s) and a disposition; it can accept only those commit
-subjects. The engine applies that decision to the exact reported SHA set, including a multi-commit
-finding; reviewer prose cannot broaden it. It cannot waive code, tests, docs, configuration,
-generated artifacts or CI findings.
+the exact lower-case full commit SHA(s), the `reviewedHead` that authorized them, and a
+disposition; it can accept only those commit subjects. The custody verifier requires that baseline
+and every named SHA to remain ancestors. A rebase therefore makes the decision stale: equal
+patch-id can inform a new human decision but cannot carry the old one automatically. The engine
+applies a valid decision to the exact reported SHA set, including a multi-commit finding;
+reviewer prose cannot broaden it. It cannot waive code, tests, docs, configuration, generated
+artifacts or CI findings.
+
+### Rebase-sensitive snapshot custody
+
+Before review, the custody verifier compares each RED snapshot's declared base with its direct
+parent. A mismatch stops before RED or GREEN. To resume after a completed rebase, a human passes
+one `custodyReset` containing the complete rewritten snapshot set and an ancestral baseline. The
+first valid new RED snapshot records that exact set in `supersedes`; later runs treat only those
+older phases as retired. A rebase of the successor invalidates it again, so no reset or history
+decision becomes an evergreen waiver. Rebase never occurs within an active RED → GREEN → P3
+attempt.

@@ -116,6 +116,15 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   A convenience predicate (for laziness, eligibility or similar) never substitutes for the
   transition that actually owns the state. See ADL
   [2026-09-05-locked-red-contract-prevents-fix-regressions.md](../decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md).
+- **Sealed custody is rebase-sensitive:** before any review, a read-only Git custody probe
+  verifies each active RED snapshot's declared base against its direct parent. A rebase does not
+  transport a sealed snapshot or a SHA-scoped history disposition: it fails closed before review.
+  A human may reset only the complete measured set of rewritten snapshot SHAs at an ancestral
+  baseline; the next valid snapshot records that exact set as `supersedes`, permanently retiring
+  only those historical phases. A later rebase invalidates the successor too and needs a new
+  reset. A patch-id is evidence for a new human history decision, never automatic authorization.
+  No rebase occurs inside a RED→GREEN→P3 attempt. See ADL
+  [2026-09-07-rebase-invalidates-sealed-custody.md](../decision-log/2026-09-07-rebase-invalidates-sealed-custody.md).
 
 ## Quality Gates
 
