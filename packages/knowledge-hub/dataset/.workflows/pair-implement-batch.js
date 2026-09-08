@@ -34,6 +34,12 @@ export const meta = {
 //                                 // A POSITIVE integer (>= 1): `0`/negative do not name a PR,
 //                                 // and `0` would skip implement AND the probe and report an
 //                                 // unbuilt story as review-approved.
+    //     historyDecision?,          // narrow human decision: exact sealed-history commit subjects
+    //                                 // only, { reviewedHead, commits: [lower-case full SHA...], disposition }
+    //     custodyReset?,             // explicit human reset after a rebase rewrites sealed commits:
+    //                                 // { baselineHead, invalidatedSnapshots, reason }
+    //     requiredFindings?,         // verified P3 evidence that RED must re-prove on its exact
+    //                                 // observedHead; it stays outside reviewer context.
 //   }],                           // every card VALUE is validated, not just its key set: id is one
 //                                 // path segment, branch/base are git refs, title/notes are plain
 //                                 // text. They reach shell command text an agent runs, so a value
@@ -44,7 +50,11 @@ export const meta = {
 //                                 // -> contract `vocabulary.severities`), pair's own when none is
 //                                 // configured; a value outside that set THROWS rather than rank
 //                                 // against a foreign scale.
-//   model?,                       // fable | haiku | sonnet | opus
+//   model?,                       // legacy global override: fable | haiku | sonnet | opus
+//   models?,                      // role-scoped override. Keys: implementation, pr, reviewer,
+//                                 // redMapper, red, redVerifier, seal, green, preflight. A role key wins
+//                                 // over `model`; use this for an A/B trial without changing the
+//                                 // independent reviewer or evidence chain.
 //   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS (skill names,
 //                                 // worktreeRoot, auditLogDir, baseBranch, reviewTemplate,
 //                                 // maxFixRounds). Its VALUES are validated by the SAME
@@ -85,7 +95,7 @@ export const meta = {
 //                                 // a batch where every card failed says so, never "ready"
 // }
 //   status ∈ ready-for-merge | escalate
-//          | failed-implement | failed-pr | failed-review | failed-fix
+//          | failed-implement | failed-pr | failed-review | failed-fix | failed-red-contract | failed-preflight
 //
 // NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is #250's
 // concern, never this engine's.
@@ -122,6 +132,18 @@ export const meta = {
 // Optional { notes } = a scope directive threaded into the implement+PR prompts
 // (overrides the issue body on conflict), e.g. "resolve all findings in ONE PR,
 // do not split".
+// Optional { historyDecision } = a narrow human decision on the SUBJECTS of exact historical
+// commits when rewriting them would alter a sealed RED base. `reviewedHead` binds it to the
+// branch ancestry that was actually inspected; a rebase makes it stale rather than silently
+// carrying the exception to replacement commits. It is reviewer context, never a waiver for
+// code, docs, tests, configuration or other commits; a history-only finding without it
+// escalates before RED/seal/GREEN can make its remediation impossible in this cycle.
+// Optional { custodyReset } = the only way to resume a PR whose prior RED snapshots were
+// rewritten by a completed rebase. It names every invalidated snapshot and a baseline that must
+// remain an ancestor; a changed head or missing snapshot fails closed before review.
+// Optional { requiredFindings } = verified P3 observations: the engine gives them to RED once
+// on their exact measured head after the independent reviewer has stayed blind. A stale head
+// fails closed rather than treating prior evidence as a current defect.
 //
 // #401: the input is validated LOUDLY. The previous version coerced an unparseable
 // string to `undefined` and fell through to `STORIES = []`, so a caller who
@@ -163,6 +185,11 @@ const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..
 // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
 // card title ("PR state flow (gate≠review) + …") must keep working.
 const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
+// Domain maps are JSON data interpolated only through JSON.stringify into agent prompts, never
+// command-line values. They must preserve literal grammar tokens such as `*/}` and fence runs;
+// retain a single-line/control-character boundary plus the structural checks below instead of
+// borrowing isProse's shell-oriented backtick/$() ban.
+const isDomainText = v => typeof v === 'string' && v.trim().length > 0 && !/[\r\n\x00-\x1f\x7f]/.test(v)
 // Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
 // shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
 // worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
@@ -256,7 +283,7 @@ function parseBatchArgs(raw) {
     // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
     // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
     // PR for a story that already had one — the very thing this file forbids in as many words.
-    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'prNumber'], `${listKey}[${i}]`)
+    rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'historyDecision', 'custodyReset', 'requiredFindings', 'prNumber'], `${listKey}[${i}]`)
     // `#234` and `234` name the same story; normalize once so no prompt, worktree
     // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
     // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
@@ -329,6 +356,122 @@ function parseBatchArgs(raw) {
     constrain(s.base, 'base', isRef, 'a valid git ref')
     constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
     constrain(s.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
+    // A seal makes its ancestors intentionally immutable. A human can accept an exact
+    // historical commit subject as trace, but the exception must remain narrow: broad caller
+    // prose must never become a way to suppress a current-tree finding in the reviewer prompt.
+    let historyDecision
+    if (s.historyDecision !== undefined && s.historyDecision !== null) {
+      const d = s.historyDecision
+      if (!d || typeof d !== 'object' || Array.isArray(d))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision must be an object with commits + disposition, or be omitted.`,
+        )
+      rejectUnknownKeys(d, ['reviewedHead', 'commits', 'disposition'], `${listKey}[${i}].historyDecision`)
+      if (typeof d.reviewedHead !== 'string' || !/^[0-9a-f]{40}$/.test(d.reviewedHead))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.reviewedHead must be the lower-case 40-character SHA whose ancestry authorised this decision.`,
+        )
+      if (!Array.isArray(d.commits) || d.commits.length === 0)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.commits must be a non-empty array of lower-case 40-character SHAs.`,
+        )
+      const commits = d.commits.map((commit, j) => {
+        if (typeof commit !== 'string' || !/^[0-9a-f]{40}$/.test(commit))
+          throw new Error(
+            `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.commits[${j}] must be a lower-case 40-character SHA.`,
+          )
+        return commit
+      })
+      if (new Set(commits).size !== commits.length)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.commits contains a duplicate SHA; name each historical commit once.`,
+        )
+      if (typeof d.disposition !== 'string' || !d.disposition.trim() || !isProse(d.disposition.trim()))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.disposition must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
+        )
+      historyDecision = { reviewedHead: d.reviewedHead, commits, disposition: d.disposition.trim() }
+    }
+    // A rebase changes commit identities, including a local RED snapshot's direct parent.
+    // It is never a harmless retry: the human must explicitly retire the exact rewritten
+    // snapshots, while the custody verifier proves that reset's baseline is still ancestral.
+    let custodyReset
+    if (s.custodyReset !== undefined && s.custodyReset !== null) {
+      const reset = s.custodyReset
+      if (!reset || typeof reset !== 'object' || Array.isArray(reset))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset must be an object with baselineHead, invalidatedSnapshots + reason, or be omitted.`,
+        )
+      rejectUnknownKeys(reset, ['baselineHead', 'invalidatedSnapshots', 'reason'], `${listKey}[${i}].custodyReset`)
+      if (typeof reset.baselineHead !== 'string' || !/^[0-9a-f]{40}$/.test(reset.baselineHead))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.baselineHead must be a lower-case 40-character SHA.`,
+        )
+      if (!Array.isArray(reset.invalidatedSnapshots) || reset.invalidatedSnapshots.length === 0)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.invalidatedSnapshots must name every rewritten snapshot SHA.`,
+        )
+      const invalidatedSnapshots = reset.invalidatedSnapshots.map((snapshot, j) => {
+        if (typeof snapshot !== 'string' || !/^[0-9a-f]{40}$/.test(snapshot))
+          throw new Error(
+            `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.invalidatedSnapshots[${j}] must be a lower-case 40-character SHA.`,
+          )
+        return snapshot
+      })
+      if (new Set(invalidatedSnapshots).size !== invalidatedSnapshots.length)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.invalidatedSnapshots contains a duplicate SHA.`,
+        )
+      if (typeof reset.reason !== 'string' || !reset.reason.trim() || !isProse(reset.reason.trim()))
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) custodyReset.reason must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
+        )
+      custodyReset = { baselineHead: reset.baselineHead, invalidatedSnapshots, reason: reset.reason.trim() }
+    }
+    if (historyDecision && custodyReset && historyDecision.reviewedHead !== custodyReset.baselineHead)
+      throw new Error(
+        `implement-batch: ${listKey}[${i}] (#${id}) historyDecision.reviewedHead and custodyReset.baselineHead must name the same baseline.`,
+      )
+    // A verified P3 result must not disappear merely because a later independent reviewer
+    // sampled a different portion of the same head. Keep it outside reviewer context (the
+    // review remains blind), but make the RED owner re-prove it on the exact head where it was
+    // measured. A different head is not "probably close enough": that would turn old evidence
+    // into a new specification without rerunning its oracle.
+    let requiredFindings = []
+    if (s.requiredFindings !== undefined && s.requiredFindings !== null) {
+      if (!Array.isArray(s.requiredFindings) || s.requiredFindings.length === 0)
+        throw new Error(
+          `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings must be a non-empty array when provided.`,
+        )
+      const requiredKeys = new Set()
+      requiredFindings = s.requiredFindings.map((finding, j) => {
+        if (!finding || typeof finding !== 'object' || Array.isArray(finding))
+          throw new Error(`implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}] must be an object.`)
+        rejectUnknownKeys(
+          finding,
+          ['observedHead', 'location', 'severity', 'description', 'recommendation', 'oracle', 'probe', 'observed'],
+          `${listKey}[${i}].requiredFindings[${j}]`,
+        )
+        if (typeof finding.observedHead !== 'string' || !/^[0-9a-f]{40}$/.test(finding.observedHead))
+          throw new Error(
+            `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}].observedHead must be the lower-case 40-character SHA on which its oracle was measured.`,
+          )
+        const normalized = { observedHead: finding.observedHead }
+        for (const key of ['location', 'severity', 'description', 'recommendation', 'oracle', 'probe', 'observed']) {
+          const value = finding[key]
+          if (typeof value !== 'string' || !value.trim() || !isProse(value.trim()))
+            throw new Error(
+              `implement-batch: ${listKey}[${i}] (#${id}) requiredFindings[${j}].${key} must be non-empty plain text (no backtick, no \`$(\`, no newline).`,
+            )
+          normalized[key] = value.trim()
+        }
+        const key = `${normalized.observedHead}\u0000${normalized.location}\u0000${normalized.description}\u0000${normalized.recommendation}`
+        if (requiredKeys.has(key))
+          throw new Error(`implement-batch: ${listKey}[${i}] (#${id}) requiredFindings contains the same measured finding more than once.`)
+        requiredKeys.add(key)
+        return normalized
+      })
+    }
     // `prNumber` decides the ENTIRE lifecycle: an integer re-enters the review loop on the
     // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
     // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
@@ -354,6 +497,10 @@ function parseBatchArgs(raw) {
           `that already has one, and \`0\` or a negative would SKIP implement and the PR entirely and report a story ` +
           `that was never built as review-approved. Pass the real PR number, or omit the key entirely to start a fresh story.`,
       )
+    if (custodyReset && !isPosInt(s.prNumber))
+      throw new Error(
+        `implement-batch: ${listKey}[${i}] (#${id}) custodyReset is only valid while resuming an existing PR (prNumber must be positive).`,
+      )
     // Two cards with the same id resolve to the SAME worktree path, so under an unbounded cap
     // two implementers would interleave `git worktree add`/checkout/commit in one working tree
     // and one card's committed work would be lost. `died` also mis-reports: it matches on the
@@ -365,7 +512,7 @@ function parseBatchArgs(raw) {
           `implementers in the same working tree and lose one of them. Pass each story once.`,
       )
     seenIds.set(id, i)
-    return { ...s, id }
+    return { ...s, id, historyDecision, custodyReset, requiredFindings }
   })
   // Return the NORMALIZED container, not just the list. Reading a second option off the
   // raw `args` was a real bug: the runtime can hand this script a JSON STRING, and
@@ -373,7 +520,7 @@ function parseBatchArgs(raw) {
   // undefined and the floor was silently ignored while the caller believed it was set.
   // A batch ran with Minors still blocking and reported escalation as if the floor had
   // been honoured. Every option must be read from the parsed object, once.
-  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'pipeline', 'maxParallelism'], 'args')
+  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. A whitelist bounds each of these two downstream, so the behavioural cost today is
   // nil (`severityFloor: ['Major']` joined to "Major" and was accepted) — the cost is the
@@ -398,7 +545,20 @@ function parseBatchArgs(raw) {
           `An empty string is a value the caller wrote, and reading it as absent would run the batch on a setting nobody chose.`,
       )
   }
-  return { stories, severityFloor: a.severityFloor, model: a.model, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
+  const modelRoles = ['implementation', 'pr', 'reviewer', 'redMapper', 'red', 'redVerifier', 'seal', 'green', 'preflight']
+  let models
+  if (a.models !== undefined && a.models !== null) {
+    if (typeof a.models !== 'object' || Array.isArray(a.models))
+      throw new Error('implement-batch: `args.models` must be an object keyed by workflow role, or be omitted.')
+    rejectUnknownKeys(a.models, modelRoles, 'args.models')
+    models = {}
+    for (const [role, value] of Object.entries(a.models)) {
+      if (typeof value !== 'string' || !value.trim())
+        throw new Error(`implement-batch: \`args.models.${role}\` must be a non-empty model name.`)
+      models[role] = value.trim()
+    }
+  }
+  return { stories, severityFloor: a.severityFloor, model: a.model, models, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
 }
 const PARSED = parseBatchArgs(args)
 
@@ -753,21 +913,74 @@ function parseFloor(raw) {
   return { name: v, rank: r }
 }
 
-// `args.model` overrides the model for every AUTHORING and REVIEW agent in the run —
-// implement, PR, fix, review. Absent, each agent keeps the tier its frontmatter declares
-// (implementer/reviewer -> opus). Validated against the known set so a typo cannot be
-// swallowed: an ignored override runs the whole batch on the wrong tier while the caller
-// believes otherwise, and the result is indistinguishable from an honoured one.
-const BATCH_MODEL = (() => {
-  const v = String(PARSED.model ?? '').trim()
+// A global `model` remains for compatibility. New runs should select an explicit role in
+// `models`: A/B testing GREEN alone must not simultaneously change the adversarial reviewer,
+// RED author and P3 verifier — otherwise a result cannot say whether model or workflow caused it.
+const KNOWN_MODELS = ['fable', 'haiku', 'sonnet', 'opus']
+const validateModel = (value, where) => {
+  const v = String(value ?? '').trim()
   if (!v) return undefined
-  const known = ['fable', 'haiku', 'sonnet', 'opus']
-  if (!known.includes(v))
-    throw new Error(`implement-batch: unknown model ${JSON.stringify(v)}; expected one of ${known.join(' | ')}.`)
+  if (!KNOWN_MODELS.includes(v))
+    throw new Error(`implement-batch: unknown model ${JSON.stringify(v)} at ${where}; expected one of ${KNOWN_MODELS.join(' | ')}.`)
   return v
-})()
-// Applied to an opts object without disturbing a step's own deliberate override.
-const withModel = (opts) => (BATCH_MODEL ? { ...opts, model: BATCH_MODEL } : opts)
+}
+const BATCH_MODEL = validateModel(PARSED.model, 'args.model')
+const ROLE_MODELS = Object.fromEntries(
+  Object.entries(PARSED.models ?? {}).map(([role, value]) => [role, validateModel(value, `args.models.${role}`)]),
+)
+// Role choice wins over legacy global override. Deliberate fixed-model utility steps do not
+// call this helper: they are not part of a model comparison and remain deterministic.
+const withModel = (role, opts) => {
+  const model = ROLE_MODELS[role] ?? BATCH_MODEL
+  return model ? { ...opts, model } : opts
+}
+const HISTORY_SUBJECT_SHA = /^[0-9a-f]{40}$/
+const HISTORY_SUBJECT_CUE = /\b(?:commit\s+(?:subject|message|label)|subject(?:[-\s]?line)?)\b/i
+const historyText = finding =>
+  [finding?.location, finding?.description, finding?.recommendation]
+    .filter((value) => typeof value === 'string')
+    .join(' ')
+// The structured fields are the preferred reviewer result. A model may still omit optional
+// metadata while stating the exact authorized commit subjects in its ordinary finding text.
+// That omission must not turn an already authorized subject-only decision into another human
+// escalation. The fallback is intentionally narrow: only an untyped finding, carrying a subject
+// cue and one or more unambiguous prefixes of the supplied full SHAs, qualifies. An explicitly
+// technical finding, an unknown full SHA or absent subject evidence stays actionable.
+function textualHistorySubjects(finding, approved) {
+  if (finding?.kind !== undefined || !HISTORY_SUBJECT_CUE.test(historyText(finding))) return []
+  const tokens = historyText(finding).match(/\b[0-9a-f]{8,40}\b/g) ?? []
+  if (tokens.some((token) => token.length === 40 && !approved.has(token))) return []
+  const matches = tokens.map((token) => [...approved].filter((sha) => sha.startsWith(token)))
+  if (matches.some((subjects) => subjects.length !== 1)) return []
+  return [...new Set(matches.flat())]
+}
+// A reviewer classifies the finding; it does not get to grant the human's exception. Applying
+// the exact SHA set here makes a two-commit decision as deterministic as a one-commit decision
+// and fails closed for an omitted, malformed or broader subject set.
+function applyHistoryDecision(findings, decision) {
+  const approved = new Set(decision?.commits ?? [])
+  let unresolved = false
+  let recognizedHistory = false
+  const normalized = findings.map((finding) => {
+    const typed = finding?.kind === 'history-subject'
+    const subjects = typed
+      ? (Array.isArray(finding.historySubjects) ? finding.historySubjects : [])
+      : textualHistorySubjects(finding, approved)
+    if (!typed && subjects.length === 0) return finding
+    recognizedHistory = true
+    const valid =
+      subjects.length > 0 &&
+      new Set(subjects).size === subjects.length &&
+      subjects.every((sha) => typeof sha === 'string' && HISTORY_SUBJECT_SHA.test(sha))
+    const accepted = valid && !!decision && subjects.every((sha) => approved.has(sha))
+    if (!accepted) {
+      unresolved = true
+      return { ...finding, nonActionable: false }
+    }
+    return { ...finding, nonActionable: true, disposition: decision.disposition }
+  })
+  return { findings: normalized, unresolved, recognizedHistory }
+}
 // Rounds of autonomous fix<->re-review before escalating to a human. Caller-configurable
 // (`args.pipeline.maxFixRounds`); pair's own 3 is the default and the measured one. Raised
 // from 2: an escalation costs a human round-trip (read the flush, decide, re-run the batch),
@@ -777,6 +990,11 @@ const withModel = (opts) => (BATCH_MODEL ? { ...opts, model: BATCH_MODEL } : opt
 // won't fix either (a design disagreement), and `needsHumanDecision` already exits
 // early for that case.
 const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
+// A rejected RED contract is still test-only and has not contaminated source or Git history.
+// Let its independent verifier name the omitted boundary once, then require a fresh author to
+// rebuild the contract from those measured facts. More attempts turn a specification defect into
+// an unattended loop, so the second rejection is terminal before sealing or GREEN.
+const MAX_RED_CONTRACT_REPAIRS = 1
 
 // ── Step retry ─────────────────────────────────────────────────────────────
 // `agent()` returns null when the subagent dies on a terminal error or is killed
@@ -795,7 +1013,7 @@ const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
 // truncated structured output) — and the contentless shape is the one this repo
 // actually measured on #432 (the machine slept mid-response), i.e. the retry
 // missed the exact incident it was written for while covering its rarer sibling.
-// The review step therefore passes `hasVerdict`, the SAME predicate its
+// The review step therefore passes `hasReviewEvidence`, the SAME predicate its
 // convergence guard uses, so "did not review" means one thing at both sites: the
 // transient gets its second chance, and a step that comes back contentless twice
 // still fails closed.
@@ -812,6 +1030,19 @@ async function agentRetry(prompt, opts, isUsable = r => !!r) {
 // ONE predicate, asked by the retry and by the convergence guard, so the two
 // cannot drift into disagreeing about what a dead reviewer is.
 const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
+const REVIEWED_HEAD_PATTERN = /^[0-9a-f]{40}$/
+// A review also has to identify the immutable PR revision it actually inspected.
+// Without that baseline a later reviewer cannot distinguish the fix delta from the
+// already-audited PR surface, which turns each re-review into another full scan.
+const hasReviewEvidence = r => hasVerdict(r) && REVIEWED_HEAD_PATTERN.test(String(r.reviewedHead ?? ''))
+// A preflight is useful only when it says whether the exact head was verified and returns its
+// full finding set. A truthy `{}` would otherwise look clean and recreate the same unsafe
+// direction that `hasReviewEvidence` prevents for the outer review.
+const hasPreflightEvidence = r =>
+  !!r &&
+  typeof r.verified === 'boolean' &&
+  Array.isArray(r.findings) &&
+  REVIEWED_HEAD_PATTERN.test(String(r.reviewedHead ?? ''))
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
@@ -854,7 +1085,14 @@ const LOOSE_REVIEW_SCHEMA = {
     // Control flow keys on `nonActionable` + actionable count, never on specific
     // verdict strings.
     verdict: { type: 'string' },
+    // Immutable full SHA of the PR head reviewed. This is workflow evidence, not
+    // part of the human-facing review template vocabulary.
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     needsHumanDecision: { type: 'boolean' },
+    // A history rewrite has to be escalated before a new RED snapshot can freeze the commits
+    // the human needs to decide about. Other human decisions retain the normal one-fix-round
+    // behavior below.
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
     findings: {
       type: 'array',
       items: {
@@ -875,17 +1113,145 @@ const LOOSE_REVIEW_SCHEMA = {
           // by-design reason (By convention … / Historical record / Forward-ref to
           // unbuilt #<n> / Resolves after merge).
           disposition: { type: 'string' },
+          // A history subject is a special, machine-checkable finding: only exact immutable
+          // commit subjects can use a human history decision. It is never a blanket waiver.
+          kind: { type: 'string', enum: ['technical', 'history-subject'] },
+          historySubjects: {
+            type: 'array',
+            items: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+          },
         },
       },
     },
   },
-  required: ['verdict'],
+  required: ['verdict', 'reviewedHead'],
 }
 const FIX_SCHEMA = {
   type: 'object',
-  properties: { fixed: { type: 'boolean' }, needsHumanDecision: { type: 'boolean' } },
-  required: ['fixed'],
+  properties: {
+    fixed: { type: 'boolean' },
+    needsHumanDecision: { type: 'boolean' },
+    evidenceLedger: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          claim: { type: 'string' },
+          oracle: { type: 'string' },
+          probe: { type: 'string' },
+          observed: { type: 'string' },
+        },
+        required: ['claim', 'oracle', 'probe', 'observed'],
+      },
+    },
+  },
+  required: ['fixed', 'evidenceLedger'],
 }
+// RED is an artifact, not an intention. A separate agent writes the test-only contract before
+// the fixer sees the source change; its hashes let the later verifier detect the old escape
+// hatch where the same session weakened the test it had just made pass.
+const RED_TEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    sourceOfTruth: { type: 'string' },
+    // A contract is either behavioral OR structural. Combining both lets a correct bug fix
+    // smuggle a refactor past the same tests; make the choice explicit before GREEN exists.
+    fixScope: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        mode: { type: 'string', enum: ['behavioral', 'structural'] },
+        allowedPaths: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['owner', 'mode', 'allowedPaths'],
+    },
+    matrix: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          condition: { type: 'string' },
+          oracle: { type: 'string' },
+          expected: { type: 'string' },
+        },
+        required: ['condition', 'oracle', 'expected'],
+      },
+    },
+    redTests: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          file: { type: 'string' },
+          // Omitted means `test` for contracts written before fixtures became explicit.
+          kind: { type: 'string', enum: ['test', 'fixture'] },
+          sha256: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+          command: { type: 'string' },
+          observed: { type: 'string' },
+          consumedBy: { type: 'string' },
+        },
+        required: ['file', 'sha256'],
+      },
+    },
+    testExempt: { type: 'boolean' },
+    exemptionRationale: { type: 'string' },
+  },
+  required: ['sourceOfTruth', 'fixScope', 'matrix', 'redTests', 'testExempt'],
+}
+const RED_TEST_SHA256 = /^sha256:[0-9a-f]{64}$/
+const RED_SNAPSHOT_SHA = /^[0-9a-f]{40}$/
+const RED_SNAPSHOT_TRAILER = 'Pair-RED-Snapshot'
+const redArtifactKind = artifact => String(artifact?.kind ?? 'test')
+const isRedTestArtifact = artifact =>
+  redArtifactKind(artifact) === 'test' &&
+  !!String(artifact?.command ?? '').trim() &&
+  /fail/i.test(String(artifact?.observed ?? ''))
+const RED_ARTIFACT_CONTRACT =
+  'Classify EVERY redTests entry: a `kind: "test"` entry returns repository-relative `file`, `sha256sum <file>` as `sha256:<digest>`, exact `command` and observed RED failure; a `kind: "fixture"` entry returns `file`, `sha256`, and `consumedBy` naming a listed `kind: "test"` file whose command is RED. A fixture has no invented standalone failure — it inherits only that named consumer’s proven failure and remains frozen in the snapshot.'
+const FIXTURE_CONSUMPTION_PREFLIGHT =
+  'For every manifest artifact with `kind: "fixture"`, verify `consumedBy` names a listed `kind: "test"` artifact, then trace that fixture to the named RED test’s actual assertion; a fixture without that exact consumer proof is a contract breach.'
+const hasRedTestEvidence = r => {
+  if (!r || !String(r.sourceOfTruth ?? '').trim() || !Array.isArray(r.matrix) || r.matrix.length === 0) return false
+  const scope = r.fixScope
+  if (!scope || !String(scope.owner ?? '').trim() || !['behavioral', 'structural'].includes(scope.mode) || !Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0)
+    return false
+  const allowedPaths = new Set()
+  for (const path of scope.allowedPaths) {
+    const file = String(path ?? '').trim()
+    if (!file || !isRelPath(file) || allowedPaths.has(file)) return false
+    allowedPaths.add(file)
+  }
+  if (r.testExempt === true) return !!String(r.exemptionRationale ?? '').trim()
+  if (r.testExempt !== false || !Array.isArray(r.redTests) || r.redTests.length === 0) return false
+
+  const byFile = new Map()
+  for (const artifact of r.redTests) {
+    const file = String(artifact?.file ?? '').trim()
+    const kind = redArtifactKind(artifact)
+    if (!file || byFile.has(file) || !RED_TEST_SHA256.test(String(artifact?.sha256 ?? ''))) return false
+    if (kind !== 'test' && kind !== 'fixture') return false
+    byFile.set(file, artifact)
+  }
+
+  return r.redTests.every(artifact => {
+    if (redArtifactKind(artifact) === 'test') return isRedTestArtifact(artifact)
+    const consumer = byFile.get(String(artifact?.consumedBy ?? '').trim())
+    return !!consumer && isRedTestArtifact(consumer)
+  })
+}
+const RED_SNAPSHOT_SCHEMA = {
+  type: 'object',
+  properties: {
+    sealed: { type: 'boolean' },
+    snapshot: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+  },
+  required: ['sealed', 'snapshot'],
+}
+const hasSealedRedSnapshot = r => r?.sealed === true && RED_SNAPSHOT_SHA.test(String(r.snapshot ?? ''))
+const redSnapshotManifestPath = (prNumber, phase) =>
+  `.pair/red-snapshots/pr-${prNumber}-${String(phase).replace(/[^a-zA-Z0-9._-]/g, '-')}.json`
+const sealedRedSnapshot = ({ prNumber, phase, baseHead }) =>
+  `SEALED RED SNAPSHOT (mandatory): before editing source, independently find the ONE ancestor commit in \`${baseHead}..HEAD\` carrying the exact \`${RED_SNAPSHOT_TRAILER}: pr=${prNumber}; phase=${phase}; base=${baseHead}; manifest=<path>\` trailer. Read its manifest and test blobs with \`git show\`/\`git ls-tree\`; do not accept a manifest, digest, test path or snapshot id from this prompt. Read its \`fixScope\` too: it is one owner, one mode and its allowed production paths. A \`behavioral\` scope may not create, move or split production modules; a \`structural\` scope may do that only where its RED contract names the structural proof. This snapshot governs ONLY the exact \`${baseHead}..HEAD\` transition and retires after its immediately following P3 succeeds; an older phase is historical evidence, never a later test-blob breach. Change implementation/adoption only inside that scope. Do NOT modify, format, rename, regenerate, delete or weaken any test artifact recorded by this snapshot, and do NOT amend, rebase, reset, replace or otherwise rewrite this snapshot commit. Commit GREEN strictly on top of it. Remove only the transient manifest path named by the snapshot in the GREEN commit, preserving the immutable ancestor for P3. If discovery is missing, ambiguous or contradictory, return needsHumanDecision — never repair the evidence.`
 // #373: sandbox-safe continuation probe. The orchestrator has no FS/gh, so a cheap
 // agent in the worktree reports two signals used to decide whether round-0 must post
 // a fresh first review:
@@ -902,6 +1268,32 @@ const PROBE_SCHEMA = {
   properties: { logExists: { type: 'boolean' }, firstReviewPosted: { type: 'boolean' } },
   required: ['logExists', 'firstReviewPosted'],
 }
+// A Git rebase rewrites a snapshot commit and its direct parent. The workflow sandbox cannot
+// inspect Git, so a read-only verifier supplies this compact custody fact before any reviewer
+// can spend a full pass. It does not decide whether to reset: the engine compares its complete
+// measured set to the human-provided reset, and otherwise stops.
+const CUSTODY_SCHEMA = {
+  type: 'object',
+  properties: {
+    valid: { type: 'boolean' },
+    head: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    invalidatedSnapshots: { type: 'array', items: { type: 'string', pattern: '^[0-9a-f]{40}$' } },
+    resetBaselineAncestor: { type: 'boolean' },
+    historyDecisionValid: { type: 'boolean' },
+  },
+  required: ['valid', 'head', 'invalidatedSnapshots', 'resetBaselineAncestor', 'historyDecisionValid'],
+}
+const hasCustodyEvidence = result =>
+  !!result &&
+  typeof result.valid === 'boolean' &&
+  REVIEWED_HEAD_PATTERN.test(String(result.head ?? '')) &&
+  Array.isArray(result.invalidatedSnapshots) &&
+  new Set(result.invalidatedSnapshots).size === result.invalidatedSnapshots.length &&
+  result.invalidatedSnapshots.every((snapshot) => RED_SNAPSHOT_SHA.test(String(snapshot ?? ''))) &&
+  typeof result.resetBaselineAncestor === 'boolean' &&
+  typeof result.historyDecisionValid === 'boolean'
+const sameShaSet = (actual, expected) =>
+  actual.length === expected.length && actual.every((sha) => expected.includes(sha))
 
 // ── Phase 0: ensure machine contracts (md template → contract.json) ────────
 // The KB markdown template is the single source of truth; the machine contract
@@ -977,7 +1369,113 @@ const contracts = STORIES.length ? await parallel(CONTRACT_SPECS.map((s) => () =
 const crContract = contracts.find((c) => c.name === 'code-review')
 // Schema the reviewer returns: template-derived when the contract is usable,
 // the loose skeleton otherwise. Control flow stays value-agnostic either way.
-const REVIEW_SCHEMA = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
+const REVIEW_SCHEMA_BASE = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
+// Keep the template's finding vocabulary, then add only orchestration metadata. The metadata
+// lets the engine apply a human decision to exact history itself instead of depending on a
+// reviewer to split or mark a finding in precisely the wording a prompt requested.
+const REVIEW_FINDING_SCHEMA = {
+  ...REVIEW_SCHEMA_BASE.properties.findings,
+  items: {
+    ...REVIEW_SCHEMA_BASE.properties.findings.items,
+    properties: {
+      ...REVIEW_SCHEMA_BASE.properties.findings.items.properties,
+      kind: { type: 'string', enum: ['technical', 'history-subject'] },
+      historySubjects: {
+        type: 'array',
+        items: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+      },
+    },
+  },
+}
+// Template contracts own human verdict/finding vocabulary. The orchestration-only
+// baseline is layered on top so a template refresh cannot accidentally remove it.
+const REVIEW_SCHEMA = {
+  ...REVIEW_SCHEMA_BASE,
+  properties: {
+    ...REVIEW_SCHEMA_BASE.properties,
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
+    findings: REVIEW_FINDING_SCHEMA,
+  },
+  required: [...new Set([...(REVIEW_SCHEMA_BASE.required ?? []), 'verdict', 'reviewedHead'])],
+}
+// The preflight does not make a PR verdict or publish a review. Its return is intentionally
+// smaller than REVIEW_SCHEMA, but reuses the template-derived finding shape so a verifier
+// cannot invent a second severity vocabulary for an inner fix.
+const PREFLIGHT_SCHEMA = {
+  type: 'object',
+  properties: {
+    verified: { type: 'boolean' },
+    // A broken RED chain is not ordinary fix work: no agent that can change source may
+    // repair the evidence that disqualifies it.
+    contractBreach: { type: 'boolean' },
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    findings: REVIEW_FINDING_SCHEMA,
+  },
+  required: ['verified', 'reviewedHead', 'findings'],
+}
+// This verifier runs while RED is still unsealed and test-only. It must independently prove
+// the test contract covers the stated behavior before an implementation agent can see it.
+const RED_CONTRACT_VERIFIER_SCHEMA = {
+  type: 'object',
+  properties: {
+    verified: { type: 'boolean' },
+    findings: REVIEW_FINDING_SCHEMA,
+  },
+  required: ['verified', 'findings'],
+}
+const hasRedContractVerification = r =>
+  !!r &&
+  typeof r.verified === 'boolean' &&
+  Array.isArray(r.findings)
+// The mapper owns neither tests nor source. It turns a behavior finding into an explicit finite
+// discriminator domain before a RED author chooses examples, so completeness is a checked input
+// rather than a claim the author can make after writing a convenient subset.
+const RED_DOMAIN_MAPPER_SCHEMA = {
+  type: 'object',
+  properties: {
+    domains: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string' },
+          discriminator: { type: 'string' },
+          rows: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                condition: { type: 'string' },
+                oracle: { type: 'string' },
+                expected: { type: 'string' },
+              },
+              required: ['condition', 'oracle', 'expected'],
+            },
+          },
+        },
+        required: ['owner', 'discriminator', 'rows'],
+      },
+    },
+  },
+  required: ['domains'],
+}
+const hasRedDomainEvidence = result =>
+  !!result &&
+  Array.isArray(result.domains) &&
+  result.domains.length > 0 &&
+  result.domains.every(domain => {
+    if (!domain || !isDomainText(domain.owner) || !isDomainText(domain.discriminator)) return false
+    if (!Array.isArray(domain.rows) || domain.rows.length < 2) return false
+    const conditions = new Set()
+    return domain.rows.every(row => {
+      if (!row) return false
+      const condition = typeof row.condition === 'string' ? row.condition.trim() : ''
+      if (!isDomainText(row.condition) || conditions.has(condition)) return false
+      conditions.add(condition)
+      return isDomainText(row.oracle) && isDomainText(row.expected)
+    })
+  })
 // Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,
 // required contract keys (ensure-contract.mjs's validateContract rejects any
 // contract missing either) — so whenever a contract IS present, both are
@@ -1006,6 +1504,37 @@ const TEXT_SHAPE =
   '(specific inputs/state -> the wrong output or the loss that follows) and the EVIDENCE it is real ' +
   '(what you ran, what it printed). Cut narration, never evidence.'
 
+const AUTHORITATIVE_BOUNDARY_PROOF =
+  'AUTHORITATIVE BOUNDARY PROOF (mandatory): when a table row, equivalence, normalization or remediation depends on an external command, service, file format or runtime, name the exact real producer/consumer that defines it and run a minimal isolated end-to-end probe for every such claim. Keep rows distinct until that boundary proves them equivalent. A unit test of the function being changed cannot establish external semantics or prove that user-facing repair advice works: apply the advice in a clean temporary environment and verify the promised postcondition.'
+
+const EMPIRICAL_EVIDENCE_LEDGER =
+  'EMPIRICAL EVIDENCE LEDGER (mandatory): before asserting or propagating a measured or factual claim in source comments, test names/comments, ADR/ADL, PR body, or a user-facing diagnostic, record Claim | authoritative oracle | exact command/fixture/revision | observed output. Counts, Unicode/category classifications, version facts and external behavior all need that proof. If evidence is absent, remove or qualify the claim. One measured output feeds every distributed restatement: never independently re-count, paraphrase, or invent a plausible explanation.'
+
+const INTERACTION_COLLISION_COMPLETENESS =
+  'INTERACTION/COLLISION COMPLETENESS (mandatory): after individual decision-table rows, add the minimal cross-product rows wherever one rule output can also be a valid input, name, state, or reservation of another. Test the actual collision resolver, including duplicate input alongside a pre-existing generated/suffixed outcome; independent happy-path rows do not prove that interaction.'
+
+const LOSSLESS_DIAGNOSTIC_CONTRACT =
+  'LOSSLESS DIAGNOSTIC CONTRACT (mandatory when reporting user input or derived identifiers): test lossless distinguishability between actual, expected and candidate values. Escape or name code points for invisible, whitespace-normalized, or confusable characters so an error cannot collapse the wrong spelling into the expected one.'
+
+const CONTRACT_INVENTORY =
+  'CONTRACT INVENTORY (mandatory): before reporting findings, map each changed observable contract to its authoritative producer, inputs, consumers and representations. A FIRST review inventories every changed contract; a re-review inventories only its fix delta and directly changed boundary. For a finite protocol, parser, configuration, state transition or command-output domain, build a finite decision table of every supported state plus its invalid/boundary pair, and probe the real behavior. Report every defect that table exposes now; do not leave ordinary rows for a later review. ' +
+  EMPIRICAL_EVIDENCE_LEDGER +
+  ' ' +
+  INTERACTION_COLLISION_COMPLETENESS +
+  ' ' +
+  LOSSLESS_DIAGNOSTIC_CONTRACT +
+  ' ' +
+  AUTHORITATIVE_BOUNDARY_PROOF
+
+const FINITE_STATE_COMPLETENESS =
+  'FINITE-STATE COMPLETENESS (mandatory when a change parses, selects, snapshots, or branches on a finite protocol/state domain): identify the authoritative grammar or producer, make the complete decision table of supported states and invalid/boundary cases, then write and run a real test for every row before editing the canonical source. Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant. ' +
+  EMPIRICAL_EVIDENCE_LEDGER +
+  ' ' +
+  INTERACTION_COLLISION_COMPLETENESS +
+  ' ' +
+  LOSSLESS_DIAGNOSTIC_CONTRACT +
+  ' ' +
+  AUTHORITATIVE_BOUNDARY_PROOF
 
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
@@ -1021,7 +1550,28 @@ const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract
 // unranked one stays unranked until the template changes, and the next caller who does pass
 // a floor gets a hard stop. Better the operator sees it on the run that generated it.
 if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
-const SEVERITY_FLOOR = parseFloor(PARSED.severityFloor)
+// The floor DEFAULTS to `Minor`, so Major and Minor block and drive fix rounds while
+// everything below them is carried to the merge gate. Measured on PR #477 across three
+// cycles: the PR reached a zero-actionable APPROVED, the next round implemented review
+// Questions the reviewer had marked "No change requested", and the re-review found new
+// Minors inside the code that round had just added — three the first time, two the second.
+// Questions are, by the review template's own definition, questions FOR THE HUMAN; putting
+// them in the fix set contradicts what they are and makes convergence a moving target.
+// An explicit `severityFloor` still wins, including a lower one that restores the old
+// block-everything behaviour.
+//
+// The default is applied SOFTLY, unlike a caller-passed floor: a template whose vocabulary
+// does not declare `Minor`, or whose contract carries no ranking, falls back to no floor
+// rather than throwing. A default must never break a run that never asked for it; a floor
+// the CALLER spelled wrong still throws, because that is a configuration error they made.
+const DEFAULT_SEVERITY_FLOOR = 'Minor'
+function defaultFloor() {
+  if (!SEVERITY_SCALE.ranks) return null
+  const key = normSeverity(DEFAULT_SEVERITY_FLOOR)
+  if (!Object.hasOwn(SEVERITY_SCALE.ranks, key)) return null
+  return { name: DEFAULT_SEVERITY_FLOOR, rank: SEVERITY_SCALE.ranks[key] }
+}
+const SEVERITY_FLOOR = String(PARSED.severityFloor ?? '').trim() ? parseFloor(PARSED.severityFloor) : defaultFloor()
 
 // ── Isolation convention ───────────────────────────────────────────────────
 // The AUTHORING chain (implement -> PR -> fix) runs inside a dedicated, PERSISTENT
@@ -1048,18 +1598,26 @@ function baseOf(story) {
   return String(story.base ?? '').trim() || PIPELINE.baseBranch
 }
 
-function wtClause(story) {
+function wtClauseBase(story) {
   const base = baseOf(story)
   return `ISOLATION (mandatory): do ALL git/file work inside a dedicated worktree at \`${PIPELINE.worktreeRoot}/${story.id}\` — create-or-reuse it: \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} -B ${story.branch} ${base}\` on first setup, or \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} ${story.branch}\` if the branch already has commits; if the path already exists, just \`cd\` into it. NEVER modify the repo's main working tree and NEVER switch its branch.${base === PIPELINE.baseBranch ? '' : ` This story is STACKED on \`${base}\`: that branch is its base, so its commits are already in your history and must NOT be reverted, duplicated or re-implemented — only ADD your own work on top. When you open the PR, target \`${base}\` as the PR base branch, not \`main\`, so the diff shows only this story's change.`}`
+}
+
+function wtClause(story) {
+  return `${wtClauseBase(story)} ${FINITE_STATE_COMPLETENESS}`
 }
 
 // Reviewer isolation: read-only inspection in a DETACHED throwaway worktree pinned
 // to the PR's pushed head. Detached HEAD never occupies the branch, so it can't
 // collide with the authoring worktree (which holds it) or with other stories'
 // reviewers in a parallel batch — and it never touches the main checkout's branch.
-function revWtClause(story) {
+function revWtClauseBase(story) {
   const p = `${PIPELINE.worktreeRoot}/${story.id}-review`
   return `ISOLATION (mandatory, read-only): NEVER switch the main checkout's branch. Inspect the code in a DETACHED throwaway worktree pinned to the PR's current pushed head: \`git worktree remove --force ${p} 2>/dev/null; git fetch origin -q; git worktree add --detach ${p} origin/${story.branch}\`, then \`cd ${p}\`. Read the code there (the untracked checkpoint is absent here — good, stay blind to it). When finished, remove it: \`git worktree remove --force ${p}\`.`
+}
+
+function revWtClause(story) {
+  return `${revWtClauseBase(story)} ${CONTRACT_INVENTORY}`
 }
 
 // #373 finding 3: the escalate-flush shared block — supersede-the-prior-flush + the manual
@@ -1096,17 +1654,67 @@ async function driveStory(story) {
     // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
     const impl = await agentRetry(
       `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following ${SK.implement}, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with ${SK.verifyQuality} (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with ${SK.recordDecision} rather than leaving it in a commit message. On completion write the story checkpoint via ${SK.checkpoint} $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
-      withModel({ agentType: 'pair-implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
+      withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
     )
     if (!impl) return { story, status: 'failed-implement' }
 
     // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
     pr = await agentRetry(
       `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (${SK.checkpoint} $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **${SK.publishPr}**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
-      { agentType: 'pair-implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
+      withModel('pr', { agentType: 'pair-implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA }),
     )
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
   }
+
+  // A rebase is not a transparent transport for either a SHA-scoped human exception or a
+  // snapshot commit: both identities change. Verify the remote branch's history before an
+  // independent review is spent. This probe deliberately reads only Git custody, never source
+  // or a working log, so it cannot bias the reviewer or invent a product finding.
+  const custody = await agentRetry(
+    [
+      `CUSTODY PROBE (read-only; no code review) for story ${tag}, PR #${pr.prNumber}.`,
+      revWtClauseBase(story),
+      `Inspect ONLY Git history on origin/${story.branch}. Find every ancestor commit whose message has a ${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; ...; base=<sha>; ... trailer.`,
+      'For each, parse the declared base and verify its DIRECT PARENT with git rev-parse <snapshot>^ equals that base.',
+      'First collect every mismatched snapshot in chronological order. A mismatch is retired only when a LATER still-valid snapshot has an exact supersedes=<comma-separated full snapshot SHAs> field equal to ALL EARLIER MISMATCHED SNAPSHOTS. A partial, extra, duplicate or malformed list retires none; a successor whose own parent mismatches is not valid and cannot retire anything.',
+      'Return only live mismatches as invalidatedSnapshots, and set valid: true only when that set is empty. Historical retired snapshots are not test-blob breaches in a later phase.',
+      `The branch head is head from git rev-parse origin/${story.branch}.`,
+      story.custodyReset
+        ? `A human supplied this possible reset: ${JSON.stringify(story.custodyReset)}. Verify git merge-base --is-ancestor ${story.custodyReset.baselineHead} origin/${story.branch}; return that boolean as resetBaselineAncestor. Do NOT treat a reset as valid merely because its prose sounds plausible: report the complete observed invalidated set exactly.`
+        : 'No custody reset was supplied; return resetBaselineAncestor: true.',
+      story.historyDecision
+        ? `A human supplied this exact-SHA history decision: ${JSON.stringify(story.historyDecision)}. Verify its reviewedHead AND every named commit are ancestors of origin/${story.branch} using git merge-base --is-ancestor <sha> origin/${story.branch}; return true as historyDecisionValid only when every command succeeds. A matching patch-id or subject is evidence for a human to issue a NEW decision, never permission to map an old SHA automatically.`
+        : 'No history decision was supplied; return historyDecisionValid: true.',
+      'Do NOT inspect source, tests, PR comments, checkpoints or working logs.',
+      'Do NOT edit, rebase, reset, commit, push, publish, label, comment, create a card or merge.',
+      'Return { valid, head, invalidatedSnapshots, resetBaselineAncestor, historyDecisionValid }.',
+    ].join(' '),
+    withModel('preflight', { agentType: 'pair-custody-verifier', phase: 'Custody', label: `custody:${tag}`, effort: 'medium', schema: CUSTODY_SCHEMA }),
+    hasCustodyEvidence,
+  )
+  if (!hasCustodyEvidence(custody))
+    return { story, prNumber: pr.prNumber, status: 'failed-custody' }
+  const invalidatedSnapshots = custody.invalidatedSnapshots
+  if (custody.valid !== (invalidatedSnapshots.length === 0))
+    return { story, prNumber: pr.prNumber, status: 'failed-custody', findings: invalidatedSnapshots }
+  if (invalidatedSnapshots.length) {
+    const reset = story.custodyReset
+    if (!reset)
+      return { story, prNumber: pr.prNumber, status: 'seal-invalidated', findings: invalidatedSnapshots }
+    if (!custody.resetBaselineAncestor || !sameShaSet(invalidatedSnapshots, reset.invalidatedSnapshots))
+      return { story, prNumber: pr.prNumber, status: 'failed-custody-reset', findings: invalidatedSnapshots }
+    log(`${tag}: human custody reset accepted for ${invalidatedSnapshots.length} rewritten snapshot(s) at ancestral baseline ${reset.baselineHead}`)
+  } else if (story.custodyReset) {
+    // A reset with nothing measured would turn a serious history rewrite into a reusable
+    // generic waiver. It must name an actual, complete invalidation set.
+    return { story, prNumber: pr.prNumber, status: 'failed-custody-reset' }
+  }
+  if (story.historyDecision && !custody.historyDecisionValid)
+    return { story, prNumber: pr.prNumber, status: 'stale-history-decision' }
+  // A reset retires its old chain through the first valid successor, not every later RED
+  // round in this invocation. Keeping this state locally preserves retry safety inside the
+  // sealer while preventing a repeated supersession claim once the successor exists.
+  let pendingCustodyReset = invalidatedSnapshots.length ? story.custodyReset : undefined
 
   // 3. REVIEW <-> FIX loop — reviewer is independent & BLIND to the handoff.
   //    Converges when every ACTIONABLE finding is resolved. Findings the reviewer
@@ -1165,6 +1773,12 @@ async function driveStory(story) {
   //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
   //    posting, and comment minimizing are all delegated to agents running in the worktree.
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
+  // This is human-provided scope for a single otherwise-unfixable finding, not author context:
+  // the reviewer still derives every finding independently. Keeping it beside the review loop
+  // prevents it leaking into RED/GREEN where it could become an implementation waiver.
+  const historyDecisionClause = story.historyDecision
+    ? `EXPLICIT HUMAN HISTORY DECISION (not author handoff): reviewed baseline ${story.historyDecision.reviewedHead}; commit SUBJECTS on ${JSON.stringify(story.historyDecision.commits)} are accepted historical trace because changing them would rewrite a sealed RED snapshot. Their disposition is: ${JSON.stringify(story.historyDecision.disposition)}. Custody independently proved this baseline and every named SHA are still ancestors of the current branch. Inspect actual history. For a finding solely about one or more of those exact subject lines, return \`kind: "history-subject"\` and \`historySubjects\` containing every exact affected lower-case SHA. Do NOT set nonActionable: the engine applies the decision only when every named SHA is in this list. A mixed code/docs/test/CI or other-commit finding is technical, not history-subject. A patch-id or matching subject after a rebase does NOT extend this decision; it needs a new human decision. Do NOT rebase, amend, reset, or release a sealed snapshot. `
+    : `HISTORY-REWRITE ESCALATION: if an actionable finding can only be fixed by rewriting, amending, or rebasing existing Git history, set needsHumanDecision: true AND humanDecisionKind: "history-rewrite". Do this before any RED snapshot; still report every other finding normally. `
   // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
   // (invisible in rendered markdown → no visible noise). The continuation probe detects a
   // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
@@ -1216,6 +1830,12 @@ async function driveStory(story) {
   // before honouring it, so the escalation is deferred by a round rather than dropped.
   let humanDecisionPending = false
   let prevFindings = []
+  let prevReviewedHead = null
+  // A P3 result is evidence, not reviewer context. It is injected exactly once, after the
+  // fresh reviewer has remained blind, and then survives as an ordinary prior finding for the
+  // re-review. Re-injecting it after GREEN would force a second fix even when its RED test
+  // proved the defect closed.
+  let pendingRequiredFindings = [...(story.requiredFindings ?? [])]
   // ACCUMULATES across rounds — never reassigned. A finding accepted in round 0 (by-design, or
   // below the floor) is not re-raised by the round-1 reviewer, because round 1 only sees the
   // fixed code and has no memory of what the human was already told would be carried. So a
@@ -1230,11 +1850,77 @@ async function driveStory(story) {
   const acceptedKeys = new Set()
   const accept = (findings) => {
     for (const f of findings) {
-      const key = `${f.location ?? ''} ${f.description ?? ''}`
+      // Keep a collision-free delimiter without embedding an invisible raw NUL in the shipped
+      // JavaScript source. A readable space collapses `(location, description)` pairs such as
+      // (`"a b"`, `"c"`) and (`"a"`, `"b c"`), silently dropping one accepted finding.
+      const key = `${f.location ?? ''}\u0000${f.description ?? ''}`
       if (acceptedKeys.has(key)) continue
       acceptedKeys.add(key)
       accepted.push(f)
     }
+  }
+  // Keep the outer review and the inner preflight on the SAME severity policy. An explicit
+  // floor is a human-selected merge rule, not something a preflight may silently override;
+  // conversely an unknown severity remains blocking in both paths (rank = Infinity).
+  const partitionFindings = (findings) => {
+    const allActionable = findings.filter((f) => !f.nonActionable)
+    const belowFloor = []
+    const actionable = []
+    for (const f of allActionable)
+      (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
+    return {
+      belowFloor,
+      actionable,
+      carried: [
+        ...findings.filter((f) => f.nonActionable),
+        ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
+      ],
+    }
+  }
+  // The fixer cannot author its own specification. RED writes only tests; a distinct sealer
+  // snapshots their exact bytes in Git before GREEN sees the source task. The verifier later
+  // discovers that object from history, rather than trusting an orchestrator-owned prompt.
+  const mapRedDomain = (targets, phase, baseHead) =>
+    agentRetry(
+      `RED DOMAIN MAP (read-only, pre-RED) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The targets are: ${JSON.stringify(targets)}. Inspect current source and the exact boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Before any test author can choose examples, identify the function/event that actually mutates each affected state. For every behavioral parser, state, normalizer or reservation target, return a finite domain: one owner, one named discriminator, and mutually exclusive rows covering every lexical/state form the owner recognizes, including the ordinary complement. Derive categories from the grammar or state transition, not examples that happen to be in the finding. Add the smallest cross-product wherever one row's output becomes another rule's input; each row must carry its authoritative oracle and measured expected result. For a non-behavioral target, still map its factual alternatives and exact authoritative probe. Return only { domains: [{ owner, discriminator, rows: [{ condition, oracle, expected }] }] }. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
+      withModel('redMapper', { agentType: 'pair-red-domain-mapper', phase: 'Review', label: `red-map:${tag} ${phase}`, effort: 'high', schema: RED_DOMAIN_MAPPER_SCHEMA }),
+      hasRedDomainEvidence,
+    )
+  const authorRedTests = (targets, phase, baseHead, domainMap, repairFindings = []) =>
+    agentRetry(
+      [RED_ARTIFACT_CONTRACT,
+      'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
+      `INDEPENDENT FINITE DOMAIN MAP (mandatory): ${JSON.stringify(domainMap)}. Make EVERY mapped row an actual RED assertion or a fixture row consumed by one. Do not collapse rows because their output happens to agree today; the map is the completeness boundary, not illustrative advice.`,
+      repairFindings.length
+        ? `RED CONTRACT REPAIR 1 OF ${MAX_RED_CONTRACT_REPAIRS}: the independent verifier rejected an UNSEALED, test-only contract. Its measured missing rows are: ${JSON.stringify(repairFindings)}. They are mandatory targets together with the original findings. Existing uncommitted test changes are untrusted evidence: inspect every dirty path, re-run each oracle while source is still unfixed, and return fresh hashes/observations for every artifact retained in this replacement contract. Do not treat the prior matrix, its prose, or a passing test as proof. Modify ONLY test artifacts; do not edit production, docs, adoption, configuration, commits, pushes, PRs, comments, cards or merges.`
+        : 'This is the first RED contract; no prior unsealed contract may be reused as evidence.',
+      `RED TEST CONTRACT (test-only; no implementation) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The actionable findings are: ${JSON.stringify(targets)}. Inspect the current source and the exact fix boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`; do NOT read ${BLIND_PATHS}, checkpoints or working logs. Before editing, identify the ONE canonical source of truth for every state transition/classification this fix touches. Build a finite matrix with every branch that changes that owner state, its nearest continuing and interrupting/boundary counterpart, and every renderer/consumer boundary the finding names. A predicate used for laziness, eligibility or a convenience classification is NOT automatically the state-transition oracle: derive expectations from the function that actually mutates/owns the state. Declare \`fixScope\` before editing: one owner, exactly one \`mode\` (\`behavioral\` or \`structural\`), and exact repository-relative \`allowedPaths\`. Do not combine a behavior repair with extraction/refactor: return no contract and ask for a separate structural round. Then modify ONLY test artifacts (test source, test fixture or committed oracle row): never modify production source, docs, adoption, configuration, generated assets, commits, pushes, PRs, comments, cards or merges. Run each changed test while the production code is still unfixed and keep it RED for the reported behavior. Do not weaken an existing expectation or replace a failing test with a source-string assertion. Return typed \`redTests\`: every artifact has its repository-relative file path and \`sha256sum <file>\` as \`sha256:<digest>\`; a test has its exact failing command and observed failure, while a fixture declares its RED \`consumedBy\` test rather than inventing one. A pure documentation/formatting finding may set testExempt true only with a concrete rationale; it still needs a matrix. Return sourceOfTruth, fixScope, matrix rows (condition | oracle | expected), redTests and testExempt. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
+      ].join('\n'),
+      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-test:${tag} ${phase}`, effort: 'high', schema: RED_TEST_SCHEMA }),
+      hasRedTestEvidence,
+    )
+  const verifyRedContract = (redContract, targets, phase, baseHead, domainMap) =>
+    agentRetry(
+      [RED_ARTIFACT_CONTRACT,
+      'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
+      `RED CONTRACT VERIFIER (read-only, pre-seal) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The author returned: ${JSON.stringify(redContract)}. The findings are: ${JSON.stringify(targets)}. The independent finite domain map is: ${JSON.stringify(domainMap)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Independently inspect the uncommitted diff and current source. Re-derive the owner/discriminator domain from the grammar or state transition; reject the map itself if it omits a recognized form, even when every mapped row has a test. Re-run every matrix oracle and every RED command yourself while production remains unfixed. Every domain-map row must have a real RED assertion/consumed fixture; a missing row is a contract finding even if neighbouring examples pass. Treat an unsupported claim (for example “does not compile”) as a finding unless its stated oracle demonstrates it. Verify every test/fixture path is repository-relative and every fixture is consumed by the exact failing assertion named in \`consumedBy\`. Verify fixScope has one owner, one mode, and only the exact paths needed by that contract: \`behavioral\` may not add/move/split production modules; \`structural\` must have a structural RED assertion. For parser/state rules, prove the full boundary and smallest rule-interaction cross-product from the actual state owner, not a downstream consumer. Return \`verified: true\` only when the whole RED contract is independently reproducible and complete; otherwise return \`verified: false\` with concrete findings.`,
+      ].join('\n'),
+      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
+      hasRedContractVerification,
+    )
+  const sealRedSnapshot = (redContract, phase, baseHead, custodyReset) => {
+    const manifestPath = redSnapshotManifestPath(pr.prNumber, phase)
+    // The reset becomes durable only through the first valid successor snapshot. The exact
+    // set is then discoverable from Git on later invocations; callers never keep a reusable
+    // waiver in prose or carry it across another rebase.
+    const supersedes = custodyReset
+      ? `; supersedes=${custodyReset.invalidatedSnapshots.join(',')}`
+      : ''
+    return agentRetry(
+      `SEAL RED SNAPSHOT (local Git commit; no implementation) for story ${tag}, PR #${pr.prNumber}, round ${phase}. ${wtClause(story)} The independent RED author returned this contract: ${JSON.stringify(redContract)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. First search for an already-sealed RED snapshot with exact \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}${supersedes}\`, parent \`${baseHead}\`, matching manifest and matching listed test blobs. If it exists, return it unchanged: this makes a lost agent response retry-safe. Otherwise verify \`git rev-parse HEAD\` is exactly \`${baseHead}\`; otherwise return no seal. Verify every listed test artifact has the stated SHA-256 and that the uncommitted diff contains only those test artifacts. Write the contract verbatim as \`${manifestPath}\`, then create ONE LOCAL commit containing exactly those test artifacts plus that manifest. The test suite is expected to fail, so use \`git commit --no-verify\` solely for this local RED snapshot. Its message MUST carry exactly \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}${supersedes}\`. ${custodyReset ? `This is the first valid successor after an accepted human reset: its exact supersedes=${custodyReset.invalidatedSnapshots.join(',')} field retires only those snapshots. Do not add, remove, shorten or broaden that field; only a still-valid successor may retire an older snapshot.` : 'Do not invent a supersedes field: a normal RED snapshot retires nothing.'} Never modify production source, docs, adoption, configuration or generated assets; never amend, rebase or reset; never push, post, publish, create a card or merge. Return \`sealed: true\` and the lower-case 40-character \`snapshot\` from \`git rev-parse HEAD\` only after verifying the commit, trailer, manifest and blob paths. ${TEXT_SHAPE}`,
+      withModel('seal', { agentType: 'pair-red-sealer', phase: 'Review', label: `red-seal:${tag} ${phase}`, effort: 'medium', schema: RED_SNAPSHOT_SCHEMA }),
+      hasSealedRedSnapshot,
+    )
   }
   // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
   // any remediation state to synthesize — not merely whether a fix happened this run. On a
@@ -1249,10 +1935,15 @@ async function driveStory(story) {
     // in-flight log AND no first-review comment already on the PR. Either signal makes
     // round-0 a SILENT re-review, so a PR never accrues a second first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
+    // An initial/resumed-without-history review establishes the whole-PR baseline.
+    // Once a fix is in flight, even the file inventory must start at that baseline;
+    // otherwise the pacing loop invites a second full audit before its delta rule.
+    const reviewBase = prevFindings.length ? prevReviewedHead : baseOf(story)
     const review = await agentRetry(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${baseOf(story)}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
-            ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`
-            : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`} Return findings and a verdict.`,
+      historyDecisionClause +
+      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${reviewBase}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ACTIONABLE-FINDING ACCEPTANCE PLAN (mandatory): end EVERY actionable \`recommendation\` with \`VERIFY: <concrete input/state -> expected outcome>; ORACLE: <exact command, fixture or authoritative source>; ASSERT: <the observable assertion that consumes that fixture/output>\`. When a changed rule can feed another rule, name the paired direction and the minimal interaction cross-product in VERIFY; a declared fixture column that no expectation reads is not a test. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
+            ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}. The last complete review covered immutable head ${prevReviewedHead}. First inspect ONLY the fix delta with \`git diff ${prevReviewedHead}...origin/${story.branch} --name-status\`, then its directly changed producer/consumer contract boundaries. Do NOT re-audit the unchanged PR surface. A new finding is actionable only if it is in this delta or a contract boundary changed by this delta; otherwise report it as a Question for the human, not a new fix round.`
+            : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end).`} Return findings, verdict, and \`reviewedHead\`: the lower-case 40-character SHA printed by \`git rev-parse origin/${story.branch}\` after your inspection.`,
       // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a
       // stuck command: transcript timing showed the reviewer issuing a tool call every ~5s
       // (97 events, mean gap 4.9s, max 49s — zero gaps over 180s) yet still killed, because
@@ -1262,11 +1953,10 @@ async function driveStory(story) {
       // shortens the silent stretches between utterances — so if a future change makes the
       // narration reliable, restoring 'xhigh' is legitimate: it costs review depth, which is
       // the whole point of this gate. Do not read this line as "xhigh causes stalls".
-      withModel({ agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
-      // A review is USABLE only if it carries a verdict — the same predicate the guard below
-      // converges on. Without it the retry covered the dead reviewer (`null`) and skipped the
-      // contentless one (`{}`), which is the shape actually measured on #432.
-      hasVerdict,
+      withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
+      // A review is USABLE only with a verdict and its immutable reviewed head. Without the
+      // latter, the next pass cannot be an evidence-bounded re-review.
+      hasReviewEvidence,
     )
     // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent
     // dies, and `review?.findings ?? []` then yields zero findings — which the
@@ -1286,35 +1976,38 @@ async function driveStory(story) {
     // So the test is inverted: a VERDICT must be present. Absence of findings is not evidence
     // that a review happened; presence of a verdict is. Every real review emits one — it is a
     // required field of the contract schema — so this costs a genuine clean review nothing.
-    // `hasVerdict` is the SAME function `agentRetry` was given above: the contentless return is
-    // retried once like any other dead step, and only then does it land here.
-    if (!hasVerdict(review))
+    // `hasReviewEvidence` is the SAME function `agentRetry` was given above: a contentless or
+    // unanchored return is retried once like any other dead step, then lands here.
+    if (!hasReviewEvidence(review))
       // `acceptedFindings` travels on EVERY terminal arm, this one included. A card whose
       // reviewer dies mid-cycle otherwise reports the by-design and below-floor findings of
       // every earlier round as if none had been raised — and those are precisely the findings
       // the fixer never receives, so they are recoverable from nowhere else. AC4 says an
       // accepted finding always reaches the human; a failure is not an exception to that.
       return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
-    const findings = review.findings ?? []
-    const allActionable = findings.filter((f) => !f.nonActionable)
-    // Below the floor: still reported, still shown to the human, just not blocking. Marked
-    // with a disposition so the merge gate can tell "we chose not to block on this" from
-    // "the reviewer judged it by-design", which are different statements.
-    // ONE predicate, two buckets — not two independent filters. `< floor` and `>= floor` are
-    // both false for a rank that is not a number (NaN, or an inherited prototype value before
-    // `Object.hasOwn` above), so the two-filter form was NOT total: such a finding landed in
-    // neither set and was recorded nowhere — not blocking, not even in `acceptedFindings`,
-    // which AC4 says never happens (#432 review round 7). Partitioning on the single
-    // below-floor test makes the complement the actionable set by construction: anything the
-    // test cannot answer YES for blocks, which is also the safe direction.
-    const belowFloor = []
-    const actionable = []
-    for (const f of allActionable)
-      (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
-    accept([
-      ...findings.filter((f) => f.nonActionable),
-      ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
-    ])
+    const reviewedHead = String(review.reviewedHead).toLowerCase()
+    // The custody probe and first review must name one immutable remote head. If it moved in
+    // between, neither its snapshot ancestry nor a human decision can safely be reused.
+    if (round === 0 && reviewedHead !== custody.head)
+      return { story, prNumber: pr.prNumber, status: 'failed-custody', acceptedFindings: accepted }
+    const historyResolution = applyHistoryDecision(review.findings ?? [], story.historyDecision)
+    const staleRequired = pendingRequiredFindings.filter((finding) => finding.observedHead !== reviewedHead)
+    if (staleRequired.length)
+      return {
+        story,
+        prNumber: pr.prNumber,
+        status: 'failed-required-findings',
+        findings: staleRequired,
+        acceptedFindings: accepted,
+        reviewLog: cycleHasRemediation ? reviewLog : undefined,
+      }
+    const findings = [...historyResolution.findings, ...pendingRequiredFindings]
+    pendingRequiredFindings = []
+    // Below the floor: still reported, still shown to the human, just not blocking. One
+    // partition predicate makes the complement total: an unknown/non-numeric rank blocks
+    // rather than disappearing from both the fix set and the merge-gate record.
+    const { belowFloor, actionable, carried } = partitionFindings(findings)
+    accept(carried)
     if (belowFloor.length)
       log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
     // Converge once nothing actionable remains (by-design findings don't block).
@@ -1331,10 +2024,29 @@ async function driveStory(story) {
     // escalation still happens — it is deferred by one round, not dropped. On the second
     // occurrence we stop: a flag raised again after a fix round is a genuine disagreement.
     const wantsHuman = review?.needsHumanDecision === true
-    if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
+    // A sealed snapshot deliberately freezes its base. If the reviewer identifies a finding
+    // whose ONLY remediation is rewriting that base's history, spending the normal one fix
+    // round first makes the human's legitimate options narrower. Stop before RED/seal/GREEN;
+    // this exceptional route is typed, while all other human decisions retain the measured
+    // one-round behavior below.
+    const reviewerUsedRecognizedHistory = historyResolution.recognizedHistory
+    // A legacy reviewer may still raise the generic flag beside a correctly typed, authorized
+    // history finding. The typed engine decision is authoritative in that narrow case; an
+    // untyped history-rewrite request still fails closed because no exact SHA set was supplied.
+    const historyRewriteDecision =
+      historyResolution.unresolved ||
+      (wantsHuman && review?.humanDecisionKind === 'history-rewrite' && !reviewerUsedRecognizedHistory)
+    let mustEscalate = false
+    if (historyRewriteDecision) {
+      mustEscalate = true
+      log(`${tag} r${round}: reviewer identified a history-rewrite decision — escalating before RED sealing or GREEN`)
+    } else if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
       humanDecisionPending = true
       log(`${tag} r${round}: reviewer asked for a human decision — spending one fix round on the ${actionable.length} finding(s) first, then escalating if it still stands`)
     } else if (round >= MAX_FIX_ROUNDS || wantsHuman) {
+      mustEscalate = true
+    }
+    if (mustEscalate) {
       // #373 finding 1: emit a PR-visible escalation UNLESS this run's round-0 ALREADY posted
       // the first review (`first === true`) carrying these same findings. The gap this closes:
       // a SILENT re-review that escalates with no log — a resumed PR whose prior first review
@@ -1357,12 +2069,45 @@ async function driveStory(story) {
 
     round++
     prevFindings = actionable
+    prevReviewedHead = reviewedHead
     cycleHasRemediation = true
+    const redDomainMap = await mapRedDomain(prevFindings, `r${round}`, reviewedHead)
+    if (!hasRedDomainEvidence(redDomainMap))
+      return { story, prNumber: pr.prNumber, status: 'failed-red-domain', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    let redTargets = prevFindings
+    let redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead, redDomainMap)
+    if (!hasRedTestEvidence(redTest))
+      return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    let redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead, redDomainMap)
+    for (let repair = 0; repair < MAX_RED_CONTRACT_REPAIRS && (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0); repair++) {
+      const repairFindings = redVerification?.findings?.length ? redVerification.findings : []
+      if (!repairFindings.length) break
+      log(`${tag} r${round}: RED verifier rejected the unsealed contract; authoring bounded test-only repair ${repair + 1}/${MAX_RED_CONTRACT_REPAIRS}`)
+      redTargets = [...redTargets, ...repairFindings]
+      redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead, redDomainMap, repairFindings)
+      if (!hasRedTestEvidence(redTest))
+        return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: redTargets, acceptedFindings: accepted, reviewLog }
+      redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead, redDomainMap)
+    }
+    if (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0)
+      return {
+        story,
+        prNumber: pr.prNumber,
+        status: 'failed-red-contract',
+        findings: redVerification?.findings?.length ? redVerification.findings : redTargets,
+        acceptedFindings: accepted,
+        reviewLog,
+      }
+    const redSnapshot = await sealRedSnapshot(redTest, `r${round}`, reviewedHead, pendingCustodyReset)
+    if (!hasSealedRedSnapshot(redSnapshot))
+      return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    pendingCustodyReset = undefined
+    log(`${tag} r${round}: sealed RED snapshot ${redSnapshot.snapshot}`)
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
     const fix = await agentRetry(
-      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. Follow ${SK.implement} for the change itself (test-first where a finding describes a defect), verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
-      withModel({ agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
+      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review and RED-contract findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(redTargets)}. ${sealedRedSnapshot({ prNumber: pr.prNumber, phase: `r${round}`, baseHead: reviewedHead })} Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. CONVERGENCE SWEEP (mandatory): the finding location is the starting point, not the contract boundary. Before changing code, make a finite map of the same observable contract: the reported case and its paired success/failure path; any state transition or resume path the contract owns; and the canonical source plus every distributed representation of that behavior (generated asset, dataset, installed copy, or documented command). Change every map cell required for that one contract, then stop — do not use the sweep for unrelated cleanup, new behavior, or speculative hardening. For a generated/distributed artifact, resolve the canonical source from the asset registry, edit only that source, then run the declared generator/installer and inspect its output; never hand-edit a derived copy. PROVISIONED ARTIFACT CONTRACT (mandatory when a change installs, builds, publishes, names, or invokes an executable/package): map \`producer -> published identity -> consumer\` — for example installer/release step -> package manifest/bin/file/export -> workflow or user command. Prove the exact path in a clean temporary environment using the real built or installed artifact. Never stub, alias, or fake the exact producer, published identity, or consumer boundary; external effects may be isolated only after that boundary is crossed. Re-run the RED commands discovered in the sealed manifest, the finding's evidence command and the mapped boundary cases before commit. Follow ${SK.implement} for the change itself: its GREEN discipline and adoption-compliance phase are mandatory. Verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`, followed by \`## Evidence ledger, round N\` with one row per empirical/boundary claim: \`claim | oracle | probe | observed\`. Return that same ledger in \`evidenceLedger\`; return \`[]\` only when the fix made no empirical or boundary claim. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
+      withModel('green', { agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
     // its path in the return so the human / next resume can find (and clean) it.
@@ -1380,6 +2125,32 @@ async function driveStory(story) {
       )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
     }
+
+    // PRE-FLIGHT — a fresh read-only verifier audits this FIX DELTA before a costly outer
+    // re-review. This gate is intentionally terminal: a P3 finding proves GREEN escaped its
+    // contract, so hiding a second autonomous fix beneath the same round weakens TDD and lets
+    // fix-on-fix regressions accumulate unseen. A later run starts a new RED contract instead.
+    const runPreflight = (baseHead, targets, ledgers, redPhase, pass) =>
+      agentRetry(
+        [FIXTURE_CONSUMPTION_PREFLIGHT,
+        `FIX PREFLIGHT (read-only; NOT a PR review) for story ${tag}, PR #${pr.prNumber}, inner pass ${pass}. ${revWtClause(story)} Inspect ONLY the delta \`git diff ${baseHead}...origin/${story.branch} --name-status\`, its directly changed producer/consumer boundaries, and the real tests/probes it adds or changes. Do NOT read ${BLIND_PATHS}, checkpoints or the working log; do NOT edit, commit, push, publish a review, post a PR comment, or merge. The prior findings being remediated are: ${JSON.stringify(targets)}. The structured evidence ledger(s) returned by the fixer are: ${JSON.stringify(ledgers)}. There is intentionally NO RED manifest, test path, digest or snapshot SHA in this prompt. Independently FIND exactly one ancestor commit in \`${baseHead}..HEAD\` with \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${redPhase}; base=${baseHead}; manifest=<path>\` in its commit message, using \`git log\` or \`git rev-list\`. Read the manifest and every recorded test blob FROM that commit using \`git show\`/\`git ls-tree\`, never an orchestrator-provided value. Verify the snapshot's parent is exactly its declared base with \`git rev-parse <snapshot>^\`; use \`git diff-tree --no-commit-id --name-only -r <base> <snapshot>\` to verify it contains only the manifest and the test artifacts listed in that manifest. Compare each listed test path byte-for-byte (Git blob identity) with HEAD: a changed comment, fixture, expectation, missing or removed file, replacement or an added/changed unlisted test artifact is a contract breach. Read \`fixScope\` from that same manifest and compare the post-snapshot production diff to its \`allowedPaths\`: an out-of-scope path, or a new/moved/split production module under a \`behavioral\` scope, is a contract breach. The snapshot missing, ambiguous, malformed, not an ancestor, carrying a mismatched base or containing any other file is also a contract breach. For any breach return \`contractBreach: true\` and \`verified: false\`; it is not eligible for repair. Re-run every stated oracle/probe yourself against this head; an evidence ledger is an input to verify, never proof by assertion. Check that every new fixture field/table column is actually consumed by an expectation (trace it to the assertion), not merely declared; that comments/test names repeat only measured claims; and that every newly introduced parser/state/normalizer rule has the paired order plus the minimal interaction cross-product whenever an output can feed another rule. For a derived predicate/event, trace every branch that mutates its declared source-of-truth state: it must be emitted from that transition or prove the exact same decision table, never substitute a laziness/eligibility helper for a block/state boundary. For any defect, return a normal finding with its concrete failure case and a recommendation ending \`VERIFY: <input/state -> expected>; ORACLE: <command/fixture>; ASSERT: <observable assertion>\`. Return \`verified: true\` only when there are zero blocking findings under the configured severity floor (${SEVERITY_FLOOR?.name ?? 'none — every actionable finding blocks'}); otherwise return \`verified: false\`. Return the exact lower-case 40-character \`reviewedHead\` from \`git rev-parse origin/${story.branch}\`.`,
+        ].join('\n'),
+        withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} r${round} p${pass}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
+        hasPreflightEvidence,
+      )
+    const preflight = await runPreflight(reviewedHead, prevFindings, [fix.evidenceLedger], `r${round}`, 0)
+    if (!hasPreflightEvidence(preflight))
+      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    if (preflight.contractBreach === true)
+      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
+    const firstPreflight = partitionFindings(preflight.findings)
+    accept(firstPreflight.carried)
+    if (preflight.verified !== (firstPreflight.actionable.length === 0))
+      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
+    if (firstPreflight.belowFloor.length)
+      log(`${tag} r${round} preflight: ${firstPreflight.belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${firstPreflight.actionable.length} blocking`)
+    if (firstPreflight.actionable.length)
+      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: firstPreflight.actionable, acceptedFindings: accepted, reviewLog }
   }
 
   // Converged. If any remediation happened (this run OR a prior run this cycle continues),
