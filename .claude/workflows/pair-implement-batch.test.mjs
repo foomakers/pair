@@ -2696,6 +2696,34 @@ test('a read-only domain mapper binds RED and its verifier to the complete measu
   assert.doesNotMatch(calls.find(c => c.opts.agentType === 'pair-reviewer').prompt, /multiline comment opener follows the closer/i, 'the external review remains blind')
 })
 
+test('a domain map may name literal grammar tokens before RED', async () => {
+  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
+  const map = {
+    domains: [{
+      owner: 'readExpressionLine',
+      discriminator: 'what follows the first `*/}`',
+      rows: [
+        { condition: 'only whitespace follows `*/}`', oracle: 'real compiler', expected: 'bare boundary' },
+        { condition: 'a literal fence follows `*/}`', oracle: 'real compiler', expected: 'fence remains visible' },
+      ],
+    }],
+  }
+  let review = 0
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return review++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-red-domain-mapper') return map
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.match(calls.find(c => c.opts.agentType === 'pair-fix-test-author').prompt, /`\*\/}`/)
+})
+
 test('a missing finite domain stops before RED, seal or GREEN', async () => {
   const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
   const { result, calls } = await runWorkflow({
@@ -2738,6 +2766,33 @@ test('a one-row domain is invalid before RED, seal or GREEN', async () => {
   assert.equal(result.batch[0].status, 'failed-red-domain')
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
+})
+
+test('a domain map with duplicate conditions fails before RED', async () => {
+  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
+  const duplicate = {
+    domains: [{
+      owner: 'readExpressionLine',
+      discriminator: 'first closer tail token',
+      rows: [
+        { condition: 'same form', oracle: 'real compiler', expected: 'first result' },
+        { condition: 'same form', oracle: 'real compiler', expected: 'second result' },
+      ],
+    }],
+  }
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.agentType === 'pair-red-domain-mapper') return duplicate
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true, evidenceLedger: [] }
+    },
+  })
+  assert.equal(result.batch[0].status, 'failed-red-domain')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
 })
 
 test('a second rejected RED contract fails closed without a third author or any seal', async () => {

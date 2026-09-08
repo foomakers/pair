@@ -129,7 +129,8 @@ The mapper precedes the author and returns a typed finite domain: the real state
 discriminator, every mutually exclusive grammar/state form (including the ordinary complement),
 and the smallest rule-interaction rows. The author makes every row RED; the verifier independently
 re-derives the domain and rejects an omitted or unrepresented row. No map is `failed-red-domain`,
-before tests, a seal or GREEN.
+before tests, a seal or GREEN. Map fields are single-line JSON prompt data, so they retain literal
+grammar tokens such as `` `*/}` ``; shell-oriented prose validation does not apply to them.
 
 If the RED verifier rejects an unsealed test-only contract, the engine gives a fresh RED author
 one bounded repair using the verifier's measured missing rows, then independently verifies it

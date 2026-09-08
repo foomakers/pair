@@ -185,6 +185,11 @@ const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..
 // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
 // card title ("PR state flow (gate≠review) + …") must keep working.
 const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
+// Domain maps are JSON data interpolated only through JSON.stringify into agent prompts, never
+// command-line values. They must preserve literal grammar tokens such as `*/}` and fence runs;
+// retain a single-line/control-character boundary plus the structural checks below instead of
+// borrowing isProse's shell-oriented backtick/$() ban.
+const isDomainText = v => typeof v === 'string' && v.trim().length > 0 && !/[\r\n\x00-\x1f\x7f]/.test(v)
 // Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
 // shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
 // worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
@@ -1460,15 +1465,15 @@ const hasRedDomainEvidence = result =>
   Array.isArray(result.domains) &&
   result.domains.length > 0 &&
   result.domains.every(domain => {
-    if (!domain || !isProse(String(domain.owner ?? '').trim()) || !isProse(String(domain.discriminator ?? '').trim())) return false
+    if (!domain || !isDomainText(domain.owner) || !isDomainText(domain.discriminator)) return false
     if (!Array.isArray(domain.rows) || domain.rows.length < 2) return false
     const conditions = new Set()
     return domain.rows.every(row => {
       if (!row) return false
-      const condition = String(row.condition ?? '').trim()
-      if (!isProse(condition) || conditions.has(condition)) return false
+      const condition = typeof row.condition === 'string' ? row.condition.trim() : ''
+      if (!isDomainText(row.condition) || conditions.has(condition)) return false
       conditions.add(condition)
-      return isProse(String(row.oracle ?? '').trim()) && isProse(String(row.expected ?? '').trim())
+      return isDomainText(row.oracle) && isDomainText(row.expected)
     })
   })
 // Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,

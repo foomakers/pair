@@ -94,6 +94,8 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   domain mapper, then has four isolated stages. The mapper identifies the actual state-transition
   owner, one named discriminator and mutually exclusive/exhaustive grammar or state rows — including
   the ordinary complement and the smallest interaction cross-product. It emits no tests or edits.
+  Its map is single-line JSON prompt data and retains literal grammar tokens; shell-value prose
+  restrictions apply only to fields that reach commands.
   A test-only author turns every mapped row into a RED assertion or a consumed fixture, then derives
   its matrix from that state-transition owner and declares one typed scope
   (`behavioral` or `structural`, never both) and writes/runs failing tests; an independent
