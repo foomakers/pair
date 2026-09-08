@@ -162,25 +162,27 @@ describe('checkCatalogCounts', () => {
 })
 
 describe('countByCategory', () => {
-  it('buckets by top-level dir (process/capability/navigator)', () => {
+  it('buckets by top-level dir (process/capability/workflow/navigator)', () => {
     const skillsDir = pathJoin('/corpus', '.skills')
     const files = [
       pathJoin(skillsDir, 'process', 'review', 'SKILL.md'),
       pathJoin(skillsDir, 'process', 'implement', 'SKILL.md'),
       pathJoin(skillsDir, 'capability', 'classify', 'SKILL.md'),
+      pathJoin(skillsDir, 'workflow', 'red-spec', 'SKILL.md'),
       pathJoin(skillsDir, 'next', 'SKILL.md'),
     ]
     expect(countByCategory(files, skillsDir)).toEqual({
-      total: 4,
+      total: 5,
       process: 2,
       capability: 1,
+      workflow: 1,
       navigator: 1,
     })
   })
 })
 
 describe('checkProseCounts', () => {
-  const counts = { total: 37, process: 9, capability: 27, navigator: 1 }
+  const counts = { total: 37, process: 9, capability: 27, workflow: 0, navigator: 1 }
 
   it('is silent when total and breakdown match the corpus', () => {
     const content =
@@ -224,10 +226,46 @@ describe('checkProseCounts', () => {
       [],
     )
   })
+
+  // US-479 c2: the `workflow/` category (delivery-phase skills the batch engine dispatches to).
+  it('accepts a four-part breakdown and requires the workflow term once the corpus has workflow skills', () => {
+    const withWorkflow = { total: 43, process: 9, capability: 27, workflow: 6, navigator: 1 }
+    expect(
+      checkProseCounts(
+        'sg.md',
+        '43 skills (9 process + 27 capability + 6 workflow + 1 navigator)',
+        withWorkflow,
+      ),
+    ).toEqual([])
+    const omitted = checkProseCounts(
+      'sg.md',
+      '43 skills (9 process + 27 capability + 1 navigator)',
+      withWorkflow,
+    )
+    expect(omitted).toHaveLength(1)
+    expect(omitted[0]).toContain('does not match corpus')
+    // and a corpus WITHOUT workflow skills still reads the three-part form as complete
+    expect(checkProseCounts('sg.md', '(9 process + 27 capability + 1 navigator)', counts)).toEqual(
+      [],
+    )
+    expect(
+      checkProseCounts('sg.md', '(9 process + 27 capability + 0 workflow + 1 navigator)', counts),
+    ).toEqual([])
+  })
 })
 
 describe('checkCategoryLabelCounts', () => {
-  const counts = { total: 37, process: 9, capability: 27, navigator: 1 }
+  const counts = { total: 37, process: 9, capability: 27, workflow: 0, navigator: 1 }
+
+  it('checks a "### Workflow Skills (N)" heading against the workflow count', () => {
+    const c = { ...counts, total: 43, workflow: 6 }
+    expect(
+      checkCategoryLabelCounts('sg.md', '### Workflow Skills (6)\n| **Workflow** | 6 |', c),
+    ).toEqual([])
+    const errors = checkCategoryLabelCounts('sg.md', '### Workflow Skills (5)', c)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('6 workflow skills')
+  })
 
   it('is silent when heading and table-cell category counts match', () => {
     const content =

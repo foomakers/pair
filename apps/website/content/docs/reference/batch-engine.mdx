@@ -47,10 +47,10 @@ Under Claude Code they are not inert, and it is worth knowing exactly what arriv
 | ------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- |
 | `pair-implementer`        | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write files, run commands, create worktrees, commit, push, open pull requests |
 | `pair-reviewer`           | `Read, Grep, Glob, Bash, Skill`            | read the code and run commands (`git`, `gh`); by its own instructions it does not edit, commit or merge |
-| `pair-red-domain-mapper`  | `Read, Grep, Glob, Bash, Skill`            | map the finite owner domain and rule collisions before RED; it is read-only and cannot edit, commit, push, post or merge |
+| `pair-remediation-planner` | `Read, Grep, Glob, Bash, Skill`            | group one review's actionable findings into a frozen remediation plan (`/pair-workflow-remediation-plan`); read-only, it cannot edit, commit, push, post or merge |
 | `pair-fix-test-author`    | `Read, Edit, Write, Bash, Grep, Glob, Skill` | write and run only failing regression tests; it cannot commit, push, post or edit production artifacts by instruction |
 | `pair-red-contract-verifier` | `Read, Grep, Glob, Bash, Skill`          | independently reproduce the RED contract before it is sealed; it is read-only and cannot edit, commit, push, post or merge |
-| `pair-red-sealer`         | `Read, Edit, Write, Bash, Grep, Glob, Skill` | verify and locally commit only a RED test snapshot; GREEN later pushes it only as an immutable branch ancestor; it cannot push, post or edit production artifacts by instruction |
+| `pair-red-sealer`         | `Read, Bash, Skill`                        | run `red-snapshot.mjs seal` (`/pair-workflow-red-seal`) and return its answer; it cannot edit, push, post or merge — the script decides |
 | `pair-fix-verifier`       | `Read, Grep, Glob, Bash, Skill`            | independently preflight a just-fixed delta; rerun evidence and tests without editing, posting or merging |
 | `pair-contract-generator` | `Read, Write, Bash`                        | read a KB template and write the derived `*.contract.json` cache beside it    |
 
@@ -63,7 +63,7 @@ in every prompt it dispatches, not a tool grant.
 
 **Read the third column as process, not as permission.** `Bash` is unrestricted wherever it is
 declared, so writing files, committing, pushing and `gh pr merge` are all technically inside the
-authority you install. What keeps `pair-reviewer`, `pair-red-domain-mapper`, `pair-red-contract-verifier` and `pair-fix-verifier` read-only, `pair-fix-test-author` test-only, `pair-red-sealer` snapshot-only, and keeps merge out of every run is
+authority you install. What keeps `pair-reviewer`, `pair-remediation-planner`, `pair-red-contract-verifier` and `pair-fix-verifier` read-only, `pair-fix-test-author` test-only, `pair-red-sealer` snapshot-only, and keeps merge out of every run is
 instruction — the engine's dispatched prompts and each agent's own definition — not the tool
 grant.
 
@@ -117,24 +117,21 @@ An unknown key, an empty override, or a `maxParallelism` below 1 is rejected lou
 ignored — a discarded setting would run the batch on values you did not choose while reporting
 success.
 
-### Fix contract and model trials
+### Remediation phases are skills
 
-Each behavior fix is `read-only RED domain map → RED author → RED verifier → local Git seal → GREEN → read-only preflight`.
-The RED contract names one owner, one mode (`behavioral` or `structural`) and exact paths; a
-behavioral fix cannot hide a module extraction or refactor. The first actionable preflight result
-stops as `failed-preflight`; the next attempt must begin with fresh RED, not an internal repair.
+From US-479 the review ↔ fix loop is a sequence of **phase skills** the engine dispatches by name with typed arguments; the workflow file carries no phase policy of its own. A round with actionable findings runs `/pair-workflow-remediation-plan` (D0: findings grouped by canonical owner, one mode — `behavioral` or `structural` — and exact allowed paths), then per group, in dependency order: `/pair-workflow-red-spec` (D1: finite domain map + test-only RED contract, hashed), `/pair-workflow-red-verify` (D2: an independent reproduction; one bounded repair on rejection, a second rejection is `failed-red-contract`), `/pair-workflow-red-seal` (D3: `node .claude/workflows/pair-contracts/red-snapshot.mjs seal` — one local commit carrying the `Pair-RED-Snapshot` trailer), `/pair-workflow-green-fix` (D4: the fix inside `fixScope`, GREEN committed above the seal, PR updated) and `/pair-workflow-p3-verify` (D5: `red-snapshot.mjs verify` — parent, tree, sealed blobs byte-identical, no unlisted test change, scope respected — then a read-only evidence re-run). A custody breach or a P3 defect is terminal for the attempt: `failed-preflight`, and the next run starts a fresh RED contract.
 
-The mapper precedes the author and returns a typed finite domain: the real state owner, one named
-discriminator, every mutually exclusive grammar/state form (including the ordinary complement),
-and the smallest rule-interaction rows. The author makes every row RED; the verifier independently
-re-derives the domain and rejects an omitted or unrepresented row. No map is `failed-red-domain`,
-before tests, a seal or GREEN. Map fields are single-line JSON prompt data, so they retain literal
-grammar tokens such as `` `*/}` ``; shell-oriented prose validation does not apply to them.
+Every phase writes one handoff JSON under `.pair/working/runs/<run>/<story>/`; the next phase reads that artifact, never a previous agent's prose. The Git work — hashing, sealing, ancestry and blob checks — is deterministic in `red-snapshot.mjs` and tested against throwaway repositories; no agent re-derives it.
 
-If the RED verifier rejects an unsealed test-only contract, the engine gives a fresh RED author
-one bounded repair using the verifier's measured missing rows, then independently verifies it
-again. A second rejection is `failed-red-contract`: no seal, GREEN, push or review runs. This
-exception exists only before a source change; P3 remains terminal.
+`model` remains a legacy global override. For a measured trial use `models`, for example
+`{ models: { green: "fable" } }`: that changes only GREEN, leaving the independent reviewer,
+RED and P3 on their declared models. Roles: `implementation`, `pr`, `reviewer`, `planner`, `red`,
+`redVerifier`, `seal`, `green`, `preflight`.
+
+`runId` (optional, one safe path segment) names the handoff directory `.pair/working/runs/<runId>/`;
+absent, each card uses `pr-<n>`. The six phase skills are pipeline configuration like the others —
+`pipeline.skills.remediationPlan`, `redSpec`, `redVerify`, `redSeal`, `greenFix`, `p3Verify` —
+so an adopter who names them differently overrides the key rather than the engine.
 
 ### Carrying verified P3 evidence
 

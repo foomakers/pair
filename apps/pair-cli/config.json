@@ -51,7 +51,8 @@
         "pair-implement-batch.test.mjs",
         "pair-refine-batch.test.mjs",
         "pair-loop.test.mjs",
-        "pair-contracts/ensure-contract.test.mjs"
+        "pair-contracts/ensure-contract.test.mjs",
+        "pair-contracts/red-snapshot.test.mjs"
       ],
       "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],
       "description": "Batch orchestration workflows (Claude Code only; inert elsewhere)"
@@ -60,7 +61,7 @@
       "source": ".agents",
       "behavior": "overwrite",
       "targets": [{ "path": ".claude/agents/", "mode": "canonical" }],
-      "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-red-domain-mapper, pair-fix-test-author, pair-red-sealer, pair-fix-verifier, pair-contract-generator)"
+      "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-remediation-planner, pair-fix-test-author, pair-red-contract-verifier, pair-red-sealer, pair-fix-verifier, pair-contract-generator)"
     }
   }
 }

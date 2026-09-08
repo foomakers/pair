@@ -26,6 +26,11 @@ const SRC = readFileSync(new URL('./pair-implement-batch.js', import.meta.url), 
 )
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
 const REVIEWED_HEAD = 'a'.repeat(40)
+// US-479 c2: the review ↔ fix loop dispatches phase SKILLS. A rule about HOW a phase works is
+// asserted on the skill file (the process of record), a rule about WHAT the engine passes and
+// in which order is asserted on the dispatched prompt.
+const SKILL = name => readFileSync(new URL(`../skills/pair-workflow-${name}/SKILL.md`, import.meta.url), 'utf8')
+const RED_SNAPSHOT_SCRIPT = readFileSync(new URL('./pair-contracts/red-snapshot.mjs', import.meta.url), 'utf8')
 
 async function runWorkflow({ args, dispatch }) {
   const calls = []
@@ -51,21 +56,19 @@ async function runWorkflow({ args, dispatch }) {
         return result.reviewedHead === undefined ? { ...result, reviewedHead: REVIEWED_HEAD } : result
       return { verified: true, findings: [], reviewedHead: REVIEWED_HEAD }
     }
-    // The mapper turns a parser/state finding into a finite owner-domain before a test
-    // author writes RED. Legacy fixtures get a small valid map; focused tests can prove
-    // mapper failure or a specific measured row without rebuilding every old dispatch.
-    if (opts.agentType === 'pair-red-domain-mapper') {
+    // US-479 c2: D0 planner. Legacy fixtures predate grouping — give them ONE group holding
+    // every finding the planner received (indices parsed back from the dispatched prompt), so
+    // the per-group attempt runs exactly once as the old single-fixer path did. Focused tests
+    // return an explicit plan (or null / an invalid one) to exercise `failed-plan`.
+    if (opts.agentType === 'pair-remediation-planner') {
       if (result === null) return null
-      if (result && typeof result === 'object' && Array.isArray(result.domains)) return result
+      if (result && typeof result === 'object' && Array.isArray(result.groups)) return result
+      const m = /\$findings=(\[.*?\]) \$scope=|\$findings=(\[.*\])\. The skill/.exec(prompt)
+      const count = JSON.parse((m?.[1] ?? m?.[2]) ?? '[]').length
       return {
-        domains: [{
-          owner: 'canonical state transition',
-          discriminator: 'state boundary',
-          rows: [
-            { condition: 'continue', oracle: 'fixture', expected: 'continues' },
-            { condition: 'interrupt', oracle: 'fixture', expected: 'interrupts' },
-          ],
-        }],
+        status: 'planned',
+        inputHead: REVIEWED_HEAD,
+        groups: [{ groupId: 'g1', findings: Array.from({ length: count }, (_, i) => i), owner: 'canonical state transition', mode: 'behavioral', allowedPaths: ['src/fixture.ts'], oracle: 'fixture', dependsOn: [] }],
       }
     }
     // RED has a distinct, read-only verifier before its snapshot is committed. Existing
@@ -356,7 +359,9 @@ test('review noise policy: first review posts, re-review is silent, fix logs to 
   assert.ok(reviews[1].prompt.includes('do NOT post any PR comment'), 're-review posts no comment')
 
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
-  assert.ok(fix.prompt.includes('append this round to the working log'), 'fix logs the round, no per-round PR comment')
+  assert.ok(fix.prompt.includes('/pair-workflow-green-fix'), 'the fix step is the GREEN phase skill')
+  assert.ok(SKILL('green-fix').includes('Append to `$reviewLog`'), 'fix logs the round, no per-round PR comment')
+  assert.ok(SKILL('green-fix').includes('Do NOT post any PR comment'), 'no per-round PR comment')
   assert.ok(fix.prompt.includes('.pair/working/reviews/292.md'), 'working log is per-story')
 
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
@@ -994,15 +999,16 @@ test('the implement and fix steps name the skills that own gating and decisions'
 
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(fix, 'a fix round ran')
+  assert.ok(fix.prompt.includes('/pair-workflow-green-fix'), 'the fix step dispatches the GREEN phase skill')
   for (const skill of [
-    '/pair-process-implement',
+    '/pair-capability-checkpoint',
     '/pair-capability-verify-quality',
     '/pair-capability-record-decision',
     '/pair-capability-publish-pr',
   ])
-    assert.ok(fix.prompt.includes(skill), `the fix step composes ${skill}`)
+    assert.ok(SKILL('green-fix').includes(skill), `the GREEN skill composes ${skill}`)
   assert.ok(
-    /in sync with the NEW head commit/.test(fix.prompt),
+    /describe the CURRENT head/.test(SKILL('green-fix')),
     'the fix step re-publishes so the PR describes the post-fix head, not the pre-fix state',
   )
 })
@@ -1071,12 +1077,13 @@ test('the fix step is likewise barred from deferring a finding into a new issue'
       return { fixed: true }
     },
   })
-  const fix = calls.find(c => c.opts.label?.startsWith('fix:')).prompt
-  assert.ok(/Fix them IN PLACE, in this PR/.test(fix), 'the fixer resolves in place')
-  assert.ok(/do NOT file a follow-up issue/.test(fix), 'the fixer cannot file a follow-up either')
-  assert.ok(/do NOT invoke \/pair-capability-write-issue/.test(fix), 'the issue-filing skill is named and forbidden')
+  assert.ok(calls.find(c => c.opts.label?.startsWith('fix:')).prompt.includes('/pair-workflow-green-fix'))
+  const fix = SKILL('green-fix')
+  assert.ok(/Resolve \*\*every\*\* finding in place/.test(fix), 'the fixer resolves in place')
+  assert.ok(/Never file a follow-up issue/.test(fix), 'the fixer cannot file a follow-up either')
+  assert.ok(/never invoke `\/pair-capability-write-issue`/.test(fix), 'the issue-filing skill is named and forbidden')
   assert.ok(
-    /the human decides at the merge gate, not a new card/.test(fix),
+    /the human decides at the merge gate/.test(fix),
     'an oversized remainder goes to the human, not to the backlog',
   )
 })
@@ -1095,12 +1102,13 @@ test('the fix step sweeps the bounded contract surface before re-review', async 
     },
   })
 
-  const fix = calls.find(c => c.opts.label?.startsWith('fix:')).prompt
-  assert.match(fix, /CONVERGENCE SWEEP/, 'the fixer must make the bounded contract explicit')
-  assert.match(fix, /location is the starting point/i, 'a finding location is not the contract boundary')
+  assert.ok(calls.find(c => c.opts.label?.startsWith('fix:')).prompt.includes('/pair-workflow-green-fix'))
+  const fix = SKILL('green-fix')
+  assert.match(fix, /Convergence sweep/, 'the fixer must make the bounded contract explicit')
+  assert.match(fix, /map the observable contract/i, 'a finding location is not the contract boundary')
   assert.match(fix, /success\/failure/i, 'paired execution paths are checked together')
   assert.match(fix, /every distributed representation/i, 'source and shipped representations are checked together')
-  assert.match(fix, /PROVISIONED ARTIFACT CONTRACT/, 'a provisioned command has an explicit end-to-end check')
+  assert.match(fix, /Provisioned artifact contract/, 'a provisioned command has an explicit end-to-end check')
   assert.match(fix, /producer.*published identity.*consumer/i, 'the provisioner, artifact metadata and invocation are mapped together')
   assert.match(fix, /clean temporary environment/i, 'the actual installed or built artifact is exercised')
   assert.match(fix, /never stub.*boundary/i, 'a stub cannot stand in for the published command boundary')
@@ -1122,11 +1130,12 @@ test('review and fix exhaust finite protocol states before another round', async
     },
   })
   const review = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
-  const fix = calls.find(c => c.opts.label?.startsWith('fix:')).prompt
+  assert.ok(calls.find(c => c.opts.label?.startsWith('fix:')).prompt.includes('/pair-workflow-green-fix'))
+  const fix = SKILL('green-fix')
   assert.ok(review.includes('CONTRACT INVENTORY (mandatory)'), 'the reviewer inventories a contract before reporting its first hole')
   assert.ok(review.includes('finite decision table of every supported state'), 'a finite protocol/state space is exhausted in the same review')
   assert.ok(review.includes('AUTHORITATIVE BOUNDARY PROOF (mandatory)'), 'the reviewer must prove externally-defined state semantics at the real boundary')
-  assert.ok(fix.includes('FINITE-STATE COMPLETENESS (mandatory when'), 'the fixer must preserve that complete state model')
+  assert.ok(fix.includes('Finite-state completeness'), 'the fixer must preserve that complete state model')
   assert.ok(fix.includes('Do not implement one newly discovered row at a time'), 'the next re-review is not used to discover ordinary variants serially')
   assert.ok(fix.includes('A unit test of the function being changed cannot establish external semantics'), 'the fixer cannot infer external-tool behavior from its own unit tests')
 })
@@ -1146,7 +1155,8 @@ test('review and fix prove empirical claims, collisions, and lossless diagnostic
   })
   const review = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
   const fixCall = calls.find(c => c.opts.label?.startsWith('fix:'))
-  const fix = fixCall.prompt
+  assert.ok(fixCall.prompt.includes('/pair-workflow-green-fix'))
+  const fix = SKILL('green-fix')
   assert.ok(review.includes('EMPIRICAL EVIDENCE LEDGER (mandatory)'), 'the reviewer must prove measured claims instead of repeating plausible figures')
   assert.ok(review.includes('INTERACTION/COLLISION COMPLETENESS (mandatory)'), 'the reviewer must include overlapping state-rule rows')
   assert.ok(fix.includes('exact command/fixture/revision'), 'the fixer records the reproducible source for each changed factual claim')
@@ -1156,6 +1166,7 @@ test('review and fix prove empirical claims, collisions, and lossless diagnostic
 })
 
 test('a separate red-test author locks the contract before a fixer may change source', async () => {
+  const redSpec = SKILL('red-spec')
   const finding = {
     location: 'reader.ts:42',
     severity: 'Major',
@@ -1191,13 +1202,15 @@ test('a separate red-test author locks the contract before a fixer may change so
   assert.ok(fix, 'the source fixer still runs after the red contract exists')
   assert.ok(calls.indexOf(red) < calls.indexOf(sealer), 'the RED author precedes its sealer')
   assert.ok(calls.indexOf(sealer) < calls.indexOf(fix), 'RED, sealing, and GREEN are distinct sessions')
-  assert.match(red.prompt, /ONLY test artifacts/i)
-  assert.match(red.prompt, /every branch that changes that owner state/i)
-  assert.match(fix.prompt, /SEALED RED SNAPSHOT/i)
-  assert.match(fix.prompt, /DO NOT modify.*test/i)
+  assert.match(red.prompt, /\/pair-workflow-red-spec/)
+  assert.match(redSpec, /Modify \*\*only\*\* test source/)
+  assert.match(redSpec, /every lexical\/state form the owner recognises/i)
+  assert.match(fix.prompt, /\/pair-workflow-green-fix/)
+  assert.match(SKILL('green-fix'), /Do NOT modify, format, rename, regenerate, delete or weaken any test artifact/)
   const preflight = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
-  assert.match(preflight.prompt, /pair-red-snapshot/i)
-  assert.match(preflight.prompt, /unlisted test artifact/i)
+  assert.match(preflight.prompt, /\/pair-workflow-p3-verify/)
+  assert.match(SKILL('p3-verify'), /red-snapshot\.mjs verify/)
+  assert.match(SKILL('p3-verify'), /unlisted test artifact/i)
 })
 
 test('a missing RED contract fails closed before any source fix or external re-review', async () => {
@@ -1254,10 +1267,12 @@ test('a narrow independent preflight stops at its first delta finding before ano
   assert.equal(fixes.length, 1, 'P3 never starts a hidden second GREEN round')
   const verifier = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
   assert.deepEqual(verifier.opts.schema.required, ['verified', 'reviewedHead', 'findings'])
-  assert.match(verifier.prompt, /FIX PREFLIGHT/, 'the verifier is a narrow post-fix check, not another PR review')
-  assert.match(verifier.prompt, /fixture field.*actually consumed/i, 'declared-but-unasserted fixture data is checked')
-  assert.match(verifier.prompt, /interaction.*cross-product/i, 'new rule ordering must be checked in both directions')
-  assert.match(verifier.prompt, /evidence ledger/i, 'the fixer ledger is rerun instead of trusted')
+  assert.match(verifier.prompt, /\/pair-workflow-p3-verify/, 'the verifier is the P3 phase skill, not another PR review')
+  assert.match(verifier.prompt, /\$ledger=/, 'the fixer ledger is passed to be re-run')
+  const p3 = SKILL('p3-verify')
+  assert.match(p3, /consumed by an expectation/i, 'declared-but-unasserted fixture data is checked')
+  assert.match(p3, /interaction cross-product/i, 'new rule ordering must be checked in both directions')
+  assert.match(p3, /evidence ledger/i, 'the fixer ledger is rerun instead of trusted')
 })
 
 test('a P3 miss stops before it can inflate the external review trend', async () => {
@@ -2235,7 +2250,7 @@ test('models.green isolates an A/B trial to GREEN; reviewer, RED and P3 keep the
       return { fixed: true }
     },
   })
-  const green = calls.find(c => c.opts.label === 'fix:#292 r1')
+  const green = calls.find(c => c.opts.label?.startsWith('fix:#292 r1'))
   const red = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
   const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
   const p3 = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
@@ -2245,25 +2260,23 @@ test('models.green isolates an A/B trial to GREEN; reviewer, RED and P3 keep the
   assert.equal(p3.opts.model, undefined)
 })
 
-test('models.redMapper is an isolated mapper trial', async () => {
-  const finding = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
-  let round = 0
+test('models.planner is an isolated planner trial', async () => {
+  let reviews = 0
   const { calls } = await runWorkflow({
-    args: { stories: [STORY], models: { redMapper: 'fable' } },
+    args: { stories: [STORY], models: { planner: 'fable' } },
     dispatch: (prompt, opts) => {
       if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return round++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
+      if (opts.agentType === 'pair-reviewer') return reviews++ === 0 ? { verdict: 'Rework', findings: [{ location: 'x.ts:1', severity: 'Major', description: 'd', recommendation: 'r' }] } : { verdict: 'Approved', findings: [] }
       if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
       if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true }
+      return { fixed: true, evidenceLedger: [] }
     },
   })
-  const mapper = calls.find(c => c.opts.agentType === 'pair-red-domain-mapper')
-  const red = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
-  const verifier = calls.find(c => c.opts.agentType === 'pair-red-contract-verifier')
-  assert.equal(mapper.opts.model, 'fable')
-  assert.equal(red.opts.model, undefined)
-  assert.equal(verifier.opts.model, undefined)
+  const planner = calls.find(c => c.opts.agentType === 'pair-remediation-planner')
+  assert.ok(planner)
+  assert.equal(planner.opts.model, 'fable')
+  assert.equal(calls.find(c => c.opts.agentType === 'pair-fix-test-author').opts.model, undefined)
+  assert.equal(calls.find(c => c.opts.label?.startsWith('fix:')).opts.model, undefined)
 })
 
 test('an unverified RED contract fails before it can be sealed or reach GREEN', async () => {
@@ -2313,147 +2326,133 @@ test('the RED verifier gets one test-only contract repair before a seal or GREEN
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.equal(authors.length, 2, 'the verifier may request one fresh RED contract')
   assert.equal(verifiers.length, 2, 'the repaired contract is independently re-verified')
-  assert.match(authors[1].prompt, /RED CONTRACT REPAIR 1/i)
+  assert.match(authors[1].prompt, /\$repair=/)
   assert.match(authors[1].prompt, /owner to consumer collision/i)
-  assert.match(authors[1].prompt, /untrusted/i)
+  assert.match(SKILL('red-spec'), /untrusted/i)
   assert.ok(calls.indexOf(authors[1]) < calls.indexOf(sealer), 'the repaired contract seals only after verification')
   assert.ok(calls.indexOf(verifiers[1]) < calls.indexOf(sealer), 'no seal precedes the second verifier')
   assert.ok(calls.indexOf(sealer) < calls.indexOf(green), 'GREEN remains after the sealed repaired contract')
   assert.match(green.prompt, /owner to consumer collision/i, 'GREEN receives the verifier-derived boundary too')
 })
 
-test('a read-only domain mapper binds RED and its verifier to the complete measured domain', async () => {
-  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
-  const map = {
-    domains: [{
-      owner: 'readExpressionLine',
-      discriminator: 'first closer tail token',
-      rows: [
-        { condition: 'only whitespace follows the closer', oracle: 'real compiler', expected: 'bare boundary' },
-        { condition: 'a multiline comment opener follows the closer', oracle: 'real compiler', expected: 'comment masks its later closer' },
-      ],
-    }],
+// US-479 c2 — D0: one frozen plan per round, one bounded attempt per group. The domain map is
+// now a step of the RED skill and is re-derived by the RED verifier skill; the engine no longer
+// dispatches a mapper agent. What the engine still guarantees is the plan's SHAPE.
+const PLAN_FINDINGS = [
+  { location: 'src/a.ts:1', severity: 'Major', description: 'a', recommendation: 'ra' },
+  { location: 'src/b.ts:2', severity: 'Minor', description: 'b', recommendation: 'rb' },
+]
+function planDispatch({ plan, p3 } = {}) {
+  let reviews = 0
+  return (prompt, opts) => {
+    if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'pair-reviewer') return reviews++ === 0 ? { verdict: 'Rework', findings: PLAN_FINDINGS } : { verdict: 'Approved', findings: [] }
+    if (opts.agentType === 'pair-remediation-planner') return plan === undefined ? undefined : plan
+    if (opts.agentType === 'pair-fix-verifier' && p3) return p3(prompt)
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    return { fixed: true, evidenceLedger: [] }
   }
-  let review = 0
+}
+
+test('a dead or malformed planner is failed-plan: no RED, no seal, no GREEN', async () => {
+  for (const plan of [null, { status: 'stale', groups: [] }, { status: 'planned', groups: [] }]) {
+    const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch({ plan }) })
+    assert.equal(result.batch[0].status, 'failed-plan', JSON.stringify(plan))
+    assert.deepEqual(result.batch[0].findings, PLAN_FINDINGS)
+    assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+    assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
+    assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0)
+  }
+})
+
+test('a plan that drops, duplicates or invents a finding index is failed-plan', async () => {
+  const g = (id, findings, extra = {}) => ({ groupId: id, findings, owner: 'o', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'x', dependsOn: [], ...extra })
+  for (const groups of [
+    [g('g1', [0])], // finding 1 left out
+    [g('g1', [0, 1]), g('g2', [1])], // finding 1 twice
+    [g('g1', [0, 1, 2])], // index outside the set
+    [g('g1', [0]), g('g1', [1])], // duplicate group id
+    [g('g1', [0], { mode: 'both' }), g('g2', [1])], // invalid mode
+    [g('g1', [0], { allowedPaths: [] }), g('g2', [1])], // no allowed paths
+    [g('g1', [0], { dependsOn: ['g2'] }), g('g2', [1], { dependsOn: ['g1'] })], // cycle
+  ]) {
+    const { result } = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch({ plan: { status: 'planned', groups } }) })
+    assert.equal(result.batch[0].status, 'failed-plan', JSON.stringify(groups))
+  }
+})
+
+test('two groups run as two sequential attempts, each phase named r<n>-g<k>, the second based on the first P3 head', async () => {
+  const HEAD_AFTER_G1 = 'b'.repeat(40)
+  const plan = {
+    status: 'planned',
+    groups: [
+      { groupId: 'A', findings: [1], owner: 'b', mode: 'structural', allowedPaths: ['src/b.ts'], oracle: 'ob', dependsOn: ['B'] },
+      { groupId: 'B', findings: [0], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'oa', dependsOn: [] },
+    ],
+  }
+  let p3s = 0
   const { result, calls } = await runWorkflow({
     args: { stories: [STORY] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return review++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
-      if (opts.agentType === 'pair-red-domain-mapper') return map
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true, evidenceLedger: [] }
-    },
+    dispatch: planDispatch({ plan, p3: () => ({ verified: true, findings: [], reviewedHead: p3s++ === 0 ? HEAD_AFTER_G1 : 'c'.repeat(40) }) }),
   })
-  const mapper = calls.find(c => c.opts.agentType === 'pair-red-domain-mapper')
-  const author = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
-  const verifier = calls.find(c => c.opts.agentType === 'pair-red-contract-verifier')
   assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.ok(mapper, 'a read-only map precedes every behavioral RED contract')
-  assert.ok(calls.indexOf(mapper) < calls.indexOf(author))
-  assert.match(author.prompt, /multiline comment opener follows the closer/i)
-  assert.match(verifier.prompt, /multiline comment opener follows the closer/i)
-  assert.doesNotMatch(calls.find(c => c.opts.agentType === 'pair-reviewer').prompt, /multiline comment opener follows the closer/i, 'the external review remains blind')
+  const authors = calls.filter(c => c.opts.agentType === 'pair-fix-test-author')
+  const seals = calls.filter(c => c.opts.agentType === 'pair-red-sealer')
+  const fixes = calls.filter(c => c.opts.label?.startsWith('fix:'))
+  const p3 = calls.filter(c => c.opts.agentType === 'pair-fix-verifier')
+  assert.deepEqual([authors.length, seals.length, fixes.length, p3.length], [2, 2, 2, 2])
+  // dependency order: B (no deps) before A (depends on B); phases are numbered by run order
+  assert.match(authors[0].prompt, /\$phase=r1-g1 /)
+  assert.match(authors[0].prompt, /"owner":"a"/)
+  assert.match(authors[0].prompt, /\$findings=\[\{"location":"src\/a\.ts:1"/)
+  assert.match(authors[1].prompt, /\$phase=r1-g2 /)
+  assert.match(authors[1].prompt, /"owner":"b"/)
+  // the second attempt starts from the head the first P3 verified, not from the review head
+  assert.match(authors[0].prompt, new RegExp(`\\$base=${REVIEWED_HEAD} `))
+  assert.match(authors[1].prompt, new RegExp(`\\$base=${HEAD_AFTER_G1} `))
+  assert.match(fixes[1].prompt, new RegExp(`\\$base=${HEAD_AFTER_G1} `))
+  // one re-review after ALL groups, anchored to the round's reviewed head
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 2)
+  // the reviewer never sees the plan or the groups
+  assert.doesNotMatch(calls.filter(c => c.opts.agentType === 'pair-reviewer')[1].prompt, /\$scope=|groupId/)
 })
 
-test('a domain map may name literal grammar tokens before RED', async () => {
-  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
-  const map = {
-    domains: [{
-      owner: 'readExpressionLine',
-      discriminator: 'what follows the first `*/}`',
-      rows: [
-        { condition: 'only whitespace follows `*/}`', oracle: 'real compiler', expected: 'bare boundary' },
-        { condition: 'a literal fence follows `*/}`', oracle: 'real compiler', expected: 'fence remains visible' },
-      ],
-    }],
+test('every phase skill is dispatched by its configured name with the typed run arguments, and the planner is read-only', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY], runId: 'run-42' }, dispatch: planDispatch() })
+  const byType = t => calls.find(c => c.opts.agentType === t)
+  const planner = byType('pair-remediation-planner')
+  assert.match(planner.prompt, /^Invoke \*\*\/pair-workflow-remediation-plan\*\* with \$run=run-42 \$story=292 \$pr=7 \$phase=r1 \$base=[0-9a-f]{40} \$branch=/)
+  assert.match(planner.prompt, /\$findings=\[/)
+  assert.deepEqual(planner.opts.schema.required, ['status', 'groups'])
+  assert.match(byType('pair-fix-test-author').prompt, /^Invoke \*\*\/pair-workflow-red-spec\*\* with \$run=run-42 .*\$scope=\{/)
+  assert.match(byType('pair-red-contract-verifier').prompt, /^Invoke \*\*\/pair-workflow-red-verify\*\* with .*\$contract=\.pair\/working\/runs\/run-42\/292\/r1-g1-red-contract\.json/)
+  assert.match(byType('pair-red-sealer').prompt, /^Invoke \*\*\/pair-workflow-red-seal\*\* with .*\$contract=\.pair\/working\/runs\/run-42\/292\/r1-g1-red-contract\.json/)
+  assert.match(calls.find(c => c.opts.label?.startsWith('fix:')).prompt, /^Invoke \*\*\/pair-workflow-green-fix\*\* with .*\$reviewLog=\.pair\/working\/reviews\/292\.md/)
+  assert.match(byType('pair-fix-verifier').prompt, /^Invoke \*\*\/pair-workflow-p3-verify\*\* with .*\$worktree=\.\.\/pair-worktrees\/292-review .*\$ledger=\[\]/)
+  // every dispatched prompt names the run directory as the ONLY readable working location
+  for (const c of calls.filter(c => /^Invoke \*\*\/pair-workflow-/.test(c.prompt)))
+    assert.match(c.prompt, /except the run directory `\.pair\/working\/runs\/run-42\/292\/`/)
+})
+
+test('args.runId is validated as one safe path segment; absent it defaults to pr-<n>', async () => {
+  await assert.rejects(runWorkflow({ args: { stories: [STORY], runId: '../x' }, dispatch: () => ({}) }), /runId/)
+  await assert.rejects(runWorkflow({ args: { stories: [STORY], runId: '' }, dispatch: () => ({}) }), /runId/)
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch() })
+  assert.match(calls.find(c => c.opts.agentType === 'pair-remediation-planner').prompt, /\$run=pr-7 /)
+})
+
+test('the phase skills are real installed skills, and the engine names them by their configured default', () => {
+  for (const [key, name] of [['remediationPlan', 'remediation-plan'], ['redSpec', 'red-spec'], ['redVerify', 'red-verify'], ['redSeal', 'red-seal'], ['greenFix', 'green-fix'], ['p3Verify', 'p3-verify']]) {
+    assert.ok(SRC.includes(`${key}: '/pair-workflow-${name}'`), `${key} default`)
+    assert.match(SKILL(name), new RegExp(`^name: pair-workflow-${name}$`, 'm'))
+    assert.match(SKILL(name), /^## Arguments$/m)
   }
-  let review = 0
-  const { result, calls } = await runWorkflow({
-    args: { stories: [STORY] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return review++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
-      if (opts.agentType === 'pair-red-domain-mapper') return map
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true, evidenceLedger: [] }
-    },
-  })
-  assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.match(calls.find(c => c.opts.agentType === 'pair-fix-test-author').prompt, /`\*\/}`/)
-})
-
-test('a missing finite domain stops before RED, seal or GREEN', async () => {
-  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
-  const { result, calls } = await runWorkflow({
-    args: { stories: [STORY] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
-      if (opts.agentType === 'pair-red-domain-mapper') return null
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true, evidenceLedger: [] }
-    },
-  })
-  assert.equal(result.batch[0].status, 'failed-red-domain')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
-  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0)
-})
-
-test('a one-row domain is invalid before RED, seal or GREEN', async () => {
-  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
-  const incomplete = {
-    domains: [{
-      owner: 'readExpressionLine',
-      discriminator: 'first closer tail token',
-      rows: [{ condition: 'only whitespace follows the closer', oracle: 'real compiler', expected: 'bare boundary' }],
-    }],
-  }
-  const { result, calls } = await runWorkflow({
-    args: { stories: [STORY] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
-      if (opts.agentType === 'pair-red-domain-mapper') return incomplete
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true, evidenceLedger: [] }
-    },
-  })
-  assert.equal(result.batch[0].status, 'failed-red-domain')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
-})
-
-test('a domain map with duplicate conditions fails before RED', async () => {
-  const finding = { location: 'src/parser.ts:42', severity: 'Major', description: 'a closer drops trailing text', recommendation: 'preserve the tail' }
-  const duplicate = {
-    domains: [{
-      owner: 'readExpressionLine',
-      discriminator: 'first closer tail token',
-      rows: [
-        { condition: 'same form', oracle: 'real compiler', expected: 'first result' },
-        { condition: 'same form', oracle: 'real compiler', expected: 'second result' },
-      ],
-    }],
-  }
-  const { result, calls } = await runWorkflow({
-    args: { stories: [STORY] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [finding] }
-      if (opts.agentType === 'pair-red-domain-mapper') return duplicate
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true, evidenceLedger: [] }
-    },
-  })
-  assert.equal(result.batch[0].status, 'failed-red-domain')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+  // the rules the engine used to spell in prompts now live in exactly one place each
+  assert.match(SKILL('red-seal'), /red-snapshot\.mjs seal/)
+  assert.match(SKILL('p3-verify'), /red-snapshot\.mjs verify/)
+  for (const gone of ['RED DOMAIN MAP', 'RED TEST CONTRACT', 'SEAL RED SNAPSHOT', 'FIX PREFLIGHT', 'CONVERGENCE SWEEP', 'sha256sum', 'git diff-tree'])
+    assert.equal(SRC.includes(gone), false, `${gone} is still spelled in the workflow`)
 })
 
 test('a second rejected RED contract fails closed without a third author or any seal', async () => {
@@ -2633,9 +2632,9 @@ test('the fix step carries the shape rule — it is the only step that rewrites 
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(fix, 'no fix call')
-  assert.ok(fix.prompt.includes('TEXT SHAPE (mandatory)'), 'the fix step lost the shape rule')
+  assert.ok(fix.prompt.includes('/pair-workflow-green-fix'), 'the fix step lost the GREEN skill')
   assert.ok(
-    fix.prompt.includes('do not append a round-by-round history'),
+    SKILL('green-fix').includes('never append a round-by-round history'),
     'nothing stops the PR body from growing one section per round',
   )
 })
@@ -2644,9 +2643,10 @@ test('the fix step logs a round as table rows, not a paragraph per finding', asy
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(fix, 'no fix call')
-  assert.ok(fix.prompt.includes('COMPACT TABLE'), 'the log round is not constrained to a table')
+  assert.ok(fix.prompt.includes('/pair-workflow-green-fix'))
+  assert.ok(SKILL('green-fix').includes('compact `## Round <n>` table'), 'the log round is not constrained to a table')
   assert.ok(
-    fix.prompt.includes('severity | location | what changed | commit'),
+    SKILL('green-fix').includes('severity | location | what changed | commit'),
     'the columns are gone — without them "table" is unspecified',
   )
 })
@@ -3890,16 +3890,17 @@ test('a RED fixture inherits its proof from the declared RED test that consumes 
 
   const sealer = calls.find(c => c.opts.agentType === 'pair-red-sealer')
   assert.ok(sealer, 'the fixture contract reaches the sealer')
-  assert.match(sealer.prompt, /reader\.rows\.json/)
-  assert.match(sealer.prompt, /consumedBy.*reader\.test\.ts|reader\.test\.ts.*consumedBy/)
+  assert.match(sealer.prompt, /\$contract=\.pair\/working\/runs\/pr-7\/292\/r1-g1-red-contract\.json/, 'the sealer reads the persisted contract FILE, never a relayed value')
+  assert.match(RED_SNAPSHOT_SCRIPT, /consumedBy does not name a listed RED test/, 'the script refuses an unconsumed fixture')
   const verifier = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
   assert.ok(verifier, 'the frozen fixture reaches P3')
-  assert.match(verifier.prompt, /kind.*fixture|fixture.*kind/i)
-  assert.match(verifier.prompt, /consumedBy/i)
-  assert.match(verifier.prompt, /contract breach/i)
+  assert.match(verifier.prompt, /\/pair-workflow-p3-verify/)
+  assert.match(RED_SNAPSHOT_SCRIPT, /kind === 'fixture'/)
+  assert.match(SKILL('p3-verify'), /contractBreach: true/)
   const author = calls.find(c => c.opts.agentType === 'pair-fix-test-author')
-  assert.match(author.prompt, /kind.*fixture|fixture.*kind/i)
-  assert.match(author.prompt, /consumedBy/i)
+  assert.match(author.prompt, /\/pair-workflow-red-spec/)
+  assert.match(SKILL('red-spec'), /kind: "fixture"/)
+  assert.match(SKILL('red-spec'), /consumedBy/)
 })
 
 test('a RED fixture without a declared RED consumer fails closed before sealing', async () => {
@@ -3943,14 +3944,14 @@ test('a dedicated sealer commits the RED snapshot locally, and never pushes it',
   assert.ok(calls.indexOf(sealer) < calls.indexOf(fix), 'source may only change on top of a sealed snapshot')
   // The sealer makes only a local commit. GREEN later pushes the branch containing this
   // immutable ancestor; the sealer never publishes a separately mutable reference.
-  assert.match(sealer.prompt, /commit/i)
-  assert.match(sealer.prompt, /do not push|never push|without pushing/i)
+  assert.match(sealer.prompt, /\/pair-workflow-red-seal/)
+  assert.match(SKILL('red-seal'), /local `--no-verify` commit/i)
+  assert.match(SKILL('red-seal'), /amend, rebase, reset, push/i)
   // The trailer is what makes the commit findable without being told where it is.
-  assert.match(sealer.prompt, RED_TRAILER)
-  assert.match(sealer.prompt, /\bPR\b/)
-  assert.match(sealer.prompt, /round/i)
-  assert.match(sealer.prompt, /base/i)
-  assert.match(sealer.prompt, /already-sealed RED snapshot|existing sealed snapshot/i, 'a retry reuses a completed local seal')
+  assert.match(SKILL('red-seal'), RED_TRAILER)
+  assert.match(sealer.prompt, /\$pr=7 \$phase=r1-g1 \$base=[0-9a-f]{40}/)
+  assert.match(SKILL('red-seal'), /idempotent/i, 'a retry reuses a completed local seal')
+  assert.match(RED_SNAPSHOT_SCRIPT, /reused: true/, 'the script, not the agent, detects the existing seal')
 })
 
 test('the verifier is told to FIND the snapshot itself — no hash reaches it through the prompt', async () => {
@@ -3969,10 +3970,11 @@ test('the verifier is told to FIND the snapshot itself — no hash reaches it th
   assert.ok(!preflight.prompt.includes(A_SHA), 'the RED author’s own digest never reaches the verifier')
   assert.doesNotMatch(preflight.prompt, /"redTests"/, 'the manifest is not serialised into the prompt')
   // What replaces it: locate the commit by its trailer and read the contract out of it.
-  assert.match(preflight.prompt, RED_TRAILER)
-  assert.match(preflight.prompt, /git log|git rev-list/i, 'the verifier searches the history itself')
-  assert.match(preflight.prompt, /git show|git cat-file/i, 'manifest and blobs are read FROM the commit')
-  assert.match(preflight.prompt, /do not|never/i)
+  assert.match(preflight.prompt, /\/pair-workflow-p3-verify/)
+  assert.match(RED_SNAPSHOT_SCRIPT, RED_TRAILER)
+  assert.match(RED_SNAPSHOT_SCRIPT, /'log', '--format=/, 'the script searches the history itself')
+  assert.match(RED_SNAPSHOT_SCRIPT, /'show', `\$\{snapshot\}:\$\{manifest\}`/, 'manifest and blobs are read FROM the commit')
+  assert.match(SKILL('p3-verify'), /never edit, commit, push/i)
 })
 
 test('the verifier compares BLOBS, so a comment-only edit to a frozen test is a breach', async () => {
@@ -3981,13 +3983,13 @@ test('the verifier compares BLOBS, so a comment-only edit to a frozen test is a 
 
   // The #434 escape was exactly this: "only a comment changed, no expectation moved".
   // A byte comparison has no opinion about which bytes are load-bearing.
-  assert.match(preflight.prompt, /byte|blob|identical/i)
-  assert.match(preflight.prompt, /comment/i, 'a comment-only difference is named as a breach, not excused')
-  assert.match(preflight.prompt, /added|unlisted|new test/i, 'a test outside the manifest is also a breach')
-  assert.match(preflight.prompt, /removed|deleted|disappear/i)
-  assert.match(preflight.prompt, /parent.*base|base.*parent/i, 'the snapshot must really descend from its declared base')
-  assert.match(preflight.prompt, /git diff-tree/i, 'the snapshot tree itself is inspected')
-  assert.match(preflight.prompt, /only.*manifest|manifest.*only/i, 'source hidden in the RED commit is also a breach')
+  assert.match(preflight.prompt, /\/pair-workflow-p3-verify/)
+  assert.match(RED_SNAPSHOT_SCRIPT, /test-blob-changed/, 'a changed blob — a comment-only edit included — is a breach')
+  assert.match(RED_SNAPSHOT_SCRIPT, /unlisted-test-changed/, 'a test outside the manifest is also a breach')
+  assert.match(RED_SNAPSHOT_SCRIPT, /test-artifact-removed/)
+  assert.match(RED_SNAPSHOT_SCRIPT, /parent-not-base/, 'the snapshot must really descend from its declared base')
+  assert.match(RED_SNAPSHOT_SCRIPT, /'diff-tree', '--no-commit-id'/, 'the snapshot tree itself is inspected')
+  assert.match(RED_SNAPSHOT_SCRIPT, /snapshot-carries-unlisted-file/, 'source hidden in the RED commit is also a breach')
 })
 
 test('the fixer is forbidden to rewrite the snapshot as well as the tests', async () => {
@@ -3995,11 +3997,13 @@ test('the fixer is forbidden to rewrite the snapshot as well as the tests', asyn
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
 
   // Freezing the blobs is worthless if the commit holding them can be replaced.
-  assert.match(fix.prompt, /amend/i)
-  assert.match(fix.prompt, /rebase/i)
-  assert.match(fix.prompt, /reset/i)
-  assert.match(fix.prompt, /RED snapshot|snapshot commit/i)
-  assert.match(fix.prompt, /on top of|above|after the snapshot/i, 'GREEN commits stack ON the snapshot')
+  assert.match(fix.prompt, /\/pair-workflow-green-fix/)
+  const green = SKILL('green-fix')
+  assert.match(green, /amend/i)
+  assert.match(green, /rebase/i)
+  assert.match(green, /reset/i)
+  assert.match(green, /snapshot commit/i)
+  assert.match(green, /strictly on top of the snapshot/i, 'GREEN commits stack ON the snapshot')
 })
 
 test('an unsealed snapshot fails closed: no fix, no preflight, no external review', async () => {

@@ -248,23 +248,27 @@ export interface CategoryCounts {
   total: number
   process: number
   capability: number
+  workflow: number
   navigator: number
 }
 
-// Bucket the corpus by top-level category dir (process/, capability/, everything
-// else = the navigator meta skill), matching the KB's "P process + C capability +
-// N navigator" phrasing.
+// Bucket the corpus by top-level category dir (process/, capability/, workflow/ —
+// the delivery-phase skills the batch engine dispatches to, US-479 — and everything
+// else = the navigator meta skills), matching the KB's "P process + C capability +
+// W workflow + N navigator" phrasing.
 export function countByCategory(files: string[], skillsDir: string): CategoryCounts {
   let process = 0
   let capability = 0
+  let workflow = 0
   let navigator = 0
   for (const f of files) {
     const top = relative(skillsDir, f).split(sep)[0]
     if (top === 'process') process++
     else if (top === 'capability') capability++
+    else if (top === 'workflow') workflow++
     else navigator++
   }
-  return { total: files.length, process, capability, navigator }
+  return { total: files.length, process, capability, workflow, navigator }
 }
 
 // Validates skill-count figures restated in KB onboarding prose against the real
@@ -279,15 +283,24 @@ export function checkProseCounts(rel: string, content: string, counts: CategoryC
       errors.push(`${rel}: states "${m[0]}" but the corpus has ${counts.total} skills`)
     }
   }
+  // The workflow term is optional in the phrasing only while the corpus has none: a
+  // three-part breakdown against a corpus with workflow skills silently omits a category.
   for (const b of content.matchAll(
-    /\((\d+)\s+process\s*\+\s*(\d+)\s+capability\s*\+\s*(\d+)\s+navigator\)/g,
+    /\((\d+)\s+process\s*\+\s*(\d+)\s+capability\s*(?:\+\s*(\d+)\s+workflow\s*)?\+\s*(\d+)\s+navigator\)/g,
   )) {
     const p = parseInt(b[1] as string, 10)
     const c = parseInt(b[2] as string, 10)
-    const n = parseInt(b[3] as string, 10)
-    if (p !== counts.process || c !== counts.capability || n !== counts.navigator) {
+    const w = b[3] === undefined ? 0 : parseInt(b[3] as string, 10)
+    const n = parseInt(b[4] as string, 10)
+    if (
+      p !== counts.process ||
+      c !== counts.capability ||
+      w !== counts.workflow ||
+      n !== counts.navigator
+    ) {
+      const wPart = counts.workflow ? ` + ${counts.workflow} workflow` : ''
       errors.push(
-        `${rel}: breakdown "${b[0]}" does not match corpus (${counts.process} process + ${counts.capability} capability + ${counts.navigator} navigator)`,
+        `${rel}: breakdown "${b[0]}" does not match corpus (${counts.process} process + ${counts.capability} capability${wPart} + ${counts.navigator} navigator)`,
       )
     }
   }
@@ -310,11 +323,12 @@ export function checkCategoryLabelCounts(
   const expected: Record<string, number> = {
     Process: counts.process,
     Capability: counts.capability,
+    Workflow: counts.workflow,
     Navigator: counts.navigator,
   }
   const forms: Array<{ re: RegExp; kind: string }> = [
-    { re: /\b(Process|Capability|Navigator)\s+Skills\s*\((\d+)\)/g, kind: 'heading' },
-    { re: /\*\*(Process|Capability|Navigator)\*\*\s*\|\s*(\d+)\b/g, kind: 'table cell' },
+    { re: /\b(Process|Capability|Workflow|Navigator)\s+Skills\s*\((\d+)\)/g, kind: 'heading' },
+    { re: /\*\*(Process|Capability|Workflow|Navigator)\*\*\s*\|\s*(\d+)\b/g, kind: 'table cell' },
   ]
   for (const { re, kind } of forms) {
     for (const m of content.matchAll(re)) {

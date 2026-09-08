@@ -41,6 +41,9 @@ export const meta = {
 //                                 // text. They reach shell command text an agent runs, so a value
 //                                 // carrying shell syntax or `..` is REJECTED, never quoted.
 //   maxParallelism?,              // integer >= 1; absent = unbounded fan-out
+//   runId?,                       // one safe path segment; names the handoff directory
+//                                 // `.pair/working/runs/<runId>/<story>/` every phase skill writes to.
+//                                 // Absent → `pr-<prNumber>` per card.
 //   severityFloor?,               // findings below it are carried, not fixed. It is spelled in
 //                                 // the REVIEW TEMPLATE's severity vocabulary (pipeline.reviewTemplate
 //                                 // -> contract `vocabulary.severities`), pair's own when none is
@@ -48,7 +51,7 @@ export const meta = {
 //                                 // against a foreign scale.
 //   model?,                       // legacy global override: fable | haiku | sonnet | opus
 //   models?,                      // role-scoped override. Keys: implementation, pr, reviewer,
-//                                 // redMapper, red, redVerifier, seal, green, preflight. A role key wins
+//                                 // planner, red, redVerifier, seal, green, preflight. A role key wins
 //                                 // over `model`; use this for an A/B trial without changing the
 //                                 // independent reviewer or evidence chain.
 //   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS (skill names,
@@ -92,7 +95,7 @@ export const meta = {
 // }
 //   status ∈ ready-for-merge | escalate
 //          | failed-implement | failed-pr | failed-review | failed-fix
-//          | failed-red-domain | failed-red-contract | failed-preflight | failed-required-findings
+//          | failed-plan | failed-red-contract | failed-preflight | failed-required-findings
 //   ONLY `ready-for-merge` may advance. A caller MUST treat every other status — including one
 //   this list does not name yet — as halted (US-479 c0: `pair-loop` matched on `failed*` and
 //   re-drove every card whose status started otherwise).
@@ -184,11 +187,6 @@ const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..
 // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
 // card title ("PR state flow (gate≠review) + …") must keep working.
 const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
-// Domain maps are JSON data interpolated only through JSON.stringify into agent prompts, never
-// command-line values. They must preserve literal grammar tokens such as `*/}` and fence runs;
-// retain a single-line/control-character boundary plus the structural checks below instead of
-// borrowing isProse's shell-oriented backtick/$() ban.
-const isDomainText = v => typeof v === 'string' && v.trim().length > 0 && !/[\r\n\x00-\x1f\x7f]/.test(v)
 // Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
 // shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
 // worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
@@ -439,7 +437,7 @@ function parseBatchArgs(raw) {
   // undefined and the floor was silently ignored while the caller believed it was set.
   // A batch ran with Minors still blocking and reported escalation as if the floor had
   // been honoured. Every option must be read from the parsed object, once.
-  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism'], 'args')
+  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism', 'runId'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. A whitelist bounds each of these two downstream, so the behavioural cost today is
   // nil (`severityFloor: ['Major']` joined to "Major" and was accepted) — the cost is the
@@ -447,7 +445,7 @@ function parseBatchArgs(raw) {
   // and the next option added beside these inherits the pattern with no whitelist to save it.
   // Checked HERE, at parse time, not where each is consumed: `severityFloor` is only rankable
   // after the contract dispatch, and a wrong TYPE should not wait on an agent to be reported.
-  for (const key of ['severityFloor', 'model']) {
+  for (const key of ['severityFloor', 'model', 'runId']) {
     if (a[key] !== undefined && a[key] !== null && typeof a[key] !== 'string')
       throw new Error(
         `implement-batch: \`args.${key}\` has ${key} of type ${Array.isArray(a[key]) ? 'array' : typeof a[key]}, which is not a string. ` +
@@ -464,7 +462,7 @@ function parseBatchArgs(raw) {
           `An empty string is a value the caller wrote, and reading it as absent would run the batch on a setting nobody chose.`,
       )
   }
-  const modelRoles = ['implementation', 'pr', 'reviewer', 'redMapper', 'red', 'redVerifier', 'seal', 'green', 'preflight']
+  const modelRoles = ['implementation', 'pr', 'reviewer', 'planner', 'red', 'redVerifier', 'seal', 'green', 'preflight']
   let models
   if (a.models !== undefined && a.models !== null) {
     if (typeof a.models !== 'object' || Array.isArray(a.models))
@@ -477,9 +475,15 @@ function parseBatchArgs(raw) {
       models[role] = value.trim()
     }
   }
-  return { stories, severityFloor: a.severityFloor, model: a.model, models, pipeline: a.pipeline, maxParallelism: a.maxParallelism }
+  const runId = a.runId === undefined || a.runId === null ? undefined : String(a.runId).trim()
+  if (runId !== undefined && !isSegment(runId))
+    throw new Error(
+      `implement-batch: \`args.runId\` ${JSON.stringify(runId)} is not a single safe path segment — it names the handoff directory under .pair/working/runs/.`,
+    )
+  return { stories, severityFloor: a.severityFloor, model: a.model, models, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId }
 }
 const PARSED = parseBatchArgs(args)
+const RUN_ID = PARSED.runId
 
 // ── Pipeline configuration: what makes this engine reusable (#219 AC1) ─────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now
@@ -500,6 +504,15 @@ const PIPELINE_DEFAULTS = {
     checkpoint: '/pair-capability-checkpoint',
     recordDecision: '/pair-capability-record-decision',
     writeIssue: '/pair-capability-write-issue',
+    // Delivery-phase skills (US-479 c2). The engine dispatches them BY NAME with typed
+    // arguments; every step, rule and command of the review ↔ fix loop lives in the skill,
+    // not here. An adopter who renames them overrides the key, exactly like the six above.
+    remediationPlan: '/pair-workflow-remediation-plan',
+    redSpec: '/pair-workflow-red-spec',
+    redVerify: '/pair-workflow-red-verify',
+    redSeal: '/pair-workflow-red-seal',
+    greenFix: '/pair-workflow-green-fix',
+    p3Verify: '/pair-workflow-p3-verify',
   },
   worktreeRoot: '../pair-worktrees',
   auditLogDir: '.pair/working/reviews',
@@ -996,6 +1009,7 @@ const FIX_SCHEMA = {
   properties: {
     fixed: { type: 'boolean' },
     needsHumanDecision: { type: 'boolean' },
+    outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     evidenceLedger: {
       type: 'array',
       items: {
@@ -1060,21 +1074,89 @@ const RED_TEST_SCHEMA = {
     },
     testExempt: { type: 'boolean' },
     exemptionRationale: { type: 'string' },
+    // US-479 c2: the skill's own outcome and the path of the contract it persisted (the sealer
+    // reads the FILE, never a value relayed through this orchestrator).
+    status: { type: 'string', enum: ['red', 'stale', 'split-required'] },
+    contractPath: { type: 'string' },
+    domains: { type: 'array', items: { type: 'object' } },
   },
   required: ['sourceOfTruth', 'fixScope', 'matrix', 'redTests', 'testExempt'],
 }
+// D0 — the frozen plan one round's actionable findings are remediated under. `findings` are
+// INDICES into the finding array the planner received, so the plan is bound to the exact set.
+const PLAN_SCHEMA = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['planned', 'stale'] },
+    inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    groups: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          groupId: { type: 'string' },
+          findings: { type: 'array', items: { type: 'integer' } },
+          owner: { type: 'string' },
+          mode: { type: 'string', enum: ['behavioral', 'structural'] },
+          allowedPaths: { type: 'array', items: { type: 'string' } },
+          oracle: { type: 'string' },
+          dependsOn: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['groupId', 'findings', 'owner', 'mode', 'allowedPaths'],
+      },
+    },
+  },
+  required: ['status', 'groups'],
+}
+// A plan is usable only when EVERY finding index appears in exactly one group, every group
+// is non-empty and well-typed, and the dependency graph is acyclic. Anything else is
+// `failed-plan`: a finding left out of the plan is a finding nobody fixes.
+const hasPlanEvidence = count => plan => {
+  if (!plan || plan.status !== 'planned' || !Array.isArray(plan.groups) || plan.groups.length === 0) return false
+  const seen = new Set()
+  const ids = new Set()
+  for (const g of plan.groups) {
+    if (!g || !String(g.groupId ?? '').trim() || ids.has(g.groupId)) return false
+    ids.add(g.groupId)
+    if (!String(g.owner ?? '').trim() || !['behavioral', 'structural'].includes(g.mode)) return false
+    if (!Array.isArray(g.allowedPaths) || g.allowedPaths.length === 0 || !g.allowedPaths.every(pth => typeof pth === 'string' && isRelPath(pth.replace(/\/$/, '')))) return false
+    if (!Array.isArray(g.findings) || g.findings.length === 0) return false
+    for (const i of g.findings) {
+      if (!Number.isInteger(i) || i < 0 || i >= count || seen.has(i)) return false
+      seen.add(i)
+    }
+    if (g.dependsOn !== undefined && (!Array.isArray(g.dependsOn) || g.dependsOn.some(d => typeof d !== 'string'))) return false
+  }
+  if (seen.size !== count) return false
+  for (const g of plan.groups) for (const d of g.dependsOn ?? []) if (!ids.has(d) || d === g.groupId) return false
+  return orderGroups(plan.groups) !== null
+}
+// Topological order by `dependsOn`, stable on the planner's order; null on a cycle.
+function orderGroups(groups) {
+  const byId = new Map(groups.map(g => [g.groupId, g]))
+  const done = new Set()
+  const out = []
+  const visiting = new Set()
+  const visit = g => {
+    if (done.has(g.groupId)) return true
+    if (visiting.has(g.groupId)) return false
+    visiting.add(g.groupId)
+    for (const d of g.dependsOn ?? []) if (!visit(byId.get(d))) return false
+    visiting.delete(g.groupId)
+    done.add(g.groupId)
+    out.push(g)
+    return true
+  }
+  for (const g of groups) if (!visit(g)) return null
+  return out
+}
 const RED_TEST_SHA256 = /^sha256:[0-9a-f]{64}$/
 const RED_SNAPSHOT_SHA = /^[0-9a-f]{40}$/
-const RED_SNAPSHOT_TRAILER = 'Pair-RED-Snapshot'
 const redArtifactKind = artifact => String(artifact?.kind ?? 'test')
 const isRedTestArtifact = artifact =>
   redArtifactKind(artifact) === 'test' &&
   !!String(artifact?.command ?? '').trim() &&
   /fail/i.test(String(artifact?.observed ?? ''))
-const RED_ARTIFACT_CONTRACT =
-  'Classify EVERY redTests entry: a `kind: "test"` entry returns repository-relative `file`, `sha256sum <file>` as `sha256:<digest>`, exact `command` and observed RED failure; a `kind: "fixture"` entry returns `file`, `sha256`, and `consumedBy` naming a listed `kind: "test"` file whose command is RED. A fixture has no invented standalone failure — it inherits only that named consumer’s proven failure and remains frozen in the snapshot.'
-const FIXTURE_CONSUMPTION_PREFLIGHT =
-  'For every manifest artifact with `kind: "fixture"`, verify `consumedBy` names a listed `kind: "test"` artifact, then trace that fixture to the named RED test’s actual assertion; a fixture without that exact consumer proof is a contract breach.'
 const hasRedTestEvidence = r => {
   if (!r || !String(r.sourceOfTruth ?? '').trim() || !Array.isArray(r.matrix) || r.matrix.length === 0) return false
   const scope = r.fixScope
@@ -1113,10 +1195,6 @@ const RED_SNAPSHOT_SCHEMA = {
   required: ['sealed', 'snapshot'],
 }
 const hasSealedRedSnapshot = r => r?.sealed === true && RED_SNAPSHOT_SHA.test(String(r.snapshot ?? ''))
-const redSnapshotManifestPath = (prNumber, phase) =>
-  `.pair/red-snapshots/pr-${prNumber}-${String(phase).replace(/[^a-zA-Z0-9._-]/g, '-')}.json`
-const sealedRedSnapshot = ({ prNumber, phase, baseHead }) =>
-  `SEALED RED SNAPSHOT (mandatory): before editing source, independently find the ONE ancestor commit in \`${baseHead}..HEAD\` carrying the exact \`${RED_SNAPSHOT_TRAILER}: pr=${prNumber}; phase=${phase}; base=${baseHead}; manifest=<path>\` trailer. Read its manifest and test blobs with \`git show\`/\`git ls-tree\`; do not accept a manifest, digest, test path or snapshot id from this prompt. Read its \`fixScope\` too: it is one owner, one mode and its allowed production paths. A \`behavioral\` scope may not create, move or split production modules; a \`structural\` scope may do that only where its RED contract names the structural proof. This snapshot governs ONLY the exact \`${baseHead}..HEAD\` transition and retires after its immediately following P3 succeeds; an older phase is historical evidence, never a later test-blob breach. Change implementation/adoption only inside that scope. Do NOT modify, format, rename, regenerate, delete or weaken any test artifact recorded by this snapshot, and do NOT amend, rebase, reset, replace or otherwise rewrite this snapshot commit. Commit GREEN strictly on top of it. Remove only the transient manifest path named by the snapshot in the GREEN commit, preserving the immutable ancestor for P3. If discovery is missing, ambiguous or contradictory, return needsHumanDecision — never repair the evidence.`
 // #373: sandbox-safe continuation probe. The orchestrator has no FS/gh, so a cheap
 // agent in the worktree reports two signals used to decide whether round-0 must post
 // a fresh first review:
@@ -1239,6 +1317,9 @@ const PREFLIGHT_SCHEMA = {
   },
   required: ['verified', 'reviewedHead', 'findings'],
 }
+// A RED contract is usable for sealing only when the skill said `red` (not `stale`, not
+// `split-required`) and persisted the file the sealer will read.
+const hasRedContractReady = r => hasRedTestEvidence(r) && (r.status === undefined || r.status === 'red') && (r.contractPath === undefined || isRelPath(r.contractPath))
 // This verifier runs while RED is still unsealed and test-only. It must independently prove
 // the test contract covers the stated behavior before an implementation agent can see it.
 const RED_CONTRACT_VERIFIER_SCHEMA = {
@@ -1253,54 +1334,6 @@ const hasRedContractVerification = r =>
   !!r &&
   typeof r.verified === 'boolean' &&
   Array.isArray(r.findings)
-// The mapper owns neither tests nor source. It turns a behavior finding into an explicit finite
-// discriminator domain before a RED author chooses examples, so completeness is a checked input
-// rather than a claim the author can make after writing a convenient subset.
-const RED_DOMAIN_MAPPER_SCHEMA = {
-  type: 'object',
-  properties: {
-    domains: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          owner: { type: 'string' },
-          discriminator: { type: 'string' },
-          rows: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                condition: { type: 'string' },
-                oracle: { type: 'string' },
-                expected: { type: 'string' },
-              },
-              required: ['condition', 'oracle', 'expected'],
-            },
-          },
-        },
-        required: ['owner', 'discriminator', 'rows'],
-      },
-    },
-  },
-  required: ['domains'],
-}
-const hasRedDomainEvidence = result =>
-  !!result &&
-  Array.isArray(result.domains) &&
-  result.domains.length > 0 &&
-  result.domains.every(domain => {
-    if (!domain || !isDomainText(domain.owner) || !isDomainText(domain.discriminator)) return false
-    if (!Array.isArray(domain.rows) || domain.rows.length < 2) return false
-    const conditions = new Set()
-    return domain.rows.every(row => {
-      if (!row) return false
-      const condition = typeof row.condition === 'string' ? row.condition.trim() : ''
-      if (!isDomainText(row.condition) || conditions.has(condition)) return false
-      conditions.add(condition)
-      return isDomainText(row.oracle) && isDomainText(row.expected)
-    })
-  })
 // Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,
 // required contract keys (ensure-contract.mjs's validateContract rejects any
 // contract missing either) — so whenever a contract IS present, both are
@@ -1649,45 +1682,57 @@ async function driveStory(story) {
       ],
     }
   }
-  // The fixer cannot author its own specification. RED writes only tests; a distinct sealer
-  // snapshots their exact bytes in Git before GREEN sees the source task. The verifier later
-  // discovers that object from history, rather than trusting an orchestrator-owned prompt.
-  const mapRedDomain = (targets, phase, baseHead) =>
+  // ── Phase D (US-479 c2): the review ↔ fix loop dispatches SKILLS, not prompts. ─────────
+  // Each phase skill owns its method, its mutation boundary and its handoff JSON under
+  // `.pair/working/runs/<run>/<story>/`; this file names the skill, passes typed arguments and
+  // validates the typed result. Nothing below tells an agent HOW to write a test, seal a
+  // snapshot or verify a delta — a change to that behaviour is a skill version, never a patch
+  // to a running workflow.
+  const runId = RUN_ID ?? `pr-${pr.prNumber}`
+  const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
+  const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
+  const phaseArgs = (phase, baseHead) =>
+    `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $phase=${phase} $base=${baseHead} $branch=${story.branch}`
+  const invoke = (skill, args) =>
+    `Invoke **${skill}** with ${args}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
+  const planRemediation = (findings, phase, baseHead) =>
     agentRetry(
-      `RED DOMAIN MAP (read-only, pre-RED) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The targets are: ${JSON.stringify(targets)}. Inspect current source and the exact boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Before any test author can choose examples, identify the function/event that actually mutates each affected state. For every behavioral parser, state, normalizer or reservation target, return a finite domain: one owner, one named discriminator, and mutually exclusive rows covering every lexical/state form the owner recognizes, including the ordinary complement. Derive categories from the grammar or state transition, not examples that happen to be in the finding. Add the smallest cross-product wherever one row's output becomes another rule's input; each row must carry its authoritative oracle and measured expected result. For a non-behavioral target, still map its factual alternatives and exact authoritative probe. Return only { domains: [{ owner, discriminator, rows: [{ condition, oracle, expected }] }] }. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
-      withModel('redMapper', { agentType: 'pair-red-domain-mapper', phase: 'Review', label: `red-map:${tag} ${phase}`, effort: 'high', schema: RED_DOMAIN_MAPPER_SCHEMA }),
-      hasRedDomainEvidence,
+      invoke(SK.remediationPlan, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(findings)}`),
+      withModel('planner', { agentType: 'pair-remediation-planner', phase: 'Review', label: `plan:${tag} ${phase}`, effort: 'medium', schema: PLAN_SCHEMA }),
+      hasPlanEvidence(findings.length),
     )
-  const authorRedTests = (targets, phase, baseHead, domainMap, repairFindings = []) =>
+  const redSpec = (targets, scope, phase, baseHead, repairFindings = []) =>
     agentRetry(
-      [RED_ARTIFACT_CONTRACT,
-      'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
-      `INDEPENDENT FINITE DOMAIN MAP (mandatory): ${JSON.stringify(domainMap)}. Make EVERY mapped row an actual RED assertion or a fixture row consumed by one. Do not collapse rows because their output happens to agree today; the map is the completeness boundary, not illustrative advice.`,
-      repairFindings.length
-        ? `RED CONTRACT REPAIR 1 OF ${MAX_RED_CONTRACT_REPAIRS}: the independent verifier rejected an UNSEALED, test-only contract. Its measured missing rows are: ${JSON.stringify(repairFindings)}. They are mandatory targets together with the original findings. Existing uncommitted test changes are untrusted evidence: inspect every dirty path, re-run each oracle while source is still unfixed, and return fresh hashes/observations for every artifact retained in this replacement contract. Do not treat the prior matrix, its prose, or a passing test as proof. Modify ONLY test artifacts; do not edit production, docs, adoption, configuration, commits, pushes, PRs, comments, cards or merges.`
-        : 'This is the first RED contract; no prior unsealed contract may be reused as evidence.',
-      `RED TEST CONTRACT (test-only; no implementation) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The actionable findings are: ${JSON.stringify(targets)}. Inspect the current source and the exact fix boundary \`git diff ${baseHead}...origin/${story.branch} --name-status\`; do NOT read ${BLIND_PATHS}, checkpoints or working logs. Before editing, identify the ONE canonical source of truth for every state transition/classification this fix touches. Build a finite matrix with every branch that changes that owner state, its nearest continuing and interrupting/boundary counterpart, and every renderer/consumer boundary the finding names. A predicate used for laziness, eligibility or a convenience classification is NOT automatically the state-transition oracle: derive expectations from the function that actually mutates/owns the state. Declare \`fixScope\` before editing: one owner, exactly one \`mode\` (\`behavioral\` or \`structural\`), and exact repository-relative \`allowedPaths\`. Do not combine a behavior repair with extraction/refactor: return no contract and ask for a separate structural round. Then modify ONLY test artifacts (test source, test fixture or committed oracle row): never modify production source, docs, adoption, configuration, generated assets, commits, pushes, PRs, comments, cards or merges. Run each changed test while the production code is still unfixed and keep it RED for the reported behavior. Do not weaken an existing expectation or replace a failing test with a source-string assertion. Return typed \`redTests\`: every artifact has its repository-relative file path and \`sha256sum <file>\` as \`sha256:<digest>\`; a test has its exact failing command and observed failure, while a fixture declares its RED \`consumedBy\` test rather than inventing one. A pure documentation/formatting finding may set testExempt true only with a concrete rationale; it still needs a matrix. Return sourceOfTruth, fixScope, matrix rows (condition | oracle | expected), redTests and testExempt. ${FINITE_STATE_COMPLETENESS} ${TEXT_SHAPE}`,
-      ].join('\n'),
-      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-test:${tag} ${phase}`, effort: 'high', schema: RED_TEST_SCHEMA }),
-      hasRedTestEvidence,
+      invoke(SK.redSpec, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $scope=${JSON.stringify(scope)}${repairFindings.length ? ` $repair=${JSON.stringify(repairFindings)}` : ''}`),
+      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-spec:${tag} ${phase}${repairFindings.length ? ' repair' : ''}`, effort: 'high', schema: RED_TEST_SCHEMA }),
+      hasRedContractReady,
     )
-  const verifyRedContract = (redContract, targets, phase, baseHead, domainMap) =>
+  // Concatenated, not a template literal in backticks: the shipped-artifact guard reads a
+  // backticked `.pair/…json` as a dataset document that must exist; this is a runtime path.
+  const contractPathOf = (redContract, phase) => redContract.contractPath ?? '.pair/working/runs/' + runId + '/' + story.id + '/' + phase + '-red-contract.json'
+  const redVerify = (redContract, targets, phase, baseHead) =>
     agentRetry(
-      [RED_ARTIFACT_CONTRACT,
-      'CARRY-FORWARD P3 EVIDENCE: a target with observedHead, oracle, probe and observed is a previously verified P3 result. It is mandatory even when the fresh reviewer omitted it. Re-run its supplied oracle on this exact head, then make it RED; reviewer omission is never evidence of resolution.',
-      `RED CONTRACT VERIFIER (read-only, pre-seal) for story ${tag}, PR #${pr.prNumber}, ${phase}. ${wtClause(story)} The author returned: ${JSON.stringify(redContract)}. The findings are: ${JSON.stringify(targets)}. The independent finite domain map is: ${JSON.stringify(domainMap)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. Do NOT edit, format, commit, push, publish, comment, create a card or merge. Independently inspect the uncommitted diff and current source. Re-derive the owner/discriminator domain from the grammar or state transition; reject the map itself if it omits a recognized form, even when every mapped row has a test. Re-run every matrix oracle and every RED command yourself while production remains unfixed. Every domain-map row must have a real RED assertion/consumed fixture; a missing row is a contract finding even if neighbouring examples pass. Treat an unsupported claim (for example “does not compile”) as a finding unless its stated oracle demonstrates it. Verify every test/fixture path is repository-relative and every fixture is consumed by the exact failing assertion named in \`consumedBy\`. Verify fixScope has one owner, one mode, and only the exact paths needed by that contract: \`behavioral\` may not add/move/split production modules; \`structural\` must have a structural RED assertion. For parser/state rules, prove the full boundary and smallest rule-interaction cross-product from the actual state owner, not a downstream consumer. Return \`verified: true\` only when the whole RED contract is independently reproducible and complete; otherwise return \`verified: false\` with concrete findings.`,
-      ].join('\n'),
+      invoke(SK.redVerify, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)} $findings=${JSON.stringify(targets)}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
       hasRedContractVerification,
     )
-  const sealRedSnapshot = (redContract, phase, baseHead) => {
-    const manifestPath = redSnapshotManifestPath(pr.prNumber, phase)
-    return agentRetry(
-      `SEAL RED SNAPSHOT (local Git commit; no implementation) for story ${tag}, PR #${pr.prNumber}, round ${phase}. ${wtClause(story)} The independent RED author returned this contract: ${JSON.stringify(redContract)}. Do NOT read ${BLIND_PATHS}, checkpoints or working logs. First search for an already-sealed RED snapshot with exact \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}\`, parent \`${baseHead}\`, matching manifest and matching listed test blobs. If it exists, return it unchanged: this makes a lost agent response retry-safe. Otherwise verify \`git rev-parse HEAD\` is exactly \`${baseHead}\`; otherwise return no seal. Verify every listed test artifact has the stated SHA-256 and that the uncommitted diff contains only those test artifacts. Write the contract verbatim as \`${manifestPath}\`, then create ONE LOCAL commit containing exactly those test artifacts plus that manifest. The test suite is expected to fail, so use \`git commit --no-verify\` solely for this local RED snapshot. Its message MUST carry exactly \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${phase}; base=${baseHead}; manifest=${manifestPath}\`. Never modify production source, docs, adoption, configuration or generated assets; never amend, rebase or reset; never push, post, publish, create a card or merge. Return \`sealed: true\` and the lower-case 40-character \`snapshot\` from \`git rev-parse HEAD\` only after verifying the commit, trailer, manifest and blob paths. ${TEXT_SHAPE}`,
-      withModel('seal', { agentType: 'pair-red-sealer', phase: 'Review', label: `red-seal:${tag} ${phase}`, effort: 'medium', schema: RED_SNAPSHOT_SCHEMA }),
+  const redSeal = (redContract, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.redSeal, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)}`),
+      withModel('seal', { agentType: 'pair-red-sealer', phase: 'Review', label: `red-seal:${tag} ${phase}`, effort: 'low', schema: RED_SNAPSHOT_SCHEMA }),
       hasSealedRedSnapshot,
     )
-  }
+  const greenFix = (targets, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.greenFix, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $reviewLog=${reviewLog}${story.notes ? ` $notes=${JSON.stringify(story.notes)}` : ''}`),
+      withModel('green', { agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} ${phase}`, effort: 'high', schema: FIX_SCHEMA }),
+    )
+  const p3Verify = (targets, ledger, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.p3Verify, `${phaseArgs(phase, baseHead)} $worktree=${reviewWorktreePath} $findings=${JSON.stringify(targets)} $ledger=${JSON.stringify(ledger)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''}. ${revWtClauseBase(story)}`),
+      withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} ${phase}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
+      hasPreflightEvidence,
+    )
   // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
   // any remediation state to synthesize — not merely whether a fix happened this run. On a
   // continuation (log present) it is seeded true so an immediate round-0 convergence still
@@ -1826,85 +1871,78 @@ async function driveStory(story) {
     prevFindings = actionable
     prevReviewedHead = reviewedHead
     cycleHasRemediation = true
-    const redDomainMap = await mapRedDomain(prevFindings, `r${round}`, reviewedHead)
-    if (!hasRedDomainEvidence(redDomainMap))
-      return { story, prNumber: pr.prNumber, status: 'failed-red-domain', findings: prevFindings, acceptedFindings: accepted, reviewLog }
-    let redTargets = prevFindings
-    let redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead, redDomainMap)
-    if (!hasRedTestEvidence(redTest))
-      return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: prevFindings, acceptedFindings: accepted, reviewLog }
-    let redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead, redDomainMap)
-    for (let repair = 0; repair < MAX_RED_CONTRACT_REPAIRS && (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0); repair++) {
-      const repairFindings = redVerification?.findings?.length ? redVerification.findings : []
-      if (!repairFindings.length) break
-      log(`${tag} r${round}: RED verifier rejected the unsealed contract; authoring bounded test-only repair ${repair + 1}/${MAX_RED_CONTRACT_REPAIRS}`)
-      redTargets = [...redTargets, ...repairFindings]
-      redTest = await authorRedTests(redTargets, `r${round}`, reviewedHead, redDomainMap, repairFindings)
-      if (!hasRedTestEvidence(redTest))
-        return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: redTargets, acceptedFindings: accepted, reviewLog }
-      redVerification = await verifyRedContract(redTest, redTargets, `r${round}`, reviewedHead, redDomainMap)
-    }
-    if (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0)
-      return {
-        story,
-        prNumber: pr.prNumber,
-        status: 'failed-red-contract',
-        findings: redVerification?.findings?.length ? redVerification.findings : redTargets,
-        acceptedFindings: accepted,
-        reviewLog,
+    // D0 — one frozen plan per round. Every actionable finding lands in exactly one group.
+    const plan = await planRemediation(prevFindings, `r${round}`, reviewedHead)
+    if (!hasPlanEvidence(prevFindings.length)(plan))
+      return { story, prNumber: pr.prNumber, status: 'failed-plan', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    const groups = orderGroups(plan.groups)
+    log(`${tag} r${round}: ${groups.length} remediation group(s) planned for ${prevFindings.length} finding(s)`)
+    // Each group is one bounded attempt on top of the previous group's GREEN head.
+    let groupBase = reviewedHead
+    for (const [k, group] of groups.entries()) {
+      const phase = `r${round}-g${k + 1}`
+      const targets = group.findings.map(idx => prevFindings[idx])
+      const scope = { owner: group.owner, mode: group.mode, allowedPaths: group.allowedPaths, oracle: group.oracle }
+      // D1 — RED contract, test-only, from an author who is not the fixer.
+      let redTargets = targets
+      let redTest = await redSpec(redTargets, scope, phase, groupBase)
+      if (!hasRedContractReady(redTest))
+        return { story, prNumber: pr.prNumber, status: redTest?.status === 'split-required' ? 'failed-red-contract' : 'failed-fix', findings: targets, acceptedFindings: accepted, reviewLog }
+      // D2 — independent reproduction; ONE bounded repair, then terminal.
+      let redVerification = await redVerify(redTest, redTargets, phase, groupBase)
+      for (let repair = 0; repair < MAX_RED_CONTRACT_REPAIRS && (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0); repair++) {
+        const repairFindings = redVerification?.findings?.length ? redVerification.findings : []
+        if (!repairFindings.length) break
+        log(`${tag} ${phase}: RED verifier rejected the unsealed contract; one bounded test-only repair`)
+        redTargets = [...redTargets, ...repairFindings]
+        redTest = await redSpec(redTargets, scope, phase, groupBase, repairFindings)
+        if (!hasRedContractReady(redTest))
+          return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: redTargets, acceptedFindings: accepted, reviewLog }
+        redVerification = await redVerify(redTest, redTargets, phase, groupBase)
       }
-    const redSnapshot = await sealRedSnapshot(redTest, `r${round}`, reviewedHead)
-    if (!hasSealedRedSnapshot(redSnapshot))
-      return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: prevFindings, acceptedFindings: accepted, reviewLog }
-    log(`${tag} r${round}: sealed RED snapshot ${redSnapshot.snapshot}`)
-    // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
-    // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
-    const fix = await agentRetry(
-      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (${SK.checkpoint} $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review and RED-contract findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(redTargets)}. ${sealedRedSnapshot({ prNumber: pr.prNumber, phase: `r${round}`, baseHead: reviewedHead })} Fix them IN PLACE, in this PR: do NOT file a follow-up issue for any of them, do NOT invoke ${SK.writeIssue}, and do NOT leave a "tracked separately" note in lieu of the fix. If a finding turns out to be genuinely larger than this story, still fix what belongs here and say plainly in the working log what remains — the human decides at the merge gate, not a new card. CONVERGENCE SWEEP (mandatory): the finding location is the starting point, not the contract boundary. Before changing code, make a finite map of the same observable contract: the reported case and its paired success/failure path; any state transition or resume path the contract owns; and the canonical source plus every distributed representation of that behavior (generated asset, dataset, installed copy, or documented command). Change every map cell required for that one contract, then stop — do not use the sweep for unrelated cleanup, new behavior, or speculative hardening. For a generated/distributed artifact, resolve the canonical source from the asset registry, edit only that source, then run the declared generator/installer and inspect its output; never hand-edit a derived copy. PROVISIONED ARTIFACT CONTRACT (mandatory when a change installs, builds, publishes, names, or invokes an executable/package): map \`producer -> published identity -> consumer\` — for example installer/release step -> package manifest/bin/file/export -> workflow or user command. Prove the exact path in a clean temporary environment using the real built or installed artifact. Never stub, alias, or fake the exact producer, published identity, or consumer boundary; external effects may be isolated only after that boundary is crossed. Re-run the RED commands discovered in the sealed manifest, the finding's evidence command and the mapped boundary cases before commit. Follow ${SK.implement} for the change itself: its GREEN discipline and adoption-compliance phase are mandatory. Verify with ${SK.verifyQuality} (tier-resolved — do not improvise a gate command), and record any decision a finding forces with ${SK.recordDecision}. Commit and push. Then re-invoke **${SK.publishPr}**: it is create-or-update and idempotent, and re-running it is what keeps the PR body, the classification tags and the \`pr-state:*\` label in sync with the NEW head commit instead of describing the pre-fix state. As in the open-PR step it will emit \`Review: review-dispatch-required\` rather than nesting — expected: this orchestrator drives the re-review. ${TEXT_SHAPE} Re-running it REWRITES the PR body, and this is the only step that does so once a cycle is under way: rewrite it to describe the CURRENT head, do not append a round-by-round history — a body that grows by one section per fix round is re-read in full by every later reviewer of this same cycle. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent) as a COMPACT TABLE under a \`## Round N\` heading — one row per finding, columns \`severity | location | what changed | commit\`, followed by \`## Evidence ledger, round N\` with one row per empirical/boundary claim: \`claim | oracle | probe | observed\`. Return that same ledger in \`evidenceLedger\`; return \`[]\` only when the fix made no empirical or boundary claim. One row, one line: no paragraph per finding, and do not restate the finding's description (its location identifies it). Add prose ONLY where a fix diverged from the recommendation, and then only the reason. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
-      withModel('green', { agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA }),
-    )
-    // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
-    // its path in the return so the human / next resume can find (and clean) it.
-    // Same rule as `failed-review` above: whatever was accepted before the death still travels.
-    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
-    if (fix.needsHumanDecision) {
-      // No guard here: reaching this line means the fix round above already ran, which set
-      // `cycleHasRemediation = true` AND had the fixer append this round to the working log.
-      // So the log always exists and the flush always fires — there is no no-log arm (unlike
-      // the MAX_FIX_ROUNDS escalation at the top of the loop, whose `cycleHasRemediation || !first`
-      // guard IS load-bearing because that path can be reached on a silent round-0 re-review).
-      await agent(
-        `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
-        { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
-      )
-      return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
+      if (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0)
+        return {
+          story,
+          prNumber: pr.prNumber,
+          status: 'failed-red-contract',
+          findings: redVerification?.findings?.length ? redVerification.findings : redTargets,
+          acceptedFindings: accepted,
+          reviewLog,
+        }
+      // D3 — the script seals; the agent only runs it.
+      const redSnapshot = await redSeal(redTest, phase, groupBase)
+      if (!hasSealedRedSnapshot(redSnapshot))
+        return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: targets, acceptedFindings: accepted, reviewLog }
+      log(`${tag} ${phase}: sealed RED snapshot ${redSnapshot.snapshot}`)
+      // D4 — GREEN inside fixScope, above the seal; the round is logged, never commented.
+      const fix = await greenFix(redTargets, phase, groupBase)
+      if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
+      if (fix.needsHumanDecision) {
+        // The fix round ran and appended to the working log, so the log-backed flush always applies.
+        await agent(
+          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
+          { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
+        )
+        return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
+      }
+      // D5 — custody (script) then evidence (read-only). Terminal on breach or defect: a P3
+      // finding proves GREEN escaped its contract, and a hidden second GREEN under the same
+      // contract is exactly the fix-on-fix drift this gate exists to stop.
+      const preflight = await p3Verify(redTargets, fix.evidenceLedger ?? [], phase, groupBase)
+      if (!hasPreflightEvidence(preflight))
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: targets, acceptedFindings: accepted, reviewLog }
+      if (preflight.contractBreach === true)
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
+      const p3 = partitionFindings(preflight.findings)
+      accept(p3.carried)
+      if (preflight.verified !== (p3.actionable.length === 0))
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
+      if (p3.belowFloor.length)
+        log(`${tag} ${phase} preflight: ${p3.belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${p3.actionable.length} blocking`)
+      if (p3.actionable.length)
+        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: p3.actionable, acceptedFindings: accepted, reviewLog }
+      groupBase = String(preflight.reviewedHead).toLowerCase()
     }
-
-    // PRE-FLIGHT — a fresh read-only verifier audits this FIX DELTA before a costly outer
-    // re-review. This gate is intentionally terminal: a P3 finding proves GREEN escaped its
-    // contract, so hiding a second autonomous fix beneath the same round weakens TDD and lets
-    // fix-on-fix regressions accumulate unseen. A later run starts a new RED contract instead.
-    const runPreflight = (baseHead, targets, ledgers, redPhase, pass) =>
-      agentRetry(
-        [FIXTURE_CONSUMPTION_PREFLIGHT,
-        `FIX PREFLIGHT (read-only; NOT a PR review) for story ${tag}, PR #${pr.prNumber}, inner pass ${pass}. ${revWtClause(story)} Inspect ONLY the delta \`git diff ${baseHead}...origin/${story.branch} --name-status\`, its directly changed producer/consumer boundaries, and the real tests/probes it adds or changes. Do NOT read ${BLIND_PATHS}, checkpoints or the working log; do NOT edit, commit, push, publish a review, post a PR comment, or merge. The prior findings being remediated are: ${JSON.stringify(targets)}. The structured evidence ledger(s) returned by the fixer are: ${JSON.stringify(ledgers)}. There is intentionally NO RED manifest, test path, digest or snapshot SHA in this prompt. Independently FIND exactly one ancestor commit in \`${baseHead}..HEAD\` with \`${RED_SNAPSHOT_TRAILER}: pr=${pr.prNumber}; phase=${redPhase}; base=${baseHead}; manifest=<path>\` in its commit message, using \`git log\` or \`git rev-list\`. Read the manifest and every recorded test blob FROM that commit using \`git show\`/\`git ls-tree\`, never an orchestrator-provided value. Verify the snapshot's parent is exactly its declared base with \`git rev-parse <snapshot>^\`; use \`git diff-tree --no-commit-id --name-only -r <base> <snapshot>\` to verify it contains only the manifest and the test artifacts listed in that manifest. Compare each listed test path byte-for-byte (Git blob identity) with HEAD: a changed comment, fixture, expectation, missing or removed file, replacement or an added/changed unlisted test artifact is a contract breach. Read \`fixScope\` from that same manifest and compare the post-snapshot production diff to its \`allowedPaths\`: an out-of-scope path, or a new/moved/split production module under a \`behavioral\` scope, is a contract breach. The snapshot missing, ambiguous, malformed, not an ancestor, carrying a mismatched base or containing any other file is also a contract breach. For any breach return \`contractBreach: true\` and \`verified: false\`; it is not eligible for repair. Re-run every stated oracle/probe yourself against this head; an evidence ledger is an input to verify, never proof by assertion. Check that every new fixture field/table column is actually consumed by an expectation (trace it to the assertion), not merely declared; that comments/test names repeat only measured claims; and that every newly introduced parser/state/normalizer rule has the paired order plus the minimal interaction cross-product whenever an output can feed another rule. For a derived predicate/event, trace every branch that mutates its declared source-of-truth state: it must be emitted from that transition or prove the exact same decision table, never substitute a laziness/eligibility helper for a block/state boundary. For any defect, return a normal finding with its concrete failure case and a recommendation ending \`VERIFY: <input/state -> expected>; ORACLE: <command/fixture>; ASSERT: <observable assertion>\`. Return \`verified: true\` only when there are zero blocking findings under the configured severity floor (${SEVERITY_FLOOR?.name ?? 'none — every actionable finding blocks'}); otherwise return \`verified: false\`. Return the exact lower-case 40-character \`reviewedHead\` from \`git rev-parse origin/${story.branch}\`.`,
-        ].join('\n'),
-        withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} r${round} p${pass}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
-        hasPreflightEvidence,
-      )
-    const preflight = await runPreflight(reviewedHead, prevFindings, [fix.evidenceLedger], `r${round}`, 0)
-    if (!hasPreflightEvidence(preflight))
-      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: prevFindings, acceptedFindings: accepted, reviewLog }
-    if (preflight.contractBreach === true)
-      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
-    const firstPreflight = partitionFindings(preflight.findings)
-    accept(firstPreflight.carried)
-    if (preflight.verified !== (firstPreflight.actionable.length === 0))
-      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
-    if (firstPreflight.belowFloor.length)
-      log(`${tag} r${round} preflight: ${firstPreflight.belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${firstPreflight.actionable.length} blocking`)
-    if (firstPreflight.actionable.length)
-      return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: firstPreflight.actionable, acceptedFindings: accepted, reviewLog }
   }
 
   // Converged. If any remediation happened (this run OR a prior run this cycle continues),
