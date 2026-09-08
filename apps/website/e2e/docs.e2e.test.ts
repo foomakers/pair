@@ -568,10 +568,11 @@ test('pm tools journey: index → GitHub Projects → Filesystem with content ve
   await expect(main).toContainText('way-of-working.md')
   await expect(main).toContainText('Mapping Model')
 
-  // All 3 options listed
+  // All 4 options listed
   await expect(main).toContainText('Filesystem')
   await expect(main).toContainText('GitHub Projects')
   await expect(main).toContainText('Linear')
+  await expect(main).toContainText('Azure DevOps')
 
   // Sidebar shows PM Tools section
   await expect(page.locator('body')).toContainText('PM Tools')

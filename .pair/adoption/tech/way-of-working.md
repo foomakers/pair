@@ -73,69 +73,6 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   applies the same rule only to its delta and changed boundary. See ADLs
   [2026-09-01-review-contract-inventory-prevents-serial-findings.md](../decision-log/2026-09-01-review-contract-inventory-prevents-serial-findings.md)
   and [2026-09-01-external-boundary-proof-prevents-false-equivalence.md](../decision-log/2026-09-01-external-boundary-proof-prevents-false-equivalence.md).
-- **Evidence and interaction proof:** every changed measured, factual or externally-defined claim
-  carries `claim | authoritative oracle | exact command/fixture/revision | observed output`; that
-  one measurement feeds every comment, test name, ADL, PR description and diagnostic. A finite
-  table includes the minimal collision rows when one rule’s output can be another rule’s input,
-  name, state or reservation. User-facing diagnostics preserve lossless distinctions for
-  invisible, normalized or confusable characters. A missing proof or a rise in findings remains a
-  stop-and-investigate signal, never noise to suppress. See ADL
-  [2026-09-03-evidence-ledger-and-interaction-matrix-prevent-serial-findings.md](../decision-log/2026-09-03-evidence-ledger-and-interaction-matrix-prevent-serial-findings.md).
-- **Post-fix preflight:** before an external re-review, a separate read-only verifier inspects
-  only the new fix delta and directly changed boundaries. It reruns every returned ledger probe,
-  traces each fixture/table value to a consuming assertion, and checks paired order plus the
-  minimal interaction cross-product of new rules. Its first actionable finding stops immediately
-  as `failed-preflight`: it never starts a hidden second RED/GREEN repair or creates a new PR
-  review round. The next attempt starts a fresh RED contract.
-  Every actionable review recommendation supplies `VERIFY: input/state -> expected`, `ORACLE:`
-  and `ASSERT:` so this check is executable rather than interpretive. See ADL
-  [2026-09-04-independent-fix-preflight-prevents-review-churn.md](../decision-log/2026-09-04-independent-fix-preflight-prevents-review-churn.md).
-- **Locked RED before GREEN:** every actionable behavior fix starts with an independent read-only
-  domain mapper, then has four isolated stages. The mapper identifies the actual state-transition
-  owner, one named discriminator and mutually exclusive/exhaustive grammar or state rows — including
-  the ordinary complement and the smallest interaction cross-product. It emits no tests or edits.
-  Its map is single-line JSON prompt data and retains literal grammar tokens; shell-value prose
-  restrictions apply only to fields that reach commands.
-  A test-only author turns every mapped row into a RED assertion or a consumed fixture, then derives
-  its matrix from that state-transition owner and declares one typed scope
-  (`behavioral` or `structural`, never both) and writes/runs failing tests; an independent
-  read-only verifier independently re-derives the domain, reproduces the matrix/oracles and rejects
-  any omitted/unrepresented mapped row or incomplete contract; only then
-  does a sealer record its manifest and blobs in one local Git snapshot and permit the source
-  fixer to edit implementation. A behavioral scope cannot add, move or split production modules.
-  Preflight finds that snapshot itself, compares its test blobs with HEAD, and rejects a changed,
-  missing or unlisted test artifact — including a comment. A
-  fixture with no standalone failure names the RED test that consumes it; an absent or non-RED
-  consumer is rejected before sealing.
-  An absent or invalid map is `failed-red-domain` before RED, sealing or GREEN. A rejected RED
-  contract may return once to a fresh test-only author with the verifier's measured
-  missing rows; it is independently re-verified before any seal. A second rejection is terminal.
-  This bounded repair never applies after GREEN or P3, and never changes source, history or the PR.
-  A finding whose sole remediation rewrites existing Git history escalates with a typed
-  `history-rewrite` decision **before** RED authoring or sealing; a human may accept only exact
-  historical commit subjects, never a current code/test/docs/CI finding. The workflow — not a
-  reviewer’s prose grouping — applies that decision to one or more exact declared SHAs. If a
-  reviewer omits the typed metadata but its untyped subject-only finding names unambiguous
-  authorized SHA prefixes, the engine resolves that narrow case; an explicit technical finding,
-  unknown SHA or missing subject evidence remains actionable. See ADLs
-  [2026-09-06-history-rewrite-escalates-before-red-seal.md](../decision-log/2026-09-06-history-rewrite-escalates-before-red-seal.md)
-  and [2026-09-07-history-and-p3-evidence-carry-forward.md](../decision-log/2026-09-07-history-and-p3-evidence-carry-forward.md).
-  A verified P3 regression can enter a card as `requiredFindings` with its exact `observedHead`,
-  oracle, probe and result. The independent reviewer remains blind; once, on that exact head,
-  the engine gives the evidence to RED. A different head stops as `failed-required-findings`,
-  never treats stale evidence as a current specification.
-  A convenience predicate (for laziness, eligibility or similar) never substitutes for the
-  transition that actually owns the state. See ADL
-  [2026-09-05-locked-red-contract-prevents-fix-regressions.md](../decision-log/2026-09-05-locked-red-contract-prevents-fix-regressions.md).
-- **Sealed custody is rebase-sensitive:** before any review, a read-only Git custody probe
-  verifies each active RED snapshot's declared base against its direct parent. A rebase does not
-  transport a sealed snapshot or a SHA-scoped history disposition: it fails closed before review.
-  A human may reset only the complete measured set of rewritten snapshot SHAs at an ancestral
-  baseline; the next valid snapshot records that exact set as `supersedes`, permanently retiring
-  only those historical phases. A later rebase invalidates the successor too and needs a new
-  reset. A patch-id is evidence for a new human history decision, never automatic authorization.
-  No rebase occurs inside a RED→GREEN→P3 attempt. See ADL
-  [2026-09-07-rebase-invalidates-sealed-custody.md](../decision-log/2026-09-07-rebase-invalidates-sealed-custody.md).
 
 ## Quality Gates
 
