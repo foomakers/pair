@@ -598,7 +598,7 @@ test('pm tools journey: index → GitHub Projects → Filesystem with content ve
     .click()
   await expect(page).toHaveURL('/docs/pm-tools/filesystem')
   await expect(main).toContainText('Configuration')
-  await expect(main).toContainText('zero-dependency')
+  await expect(main).toContainText('zero-PM-dependency')
   await expect(main).toContainText('backlog/')
 })
 

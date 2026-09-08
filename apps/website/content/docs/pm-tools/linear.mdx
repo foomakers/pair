@@ -5,6 +5,21 @@ description: Configure pair to manage work items with Linear — setup, the requ
 
 **Linear hosts no code.** It has no repositories, branches or pull requests, so a Linear project always declares a separate **code host** (usually GitHub). This is pair's reference split setup — see [Code host vs PM tool](/docs/concepts/code-host) for the routing rule and cross-linking convention.
 
+## Why Linear is the page that changed pair's design
+
+Linear is the tool that broke the assumption everything else in pair had been built on: that the one `pm-tool` field could answer both backlog work and code work (the [PM tools overview](/docs/pm-tools) tells that story in full). Linear answers exactly one of the two, and asking it for a pull request is asking a backlog for something it does not have.
+
+The obvious fix was the wrong one. Linear ships an excellent GitHub app that would have supplied the item↔PR link for free and pushed PR status onto the card. It was **rejected** (per [ADR-018](https://github.com/foomakers/pair/blob/main/.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md)) for two reasons: it would make a proprietary per-tool integration a hard prerequisite of the framework, so every future tracker would need its own porting story and air-gapped setups could not comply; and it duplicates state across two systems, which is fine until one write fails and there is no owner to reconcile from.
+
+What pair adopted instead is deliberately unglamorous, and it is why this page reads the way it does:
+
+- **One optional field.** Declare `code-host` in `## Git Workflow` and issue/state work routes to Linear while branch/PR/review work routes to GitHub. Projects already on a single tool declare nothing and behave exactly as before.
+- **The cross-link is plain text, both ways.** `Refs: <issue-id>` in the PR body; the PR URL posted back as a **comment** on the Linear issue — a comment, never a body edit, because writing the body would overwrite the story's acceptance criteria. Any tool with a comment field can play.
+- **PR state (draft / ready / approved / merged) is never mirrored onto the board.** Macrostate transitions still happen on Linear — the Status Transitions table below moves the issue to "In Review" when the PR opens, on teams that have that state (see the table). What never crosses is the pull request's own state: find the row whose Linear column says nothing happens — review. It happens entirely on the code host. That "nothing" is the decision, not an omission — each state lives in one place, so there is nothing to reconcile.
+- **What Linear does not have, pair reports rather than invents.** Linear's default teams ship no "In Review" state; a skill asked to write one says so instead of guessing a nearby column.
+
+The rest of this page is the configuration that model implies, including the one section a single-tool guide has no need for: `## Git Workflow`, where the `code-host` is declared.
+
 ## Configuration
 
 Add these lines to `.pair/adoption/tech/way-of-working.md`:
@@ -68,7 +83,7 @@ Task                →   Checklist item in story issue body
 | Merge PR | Issue status → "Done" | PR merged, branch deleted |
 | All stories in epic done | Parent issue status → "Done" | — |
 
-State transitions always happen on Linear. PR states live on the code host and are never mirrored onto Linear, so no state is duplicated.
+State transitions always happen on Linear. PR states (draft / ready / approved / merged) live on the code host and are never mirrored onto Linear, so no state is duplicated.
 
 ### Labels and Properties
 
@@ -113,5 +128,5 @@ pair creates Linear sub-issues under the epic, sets priority, and assigns them t
 - [Code host vs PM tool](/docs/concepts/code-host) — the split setup, routing rule and cross-linking convention
 - [Canonical states](/docs/concepts/canonical-states) — mapping Linear workflow states to macrostates
 - [PM Tools overview](/docs/pm-tools) — choosing the right tool
-- [Filesystem](/docs/pm-tools/filesystem) — zero-dependency alternative
+- [Filesystem](/docs/pm-tools/filesystem) — zero-PM-dependency alternative (backlog in your repo; still declares a `code-host`)
 - [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option
