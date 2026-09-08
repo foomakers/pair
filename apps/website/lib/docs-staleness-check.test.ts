@@ -7,6 +7,7 @@ import {
   findGuideCountMismatches,
   findDeadLinks,
   findDeadRepoCitations,
+  githubHeadingSlugs,
   checkCatalogSync,
   checkCommandAnchors,
   checkDocsCommands,
@@ -299,14 +300,274 @@ describe('findDeadRepoCitations', () => {
   ]
   for (const { why, content, dead } of ROWS) {
     it(`${dead === 0 ? 'ignores' : 'flags'} ${why}`, () => {
-      expect(findDeadRepoCitations(content, 'a.mdx', tracked), why).toHaveLength(dead)
+      expect(
+        findDeadRepoCitations(content, 'a.mdx', tracked, () => undefined),
+        why,
+      ).toHaveLength(dead)
     })
   }
   it('names the file, the cited path and the reason in the error', () => {
-    const [err] = findDeadRepoCitations(`See [x](${DEAD}).\n`, 'pm-tools/index.mdx', tracked)
+    const [err] = findDeadRepoCitations(
+      `See [x](${DEAD}).\n`,
+      'pm-tools/index.mdx',
+      tracked,
+      () => undefined,
+    )
     expect(err).toContain('pm-tools/index.mdx')
     expect(err).toContain('does/not/exist.md')
     expect(err).toMatch(/not a git-tracked file/)
+  })
+})
+
+describe('findDeadRepoCitations — #fragment anchors (Check 5c)', () => {
+  // github.com's own rules, measured on the rendered pages (ADL
+  // 2026-09-08-repo-citation-anchors-are-githubs-own-slugs): a rendered Markdown heading (.md,
+  // .markdown, .mdx alike) gets `id="user-content-<slug>"`, <slug> being github-slugger over its
+  // text, duplicates `-1`, `-2`…; a tree/ page renders the directory's README under the listing;
+  // `#L<n>` line anchors exist only where a source panel is shown — non-Markdown blobs, or a
+  // Markdown blob under `?plain=1`; raw/ has no anchors at all.
+  const tracked = new Set([
+    'README.md',
+    'docs/guide.md',
+    'docs/page.mdx',
+    'packages/x/src/index.ts',
+    'qa/plan.md',
+    'apps/cli/README.md',
+    'apps/cli/src/main.ts',
+  ])
+  const targets = new Map<string, string>([
+    [
+      'README.md',
+      [
+        '---',
+        'title: Frontmatter Heading',
+        '---',
+        '# Intro',
+        '',
+        '## 6. `tech/risk-matrix.md` — Adoption Delta',
+        '',
+        '## Steps',
+        'one',
+        '## Steps',
+        'two',
+        '## Café',
+        '',
+        '<a name="legacy"></a>',
+        '',
+        "<a id='single-quoted'></a>",
+        '',
+        '## <a id="inline"></a> Inline Anchored',
+        '',
+        '```md',
+        '# not a heading',
+        '```',
+        '',
+        'Setext Title',
+        '============',
+        '',
+      ].join('\n'),
+    ],
+    ['docs/guide.md', '## Execution Log\n'],
+    ['docs/page.mdx', '## Rendered By Fumadocs\n'],
+    ['packages/x/src/index.ts', Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join('\n')],
+    ['qa/plan.md', '## Execution Log\n'],
+    ['apps/cli/README.md', '# cli\n\n## Development\n'],
+    ['apps/cli/src/main.ts', 'export {}\n'],
+  ])
+  const src = (path: string) => targets.get(path)
+  const B = 'https://github.com/foomakers/pair/blob/main/'
+
+  const ROWS: Array<[string, string, number]> = [
+    ['live heading anchor', `[x](${B}docs/guide.md#execution-log)`, 0],
+    ['dead heading anchor', `[x](${B}docs/guide.md#deployment-log)`, 1],
+    [
+      'punctuation, backticks and an em-dash slug exactly as github.com does (the real quality-model citation shape)',
+      `[x](${B}README.md#6-techrisk-matrixmd--adoption-delta)`,
+      0,
+    ],
+    ['second duplicate heading gets -1', `[x](${B}README.md#steps-1)`, 0],
+    ['no third duplicate, so -2 is dead', `[x](${B}README.md#steps-2)`, 1],
+    ['a heading inside a fence is not a heading', `[x](${B}README.md#not-a-heading)`, 1],
+    [
+      'a frontmatter key is not a heading (github renders frontmatter as a table)',
+      `[x](${B}README.md#frontmatter-heading)`,
+      1,
+    ],
+    ['setext heading', `[x](${B}README.md#setext-title)`, 0],
+    [
+      'unicode letters survive the slug; percent-escaped fragment decodes first',
+      `[x](${B}README.md#caf%C3%A9)`,
+      0,
+    ],
+    ['an explicit html <a name> anchor', `[x](${B}README.md#legacy)`, 0],
+    [
+      'a single-quoted html id is an anchor too (GitHub parses HTML, not quotes)',
+      `[x](${B}README.md#single-quoted)`,
+      0,
+    ],
+    ['a heading carrying an inline html anchor serves both ids', `[x](${B}README.md#inline)`, 0],
+    [
+      '…and its own slug — over the text content, untrimmed, exactly as github.com (measured: gitui FAQ.md serves `-table-of-contents`)',
+      `[x](${B}README.md#-inline-anchored)`,
+      0,
+    ],
+    ['the trimmed spelling of that slug is NOT served', `[x](${B}README.md#inline-anchored)`, 1],
+    [
+      'fragment case matters (ids are lowercase, browser matching is exact)',
+      `[x](${B}docs/guide.md#Execution-Log)`,
+      1,
+    ],
+    [
+      'a .mdx blob is rendered as Markdown on github.com (measured: pm-tools/index.mdx serves 6 ids)',
+      `[x](${B}docs/page.mdx#rendered-by-fumadocs)`,
+      0,
+    ],
+    ['a dead heading on a .mdx blob', `[x](${B}docs/page.mdx#nope)`, 1],
+    ['line anchor inside the file', `[x](${B}packages/x/src/index.ts#L12)`, 0],
+    ['line anchor past the end', `[x](${B}packages/x/src/index.ts#L40)`, 1],
+    ['line range whose end is past the end', `[x](${B}packages/x/src/index.ts#L5-L30)`, 1],
+    ['line range with columns', `[x](${B}packages/x/src/index.ts#L5C1-L9C4)`, 0],
+    ['the last line is inside the file', `[x](${B}packages/x/src/index.ts#L20)`, 0],
+    ['one past the last line is not', `[x](${B}packages/x/src/index.ts#L21)`, 1],
+    [
+      'line anchor on a RENDERED markdown file is dead — github.com serves line anchors only under ?plain=1',
+      `[x](${B}docs/guide.md#L1)`,
+      1,
+    ],
+    ['heading anchor on a non-markdown file', `[x](${B}packages/x/src/index.ts#execution-log)`, 1],
+    [
+      '?plain=1 shows source, so a heading anchor is dead there',
+      `[x](${B}docs/guide.md?plain=1#execution-log)`,
+      1,
+    ],
+    ['?plain=1 keeps line anchors', `[x](${B}docs/guide.md?plain=1#L1)`, 0],
+    [
+      'tree/ renders the directory README — its heading anchors are live',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli#development)`,
+      0,
+    ],
+    [
+      'tree/ dead README heading',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli#nope)`,
+      1,
+    ],
+    [
+      'tree/ of a directory with no README has no anchors',
+      `[x](https://github.com/foomakers/pair/tree/main/docs#execution-log)`,
+      1,
+    ],
+    [
+      'tree/ has no source panel, so no line anchors',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli#L2)`,
+      1,
+    ],
+    [
+      'tree/<file> is 301-redirected by github.com to blob/<file> — its heading anchors are live',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli/README.md#development)`,
+      0,
+    ],
+    [
+      '…and a dead heading through tree/<file> is still dead',
+      `[x](https://github.com/foomakers/pair/tree/main/apps/cli/README.md#nope)`,
+      1,
+    ],
+    [
+      'blob/<dir> is 301-redirected to tree/<dir> — the README heading anchors are live',
+      `[x](${B}apps/cli#development)`,
+      0,
+    ],
+    ['…and a dead heading through blob/<dir> is still dead', `[x](${B}apps/cli#nope)`, 1],
+    [
+      'raw/<dir> is 301-redirected to tree/<dir> too',
+      `[x](https://github.com/foomakers/pair/raw/main/apps/cli#development)`,
+      0,
+    ],
+    [
+      'raw/ has no anchors',
+      `[x](https://github.com/foomakers/pair/raw/main/docs/guide.md#execution-log)`,
+      1,
+    ],
+    ['empty fragment is not a citation of an anchor', `[x](${B}docs/guide.md#)`, 0],
+    ['no fragment: unchanged behaviour', `[x](${B}docs/guide.md)`, 0],
+    [
+      'dead path with a fragment reports the path once, not the anchor too',
+      `[x](${B}docs/nope.md#execution-log)`,
+      1,
+    ],
+    ['a dead anchor in a code span is invisible', `\`${B}docs/guide.md#deployment-log\``, 0],
+  ]
+
+  it.each(ROWS)('%s', (_label, body, dead) => {
+    expect(findDeadRepoCitations(`See ${body}.\n`, 'a.mdx', tracked, src)).toHaveLength(dead)
+  })
+
+  it('names the fragment and the reason', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](${B}docs/guide.md#deployment-log).\n`,
+      'a.mdx',
+      tracked,
+      src,
+    )
+    expect(err).toContain('docs/guide.md#deployment-log')
+    expect(err).toMatch(/no heading or anchor/)
+  })
+
+  it('names the line count when a line anchor is past the end', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](${B}packages/x/src/index.ts#L40).\n`,
+      'a.mdx',
+      tracked,
+      src,
+    )
+    expect(err).toContain('#L40')
+    expect(err).toContain('20 lines')
+  })
+
+  it('names the missing README when a tree/ anchor cannot resolve', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](https://github.com/foomakers/pair/tree/main/docs#execution-log).\n`,
+      'a.mdx',
+      tracked,
+      src,
+    )
+    expect(err).toMatch(/no README/)
+  })
+
+  it('tells the author to cite ?plain=1 for a line anchor on a rendered Markdown file', () => {
+    const [err] = findDeadRepoCitations(`See [x](${B}docs/guide.md#L1).\n`, 'a.mdx', tracked, src)
+    expect(err).toMatch(/\?plain=1/)
+  })
+
+  it('a tracked target the run cannot read is a finding, not a pass', () => {
+    const [err] = findDeadRepoCitations(
+      `See [x](${B}qa/plan.md#execution-log).\n`,
+      'a.mdx',
+      tracked,
+      () => undefined,
+    )
+    expect(err).toMatch(/could not be read/)
+  })
+})
+
+describe('githubHeadingSlugs', () => {
+  it('slugs headings in document order with github-slugger duplicate suffixes', () => {
+    expect([...githubHeadingSlugs('# A\n## A\n## B & C\n')]).toEqual(['a', 'a-1', 'b--c'])
+  })
+  it('reads single-quoted and unquoted html ids as well as double-quoted ones', () => {
+    expect([...githubHeadingSlugs(`<a id='a'></a>\n\n<a name=b></a>\n\n<a id="c"></a>\n`)]).toEqual(
+      ['a', 'b', 'c'],
+    )
+  })
+  it('ignores frontmatter and fenced code, keeps setext and html anchors', () => {
+    const md = '---\ntitle: T\n---\n```\n# fenced\n```\nS\n=\n<a id="x"></a>\n'
+    expect([...githubHeadingSlugs(md)]).toEqual(['s', 'x'])
+  })
+  it('a heading with an inline html anchor yields its (untrimmed) slug and the anchor id', () => {
+    expect([...githubHeadingSlugs('## <a id="k"></a> Key Term\n')]).toEqual(['-key-term', 'k'])
+  })
+  it('inline html contributes no tag text to the slug; link text inside it does', () => {
+    const md = '## 1. <a name="c"></a> "Bad" Error <small><sup>[Top ▲](#toc)</sup></small>\n'
+    expect([...githubHeadingSlugs(md)]).toEqual(['1--bad-error-top-', 'c'])
   })
 })
 

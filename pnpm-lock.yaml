@@ -105,6 +105,9 @@ catalogs:
     fumadocs-ui:
       specifier: 14.7.7
       version: 14.7.7
+    github-slugger:
+      specifier: 2.0.0
+      version: 2.0.0
     globals:
       specifier: 15.0.0
       version: 15.0.0
@@ -126,6 +129,9 @@ catalogs:
     mdast:
       specifier: 3.0.0
       version: 3.0.0
+    mdast-util-to-string:
+      specifier: 4.0.0
+      version: 4.0.0
     next:
       specifier: ^15.3.3
       version: 15.5.12
@@ -352,15 +358,24 @@ importers:
       autoprefixer:
         specifier: 'catalog:'
         version: 10.4.20(postcss@8.4.49)
+      github-slugger:
+        specifier: 'catalog:'
+        version: 2.0.0
       jsdom:
         specifier: 'catalog:'
         version: 25.0.1
+      mdast-util-to-string:
+        specifier: 'catalog:'
+        version: 4.0.0
       postcss:
         specifier: 'catalog:'
         version: 8.4.49
       remark-gfm:
         specifier: 'catalog:'
         version: 4.0.1
+      remark-parse:
+        specifier: 'catalog:'
+        version: 11.0.0
       tailwindcss:
         specifier: 'catalog:'
         version: 3.4.17(ts-node@10.9.2(@types/node@26.3.0)(typescript@5.4.5))
@@ -370,6 +385,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.4.5
+      unified:
+        specifier: 'catalog:'
+        version: 11.0.5
       vitest:
         specifier: 'catalog:'
         version: 3.2.4(@types/debug@4.1.12)(@types/node@26.3.0)(jiti@2.7.0)(jsdom@25.0.1)(tsx@4.23.1)(yaml@2.9.0)

@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Active — **partially superseded** by [2026-09-08-repo-citation-anchors-are-githubs-own-slugs](./2026-09-08-repo-citation-anchors-are-githubs-own-slugs.md). The compiler-as-oracle decision and the `git ls-files` existence oracle stand unchanged. What changed: the kind github.com *serves* is resolved from the tracked index (`tree/<file>` is 301-redirected to `blob/`, `blob|raw/<dir>` to `tree/`), so Decision 2's per-word rule below is narrowed; and the anchor deferral in Alternatives Considered is closed — its proposed oracle (`gh api /markdown`) turned out to emit no ids, the rendered page does.
 
 ## Category
 
@@ -21,7 +21,7 @@ The first attempt (PR #471, closed unmerged) answered the question "is this URL 
 ## Decision
 
 1. **The site's MDX compiler is the gate, not a model of it.** `findDeadRepoCitations` compiles each page with `@mdx-js/mdx` + `remark-gfm` — the same pair fumadocs runs — and reads the `href` values the compiler emits. Only links are in scope: an image `src` pointing at the repository is not checked. A URL in a fence, a code span or a JSX comment is text to the compiler and therefore invisible to the gate, by construction rather than by rule; a URL in a table cell or after a backslash escape is a link on the page and is gated exactly like one in prose — measured, not modelled.
-2. **"Resolves" means git-tracked at that exact spelling.** The tracked set comes from `git ls-files`; the filesystem is not the oracle because macOS is case-insensitive and would pass `readme.md`, which github.com serves as a 404. `blob/` and `raw/` must name a tracked file; `tree/` a tracked file or directory prefix.
+2. **"Resolves" means git-tracked at that exact spelling.** The tracked set comes from `git ls-files`; the filesystem is not the oracle because macOS is case-insensitive and would pass `readme.md`, which github.com serves as a 404. `blob/` and `raw/` must name a tracked file; `tree/` a tracked file or directory prefix. *Narrowed by the anchors ADL (see Status): any of the three words may name a tracked file or a tracked directory, and the served kind decides.*
 3. **Only `main` refs are checked.** A citation pinned to a tag or SHA is a deliberate reference to a moment in time and is left alone.
 4. **A page the compiler rejects is not this check's finding** — `next build` reports it, loudly. The gate returns no citation errors for it rather than a misleading one.
 5. `@mdx-js/mdx` and `remark-gfm` become declared `devDependencies` of `apps/website` (catalog-pinned to the versions fumadocs already resolves), instead of transitive imports from the store.
@@ -30,7 +30,7 @@ The first attempt (PR #471, closed unmerged) answered the question "is this URL 
 
 - **A CommonMark/MDX block reader of our own** (PR #471): rejected — the domain is a parser's; nine cycles reproduced it one rule at a time and each fix opened the next case. Everything the reader covered, the compiler yields for free.
 - **A regex over the raw `.mdx` bytes**: rejected — fails in both directions, gating URLs inside fences and code spans (false red) and missing none of the live ones only by luck.
-- **Checking anchors (`#fragment`) against github.com's slugger**: deferred — a different oracle (`gh api /markdown`). Four gated citations across three pages carry a fragment today (`integrations/web-cloud-environments.mdx` ×2 → `…CP10-web-cloud-environment.md#execution-log`, `reference/guidelines-catalog.mdx` → `skills-guide.md#callers-matrix-scoped-capabilities`, `reference/quality-model.mdx` → `quality-model.md#6-techrisk-matrixmd--adoption-delta`); their paths are verified, their fragments are not. Add on demand, not as a 937-file sweep.
+- **Checking anchors (`#fragment`) against github.com's slugger**: deferred here, adopted the same day by the anchors ADL (see Status) — and not with `gh api /markdown`, which emits no ids; the rendered github.com page is the oracle. Four gated citations across three pages carry a fragment today (`integrations/web-cloud-environments.mdx` ×2 → `…CP10-web-cloud-environment.md#execution-log`, `reference/guidelines-catalog.mdx` → `skills-guide.md#callers-matrix-scoped-capabilities`, `reference/quality-model.mdx` → `quality-model.md#6-techrisk-matrixmd--adoption-delta`); at this decision their paths are verified and their fragments are not; the anchors ADL verifies the fragments too, on demand, not as a 937-file sweep.
 
 ## Consequences
 
