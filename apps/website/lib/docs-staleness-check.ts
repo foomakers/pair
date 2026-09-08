@@ -14,6 +14,13 @@
  * apps/website/lib -> apps/website -> apps -> <repo root> (up 3).
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { compileSync } from '@mdx-js/mdx'
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
+import { toString as mdastToString } from 'mdast-util-to-string'
+import GitHubSlugger from 'github-slugger'
 import { basename, join, relative, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -177,6 +184,263 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
     }
   }
   return errors
+}
+
+/**
+ * Check 5b: every repo citation the SITE RENDERS AS A LINK resolves to a tracked file.
+ *
+ * A docs page cites repository files as `https://github.com/foomakers/pair/blob/main/<path>`.
+ * The oracle for "is this a link" is the site's own MDX compiler — `@mdx-js/mdx` + `remark-gfm`,
+ * the pair fumadocs runs — not a regex over the raw bytes: a URL inside a fence, a code span or a
+ * JSX comment block is text on the rendered page and must not be gated; the same URL in prose is a
+ * link a reader can click into a 404. Compiling the page and reading the `href` values the
+ * compiler emits is what makes fence, span, comment, table-cell and escape rules all come out
+ * right for free — they are the compiler's, not ours.
+ *
+ * "Resolves" means the path is git-tracked at that exact spelling — a tracked file, or a tracked
+ * directory prefix — whichever of blob/tree/raw the URL says: github.com 301-redirects the word to
+ * the kind it serves, and `servedKind` below does the same. The filesystem is not the oracle: macOS
+ * is case-insensitive and would pass `readme.md`, which github.com serves as a 404. Only `main`
+ * refs are checked; a pinned tag or SHA is a deliberate citation of a moment in time and is left
+ * alone.
+ */
+const REPO_CITATION_RE =
+  /href: "https:\/\/github\.com\/foomakers\/pair\/(blob|tree|raw)\/([^/"]+)\/([^"#?]+)(\?[^"#]*)?(?:#([^"]*))?/g
+const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n/
+
+/** Reads a git-tracked path's content, or `undefined` when it cannot be read. */
+export type TargetSource = (path: string) => string | undefined
+
+export function findDeadRepoCitations(
+  content: string,
+  rel: string,
+  tracked: ReadonlySet<string>,
+  targetSource: TargetSource,
+): string[] {
+  const errors: string[] = []
+  let compiled: string
+  try {
+    compiled = String(
+      compileSync(content.replace(FRONTMATTER_RE, ''), { remarkPlugins: [remarkGfm] }),
+    )
+  } catch {
+    // A page the site cannot build is not this check's finding — next build reports it, loudly.
+    return errors
+  }
+  for (const m of compiled.matchAll(REPO_CITATION_RE)) {
+    const { kind, ref, path, query, fragment } = citationOf(m)
+    if (ref !== 'main') continue
+    const clean = safeDecode(path).replace(/\/$/, '')
+    // "git-tracked", not "on main": the oracle is the index of the branch under review, which is
+    // the right question — will this citation resolve once the branch merges.
+    const served = servedKind(kind, clean, tracked)
+    if (served === undefined) {
+      errors.push(`Dead repo citation in ${rel}: ${kind}/main/${clean} is not a git-tracked file`)
+      continue
+    }
+    if (fragment)
+      errors.push(
+        ...deadAnchorErrors({
+          kind: served,
+          cited: kind,
+          path: clean,
+          query,
+          fragment,
+          rel,
+          tracked,
+          targetSource,
+        }),
+      )
+  }
+  return errors
+}
+
+function citationOf(m: RegExpMatchArray) {
+  return {
+    kind: m[1] ?? '',
+    ref: m[2] ?? '',
+    path: m[3] ?? '',
+    query: m[4] ?? '',
+    fragment: m[5] ?? '',
+  }
+}
+
+/**
+ * A malformed escape (`100%coverage.sh`) is still a citation to report — never a URIError out of
+ * the whole run, which would also discard every other check's findings.
+ */
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
+type Kind = 'blob' | 'tree' | 'raw'
+
+/**
+ * The page github.com actually serves for a citation, or `undefined` when it serves a 404.
+ * MEASURED 2026-09-08: `tree/<file>` is 301-redirected to `blob/<file>`, and `blob/<dir>` and
+ * `raw/<dir>` to `tree/<dir>` — so the tracked index decides the kind, not the word in the URL.
+ */
+function servedKind(cited: string, clean: string, tracked: ReadonlySet<string>): Kind | undefined {
+  if (tracked.has(clean)) return cited === 'raw' ? 'raw' : 'blob'
+  if ([...tracked].some(t => t.startsWith(clean + '/'))) return 'tree'
+  return undefined
+}
+
+/**
+ * Check 5c — the `#fragment` of a citation must be an anchor github.com actually renders.
+ *
+ * Rules are github.com's, MEASURED on the rendered pages (`id="user-content-<slug>"`, see ADL
+ * 2026-09-08-repo-citation-anchors-are-githubs-own-slugs) and applied offline. A `blob/` of a
+ * Markdown file (`.md`, `.markdown`, `.mdx` — all three render) has heading anchors: `github-slugger`
+ * over each heading's text, duplicates suffixed `-1`, `-2`…, plus any `id`/`name` written in raw
+ * HTML. A `tree/` page renders the directory's README under the listing, so it serves that
+ * README's heading anchors and nothing else. `#L<n>` / `#L<n>-L<m>` line anchors exist only where
+ * a source panel is shown — a non-Markdown blob, or a Markdown blob under `?plain=1` — and are
+ * bounded by the file's line count. `raw/` has no anchors. The reader for "which headings" is
+ * remark-parse + remark-gfm, so a `#` inside a fence or in frontmatter is not a heading here
+ * either. Fails closed: an anchor this check cannot prove is reported, never assumed.
+ */
+const LINE_ANCHOR_RE = /^L(\d+)(?:C\d+)?(?:-L(\d+)(?:C\d+)?)?$/
+const RENDERED_MARKDOWN_RE = /\.(md|markdown|mdx)$/i
+const README_RE = /^readme\.(md|markdown|mdx)$/i
+// GitHub's sanitizer parses the HTML, so double-quoted, single-quoted and unquoted ids all count.
+const HTML_ID_RE = /\s(?:id|name)=(?:"([^"]+)"|'([^']+)'|([^\s"'>]+))/g
+
+/** What github.com shows for the cited URL: a rendered README under a listing, rendered Markdown, or source. */
+type View = 'tree' | 'rendered' | 'source'
+
+function deadAnchorErrors(c: {
+  kind: Kind
+  cited: string
+  path: string
+  query: string
+  fragment: string
+  rel: string
+  tracked: ReadonlySet<string>
+  targetSource: TargetSource
+}): string[] {
+  const cite = `${c.cited}/main/${c.path}${c.query}#${c.fragment}`
+  const dead = (why: string) => [`Dead repo citation in ${c.rel}: ${cite} — ${why}`]
+  if (c.kind === 'raw') return dead('raw/ has no anchors')
+  const target = c.kind === 'tree' ? readmeOf(c.path, c.tracked) : c.path
+  if (target === undefined) return dead('no README in that directory, so tree/ renders no anchors')
+  const source = c.targetSource(target)
+  if (source === undefined) return dead('the target could not be read')
+  const fragment = safeDecode(c.fragment)
+  const view = viewOf(c.kind, target, c.query)
+  const why = LINE_ANCHOR_RE.test(fragment)
+    ? lineAnchorProblem(fragment, source, view)
+    : headingAnchorProblem(fragment, source, view)
+  return why ? dead(why) : []
+}
+
+/** The README github.com renders under a `tree/` listing, if one is tracked in that directory. */
+function readmeOf(dir: string, tracked: ReadonlySet<string>): string | undefined {
+  for (const t of tracked) {
+    if (t.startsWith(dir + '/') && README_RE.test(t.slice(dir.length + 1))) return t
+  }
+  return undefined
+}
+
+function viewOf(kind: Kind, path: string, query: string): View {
+  if (kind === 'tree') return 'tree'
+  if (/(^|&)plain=1(&|$)/.test(query.slice(1))) return 'source'
+  return RENDERED_MARKDOWN_RE.test(path) ? 'rendered' : 'source'
+}
+
+/** `#L<n>` / `#L<n>-L<m>` need a source panel and must lie inside the file; the reason when not, else null. */
+function lineAnchorProblem(fragment: string, source: string, view: View): string | null {
+  if (view === 'tree') return 'tree/ shows no source panel, so it has no line anchors'
+  if (view === 'rendered')
+    return 'a rendered Markdown file has no line anchors — cite it with ?plain=1'
+  const line = LINE_ANCHOR_RE.exec(fragment)!
+  const lines = source.split(/\r?\n/).length - (source.endsWith('\n') ? 1 : 0)
+  const from = Number(line[1])
+  const to = line[2] === undefined ? from : Number(line[2])
+  if (from < 1 || to < from || to > lines)
+    return `line anchor #${fragment} is outside the file's ${lines} lines`
+  return null
+}
+
+/** A heading anchor exists only on a rendered view; the reason when it does not, else null. */
+function headingAnchorProblem(fragment: string, source: string, view: View): string | null {
+  if (view === 'source') return 'this view shows the source, which has line anchors only'
+  if (!githubHeadingSlugs(source).has(fragment))
+    return 'no heading or anchor in the target renders to that id'
+  return null
+}
+
+/**
+ * The anchor ids github.com gives a rendered Markdown file, in document order: `github-slugger`
+ * over each heading's text (duplicates suffixed `-1`, `-2`…), plus any `id`/`name` written in raw
+ * HTML. Frontmatter is a table on github.com, not headings, so it is stripped first.
+ */
+export function githubHeadingSlugs(markdown: string): Set<string> {
+  const tree = unified().use(remarkParse).use(remarkGfm).parse(markdown.replace(FRONTMATTER_RE, ''))
+  const slugger = new GitHubSlugger()
+  const ids = new Set<string>()
+  type Node = { type: string; children?: unknown[]; value?: string }
+  const htmlIds = (node: Node) => {
+    if (node.type === 'html' && node.value)
+      for (const m of node.value.matchAll(HTML_ID_RE)) ids.add(m[1] ?? m[2] ?? m[3] ?? '')
+    for (const child of node.children ?? []) htmlIds(child as Node)
+  }
+  const headingText = (node: Node): string =>
+    node.type === 'html'
+      ? ''
+      : node.children
+        ? node.children.map(c => headingText(c as Node)).join('')
+        : mdastToString(node, { includeImageAlt: false })
+  const visit = (node: Node) => {
+    if (node.type === 'heading') {
+      // github.com serves the slug AND any anchor written inline in the heading; the slug is over
+      // the rendered text, so inline HTML contributes its ids but not its tags.
+      ids.add(slugger.slug(headingText(node)))
+      htmlIds(node)
+      return
+    }
+    if (node.type === 'html') return htmlIds(node)
+    for (const child of node.children ?? []) visit(child as Node)
+  }
+  visit(tree as unknown as Node)
+  return ids
+}
+
+/** Reads a tracked path under `repoRoot`, once per run; `undefined` (never a throw) when it cannot be read. */
+export function readTracked(repoRoot: string): TargetSource {
+  const cache = new Map<string, string | undefined>()
+  return path => {
+    if (!cache.has(path)) {
+      try {
+        cache.set(path, readFileSync(join(repoRoot, path), 'utf8'))
+      } catch {
+        cache.set(path, undefined)
+      }
+    }
+    return cache.get(path)
+  }
+}
+
+/** The git repository root that owns `root` — asked of git, not derived from directory depth. */
+export function repoRootOf(root: string): string {
+  return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim()
+}
+
+/** The set of git-tracked paths, exact case — the only honest existence oracle on a case-insensitive filesystem. */
+export function trackedFiles(repoRoot: string): Set<string> {
+  const out = execFileSync('git', ['ls-files', '-z'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  return new Set(out.split('\0').filter(Boolean))
 }
 
 // --- Catalog ROW CONTENT (single-sourced from the dataset SKILL.md frontmatter) ---
@@ -540,8 +804,19 @@ function perFileErrors(params: {
   declaredPluginSkills: number | null
   howToCount: number | null
   validRoutes: Set<string>
+  repoRoot: string
 }): string[] {
-  const { docsFiles, docsDir, skillCount, declaredPluginSkills, howToCount, validRoutes } = params
+  const {
+    docsFiles,
+    docsDir,
+    skillCount,
+    declaredPluginSkills,
+    howToCount,
+    validRoutes,
+    repoRoot,
+  } = params
+  const tracked = trackedFiles(repoRoot)
+  const targetSource = readTracked(repoRoot)
   const errors: string[] = []
   for (const file of docsFiles) {
     const content = readFileSync(file, 'utf-8')
@@ -552,6 +827,7 @@ function perFileErrors(params: {
     }
     if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
     errors.push(...findDeadLinks(content, rel, validRoutes))
+    errors.push(...findDeadRepoCitations(content, rel, tracked, targetSource))
   }
   return errors
 }
@@ -832,6 +1108,7 @@ export function runAllChecks(root: string): RunResult {
       declaredPluginSkills,
       howToCount,
       validRoutes,
+      repoRoot: repoRootOf(root),
     }),
   )
 
