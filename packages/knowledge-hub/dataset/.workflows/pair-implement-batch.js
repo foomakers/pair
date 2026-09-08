@@ -95,7 +95,13 @@ export const meta = {
 //                                 // a batch where every card failed says so, never "ready"
 // }
 //   status ∈ ready-for-merge | escalate
-//          | failed-implement | failed-pr | failed-review | failed-fix | failed-red-contract | failed-preflight
+//          | failed-implement | failed-pr | failed-review | failed-fix
+//          | failed-red-domain | failed-red-contract | failed-preflight
+//          | failed-custody | failed-custody-reset | seal-invalidated | stale-history-decision
+//          | failed-required-findings
+//   ONLY `ready-for-merge` may advance. A caller MUST treat every other status — including one
+//   this list does not name yet — as halted: `pair-loop` re-drove `seal-invalidated` and
+//   `stale-history-decision` cards on every iteration because it matched on `failed*` (US-479 c0).
 //
 // NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is #250's
 // concern, never this engine's.

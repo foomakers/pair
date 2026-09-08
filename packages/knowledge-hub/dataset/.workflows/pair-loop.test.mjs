@@ -575,6 +575,33 @@ test('orchestration: an escalated card is excluded from every subsequent iterati
   assert.equal(result.log.filter(l => l.status === 'escalate').length, 1)
 })
 
+test('orchestration: ANY non-ready status halts the card — a status outside escalate/failed-* is never re-driven (US-479 c0)', async () => {
+  // The engine emits statuses that start with neither `failed` nor `escalate` (`seal-invalidated`,
+  // `stale-history-decision`). A halt rule spelled as an allow-list of failure prefixes let those
+  // cards fall through: not halted, not parked, re-selected and re-driven on every iteration until
+  // max-iterations. The only status that may ever advance is `ready-for-merge`; everything else halts.
+  for (const status of ['seal-invalidated', 'stale-history-decision', 'some-future-status']) {
+    let batchCalls = 0
+    const { result } = await runWorkflow({
+      args: {
+        policyText: '## Eligibility\n\nrisk:green\n\n## Max Parallelism\n\n1\n## Stop Predicate\n\nmax-iterations: 3\n',
+      },
+      dispatch: (_prompt, opts) => {
+        if (opts.phase === 'Select') return { candidates: [{ id: '1', title: 'A', branch: 'feature/#1-a', tier: 'risk:green', mutexResources: [], prerequisites: [] }] }
+        return {}
+      },
+      workflowDispatch: () => {
+        batchCalls++
+        return { batch: [{ id: '1', status }] }
+      },
+    })
+    assert.equal(batchCalls, 1, `${status}: card was re-driven`)
+    const halted = result.log.find(l => l.id === '1' && l.excluded === true && /halted/.test(l.reason ?? ''))
+    assert.ok(halted, `${status}: no halted audit entry`)
+    assert.match(halted.reason, new RegExp(status))
+  }
+})
+
 test('orchestration: audit write not confirmed HALTs the run (review M5)', async () => {
   await assert.rejects(
     runWorkflow({
