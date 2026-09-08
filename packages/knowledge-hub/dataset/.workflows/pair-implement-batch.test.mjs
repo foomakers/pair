@@ -203,7 +203,7 @@ test('reviewer prompt pins the nonActionable-is-not-a-scope-filter correction', 
   })
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(
-    rev.prompt.includes('originally stated scope'),
+    SKILL('review-phase').includes('originally stated scope'),
     'reviewer prompt keeps the scope-filter correction',
   )
   // Matches either wording of the same ADL clause: the original "NOT by itself a reason"
@@ -211,7 +211,7 @@ test('reviewer prompt pins the nonActionable-is-not-a-scope-filter correction', 
   // The invariant being pinned is the ADL's, not one particular sentence — but it must stay
   // at least as strict, so a future edit cannot weaken it back into a scope filter.
   assert.ok(
-    /originally stated scope is NOT (a reason|by itself a reason)/.test(rev.prompt),
+    /originally stated scope is NOT (a reason|by itself a reason)/.test(SKILL('review-phase')),
     'reviewer prompt keeps the "not a reason to mark nonActionable" clause',
   )
 })
@@ -355,8 +355,8 @@ test('review noise policy: first review posts, re-review is silent, fix logs to 
 
   const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 2, 'first review + one re-review')
-  assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'), 'first review is posted on the PR')
-  assert.ok(reviews[1].prompt.includes('do NOT post any PR comment'), 're-review posts no comment')
+  assert.ok(reviews[0].prompt.includes('$mode=first'), 'first review is posted on the PR')
+  assert.ok(reviews[1].prompt.match(/\$mode=(re-review|fresh)/), 're-review posts no comment')
 
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(fix.prompt.includes('/pair-workflow-green-fix'), 'the fix step is the GREEN phase skill')
@@ -367,7 +367,7 @@ test('review noise policy: first review posts, re-review is silent, fix logs to 
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
   assert.ok(synth, 'a synthesis step runs at convergence')
   assert.ok(
-    synth.prompt.includes('Post ONE remediation comment') && synth.prompt.includes('DELETE'),
+    /\$mode=synthesize/.test(synth.prompt) && SKILL('cycle-comments').includes('Post ONE remediation comment') && SKILL('cycle-comments').includes('DELETE'),
     'convergence posts ONE remediation comment then deletes the log',
   )
   assert.equal(result.batch[0].status, 'ready-for-merge')
@@ -382,7 +382,7 @@ test('clean first review: no remediation comment, no synthesis step (first-revie
   assert.ok(!calls.some(c => c.opts.label?.startsWith('fix:')), 'no fix round when nothing actionable')
   const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 1, 'exactly one (first) review')
-  assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'))
+  assert.ok(reviews[0].prompt.includes('$mode=first'))
 })
 
 test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the PR with the open findings, no synthesis', async () => {
@@ -401,14 +401,14 @@ test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the 
   const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
   assert.ok(flush, 'escalation posts a flush comment')
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
-  assert.ok(flush.prompt.includes('.pair/working/reviews/292.md') && flush.prompt.includes('Do NOT delete the log'), 'flush reads the log and keeps it for the human')
-  assert.ok(/UNTRACKED|PRESERVED|pruned/.test(flush.prompt) && flush.prompt.includes('../pair-worktrees/292'), 'flush documents the worktree-persistence assumption of the untracked log (finding 3)')
+  assert.ok(flush.prompt.includes('.pair/working/reviews/292.md') && /\$hasLog=true/.test(flush.prompt) && SKILL('cycle-comments').includes('Do NOT delete the log'), 'flush reads the log and keeps it for the human')
+  assert.ok(/UNTRACKED|PRESERVED|pruned/.test(SKILL('cycle-comments')) && flush.prompt.includes('../pair-worktrees/292'), 'flush documents the worktree-persistence assumption of the untracked log (finding 3)')
   // #373 round-6 finding: the flush must ALSO minimize a prior convergence's final-remediation
   // comment (converged-but-unmerged re-run that now escalates) — a stale "ready for merge" verdict
   // cannot stay visible beside an active escalation; never the first-review comment. Mirrors the
   // synth-path minimize set.
-  assert.ok(/final-remediation\/synthesis comment left by an EARLIER convergence/i.test(flush.prompt), 'flush minimizes a prior convergence\'s own final-remediation comment (round-6 finding)')
-  assert.ok(/NEVER minimize the first-review comment/i.test(flush.prompt), 'flush carves out the first-review comment from the minimize set')
+  assert.ok(/final-remediation\/synthesis comment left by an EARLIER convergence/i.test(SKILL('cycle-comments')), 'flush minimizes a prior convergence\'s own final-remediation comment (round-6 finding)')
+  assert.ok(/NEVER minimize the first-review comment/i.test(SKILL('cycle-comments')), 'flush carves out the first-review comment from the minimize set')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
 })
 
@@ -437,8 +437,8 @@ test('#373 continuation (resume + existing log): probe runs, round-0 review is S
 
   const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 1, 'round-0 only (immediate convergence)')
-  assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 on a continuation is a SILENT re-review')
-  assert.ok(!reviews[0].prompt.includes('This is the FIRST review: POST'), 'no second first-review is posted')
+  assert.ok(reviews[0].prompt.match(/\$mode=(re-review|fresh)/), 'round-0 on a continuation is a SILENT re-review')
+  assert.ok(!reviews[0].prompt.includes('$mode=first'), 'no second first-review is posted')
 
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
   assert.ok(synth, 'immediate convergence on a continuation still synthesizes (cycleHasRemediation seeded true)')
@@ -462,14 +462,15 @@ test('#373 continuation convergence: the ONE synthesis maps ALL runs, minimizes 
   const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
   assert.ok(synth, 'convergence synthesizes')
-  assert.ok(/ALL runs/i.test(synth.prompt), 'synthesis maps findings across ALL runs of the cycle')
-  assert.ok(/minimize/i.test(synth.prompt) && /outdated/i.test(synth.prompt), 'synthesis minimizes / marks-outdated prior intermediate comments')
+  assert.match(synth.prompt, /\$mode=synthesize/)
+  assert.ok(/ALL runs/i.test(SKILL('cycle-comments')), 'synthesis maps findings across ALL runs of the cycle')
+  assert.ok(/minimize/i.test(SKILL('cycle-comments')) && /outdated/i.test(SKILL('cycle-comments')), 'synthesis minimizes / marks-outdated prior intermediate comments')
   // #373 round-5 finding 1: the minimize set must also cover a PRIOR convergence's own
   // final-remediation comment (re-run→re-converge edge), while NEVER the first review, so the
   // 'at most one final remediation' invariant holds on re-entry.
-  assert.ok(/prior convergence/i.test(synth.prompt), 'synthesis minimizes a prior convergence\'s own final-remediation comment (re-run→re-converge edge)')
-  assert.ok(/do NOT minimize the first review/i.test(synth.prompt), 'the first-review comment is explicitly excluded from the minimize set')
-  assert.ok(synth.prompt.includes('DELETE'), 'synthesis deletes the log at the end')
+  assert.ok(/prior convergence/i.test(SKILL('cycle-comments')), 'synthesis minimizes a prior convergence\'s own final-remediation comment (re-run→re-converge edge)')
+  assert.ok(/do NOT minimize the first review/i.test(SKILL('cycle-comments')), 'the first-review comment is explicitly excluded from the minimize set')
+  assert.ok(SKILL('cycle-comments').includes('DELETE'), 'synthesis deletes the log at the end')
   assert.equal(result.batch[0].status, 'ready-for-merge')
 })
 
@@ -484,7 +485,7 @@ test('#373 resume with NO prior log: round-0 is a FRESH first review (posted), n
   const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
   assert.ok(probe, 'probe still runs on resume')
   const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
-  assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'), 'no log → round-0 posts a fresh first review')
+  assert.ok(reviews[0].prompt.includes('$mode=first'), 'no log → round-0 posts a fresh first review')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'clean fresh review on resume → no synthesis (cycleHasRemediation stayed false)')
 })
 
@@ -512,7 +513,7 @@ test('fresh story: the probe runs (guard independent of caller bookkeeping) and 
   assert.ok(review, 'a review round ran')
   assert.match(
     review.prompt,
-    /post/i,
+    /\$mode=first/,
     'round-0 on a fresh story still posts the first review (the probe must not silence it)',
   )
 })
@@ -534,7 +535,7 @@ test('the probe cannot silence a fresh first review even if it returns garbage',
     },
   })
   const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
-  assert.match(review.prompt, /post/i, 'a garbage probe return must not silence the first review')
+  assert.match(review.prompt, /\$mode=first/, 'a garbage probe return must not silence the first review')
 })
 
 test('#373 escalate documents the manual out-of-band convention (funnel into the same log; next run synthesizes) — AC4', async () => {
@@ -550,8 +551,9 @@ test('#373 escalate documents the manual out-of-band convention (funnel into the
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
   const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
   assert.ok(flush, 'escalation posts a flush comment')
-  assert.ok(/same (working )?log|this log/i.test(flush.prompt), 'flush directs further rework into the same working log')
-  assert.ok(/next.*run.*synthesi/i.test(flush.prompt), 'flush states the next orchestrated run synthesizes the cycle')
+  assert.match(flush.prompt, /\$mode=flush/)
+  assert.ok(/same (working )?log|this log/i.test(SKILL('cycle-comments')), 'flush directs further rework into the same working log')
+  assert.ok(/next.*run.*synthesi/i.test(SKILL('cycle-comments')), 'flush states the next orchestrated run synthesizes the cycle')
 })
 
 test('#373 resume with NO log but a first review ALREADY on the PR: round-0 is SILENT (no duplicate first review), clean → no synth (findings 1 & 3)', async () => {
@@ -568,8 +570,8 @@ test('#373 resume with NO log but a first review ALREADY on the PR: round-0 is S
   const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
   const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(reviews.length, 1, 'round-0 only')
-  assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 is a SILENT re-review when a first review already exists on the PR')
-  assert.ok(!reviews[0].prompt.includes('This is the FIRST review: POST'), 'no duplicate first-review is posted')
+  assert.ok(reviews[0].prompt.match(/\$mode=(re-review|fresh)/), 'round-0 is a SILENT re-review when a first review already exists on the PR')
+  assert.ok(!reviews[0].prompt.includes('$mode=first'), 'no duplicate first-review is posted')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no log to continue → clean round-0 does not synthesize a deleted log')
   assert.equal(result.batch[0].status, 'ready-for-merge')
 })
@@ -599,7 +601,7 @@ test('#373 finding 1: resume, NO log + first review already on PR, round-0 ESCAL
   // remembered, so the second time it stands the story escalates exactly as before.
   assert.equal(reviews.length, 2, 'one fix round is spent before honouring the request')
   assert.ok(calls.some(c => c.opts.label?.startsWith('fix:')), 'the fixer DID run on the actionable findings')
-  assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 is SILENT (first review already on PR)')
+  assert.ok(reviews[0].prompt.match(/\$mode=(re-review|fresh)/), 'round-0 is SILENT (first review already on PR)')
   const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
   assert.ok(flush, 'a resume-path round-0 escalation STILL posts a flush (finding 1: no silent escalation)')
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open actionable findings')
@@ -608,8 +610,8 @@ test('#373 finding 1: resume, NO log + first review already on PR, round-0 ESCAL
   // outcome — the arm itself is still exercised by the MAX_FIX_ROUNDS escalation test, where
   // no fix round precedes it. What this test still pins is the finding-1 invariant: a
   // resume-path escalation is never SILENT.
-  assert.ok(flush.prompt.includes('Read the review log'), 'after a fix round there IS a log to anchor to')
-  assert.ok(flush.prompt.includes('Do NOT delete the log'), 'the log is kept as the continuation anchor')
+  assert.match(flush.prompt, /\$hasLog=true/, 'after a fix round there IS a log to anchor to')
+  assert.ok(SKILL('cycle-comments').includes('Do NOT delete the log'), 'the log is kept as the continuation anchor')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'escalation never synthesizes')
 })
 
@@ -629,7 +631,8 @@ test('#373 finding 4: probe queries BOTH signals and runs at sonnet/low — reli
   assert.ok(probe, 'probe runs on resume')
   assert.equal(probe.opts.model, 'sonnet', 'probe runs at sonnet (reliable worktree+gh substring match, fails open toward duplicate first review)')
   assert.equal(probe.opts.effort, 'low', 'probe uses low effort')
-  assert.ok(probe.prompt.includes('logExists') && probe.prompt.includes('firstReviewPosted'), 'probe reports both the log-existence and the PR-side first-review signal')
+  assert.match(probe.prompt, /\/pair-workflow-cycle-comments\*\* with .*\$mode=probe/)
+  assert.ok(SKILL('cycle-comments').includes('logExists') && SKILL('cycle-comments').includes('firstReviewPosted'), 'probe reports both the log-existence and the PR-side first-review signal')
 })
 
 test('#373 finding 1: the first review emits a hidden marker and the probe matches it DETERMINISTICALLY (no semantic template-structure judgment)', async () => {
@@ -648,11 +651,11 @@ test('#373 finding 1: the first review emits a hidden marker and the probe match
 
   const first = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.ok(first.prompt.includes(marker), 'the first review emits the exact hidden marker verbatim')
-  assert.ok(/HTML comment/i.test(first.prompt) && /invisible/i.test(first.prompt), 'marker is documented as an invisible HTML comment (no visible noise)')
+  assert.ok(/HTML comment/i.test(SKILL('review-phase')) && /invisible/i.test(SKILL('review-phase')), 'marker is documented as an invisible HTML comment (no visible noise)')
 
   const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
   assert.ok(probe.prompt.includes(marker), 'the probe matches the SAME marker the first review emits')
-  assert.ok(/EXACT marker substring|plain substring match|DETERMINISTICALLY/.test(probe.prompt), 'probe is a deterministic substring match, not a judgment')
+  assert.ok(/EXACT substring|plain substring match|DETERMINISTICALLY/.test(SKILL('cycle-comments')), 'probe is a deterministic substring match, not a judgment')
   assert.ok(!/Overall Assessment|Review Summary/.test(probe.prompt), 'probe no longer relies on a semantic template-structure reading of the comment')
 })
 
@@ -691,17 +694,18 @@ test('#373 finding 3: both escalate-flush prompts carry the shared convention bl
   assert.ok(maxRoundsFlush && designFlush, 'both escalation paths post a flush')
 
   // Shared single-source marker present in BOTH (Part A supersede clause).
-  assert.match(maxRoundsFlush.prompt, /SUPERSEDES the last/, 'maxRounds flush carries the shared minimize/supersede block')
-  assert.match(designFlush.prompt, /SUPERSEDES the last/, 'design-disagreement flush carries the shared minimize/supersede block')
+  assert.match(maxRoundsFlush.prompt, /\$mode=flush/, 'maxRounds flush is the cycle-comments skill')
+  assert.match(designFlush.prompt, /\$mode=flush/, 'design-disagreement flush is the cycle-comments skill')
+  assert.match(SKILL('cycle-comments'), /supersedes the last/i, 'the shared minimize/supersede rule lives once, in the skill')
 
   // Each flush is interpolated from its OWN story/PR — proving parameterization, not a tautology.
   assert.match(maxRoundsFlush.prompt, /\.\.\/pair-worktrees\/292\b/, 'maxRounds flush interpolates its own worktree (292)')
-  assert.match(maxRoundsFlush.prompt, /PR #7\b/, 'maxRounds flush interpolates its own PR (#7)')
-  assert.doesNotMatch(maxRoundsFlush.prompt, /pair-worktrees\/555|PR #88\b/, 'maxRounds flush does NOT leak the other story/PR')
+  assert.match(maxRoundsFlush.prompt, /\$pr=7\b/, 'maxRounds flush interpolates its own PR (#7)')
+  assert.doesNotMatch(maxRoundsFlush.prompt, /pair-worktrees\/555|\$pr=88\b/, 'maxRounds flush does NOT leak the other story/PR')
 
   assert.match(designFlush.prompt, /\.\.\/pair-worktrees\/555\b/, 'design flush interpolates its own worktree (555)')
-  assert.match(designFlush.prompt, /PR #88\b/, 'design flush interpolates its own PR (#88)')
-  assert.doesNotMatch(designFlush.prompt, /pair-worktrees\/292|PR #7\b/, 'design flush does NOT leak the other story/PR')
+  assert.match(designFlush.prompt, /\$pr=88\b/, 'design flush interpolates its own PR (#88)')
+  assert.doesNotMatch(designFlush.prompt, /pair-worktrees\/292|\$pr=7\b/, 'design flush does NOT leak the other story/PR')
 })
 
 test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging re-review keeps the log, flushes (cycleHasRemediation seeded true), supersedes prior flush, no synth (AC5 on the resume path)', async () => {
@@ -721,8 +725,8 @@ test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging 
   const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
   assert.ok(flush, 'continuation escalation posts a flush (cycleHasRemediation seeded true from the existing log)')
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
-  assert.ok(flush.prompt.includes('Do NOT delete the log'), 'the continuation anchor log is kept')
-  assert.ok(/minimize|supersede/i.test(flush.prompt), 'a new escalate-flush supersedes/minimizes the prior one (finding 2)')
+  assert.match(flush.prompt, /\$hasLog=true/, 'the continuation anchor log is kept')
+  assert.ok(/minimize|supersede/i.test(SKILL('cycle-comments')), 'a new escalate-flush supersedes/minimizes the prior one (finding 2)')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
 })
 
@@ -1019,7 +1023,9 @@ test('the review step is the review PROCESS skill, and the reviewer is never ask
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
-  assert.ok(rev.prompt.includes('/pair-process-review'), 'the review follows the process skill')
+  assert.ok(rev.prompt.includes('/pair-workflow-review-phase'), 'the review is the review-phase skill')
+  assert.ok(rev.prompt.includes('$reviewSkill=/pair-process-review'), 'the review follows the process skill')
+  assert.ok(SKILL('review-phase').includes('/pair-process-review'), 'the general pass composes the process skill')
   assert.ok(rev.prompt.includes('Do NOT read `.pair/working/`'), 'the reviewer stays blind to the authoring handoff')
 })
 
@@ -1048,13 +1054,14 @@ test('the reviewer is forbidden from filing issues and told to resolve debts in 
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
-  const rev = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
+  const rev = SKILL('review-phase')
+  assert.match(calls.find(c => c.opts.agentType === 'pair-reviewer').prompt, /\$writeIssue=\/pair-capability-write-issue/)
   assert.ok(/DO NOT FILE NEW ISSUES/.test(rev), 'the ban is stated, in the imperative')
   assert.ok(
     !/file one via \/pair-capability-write-issue/.test(rev),
     'the old "file one if none exists yet" instruction is gone — this is the exact string that produced #426-#431',
   )
-  assert.ok(/never invoke \/pair-capability-write-issue/i.test(rev), 'the skill that files issues is named and forbidden')
+  assert.ok(/never invoke `\$writeIssue` \(default `\/pair-capability-write-issue`\)/i.test(rev), 'the skill that files issues is named and forbidden')
   assert.ok(/resolved IN PLACE, in this same PR/.test(rev), 'the replacement behaviour is stated positively')
   // An existing card may still be cited — the ban is on CREATING, not on referencing.
   assert.ok(/do not create one/i.test(rev), 'citing an already-tracked story stays allowed')
@@ -1081,7 +1088,7 @@ test('the fix step is likewise barred from deferring a finding into a new issue'
   const fix = SKILL('green-fix')
   assert.ok(/Resolve \*\*every\*\* finding in place/.test(fix), 'the fixer resolves in place')
   assert.ok(/Never file a follow-up issue/.test(fix), 'the fixer cannot file a follow-up either')
-  assert.ok(/never invoke `\/pair-capability-write-issue`/.test(fix), 'the issue-filing skill is named and forbidden')
+  assert.ok(/never invoke `\$writeIssue` \(default `\/pair-capability-write-issue`\)/.test(fix), 'the issue-filing skill is named and forbidden')
   assert.ok(
     /the human decides at the merge gate/.test(fix),
     'an oversized remainder goes to the human, not to the backlog',
@@ -1132,9 +1139,10 @@ test('review and fix exhaust finite protocol states before another round', async
   const review = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
   assert.ok(calls.find(c => c.opts.label?.startsWith('fix:')).prompt.includes('/pair-workflow-green-fix'))
   const fix = SKILL('green-fix')
-  assert.ok(review.includes('CONTRACT INVENTORY (mandatory)'), 'the reviewer inventories a contract before reporting its first hole')
-  assert.ok(review.includes('finite decision table of every supported state'), 'a finite protocol/state space is exhausted in the same review')
-  assert.ok(review.includes('AUTHORITATIVE BOUNDARY PROOF (mandatory)'), 'the reviewer must prove externally-defined state semantics at the real boundary')
+  assert.ok(review.includes('/pair-workflow-review-phase'))
+  assert.ok(SKILL('review-phase').includes('Contract inventory'), 'the reviewer inventories a contract before reporting its first hole')
+  assert.ok(/finite decision table of supported states/.test(SKILL('review-phase')), 'a finite protocol/state space is exhausted in the same review')
+  assert.ok(SKILL('review-phase').includes('Authoritative boundary proof'), 'the reviewer must prove externally-defined state semantics at the real boundary')
   assert.ok(fix.includes('Finite-state completeness'), 'the fixer must preserve that complete state model')
   assert.ok(fix.includes('Do not implement one newly discovered row at a time'), 'the next re-review is not used to discover ordinary variants serially')
   assert.ok(fix.includes('A unit test of the function being changed cannot establish external semantics'), 'the fixer cannot infer external-tool behavior from its own unit tests')
@@ -1157,8 +1165,9 @@ test('review and fix prove empirical claims, collisions, and lossless diagnostic
   const fixCall = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(fixCall.prompt.includes('/pair-workflow-green-fix'))
   const fix = SKILL('green-fix')
-  assert.ok(review.includes('EMPIRICAL EVIDENCE LEDGER (mandatory)'), 'the reviewer must prove measured claims instead of repeating plausible figures')
-  assert.ok(review.includes('INTERACTION/COLLISION COMPLETENESS (mandatory)'), 'the reviewer must include overlapping state-rule rows')
+  assert.ok(review.includes('/pair-workflow-review-phase'))
+  assert.ok(SKILL('review-phase').includes('Empirical evidence ledger'), 'the reviewer must prove measured claims instead of repeating plausible figures')
+  assert.ok(/interaction cross-product/.test(SKILL('review-phase')), 'the reviewer must include overlapping state-rule rows')
   assert.ok(fix.includes('exact command/fixture/revision'), 'the fixer records the reproducible source for each changed factual claim')
   assert.ok(fix.includes('lossless distinguishability'), 'diagnostics retain invisible or confusable input distinctions')
   assert.ok(fix.includes('duplicate input alongside a pre-existing generated/suffixed outcome'), 'the fixer tests rule-output collisions, not independent duplicate rows only')
@@ -1315,10 +1324,11 @@ test('re-review is anchored to the reviewed revision and checks only the fix del
   })
 
   const reviews = calls.filter(c => c.opts.agentType === 'pair-reviewer')
-  assert.match(reviews[0].prompt, /reviewedHead/i, 'every review returns the immutable head it covered')
-  assert.match(reviews[1].prompt, new RegExp(`git diff ${REVIEWED_HEAD}\\.\\.\\.origin/feat/#292-x --name-only`), 're-review inventories the fix delta, not the entire PR')
-  assert.match(reviews[1].prompt, new RegExp(`git diff ${REVIEWED_HEAD}\\.\\.\\.origin/feat/#292-x`), 're-review starts from the previous review baseline')
-  assert.match(reviews[1].prompt, /only if it is in this delta or a contract boundary changed by this delta/i, 'unchanged PR surface is not repeatedly re-audited')
+  assert.match(SKILL('review-phase'), /reviewedHead/i, 'every review returns the immutable head it covered')
+  assert.match(reviews[1].prompt, new RegExp(`\\$base=${REVIEWED_HEAD} `), 're-review inventories the fix delta, not the entire PR')
+  assert.match(reviews[1].prompt, new RegExp(`\\$priorHead=${REVIEWED_HEAD}\\b`), 're-review starts from the previous review baseline')
+  assert.match(reviews[1].prompt, /\$mode=re-review/)
+  assert.match(SKILL('review-phase'), /only if it is in this delta or a boundary changed by it/i, 'unchanged PR surface is not repeatedly re-audited')
 })
 
 test('a review without an immutable baseline cannot converge', async () => {
@@ -1446,16 +1456,17 @@ test('the reviewer runs at high effort, not xhigh, and is told to work in short 
   })
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   assert.equal(rev.opts.effort, 'high', 'xhigh reasoning gaps outrun the supervisor window')
-  assert.match(rev.prompt, /PACING \(mandatory/, 'the pacing contract is stated')
+  const pacing = SKILL('review-phase')
+  assert.match(pacing, /PACING \(mandatory/, 'the pacing contract is stated')
   // The measurement that matters: the window is on TEXT, not on tool calls. A prompt that
   // says "do not leave gaps between tool calls" aims at the wrong target — the killed
   // reviewer was calling sed every ~5s and died anyway.
-  assert.match(rev.prompt, /180 seconds without emitting a TEXT MESSAGE/, 'the real limit is named')
-  assert.match(rev.prompt, /Tool calls do NOT count as progress/, 'the common misreading is pre-empted')
-  assert.match(rev.prompt, /after EVERY file you inspect, write ONE SHORT LINE/, 'the required behaviour is concrete')
-  assert.match(rev.prompt, /never read two files in a row without speaking in between/i, 'the failure mode is named')
-  assert.match(rev.prompt, /silence is fatal/, 'the rule ends unambiguously')
-  assert.match(rev.prompt, /--name-only/, 'it starts by enumerating the files so progress is observable from the first step')
+  assert.match(pacing, /180 seconds without emitting a TEXT MESSAGE/, 'the real limit is named')
+  assert.match(pacing, /Tool calls do NOT count as progress/, 'the common misreading is pre-empted')
+  assert.match(pacing, /after EVERY file you inspect, write ONE SHORT LINE/i, 'the required behaviour is concrete')
+  assert.match(pacing, /never read two files in a row without speaking in between/i, 'the failure mode is named')
+  assert.match(pacing, /silence is fatal/, 'the rule ends unambiguously')
+  assert.match(pacing, /--name-only/, 'it starts by enumerating the files so progress is observable from the first step')
 })
 
 test('the fix step keeps high effort — it was never the step that stalled', async () => {
@@ -2607,7 +2618,10 @@ test('the text-shape rule reaches the prompts whose output gets re-read', async 
   const pr = calls.find(c => c.opts.phase === 'PR')
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer')
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
-  for (const [name, c] of [['PR', pr], ['review', rev], ['synthesis', synth]]) {
+  assert.ok(rev && synth, 'review and synthesis calls exist')
+  assert.ok(SKILL('review-phase').includes('TEXT SHAPE (mandatory)'), 'review skill lost the shape rule')
+  assert.ok(/Schematic, no narration/.test(SKILL('cycle-comments')), 'synthesis skill lost the shape rule')
+  for (const [name, c] of [['PR', pr]]) {
     assert.ok(c, `no ${name} call`)
     assert.ok(c.prompt.includes('TEXT SHAPE (mandatory)'), `${name} prompt lost the shape rule`)
   }
@@ -2615,7 +2629,8 @@ test('the text-shape rule reaches the prompts whose output gets re-read', async 
 
 test('the shape rule protects evidence: it forbids narration, never the failure case', async () => {
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
-  const review = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
+  assert.ok(calls.find(c => c.opts.agentType === 'pair-reviewer').prompt.includes('/pair-workflow-review-phase'))
+  const review = SKILL('review-phase')
   // A rule that merely said "be brief" would trade a review round for a few words. The
   // asymmetry — cut narration, keep the failure case and the proof — IS the rule.
   assert.ok(review.includes('KEEP AT FULL LENGTH'), 'the keep-clause is gone')
@@ -2655,11 +2670,12 @@ test('the convergence synthesis stays COMPLETE while becoming a table', async ()
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: shapeDispatch() })
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
   assert.ok(synth, 'no synthesis call')
-  assert.ok(synth.prompt.includes('ONE MARKDOWN TABLE'), 'synthesis is not a table')
+  assert.match(synth.prompt, /\$mode=synthesize/)
+  assert.ok(SKILL('cycle-comments').includes('ONE MARKDOWN TABLE'), 'synthesis is not a table')
   // Compression must never become truncation: this comment is the merge-gate reader's whole
   // view of the cycle, so a dropped finding is a finding nobody sees.
-  assert.ok(synth.prompt.includes('EVERY finding recorded across ALL runs'), 'completeness lost')
-  assert.ok(synth.prompt.includes('no silent truncation'), 'the anti-truncation clause is gone')
+  assert.ok(SKILL('cycle-comments').includes('EVERY finding recorded across ALL runs'), 'completeness lost')
+  assert.ok(SKILL('cycle-comments').includes('no silent truncation'), 'the anti-truncation clause is gone')
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2996,7 +3012,7 @@ test('US-219 AC1: a caller-supplied pipeline replaces every pair literal', async
   assert.ok(gen.includes('kb/templates/acme-review-format.md'), 'the generator must receive the full template path')
   const rev = calls.find(c => c.opts.agentType === 'pair-reviewer').prompt
   assert.ok(
-    rev.includes('using the acme-review-format.md vocabulary'),
+    rev.includes('$template=acme-review-format.md'),
     'the reviewer prompt must name the template by basename, not by path',
   )
 

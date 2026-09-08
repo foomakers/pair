@@ -35,7 +35,7 @@ Accepted
 
 ## Decision
 
-1. **Phase skills.** The review ↔ fix loop is six skills in a new `workflow/` category, installed as `pair-workflow-*`: `remediation-plan` (D0), `red-spec` (D1, the finite domain map is a step of it), `red-verify` (D2), `red-seal` (D3), `green-fix` (D4), `p3-verify` (D5). Each declares its arguments, its single mutation boundary and its handoff; the workflow names the skill and passes typed arguments (`$run $story $pr $phase $base $worktree $branch` plus phase-specific JSON). A workflow source scan must find none of the phase rules spelled inline (asserted in `pair-implement-batch.test.mjs`).
+1. **Phase skills.** The review ↔ fix loop is eight skills in a new `workflow/` category, installed as `pair-workflow-*`: `review-phase` (C — review set declared from the PR's risk tier, union of passes, `first` / `re-review` / `fresh` modes), `cycle-comments` (the PR-comment policy: `probe` / `flush` / `synthesize`), `remediation-plan` (D0), `red-spec` (D1, the finite domain map is a step of it), `red-verify` (D2), `red-seal` (D3), `green-fix` (D4), `p3-verify` (D5). Each declares its arguments, its single mutation boundary and its handoff; the workflow names the skill and passes typed arguments (`$run $story $pr $phase $base $worktree $branch` plus phase-specific JSON). A workflow source scan must find none of the phase rules spelled inline (asserted in `pair-implement-batch.test.mjs`).
 2. **Deterministic custody in a script.** `.claude/workflows/pair-contracts/red-snapshot.mjs` owns `seal` (HEAD at base, artifacts hash-checked, tree dirty only at the contract, one local `--no-verify` commit with the `Pair-RED-Snapshot` trailer, idempotent) and `verify` (one snapshot by trailer, parent == base, tree == manifest + artifacts, sealed blobs byte-identical at HEAD, no unlisted test change, production changes inside `fixScope.allowedPaths`, no module added or moved under a `behavioral` scope). It is tested against throwaway repositories; the sealer and P3 agents run it and return its answer.
 3. **Rebase is never repaired.** No custody probe, card-level reset or SHA-scoped waiver. An in-flight attempt whose base moved fails closed where it is measured; a resumed run starts a fresh review on the current head; older snapshots are historical evidence. A history-only finding stays a typed human escalation (`humanDecisionKind: history-rewrite`) taken before RED/seal/GREEN.
 4. **One frozen plan per round.** D0 groups the round's actionable findings by canonical owner, one mode (`behavioral` | `structural`) and exact allowed paths; every finding index appears in exactly one group; groups run sequentially in dependency order, each on the previous group's verified head. A plan that drops, duplicates or invents an index is `failed-plan`.
@@ -54,7 +54,7 @@ Accepted
 ### Trade-offs
 
 - `models.redMapper` no longer exists (`models.planner` replaces it); `historyDecision` and `custodyReset` are unknown card keys.
-- Phases A–C (implement, PR, review) still carry inline prompts until the next commits of US-479 move them into skills the same way.
+- Phases A–B (implement, PR) and the contract generator still carry inline prompts until the next commits of US-479 move them into skills the same way.
 
 ## References
 

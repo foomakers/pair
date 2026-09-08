@@ -23,6 +23,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 | `$findings`  | Yes      | JSON array: the group's findings to resolve, every one, including minor.                             |
 | `$reviewLog` | Yes      | Path of the cycle's working log (e.g. `.pair/working/reviews/<story>.md`) to append this round to. |
 | `$notes`     | No       | Scope directive from the card.                                                                       |
+| `$writeIssue` | No      | The project's issue-filing skill (default `/pair-capability-write-issue`) — named only to forbid it.                 |
 
 ## Algorithm
 
@@ -41,7 +42,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 5. Do NOT modify, format, rename, regenerate, delete or weaken any test artifact the snapshot records; do NOT amend, rebase, reset or rewrite the snapshot commit.
 6. **Finite-state completeness**: when the change parses, selects or branches on a finite protocol/state domain, make the whole decision table pass — every supported state and its invalid/boundary pair, including the smallest interaction cross-product where one rule's output can be another's input (test the actual collision resolver, including duplicate input alongside a pre-existing generated/suffixed outcome). Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant. A unit test of the function being changed cannot establish external semantics: prove an external command, format or runtime claim at its real producer/consumer boundary.
 7. **Lossless diagnostics**: when an error reports user input or a derived identifier, keep lossless distinguishability between actual, expected and candidate values — escape or name code points for invisible, whitespace-normalized or confusable characters.
-8. Resolve **every** finding in place. Never file a follow-up issue, never invoke `/pair-capability-write-issue`, never leave a "tracked separately" note. If a finding is genuinely larger than the story, fix what belongs here and say plainly in the log what remains — the human decides at the merge gate.
+8. Resolve **every** finding in place. Never file a follow-up issue, never invoke `$writeIssue` (default `/pair-capability-write-issue`), never leave a "tracked separately" note. If a finding is genuinely larger than the story, fix what belongs here and say plainly in the log what remains — the human decides at the merge gate.
 
 ### Step 3: Prove and commit
 

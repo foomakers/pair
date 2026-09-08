@@ -513,6 +513,9 @@ const PIPELINE_DEFAULTS = {
     redSeal: '/pair-workflow-red-seal',
     greenFix: '/pair-workflow-green-fix',
     p3Verify: '/pair-workflow-p3-verify',
+    // Fase C (US-479 c3): the independent review and the cycle's PR-comment policy.
+    reviewPhase: '/pair-workflow-review-phase',
+    cycleComments: '/pair-workflow-cycle-comments',
   },
   worktreeRoot: '../pair-worktrees',
   auditLogDir: '.pair/working/reviews',
@@ -1374,16 +1377,6 @@ const INTERACTION_COLLISION_COMPLETENESS =
 const LOSSLESS_DIAGNOSTIC_CONTRACT =
   'LOSSLESS DIAGNOSTIC CONTRACT (mandatory when reporting user input or derived identifiers): test lossless distinguishability between actual, expected and candidate values. Escape or name code points for invisible, whitespace-normalized, or confusable characters so an error cannot collapse the wrong spelling into the expected one.'
 
-const CONTRACT_INVENTORY =
-  'CONTRACT INVENTORY (mandatory): before reporting findings, map each changed observable contract to its authoritative producer, inputs, consumers and representations. A FIRST review inventories every changed contract; a re-review inventories only its fix delta and directly changed boundary. For a finite protocol, parser, configuration, state transition or command-output domain, build a finite decision table of every supported state plus its invalid/boundary pair, and probe the real behavior. Report every defect that table exposes now; do not leave ordinary rows for a later review. ' +
-  EMPIRICAL_EVIDENCE_LEDGER +
-  ' ' +
-  INTERACTION_COLLISION_COMPLETENESS +
-  ' ' +
-  LOSSLESS_DIAGNOSTIC_CONTRACT +
-  ' ' +
-  AUTHORITATIVE_BOUNDARY_PROOF
-
 const FINITE_STATE_COMPLETENESS =
   'FINITE-STATE COMPLETENESS (mandatory when a change parses, selects, snapshots, or branches on a finite protocol/state domain): identify the authoritative grammar or producer, make the complete decision table of supported states and invalid/boundary cases, then write and run a real test for every row before editing the canonical source. Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant. ' +
   EMPIRICAL_EVIDENCE_LEDGER +
@@ -1474,34 +1467,6 @@ function revWtClauseBase(story) {
   return `ISOLATION (mandatory, read-only): NEVER switch the main checkout's branch. Inspect the code in a DETACHED throwaway worktree pinned to the PR's current pushed head: \`git worktree remove --force ${p} 2>/dev/null; git fetch origin -q; git worktree add --detach ${p} origin/${story.branch}\`, then \`cd ${p}\`. Read the code there (the untracked checkpoint is absent here — good, stay blind to it). When finished, remove it: \`git worktree remove --force ${p}\`.`
 }
 
-function revWtClause(story) {
-  return `${revWtClauseBase(story)} ${CONTRACT_INVENTORY}`
-}
-
-// #373 finding 3: the escalate-flush shared block — supersede-the-prior-flush + the manual
-// out-of-band CONVENTION + the untracked-worktree-persistence note — is identical across BOTH
-// escalation prompts (MAX_FIX_ROUNDS + needsHumanDecision). Authored ONCE here so a future
-// change to the convention or the worktree-persistence wording is made in one place and can't
-// silently diverge between the two paths (they had already drifted slightly before this).
-// Part A — PR-comment minimize/supersede. Operates ONLY on already-posted PR comments, so it
-// does NOT depend on a working log and MUST be emitted on EVERY escalation (both arms), else a
-// stale prior flush or a prior convergence's "ready for merge" synthesis is left visible next to
-// an active escalation (finding: the no-log arm previously omitted this).
-function flushMinimize(prNumber) {
-  return `FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). ALSO minimize / mark-outdated any prior final-remediation/synthesis comment left by an EARLIER convergence of this SAME cycle (a converged-but-unmerged PR that was re-run, found new findings and is now escalating): its "review clean / ready for merge" verdict directly contradicts an active escalation, so it must NOT stay visible alongside this flush — mirror the convergence-synthesis path (no-op if there is none), but NEVER minimize the first-review comment.`
-}
-
-// Part B — the log/out-of-band CONVENTION + untracked-worktree-persistence note. Only meaningful
-// when a working log exists (a continuing cycle), so it is emitted only on the log-backed arms.
-function flushLogConvention(story) {
-  return `CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`${PIPELINE.worktreeRoot}/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
-}
-
-// Full convention = minimize (Part A) + log/out-of-band note (Part B), for the log-backed arms.
-function flushConvention(story, prNumber) {
-  return `${flushMinimize(prNumber)} ${flushLogConvention(story)}`
-}
-
 // ── Per-story lifecycle ──────────────────────────────────────────────────
 async function driveStory(story) {
   const tag = `#${story.id}`
@@ -1581,9 +1546,6 @@ async function driveStory(story) {
   //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
   //    posting, and comment minimizing are all delegated to agents running in the worktree.
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
-  // A history rewrite is a human decision the engine cannot take or waive (US-479 c1): the reviewer
-  // types it and the loop escalates before RED/seal/GREEN could make the commits immutable.
-  const historyEscalationClause = `HISTORY-REWRITE ESCALATION: if an actionable finding can only be fixed by rewriting, amending, or rebasing existing Git history, set needsHumanDecision: true AND humanDecisionKind: "history-rewrite". Do this before any RED snapshot; still report every other finding normally. `
   // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
   // (invisible in rendered markdown → no visible noise). The continuation probe detects a
   // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
@@ -1592,6 +1554,59 @@ async function driveStory(story) {
   // review (the story's High-impact over-silencing risk). Minimized/outdated comments still
   // match: gh returns their raw body, which still contains the marker.
   const firstReviewMarker = `<!-- pair:first-review #${story.id} PR#${pr.prNumber} -->`
+  // ── Phases C + D (US-479 c2/c3): the review ↔ fix loop dispatches SKILLS, not prompts. ────
+  // Each phase skill owns its method, its mutation boundary and its handoff JSON under
+  // `.pair/working/runs/<run>/<story>/`; this file names the skill, passes typed arguments and
+  // validates the typed result. Nothing below tells an agent HOW to write a test, seal a
+  // snapshot or verify a delta — a change to that behaviour is a skill version, never a patch
+  // to a running workflow.
+  const runId = RUN_ID ?? `pr-${pr.prNumber}`
+  const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
+  const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
+  const phaseArgs = (phase, baseHead) =>
+    `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $phase=${phase} $base=${baseHead} $branch=${story.branch}`
+  const cycleArgs = () =>
+    `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $worktree=${worktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)}`
+  const invoke = (skill, args) =>
+    `Invoke **${skill}** with ${args}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
+  const planRemediation = (findings, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.remediationPlan, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(findings)}`),
+      withModel('planner', { agentType: 'pair-remediation-planner', phase: 'Review', label: `plan:${tag} ${phase}`, effort: 'medium', schema: PLAN_SCHEMA }),
+      hasPlanEvidence(findings.length),
+    )
+  const redSpec = (targets, scope, phase, baseHead, repairFindings = []) =>
+    agentRetry(
+      invoke(SK.redSpec, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $scope=${JSON.stringify(scope)}${repairFindings.length ? ` $repair=${JSON.stringify(repairFindings)}` : ''}`),
+      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-spec:${tag} ${phase}${repairFindings.length ? ' repair' : ''}`, effort: 'high', schema: RED_TEST_SCHEMA }),
+      hasRedContractReady,
+    )
+  // Concatenated, not a template literal in backticks: the shipped-artifact guard reads a
+  // backticked `.pair/…json` as a dataset document that must exist; this is a runtime path.
+  const contractPathOf = (redContract, phase) => redContract.contractPath ?? '.pair/working/runs/' + runId + '/' + story.id + '/' + phase + '-red-contract.json'
+  const redVerify = (redContract, targets, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.redVerify, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)} $findings=${JSON.stringify(targets)}`),
+      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
+      hasRedContractVerification,
+    )
+  const redSeal = (redContract, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.redSeal, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)}`),
+      withModel('seal', { agentType: 'pair-red-sealer', phase: 'Review', label: `red-seal:${tag} ${phase}`, effort: 'low', schema: RED_SNAPSHOT_SCHEMA }),
+      hasSealedRedSnapshot,
+    )
+  const greenFix = (targets, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.greenFix, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $reviewLog=${reviewLog} $writeIssue=${SK.writeIssue}${story.notes ? ` $notes=${JSON.stringify(story.notes)}` : ''}`),
+      withModel('green', { agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} ${phase}`, effort: 'high', schema: FIX_SCHEMA }),
+    )
+  const p3Verify = (targets, ledger, phase, baseHead) =>
+    agentRetry(
+      invoke(SK.p3Verify, `${phaseArgs(phase, baseHead)} $worktree=${reviewWorktreePath} $findings=${JSON.stringify(targets)} $ledger=${JSON.stringify(ledger)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''}. ${revWtClauseBase(story)}`),
+      withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} ${phase}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
+      hasPreflightEvidence,
+    )
   // #373: continuation detection. Two signals, only meaningful on a resume run (a fresh
   // story branches from origin/main, so neither a prior cycle log nor a prior first-review
   // comment exists): `logExists` = an in-flight cycle to continue; `firstReviewPosted` =
@@ -1615,7 +1630,7 @@ async function driveStory(story) {
   // identical (the first review still posts).
   if (pr?.prNumber) {
     const probe = await agent(
-      `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY carry the first-review comment? Match it DETERMINISTICALLY, not by judgment: fetch the PR comments via \`gh\` and report whether ANY comment's raw body contains the EXACT marker substring \`${firstReviewMarker}\` (the first review always emits this hidden marker verbatim; a minimized/outdated comment still counts — its raw body still contains the marker). Do NOT infer from a comment's structure or tone — it is a plain substring match. Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
+      invoke(SK.cycleComments, `${cycleArgs()} $mode=probe`),
       { agentType: 'pair-implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
     )
     // #373 finding 4: a failed / malformed / schema-invalid probe return yields BOTH signals
@@ -1682,57 +1697,6 @@ async function driveStory(story) {
       ],
     }
   }
-  // ── Phase D (US-479 c2): the review ↔ fix loop dispatches SKILLS, not prompts. ─────────
-  // Each phase skill owns its method, its mutation boundary and its handoff JSON under
-  // `.pair/working/runs/<run>/<story>/`; this file names the skill, passes typed arguments and
-  // validates the typed result. Nothing below tells an agent HOW to write a test, seal a
-  // snapshot or verify a delta — a change to that behaviour is a skill version, never a patch
-  // to a running workflow.
-  const runId = RUN_ID ?? `pr-${pr.prNumber}`
-  const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
-  const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
-  const phaseArgs = (phase, baseHead) =>
-    `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $phase=${phase} $base=${baseHead} $branch=${story.branch}`
-  const invoke = (skill, args) =>
-    `Invoke **${skill}** with ${args}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
-  const planRemediation = (findings, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.remediationPlan, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(findings)}`),
-      withModel('planner', { agentType: 'pair-remediation-planner', phase: 'Review', label: `plan:${tag} ${phase}`, effort: 'medium', schema: PLAN_SCHEMA }),
-      hasPlanEvidence(findings.length),
-    )
-  const redSpec = (targets, scope, phase, baseHead, repairFindings = []) =>
-    agentRetry(
-      invoke(SK.redSpec, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $scope=${JSON.stringify(scope)}${repairFindings.length ? ` $repair=${JSON.stringify(repairFindings)}` : ''}`),
-      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-spec:${tag} ${phase}${repairFindings.length ? ' repair' : ''}`, effort: 'high', schema: RED_TEST_SCHEMA }),
-      hasRedContractReady,
-    )
-  // Concatenated, not a template literal in backticks: the shipped-artifact guard reads a
-  // backticked `.pair/…json` as a dataset document that must exist; this is a runtime path.
-  const contractPathOf = (redContract, phase) => redContract.contractPath ?? '.pair/working/runs/' + runId + '/' + story.id + '/' + phase + '-red-contract.json'
-  const redVerify = (redContract, targets, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.redVerify, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)} $findings=${JSON.stringify(targets)}`),
-      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
-      hasRedContractVerification,
-    )
-  const redSeal = (redContract, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.redSeal, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)}`),
-      withModel('seal', { agentType: 'pair-red-sealer', phase: 'Review', label: `red-seal:${tag} ${phase}`, effort: 'low', schema: RED_SNAPSHOT_SCHEMA }),
-      hasSealedRedSnapshot,
-    )
-  const greenFix = (targets, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.greenFix, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $reviewLog=${reviewLog}${story.notes ? ` $notes=${JSON.stringify(story.notes)}` : ''}`),
-      withModel('green', { agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} ${phase}`, effort: 'high', schema: FIX_SCHEMA }),
-    )
-  const p3Verify = (targets, ledger, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.p3Verify, `${phaseArgs(phase, baseHead)} $worktree=${reviewWorktreePath} $findings=${JSON.stringify(targets)} $ledger=${JSON.stringify(ledger)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''}. ${revWtClauseBase(story)}`),
-      withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} ${phase}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
-      hasPreflightEvidence,
-    )
   // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
   // any remediation state to synthesize — not merely whether a fix happened this run. On a
   // continuation (log present) it is seeded true so an immediate round-0 convergence still
@@ -1750,23 +1714,16 @@ async function driveStory(story) {
     // Once a fix is in flight, even the file inventory must start at that baseline;
     // otherwise the pacing loop invites a second full audit before its delta rule.
     const reviewBase = prevFindings.length ? prevReviewedHead : baseOf(story)
+    const mode = first ? 'first' : prevFindings.length ? 're-review' : 'fresh'
     const review = await agentRetry(
-      historyEscalationClause +
-      `Independently review PR #${pr.prNumber} for story ${tag}, following ${SK.review}. ${revWtClause(story)} PACING (mandatory — this is what killed the previous four attempts at this review, measured): a supervisor kills any agent that goes 180 seconds without emitting a TEXT MESSAGE. Tool calls do NOT count as progress: the last stalled reviewer was calling \`sed\`/\`cat\` every ~5 seconds and was still killed, because it had not written a sentence in 200 seconds. So: after EVERY file you inspect, write ONE SHORT LINE of prose saying what you found or that it is clean — before moving to the next file. Never read two files in a row without speaking in between, and never go into a long silent analysis pass. Start by listing the changed files (\`git diff ${reviewBase}...origin/${story.branch} --name-only\`), say aloud the order you will take them, then go file by file, narrating as you go. Brevity is fine — one line is enough — but silence is fatal. Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read ${BLIND_PATHS}, nor any checkpoint, handoff or working log under them — they are the author's private context and this review is independent and blind to it. Report EVERY finding regardless of severity (including minor/nit), using the ${REVIEW_TEMPLATE_LABEL} vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (the CONCRETE FAILURE CASE — inputs/state -> wrong output — not a retelling of the diff), \`recommendation\` (the change, in one or two lines); verdict ∈ {${VERDICTS}}. ACTIONABLE-FINDING ACCEPTANCE PLAN (mandatory): end EVERY actionable \`recommendation\` with \`VERIFY: <concrete input/state -> expected outcome>; ORACLE: <exact command, fixture or authoritative source>; ASSERT: <the observable assertion that consumes that fixture/output>\`. When a changed rule can feed another rule, name the paired direction and the minimal interaction cross-product in VERIFY; a declared fixture column that no expectation reads is not a test. ${TEXT_SHAPE} DO NOT FILE NEW ISSUES. This is a hard rule, and it overrides any habit of deferring work to a follow-up card: a debt you find in this diff is resolved IN PLACE, in this same PR, within this story's scope. Never invoke ${SK.writeIssue}, never write \`Deferred to #<new>\`, and never recommend "track this separately" — a finding parked in a fresh card is a finding nobody fixes, and it converts a reviewed PR into an unreviewed backlog. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG — byte-consistent with a source of truth, matching an existing convention, an ALREADY-EXISTING tracked story (cite its number; do not create one), or something that can only resolve after merge. Being outside this story's originally stated scope is NOT a reason: fix it here. Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` with a concrete reason replacing the bare label (\`By convention …\` / \`Historical record\` / \`Already tracked in #<existing>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. If a finding is SO large that fixing it here would genuinely swamp the story, say so explicitly in \`description\` and leave it ACTIONABLE — the human decides at the merge gate whether to accept the bigger PR or carve it out; that decision is not yours to pre-empt by filing a card. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (${REVIEW_TEMPLATE_LABEL} structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
-            ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}. The last complete review covered immutable head ${prevReviewedHead}. First inspect ONLY the fix delta with \`git diff ${prevReviewedHead}...origin/${story.branch} --name-status\`, then its directly changed producer/consumer contract boundaries. Do NOT re-audit the unchanged PR surface. A new finding is actionable only if it is in this delta or a contract boundary changed by this delta; otherwise report it as a Question for the human, not a new fix round.`
-            : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end).`} Return findings, verdict, and \`reviewedHead\`: the lower-case 40-character SHA printed by \`git rev-parse origin/${story.branch}\` after your inspection.`,
-      // effort was 'xhigh'. The measured cause of the repeated kills was NOT effort and NOT a
-      // stuck command: transcript timing showed the reviewer issuing a tool call every ~5s
-      // (97 events, mean gap 4.9s, max 49s — zero gaps over 180s) yet still killed, because
-      // the supervisor's window measures TEXT MESSAGES, not tool calls, and the agent had gone
-      // 200s without writing a sentence while reading files. The real fix is the PACING clause
-      // in the prompt (speak after every file). 'high' is kept only as margin — a lower effort
-      // shortens the silent stretches between utterances — so if a future change makes the
-      // narration reliable, restoring 'xhigh' is legitimate: it costs review depth, which is
-      // the whole point of this gate. Do not read this line as "xhigh causes stalls".
+      invoke(
+        SK.reviewPhase,
+        `${phaseArgs(`r${round}`, reviewBase)} $worktree=${reviewWorktreePath} $mode=${mode} $marker=${JSON.stringify(firstReviewMarker)} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${mode === 're-review' ? ` $priorFindings=${JSON.stringify(prevFindings)} $priorHead=${prevReviewedHead}` : ''}`,
+      ),
+      // 'high', not 'xhigh': the measured stalls were silence between utterances, not depth, and
+      // the pacing rule now lives in the skill. Restoring 'xhigh' is legitimate once narration is
+      // reliable — it buys review depth, which is the point of this gate.
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
-      // A review is USABLE only with a verdict and its immutable reviewed head. Without the
-      // latter, the next pass cannot be an evidence-bounded re-review.
       hasReviewEvidence,
     )
     // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent
@@ -1856,11 +1813,8 @@ async function driveStory(story) {
       // repeated the silent escalation. The log read is BEST-EFFORT: only a continuing cycle
       // (cycleHasRemediation) has a log to anchor to; the no-log arm escalates from inline findings.
       if (cycleHasRemediation || !first) {
-        const logClause = cycleHasRemediation
-          ? `Read the review log \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN `
-          : `No prior review working log exists (a re-review on a resumed PR whose log was never written or was pruned) — escalate from the inline findings directly. ${flushMinimize(pr.prNumber)} `
         await agent(
-          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} ${logClause}post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing${cycleHasRemediation ? ' the rounds so far (per finding: what was attempted + current state) and' : ''} the still-open actionable findings: ${JSON.stringify(actionable)}.${cycleHasRemediation ? ' Do NOT delete the log — it is the continuation anchor for this cycle.' : ''} Do NOT merge.`,
+          invoke(SK.cycleComments, `${cycleArgs()} $mode=flush $hasLog=${cycleHasRemediation} $findings=${JSON.stringify(actionable)}`),
           { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
       }
@@ -1920,7 +1874,7 @@ async function driveStory(story) {
       if (fix.needsHumanDecision) {
         // The fix round ran and appended to the working log, so the log-backed flush always applies.
         await agent(
-          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
+          invoke(SK.cycleComments, `${cycleArgs()} $mode=flush $hasLog=true $findings=${JSON.stringify(prevFindings)}`),
           { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
         return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
@@ -1951,7 +1905,7 @@ async function driveStory(story) {
   // clean (fresh cycle, no remediation), the first-review comment stands alone — nothing to do.
   if (cycleHasRemediation)
     await agent(
-      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: render EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) as ONE MARKDOWN TABLE — columns \`round | severity | location | resolution | commit\` — one row per finding, one line per row. Then a second short table for the accepted/non-actionable findings and their dispositions (${JSON.stringify(accepted)}), and the final verdict (review clean) as a single line. ${TEXT_SHAPE} This comment is the merge-gate reader's entire view of the cycle, so it must stay COMPLETE — no finding dropped, no silent truncation; if one does not fit a row, give it a single line beneath the table. THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments, any manual out-of-band rework/re-review comments, AND any earlier final-remediation/synthesis comment left by a prior convergence of this same cycle (a converged-but-unmerged PR that was re-run, found new findings and re-converged — do NOT minimize the first review comment) — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
+      invoke(SK.cycleComments, `${cycleArgs()} $mode=synthesize $accepted=${JSON.stringify(accepted)}`),
       { agentType: 'pair-implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
     )
 

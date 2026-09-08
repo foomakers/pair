@@ -117,6 +117,20 @@ An unknown key, an empty override, or a `maxParallelism` below 1 is rejected lou
 ignored — a discarded setting would run the batch on values you did not choose while reporting
 success.
 
+### The review and the cycle's comments are skills
+
+From US-479 c3 the independent review is `/pair-workflow-review-phase`: it reads the PR's `risk:*`
+label and declares its review set before running — a general pass (`/pair-process-review` phases
+1–4) on `risk:green`, plus security and boundary lenses on `risk:yellow`, plus architecture
+(`/pair-capability-assess-coupling`) and an adversarial second pass on `risk:red` — then unions and
+deduplicates the findings, keeping the highest evidenced severity. The engine passes the mode
+(`first` posts the report with the hidden marker; `re-review` inspects only the fix delta, silent;
+`fresh` is a full silent pass on a resumed cycle), the template vocabulary and, on a re-review, the
+prior findings and head. `/pair-workflow-cycle-comments` owns the PR-comment policy in three modes
+— `probe` (log present? marker on the PR?), `flush` (escalation, superseding any prior flush),
+`synthesize` (one remediation table across every run, intermediates minimized, log deleted) — so a
+PR shows at most one first review and one final remediation.
+
 ### Remediation phases are skills
 
 From US-479 the review ↔ fix loop is a sequence of **phase skills** the engine dispatches by name with typed arguments; the workflow file carries no phase policy of its own. A round with actionable findings runs `/pair-workflow-remediation-plan` (D0: findings grouped by canonical owner, one mode — `behavioral` or `structural` — and exact allowed paths), then per group, in dependency order: `/pair-workflow-red-spec` (D1: finite domain map + test-only RED contract, hashed), `/pair-workflow-red-verify` (D2: an independent reproduction; one bounded repair on rejection, a second rejection is `failed-red-contract`), `/pair-workflow-red-seal` (D3: `node .claude/workflows/pair-contracts/red-snapshot.mjs seal` — one local commit carrying the `Pair-RED-Snapshot` trailer), `/pair-workflow-green-fix` (D4: the fix inside `fixScope`, GREEN committed above the seal, PR updated) and `/pair-workflow-p3-verify` (D5: `red-snapshot.mjs verify` — parent, tree, sealed blobs byte-identical, no unlisted test change, scope respected — then a read-only evidence re-run). A custody breach or a P3 defect is terminal for the attempt: `failed-preflight`, and the next run starts a fresh RED contract.
@@ -130,7 +144,7 @@ RED and P3 on their declared models. Roles: `implementation`, `pr`, `reviewer`, 
 
 `runId` (optional, one safe path segment) names the handoff directory `.pair/working/runs/<runId>/`;
 absent, each card uses `pr-<n>`. The six phase skills are pipeline configuration like the others —
-`pipeline.skills.remediationPlan`, `redSpec`, `redVerify`, `redSeal`, `greenFix`, `p3Verify` —
+`pipeline.skills.remediationPlan`, `redSpec`, `redVerify`, `redSeal`, `greenFix`, `p3Verify`, `reviewPhase`, `cycleComments` —
 so an adopter who names them differently overrides the key rather than the engine.
 
 ### Carrying verified P3 evidence
