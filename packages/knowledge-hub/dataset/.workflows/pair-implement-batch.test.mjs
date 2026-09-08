@@ -51,18 +51,6 @@ async function runWorkflow({ args, dispatch }) {
         return result.reviewedHead === undefined ? { ...result, reviewedHead: REVIEWED_HEAD } : result
       return { verified: true, findings: [], reviewedHead: REVIEWED_HEAD }
     }
-    // Custody is a separate read-only Git probe before review. Legacy fixtures describe no
-    // rewritten snapshots, while focused custody tests return the real shape explicitly.
-    if (opts.agentType === 'pair-custody-verifier') {
-      if (result && typeof result === 'object' && typeof result.valid === 'boolean') return result
-      return {
-        valid: true,
-        head: REVIEWED_HEAD,
-        invalidatedSnapshots: [],
-        resetBaselineAncestor: true,
-        historyDecisionValid: true,
-      }
-    }
     // The mapper turns a parser/state finding into a finite owner-domain before a test
     // author writes RED. Legacy fixtures get a small valid map; focused tests can prove
     // mapper failure or a specific measured row without rebuilding every old dispatch.
@@ -177,21 +165,11 @@ function validContract() {
 }
 
 const STORY = { id: '292', title: 'T', branch: 'feat/#292-x' }
-const HISTORY_FINDING_PROPERTIES = {
-  kind: { type: 'string', enum: ['technical', 'history-subject'] },
-  historySubjects: { type: 'array', items: { type: 'string', pattern: '^[0-9a-f]{40}$' } },
-}
 const reviewSchemaWithOrchestration = contract => ({
   ...contract.schema,
   properties: {
     ...contract.schema.properties,
-    findings: {
-      ...contract.schema.properties.findings,
-      items: {
-        ...contract.schema.properties.findings.items,
-        properties: { ...contract.schema.properties.findings.items.properties, ...HISTORY_FINDING_PROPERTIES },
-      },
-    },
+    findings: contract.schema.properties.findings,
     reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
   },
@@ -2128,6 +2106,48 @@ test('needsHumanDecision spends one fix round first, then escalates if it still 
 // A history rewrite is categorically unlike an ordinary design disagreement: creating a RED
 // snapshot first makes the very commits the human must decide about immutable for this cycle.
 // It must therefore stop BEFORE RED/seal/GREEN, not consume the one remedial round above.
+// US-479 c1 — custody/history machinery removed. A rebase is not repaired by the engine: an
+// in-flight attempt whose base moved fails closed at seal/preflight, and a resumed run starts a
+// fresh review on the current head. No card-level waiver, reset or SHA-scoped decision exists.
+test('US-479 c1: historyDecision / custodyReset are unknown card keys — rejected before any agent runs', async () => {
+  for (const extra of [
+    { historyDecision: { reviewedHead: 'a'.repeat(40), commits: ['b'.repeat(40)], disposition: 'trace' } },
+    { custodyReset: { baselineHead: 'a'.repeat(40), invalidatedSnapshots: ['b'.repeat(40)], reason: 'rebase' } },
+  ]) {
+    await assert.rejects(
+      runWorkflow({ args: { stories: [{ ...STORY, prNumber: 7, ...extra }] }, dispatch: () => ({}) }),
+      /unknown `stories\[0\]\.(historyDecision|custodyReset)`/,
+    )
+  }
+})
+
+test('US-479 c1: no custody probe is dispatched — review is the first agent after PR on a resumed card', async () => {
+  const { result, calls } = await runWorkflow({
+    args: { stories: [{ ...STORY, prNumber: 7 }] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
+      return {}
+    },
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-custody-verifier').length, 0)
+  assert.equal(calls.filter(c => c.opts.phase === 'Custody').length, 0)
+  const firstAfterContract = calls.filter(c => c.opts.agentType !== 'pair-contract-generator')[0]
+  assert.match(firstAfterContract.opts.label, /^probe:/)
+})
+
+test('US-479 c1: source carries no custody/history-decision machinery and emits none of its statuses', () => {
+  for (const gone of [
+    'pair-custody-verifier', 'custodyReset', 'historyDecision', 'applyHistoryDecision', 'textualHistorySubjects',
+    'history-subject', 'historySubjects', 'supersedes=', "'failed-custody'", "'failed-custody-reset'",
+    "'seal-invalidated'", "'stale-history-decision'",
+  ])
+    assert.equal(SRC.includes(gone), false, `${gone} still present in pair-implement-batch.js`)
+  // The typed escalation stays: a history rewrite is a human decision, taken before RED/seal/GREEN.
+  assert.ok(SRC.includes("humanDecisionKind === 'history-rewrite'"))
+})
+
 test('history-rewrite decision escalates before RED sealing or GREEN', async () => {
   const f = { location: '05e95887:subject', severity: 'Minor', description: 'wrong story label', recommendation: 'rewrite the commit subject' }
   const { result, calls } = await runWorkflow({
@@ -2145,365 +2165,6 @@ test('history-rewrite decision escalates before RED sealing or GREEN', async () 
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0, 'no RED contract is authored for a history-only decision')
   assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0, 'no snapshot can make the decision unfixable')
   assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'no GREEN runs before the human decision')
-})
-
-test('historyDecision is reviewer context only: exact historical subjects may be accepted, code remains actionable', async () => {
-  const commit = 'a'.repeat(40)
-  const historical = {
-    location: `${commit}:subject`, severity: 'Minor', description: 'old subject label', recommendation: 'rewrite subject',
-    nonActionable: true, disposition: 'Accepted historical trace; rewriting would alter the sealed RED base.',
-  }
-  const technical = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
-  let reviewerCalls = 0
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        historyDecision: {
-          reviewedHead: REVIEWED_HEAD,
-          commits: [commit],
-          disposition: 'Accepted historical trace; do not rewrite the sealed RED base.',
-        },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer')
-        return reviewerCalls++ === 0 ? { verdict: 'Rework', findings: [historical, technical] } : { verdict: 'Approved', findings: [] }
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true }
-    },
-  })
-  const review = calls.find(c => c.opts.agentType === 'pair-reviewer')
-  assert.match(review.prompt, new RegExp(commit), 'the reviewer receives the exact human-authorized commit only')
-  assert.match(review.prompt, /mixed code\/docs\/test\/CI.*technical/i, 'the decision cannot waive technical work')
-  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'the technical finding still receives GREEN')
-  assert.equal(result.batch[0].acceptedFindings.length, 1, 'only the explicitly non-actionable historical finding is carried')
-})
-
-test('historyDecision rejects a non-canonical commit identifier before agents run', async () => {
-  await assert.rejects(
-    () => runWorkflow({
-      args: { stories: [{ ...STORY, historyDecision: { reviewedHead: REVIEWED_HEAD, commits: ['ABC'], disposition: 'accept it' } }] },
-      dispatch: stdDispatch({}),
-    }),
-    /historyDecision\.commits\[0\].*lower-case 40-character SHA/i,
-  )
-})
-
-test('historyDecision requires the reviewed baseline that authorised its exact SHAs', async () => {
-  const commit = 'a'.repeat(40)
-  await assert.rejects(
-    () => runWorkflow({
-      args: { stories: [{ ...STORY, historyDecision: { commits: [commit], disposition: 'accept it' } }] },
-      dispatch: stdDispatch({}),
-    }),
-    /historyDecision\.reviewedHead.*lower-case 40-character SHA/i,
-  )
-})
-
-test('a history decision whose baseline or subjects no longer survive fails before review', async () => {
-  const commit = 'a'.repeat(40)
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        prNumber: 7,
-        historyDecision: { reviewedHead: REVIEWED_HEAD, commits: [commit], disposition: 'accepted history' },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-custody-verifier')
-        return { valid: true, head: REVIEWED_HEAD, invalidatedSnapshots: [], resetBaselineAncestor: true, historyDecisionValid: false }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
-      return { fixed: true }
-    },
-  })
-  assert.equal(result.batch[0].status, 'stale-history-decision')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 0)
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
-})
-
-test('a rewritten RED snapshot blocks a resumed PR before a review or RED can run', async () => {
-  const invalidated = 'b'.repeat(40)
-  const { result, calls } = await runWorkflow({
-    args: { stories: [{ ...STORY, prNumber: 7 }] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-custody-verifier')
-        return { valid: false, head: REVIEWED_HEAD, invalidatedSnapshots: [invalidated], resetBaselineAncestor: true, historyDecisionValid: true }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
-      return { fixed: true }
-    },
-  })
-  assert.equal(result.batch[0].status, 'seal-invalidated')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 0)
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
-})
-
-test('a human custody reset permits only its exact rewritten snapshots while its baseline remains ancestral', async () => {
-  const invalidated = 'b'.repeat(40)
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        prNumber: 7,
-        custodyReset: {
-          baselineHead: REVIEWED_HEAD,
-          invalidatedSnapshots: [invalidated],
-          reason: 'a completed rebase rewrote prior snapshot commits',
-        },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-custody-verifier')
-        return { valid: false, head: REVIEWED_HEAD, invalidatedSnapshots: [invalidated], resetBaselineAncestor: true, historyDecisionValid: true }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
-      return { fixed: true }
-    },
-  })
-  const custody = calls.find(c => c.opts.agentType === 'pair-custody-verifier')
-  assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.ok(custody)
-  assert.match(custody.prompt, /git merge-base --is-ancestor/i)
-  assert.match(custody.prompt, /direct parent/i)
-  assert.match(custody.prompt, /all earlier mismatched snapshots/i)
-})
-
-test('a custody reset is sealed into the successor that retires exactly those old snapshots', async () => {
-  const invalidated = 'b'.repeat(40)
-  const finding = { location: 'src/owner.ts:1', severity: 'Major', description: 'broken', recommendation: 'fix it' }
-  let reviewCalls = 0
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        prNumber: 7,
-        custodyReset: {
-          baselineHead: REVIEWED_HEAD,
-          invalidatedSnapshots: [invalidated],
-          reason: 'a completed rebase rewrote prior snapshot commits',
-        },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-custody-verifier')
-        return { valid: false, head: REVIEWED_HEAD, invalidatedSnapshots: [invalidated], resetBaselineAncestor: true, historyDecisionValid: true }
-      if (opts.agentType === 'pair-reviewer')
-        return reviewCalls++ === 0 ? { verdict: 'Rework', findings: [finding] } : { verdict: 'Approved', findings: [] }
-      return { fixed: true, evidenceLedger: [] }
-    },
-  })
-  const sealer = calls.find(c => c.opts.agentType === 'pair-red-sealer')
-  assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.ok(sealer)
-  assert.match(sealer.prompt, new RegExp(`supersedes=${invalidated}`))
-  assert.match(sealer.prompt, /only a still-valid successor may retire/i)
-})
-
-test('only the first valid successor records a custody reset during a multi-round run', async () => {
-  const invalidated = 'b'.repeat(40)
-  const first = { location: 'src/owner.ts:1', severity: 'Major', description: 'first', recommendation: 'fix first' }
-  const second = { location: 'src/owner.ts:2', severity: 'Minor', description: 'second', recommendation: 'fix second' }
-  let reviewCalls = 0
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        prNumber: 7,
-        custodyReset: {
-          baselineHead: REVIEWED_HEAD,
-          invalidatedSnapshots: [invalidated],
-          reason: 'a completed rebase rewrote prior snapshot commits',
-        },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-custody-verifier')
-        return { valid: false, head: REVIEWED_HEAD, invalidatedSnapshots: [invalidated], resetBaselineAncestor: true, historyDecisionValid: true }
-      if (opts.agentType === 'pair-reviewer') {
-        reviewCalls++
-        if (reviewCalls === 1) return { verdict: 'Rework', findings: [first] }
-        if (reviewCalls === 2) return { verdict: 'Rework', findings: [second] }
-        return { verdict: 'Approved', findings: [] }
-      }
-      return { fixed: true, evidenceLedger: [] }
-    },
-  })
-  const sealers = calls.filter(c => c.opts.agentType === 'pair-red-sealer')
-  assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.equal(sealers.length, 2)
-  assert.match(sealers[0].prompt, new RegExp(`supersedes=${invalidated}`))
-  assert.doesNotMatch(sealers[1].prompt, new RegExp(`supersedes=${invalidated}`))
-})
-
-test('a custody reset rejects a changed head or an incomplete invalidated-snapshot set', async () => {
-  const invalidated = 'b'.repeat(40)
-  const unexpected = 'c'.repeat(40)
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        prNumber: 7,
-        custodyReset: {
-          baselineHead: REVIEWED_HEAD,
-          invalidatedSnapshots: [invalidated],
-          reason: 'a completed rebase rewrote prior snapshot commits',
-        },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-custody-verifier')
-        return { valid: false, head: REVIEWED_HEAD, invalidatedSnapshots: [invalidated, unexpected], resetBaselineAncestor: false, historyDecisionValid: true }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Approved', findings: [] }
-      return { fixed: true }
-    },
-  })
-  assert.equal(result.batch[0].status, 'failed-custody-reset')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 0)
-})
-
-test('a multi-SHA historyDecision is applied by the engine, not left to reviewer grouping', async () => {
-  const commits = ['a'.repeat(40), 'b'.repeat(40)]
-  const historical = {
-    kind: 'history-subject',
-    historySubjects: commits,
-    location: 'history:subjects',
-    severity: 'Minor',
-    description: 'two old commit subjects use a stale label',
-    recommendation: 'rewrite both subjects',
-  }
-  const technical = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
-  let reviewerCalls = 0
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        historyDecision: { reviewedHead: REVIEWED_HEAD, commits, disposition: 'Accepted historical trace; do not rewrite the sealed base.' },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer')
-        return reviewerCalls++ === 0 ? { verdict: 'Rework', findings: [historical, technical] } : { verdict: 'Approved', findings: [] }
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true }
-    },
-  })
-  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'only the technical finding reaches GREEN')
-  assert.equal(result.batch[0].acceptedFindings.length, 1, 'the two-SHA history finding is carried once')
-  assert.equal(result.batch[0].acceptedFindings[0].nonActionable, true, 'the engine—not free prose—sets disposition')
-  assert.equal(result.batch[0].acceptedFindings[0].disposition, 'Accepted historical trace; do not rewrite the sealed base.')
-})
-
-test('an authorized typed history finding cannot be re-escalated by the legacy generic flag', async () => {
-  const commit = 'a'.repeat(40)
-  const history = {
-    kind: 'history-subject', historySubjects: [commit], location: `${commit}:subject`, severity: 'Minor',
-    description: 'old subject label', recommendation: 'rewrite subject',
-  }
-  const { result, calls } = await runWorkflow({
-    args: { stories: [{ ...STORY, historyDecision: { reviewedHead: REVIEWED_HEAD, commits: [commit], disposition: 'Accepted history.' } }] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [history], needsHumanDecision: true, humanDecisionKind: 'history-rewrite' }
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true }
-    },
-  })
-  assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.equal(result.batch[0].acceptedFindings[0].disposition, 'Accepted history.')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
-})
-
-test('an unapproved typed history finding escalates before RED even when reviewer omits needsHumanDecision', async () => {
-  const commit = 'c'.repeat(40)
-  const history = {
-    kind: 'history-subject',
-    historySubjects: [commit],
-    location: `${commit}:subject`,
-    severity: 'Minor',
-    description: 'subject needs rewrite',
-    recommendation: 'rewrite commit subject',
-  }
-  const { result, calls } = await runWorkflow({
-    args: { stories: [STORY] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer') return { verdict: 'Rework', findings: [history], needsHumanDecision: false }
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true }
-    },
-  })
-  assert.equal(result.batch[0].status, 'escalate')
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0, 'history cannot reach RED unsanctioned')
-  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'history cannot reach GREEN unsanctioned')
-})
-
-test('an authorized history decision applies when the reviewer omits typed metadata but names only its subjects', async () => {
-  const commits = ['a'.repeat(40), 'b'.repeat(40)]
-  const historical = {
-    location: `${commits[0].slice(0, 8)}, ${commits[1].slice(0, 8)}: subject`,
-    severity: 'Minor',
-    description: 'the two historical commit subjects use a stale label',
-    recommendation: 'rewrite both commit subjects',
-  }
-  const technical = { location: 'src/a.ts:1', severity: 'Major', description: 'runtime failure', recommendation: 'fix it' }
-  let reviewerCalls = 0
-  const { result, calls } = await runWorkflow({
-    args: {
-      stories: [{
-        ...STORY,
-        historyDecision: { reviewedHead: REVIEWED_HEAD, commits, disposition: 'Accepted historical trace; do not rewrite the sealed base.' },
-      }],
-    },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer')
-        return reviewerCalls++ === 0
-          ? { verdict: 'Rework', findings: [historical, technical], needsHumanDecision: true, humanDecisionKind: 'history-rewrite' }
-          : { verdict: 'Approved', findings: [] }
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true }
-    },
-  })
-  assert.equal(result.batch[0].status, 'ready-for-merge')
-  assert.equal(result.batch[0].acceptedFindings.length, 1, 'the engine carries the authorized history finding')
-  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 1, 'only technical work reaches GREEN')
-})
-
-test('an ambiguous history SHA prefix never consumes more than one approved subject', async () => {
-  const commits = ['a'.repeat(40), `${'a'.repeat(39)}b`]
-  const historical = {
-    location: `${'a'.repeat(8)}: subject`,
-    severity: 'Minor',
-    description: 'the historical commit subject uses a stale label',
-    recommendation: 'rewrite the commit subject',
-  }
-  const { result, calls } = await runWorkflow({
-    args: { stories: [{ ...STORY, historyDecision: { reviewedHead: REVIEWED_HEAD, commits, disposition: 'Must not apply.' } }] },
-    dispatch: (prompt, opts) => {
-      if (opts.agentType === 'pair-contract-generator') return { status: 'cache-hit', contract: validContract() }
-      if (opts.agentType === 'pair-reviewer')
-        return { verdict: 'Rework', findings: [historical], needsHumanDecision: true, humanDecisionKind: 'history-rewrite' }
-      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
-      if (opts.phase === 'PR') return { prNumber: 7 }
-      return { fixed: true }
-    },
-  })
-  assert.equal(result.batch[0].status, 'escalate')
-  assert.equal(result.batch[0].acceptedFindings.length, 0)
-  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
 })
 
 test('a verified current-head finding reaches RED even when the fresh reviewer omits it', async () => {
