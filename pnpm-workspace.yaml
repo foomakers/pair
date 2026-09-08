@@ -9,6 +9,7 @@ catalog:
   '@earendil-works/pi-coding-agent': ^0.84.3
   '@eslint/js': 9.34.0
   '@inquirer/prompts': 7.5.0
+  '@mdx-js/mdx': 3.1.1
   '@playwright/experimental-ct-react': ^1.50.0
   '@playwright/test': ^1.50.0
   '@testing-library/jest-dom': 6.6.3
@@ -50,6 +51,7 @@ catalog:
   prettier: 3.6.2
   react: 19.0.0
   react-dom: 19.0.0
+  remark-gfm: 4.0.1
   remark-parse: 11.0.0
   tailwindcss: 3.4.17
   ts-node: 10.9.2

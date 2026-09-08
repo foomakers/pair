@@ -38,11 +38,12 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@axe-core/playwright": "catalog:",
+    "@mdx-js/mdx": "catalog:",
     "@pair/eslint-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/ts-config": "workspace:*",
-    "@axe-core/playwright": "catalog:",
     "@playwright/experimental-ct-react": "catalog:",
     "@playwright/test": "catalog:",
     "@testing-library/jest-dom": "catalog:",
@@ -54,6 +55,7 @@
     "autoprefixer": "catalog:",
     "jsdom": "catalog:",
     "postcss": "catalog:",
+    "remark-gfm": "catalog:",
     "tailwindcss": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",

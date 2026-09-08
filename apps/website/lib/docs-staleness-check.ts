@@ -14,6 +14,9 @@
  * apps/website/lib -> apps/website -> apps -> <repo root> (up 3).
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { compileSync } from '@mdx-js/mdx'
+import remarkGfm from 'remark-gfm'
 import { basename, join, relative, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -177,6 +180,85 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
     }
   }
   return errors
+}
+
+/**
+ * Check 5b: every repo citation the SITE RENDERS AS A LINK resolves to a tracked file.
+ *
+ * A docs page cites repository files as `https://github.com/foomakers/pair/blob/main/<path>`.
+ * The oracle for "is this a link" is the site's own MDX compiler — `@mdx-js/mdx` + `remark-gfm`,
+ * the pair fumadocs runs — not a regex over the raw bytes: a URL inside a fence, a code span or a
+ * JSX comment block is text on the rendered page and must not be gated; the same URL in prose is a
+ * link a reader can click into a 404. Compiling the page and reading the `href` values the
+ * compiler emits is what makes fence, span, comment, table-cell and escape rules all come out
+ * right for free — they are the compiler's, not ours.
+ *
+ * "Resolves" means the path is a git-tracked file at that exact spelling. The filesystem is not
+ * the oracle: macOS is case-insensitive and would pass `readme.md`, which github.com serves as
+ * a 404. Only `main` refs are checked; a pinned tag or SHA is a deliberate citation of a moment
+ * in time and is left alone.
+ */
+const REPO_CITATION_RE =
+  /href: "https:\/\/github\.com\/foomakers\/pair\/(blob|tree|raw)\/([^/"]+)\/([^"#?]+)/g
+const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n/
+
+export function findDeadRepoCitations(
+  content: string,
+  rel: string,
+  tracked: ReadonlySet<string>,
+): string[] {
+  const errors: string[] = []
+  let compiled: string
+  try {
+    compiled = String(
+      compileSync(content.replace(FRONTMATTER_RE, ''), { remarkPlugins: [remarkGfm] }),
+    )
+  } catch {
+    // A page the site cannot build is not this check's finding — next build reports it, loudly.
+    return errors
+  }
+  for (const m of compiled.matchAll(REPO_CITATION_RE)) {
+    const kind = m[1] ?? ''
+    const ref = m[2] ?? ''
+    const path = m[3] ?? ''
+    if (ref !== 'main') continue
+    // A malformed escape (`100%coverage.sh`) is still a citation to report — never a URIError out
+    // of the whole run, which would also discard every other check's findings.
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(path)
+    } catch {
+      decoded = path
+    }
+    const clean = decoded.replace(/\/$/, '')
+    const ok =
+      kind === 'tree'
+        ? [...tracked].some(t => t === clean || t.startsWith(clean + '/'))
+        : tracked.has(clean)
+    // "git-tracked", not "on main": the oracle is the index of the branch under review, which is
+    // the right question — will this citation resolve once the branch merges.
+    if (!ok)
+      errors.push(`Dead repo citation in ${rel}: ${kind}/main/${clean} is not a git-tracked file`)
+  }
+  return errors
+}
+
+/** The git repository root that owns `root` — asked of git, not derived from directory depth. */
+export function repoRootOf(root: string): string {
+  return execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    cwd: root,
+    encoding: 'utf8',
+  }).trim()
+}
+
+/** The set of git-tracked paths, exact case — the only honest existence oracle on a case-insensitive filesystem. */
+export function trackedFiles(repoRoot: string): Set<string> {
+  const out = execFileSync('git', ['ls-files', '-z'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  return new Set(out.split('\0').filter(Boolean))
 }
 
 // --- Catalog ROW CONTENT (single-sourced from the dataset SKILL.md frontmatter) ---
@@ -540,8 +622,10 @@ function perFileErrors(params: {
   declaredPluginSkills: number | null
   howToCount: number | null
   validRoutes: Set<string>
+  tracked: ReadonlySet<string>
 }): string[] {
-  const { docsFiles, docsDir, skillCount, declaredPluginSkills, howToCount, validRoutes } = params
+  const { docsFiles, docsDir, skillCount, declaredPluginSkills, howToCount, validRoutes, tracked } =
+    params
   const errors: string[] = []
   for (const file of docsFiles) {
     const content = readFileSync(file, 'utf-8')
@@ -552,6 +636,7 @@ function perFileErrors(params: {
     }
     if (howToCount !== null) errors.push(...findGuideCountMismatches(content, rel, howToCount))
     errors.push(...findDeadLinks(content, rel, validRoutes))
+    errors.push(...findDeadRepoCitations(content, rel, tracked))
   }
   return errors
 }
@@ -832,6 +917,7 @@ export function runAllChecks(root: string): RunResult {
       declaredPluginSkills,
       howToCount,
       validRoutes,
+      tracked: trackedFiles(repoRootOf(root)),
     }),
   )
 

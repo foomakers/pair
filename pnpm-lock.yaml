@@ -21,6 +21,9 @@ catalogs:
     '@inquirer/prompts':
       specifier: 7.5.0
       version: 7.5.0
+    '@mdx-js/mdx':
+      specifier: 3.1.1
+      version: 3.1.1
     '@playwright/experimental-ct-react':
       specifier: ^1.50.0
       version: 1.58.2
@@ -144,6 +147,9 @@ catalogs:
     react-dom:
       specifier: 19.0.0
       version: 19.0.0
+    remark-gfm:
+      specifier: 4.0.1
+      version: 4.0.1
     remark-parse:
       specifier: 11.0.0
       version: 11.0.0
@@ -304,6 +310,9 @@ importers:
       '@axe-core/playwright':
         specifier: 'catalog:'
         version: 4.11.1(playwright-core@1.58.2)
+      '@mdx-js/mdx':
+        specifier: 'catalog:'
+        version: 3.1.1
       '@pair/eslint-config':
         specifier: workspace:*
         version: link:../../tools/eslint-config
@@ -349,6 +358,9 @@ importers:
       postcss:
         specifier: 'catalog:'
         version: 8.4.49
+      remark-gfm:
+        specifier: 'catalog:'
+        version: 4.0.1
       tailwindcss:
         specifier: 'catalog:'
         version: 3.4.17(ts-node@10.9.2(@types/node@26.3.0)(typescript@5.4.5))

@@ -6,6 +6,7 @@ import {
   countDeclaredPluginSkills,
   findGuideCountMismatches,
   findDeadLinks,
+  findDeadRepoCitations,
   checkCatalogSync,
   checkCommandAnchors,
   checkDocsCommands,
@@ -182,6 +183,133 @@ describe('findDeadLinks', () => {
   })
 })
 
+describe('findDeadRepoCitations', () => {
+  // The tracked set stands in for `git ls-files`: exact paths, exact case — the case-insensitive
+  // macOS filesystem would otherwise pass a `readme.md` citation that github.com serves as 404.
+  const tracked = new Set([
+    'README.md',
+    'docs/contributing/index.mdx',
+    'packages/content-ops/src/index.ts',
+    'apps/website/app/(landing)/constants.ts',
+  ])
+  const LIVE = 'https://github.com/foomakers/pair/blob/main/README.md'
+  const DEAD = 'https://github.com/foomakers/pair/blob/main/does/not/exist.md'
+
+  // Every `hrefs` below is what the site's own MDX compiler (@mdx-js/mdx + remark-gfm, the same
+  // pair fumadocs runs) emits as a link for that source — the oracle is the renderer, not a regex.
+  const ROWS: ReadonlyArray<{ why: string; content: string; dead: number }> = [
+    {
+      why: 'a markdown link to a missing repo file',
+      content: `See [the file](${DEAD}) here.\n`,
+      dead: 1,
+    },
+    { why: 'a bare GFM autolink to a missing repo file', content: `See ${DEAD} here.\n`, dead: 1 },
+    { why: 'a live citation', content: `See [readme](${LIVE}).\n`, dead: 0 },
+    {
+      why: 'a tree/ citation to a tracked directory',
+      content: `See [src](https://github.com/foomakers/pair/tree/main/packages/content-ops/src).\n`,
+      dead: 0,
+    },
+    {
+      why: 'the dead URL inside a fenced code block (rendered as code, not a link)',
+      content: '```bash\ngh api ' + DEAD + '\n```\n',
+      dead: 0,
+    },
+    {
+      why: 'the dead URL inside an inline code span',
+      content: `Run \`curl ${DEAD}\` first.\n`,
+      dead: 0,
+    },
+    {
+      why: 'the dead URL inside a JSX comment (compiled away)',
+      content: `{/* TODO ${DEAD} */}\n\nText.\n`,
+      dead: 0,
+    },
+    {
+      why: 'a case-mismatched path the filesystem would forgive',
+      content: `See [x](https://github.com/foomakers/pair/blob/main/readme.md).\n`,
+      dead: 1,
+    },
+    {
+      why: 'a github URL to another repository',
+      content: `See [x](https://github.com/vercel/next.js/blob/main/nope.md).\n`,
+      dead: 0,
+    },
+    {
+      why: 'a citation with a fragment and query',
+      content: `See [x](${DEAD}#anchor?plain=1).\n`,
+      dead: 1,
+    },
+    {
+      // Not "frontmatter above the prose" — MDX compiles well-formed frontmatter as a thematic
+      // break plus a paragraph, so that row passes with or without the strip. This one does not:
+      // an unbalanced `{` in the frontmatter is an MDX expression the compiler rejects, and
+      // without the strip the page falls into the compile-failure catch and goes UNCHECKED.
+      why: 'frontmatter MDX cannot parse, stripped before compiling',
+      content: `---\ntitle: 'a { b'\n---\n\nSee [x](${DEAD}).\n`,
+      dead: 1,
+    },
+    {
+      // ADL decision 3: a pinned ref is a citation of a moment in time, left alone.
+      why: 'a citation pinned to a SHA rather than main',
+      content: `See [x](https://github.com/foomakers/pair/blob/1bbccf6f/does/not/exist.md).\n`,
+      dead: 0,
+    },
+    {
+      // ADL decision 2: raw/ is a file URL form exactly like blob/.
+      why: 'a raw/ citation to a missing repo file',
+      content: `See [x](https://github.com/foomakers/pair/raw/main/does/not/exist.md).\n`,
+      dead: 1,
+    },
+    {
+      // ADL decision 4: a page the compiler rejects is next build's finding, not this gate's —
+      // the gate returns nothing rather than a misleading citation error.
+      why: 'a page the compiler rejects — next build reports it, not this gate',
+      content: `See [x](${DEAD}).\n\n<Broken attr={ unclosed\n`,
+      dead: 0,
+    },
+    {
+      // The tree/ arm must still CHECK: a tree/ URL whose prefix matches nothing tracked is dead.
+      // Without this row the arm can be mutated to accept everything with the suite green.
+      why: 'a tree/ citation to a directory that does not exist',
+      content: `See [x](https://github.com/foomakers/pair/tree/main/packages/deleted-package).\n`,
+      dead: 1,
+    },
+    {
+      // github.com serves `tree/<dir>/` and `tree/<dir>` alike; the trailing slash is stripped
+      // before the prefix test, or a live directory citation would be reported dead.
+      why: 'a live tree/ citation with a trailing slash',
+      content: `See [x](https://github.com/foomakers/pair/tree/main/packages/content-ops/src/).\n`,
+      dead: 0,
+    },
+    {
+      // GitHub's copy-link percent-escapes `(` and `)`; 13 tracked paths under
+      // apps/website/app/(landing)/ carry them. The citation must resolve through the decode.
+      why: 'a live citation whose path is percent-escaped the way GitHub copies it',
+      content: `See [x](https://github.com/foomakers/pair/blob/main/apps/website/app/%28landing%29/constants.ts).\n`,
+      dead: 0,
+    },
+    {
+      // A literal `%` is not a valid escape. The gate must REPORT the citation, never throw a
+      // URIError out of the whole run — that would also discard every other check's findings.
+      why: 'a path with a malformed percent-escape, reported instead of crashing the gate',
+      content: `See [x](https://github.com/foomakers/pair/blob/main/scripts/100%coverage.sh).\n`,
+      dead: 1,
+    },
+  ]
+  for (const { why, content, dead } of ROWS) {
+    it(`${dead === 0 ? 'ignores' : 'flags'} ${why}`, () => {
+      expect(findDeadRepoCitations(content, 'a.mdx', tracked), why).toHaveLength(dead)
+    })
+  }
+  it('names the file, the cited path and the reason in the error', () => {
+    const [err] = findDeadRepoCitations(`See [x](${DEAD}).\n`, 'pm-tools/index.mdx', tracked)
+    expect(err).toContain('pm-tools/index.mdx')
+    expect(err).toContain('does/not/exist.md')
+    expect(err).toMatch(/not a git-tracked file/)
+  })
+})
+
 describe('checkCatalogSync', () => {
   it('flags a skill dir missing from the catalog', () => {
     expect(checkCatalogSync(['implement'], 'no rows here')).toHaveLength(1)
@@ -257,11 +385,15 @@ describe('buildValidRoutes', () => {
 })
 
 describe('runAllChecks (in-process, real docs tree)', () => {
+  // Check 5b compiles every docs page through the real MDX compiler, so this is no longer a
+  // 5000ms test: MEASURED 1.0s locally and 17.1s on the ubuntu CI runner, actions run 34229200841 (five test
+  // files sharing two cores), where vitest's default budget failed it. Same shape as
+  // deploy-build-command.test.ts: an explicit budget with the measurement it came from.
   it('reports zero drift and 44 skills against the actual repo', () => {
     const { errors, skillCount } = runAllChecks(REPO_ROOT)
     expect(errors, errors.join('\n')).toHaveLength(0)
     expect(skillCount).toBe(44)
-  })
+  }, 60_000)
 })
 
 // Check 2c — catalog ROW CONTENT single-sourced from the dataset SKILL.md frontmatter.
