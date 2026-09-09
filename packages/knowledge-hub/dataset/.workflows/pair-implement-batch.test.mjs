@@ -2436,6 +2436,31 @@ test('an absolute contractPath under .pair/working/runs/ is accepted and handed 
     assert.equal(new Function(SRC.slice(SRC.indexOf('const isRelPath = v =>'), SRC.indexOf('\n}\n', SRC.indexOf('const isRelPath = v =>')) + 3) + SRC.slice(SRC.indexOf('const isContractPath = p =>'), SRC.indexOf('const hasRedContractReady')) + 'return isContractPath(' + JSON.stringify(bad) + ')')(), false, bad)
 })
 
+// Canary run 7 on #482: a finding whose fix is on the story CARD landed in a structural group with
+// no paths, and the plan was rejected. Such a finding is carried to the merge gate, not grouped.
+test('a plan may carry an out-of-repository finding to the merge gate; all-carried converges with it on the record', async () => {
+  const carriedPlan = { status: 'planned', groups: [{ groupId: 'g1', findings: [0], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'], oracle: 'x', dependsOn: [] }], carried: [{ finding: 1, disposition: 'story #482 business rule 3 must be corrected on the card' }] }
+  let r = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch({ plan: carriedPlan }) })
+  assert.equal(r.result.batch[0].status, 'ready-for-merge')
+  assert.equal(r.calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1, 'only the grouped finding reaches RED')
+  const carried = r.result.batch[0].acceptedFindings.find(f => f.location === 'src/b.ts:2')
+  assert.ok(carried && carried.nonActionable === true)
+  assert.match(carried.disposition, /^Outside the repository — story #482/)
+  // every finding carried, no group ⇒ nothing to fix, converge with them on the record
+  const allCarried = { status: 'planned', groups: [], carried: [{ finding: 0, disposition: 'card' }, { finding: 1, disposition: 'PR body' }] }
+  r = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch({ plan: allCarried }) })
+  assert.equal(r.result.batch[0].status, 'ready-for-merge')
+  assert.equal(r.calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
+  assert.equal(r.result.batch[0].acceptedFindings.length, 2)
+  // a finding both grouped and carried, or carried twice, or carried without a disposition, is not a plan
+  for (const bad of [
+    { status: 'planned', groups: [{ groupId: 'g1', findings: [0, 1], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [{ finding: 1, disposition: 'x' }] },
+    { status: 'planned', groups: [], carried: [{ finding: 0, disposition: 'x' }, { finding: 0, disposition: 'y' }, { finding: 1, disposition: 'z' }] },
+    { status: 'planned', groups: [{ groupId: 'g1', findings: [0], owner: 'a', mode: 'behavioral', allowedPaths: ['src/a.ts'] }], carried: [{ finding: 1, disposition: '' }] },
+  ])
+    assert.equal(hasPlanShape(bad), false, JSON.stringify(bad))
+})
+
 test('a `test` group (guard-strength repair) seals with no production paths, skips GREEN, and P3 verifies the sealed head', async () => {
   const plan = { status: 'planned', groups: [{ groupId: 'g1', findings: [0, 1], owner: 'the AC-1 guard', mode: 'test', allowedPaths: [], oracle: 'vitest', dependsOn: [] }] }
   const base = planDispatch({ plan })

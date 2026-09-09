@@ -82,6 +82,11 @@ rules are added:
     the RED author treats the verifier's earlier rejection for its phase as mandatory rows while a
     `fresh` review re-validates the previous review's findings before hunting for new ones — the two
     attempts of one cycle build on each other instead of re-sampling.
+7. **An out-of-repository finding is carried, never grouped.** A review may find a defect on the
+    story card or in the PR body; the planner puts it in `carried` with a disposition, the engine
+    accepts it (`Outside the repository — …`) for the merge gate, and a plan whose every finding is
+    carried converges with them on the record. Canary run 7 (#482) put such a finding in a
+    `structural` group with no paths and the plan was rejected.
 
 ## Consequences
 

@@ -39,7 +39,7 @@ For each finding, read the code at `location` and name the **canonical owner**: 
 2. A behavior repair and an extraction/refactor never share a group: `mode` is `behavioral`, `structural` or `test`, exactly one per group. `test` is the mode for a **guard-strength** finding — the defect is in a test artifact (a positional-blind assertion, an unconsumed fixture, a missing boundary row) while production at `$base` is already correct; such a group declares `allowedPaths: []`, gets no GREEN, and its RED is proven against an injected regression, not against production.
 3. `allowedPaths` = the exact production paths (files, or directories with a trailing `/`) the group may change; `[]` for a `test` group. Tests and fixtures are never listed here; RED owns them.
 4. `dependsOn` = groups whose GREEN this group needs first. Order groups by dependency, then by highest severity.
-5. Every finding appears in **exactly one** group. A finding that fits none becomes its own group.
+5. Every finding appears in **exactly one** group — or, when its remediation lies OUTSIDE the repository (the story card, the PR description, a decision only a human can take), in `carried` with a one-line `disposition` naming who acts and where. A carried finding never gets a group, and a group never gets an empty `allowedPaths` unless its mode is `test`. A repository finding that fits no group becomes its own group.
 
 ### Step 4: Write the handoff
 
@@ -51,7 +51,8 @@ Write `.pair/working/runs/$run/$story/$phase-remediation-plan.json`:
   "skill": "remediation-plan", "status": "planned", "inputHead": "<$base>",
   "groups": [{ "groupId": "r1-g1", "findings": [0, 2], "owner": "...", "mode": "behavioral",
                "allowedPaths": ["src/x.ts"], "oracle": "...", "dependsOn": [] }],
-  "findings": { "received": [0, 1, 2], "planned": [0, 1, 2], "carried": [] },
+  "carried": [{ "finding": 3, "disposition": "story card business rule 3 contradicts the shipped gate — maintainer edits the card" }],
+  "findings": { "received": [0, 1, 2, 3], "planned": [0, 1, 2], "carried": [3] },
   "createdAt": "<ISO-8601>"
 }
 ```
@@ -60,7 +61,7 @@ Write `.pair/working/runs/$run/$story/$phase-remediation-plan.json`:
 
 ## Output Format
 
-Return exactly `{ status, groups, inputHead }` with `status ∈ planned | stale`. `groups[].findings` are indices; `groups[].mode` is `behavioral | structural | test`; `groups[].allowedPaths` are repository-relative.
+Return exactly `{ status, groups, carried, inputHead }` with `status ∈ planned | stale`; `carried[]` = `{ finding, disposition }` for out-of-repository findings. `groups[].findings` are indices; `groups[].mode` is `behavioral | structural | test`; `groups[].allowedPaths` are repository-relative.
 
 ## HALT Conditions
 

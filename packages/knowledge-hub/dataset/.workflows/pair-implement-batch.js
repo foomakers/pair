@@ -977,6 +977,16 @@ const PLAN_SCHEMA = {
         required: ['groupId', 'findings', 'owner', 'mode', 'allowedPaths'],
       },
     },
+    // A finding whose remediation lies OUTSIDE the repository (the story card, the PR body, a
+    // human decision) has no group: it is carried to the merge gate with its disposition.
+    carried: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { finding: { type: 'integer' }, disposition: { type: 'string' } },
+        required: ['finding', 'disposition'],
+      },
+    },
   },
   required: ['status', 'groups'],
 }
@@ -984,8 +994,16 @@ const PLAN_SCHEMA = {
 // is non-empty and well-typed, and the dependency graph is acyclic. Anything else is
 // `failed-plan`: a finding left out of the plan is a finding nobody fixes.
 const hasPlanEvidence = count => plan => {
-  if (!plan || plan.status !== 'planned' || !Array.isArray(plan.groups) || plan.groups.length === 0) return false
+  if (!plan || plan.status !== 'planned' || !Array.isArray(plan.groups)) return false
+  const carried = plan.carried ?? []
+  if (!Array.isArray(carried)) return false
+  if (plan.groups.length === 0 && carried.length === 0) return false
   const seen = new Set()
+  for (const c of carried) {
+    if (!c || !Number.isInteger(c.finding) || c.finding < 0 || c.finding >= count || seen.has(c.finding)) return false
+    if (!String(c.disposition ?? '').trim()) return false
+    seen.add(c.finding)
+  }
   const ids = new Set()
   for (const g of plan.groups) {
     if (!g || !String(g.groupId ?? '').trim() || ids.has(g.groupId)) return false
@@ -1568,8 +1586,13 @@ async function driveStory(story) {
     const plan = await planRemediation(prevFindings, `r${round}`, reviewedHead)
     if (!hasPlanEvidence(prevFindings.length)(plan))
       return { story, prNumber: pr.prNumber, status: plan?.status === 'stale' ? 'failed-fix' : 'failed-plan', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+    // Out-of-repository findings are accepted with the planner's disposition and shown to the human.
+    const carriedByPlan = (plan.carried ?? []).map(c => ({ ...prevFindings[c.finding], nonActionable: true, disposition: `Outside the repository — ${c.disposition}` }))
+    accept(carriedByPlan)
     const groups = orderGroups(plan.groups)
-    log(`${tag} r${round}: ${groups.length} remediation group(s) planned for ${prevFindings.length} finding(s)`)
+    log(`${tag} r${round}: ${groups.length} remediation group(s) planned for ${prevFindings.length} finding(s)${carriedByPlan.length ? `, ${carriedByPlan.length} carried to the merge gate` : ''}`)
+    // Nothing left to fix in the repository: converge with the carried findings on the record.
+    if (groups.length === 0) break
     // Each group is one bounded attempt on top of the previous group's GREEN head.
     let groupBase = reviewedHead
     for (const [k, group] of groups.entries()) {
