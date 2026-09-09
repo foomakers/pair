@@ -17,22 +17,24 @@ import {
   seal,
   trailerFor,
   verify,
-} from '../../skills/pair-workflow-red-seal/scripts/red-snapshot.mjs'
+  verifyChain,
+} from '../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs'
 
-const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-seal/scripts/red-snapshot.mjs', import.meta.url))
+const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url))
 
-// The module ships inside TWO skills — `red-seal` (seal) and `p3-verify` (verify) — because a
-// skill must be able to run its script from its own directory on any harness. One source, two
-// installed copies: this is the guard that keeps them one artifact.
-test('red-snapshot.mjs ships byte-identical inside red-seal and p3-verify (installed and dataset)', () => {
+// The module ships inside the skills that run it — `red-verify` (seal, after validation) and
+// `review-phase` (verify + verify-chain, as the final verifier's first step) — because a skill must
+// be able to run its script from its own directory on any harness. One source, two installed copies
+// (and their dataset sources): this is the guard that keeps them one artifact.
+test('red-snapshot.mjs ships byte-identical inside red-verify and review-phase (installed and dataset)', () => {
   const read = rel => readFileSync(new URL(rel, import.meta.url), 'utf8')
-  const canonical = read('../../skills/pair-workflow-red-seal/scripts/red-snapshot.mjs')
+  const canonical = read('../../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs')
   for (const rel of [
-    '../../skills/pair-workflow-p3-verify/scripts/red-snapshot.mjs',
-    '../../../packages/knowledge-hub/dataset/.skills/workflow/red-seal/scripts/red-snapshot.mjs',
-    '../../../packages/knowledge-hub/dataset/.skills/workflow/p3-verify/scripts/red-snapshot.mjs',
+    '../../skills/pair-workflow-review-phase/scripts/red-snapshot.mjs',
+    '../../../packages/knowledge-hub/dataset/.skills/workflow/red-verify/scripts/red-snapshot.mjs',
+    '../../../packages/knowledge-hub/dataset/.skills/workflow/review-phase/scripts/red-snapshot.mjs',
   ])
-    assert.equal(read(rel), canonical, `${rel} drifted from the red-seal copy`)
+    assert.equal(read(rel), canonical, `${rel} drifted from the red-verify copy`)
 })
 
 function sh(cwd, ...args) {
@@ -68,7 +70,7 @@ function redContract(cwd, extra = {}) {
   const contract = {
     sourceOfTruth: 'a()',
     fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] },
-    matrix: [{ condition: 'default', oracle: 'node test/a.test.js', expected: '2' }],
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '2', covers: ['r0-1'] }],
     redTests: [{ file: 'test/a.test.js', kind: 'test', sha256: hashFile('test/a.test.js', cwd), command: 'node test/a.test.js', observed: 'Error: FAIL' }],
     testExempt: false,
     ...extra,
@@ -304,5 +306,140 @@ test('CLI: seal then verify print JSON and exit 0; a breach exits 1; a usage err
   r = run('frobnicate', '--pr', PR, '--phase', PHASE, '--base', base)
   assert.equal(r.status, 2)
   assert.match(JSON.parse(r.stdout).error, /unknown command/)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+
+// ── US-479 T-13: controls may pass, matrix rows are typed, revisions are successor snapshots ──
+test('contractErrors: a `baseline: pass` control needs a passing observation; a red witness needs a failure; matrix rows need id, kind, baseline and covers', () => {
+  const scope = { owner: 'x', mode: 'behavioral', allowedPaths: ['src/x.js'] }
+  const witness = { file: 'test/x.test.js', sha256: `sha256:${'0'.repeat(64)}`, command: 'node t', observed: 'FAIL' }
+  const control = { file: 'test/c.test.js', kind: 'test', baseline: 'pass', sha256: `sha256:${'1'.repeat(64)}`, command: 'node c', observed: 'PASS 3/3' }
+  assert.deepEqual(contractErrors({ fixScope: scope, redTests: [witness, control], testExempt: false }), [])
+  assert.match(contractErrors({ fixScope: scope, redTests: [witness, { ...control, observed: 'FAIL' }], testExempt: false }).join(), /control.*observed passing/i)
+  assert.match(contractErrors({ fixScope: scope, redTests: [{ ...witness, baseline: 'red', observed: 'PASS' }], testExempt: false }).join(), /observed RED failure/)
+  assert.match(contractErrors({ fixScope: scope, redTests: [{ ...witness, baseline: 'maybe' }], testExempt: false }).join(), /baseline must be red \| pass/)
+  // a contract made only of controls proves nothing about the defect
+  assert.match(contractErrors({ fixScope: scope, redTests: [control], testExempt: false }).join(), /at least one red witness/i)
+  const row = { id: 'row-1', kind: 'witness', baseline: 'red', condition: 'c', oracle: 'o', expected: 'e', covers: ['AC-1'] }
+  assert.deepEqual(contractErrors({ fixScope: scope, redTests: [witness], testExempt: false, matrix: [row] }), [])
+  assert.match(contractErrors({ fixScope: scope, redTests: [witness], testExempt: false, matrix: [{ ...row, id: undefined }] }).join(), /matrix\[0\]\.id/)
+  assert.match(contractErrors({ fixScope: scope, redTests: [witness], testExempt: false, matrix: [row, row] }).join(), /matrix\[1\]\.id is listed twice/)
+  assert.match(contractErrors({ fixScope: scope, redTests: [witness], testExempt: false, matrix: [{ ...row, kind: 'guess' }] }).join(), /matrix\[0\]\.kind/)
+  assert.match(contractErrors({ fixScope: scope, redTests: [witness], testExempt: false, matrix: [{ ...row, covers: [] }] }).join(), /matrix\[0\]\.covers/)
+  assert.match(contractErrors({ fixScope: scope, redTests: [witness], testExempt: false, matrix: [{ ...row, kind: 'not-applicable' }] }).join(), /matrix\[0\]\.rationale/)
+})
+
+test('seal: an already-correct control that did not change still seals (recorded, hashed, protected) — no artificial RED is required', () => {
+  const { cwd, base } = repo()
+  const { contract, contractPath } = redContract(cwd)
+  // test/other.test.js is a committed, unchanged, already-passing test recorded as a control
+  write(cwd, 'test/other.test.js', 'import { o } from "../src/other.js"\nif (o() !== 0) throw new Error("FAIL")\n')
+  git(cwd, 'add', '--', 'test/other.test.js')
+  git(cwd, 'commit', '-q', '--no-verify', '-m', 'control exists')
+  const base2 = git(cwd, 'rev-parse', 'HEAD')
+  const withControl = { ...contract, redTests: [...contract.redTests, { file: 'test/other.test.js', kind: 'test', baseline: 'pass', sha256: hashFile('test/other.test.js', cwd), command: 'node test/other.test.js', observed: 'PASS' }] }
+  write(cwd, contractPath, JSON.stringify(withControl))
+  const s = seal({ pr: PR, phase: PHASE, base: base2, contractPath, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  assert.deepEqual(git(cwd, 'diff-tree', '--no-commit-id', '--name-only', '-r', s.snapshot).split('\n').sort(), [manifestPathFor(PR, PHASE), 'test/a.test.js'].sort(), 'the unchanged control adds no blob to the snapshot commit')
+  // …but it IS protected: changing it after the seal is a breach
+  rmSync(join(cwd, contractPath))
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n', 'test/other.test.js': 'tampered\n' })
+  const v = verify({ pr: PR, phase: PHASE, base: base2, cwd })
+  assert.deepEqual(v.breaches.map(b => b.code), ['test-blob-changed'])
+  // a red witness that did not change is still refused: it cannot be a witness of anything
+  const { cwd: c2, base: b2 } = repo()
+  const { contract: k2 } = redContract(c2)
+  git(c2, 'checkout', '--', 'test/a.test.js')
+  write(c2, '.pair/working/red-draft.json', JSON.stringify({ ...k2, redTests: [{ ...k2.redTests[0], sha256: hashFile('test/a.test.js', c2) }] }))
+  assert.equal(seal({ pr: PR, phase: PHASE, base: b2, contractPath: '.pair/working/red-draft.json', cwd: c2 }).reason, 'artifact-not-changed')
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(c2, { recursive: true, force: true })
+})
+
+// A genuine contract gap found by the final verifier revises the affected group: the revised test
+// artifacts are sealed as a SUCCESSOR snapshot on the current head. verify-chain proves the whole
+// attempt: every snapshot well-formed on its declared base, every sealed blob at HEAD identical to
+// the LATEST snapshot that lists it (the successor is the only commit allowed to change a sealed
+// test), every production change inside the scope in force at that point.
+function chainRepo() {
+  const { cwd, base } = repo()
+  const { contractPath } = redContract(cwd)
+  const s1 = seal({ pr: PR, phase: 'r1-g1', base, contractPath, cwd })
+  assert.equal(s1.sealed, true)
+  rmSync(join(cwd, contractPath))
+  green(cwd, s1.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  const head1 = git(cwd, 'rev-parse', 'HEAD')
+  return { cwd, base, s1, head1 }
+}
+function revision(cwd, head1, extra = {}) {
+  // the gap: the empty form; the revised witness extends the SAME sealed test file
+  write(cwd, 'test/a.test.js', 'import { a } from "../src/a.js"\nif (a() !== 2) throw new Error("FAIL")\nif (a(0) !== 0) throw new Error("FAIL empty")\n')
+  const contract = {
+    sourceOfTruth: 'a()',
+    fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] },
+    revision: 2,
+    supersedes: 'r1-g1',
+    matrix: [{ id: 'row-1', kind: 'witness', baseline: 'red', condition: 'default', oracle: 'node test/a.test.js', expected: '2', covers: ['r0-1'] }, { id: 'row-2', kind: 'witness', baseline: 'red', condition: 'empty', oracle: 'node test/a.test.js', expected: '0', covers: ['r1-1'] }],
+    redTests: [{ file: 'test/a.test.js', kind: 'test', sha256: hashFile('test/a.test.js', cwd), command: 'node test/a.test.js', observed: 'Error: FAIL empty' }],
+    testExempt: false,
+    ...extra,
+  }
+  write(cwd, '.pair/working/rev-draft.json', JSON.stringify(contract))
+  const s2 = seal({ pr: PR, phase: 'r1-g1-rev2', base: head1, contractPath: '.pair/working/rev-draft.json', cwd })
+  rmSync(join(cwd, '.pair/working/rev-draft.json'))
+  return s2
+}
+
+test('verify-chain: seal → GREEN → successor seal (revision) → GREEN is one verified attempt; the earlier snapshot is history, not a breach', () => {
+  const { cwd, base, s1, head1 } = chainRepo()
+  const s2 = revision(cwd, head1)
+  assert.equal(s2.sealed, true, JSON.stringify(s2))
+  assert.equal(git(cwd, 'rev-parse', `${s2.snapshot}^`), head1)
+  green(cwd, s2.manifest, { 'src/a.js': 'export const a = (x = 2) => x\n' })
+  const chain = verifyChain({ pr: PR, base, cwd })
+  assert.equal(chain.verified, true, JSON.stringify(chain))
+  assert.deepEqual(chain.snapshots.map(s => s.phase), ['r1-g1', 'r1-g1-rev2'])
+  assert.deepEqual(chain.snapshots.map(s => s.snapshot), [s1.snapshot, s2.snapshot])
+  // the single-snapshot verify of the superseded phase still reports the changed blob — that is
+  // WHY the final verifier runs verify-chain, not verify, once a revision exists
+  assert.equal(verify({ pr: PR, phase: 'r1-g1', base, cwd }).contractBreach, true)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('verify-chain breach: a sealed test changed outside a successor snapshot, a production change out of the scope in force, an unlisted test, a missing snapshot', () => {
+  const { cwd, base, head1 } = chainRepo()
+  // tamper between seals: a sealed blob edited by an ordinary commit is a breach even though a revision follows
+  green(cwd, '.no-manifest', { 'test/a.test.js': 'import { a } from "../src/a.js"\nif (a() !== 3) throw new Error("FAIL")\n' })
+  let chain = verifyChain({ pr: PR, base, cwd })
+  assert.deepEqual(chain.breaches.map(b => b.code), ['test-blob-changed'])
+  const { cwd: c2, base: b2, head1: h2 } = chainRepo()
+  const s2 = revision(c2, h2)
+  green(c2, s2.manifest, { 'src/a.js': 'export const a = (x = 2) => x\n', 'src/other.js': 'export const o = () => 1\n', 'test/zz.test.js': 'new\n' })
+  chain = verifyChain({ pr: PR, base: b2, cwd: c2 })
+  assert.deepEqual(chain.breaches.map(b => `${b.code}:${b.path}`).sort(), ['out-of-scope:src/other.js', 'unlisted-test-changed:test/zz.test.js'])
+  const { cwd: c3, base: b3 } = repo()
+  assert.deepEqual(verifyChain({ pr: PR, base: b3, cwd: c3 }).breaches, [{ code: 'snapshot-missing' }])
+  // a successor whose parent is not the head it declares is parent-not-base
+  const { cwd: c4, base: b4, head1: h4 } = chainRepo()
+  git(c4, 'commit', '-q', '--no-verify', '--allow-empty', '-m', 'moved')
+  assert.equal(revision(c4, h4).reason, 'head-not-base', 'the sealer refuses to seal a revision on a moved head')
+  for (const d of [cwd, c2, c3, c4]) rmSync(d, { recursive: true, force: true })
+})
+
+test('CLI: verify-chain prints JSON and exits 0 on a verified chain, 1 on a breach', () => {
+  const { cwd, base, head1 } = chainRepo()
+  const s2 = revision(cwd, head1)
+  green(cwd, s2.manifest, { 'src/a.js': 'export const a = (x = 2) => x\n' })
+  const run = (...args) => spawnSync(process.execPath, [CLI, ...args, '--cwd', cwd], { encoding: 'utf8' })
+  let r = run('verify-chain', '--pr', PR, '--base', base)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(JSON.parse(r.stdout).verified, true)
+  write(cwd, 'test/a.test.js', 'tampered\n')
+  git(cwd, 'commit', '-q', '--no-verify', '-am', 'tamper')
+  r = run('verify-chain', '--pr', PR, '--base', base)
+  assert.equal(r.status, 1)
+  assert.equal(JSON.parse(r.stdout).contractBreach, true)
   rmSync(cwd, { recursive: true, force: true })
 })

@@ -294,6 +294,9 @@ test('TC-11 / TC-14: the six phase skills are real installed skills named by the
   }
   for (const name of ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase'])
     assert.ok(existsSync(new URL(`../skills/pair-workflow-${name}/scripts/cycle-state.mjs`, import.meta.url)), `${name} ships without cycle-state.mjs`)
+  // the seal runs inside the validation stage, with the custody script shipped beside that skill
+  assert.match(SKILL('red-verify'), /red-snapshot\.mjs seal/)
+  assert.ok(existsSync(new URL('../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url)))
 })
 
 test('TC-11: the author cannot approve its own work — the final verifier and the contract validator are distinct read-only roles from the author and the fixer', async () => {

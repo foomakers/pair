@@ -18,6 +18,18 @@
 //     path at all). Prints {verified, contractBreach,
 //     breaches[]}. Any breach is terminal for the attempt; the script repairs nothing.
 //
+//   node <skill dir>/scripts/red-snapshot.mjs verify-chain --pr <n> --base <sha>
+//     The whole attempt since <base>: every snapshot of this PR in order, each well-formed on its
+//     declared base; every sealed blob at HEAD identical to the LATEST snapshot that lists it (a
+//     successor snapshot — a contract REVISION — is the only commit allowed to change a sealed
+//     test); every production change inside the scope in force at that point. This is what the
+//     final verifier runs: a revision keeps the earlier seal as history, never as a breach.
+//
+// Artifacts carry a `baseline`: `red` (a witness — its recorded observation is a FAILURE, and the
+// seal requires it to have changed at the base) or `pass` (a positive / already-correct control —
+// its observation is a pass, it may be unchanged, and it is protected by blob identity like every
+// other sealed artifact). A contract with no red witness proves nothing and is invalid.
+//
 // A rebase is never repaired (US-479 c1): a snapshot that is no longer an ancestor is simply
 // `snapshot-missing`, and the attempt fails closed.
 import { createHash } from 'node:crypto'
@@ -80,15 +92,22 @@ export function contractErrors(c) {
   if (!Array.isArray(c.redTests) || c.redTests.length === 0) errs.push('redTests must be a non-empty array')
   else {
     const seen = new Set()
+    let witnesses = 0
     for (const [i, a] of c.redTests.entries()) {
       const kind = a?.kind ?? 'test'
+      const baseline = artifactBaseline(a)
       if (!isRelPath(a?.file)) errs.push(`redTests[${i}].file must be a repository-relative path`)
       else if (seen.has(a.file)) errs.push(`redTests[${i}].file is listed twice: ${a.file}`)
       else seen.add(a.file)
       if (!SHA256_RE.test(String(a?.sha256 ?? ''))) errs.push(`redTests[${i}].sha256 must be sha256:<64 hex>`)
+      if (!['red', 'pass'].includes(baseline)) errs.push(`redTests[${i}].baseline must be red | pass`)
       if (kind === 'test') {
-        if (!String(a?.command ?? '').trim()) errs.push(`redTests[${i}] (test) needs its failing command`)
-        if (!/fail/i.test(String(a?.observed ?? ''))) errs.push(`redTests[${i}] (test) needs an observed RED failure`)
+        if (!String(a?.command ?? '').trim()) errs.push(`redTests[${i}] (test) needs its ${baseline === 'pass' ? 'passing' : 'failing'} command`)
+        const observed = String(a?.observed ?? '')
+        if (baseline === 'pass') {
+          if (/fail/i.test(observed) || !/pass|ok|green|\d+\/\d+/i.test(observed)) errs.push(`redTests[${i}] (control) needs an observed PASSING run, not ${JSON.stringify(observed)}`)
+        } else if (!/fail/i.test(observed)) errs.push(`redTests[${i}] (test) needs an observed RED failure`)
+        else witnesses++
       } else if (kind === 'fixture') {
         if (!String(a?.consumedBy ?? '').trim()) errs.push(`redTests[${i}] (fixture) needs consumedBy`)
       } else errs.push(`redTests[${i}].kind must be test | fixture`)
@@ -98,11 +117,32 @@ export function contractErrors(c) {
         const consumer = c.redTests.find(t => t.file === a.consumedBy && (t.kind ?? 'test') === 'test')
         if (!consumer) errs.push(`redTests[${i}] (fixture) consumedBy does not name a listed RED test: ${a.consumedBy}`)
       }
+    // Controls prove what already works; only a witness that fails for the defect proves the fix.
+    if (witnesses === 0 && scope?.mode !== 'test' && !errs.some(e => /RED failure/.test(e))) errs.push('redTests needs at least one red witness (baseline red, observed failing) — a contract made only of controls proves nothing')
+  }
+  if (c.matrix !== undefined) {
+    if (!Array.isArray(c.matrix)) errs.push('matrix must be an array')
+    else {
+      const ids = new Set()
+      for (const [i, row] of c.matrix.entries()) {
+        if (!String(row?.id ?? '').trim()) errs.push(`matrix[${i}].id is required (stable row id)`)
+        else if (ids.has(row.id)) errs.push(`matrix[${i}].id is listed twice: ${row.id}`)
+        else ids.add(row.id)
+        if (!['witness', 'control', 'boundary', 'interaction', 'not-applicable'].includes(row?.kind)) errs.push(`matrix[${i}].kind must be witness | control | boundary | interaction | not-applicable`)
+        if (!['red', 'pass'].includes(row?.baseline)) errs.push(`matrix[${i}].baseline must be red | pass`)
+        if (!Array.isArray(row?.covers) || row.covers.length === 0) errs.push(`matrix[${i}].covers must name at least one obligation`)
+        if (row?.kind === 'not-applicable' && !String(row?.rationale ?? '').trim()) errs.push(`matrix[${i}].rationale is required for a not-applicable row`)
+      }
+    }
   }
   return errs
 }
 
+export const artifactBaseline = a => String(a?.baseline ?? 'red')
 export const artifactPaths = c => (c.testExempt === true ? [] : c.redTests.map(a => a.file))
+// Artifacts the seal requires to have CHANGED at the base: red witnesses. A `pass` control is an
+// already-correct test and may be sealed unchanged.
+export const witnessPaths = c => (c.testExempt === true ? [] : c.redTests.filter(a => artifactBaseline(a) === 'red').map(a => a.file))
 
 // ── seal ───────────────────────────────────────────────────────────────────────────────────
 export function findSnapshot({ pr, phase, base, cwd }) {
@@ -169,7 +209,7 @@ export function seal({ pr, phase, base, contractPath, cwd }) {
     .filter(p => p !== contractPath && resolve(cwd, p) !== resolve(cwd, contractPath) && p !== manifest)
   const outside = dirty.filter(p => !files.includes(p))
   if (outside.length) return { sealed: false, reason: 'dirty-outside-contract', paths: outside }
-  const notDirty = files.filter(f => !dirty.includes(f))
+  const notDirty = witnessPaths(contract).filter(f => !dirty.includes(f))
   if (notDirty.length && contract.testExempt !== true)
     return { sealed: false, reason: 'artifact-not-changed', paths: notDirty }
 
@@ -219,7 +259,11 @@ export function verify({ pr, phase, base, cwd }) {
   const tree = (git(['diff-tree', '--no-commit-id', '--name-only', '-r', snapshot], cwd) ?? '').split('\n').filter(Boolean)
   const expected = new Set([manifest, ...listed])
   for (const p of tree) if (!expected.has(p)) breach('snapshot-carries-unlisted-file', { path: p })
-  for (const p of expected) if (!tree.includes(p)) breach('snapshot-lacks-listed-file', { path: p })
+  // Witnesses changed at the base, so they appear in the snapshot's diff; a `pass` control may be
+  // an unchanged file — it must exist in the snapshot's TREE, not in its diff.
+  const mustDiff = new Set([manifest, ...(contract && !contractErrors(contract).length ? witnessPaths(contract) : [])])
+  for (const p of mustDiff) if (!tree.includes(p)) breach('snapshot-lacks-listed-file', { path: p })
+  for (const p of listed) if (!mustDiff.has(p) && git(['rev-parse', '--verify', '-q', `${snapshot}:${p}`], cwd, { allowFail: true }) === null) breach('snapshot-lacks-listed-file', { path: p })
 
   for (const f of listed) {
     const atSnap = git(['rev-parse', '--verify', '-q', `${snapshot}:${f}`], cwd, { allowFail: true })
@@ -250,6 +294,111 @@ export function verify({ pr, phase, base, cwd }) {
   return { verified: !contractBreach, contractBreach, snapshot, manifest, breaches }
 }
 
+// ── verify-chain ───────────────────────────────────────────────────────────────────────────
+// Every snapshot of this PR between <base> and HEAD, oldest first, as {sha, phase, base, manifest}.
+export function listSnapshots({ pr, base, cwd }) {
+  const head = git(['rev-parse', 'HEAD'], cwd)
+  const range = head === base ? [] : [`${base}..HEAD`]
+  const out = git(['log', '--reverse', '--format=%H%x00%B%x1e', ...range], cwd) ?? ''
+  const re = new RegExp(`^${TRAILER_KEY}: pr=${String(pr).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; phase=([^;]+); base=([0-9a-f]{40}); manifest=(\\S+)$`)
+  const snaps = []
+  for (const rec of out.split('\x1e').map(r => r.replace(/^\n/, '')).filter(Boolean)) {
+    const [sha, body] = rec.split('\x00')
+    for (const line of (body ?? '').split('\n')) {
+      const m = re.exec(line.trim())
+      if (m) snaps.push({ sha, phase: m[1], base: m[2], manifest: m[3] })
+    }
+  }
+  return snaps
+}
+
+export function verifyChain({ pr, base, cwd }) {
+  if (!SHA_RE.test(String(base))) return { verified: false, contractBreach: true, breaches: [{ code: 'base-not-a-sha' }], snapshots: [] }
+  const snaps = listSnapshots({ pr, base, cwd })
+  if (!snaps.length) return { verified: false, contractBreach: true, breaches: [{ code: 'snapshot-missing' }], snapshots: [] }
+  const breaches = []
+  const breach = (code, extra = {}) => breaches.push({ code, ...extra })
+  const head = git(['rev-parse', 'HEAD'], cwd)
+  // Each snapshot: parent == its declared base, and that base descends from the previous snapshot.
+  const contracts = []
+  for (const [i, s] of snaps.entries()) {
+    const parent = git(['rev-parse', `${s.sha}^`], cwd)
+    if (parent !== s.base) breach('parent-not-base', { phase: s.phase, parent })
+    if (i > 0 && git(['merge-base', '--is-ancestor', snaps[i - 1].sha, s.base], cwd, { allowFail: true }) === null) breach('successor-not-above-predecessor', { phase: s.phase })
+    const raw = git(['show', `${s.sha}:${s.manifest}`], cwd, { allowFail: true })
+    let contract = null
+    if (raw === null) breach('manifest-missing-in-snapshot', { phase: s.phase, manifest: s.manifest })
+    else {
+      try {
+        contract = JSON.parse(raw)
+      } catch {
+        breach('manifest-not-json', { phase: s.phase, manifest: s.manifest })
+      }
+    }
+    if (contract) {
+      const errs = contractErrors(contract)
+      if (errs.length) {
+        breach('manifest-invalid', { phase: s.phase, errors: errs })
+        contract = null
+      }
+    }
+    const listed = contract ? artifactPaths(contract) : []
+    const tree = (git(['diff-tree', '--no-commit-id', '--name-only', '-r', s.sha], cwd) ?? '').split('\n').filter(Boolean)
+    for (const p of tree) if (p !== s.manifest && !listed.includes(p)) breach('snapshot-carries-unlisted-file', { phase: s.phase, path: p })
+    for (const p of listed) if (git(['rev-parse', '--verify', '-q', `${s.sha}:${p}`], cwd, { allowFail: true }) === null) breach('snapshot-lacks-listed-file', { phase: s.phase, path: p })
+    contracts.push({ ...s, contract, listed })
+  }
+  // Blob identity: at HEAD every sealed artifact equals the LATEST snapshot that lists it.
+  const latestBy = new Map()
+  for (const c of contracts) for (const f of c.listed) latestBy.set(f, c)
+  for (const [f, c] of latestBy) {
+    const atSnap = git(['rev-parse', '--verify', '-q', `${c.sha}:${f}`], cwd, { allowFail: true })
+    const atHead = git(['rev-parse', '--verify', '-q', `HEAD:${f}`], cwd, { allowFail: true })
+    if (!atHead) breach('test-artifact-removed', { path: f })
+    else if (atSnap !== atHead) breach('test-blob-changed', { path: f, sealedBy: c.phase })
+  }
+  // Segments: the commits between one snapshot and the next (or HEAD) live under that snapshot's scope.
+  for (const [i, c] of contracts.entries()) {
+    const end = i + 1 < contracts.length ? `${contracts[i + 1].sha}^` : head
+    const manifests = new Set(contracts.map(x => x.manifest))
+    const changes = (git(['diff', '--name-status', `${c.sha}..${end}`], cwd) ?? '')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => {
+        const [status, ...rest] = l.split('\t')
+        return { status: status[0], path: rest[rest.length - 1] }
+      })
+      .filter(({ path }) => !manifests.has(path))
+    for (const { status, path } of changes) {
+      if (c.listed.includes(path)) {
+        // a sealed blob edited inside a segment (not by a successor snapshot) — even if a later
+        // snapshot re-seals the file, THIS change was unauthorized
+        if (!contracts.slice(i + 1).some(x => x.listed.includes(path))) continue // already reported by blob identity
+        breach('test-blob-changed', { path, sealedBy: c.phase, segment: c.phase })
+        continue
+      }
+      if (isTestPath(path)) {
+        if (!contracts.slice(i + 1).some(x => x.listed.includes(path))) breach('unlisted-test-changed', { path, segment: c.phase })
+        continue
+      }
+      if (!c.contract?.fixScope) continue
+      const { allowedPaths, mode } = c.contract.fixScope
+      if (mode === 'test') breach('test-mode-production-change', { path, status, segment: c.phase })
+      else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path, segment: c.phase })
+      else if (mode === 'behavioral' && status !== 'M') breach('behavioral-adds-or-moves-module', { path, status, segment: c.phase })
+    }
+  }
+  // dedupe identical breaches
+  const seen = new Set()
+  const unique = breaches.filter(b => {
+    const k = JSON.stringify([b.code, b.path ?? '', b.phase ?? ''])
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+  return { verified: unique.length === 0, contractBreach: unique.length > 0, head, snapshots: snaps.map(s => ({ phase: s.phase, snapshot: s.sha, base: s.base, manifest: s.manifest })), breaches: unique }
+}
+
 // ── CLI ────────────────────────────────────────────────────────────────────────────────────
 function parseCli(argv) {
   const [cmd, ...rest] = argv
@@ -267,9 +416,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const { cmd, opts } = parseCli(process.argv.slice(2))
     const cwd = opts.cwd ?? process.cwd()
     const common = { pr: opts.pr, phase: opts.phase, base: opts.base, cwd }
-    for (const k of ['pr', 'phase', 'base']) if (!opts[k]) throw new Error(`--${k} is required`)
+    for (const k of cmd === 'verify-chain' ? ['pr', 'base'] : ['pr', 'phase', 'base']) if (!opts[k]) throw new Error(`--${k} is required`)
     let out
-    if (cmd === 'seal') {
+    if (cmd === 'verify-chain') {
+      out = verifyChain({ pr: opts.pr, base: opts.base, cwd })
+      process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(out.verified ? 0 : 1)
+    } else if (cmd === 'seal') {
       if (!opts.contract) throw new Error('--contract <draft.json> is required')
       out = seal({ ...common, contractPath: opts.contract })
       process.stdout.write(JSON.stringify(out) + '\n')
@@ -278,7 +431,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       out = verify(common)
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.verified ? 0 : 1)
-    } else throw new Error(`unknown command: ${cmd} (expected seal | verify)`)
+    } else throw new Error(`unknown command: ${cmd} (expected seal | verify | verify-chain)`)
   } catch (e) {
     process.stdout.write(JSON.stringify({ error: e.message }) + '\n')
     process.exit(2)
