@@ -23,9 +23,19 @@ import {
   parseRoundMarker,
   ROUND_KINDS,
   AUTO_RESOLUTIONS,
+  checkSkillLocalScripts,
+  collectSkillFiles,
+  installedSkillDirName,
+  SKILLS_DIR,
+  INSTALLED_SKILLS_DIR,
 } from './skills-conformance-check'
-import { SKILL_COPY_OPTS } from './skill-md-mirror'
-import { join as pathJoin } from 'node:path'
+import {
+  SKILL_COPY_OPTS,
+  readSkillsDatasetFromDisk,
+  datasetSkillDirs,
+  installedSkillDir,
+} from './skill-md-mirror'
+import { join as pathJoin, dirname as pathDirname, relative, sep } from 'node:path'
 
 describe('parseFrontmatter', () => {
   it('parses top-level keys and quoted values', () => {
@@ -901,5 +911,361 @@ describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', ()
     )
     const { errors } = runChecks(root)
     expect(errors.some(e => e.includes('process/other') && e.includes('$approval'))).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Skill-local scripts (#482): a skill is portable as ONE folder — every script
+// its SKILL.md links ships beside it, and every shipped script has a
+// byte-identical installed twin.
+// ---------------------------------------------------------------------------
+
+/**
+ * A two-tree fixture: a dataset `.skills` root and an installed `.claude/skills`
+ * root, so the twin check is exercised against real files rather than a stub.
+ */
+const scriptsFixture = (
+  prefix: string,
+): { root: string; dataset: string; installed: string } => {
+  const root = mkdtempSync(join(tmpdir(), prefix))
+  const dataset = join(root, 'dataset')
+  const installed = join(root, 'installed')
+  mkdirSync(dataset, { recursive: true })
+  mkdirSync(installed, { recursive: true })
+  return { root, dataset, installed }
+}
+
+const put = (base: string, rel: string, content: string): void => {
+  mkdirSync(pathDirname(join(base, rel)), { recursive: true })
+  writeFileSync(join(base, rel), content)
+}
+
+const putSkill = (dataset: string, dir: string, body: string): void => {
+  const name = dir.split('/').pop() as string
+  put(dataset, `${dir}/SKILL.md`, `---\nname: ${name}\ndescription: "Fixture."\n---\n${body}`)
+}
+
+describe('checkSkillLocalScripts — a linked script ships beside its SKILL.md (AC1)', () => {
+  const roots: string[] = []
+  afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
+
+  const fixture = (prefix: string) => {
+    const f = scriptsFixture(prefix)
+    roots.push(f.root)
+    return f
+  }
+
+  it('errors with the skill path AND the missing script path when the target is absent', () => {
+    const { dataset, installed } = fixture('skills-scripts-missing-')
+    putSkill(dataset, 'workflow/phase', 'Run [scripts/go.mjs](scripts/go.mjs) first.')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('workflow/phase')
+    expect(errors[0]).toContain('workflow/phase/scripts/go.mjs')
+  })
+
+  it('accepts the `./scripts/` spelling and reports it the same way', () => {
+    const { dataset, installed } = fixture('skills-scripts-dotslash-')
+    putSkill(dataset, 'workflow/phase', 'Run [go](./scripts/go.mjs).')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('workflow/phase/scripts/go.mjs')
+  })
+
+  it('follows a nested target under scripts/', () => {
+    const { dataset, installed } = fixture('skills-scripts-nested-link-')
+    putSkill(dataset, 'workflow/phase', 'Run [go](scripts/lib/go.mjs).')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('workflow/phase/scripts/lib/go.mjs')
+  })
+
+  it('is silent when the linked script exists', () => {
+    const { dataset, installed } = fixture('skills-scripts-present-')
+    putSkill(dataset, 'workflow/phase', 'Run [go](scripts/go.mjs).')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'export const go = 1\n')
+    put(installed, 'pair-workflow-phase/scripts/go.mjs', 'export const go = 1\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('strips an anchor before resolving the target', () => {
+    const { dataset, installed } = fixture('skills-scripts-anchor-')
+    putSkill(dataset, 'workflow/phase', 'Run [go](scripts/go.mjs#usage).')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+    put(installed, 'pair-workflow-phase/scripts/go.mjs', 'x\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('leaves a target OUTSIDE scripts/ to checkLinks (out of scope here)', () => {
+    const { dataset, installed } = fixture('skills-scripts-outside-')
+    putSkill(dataset, 'workflow/phase', 'See [x](../other/x.mjs) and [y](./notes.md).')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('does not mistake a sibling whose name merely STARTS with "scripts" for a script link', () => {
+    const { dataset, installed } = fixture('skills-scripts-prefix-')
+    putSkill(dataset, 'workflow/phase', 'See [notes](scripts-of-note.md).')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('ignores non-checkable targets (URL, absolute, placeholder)', () => {
+    const { dataset, installed } = fixture('skills-scripts-noncheckable-')
+    putSkill(
+      dataset,
+      'workflow/phase',
+      'See [a](https://example.com/scripts/go.mjs), [b](/scripts/go.mjs), [c](scripts/<name>.mjs).',
+    )
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('ignores a link inside a fenced code block, like checkLinks does', () => {
+    const { dataset, installed } = fixture('skills-scripts-fenced-')
+    putSkill(dataset, 'workflow/phase', '```md\n[go](scripts/go.mjs)\n```\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('accepts a link to the scripts/ directory itself when the directory exists', () => {
+    const { dataset, installed } = fixture('skills-scripts-dirlink-')
+    putSkill(dataset, 'workflow/phase', 'Everything under [scripts/](scripts/).')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+    put(installed, 'pair-workflow-phase/scripts/go.mjs', 'x\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+})
+
+describe('checkSkillLocalScripts — the installed twin is byte-identical (AC2)', () => {
+  const roots: string[] = []
+  afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
+
+  const fixture = (prefix: string) => {
+    const f = scriptsFixture(prefix)
+    roots.push(f.root)
+    return f
+  }
+
+  it('is silent when the twin exists with identical bytes', () => {
+    const { dataset, installed } = fixture('skills-twin-identical-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'console.log(1)\n')
+    put(installed, 'pair-workflow-phase/scripts/go.mjs', 'console.log(1)\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('reports `missing` naming both paths when the twin is absent', () => {
+    const { dataset, installed } = fixture('skills-twin-missing-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'console.log(1)\n')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('missing')
+    expect(errors[0]).toContain('workflow/phase/scripts/go.mjs')
+    expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
+  })
+
+  it('reports `drifted` naming both paths when the twin differs by ONE byte', () => {
+    const { dataset, installed } = fixture('skills-twin-drift-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'console.log(1)\n')
+    put(installed, 'pair-workflow-phase/scripts/go.mjs', 'console.log(2)\n')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('drifted')
+    expect(errors[0]).toContain('workflow/phase/scripts/go.mjs')
+    expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
+  })
+
+  it('maps a BARE skill to `pair-<name>` (loop, next)', () => {
+    const { dataset, installed } = fixture('skills-twin-bare-')
+    putSkill(dataset, 'loop', 'body')
+    put(dataset, 'loop/scripts/go.mjs', 'x\n')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('pair-loop/scripts/go.mjs')
+  })
+
+  it('mirrors a nested script at the same relative path under the skill', () => {
+    const { dataset, installed } = fixture('skills-twin-nested-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/lib/go.mjs', 'x\n')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('pair-workflow-phase/scripts/lib/go.mjs')
+  })
+
+  it('ignores an installed script that has no dataset source', () => {
+    const { dataset, installed } = fixture('skills-twin-orphan-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(installed, 'pair-workflow-phase/scripts/orphan.mjs', 'x\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('treats an empty scripts/ directory as neither an error nor a pass line', () => {
+    const { dataset, installed } = fixture('skills-twin-empty-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    mkdirSync(join(dataset, 'workflow/phase/scripts'), { recursive: true })
+
+    const result = checkSkillLocalScripts(dataset, installed)
+
+    expect(result.errors).toEqual([])
+    expect(result.notes).toEqual([])
+  })
+
+  it('ignores a scripts/ directory that is NOT the skill’s own (references/scripts/)', () => {
+    const { dataset, installed } = fixture('skills-twin-notown-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/references/scripts/go.mjs', 'x\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
+  })
+
+  it('reports an unreadable script as an error naming the path, never as identical', () => {
+    const { dataset, installed } = fixture('skills-twin-unreadable-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+    // The twin exists as a DIRECTORY where a file is expected: reading it throws.
+    mkdirSync(join(installed, 'pair-workflow-phase/scripts/go.mjs'), { recursive: true })
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
+    expect(errors[0]).not.toContain('identical')
+  })
+
+  it('skips the twin check with ONE informational note when the installed root is absent', () => {
+    const { root, dataset } = fixture('skills-twin-nodir-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+
+    const result = checkSkillLocalScripts(dataset, join(root, 'does-not-exist'))
+
+    expect(result.errors).toEqual([])
+    expect(result.notes).toHaveLength(1)
+    expect(result.notes[0]).toContain('does-not-exist')
+  })
+})
+
+describe('checkSkillLocalScripts — the two checks meet (collision rows)', () => {
+  const roots: string[] = []
+  afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
+
+  const fixture = (prefix: string) => {
+    const f = scriptsFixture(prefix)
+    roots.push(f.root)
+    return f
+  }
+
+  it('a linked-but-absent script yields the link error ONLY — never a phantom missing twin', () => {
+    const { dataset, installed } = fixture('skills-collide-linkonly-')
+    putSkill(dataset, 'workflow/phase', 'Run [go](scripts/go.mjs).')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors.some(e => e.includes('pair-workflow-phase'))).toBe(false)
+  })
+
+  it('a shipped-but-unlinked script is still mirror-checked', () => {
+    const { dataset, installed } = fixture('skills-collide-unlinked-')
+    putSkill(dataset, 'workflow/phase', 'No links here.')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('missing')
+  })
+})
+
+describe('installedSkillDirName — pinned to the real copy-pipeline transform', () => {
+  it("uses the registry's declared prefix, not an independent string", () => {
+    expect(installedSkillDirName('workflow/red-seal')).toBe(
+      `${SKILL_COPY_OPTS.prefix}-workflow-red-seal`,
+    )
+  })
+
+  it('agrees with skill-md-mirror’s installedSkillDir for every real dataset skill dir', () => {
+    const tree = readSkillsDatasetFromDisk(SKILLS_DIR)
+    const dirs = datasetSkillDirs(tree)
+    expect(dirs.length).toBeGreaterThan(0)
+    for (const dir of dirs) {
+      expect(installedSkillDirName(dir)).toBe(installedSkillDir(dir))
+    }
+  })
+})
+
+describe('runChecks — skill-local scripts are part of the gate', () => {
+  const roots: string[] = []
+  afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
+
+  it('a drifted twin surfaces through runChecks (drives CLI exit 1)', () => {
+    const f = scriptsFixture('skills-gate-drift-')
+    roots.push(f.root)
+    putSkill(f.dataset, 'workflow/phase', 'Run [go](scripts/go.mjs).')
+    put(f.dataset, 'workflow/phase/scripts/go.mjs', 'a\n')
+    put(f.installed, 'pair-workflow-phase/scripts/go.mjs', 'b\n')
+
+    const { errors } = runChecks(f.dataset, f.installed)
+
+    expect(errors.some(e => e.includes('drifted') && e.includes('scripts/go.mjs'))).toBe(true)
+  })
+
+  it('a missing linked script is reported by BOTH this check and checkLinks', () => {
+    const f = scriptsFixture('skills-gate-link-')
+    roots.push(f.root)
+    putSkill(f.dataset, 'workflow/phase', 'Run [go](scripts/go.mjs).')
+
+    const { errors } = runChecks(f.dataset, f.installed)
+
+    expect(errors.some(e => e.includes('broken relative reference'))).toBe(true)
+    expect(errors.some(e => e.includes('workflow/phase/scripts/go.mjs'))).toBe(true)
+  })
+})
+
+describe('the real corpus ships and mirrors every skill-local script (AC3)', () => {
+  it('PASSes with no errors and no notes', () => {
+    const result = checkSkillLocalScripts(SKILLS_DIR, INSTALLED_SKILLS_DIR)
+
+    expect(result.errors).toEqual([])
+    expect(result.notes).toEqual([])
+  })
+})
+
+describe('collectSkillFiles — a bare skill stays visible once it ships a subdirectory', () => {
+  const roots: string[] = []
+  afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
+
+  it('finds `<name>/SKILL.md` even when the dir also holds `scripts/`', () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-bare-with-subdir-'))
+    roots.push(root)
+    put(root, 'loop/SKILL.md', '---\nname: loop\ndescription: "Loops."\n---\nbody\n')
+    put(root, 'loop/scripts/go.mjs', 'x\n')
+
+    const files = collectSkillFiles(root).map(f => relative(root, f).split(sep).join('/'))
+
+    expect(files).toContain('loop/SKILL.md')
   })
 })
