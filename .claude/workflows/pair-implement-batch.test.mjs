@@ -2366,9 +2366,9 @@ function planDispatch({ plan, p3 } = {}) {
 }
 
 test('a dead or malformed planner is failed-plan: no RED, no seal, no GREEN', async () => {
-  for (const plan of [null, { status: 'stale', groups: [] }, { status: 'planned', groups: [] }]) {
+  for (const [plan, expected] of [[null, 'failed-plan'], [{ status: 'stale', groups: [] }, 'failed-fix'], [{ status: 'planned', groups: [] }, 'failed-plan']]) {
     const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch({ plan }) })
-    assert.equal(result.batch[0].status, 'failed-plan', JSON.stringify(plan))
+    assert.equal(result.batch[0].status, expected, JSON.stringify(plan))
     assert.deepEqual(result.batch[0].findings, PLAN_FINDINGS)
     assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 0)
     assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
@@ -2391,6 +2391,57 @@ test('a plan that drops, duplicates or invents a finding index is failed-plan', 
     assert.equal(result.batch[0].status, 'failed-plan', JSON.stringify(groups))
   }
 })
+
+// Canary on #321 (2026-09-09): a guard-strength finding cannot be a RED-against-production contract.
+test('a RED refusal (split-required / stale) is an ANSWER: routed by status, never retried with the same prompt', async () => {
+  for (const [status, expected] of [['split-required', 'failed-red-contract'], ['stale', 'failed-fix']]) {
+    const base = planDispatch()
+    const { result, calls } = await runWorkflow({
+      args: { stories: [STORY] },
+      dispatch: (prompt, opts) => {
+        if (opts.agentType === 'pair-fix-test-author') return { status, splitReason: 'guard-strength defect; production already correct', sourceOfTruth: 'x', fixScope: { owner: 'x', mode: 'behavioral', allowedPaths: ['src/x.ts'] }, matrix: [{ condition: 'c', oracle: 'o', expected: 'e' }], redTests: [], testExempt: false }
+        return base(prompt, opts)
+      },
+    })
+    assert.equal(result.batch[0].status, expected, status)
+    assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1, `${status}: the author was re-dispatched with the identical prompt`)
+    assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier').length, 0)
+    assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 0)
+    if (status === 'split-required') {
+      assert.equal(result.batch[0].redRefusal, 'split-required')
+      assert.match(result.batch[0].splitReason, /guard-strength/)
+    }
+  }
+})
+
+test('a `test` group (guard-strength repair) seals with no production paths, skips GREEN, and P3 verifies the sealed head', async () => {
+  const plan = { status: 'planned', groups: [{ groupId: 'g1', findings: [0, 1], owner: 'the AC-1 guard', mode: 'test', allowedPaths: [], oracle: 'vitest', dependsOn: [] }] }
+  const base = planDispatch({ plan })
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-fix-test-author')
+        return { status: 'red', sourceOfTruth: 'guard', fixScope: { owner: 'the AC-1 guard', mode: 'test', allowedPaths: [] }, matrix: [{ condition: 'injected pre-fix line', oracle: 'vitest', expected: 'FAIL' }], redTests: [{ file: 'test/g.test.ts', sha256: `sha256:${'a'.repeat(64)}`, command: 'vitest', observed: 'FAIL on injected regression' }], testExempt: false }
+      return base(prompt, opts)
+    },
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(calls.filter(c => c.opts.label?.startsWith('fix:')).length, 0, 'no GREEN for a test group')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-red-sealer').length, 1)
+  const p3 = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
+  assert.ok(p3, 'P3 still verifies the sealed guard')
+  assert.match(p3.prompt, /"claim":"injected pre-fix line"/, 'the RED matrix is the ledger P3 re-runs')
+  // a test group that names production paths, or a non-test group with none, is not a plan
+  const bad = (g) => ({ status: 'planned', groups: [g] })
+  assert.equal(hasPlanShape(bad({ groupId: 'g1', findings: [0, 1], owner: 'o', mode: 'test', allowedPaths: ['src/x.ts'] })), false)
+  assert.equal(hasPlanShape(bad({ groupId: 'g1', findings: [0, 1], owner: 'o', mode: 'behavioral', allowedPaths: [] })), false)
+})
+
+// The engine's own plan predicate, evaluated in the harness (SRC is a function body, not a module).
+function hasPlanShape(plan) {
+  const isRelPathSrc = SRC.slice(SRC.indexOf('const isRelPath = v =>'), SRC.indexOf('\n}\n', SRC.indexOf('const isRelPath = v =>')) + 3)
+  return new Function('plan', isRelPathSrc + SRC.slice(SRC.indexOf('const hasPlanEvidence'), SRC.indexOf('function orderGroups')) + SRC.slice(SRC.indexOf('function orderGroups'), SRC.indexOf('\n}\n', SRC.indexOf('function orderGroups')) + 3) + 'return hasPlanEvidence(2)(plan)')(plan)
+}
 
 test('two groups run as two sequential attempts, each phase named r<n>-g<k>, the second based on the first P3 head', async () => {
   const HEAD_AFTER_G1 = 'b'.repeat(40)

@@ -43,6 +43,27 @@ Accepted
 6. **RED repair budget = 1**; a second rejection is `failed-red-contract`. P3 stays terminal for the attempt: a breach or a defect is `failed-preflight` and the next run starts a fresh RED contract.
 7. **Agent budget is an acceptance criterion.** A fresh story with one fix round dispatches: implement, PR, probe, review, plan, red-spec, red-verify, red-seal (sonnet), green-fix, p3-verify, re-review, synthesis — twelve, with the mapper folded into RED and the custody probe gone. Adding an agent to the loop requires stating what it removes.
 
+## Amendment 2026-09-09 — what the first canary taught
+
+The first end-to-end run of the phase skills (story #321, PR #481, `runId: canary-479`) reached the
+RED phase and stopped: fases 0/A/B/C and the planner worked; the RED author refused a group as
+`split-required` because the finding was a **guard-strength** defect (a positional-blind assertion)
+while production was already correct — no RED against unfixed production exists for it. Three
+rules are added:
+
+1. **A third group mode, `test`.** The planner assigns `mode: test` with `allowedPaths: []` to a
+   finding whose defect is in a test artifact. Its RED is proven against an **injected regression**
+   (the test fails on the restored defect, passes on the current source); it is sealed like any
+   other; there is no GREEN; P3 verifies the sealed blobs, the suite on the same head, and that no
+   production path changed (`test-mode-production-change` is a breach).
+2. **A typed refusal is an answer, not a dead agent.** `stale` and `split-required` from the RED
+   author, `stale` from the planner, are routed by status (`failed-fix`, `failed-red-contract`,
+   with `splitReason` carried in the result) and never re-dispatched with the identical prompt.
+3. **Handoffs live in the main checkout.** `.pair/working/runs/<run>/<story>/` is resolved from the
+    checkout the coordinator was started in (its working directory before any `cd`),
+    never from a story or review worktree — the review's detached worktree is removed at the end
+    and took its handoff with it.
+
 ## Consequences
 
 ### Benefits

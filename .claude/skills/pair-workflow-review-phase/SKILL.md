@@ -13,7 +13,7 @@ Judge the change on its own merits, adversarially, from three inputs only: the s
 
 | Argument         | Required | Description                                                                                                                            |
 | ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `$run`           | Yes      | Run id; the handoff goes under `.pair/working/runs/$run/$story/`.                                                                        |
+| `$run`           | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
 | `$story`         | Yes      | Story id.                                                                                                                              |
 | `$pr`            | Yes      | PR number.                                                                                                                             |
 | `$phase`         | Yes      | Round id, `r<n>`.                                                                                                                      |

@@ -13,7 +13,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 
 | Argument     | Required | Description                                                                                          |
 | ------------ | -------- | ---------------------------------------------------------------------------------------------------- |
-| `$run`       | Yes      | Run id.                                                                                              |
+| `$run`       | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
 | `$story`     | Yes      | Story id.                                                                                            |
 | `$pr`        | Yes      | PR number.                                                                                           |
 | `$phase`     | Yes      | Attempt id, `r<n>-g<k>`.                                                                             |
@@ -61,6 +61,8 @@ The RED snapshot is the specification. You may change implementation inside its 
 `{ fixed, needsHumanDecision, outputHead, evidenceLedger: [{ claim, oracle, probe, observed }] }`. `evidenceLedger` is `[]` only when the fix made no empirical or boundary claim.
 
 ## Notes
+
+- A `mode: test` group never reaches this skill: the guard is the fix, and P3 verifies it directly on the sealed head.
 
 - Do NOT post any PR comment; the coordinator synthesizes the cycle at the end.
 - Never merge.

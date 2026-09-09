@@ -221,6 +221,24 @@ test('verify breach: a behavioral scope may not add a production module even ins
   rmSync(cwd2, { recursive: true, force: true })
 })
 
+test('mode test: a guard-strength repair seals with no production paths; any production change after it is a breach', () => {
+  const { cwd, base } = repo()
+  redContract(cwd, { fixScope: { owner: 'guard', mode: 'test', allowedPaths: [] } })
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: '.pair/working/red-draft.json', cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  // nothing but the manifest removal after the seal ⇒ verified
+  green(cwd, s.manifest, {})
+  assert.equal(verify({ pr: PR, phase: PHASE, base, cwd }).verified, true)
+  // a production edit under a test scope is a breach, whatever the path
+  green(cwd, s.manifest, { 'src/a.js': 'export const a = () => 2\n' })
+  const v = verify({ pr: PR, phase: PHASE, base, cwd })
+  assert.deepEqual(v.breaches, [{ code: 'test-mode-production-change', path: 'src/a.js', status: 'M' }])
+  // and a test scope may not name production paths
+  assert.match(contractErrors({ fixScope: { owner: 'g', mode: 'test', allowedPaths: ['src/a.js'] }, redTests: [{ file: 'test/a.test.js', sha256: `sha256:${'0'.repeat(64)}`, command: 'x', observed: 'FAIL' }], testExempt: false }).join(), /empty array for mode test/)
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('verify breach: a rebase that rewrote the snapshot is snapshot-missing — never repaired', () => {
   const { cwd, base, manifest } = sealed()
   green(cwd, manifest, { 'src/a.js': 'export const a = () => 2\n' })

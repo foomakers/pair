@@ -13,7 +13,7 @@ Two questions, in order: did the fix respect the sealed contract (a script answe
 
 | Argument    | Required | Description                                                                          |
 | ----------- | -------- | ------------------------------------------------------------------------------------ |
-| `$run`      | Yes      | Run id.                                                                              |
+| `$run`      | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
 | `$story`    | Yes      | Story id.                                                                            |
 | `$pr`       | Yes      | PR number.                                                                           |
 | `$phase`    | Yes      | Attempt id, `r<n>-g<k>`.                                                             |
@@ -39,13 +39,13 @@ cd $worktree && node "$SKILL_DIR/scripts/red-snapshot.mjs" verify --pr $pr --pha
 
 The script ships beside this file ([scripts/red-snapshot.mjs](./scripts/red-snapshot.mjs)) — the same custody module the `red-seal` skill seals with.
 
-`contractBreach: true` (snapshot missing/ambiguous, parent ≠ base, unlisted file in the snapshot, a sealed blob changed or removed, an unlisted test artifact changed, a production path outside `allowedPaths`, a module added/moved under a `behavioral` scope) ⇒ return `{ verified: false, contractBreach: true, findings: <one per breach>, reviewedHead }` **immediately**. A breach is not repairable inside the attempt.
+`contractBreach: true` (snapshot missing/ambiguous, parent ≠ base, unlisted file in the snapshot, a sealed blob changed or removed, an unlisted test artifact changed, a production path outside `allowedPaths`, a module added/moved under a `behavioral` scope, any production change under a `test` scope) ⇒ return `{ verified: false, contractBreach: true, findings: <one per breach>, reviewedHead }` **immediately**. A breach is not repairable inside the attempt.
 
 ### Step 2: Evidence
 
 1. Inspect ONLY `git diff $base...origin/$branch --name-status` and the directly changed producer/consumer boundaries.
 2. Re-run every `$ledger` row's probe: `observed` must reproduce. A ledger is an input to verify, never proof by assertion.
-3. Re-run the manifest's RED commands: all green.
+3. Re-run the manifest's RED commands: all green. For a `mode: test` contract there was no GREEN commit: verify the suite is green on `$base` itself and the sealed guard still fails on the injected regression the manifest describes.
 4. Every new fixture field or table column is consumed by an expectation (trace it to the assertion). Comments and test names repeat only measured claims.
 5. A newly introduced parser/state/normalizer rule has its paired order and the smallest interaction cross-product where an output can feed another rule. A derived predicate is emitted from the state transition that owns it, or proves the same decision table.
 

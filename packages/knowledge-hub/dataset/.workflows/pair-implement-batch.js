@@ -913,7 +913,7 @@ const RED_TEST_SCHEMA = {
       type: 'object',
       properties: {
         owner: { type: 'string' },
-        mode: { type: 'string', enum: ['behavioral', 'structural'] },
+        mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
         allowedPaths: { type: 'array', items: { type: 'string' } },
       },
       required: ['owner', 'mode', 'allowedPaths'],
@@ -969,7 +969,7 @@ const PLAN_SCHEMA = {
           groupId: { type: 'string' },
           findings: { type: 'array', items: { type: 'integer' } },
           owner: { type: 'string' },
-          mode: { type: 'string', enum: ['behavioral', 'structural'] },
+          mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
           allowedPaths: { type: 'array', items: { type: 'string' } },
           oracle: { type: 'string' },
           dependsOn: { type: 'array', items: { type: 'string' } },
@@ -990,8 +990,9 @@ const hasPlanEvidence = count => plan => {
   for (const g of plan.groups) {
     if (!g || !String(g.groupId ?? '').trim() || ids.has(g.groupId)) return false
     ids.add(g.groupId)
-    if (!String(g.owner ?? '').trim() || !['behavioral', 'structural'].includes(g.mode)) return false
-    if (!Array.isArray(g.allowedPaths) || g.allowedPaths.length === 0 || !g.allowedPaths.every(pth => typeof pth === 'string' && isRelPath(pth.replace(/\/$/, '')))) return false
+    if (!String(g.owner ?? '').trim() || !['behavioral', 'structural', 'test'].includes(g.mode)) return false
+    // A `test` group repairs a guard, not production: it declares no production paths at all.
+    if (g.mode === 'test' ? !Array.isArray(g.allowedPaths) || g.allowedPaths.length !== 0 : !Array.isArray(g.allowedPaths) || g.allowedPaths.length === 0 || !g.allowedPaths.every(pth => typeof pth === 'string' && isRelPath(pth.replace(/\/$/, '')))) return false
     if (!Array.isArray(g.findings) || g.findings.length === 0) return false
     for (const i of g.findings) {
       if (!Number.isInteger(i) || i < 0 || i >= count || seen.has(i)) return false
@@ -1032,8 +1033,9 @@ const isRedTestArtifact = artifact =>
 const hasRedTestEvidence = r => {
   if (!r || !String(r.sourceOfTruth ?? '').trim() || !Array.isArray(r.matrix) || r.matrix.length === 0) return false
   const scope = r.fixScope
-  if (!scope || !String(scope.owner ?? '').trim() || !['behavioral', 'structural'].includes(scope.mode) || !Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0)
+  if (!scope || !String(scope.owner ?? '').trim() || !['behavioral', 'structural', 'test'].includes(scope.mode) || !Array.isArray(scope.allowedPaths))
     return false
+  if (scope.mode === 'test' ? scope.allowedPaths.length !== 0 : scope.allowedPaths.length === 0) return false
   const allowedPaths = new Set()
   for (const path of scope.allowedPaths) {
     const file = String(path ?? '').trim()
@@ -1183,6 +1185,13 @@ const PREFLIGHT_SCHEMA = {
 // A RED contract is usable for sealing only when the skill said `red` (not `stale`, not
 // `split-required`) and persisted the file the sealer will read.
 const hasRedContractReady = r => hasRedTestEvidence(r) && (r.status === undefined || r.status === 'red') && (r.contractPath === undefined || isRelPath(r.contractPath))
+// A typed refusal (`stale`, `split-required`) is the skill's ANSWER, not a dead agent: it is never
+// retried with the identical prompt (the canary on #321 spent a second opus author on the same
+// `split-required`), and the engine routes it by status.
+const RED_REFUSALS = new Set(['stale', 'split-required'])
+const isRedRefusal = r => !!r && RED_REFUSALS.has(r.status)
+const isRedAnswer = r => hasRedContractReady(r) || isRedRefusal(r)
+const isPlanAnswer = count => plan => hasPlanEvidence(count)(plan) || plan?.status === 'stale'
 // This verifier runs while RED is still unsealed and test-only. It must independently prove
 // the test contract covers the stated behavior before an implementation agent can see it.
 const RED_CONTRACT_VERIFIER_SCHEMA = {
@@ -1282,7 +1291,7 @@ async function driveStory(story) {
     `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}`
   const notesArg = () => (story.notes ? ` $notes=${JSON.stringify(story.notes)}` : '')
   const invoke = (skill, args) =>
-    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
+    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.`
   const resuming = Number.isInteger(story.prNumber)
   let pr = resuming ? { prNumber: story.prNumber } : null
 
@@ -1340,13 +1349,13 @@ async function driveStory(story) {
     agentRetry(
       invoke(SK.remediationPlan, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(findings)}`),
       withModel('planner', { agentType: 'pair-remediation-planner', phase: 'Review', label: `plan:${tag} ${phase}`, effort: 'medium', schema: PLAN_SCHEMA }),
-      hasPlanEvidence(findings.length),
+      isPlanAnswer(findings.length),
     )
   const redSpec = (targets, scope, phase, baseHead, repairFindings = []) =>
     agentRetry(
       invoke(SK.redSpec, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $scope=${JSON.stringify(scope)}${repairFindings.length ? ` $repair=${JSON.stringify(repairFindings)}` : ''}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-spec:${tag} ${phase}${repairFindings.length ? ' repair' : ''}`, effort: 'high', schema: RED_TEST_SCHEMA }),
-      hasRedContractReady,
+      isRedAnswer,
     )
   // Concatenated, not a template literal in backticks: the shipped-artifact guard reads a
   // backticked `.pair/…json` as a dataset document that must exist; this is a runtime path.
@@ -1546,7 +1555,7 @@ async function driveStory(story) {
     // D0 — one frozen plan per round. Every actionable finding lands in exactly one group.
     const plan = await planRemediation(prevFindings, `r${round}`, reviewedHead)
     if (!hasPlanEvidence(prevFindings.length)(plan))
-      return { story, prNumber: pr.prNumber, status: 'failed-plan', findings: prevFindings, acceptedFindings: accepted, reviewLog }
+      return { story, prNumber: pr.prNumber, status: plan?.status === 'stale' ? 'failed-fix' : 'failed-plan', findings: prevFindings, acceptedFindings: accepted, reviewLog }
     const groups = orderGroups(plan.groups)
     log(`${tag} r${round}: ${groups.length} remediation group(s) planned for ${prevFindings.length} finding(s)`)
     // Each group is one bounded attempt on top of the previous group's GREEN head.
@@ -1559,7 +1568,7 @@ async function driveStory(story) {
       let redTargets = targets
       let redTest = await redSpec(redTargets, scope, phase, groupBase)
       if (!hasRedContractReady(redTest))
-        return { story, prNumber: pr.prNumber, status: redTest?.status === 'split-required' ? 'failed-red-contract' : 'failed-fix', findings: targets, acceptedFindings: accepted, reviewLog }
+        return { story, prNumber: pr.prNumber, status: redTest?.status === 'split-required' ? 'failed-red-contract' : 'failed-fix', findings: targets, acceptedFindings: accepted, reviewLog, redRefusal: redTest?.status, splitReason: redTest?.splitReason }
       // D2 — independent reproduction; ONE bounded repair, then terminal.
       let redVerification = await redVerify(redTest, redTargets, phase, groupBase)
       for (let repair = 0; repair < MAX_RED_CONTRACT_REPAIRS && (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0); repair++) {
@@ -1587,7 +1596,11 @@ async function driveStory(story) {
         return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: targets, acceptedFindings: accepted, reviewLog }
       log(`${tag} ${phase}: sealed RED snapshot ${redSnapshot.snapshot}`)
       // D4 — GREEN inside fixScope, above the seal; the round is logged, never commented.
-      const fix = await greenFix(redTargets, phase, groupBase)
+      // A `test` group has no GREEN: the guard IS the fix, production stays untouched, and P3
+      // proves the sealed blobs are unchanged and the suite is green on the same head.
+      const fix = group.mode === 'test'
+        ? { fixed: true, evidenceLedger: (redTest.matrix ?? []).map(row => ({ claim: row.condition, oracle: row.oracle, probe: row.oracle, observed: row.expected })) }
+        : await greenFix(redTargets, phase, groupBase)
       if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
       if (fix.needsHumanDecision) {
         // The fix round ran and appended to the working log, so the log-backed flush always applies.

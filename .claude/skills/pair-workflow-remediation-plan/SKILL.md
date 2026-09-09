@@ -1,6 +1,6 @@
 ---
 name: pair-workflow-remediation-plan
-description: "Phase D0 of the delivery workflow: turns one immutable set of actionable review findings into a frozen remediation plan — owner-aligned groups, one mode each (behavioral or structural), exact allowed paths, one authoritative oracle, dependency order — so every finding is remediated exactly once by a bounded RED → seal → GREEN → P3 attempt. Read-only; writes only its handoff. Dispatched by the batch engine (pair-implement-batch); invoke directly to plan a fix cycle by hand ('plan the remediation for PR #42')."
+description: "Phase D0 of the delivery workflow: turns one immutable set of actionable review findings into a frozen remediation plan — owner-aligned groups, one mode each (behavioral, structural or test), exact allowed paths, one authoritative oracle, dependency order — so every finding is remediated exactly once by a bounded RED → seal → GREEN → P3 attempt. Read-only; writes only its handoff. Dispatched by the batch engine (pair-implement-batch); invoke directly to plan a fix cycle by hand ('plan the remediation for PR #42')."
 version: 0.1.0
 author: Foomakers
 ---
@@ -13,7 +13,7 @@ Consume the finding set one review produced and emit the plan the remediation at
 
 | Argument    | Required | Description                                                                                                             |
 | ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `$run`      | Yes      | Run id. Handoffs live under `.pair/working/runs/$run/$story/`.                                                           |
+| `$run`      | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
 | `$story`    | Yes      | Story id (issue ref).                                                                                                   |
 | `$pr`       | Yes      | PR number the findings were reviewed on.                                                                                |
 | `$phase`    | Yes      | Round id, `r<n>`. Groups are numbered `r<n>-g<k>` under it.                                                              |
@@ -36,8 +36,8 @@ For each finding, read the code at `location` and name the **canonical owner**: 
 ### Step 3: Group
 
 1. Same owner **and** same oracle **and** compatible fix scope ⇒ one group.
-2. A behavior repair and an extraction/refactor never share a group: `mode` is `behavioral` or `structural`, exactly one per group.
-3. `allowedPaths` = the exact production paths (files, or directories with a trailing `/`) the group may change. Tests and fixtures are not listed here; RED owns them.
+2. A behavior repair and an extraction/refactor never share a group: `mode` is `behavioral`, `structural` or `test`, exactly one per group. `test` is the mode for a **guard-strength** finding — the defect is in a test artifact (a positional-blind assertion, an unconsumed fixture, a missing boundary row) while production at `$base` is already correct; such a group declares `allowedPaths: []`, gets no GREEN, and its RED is proven against an injected regression, not against production.
+3. `allowedPaths` = the exact production paths (files, or directories with a trailing `/`) the group may change; `[]` for a `test` group. Tests and fixtures are never listed here; RED owns them.
 4. `dependsOn` = groups whose GREEN this group needs first. Order groups by dependency, then by highest severity.
 5. Every finding appears in **exactly one** group. A finding that fits none becomes its own group.
 
@@ -60,7 +60,7 @@ Write `.pair/working/runs/$run/$story/$phase-remediation-plan.json`:
 
 ## Output Format
 
-Return exactly `{ status, groups, inputHead }` with `status ∈ planned | stale`. `groups[].findings` are indices; `groups[].mode` is `behavioral | structural`; `groups[].allowedPaths` are repository-relative.
+Return exactly `{ status, groups, inputHead }` with `status ∈ planned | stale`. `groups[].findings` are indices; `groups[].mode` is `behavioral | structural | test`; `groups[].allowedPaths` are repository-relative.
 
 ## HALT Conditions
 

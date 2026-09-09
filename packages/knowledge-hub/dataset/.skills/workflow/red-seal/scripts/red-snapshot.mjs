@@ -14,7 +14,8 @@
 //     Finds the ONE snapshot in <base>..HEAD by trailer, proves parent == base, tree == manifest +
 //     listed artifacts, every listed blob byte-identical at HEAD, no unlisted test artifact changed
 //     after the seal, and every production change inside the manifest's fixScope.allowedPaths
-//     (a `behavioral` scope adds/moves no production module). Prints {verified, contractBreach,
+//     (a `behavioral` scope adds/moves no production module; a `test` scope changes no production
+//     path at all). Prints {verified, contractBreach,
 //     breaches[]}. Any breach is terminal for the attempt; the script repairs nothing.
 //
 // A rebase is never repaired (US-479 c1): a snapshot that is no longer an ancestor is simply
@@ -64,8 +65,12 @@ export function contractErrors(c) {
   if (!scope || typeof scope !== 'object') errs.push('fixScope missing')
   else {
     if (!String(scope.owner ?? '').trim()) errs.push('fixScope.owner missing')
-    if (!['behavioral', 'structural'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural')
-    if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) errs.push('fixScope.allowedPaths must be a non-empty array')
+    if (!['behavioral', 'structural', 'test'].includes(scope.mode)) errs.push('fixScope.mode must be behavioral | structural | test')
+    // A `test` scope repairs a guard: it declares NO production paths, and verify treats any
+    // production change after the seal as a breach.
+    if (scope.mode === 'test') {
+      if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length !== 0) errs.push('fixScope.allowedPaths must be an empty array for mode test')
+    } else if (!Array.isArray(scope.allowedPaths) || scope.allowedPaths.length === 0) errs.push('fixScope.allowedPaths must be a non-empty array')
     else for (const p of scope.allowedPaths) if (!isRelPath(p)) errs.push(`fixScope.allowedPaths has an invalid path: ${JSON.stringify(p)}`)
   }
   if (c.testExempt === true) {
@@ -234,7 +239,8 @@ export function verify({ pr, phase, base, cwd }) {
     const { allowedPaths, mode } = contract.fixScope
     for (const { status, path } of after) {
       if (isTestPath(path)) continue
-      if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
+      if (mode === 'test') breach('test-mode-production-change', { path, status })
+      else if (!inScope(path, allowedPaths)) breach('out-of-scope', { path })
       else if (mode === 'behavioral' && status !== 'M') breach('behavioral-adds-or-moves-module', { path, status })
     }
   }

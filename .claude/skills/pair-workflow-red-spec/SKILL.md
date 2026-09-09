@@ -13,7 +13,7 @@ Author the test-only contract a fix must satisfy, before any agent that can edit
 
 | Argument    | Required | Description                                                                                                                      |
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `$run`      | Yes      | Run id. Handoffs live under `.pair/working/runs/$run/$story/`.                                                                    |
+| `$run`      | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
 | `$story`    | Yes      | Story id.                                                                                                                       |
 | `$pr`       | Yes      | PR number.                                                                                                                      |
 | `$phase`    | Yes      | Attempt id, `r<n>-g<k>`.                                                                                                        |
@@ -21,7 +21,7 @@ Author the test-only contract a fix must satisfy, before any agent that can edit
 | `$worktree` | Yes      | Story worktree. All file work happens here.                                                                                     |
 | `$branch`   | Yes      | Story branch.                                                                                                                   |
 | `$findings` | Yes      | JSON array: the group's findings (`location`, `severity`, `description`, `recommendation`, optional P3 evidence fields).         |
-| `$scope`    | Yes      | JSON: the plan's group — `{ owner, mode, allowedPaths, oracle }`. You may narrow it, never widen it.                             |
+| `$scope`    | Yes      | JSON: the plan's group — `{ owner, mode, allowedPaths, oracle }`. You may narrow it, never widen it. `mode: test` = guard-strength repair: production is already correct, `allowedPaths` is `[]`, there will be no GREEN. |
 | `$repair`   | No       | JSON array: the verifier's findings on a rejected contract. Present ⇒ this is the ONE bounded repair; uncommitted test edits are untrusted and must be re-proven. |
 
 ## Algorithm
@@ -39,10 +39,11 @@ For every behavioral target: identify the **owner** (the function/event that mut
 
 ### Step 3: Write the contract
 
-1. Declare `fixScope` before editing: one `owner`, exactly one `mode` (`behavioral` | `structural`), exact `allowedPaths`. A behavior repair and a refactor never share a contract — if the group needs both, return `status: split-required`.
+1. Declare `fixScope` before editing: one `owner`, exactly one `mode` (`behavioral` | `structural` | `test`), exact `allowedPaths` (`[]` for `test`). A behavior repair and a refactor never share a contract — if the group needs both, return `status: split-required` with a `splitReason`. A refusal is your ANSWER: the coordinator routes it by status and never re-dispatches you with the same prompt, so say precisely what a re-plan must change.
+   **`mode: test`** (guard-strength): the RED proof is that the strengthened assertion FAILS against an **injected regression** — restore the defect in a scratch copy (a fixture, a temp file, a `git stash`-free copy) and run the test there; `observed` records that failure — and PASSES against the current source. Never edit production to make a guard red.
 2. Modify **only** test source, fixtures and committed oracle rows. Never production source, docs, adoption, configuration, generated assets. Never commit, push, post, label, create a card or merge.
 3. Make **every mapped row** a real RED assertion or a fixture row consumed by one. Do not collapse rows because their outputs agree today.
-4. Run each changed test while production is unfixed; keep it RED for the reported behavior. Never weaken an existing expectation or replace a behavior assertion with a source-string assertion.
+4. Run each changed test while production is unfixed (`behavioral`/`structural`) or against the injected regression (`test`); keep it RED for the reported behavior. Never weaken an existing expectation or replace a behavior assertion with a source-string assertion.
 5. A pure documentation/formatting finding may set `testExempt: true` with a concrete `exemptionRationale`; it still needs a matrix.
 6. Hash every artifact: `sha256sum <file>` ⇒ `sha256:<digest>`. A `kind: "test"` entry carries its exact failing `command` and `observed` failure; a `kind: "fixture"` entry carries `consumedBy` naming a listed RED test.
 
@@ -52,7 +53,7 @@ Write the contract verbatim to `.pair/working/runs/$run/$story/$phase-red-contra
 
 ## Output Format
 
-Return the contract: `{ status, sourceOfTruth, fixScope: { owner, mode, allowedPaths }, domains, matrix: [{ condition, oracle, expected }], redTests: [{ file, kind, sha256, command?, observed?, consumedBy? }], testExempt, exemptionRationale?, contractPath }` with `status ∈ red | stale | split-required`.
+Return the contract: `{ status, sourceOfTruth, fixScope: { owner, mode, allowedPaths }, domains, matrix: [{ condition, oracle, expected }], redTests: [{ file, kind, sha256, command?, observed?, consumedBy? }], testExempt, exemptionRationale?, contractPath }` with `status ∈ red | stale | split-required`; a refusal carries `splitReason` (or the stale head) so the planner can re-scope.
 
 ## HALT Conditions
 

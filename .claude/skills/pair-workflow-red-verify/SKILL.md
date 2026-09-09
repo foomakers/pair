@@ -13,7 +13,7 @@ A RED contract is evidence only once someone who did not write it reproduces it.
 
 | Argument    | Required | Description                                                                                  |
 | ----------- | -------- | -------------------------------------------------------------------------------------------- |
-| `$run`      | Yes      | Run id.                                                                                      |
+| `$run`      | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
 | `$story`    | Yes      | Story id.                                                                                    |
 | `$pr`       | Yes      | PR number.                                                                                   |
 | `$phase`    | Yes      | Attempt id, `r<n>-g<k>`.                                                                     |
@@ -33,7 +33,7 @@ A RED contract is evidence only once someone who did not write it reproduces it.
 
 ### Step 2: Reproduce
 
-1. Run every `redTests[].command` yourself while production is unfixed: each must fail as `observed` says.
+1. Run every `redTests[].command` yourself while production is unfixed: each must fail as `observed` says. For a `mode: test` contract, reproduce the injected regression the author describes and confirm the test fails there AND passes on the current source; a guard that cannot be made to fail proves nothing.
 2. Run every `matrix[].oracle`; the result must equal `expected`.
 3. Trace each `kind: "fixture"` artifact to the exact failing assertion its `consumedBy` test makes. A declared fixture column that no expectation reads is not a test.
 4. Treat any unsupported claim ("does not compile", a count, a version fact) as a finding unless its stated oracle demonstrates it.
@@ -44,7 +44,7 @@ Independently derive the owner/discriminator domain from the grammar or state tr
 
 ### Step 4: Check scope
 
-`fixScope` has one owner, one mode and only the paths that contract needs. `behavioral` may not add, move or split production modules; `structural` must carry a structural RED assertion.
+`fixScope` has one owner, one mode and only the paths that contract needs. `behavioral` may not add, move or split production modules; `structural` must carry a structural RED assertion; `test` declares no production path at all.
 
 ### Step 5: Persist
 
