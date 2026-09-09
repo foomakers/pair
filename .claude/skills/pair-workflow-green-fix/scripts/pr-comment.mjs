@@ -15,9 +15,9 @@
 //     Read-only: { found, id?, url?, count }.
 //
 // `gh` is the only transport; it is resolved from PATH so a test can stand a recorder in its place.
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 export function gh(args, { input } = {}) {
   const r = spawnSync('gh', args, { encoding: 'utf8', input })
@@ -83,7 +83,17 @@ function parseCli(argv) {
   }
   return { cmd, opts }
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Entry-point guard by REAL path: an install directory reached through a symlink (macOS's /var → /private/var,
+// a linked skills dir) makes `import.meta.url` and `process.argv[1]` spell the same file two ways, and a
+// string comparison silently turns the CLI into a no-op that exits 0. Compare realpaths, never strings.
+const isMain = () => {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     for (const k of ['pr', 'marker']) if (!opts[k]) throw new Error(`--${k} is required`)

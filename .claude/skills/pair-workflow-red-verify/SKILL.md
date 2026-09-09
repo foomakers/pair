@@ -26,7 +26,17 @@ A contract is evidence only once someone who did not write it reproduces it. You
 
 ### Step 0: Resolve the durable state (mandatory)
 
-Run `cycle-state.mjs resolve` exactly as `/pair-workflow-red-spec` does (`SKILL_DIR`, `MAIN`, `RUN_DIR`; `--entry $entry --policy '$policy' --inputs $inputs --story $story [--pr $pr]`). `other-run` ⇒ return it. `incompatible | invalid` ⇒ redirect to `blocked / failed-resume`. `next.step ≠ validate` or `next.phase ≠ $phase` ⇒ return `{ status: "redirect", next }`. Otherwise `next.attempt` is your attempt.
+```bash
+SKILL_DIR="$(dirname "<absolute path of this SKILL.md>")"
+MAIN="$(pwd)"                                   # the main checkout — you have not cd'd yet
+RUN_DIR="$MAIN/.pair/working/runs/$run/$story"
+node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVersion $workflowVersion \
+  --policy '$policy' --entry $entry --story $story --inputs $inputs --runsRoot "$MAIN/.pair/working/runs" ${pr:+--pr $pr}
+```
+
+- `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
+- `next.step` is not `validate`, or `next.phase` is not `$phase` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment.
+- Otherwise continue; `next.attempt` is your attempt number.
 
 ### Step 1: Read the contract, verify the tree
 
@@ -52,10 +62,10 @@ Return `verified: false` with **every** concrete gap found in this pass as findi
 ### Step 5: Seal (only when verified) — the script decides
 
 ```bash
-cd $worktree && node "$SKILL_DIR/scripts/red-snapshot.mjs" seal --pr ${pr:-0} --phase $phase --base $head --contract $contract
+cd $worktree && node "$SKILL_DIR/scripts/red-snapshot.mjs" seal --pr ${pr:-0} --phase $phase --base $head --contract "$contract" --root "$MAIN"
 ```
 
-The script (shipped beside this file, [scripts/red-snapshot.mjs](./scripts/red-snapshot.mjs)) verifies `HEAD == $head`, every artifact's `sha256`, that the tree is dirty only at those artifacts (a `pass` control may be unchanged), writes `.pair/red-snapshots/pr-$pr-$phase.json`, and creates exactly one local `--no-verify` commit carrying `Pair-RED-Snapshot: pr=…; phase=…; base=…; manifest=…`. It is idempotent: re-running after a lost response returns the existing snapshot. A revision (`-rev<m>`) seals as a SUCCESSOR snapshot on `$head`; the earlier seal stays history. Do not retry with a different contract, edit any file, amend, rebase, reset, push or post to make it seal: `{ sealed: false, reason }` is the answer, returned as `sealed: false` with `reason`.
+The script (shipped beside this file, [scripts/red-snapshot.mjs](./scripts/red-snapshot.mjs)) validates the contract path ONCE against the declared main checkout (`--root`: no `..`, under `<root>/.pair/working/runs/`, real path inside it — a symlink pointing elsewhere is an escape; a relative path resolves against the root, never the worktree), then verifies `HEAD == $head`, every artifact's `sha256`, that the tree is dirty only at those artifacts (a `pass` control may be unchanged), writes `.pair/red-snapshots/pr-$pr-$phase.json`, and creates exactly one local `--no-verify` commit carrying `Pair-RED-Snapshot: pr=…; phase=…; base=…; manifest=…`. It is idempotent: re-running after a lost response returns the existing snapshot. A revision (`-rev<m>`) seals as a SUCCESSOR snapshot on `$head`; the earlier seal stays history. Do not retry with a different contract, edit any file, amend, rebase, reset, push or post to make it seal: `{ sealed: false, reason }` is the answer, returned as `sealed: false` with `reason`.
 
 ### Step 6: Persist and hand off
 

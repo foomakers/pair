@@ -30,7 +30,18 @@ Turn one refined story into verified commits above its sealed acceptance contrac
 
 ### Step 0: Resolve the durable state (mandatory)
 
-Run `cycle-state.mjs resolve` exactly as `/pair-workflow-red-spec` does (`SKILL_DIR`, `MAIN`, `RUN_DIR`; `--entry $entry --policy '$policy' --inputs $inputs --story $story`). `other-run` ⇒ return it. `incompatible | invalid` ⇒ redirect to `blocked / failed-resume`. `next.step ≠ implement` ⇒ return `{ status: "redirect", next }`. A prior attempt may already have published a PR: `next` then says `verify`, and you return that — never a second PR.
+```bash
+SKILL_DIR="$(dirname "<absolute path of this SKILL.md>")"
+MAIN="$(pwd)"                                   # the main checkout — you have not cd'd yet
+RUN_DIR="$MAIN/.pair/working/runs/$run/$story"
+node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVersion $workflowVersion \
+  --policy '$policy' --entry $entry --story $story --inputs $inputs --runsRoot "$MAIN/.pair/working/runs" 
+```
+
+- `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
+- `next.step` is not `implement` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment.
+- Otherwise continue; `next.attempt` is your attempt number.
+- A prior attempt may already have published a PR: `next` then says `verify`, and you return that — never a second PR.
 
 ### Step 1: Isolation and the contract (mandatory)
 

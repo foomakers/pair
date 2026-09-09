@@ -26,6 +26,8 @@ const SNAP = 'c'.repeat(40)
 const SHA256 = c => `sha256:${c.repeat(64)}`
 const STORY = { id: '292', title: 'T', branch: 'feat/#292-x' }
 const arg = (prompt, name) => {
+  const q = new RegExp(`\\$${name}="((?:[^"\\\\]|\\\\.)*)"`).exec(prompt)
+  if (q) return JSON.parse(`"${q[1]}"`)
   const m = new RegExp(`\\$${name}=(\\S+)`).exec(prompt)
   return m ? m[1] : undefined
 }
@@ -269,11 +271,11 @@ test('TC-11: every dispatch is a configured skill + typed arguments + the engine
   }
   const byLabel = l => calls.find(c => c.opts.label === l).prompt
   assert.match(byLabel('prepare:#292 a0'), /\$mode=initial \$phase=a0 \$title="T" \$workflowVersion/)
-  assert.match(byLabel('validate:#292 a0'), /\$phase=a0 \$head=a{40} \$contract=\/main\/\.pair\/working\/runs\/run-42\/292\/a0-red-contract\.json \$contractHash=sha256:1{64}/)
-  assert.match(byLabel('implement:#292'), /\$snapshot=c{40} \$contract=\/main\/.*\$implementSkill=\/pair-process-implement \$verifyQuality=\/pair-capability-verify-quality \$recordDecision=\/pair-capability-record-decision \$checkpoint=\/pair-capability-checkpoint \$publishPr=\/pair-capability-publish-pr/)
+  assert.match(byLabel('validate:#292 a0'), /\$phase=a0 \$head=a{40} \$contract=\"\/main\/\.pair\/working\/runs\/run-42\/292\/a0-red-contract\.json\" \$contractHash=sha256:1{64}/)
+  assert.match(byLabel('implement:#292'), /\$snapshot=c{40} \$contract=\"\/main\/.*\$implementSkill=\/pair-process-implement \$verifyQuality=\/pair-capability-verify-quality \$recordDecision=\/pair-capability-record-decision \$checkpoint=\/pair-capability-checkpoint \$publishPr=\/pair-capability-publish-pr/)
   assert.match(byLabel('verify:#292 r0'), /\$pr=7 .*\$phase=r0 \$mode=first \$head=a{40} \$worktree=\.\.\/pair-worktrees\/292-review \$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$synthesisMarker="<!-- pair:synthesis #292 PR#7 -->" \$template=code-review-template\.md .*\$floor=Minor \$ranks=\{"Blocker":3,"Major":2,"Minor":1\} \$reviewer=1 \$reviewers=1 \$reviewSkill=\/pair-process-review \$writeIssue=\/pair-capability-write-issue/)
   assert.match(byLabel('prepare:#292 r1-g1'), /\$mode=remediation \$phase=r1-g1 \$head=a{40} \$findings=\[\{"id":"r0-1","severity":"Major","location":"src\/a\.ts:1","description":"wrong output on the empty form","recommendation":"handle it","kind":"defect"\}\]/)
-  assert.match(byLabel('green:#292 r1-g1'), /\$phase=r1-g1 \$head=a{40} \$attempt=1 \$snapshot=c{40} \$contract=\/main\/.*\$findings=\[.*\$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$writeIssue=/)
+  assert.match(byLabel('green:#292 r1-g1'), /\$phase=r1-g1 \$head=a{40} \$attempt=1 \$snapshot=c{40} \$contract=\"\/main\/.*\$findings=\[.*\$reviewLog=\.pair\/working\/reviews\/292\.md \$marker="<!-- pair:first-review #292 PR#7 -->" \$writeIssue=/)
   assert.match(byLabel('verify:#292 r1'), /\$mode=re-review \$head=a{40} .*\$prior=r0-review-phase \$openIds=\["r0-1"\]/)
 })
 
@@ -521,7 +523,7 @@ test('TC-09: a genuine contract gap revises ONLY the affected group — prepare(
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.deepEqual(stageLabels(calls).slice(8), ['prepare:#292 r1-g1-rev2 revision', 'validate:#292 r1-g1-rev2', 'green:#292 r1-g1-rev2', 'verify:#292 r1'])
   const rev = calls.find(c => c.opts.label === 'prepare:#292 r1-g1-rev2 revision').prompt
-  assert.match(rev, /\$mode=revision \$phase=r1-g1-rev2 .*\$findings=\[\{"id":"r1-1".*"kind":"contract-gap","groupId":"r1-g1"\}\] \$contract=\/main\/\.pair\/working\/runs\/story-292\/292\/r1-g1-red-contract\.json \$contractHash=sha256:1{64} \$revision=2/)
+  assert.match(rev, /\$mode=revision \$phase=r1-g1-rev2 .*\$findings=\[\{"id":"r1-1".*"kind":"contract-gap","groupId":"r1-g1"\}\] \$contract=\"\/main\/\.pair\/working\/runs\/story-292\/292\/r1-g1-red-contract\.json\" \$contractHash=sha256:1{64} \$revision=2/)
 })
 
 test('TC-10: a rejected contract goes back to preparation ONCE carrying the rejection; a second rejection is failed-contract with no seal and no GREEN', async () => {
@@ -618,11 +620,16 @@ test('TC-10: a preparation result without an inventory, a matrix row that covers
     ['no red witness', { ...base, matrix: [{ ...base.matrix[0], kind: 'control', baseline: 'pass' }] }],
     ['control observed failing', { ...base, redTests: [{ file: 'fixture.test.ts', kind: 'test', baseline: 'pass', sha256: SHA256('0'), command: 'pnpm test', observed: 'FAIL' }] }],
     ['relative contract path', { ...base, contractPath: '.pair/working/runs/x/292/a0-red-contract.json'.replace('.pair', '../pair') }],
+    ['shell metacharacter in the path', { ...base, contractPath: '/main/.pair/working/runs/x/292/a0;rm -rf.json' }],
     ['no inputHead', { ...base, inputHead: 'HEAD' }],
   ]) {
     const { result } = await drive(patch)
     assert.equal(result.batch[0].status, 'failed-preparation', what)
   }
+  // a path with SPACES is data, quoted in the prompt — accepted
+  const spaced = await drive({ ...base, contractPath: '/Users/me/My Projects/repo/.pair/working/runs/x/292/a0-red-contract.json' })
+  assert.equal(spaced.result.batch[0].status, 'ready-for-merge')
+  assert.match(spaced.calls.find(c => c.opts.label === 'validate:#292 a0').prompt, /\$contract="\/Users\/me\/My Projects\/repo\/\.pair\/working\/runs\/x\/292\/a0-red-contract\.json" /)
   // …and a positive control with baseline pass, observed PASS, beside a red witness, is fine
   const ok = await drive({ ...base, matrix: [...base.matrix, { id: 'row-2', kind: 'control', baseline: 'pass', condition: 'already correct', oracle: 'o', expected: 'unchanged', covers: ['AC-1'] }], redTests: [{ file: 'fixture.test.ts', kind: 'test', baseline: 'red', sha256: SHA256('0'), command: 'pnpm test', observed: 'FAIL' }, { file: 'control.test.ts', kind: 'test', baseline: 'pass', sha256: SHA256('2'), command: 'pnpm test control', observed: 'PASS' }] })
   assert.equal(ok.result.batch[0].status, 'ready-for-merge')
@@ -725,7 +732,7 @@ test('TC-15: every dispatched payload carries identities, references and compact
     assert.doesNotMatch(c.prompt, /"inventory":|"matrix":|"redTests":/, `${c.opts.label}: a contract was re-serialized into a prompt instead of referenced by path + hash`)
   }
   const green = calls.find(c => c.opts.label === 'green:#292 r1-g1').prompt
-  assert.match(green, /\$snapshot=c{40} \$contract=\/main\/\S+r1-g1-red-contract\.json/, 'GREEN receives the seal and the contract by reference')
+  assert.match(green, /\$snapshot=c{40} \$contract=\"\/main\/\S+r1-g1-red-contract\.json\"/, 'GREEN receives the seal and the contract by reference')
   const verify = calls.find(c => c.opts.label === 'verify:#292 r1').prompt
   assert.match(verify, /\$prior=r0-review-phase \$openIds=\["r0-1"\]/, 'the verifier receives the prior review by name and the open ids, not the findings')
   assert.doesNotMatch(verify, /wrong output on the empty form/, 'the prior finding text is not repeated into the verifier prompt')

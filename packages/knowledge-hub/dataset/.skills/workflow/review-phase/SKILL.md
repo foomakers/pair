@@ -34,7 +34,18 @@ Judge the whole result on its own merits, adversarially, from the story (accepta
 
 ### Step 0: Resolve the durable state (mandatory)
 
-Run `cycle-state.mjs resolve` exactly as `/red-spec` does (`--entry $entry --pr $pr --head "$(git ls-remote origin refs/heads/$branch | cut -c1-40)" …`). `other-run` ⇒ return it. `incompatible | invalid` ⇒ redirect to `blocked / failed-resume`. `next.step ≠ verify` or `next.phase ≠ $phase` ⇒ return `{ status: "redirect", next }` — including `next.step: done` on a completed cycle whose remote head still equals its `reviewedHead`: a cheap identity check, no judgment, no publication.
+```bash
+SKILL_DIR="$(dirname "<absolute path of this SKILL.md>")"
+MAIN="$(pwd)"                                   # the main checkout — you have not cd'd yet
+RUN_DIR="$MAIN/.pair/working/runs/$run/$story"
+node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVersion $workflowVersion \
+  --policy '$policy' --entry $entry --story $story --inputs $inputs --runsRoot "$MAIN/.pair/working/runs" --pr $pr --head "$(git ls-remote origin refs/heads/$branch | cut -c1-40)"
+```
+
+- `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
+- `next.step` is not `verify`, or `next.phase` is not `$phase` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment.
+- Otherwise continue; `next.attempt` is your attempt number.
+- `next.step: done` on a completed cycle whose remote head still equals its `reviewedHead` is returned as a redirect too: a cheap identity check, no judgment, no publication.
 
 ### Step 1: Isolation and pacing
 

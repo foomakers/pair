@@ -976,10 +976,13 @@ const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
 // The persisted contract lives in the MAIN checkout's run directory while later stages `cd` into
 // the story worktree, so the path is ABSOLUTE by design (repository-relative is accepted and
 // resolves against the main checkout).
+// Spaces are legal (a checkout under "~/My Projects/…" is a real path) because the value travels
+// JSON-quoted as DATA in the prompt and the skills quote it on their command lines; shell
+// metacharacters, control characters and `..` are not.
 const isContractPath = p =>
   typeof p === 'string' &&
   !p.includes('..') &&
-  !/[\s`$;|&<>]/.test(p) &&
+  !/[`$;|&<>"'\\\r\n\x00-\x1f]/.test(p) &&
   (isRelPath(p) || (p.startsWith('/') && /\/\.pair\/working\/runs\//.test(p)))
 const validScope = scope => {
   if (!scope || !String(scope.owner ?? '').trim() || !['behavioral', 'structural', 'test'].includes(scope.mode) || !Array.isArray(scope.allowedPaths)) return false
@@ -1408,25 +1411,25 @@ async function driveStory(story) {
   // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
   const prepare = n =>
     agentRetry(
-      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${n.contract.path} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${notesArg()}`),
+      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${notesArg()}`),
       withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id) }),
     )
   const validate = n =>
     agentRetry(
-      invoke(SK.redVerify, `${common()} $phase=${n.phase} $head=${n.base} $contract=${n.contract.path} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
+      invoke(SK.redVerify, `${common()} $phase=${n.phase} $head=${n.base} $contract=${JSON.stringify(n.contract.path)} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
       withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'high', schema: VALIDATE_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
     )
   const implement = n =>
     agentRetry(
-      invoke(SK.implementPhase, `${common()} $phase=${n.phase} $head=${n.base} $snapshot=${n.contract.snapshot} $contract=${n.contract.path} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
+      invoke(SK.implementPhase, `${common()} $phase=${n.phase} $head=${n.base} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
       withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean'),
     )
   const green = n =>
     agentRetry(
-      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${n.contract.path}${findingsArg(n.findings)} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
+      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)}${findingsArg(n.findings)} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
       withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || hasGreen(r),
     )

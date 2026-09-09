@@ -443,3 +443,85 @@ test('CLI: verify-chain prints JSON and exits 0 on a verified chain, 1 on a brea
   assert.equal(JSON.parse(r.stdout).contractBreach, true)
   rmSync(cwd, { recursive: true, force: true })
 })
+
+// ── US-479 T-17 / TC-07: the contract path is validated once, against the declared main-checkout root ──
+// The sealer runs inside the story worktree while the contract lives in the main checkout's run
+// directory. `--root <main checkout>` declares that root: an absolute path is accepted only when its
+// REAL path lies under `<root>/.pair/working/runs/` (a symlink pointing outside is an escape); a
+// relative path resolves against the ROOT, never the worktree cwd; `..` escapes, a root-prefix
+// sibling (`/main-evil/…`) and a path outside the root are refused before any file is read.
+function mainCheckout() {
+  const main = mkdtempSync(join(tmpdir(), 'main checkout ')) // a space, on purpose
+  mkdirSync(join(main, '.pair', 'working', 'runs', 'run-1', '42'), { recursive: true })
+  return main
+}
+test('seal --root: an absolute contract under <root>/.pair/working/runs is accepted (spaces included); a relative path resolves against the root, not the worktree', () => {
+  const { cwd, base } = repo()
+  const { contract } = redContract(cwd)
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  const main = mainCheckout()
+  const abs = join(main, '.pair/working/runs/run-1/42/r1-g1-red-contract.json')
+  writeFileSync(abs, JSON.stringify(contract))
+  let s = seal({ pr: PR, phase: PHASE, base, contractPath: abs, cwd, root: main })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  // relative to the ROOT
+  const { cwd: c2, base: b2 } = repo()
+  const { contract: k2 } = redContract(c2)
+  rmSync(join(c2, '.pair/working/red-draft.json'))
+  const main2 = mainCheckout()
+  writeFileSync(join(main2, '.pair/working/runs/run-1/42/r1-g1-red-contract.json'), JSON.stringify(k2))
+  s = seal({ pr: PR, phase: PHASE, base: b2, contractPath: '.pair/working/runs/run-1/42/r1-g1-red-contract.json', cwd: c2, root: main2 })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  for (const d of [cwd, c2, main, main2]) rmSync(d, { recursive: true, force: true })
+})
+
+test('seal --root refuses: a `..` escape, a root-prefix sibling, a path outside the root, a symlink escaping the root, an absent or partial contract — before touching git', () => {
+  const { cwd, base } = repo()
+  const { contract } = redContract(cwd)
+  const main = mainCheckout()
+  const outside = mkdtempSync(join(tmpdir(), 'outside-'))
+  writeFileSync(join(outside, 'c.json'), JSON.stringify(contract))
+  // root-prefix sibling: "<root>-evil/…" shares the prefix string but is not under the root
+  const sibling = `${main}-evil`
+  mkdirSync(join(sibling, '.pair', 'working', 'runs'), { recursive: true })
+  writeFileSync(join(sibling, '.pair/working/runs/c.json'), JSON.stringify(contract))
+  // symlink inside the run dir pointing outside
+  const link = join(main, '.pair/working/runs/run-1/42/escape.json')
+  spawnSync('ln', ['-s', join(outside, 'c.json'), link])
+  const cases = [
+    [`${main}/.pair/working/runs/../../../../etc/passwd`, 'path-escape'],
+    ['../../outside/c.json', 'path-escape'],
+    [join(sibling, '.pair/working/runs/c.json'), 'path-outside-root'],
+    [join(outside, 'c.json'), 'path-outside-root'],
+    [link, 'path-escape'],
+    [join(main, '.pair/working/runs/run-1/42/missing.json'), 'contract-missing'],
+  ]
+  for (const [p, reason] of cases) {
+    const r = seal({ pr: PR, phase: PHASE, base, contractPath: p, cwd, root: main })
+    assert.equal(r.sealed, false, p)
+    assert.equal(r.reason, reason, `${p}: ${JSON.stringify(r)}`)
+  }
+  writeFileSync(join(main, '.pair/working/runs/run-1/42/partial.json'), '{"fixScope": {"owner": "a"')
+  assert.equal(seal({ pr: PR, phase: PHASE, base, contractPath: join(main, '.pair/working/runs/run-1/42/partial.json'), cwd, root: main }).reason, 'contract-not-json')
+  assert.equal(git(cwd, 'rev-parse', 'HEAD'), base, 'nothing was committed')
+  assert.equal(git(cwd, 'status', '--porcelain').split('\n').filter(Boolean).length, 2, 'the worktree is untouched (the RED test + the draft)')
+  for (const d of [cwd, main, outside, sibling]) rmSync(d, { recursive: true, force: true })
+})
+
+test('CLI: seal accepts --root and reports the same typed refusals', () => {
+  const { cwd, base } = repo()
+  const { contract } = redContract(cwd)
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  const main = mainCheckout()
+  const abs = join(main, '.pair/working/runs/run-1/42/r1-g1-red-contract.json')
+  writeFileSync(abs, JSON.stringify(contract))
+  const run = (...args) => spawnSync(process.execPath, [CLI, ...args, '--cwd', cwd, '--root', main], { encoding: 'utf8' })
+  let r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', '/etc/passwd')
+  assert.equal(r.status, 1)
+  assert.equal(JSON.parse(r.stdout).reason, 'path-outside-root')
+  r = run('seal', '--pr', PR, '--phase', PHASE, '--base', base, '--contract', abs)
+  assert.equal(r.status, 0, r.stdout)
+  assert.equal(JSON.parse(r.stdout).sealed, true)
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(main, { recursive: true, force: true })
+})

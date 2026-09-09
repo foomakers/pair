@@ -25,10 +25,10 @@
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 export const SCHEMA_VERSION = 2
 export const SKILLS = ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase']
@@ -86,7 +86,7 @@ const REQUIRED_BY_SKILL = {
   'red-verify': ['verified', 'sealed'],
   'implement-phase': ['status'],
   'green-fix': ['fixed'],
-  'review-phase': ['reviewedHead', 'verdict', 'findings'],
+  'review-phase': ['reviewedHead', 'verdict', 'findings', 'custody', 'readiness'],
 }
 export function envelopeErrors(data, { phase, skill }) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return ['not-an-object']
@@ -338,7 +338,17 @@ function parseCli(argv) {
   }
   return { cmd, opts }
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Entry-point guard by REAL path: an install directory reached through a symlink (macOS's /var → /private/var,
+// a linked skills dir) makes `import.meta.url` and `process.argv[1]` spell the same file two ways, and a
+// string comparison silently turns the CLI into a no-op that exits 0. Compare realpaths, never strings.
+const isMain = () => {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     const need = (...ks) => {

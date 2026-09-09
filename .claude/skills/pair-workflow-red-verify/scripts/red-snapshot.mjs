@@ -4,7 +4,7 @@
 // commands run INSIDE the story worktree by the phase skill that owns them, never by the workflow sandbox (which has no
 // filesystem) and never re-implemented by an LLM agent:
 //
-//   node <skill dir>/scripts/red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <draft.json>
+//   node <skill dir>/scripts/red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <contract.json> [--root <main checkout>]
 //     Verifies HEAD is exactly <base>, every listed artifact hashes to its stated sha256, and the
 //     working tree is dirty ONLY at those artifacts; writes the manifest, creates ONE local
 //     `--no-verify` commit carrying the `Pair-RED-Snapshot` trailer, prints {sealed, snapshot}.
@@ -33,10 +33,10 @@
 // A rebase is never repaired (US-479 c1): a snapshot that is no longer an ancestor is simply
 // `snapshot-missing`, and the attempt fails closed.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 export const TRAILER_KEY = 'Pair-RED-Snapshot'
 export const SHA_RE = /^[0-9a-f]{40}$/
@@ -164,11 +164,35 @@ export function findSnapshot({ pr, phase, base, cwd }) {
   return { manifest, trailer, matches }
 }
 
-export function seal({ pr, phase, base, contractPath, cwd }) {
+// The contract lives in the main checkout's run directory while cwd is the story worktree. With a
+// declared `root` (the main checkout) the path is validated ONCE, before any read: no `..`
+// anywhere; an absolute path must lie lexically under `<root>/.pair/working/runs/` (a sibling
+// sharing the prefix string is outside); a relative path resolves against the ROOT, never cwd; the
+// REAL path must stay under the run root, so a symlink pointing elsewhere is an escape. Without a
+// root (legacy callers) an absolute path is read as-is and a relative one resolves against cwd.
+export function resolveContractPath(contractPath, { cwd, root }) {
+  const p = String(contractPath ?? '').trim()
+  if (!p) return { error: 'contract-missing' }
+  if (p.split(/[\\/]/).includes('..')) return { error: 'path-escape', path: p }
+  if (!root) {
+    const candidate = resolve(cwd, p)
+    return existsSync(candidate) ? { path: candidate } : { error: 'contract-missing', path: candidate }
+  }
+  const runsLexical = join(resolve(root), '.pair', 'working', 'runs')
+  const candidate = isAbsolute(p) ? resolve(p) : resolve(root, p)
+  if (candidate !== runsLexical && !candidate.startsWith(runsLexical + sep)) return { error: 'path-outside-root', path: candidate, root: runsLexical }
+  if (!existsSync(candidate)) return { error: 'contract-missing', path: candidate }
+  const runsReal = join(realpathSync(root), '.pair', 'working', 'runs')
+  const real = realpathSync(candidate)
+  if (!real.startsWith(runsReal + sep)) return { error: 'path-escape', path: candidate, real }
+  return { path: real }
+}
+
+export function seal({ pr, phase, base, contractPath, cwd, root }) {
   if (!SHA_RE.test(String(base))) return { sealed: false, reason: 'base-not-a-sha' }
-  // The contract lives in the main checkout's run directory while cwd is the story worktree, so
-  // the path is normally ABSOLUTE: resolve() keeps it; a relative one resolves against cwd.
-  const raw = readFileSync(resolve(cwd, contractPath), 'utf8')
+  const resolved = resolveContractPath(contractPath, { cwd, root })
+  if (resolved.error) return { sealed: false, reason: resolved.error, path: resolved.path, root: resolved.root }
+  const raw = readFileSync(resolved.path, 'utf8')
   let contract
   try {
     contract = JSON.parse(raw)
@@ -206,7 +230,7 @@ export function seal({ pr, phase, base, contractPath, cwd }) {
     .split('\n')
     .filter(Boolean)
     .map(l => l.slice(3).replace(/^"|"$/g, ''))
-    .filter(p => p !== contractPath && resolve(cwd, p) !== resolve(cwd, contractPath) && p !== manifest)
+    .filter(p => p !== contractPath && resolve(cwd, p) !== resolved.path && p !== manifest)
   const outside = dirty.filter(p => !files.includes(p))
   if (outside.length) return { sealed: false, reason: 'dirty-outside-contract', paths: outside }
   const notDirty = witnessPaths(contract).filter(f => !dirty.includes(f))
@@ -411,7 +435,17 @@ function parseCli(argv) {
   return { cmd, opts }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Entry-point guard by REAL path: an install directory reached through a symlink (macOS's /var → /private/var,
+// a linked skills dir) makes `import.meta.url` and `process.argv[1]` spell the same file two ways, and a
+// string comparison silently turns the CLI into a no-op that exits 0. Compare realpaths, never strings.
+const isMain = () => {
+  try {
+    return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+if (isMain()) {
   try {
     const { cmd, opts } = parseCli(process.argv.slice(2))
     const cwd = opts.cwd ?? process.cwd()
@@ -424,7 +458,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exit(out.verified ? 0 : 1)
     } else if (cmd === 'seal') {
       if (!opts.contract) throw new Error('--contract <draft.json> is required')
-      out = seal({ ...common, contractPath: opts.contract })
+      out = seal({ ...common, contractPath: opts.contract, root: opts.root })
       process.stdout.write(JSON.stringify(out) + '\n')
       process.exit(out.sealed ? 0 : 1)
     } else if (cmd === 'verify') {
