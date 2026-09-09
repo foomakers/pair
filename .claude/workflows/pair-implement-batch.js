@@ -4,19 +4,20 @@ export const meta = {
   // collide with this one under an undefined winner. File name and registry name match.
   name: 'pair-implement-batch',
   description:
-    'Drive a mutex-safe batch of ready story cards, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
+    'Drive a mutex-safe batch of ready story cards, each to a review-approved PR through four judgment stages (preparation -> independent contract validation + seal -> implementation -> independent final verification), resuming a cycle from its first incomplete step. Stops at PR-ready; NEVER merges (human gate).',
   // NOTE: `meta` must be a PURE LITERAL — the loader parses it statically and rejects any
   // expression node. A `+`-concatenated string is a BinaryExpression and makes the whole
   // workflow UNLOADABLE: it silently disappears from the registry and only `scriptPath`
   // reports why. Keep every value here a single literal, however long the line gets
   // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds). Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
+    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), runId (resume a cycle by naming its run directory), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
+    { title: 'Prepare', model: 'opus' },
+    { title: 'Validate', model: 'opus' },
     { title: 'Implement', model: 'opus' },
-    { title: 'PR', model: 'sonnet' },
-    { title: 'Review', model: 'opus' },
+    { title: 'Verify', model: 'opus' },
   ],
 }
 
@@ -50,10 +51,10 @@ export const meta = {
 //                                 // configured; a value outside that set THROWS rather than rank
 //                                 // against a foreign scale.
 //   model?,                       // legacy global override: fable | haiku | sonnet | opus
-//   models?,                      // role-scoped override. Keys: implementation, pr, reviewer,
-//                                 // planner, red, redVerifier, seal, green, preflight. A role key wins
-//                                 // over `model`; use this for an A/B trial without changing the
-//                                 // independent reviewer or evidence chain.
+//   models?,                      // role-scoped override. Keys: implementation, reviewer, red,
+//                                 // redVerifier, green. A role key wins over `model`; use this for an
+//                                 // A/B trial without changing the independent verifier or the
+//                                 // evidence chain. Retired roles (planner, seal, preflight, pr) THROW.
 //   pipeline?,                    // per-key overrides — see PIPELINE_DEFAULTS (skill names,
 //                                 // worktreeRoot, auditLogDir, baseBranch, reviewTemplate,
 //                                 // maxFixRounds). Its VALUES are validated by the SAME
@@ -85,26 +86,39 @@ export const meta = {
 // analysis, because only the caller knows the file sets.
 //
 // RETURN {
+//   workflowVersion,
 //   contracts: [{ name, status }],
-//   batch:     [{ id, status, prNumber?, findings?, acceptedFindings?, story, ... }],
+//   batch:     [{ id, status, prNumber?, reviewedHead?, verdict?, findings?, acceptedFindings?,
+//                 reason?, metrics, story }],
 //   died:      [id],              // cards that never returned anything
+//   metrics:   { dispatches, retries, redirects, wallMs, tokens: 'unknown' },
 //   note,                         // derived from the STATUSES: how many cards ADVANCED to a
 //                                 // PR (ready-for-merge/escalate) and what the rest did —
 //                                 // a batch where every card failed says so, never "ready"
 // }
 //   status ∈ ready-for-merge | escalate
-//          | failed-implement | failed-pr | failed-review | failed-fix
-//          | failed-plan | failed-red-contract | failed-preflight | failed-required-findings
-//   ONLY `ready-for-merge` may advance. A caller MUST treat every other status — including one
-//   this list does not name yet — as halted.
+//          | failed-preparation | failed-contract | failed-seal | failed-implement | failed-fix
+//          | failed-verify | failed-custody | failed-resume | incompatible
+//   ONLY `ready-for-merge` may advance, and only when the row carries a 40-hex `reviewedHead`
+//   and a `verdict` — a caller MUST treat every other status — including one this list does not
+//   name yet — as halted. `escalate` and `failed-*` rows carry `reason` and the open findings.
+//
+// FOUR JUDGMENT STAGES, ONE TRANSITION AUTHORITY. The cycle of a story is a chain of phase
+// handoffs under `.pair/working/runs/<runId>/<story>/` in the MAIN checkout. Every phase skill
+// runs `cycle-state.mjs resolve` before doing anything and after publishing its handoff, and
+// returns the typed `next` step; this file dispatches `next`, validates the typed evidence each
+// stage returns, enforces the budgets, and never derives a transition of its own. A same-input
+// resume therefore continues from the first incomplete step; a moved head or changed relevant
+// inputs re-validate the prior findings plus the delta; an incompatible workflow major or
+// ambiguous run scope is `incompatible`, never silently reused.
 //
 // REBASE IS NOT REPAIRED. There is no custody probe, no card-level reset and no
 // SHA-scoped history waiver. An in-flight attempt whose base moved fails closed where it is
-// measured — the sealer refuses a HEAD that is not its base, the preflight refuses a snapshot
-// that is not an ancestor — and a resumed run starts a fresh review on the current head; older
-// snapshots are historical evidence, never a later breach. A finding whose only fix is a history
-// rewrite is a HUMAN decision: the reviewer types it `humanDecisionKind: 'history-rewrite'` and the
-// engine escalates before any RED/seal/GREEN, with nothing in the engine able to accept or waive it.
+// measured — the sealer refuses a HEAD that is not its base, the custody check refuses a snapshot
+// that is not an ancestor — and the trusted snapshot is preserved, never reset. A finding whose
+// only fix is a history rewrite is a HUMAN decision: the verifier types it
+// `humanDecisionKind: 'history-rewrite'` and the engine escalates before any RED/seal/GREEN, with
+// nothing in the engine able to accept or waive it.
 //
 // NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is the loop's
 // concern, never this engine's.
@@ -404,11 +418,17 @@ function parseBatchArgs(raw) {
           `An empty string is a value the caller wrote, and reading it as absent would run the batch on a setting nobody chose.`,
       )
   }
-  const modelRoles = ['implementation', 'pr', 'reviewer', 'planner', 'red', 'redVerifier', 'seal', 'green', 'preflight']
+  const modelRoles = ['implementation', 'reviewer', 'red', 'redVerifier', 'green']
+  // Engine 3.0.0 retired four dispatch roles. A caller still naming one is told what replaced it —
+  // never silently remapped, never silently dropped (two engines would be worse than one error).
+  const RETIRED_MODEL_ROLES = { planner: 'red (the preparation stage owns grouping)', seal: 'redVerifier (validation seals in the same execution)', preflight: 'reviewer (the final verifier owns custody and P3 evidence)', pr: 'implementation (implement-phase publishes the PR)' }
   let models
   if (a.models !== undefined && a.models !== null) {
     if (typeof a.models !== 'object' || Array.isArray(a.models))
       throw new Error('implement-batch: `args.models` must be an object keyed by workflow role, or be omitted.')
+    for (const role of Object.keys(a.models))
+      if (RETIRED_MODEL_ROLES[role])
+        throw new Error(`implement-batch: \`args.models.${role}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_MODEL_ROLES[role]}. Remove the key; it is never mapped silently.`)
     rejectUnknownKeys(a.models, modelRoles, 'args.models')
     models = {}
     for (const [role, value] of Object.entries(a.models)) {
@@ -429,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '2.0.0'
+const WORKFLOW_VERSION = '3.0.0'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -447,20 +467,15 @@ const PIPELINE_DEFAULTS = {
     checkpoint: '/pair-capability-checkpoint',
     recordDecision: '/pair-capability-record-decision',
     writeIssue: '/pair-capability-write-issue',
-    // The engine dispatches them BY NAME with typed arguments; every step, rule and command of
-    // the review ↔ fix loop lives in the skill, not here. An adopter who renames them overrides
-    // the key, exactly like the six above.
-    remediationPlan: '/pair-workflow-remediation-plan',
+    // The five phase skills of the four judgment stages (+ the batch-level template contract).
+    // The engine dispatches them BY NAME with typed arguments; every step, rule and command
+    // lives in the skill, not here. An adopter who renames them overrides the key.
+    contractPhase: '/pair-workflow-contract-phase',
     redSpec: '/pair-workflow-red-spec',
     redVerify: '/pair-workflow-red-verify',
-    redSeal: '/pair-workflow-red-seal',
-    greenFix: '/pair-workflow-green-fix',
-    p3Verify: '/pair-workflow-p3-verify',
-    reviewPhase: '/pair-workflow-review-phase',
-    cycleComments: '/pair-workflow-cycle-comments',
-    contractPhase: '/pair-workflow-contract-phase',
     implementPhase: '/pair-workflow-implement-phase',
-    prPhase: '/pair-workflow-pr-phase',
+    greenFix: '/pair-workflow-green-fix',
+    reviewPhase: '/pair-workflow-review-phase',
   },
   worktreeRoot: '../pair-worktrees',
   auditLogDir: '.pair/working/reviews',
@@ -472,6 +487,17 @@ const PIPELINE_DEFAULTS = {
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
   // Rounds of autonomous fix<->re-review before escalating to a human.
   maxFixRounds: 3,
+  // Independent final verifiers per head — the tier's reviewer count (KB default 1 at every tier;
+  // an adoption override in way-of-working's Review Tier Matrix is passed here by the caller).
+  reviewers: 1,
+}
+// Retired by engine 3.0.0 — named so the migration message can say what absorbed each one.
+const RETIRED_SKILL_KEYS = {
+  remediationPlan: 'redSpec (grouping is a step of preparation)',
+  redSeal: 'redVerify (the seal runs in the validation execution)',
+  p3Verify: 'reviewPhase (custody + evidence are the final verifier\'s first steps)',
+  cycleComments: 'reviewPhase / greenFix (probe, synthesis and flush are scripts inside those stages)',
+  prPhase: 'implementPhase (the implementer publishes the PR)',
 }
 
 // The human-readable NAME of the contract template, for the prompt sentence "using the …
@@ -486,7 +512,7 @@ function resolvePipeline(raw) {
       `implement-batch: \`args.pipeline\` must be an object; received ${JSON.stringify(raw).slice(0, 60)}. ` +
         `Omit it entirely to run on pair's defaults.`,
     )
-  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds'], 'args.pipeline')
+  rejectUnknownKeys(raw, ['skills', 'worktreeRoot', 'auditLogDir', 'baseBranch', 'reviewTemplate', 'maxFixRounds', 'reviewers'], 'args.pipeline')
   // Every value below is interpolated VERBATIM into the same command text `cards[i]` values
   // are, so it is validated by the SAME predicates — `ok`/`what` are not optional. Presence is
   // not validity here either: `baseBranch` is the `<base>` argument of `git worktree add`
@@ -522,6 +548,9 @@ function resolvePipeline(raw) {
       `implement-batch: \`args.pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. ` +
         `A non-object would be silently ignored and pair's own skill names would run instead. Omit the key to keep them deliberately.`,
     )
+  for (const k of Object.keys(raw.skills ?? {}))
+    if (RETIRED_SKILL_KEYS[k])
+      throw new Error(`implement-batch: \`args.pipeline.skills.${k}\` was retired by engine 3.0.0 (ADR-024 amendment b) — its work now runs inside ${RETIRED_SKILL_KEYS[k]}. Remove the key; a retired dispatch is never mapped silently and never re-added.`)
   rejectUnknownKeys(raw.skills, Object.keys(PIPELINE_DEFAULTS.skills), 'args.pipeline.skills')
   const skills = { ...PIPELINE_DEFAULTS.skills }
   for (const [k, v] of Object.entries(raw.skills ?? {}))
@@ -533,6 +562,7 @@ function resolvePipeline(raw) {
     baseBranch: str(raw.baseBranch, 'baseBranch', PIPELINE_DEFAULTS.baseBranch, isRef, 'a valid git ref (it is the `<base>` argument of `git worktree add`, exactly like a card\'s `base`)'),
     reviewTemplate: str(raw.reviewTemplate, 'reviewTemplate', PIPELINE_DEFAULTS.reviewTemplate, isRelPath, 'a relative path built from safe segments (at most one leading `..`)'),
     maxFixRounds: posInt(raw.maxFixRounds, 'maxFixRounds', PIPELINE_DEFAULTS.maxFixRounds),
+    reviewers: posInt(raw.reviewers, 'reviewers', PIPELINE_DEFAULTS.reviewers),
   }
 }
 // The one NUMERIC pipeline key. Rejected rather than coerced, for the same reason
@@ -767,167 +797,150 @@ const withModel = (role, opts) => {
 const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
 // A rejected RED contract is still test-only and has not contaminated source or Git history.
 // More attempts turn a specification defect into an unattended loop, so the second rejection is
-// terminal before sealing or GREEN.
+// terminal before sealing or GREEN. Unchanged by decision (ADL 2026-09-09); never raised as a remedy.
 const MAX_RED_CONTRACT_REPAIRS = 1
-
-// ── Step retry ─────────────────────────────────────────────────────────────
-// Without a retry a single such death takes the whole story out of the run: driveStory returns
-// `failed-*` and the card ends the batch with no PR at all, even though the worktree still
-// holds every committed task. Each authoring step is re-entrant by construction (persistent
-// worktree + checkpoint + committed work), so a second attempt RESUMES rather than restarts.
-// WHAT COUNTS AS A DEAD STEP IS THE CALLER'S CALL (`isUsable`).
-async function agentRetry(prompt, opts, isUsable = r => !!r) {
-  const first = await agent(prompt, opts)
-  if (isUsable(first)) return first
-  log(`${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`)
-  return agent(prompt, { ...opts, label: `${opts.label} retry` })
-}
-
-// Positive evidence that a review HAPPENED: a verdict is a required field of the
-// review contract, so its absence — null, `{}`, `{findings: []}`, a blank string —
-// means the reviewer did not return one. Absence of findings is not evidence.
-// ONE predicate, asked by the retry and by the convergence guard, so the two
-// cannot drift into disagreeing about what a dead reviewer is.
-const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
-const REVIEWED_HEAD_PATTERN = /^[0-9a-f]{40}$/
-// A review also has to identify the immutable PR revision it actually inspected.
-// Without that baseline a later reviewer cannot distinguish the fix delta from the
-// already-audited PR surface, which turns each re-review into another full scan.
-const hasReviewEvidence = r => hasVerdict(r) && REVIEWED_HEAD_PATTERN.test(String(r.reviewedHead ?? ''))
-// A preflight is useful only when it says whether the exact head was verified and returns its
-// full finding set. A truthy `{}` would otherwise look clean and recreate the same unsafe
-// direction that `hasReviewEvidence` prevents for the outer review.
-const hasPreflightEvidence = r =>
-  !!r &&
-  typeof r.verified === 'boolean' &&
-  Array.isArray(r.findings) &&
-  REVIEWED_HEAD_PATTERN.test(String(r.reviewedHead ?? ''))
+// An approved test failing on production returns to implementation on the SAME seal once; a second
+// failure is `failed-fix` — the contract was right, the fix was not, and a third GREEN is drift.
+const MAX_GREEN_RETRIES = 1
+// A cycle that asks for more dispatches than this in one run is looping, not converging.
+const MAX_DISPATCHES_PER_STORY = 40
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
 // These are the compact values agents RETURN for control-flow — NOT the artifact
 // formats. The human-facing artifacts follow the KB templates, applied by the
 // agents: the PR body → `pr-template.md`, the review report → the configured review
-// template (`code-review-template.md` by default)
-// (posted as a PR comment by the reviewer), the checkpoint → `checkpoint-template.md`.
-// Where a schema field overlaps a template field it MIRRORS the template's
-// vocabulary (single source of truth) so the machine contract and the human
-// artifact cannot drift.
-const STEP_SCHEMA = {
+// template (`code-review-template.md` by default), the checkpoint → `checkpoint-template.md`.
+// Where a schema field overlaps a template field it MIRRORS the template's vocabulary.
+//
+// Every phase result carries `next`: the typed step the durable cycle state names after the
+// skill published its handoff (`cycle-state.mjs resolve`). A skill whose Step 0 found another
+// step due returns `{ status: 'redirect', next }` and nothing else — no judgment was spent.
+const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'done', 'blocked']
+const NEXT_SCHEMA = {
   type: 'object',
   properties: {
-    branch: { type: 'string' },
-    checkpointPath: { type: 'string' }, // checkpoint body follows checkpoint-template.md
-    gatesPassed: { type: 'boolean' },
-    summary: { type: 'string' },
-  },
-  required: ['gatesPassed'],
-}
-const PR_SCHEMA = {
-  // The PR BODY follows pr-template.md (authored by the agent); this is only the handle.
-  type: 'object',
-  properties: { prNumber: { type: 'number' }, url: { type: 'string' } },
-  required: ['prNumber'],
-}
-const LOOSE_REVIEW_SCHEMA = {
-  // Mirrors the configured review template: the `## Verdict`-line verdict options and the
-  // `Findings by severity` finding fields (File:Line / severity / description /
-  // recommendation). The posted report is the artifact; this is the return value.
-  // This is the loose FALLBACK skeleton: phase-0 (ensure-contract, below) derives an
-  // enum-locked version from the template via an AI-generated contract.json; when
-  // that contract is missing/stale-and-ungeneratable/malformed, this skeleton is
-  // used as-is so the run never breaks.
-  type: 'object',
-  properties: {
-    // Free string mirroring the review template's `## Verdict`-line options
-    // (APPROVED / CHANGES-REQUESTED / TECH-DEBT) — NOT enum-locked here, so a
-    // template vocabulary change doesn't break validation.
-    // Control flow keys on `nonActionable` + actionable count, never on specific
-    // verdict strings.
+    step: { type: 'string', enum: STEPS },
+    mode: { type: 'string' },
+    phase: { type: 'string' },
+    round: { type: 'integer' },
+    attempt: { type: 'integer' },
+    revision: { type: 'integer' },
+    reviewer: { type: 'integer' },
+    base: { type: 'string' },
+    reason: { type: 'string' },
+    budget: { type: 'string' },
+    detail: { type: 'string' },
+    reviewedHead: { type: 'string' },
     verdict: { type: 'string' },
-    // Immutable full SHA of the PR head reviewed. This is workflow evidence, not
-    // part of the human-facing review template vocabulary.
-    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
-    needsHumanDecision: { type: 'boolean' },
-    // A history rewrite has to be escalated before a new RED snapshot can freeze the commits
-    // the human needs to decide about. Other human decisions retain the normal one-fix-round
-    // behavior below.
-    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
-    findings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          location: { type: 'string' }, // File:Line
-          severity: { type: 'string' }, // Critical | Major | Minor | Questions per template (not enum-locked)
-          description: { type: 'string' }, // the issue and its impact
-          recommendation: { type: 'string' }, // suggested resolution
-          // true = by-design / won't-fix: fixing it would be wrong (byte-consistent
-          // with a source of truth, matches an existing convention, resolves only
-          // post-merge, etc.). Put the justification in `description`. Non-actionable
-          // findings do NOT block convergence; surfaced to the human at the merge gate.
-          nonActionable: { type: 'boolean' },
-          // When nonActionable, the SPECIFIC disposition that replaces the opaque
-          // "non-actionable" label in human-facing output: exactly `Deferred to #<n>`
-          // when the finding belongs to a separate tracked story, else a concrete
-          // by-design reason (By convention … / Historical record / Forward-ref to
-          // unbuilt #<n> / Resolves after merge).
-          disposition: { type: 'string' },
-        },
-      },
-    },
+    prior: { type: 'string' },
+    openIds: { type: 'array', items: { type: 'string' } },
+    headMoved: { type: 'boolean' },
+    inputsChanged: { type: 'boolean' },
+    invalidated: { type: 'array', items: { type: 'string' } },
+    contract: { type: 'object' },
+    group: { type: 'object' },
+    plan: { type: 'object' },
+    findings: { type: 'array', items: { type: 'object' } },
+    rejection: { type: 'array', items: { type: 'object' } },
+    refusal: { type: 'string' },
   },
-  required: ['verdict', 'reviewedHead'],
+  required: ['step'],
 }
-const FIX_SCHEMA = {
+const REDIRECT_STATUS = 'redirect'
+const PHASE_RE = /^(a0|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
+const SHA40 = /^[0-9a-f]{40}$/
+const SHA256_RE = /^sha256:[0-9a-f]{64}$/
+const hasNext = n => !!n && typeof n === 'object' && STEPS.includes(n.step)
+// A `next` the coordinator will act on: the step is known and, for a dispatchable step, the phase
+// id has the shape the run directory expects. Anything else is `failed-resume`.
+const usableNext = n =>
+  hasNext(n) &&
+  (n.step === 'done'
+    ? SHA40.test(String(n.reviewedHead ?? ''))
+    : n.step === 'blocked'
+      ? !!String(n.reason ?? '').trim()
+      : PHASE_RE.test(String(n.phase ?? '')) && (n.base === undefined || SHA40.test(String(n.base))))
+const isRedirect = r => !!r && r.status === REDIRECT_STATUS && usableNext(r.next)
+const isOtherRun = r => !!r && r.status === 'other-run' && isSegment(String(r.runId ?? ''))
+
+// ── Stage 1: preparation (red-spec) ──────────────────────────────────────────
+const FIX_SCOPE_SCHEMA = {
   type: 'object',
   properties: {
-    fixed: { type: 'boolean' },
-    needsHumanDecision: { type: 'boolean' },
-    outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
-    evidenceLedger: {
+    owner: { type: 'string' },
+    mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
+    allowedPaths: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['owner', 'mode', 'allowedPaths'],
+}
+const PLAN_SCHEMA = {
+  type: 'object',
+  properties: {
+    groups: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          claim: { type: 'string' },
+          groupId: { type: 'string' },
+          findings: { type: 'array', items: { type: 'string' } }, // stable finding IDs
+          owner: { type: 'string' },
+          mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
+          allowedPaths: { type: 'array', items: { type: 'string' } },
           oracle: { type: 'string' },
-          probe: { type: 'string' },
-          observed: { type: 'string' },
+          dependsOn: { type: 'array', items: { type: 'string' } },
         },
-        required: ['claim', 'oracle', 'probe', 'observed'],
+        required: ['groupId', 'findings', 'owner', 'mode', 'allowedPaths'],
       },
+    },
+    // A finding whose correction lies OUTSIDE the repository: it stays BLOCKING until a human
+    // disposition or a read-back-verified correction — `carried` names a location, never acceptance.
+    carried: {
+      type: 'array',
+      items: { type: 'object', properties: { finding: { type: 'string' }, disposition: { type: 'string' } }, required: ['finding', 'disposition'] },
     },
   },
-  required: ['fixed', 'evidenceLedger'],
+  required: ['groups'],
 }
-// RED is an artifact, not an intention. A separate agent writes the test-only contract before
-// the fixer sees the source change; its hashes let the later verifier detect the old escape
-// hatch where the same session weakened the test it had just made pass.
-const RED_TEST_SCHEMA = {
+const PREPARE_SCHEMA = {
   type: 'object',
   properties: {
+    status: { type: 'string', enum: ['red', 'stale', 'split-required', 'unprovable', 'dirty', REDIRECT_STATUS] },
+    mode: { type: 'string', enum: ['initial', 'remediation', 'repair', 'revision'] },
+    inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     sourceOfTruth: { type: 'string' },
-    // A contract is either behavioral OR structural. Combining both lets a correct bug fix
-    // smuggle a refactor past the same tests; make the choice explicit before GREEN exists.
-    fixScope: {
-      type: 'object',
-      properties: {
-        owner: { type: 'string' },
-        mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
-        allowedPaths: { type: 'array', items: { type: 'string' } },
+    // The authoritative inventory: what each obligation (AC or finding) maps to.
+    inventory: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }, // AC-1 | <finding id>
+          producer: { type: 'string' }, // the function/grammar/command that owns the behavior
+          inputs: { type: 'array', items: { type: 'string' } },
+          representations: { type: 'array', items: { type: 'string' } },
+          consumers: { type: 'array', items: { type: 'string' } },
+          classes: { type: 'array', items: { type: 'string' } }, // equivalence classes incl. invalid/boundary
+          interactions: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['id', 'producer', 'classes'],
       },
-      required: ['owner', 'mode', 'allowedPaths'],
     },
+    fixScope: FIX_SCOPE_SCHEMA,
     matrix: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
+          id: { type: 'string' },
+          kind: { type: 'string', enum: ['witness', 'control', 'boundary', 'interaction', 'not-applicable'] },
+          baseline: { type: 'string', enum: ['red', 'pass'] },
           condition: { type: 'string' },
           oracle: { type: 'string' },
           expected: { type: 'string' },
+          covers: { type: 'array', items: { type: 'string' } },
+          rationale: { type: 'string' },
         },
-        required: ['condition', 'oracle', 'expected'],
+        required: ['id', 'kind', 'baseline', 'condition', 'oracle', 'expected', 'covers'],
       },
     },
     redTests: {
@@ -936,8 +949,8 @@ const RED_TEST_SCHEMA = {
         type: 'object',
         properties: {
           file: { type: 'string' },
-          // Omitted means `test` for contracts written before fixtures became explicit.
           kind: { type: 'string', enum: ['test', 'fixture'] },
+          baseline: { type: 'string', enum: ['red', 'pass'] },
           sha256: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
           command: { type: 'string' },
           observed: { type: 'string' },
@@ -948,87 +961,71 @@ const RED_TEST_SCHEMA = {
     },
     testExempt: { type: 'boolean' },
     exemptionRationale: { type: 'string' },
-    status: { type: 'string', enum: ['red', 'stale', 'split-required'] },
     contractPath: { type: 'string' },
-    domains: { type: 'array', items: { type: 'object' } },
+    contractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    plan: PLAN_SCHEMA,
+    splitReason: { type: 'string' },
+    reason: { type: 'string' },
+    preserved: { type: 'array', items: { type: 'string' } }, // unknown edits found and left alone
+    next: NEXT_SCHEMA,
   },
-  required: ['sourceOfTruth', 'fixScope', 'matrix', 'redTests', 'testExempt'],
+  required: ['status'],
 }
-// D0 — the frozen plan one round's actionable findings are remediated under. `findings` are
-// INDICES into the finding array the planner received, so the plan is bound to the exact set.
-const PLAN_SCHEMA = {
-  type: 'object',
-  properties: {
-    status: { type: 'string', enum: ['planned', 'stale'] },
-    inputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
-    groups: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          groupId: { type: 'string' },
-          findings: { type: 'array', items: { type: 'integer' } },
-          owner: { type: 'string' },
-          mode: { type: 'string', enum: ['behavioral', 'structural', 'test'] },
-          allowedPaths: { type: 'array', items: { type: 'string' } },
-          oracle: { type: 'string' },
-          dependsOn: { type: 'array', items: { type: 'string' } },
-        },
-        required: ['groupId', 'findings', 'owner', 'mode', 'allowedPaths'],
-      },
-    },
-    // A finding whose remediation lies OUTSIDE the repository (the story card, the PR body, a
-    // human decision) has no group: it is carried to the merge gate with its disposition.
-    carried: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: { finding: { type: 'integer' }, disposition: { type: 'string' } },
-        required: ['finding', 'disposition'],
-      },
-    },
-  },
-  required: ['status', 'groups'],
+const PREPARE_REFUSALS = new Set(['stale', 'split-required', 'unprovable', 'dirty'])
+const isPrepareRefusal = r => !!r && PREPARE_REFUSALS.has(r.status)
+// The persisted contract lives in the MAIN checkout's run directory while later stages `cd` into
+// the story worktree, so the path is ABSOLUTE by design (repository-relative is accepted and
+// resolves against the main checkout).
+const isContractPath = p =>
+  typeof p === 'string' &&
+  !p.includes('..') &&
+  !/[\s`$;|&<>]/.test(p) &&
+  (isRelPath(p) || (p.startsWith('/') && /\/\.pair\/working\/runs\//.test(p)))
+const validScope = scope => {
+  if (!scope || !String(scope.owner ?? '').trim() || !['behavioral', 'structural', 'test'].includes(scope.mode) || !Array.isArray(scope.allowedPaths)) return false
+  if (scope.mode === 'test' ? scope.allowedPaths.length !== 0 : scope.allowedPaths.length === 0) return false
+  const seen = new Set()
+  for (const path of scope.allowedPaths) {
+    const file = String(path ?? '').trim()
+    if (!file || !isRelPath(file.replace(/\/$/, '')) || seen.has(file)) return false
+    seen.add(file)
+  }
+  return true
 }
-// A plan is usable only when EVERY finding index appears in exactly one group, every group
-// is non-empty and well-typed, and the dependency graph is acyclic. Anything else is
-// `failed-plan`: a finding left out of the plan is a finding nobody fixes.
-const hasPlanEvidence = count => plan => {
-  if (!plan || plan.status !== 'planned' || !Array.isArray(plan.groups)) return false
+// A plan is usable only when EVERY received finding id lands in exactly one group or in `carried`,
+// every group is non-empty and well-typed, and the dependency graph is acyclic.
+const validPlan = (plan, ids) => {
+  if (!plan || !Array.isArray(plan.groups)) return false
   const carried = plan.carried ?? []
   if (!Array.isArray(carried)) return false
   if (plan.groups.length === 0 && carried.length === 0) return false
   const seen = new Set()
+  const expected = new Set(ids)
   for (const c of carried) {
-    if (!c || !Number.isInteger(c.finding) || c.finding < 0 || c.finding >= count || seen.has(c.finding)) return false
-    if (!String(c.disposition ?? '').trim()) return false
+    if (!c || typeof c.finding !== 'string' || !expected.has(c.finding) || seen.has(c.finding) || !String(c.disposition ?? '').trim()) return false
     seen.add(c.finding)
   }
-  const ids = new Set()
+  const groupIds = new Set()
   for (const g of plan.groups) {
-    if (!g || !String(g.groupId ?? '').trim() || ids.has(g.groupId)) return false
-    ids.add(g.groupId)
-    if (!String(g.owner ?? '').trim() || !['behavioral', 'structural', 'test'].includes(g.mode)) return false
-    // A `test` group repairs a guard, not production: it declares no production paths at all.
-    if (g.mode === 'test' ? !Array.isArray(g.allowedPaths) || g.allowedPaths.length !== 0 : !Array.isArray(g.allowedPaths) || g.allowedPaths.length === 0 || !g.allowedPaths.every(pth => typeof pth === 'string' && isRelPath(pth.replace(/\/$/, '')))) return false
+    if (!g || !/^r\d+-g\d+$/.test(String(g.groupId ?? '')) || groupIds.has(g.groupId)) return false
+    groupIds.add(g.groupId)
+    if (!validScope(g)) return false
     if (!Array.isArray(g.findings) || g.findings.length === 0) return false
-    for (const i of g.findings) {
-      if (!Number.isInteger(i) || i < 0 || i >= count || seen.has(i)) return false
-      seen.add(i)
+    for (const id of g.findings) {
+      if (typeof id !== 'string' || !expected.has(id) || seen.has(id)) return false
+      seen.add(id)
     }
-    if (g.dependsOn !== undefined && (!Array.isArray(g.dependsOn) || g.dependsOn.some(d => typeof d !== 'string'))) return false
+    if (g.dependsOn !== undefined && (!Array.isArray(g.dependsOn) || g.dependsOn.some(d => typeof d !== 'string' || !groupIds.has(d) && !plan.groups.some(x => x.groupId === d) || d === g.groupId))) return false
   }
-  if (seen.size !== count) return false
-  for (const g of plan.groups) for (const d of g.dependsOn ?? []) if (!ids.has(d) || d === g.groupId) return false
-  return orderGroups(plan.groups) !== null
+  return seen.size === expected.size && orderGroups(plan.groups) !== null
 }
-// Topological order by `dependsOn`, stable on the planner's order; null on a cycle.
 function orderGroups(groups) {
   const byId = new Map(groups.map(g => [g.groupId, g]))
   const done = new Set()
   const out = []
   const visiting = new Set()
   const visit = g => {
+    if (!g) return false
     if (done.has(g.groupId)) return true
     if (visiting.has(g.groupId)) return false
     visiting.add(g.groupId)
@@ -1041,73 +1038,173 @@ function orderGroups(groups) {
   for (const g of groups) if (!visit(g)) return null
   return out
 }
-const RED_TEST_SHA256 = /^sha256:[0-9a-f]{64}$/
-const RED_SNAPSHOT_SHA = /^[0-9a-f]{40}$/
-const redArtifactKind = artifact => String(artifact?.kind ?? 'test')
-const isRedTestArtifact = artifact =>
-  redArtifactKind(artifact) === 'test' &&
-  !!String(artifact?.command ?? '').trim() &&
-  /fail/i.test(String(artifact?.observed ?? ''))
-const hasRedTestEvidence = r => {
-  if (!r || !String(r.sourceOfTruth ?? '').trim() || !Array.isArray(r.matrix) || r.matrix.length === 0) return false
-  const scope = r.fixScope
-  if (!scope || !String(scope.owner ?? '').trim() || !['behavioral', 'structural', 'test'].includes(scope.mode) || !Array.isArray(scope.allowedPaths))
-    return false
-  if (scope.mode === 'test' ? scope.allowedPaths.length !== 0 : scope.allowedPaths.length === 0) return false
-  const allowedPaths = new Set()
-  for (const path of scope.allowedPaths) {
-    const file = String(path ?? '').trim()
-    if (!file || !isRelPath(file) || allowedPaths.has(file)) return false
-    allowedPaths.add(file)
+const artifactKind = a => String(a?.kind ?? 'test')
+const artifactBaseline = a => String(a?.baseline ?? 'red')
+const isProvenArtifact = a => {
+  if (!String(a?.command ?? '').trim()) return false
+  const observed = String(a?.observed ?? '')
+  return artifactBaseline(a) === 'pass' ? /pass|ok|green/i.test(observed) && !/fail/i.test(observed) : /fail/i.test(observed)
+}
+// The evidence a preparation result must carry before anyone validates it: an inventory, a
+// discriminating matrix that covers every inventory item (or says why not), hashed artifacts whose
+// observed baseline matches the row they prove, a typed scope and an absolute contract path.
+function hasPreparedContract(r, { needPlan = false, ids = [] } = {}) {
+  if (!r || r.status !== 'red') return false
+  if (!SHA40.test(String(r.inputHead ?? ''))) return false
+  if (!String(r.sourceOfTruth ?? '').trim()) return false
+  if (!isContractPath(r.contractPath) || !SHA256_RE.test(String(r.contractHash ?? ''))) return false
+  if (!validScope(r.fixScope)) return false
+  if (!Array.isArray(r.inventory) || r.inventory.length === 0) return false
+  const inventoryIds = new Set()
+  for (const item of r.inventory) {
+    if (!item || !String(item.id ?? '').trim() || !String(item.producer ?? '').trim() || !Array.isArray(item.classes) || item.classes.length === 0 || inventoryIds.has(item.id)) return false
+    inventoryIds.add(item.id)
   }
+  if (!Array.isArray(r.matrix) || r.matrix.length === 0) return false
+  const rowIds = new Set()
+  const covered = new Set()
+  let witnesses = 0
+  for (const row of r.matrix) {
+    if (!row || !String(row.id ?? '').trim() || rowIds.has(row.id)) return false
+    rowIds.add(row.id)
+    if (!['witness', 'control', 'boundary', 'interaction', 'not-applicable'].includes(row.kind) || !['red', 'pass'].includes(row.baseline)) return false
+    if (!String(row.condition ?? '').trim() || !String(row.oracle ?? '').trim() || !String(row.expected ?? '').trim()) return false
+    if (!Array.isArray(row.covers) || row.covers.length === 0 || row.covers.some(c => !inventoryIds.has(c))) return false
+    if (row.kind === 'not-applicable' && !String(row.rationale ?? '').trim()) return false
+    if (row.kind === 'witness' && row.baseline === 'red') witnesses++
+    for (const c of row.covers) covered.add(c)
+  }
+  if (covered.size !== inventoryIds.size) return false
+  if (needPlan && !validPlan(r.plan, ids)) return false
   if (r.testExempt === true) return !!String(r.exemptionRationale ?? '').trim()
   if (r.testExempt !== false || !Array.isArray(r.redTests) || r.redTests.length === 0) return false
-
+  // Without one discriminating witness the contract cannot fail for the defect it claims to close.
+  if (witnesses === 0 && r.fixScope.mode !== 'test') return false
   const byFile = new Map()
-  for (const artifact of r.redTests) {
-    const file = String(artifact?.file ?? '').trim()
-    const kind = redArtifactKind(artifact)
-    if (!file || byFile.has(file) || !RED_TEST_SHA256.test(String(artifact?.sha256 ?? ''))) return false
-    if (kind !== 'test' && kind !== 'fixture') return false
-    byFile.set(file, artifact)
+  for (const a of r.redTests) {
+    const file = String(a?.file ?? '').trim()
+    if (!file || byFile.has(file) || !isRelPath(file) || !SHA256_RE.test(String(a?.sha256 ?? ''))) return false
+    if (!['test', 'fixture'].includes(artifactKind(a)) || !['red', 'pass'].includes(artifactBaseline(a))) return false
+    byFile.set(file, a)
   }
-
-  return r.redTests.every(artifact => {
-    if (redArtifactKind(artifact) === 'test') return isRedTestArtifact(artifact)
-    const consumer = byFile.get(String(artifact?.consumedBy ?? '').trim())
-    return !!consumer && isRedTestArtifact(consumer)
-  })
+  return r.redTests.every(a => (artifactKind(a) === 'test' ? isProvenArtifact(a) : (() => { const c = byFile.get(String(a?.consumedBy ?? '').trim()); return !!c && artifactKind(c) === 'test' && isProvenArtifact(c) })()))
 }
-const RED_SNAPSHOT_SCHEMA = {
+
+// ── Stage 2: independent validation + seal (red-verify) ──────────────────────
+const VALIDATE_SCHEMA = {
   type: 'object',
   properties: {
+    status: { type: 'string', enum: ['verified', 'rejected', REDIRECT_STATUS] },
+    verified: { type: 'boolean' },
+    findings: { type: 'array', items: { type: 'object' } },
     sealed: { type: 'boolean' },
     snapshot: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    manifest: { type: 'string' },
+    contractHash: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' },
+    reason: { type: 'string' },
+    next: NEXT_SCHEMA,
   },
-  required: ['sealed', 'snapshot'],
+  required: ['status'],
 }
-const hasSealedRedSnapshot = r => r?.sealed === true && RED_SNAPSHOT_SHA.test(String(r.snapshot ?? ''))
-// Either signal suppresses a second first-review.
-const PROBE_SCHEMA = {
+const hasValidation = r => !!r && typeof r.verified === 'boolean' && Array.isArray(r.findings) && (r.verified === false ? r.findings.length > 0 : true)
+const hasSeal = r => r?.sealed === true && SHA40.test(String(r.snapshot ?? ''))
+
+// ── Stage 3: implementation (implement-phase | green-fix) ────────────────────
+const IMPLEMENT_SCHEMA = {
   type: 'object',
-  properties: { logExists: { type: 'boolean' }, firstReviewPosted: { type: 'boolean' } },
-  required: ['logExists', 'firstReviewPosted'],
+  properties: {
+    status: { type: 'string', enum: ['ok', 'failed', REDIRECT_STATUS] },
+    gatesPassed: { type: 'boolean' },
+    branch: { type: 'string' },
+    checkpointPath: { type: 'string' },
+    prNumber: { type: 'number' },
+    url: { type: 'string' },
+    outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    summary: { type: 'string' },
+    reason: { type: 'string' },
+    next: NEXT_SCHEMA,
+  },
+  required: ['status'],
 }
+const hasImplementation = r => !!r && r.status === 'ok' && r.gatesPassed === true && isPosInt(r.prNumber) && SHA40.test(String(r.outputHead ?? ''))
+const GREEN_SCHEMA = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['fixed', 'failed', 'human', REDIRECT_STATUS] },
+    fixed: { type: 'boolean' },
+    needsHumanDecision: { type: 'boolean' },
+    outputHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    evidenceLedger: {
+      type: 'array',
+      items: { type: 'object', properties: { claim: { type: 'string' }, oracle: { type: 'string' }, probe: { type: 'string' }, observed: { type: 'string' } }, required: ['claim', 'oracle', 'probe', 'observed'] },
+    },
+    reason: { type: 'string' },
+    next: NEXT_SCHEMA,
+  },
+  required: ['status'],
+}
+const hasGreen = r => !!r && typeof r.fixed === 'boolean' && Array.isArray(r.evidenceLedger) && (r.fixed ? SHA40.test(String(r.outputHead ?? '')) : true)
+
+// ── Stage 4: final verification (review-phase) ──────────────────────────────
+const LOOSE_REVIEW_SCHEMA = {
+  // Mirrors the configured review template: the `## Verdict`-line verdict options and the
+  // `Findings by severity` finding fields (File:Line / severity / description / recommendation).
+  // This is the loose FALLBACK skeleton: phase-0 (ensure-contract, below) derives an enum-locked
+  // version from the template via an AI-generated contract.json; when that contract is
+  // missing/stale-and-ungeneratable/malformed, this skeleton is used as-is so the run never breaks.
+  type: 'object',
+  properties: {
+    verdict: { type: 'string' },
+    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
+    needsHumanDecision: { type: 'boolean' },
+    humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' },
+          severity: { type: 'string' },
+          description: { type: 'string' },
+          recommendation: { type: 'string' },
+          nonActionable: { type: 'boolean' },
+          disposition: { type: 'string' },
+        },
+      },
+    },
+  },
+  required: ['verdict', 'reviewedHead'],
+}
+// The orchestration fields every finding carries on top of the template's own: a stable id
+// assigned once, the policy decision (`blocking`, computed by the skill's script from the floor
+// the coordinator passed and re-checked here), the transition of a prior finding, and the KIND
+// that routes recovery (an approved test failing on production returns to GREEN; a contract gap
+// revises the affected obligation; a defect opens a round; a regression is a defect on old code).
+const FINDING_ORCHESTRATION = {
+  id: { type: 'string' },
+  blocking: { type: 'boolean' },
+  transition: { type: 'string', enum: ['open', 'resolved', 'superseded', 'human'] },
+  kind: { type: 'string', enum: ['defect', 'regression', 'approved-test-failing', 'contract-gap', 'question'] },
+  external: { type: 'boolean' },
+  groupId: { type: 'string' },
+  rowId: { type: 'string' },
+  severityEvidence: { type: 'string' },
+  missedUpstream: { type: 'boolean' },
+  evidence: { type: 'string' },
+}
+const FINDING_ID_RE = /^r\d+(-[a-z])?-\d+$/
+const TRANSITIONS = new Set(['open', 'resolved', 'superseded', 'human'])
+const KINDS = new Set(['defect', 'regression', 'approved-test-failing', 'contract-gap', 'question'])
 
 // ── Phase 0: ensure machine contracts (md template → contract.json) ────────
-// The KB markdown template is the single source of truth; the machine contract
-// is DERIVED from it by an AI generator agent (this sandbox has no filesystem
-// access, so all file work — hashing, cache check, generation, validation —
-// happens in the agent via the `ensure-contract.mjs` script that ships inside the
-// contract-phase skill).
-// Cache-by-hash: the contract stores the template's sha256; unchanged hash →
-// reuse (no regeneration), changed hash → regenerate. Malformed/failed contract
-// → the loose skeleton above is used as-is (the run never breaks) and the
-// fallback is reported in the run result (`contracts[].status: 'fallback-loose'`).
-// The pattern is per-template and reusable: add a spec below to contract another
-// template — e.g. { name: 'pr', template: '.../pr-template.md', contract:
-// '.claude/workflows/pair-contracts/pr.contract.json', skeleton: PR_SCHEMA, mirrors: ... }
-// once the PR return value grows beyond a handle.
+// The KB markdown template is the single source of truth; the machine contract is DERIVED from it
+// by an AI generator agent (this sandbox has no filesystem access, so all file work — hashing,
+// cache check, generation, validation — happens in the agent via the `ensure-contract.mjs` script
+// that ships inside the contract-phase skill). Cache-by-hash: unchanged template → reuse (no
+// regeneration). Malformed/failed contract → the loose skeleton above is used as-is (the run never
+// breaks) and the fallback is reported in the run result (`contracts[].status: 'fallback-loose'`).
+// This is the TEMPLATE contract (review vocabulary). It is never the ACCEPTANCE contract a story
+// is judged against — that one is prepared and sealed per cycle (stages 1–2 above).
 const CONTRACT_SPECS = [
   {
     name: 'code-review',
@@ -1119,21 +1216,14 @@ const CONTRACT_SPECS = [
       'The RELATIVE severity of those levels is a contract TERM, carried by the top-level `severityRanks` map (one explicit integer per severity, higher = more severe) — the consumer ranks a merge-blocking floor with it and IGNORES the order of the `severities` array entirely',
   },
 ]
-
 const CONTRACT_RESULT_SCHEMA = {
   type: 'object',
-  properties: {
-    status: { type: 'string' }, // cache-hit | regenerated | failed
-    contract: { type: 'object' }, // parsed contract.json: { $meta, vocabulary, schema }
-  },
+  properties: { status: { type: 'string' }, contract: { type: 'object' } },
   required: ['status'],
 }
-
-// Last-resort consumer-side guard (pure, value-agnostic): accept the generated
-// schema only if it keeps the structure the control flow depends on. Generic
-// contract integrity (hash, vocabulary, JSON-Schema shape) is validated by
-// ensure-contract.mjs — the canonical validator; the sandbox cannot import it,
-// so this is a deliberately minimal duplicate covering only THIS consumer's needs.
+// Last-resort consumer-side guard (pure, value-agnostic): accept the generated schema only if it
+// keeps the structure the control flow depends on. Generic contract integrity is validated by
+// ensure-contract.mjs — the canonical validator; the sandbox cannot import it.
 function usableSchema(contract) {
   try {
     const s = contract?.schema
@@ -1149,125 +1239,82 @@ function usableSchema(contract) {
     return null
   }
 }
+// ── Dispatch accounting ───────────────────────────────────────────────────────
+// Every agent call is recorded with its label, role, model/effort, wall time and whether it was a
+// retry or a redirect. Token counters are NOT exposed to a workflow script by the harness, so they
+// are reported as 'unknown' — never as zero.
+const METRICS = { dispatches: [], retries: 0, redirects: 0, startedAt: Date.now() }
+async function dispatch(prompt, opts, { retry = false } = {}) {
+  const t0 = Date.now()
+  const result = await agent(prompt, opts)
+  METRICS.dispatches.push({ label: opts.label, agentType: opts.agentType, phase: opts.phase, model: opts.model ?? 'frontmatter', effort: opts.effort, ms: Date.now() - t0, retry, usable: result !== null && result !== undefined })
+  if (retry) METRICS.retries++
+  return result
+}
+// A dead step (null, or a shape the stage cannot use) is retried ONCE with the same prompt: every
+// stage is re-entrant by construction (it resolves the durable state first), so the retry RESUMES.
+// A typed answer — a refusal, a redirect, a rejection — is never retried.
+async function agentRetry(prompt, opts, isUsable = r => !!r) {
+  const first = await dispatch(prompt, opts)
+  if (isUsable(first)) return first
+  log(`${opts.label}: step returned nothing usable (agent died or returned an invalid shape) — retrying once`)
+  return dispatch(prompt, { ...opts, label: `${opts.label} retry` }, { retry: true })
+}
 
 async function ensureContract(spec) {
-  const res = await agent(
+  const res = await dispatch(
     `Invoke **${SK.contractPhase}** with $name=${spec.name} $template=${spec.template} $contract=${spec.contract} $skeleton=${JSON.stringify(spec.skeleton)} $mirrors=${JSON.stringify(spec.mirrors)} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly and return exactly the structured result it defines.`,
     { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
-  return {
-    name: spec.name,
-    status: schema ? (res?.status ?? 'regenerated') : 'fallback-loose',
-    contract: schema ? res.contract : null,
-    schema: schema ?? spec.skeleton,
-  }
+  return { name: spec.name, status: schema ? (res?.status ?? 'regenerated') : 'fallback-loose', contract: schema ? res.contract : null, schema: schema ?? spec.skeleton }
 }
-
 // Contracts are ensured up-front (skipped for an empty batch — nothing to drive).
 const contracts = STORIES.length ? await parallel(CONTRACT_SPECS.map((s) => () => ensureContract(s))) : []
 const crContract = contracts.find((c) => c.name === 'code-review')
-// Schema the reviewer returns: template-derived when the contract is usable,
-// the loose skeleton otherwise. Control flow stays value-agnostic either way.
 const REVIEW_SCHEMA_BASE = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
-// The template's finding vocabulary, shared by the review, preflight and RED-verifier schemas so
-// no inner verifier can invent a second severity vocabulary.
 const REVIEW_FINDING_SCHEMA = REVIEW_SCHEMA_BASE.properties.findings
-// Template contracts own human verdict/finding vocabulary. The orchestration-only
-// baseline is layered on top so a template refresh cannot accidentally remove it.
-const REVIEW_SCHEMA = {
+// The final verifier's return: the template's verdict/finding vocabulary, the orchestration
+// evidence (reviewedHead, custody, readiness, publication) and the finding orchestration fields.
+const VERIFY_SCHEMA = {
   ...REVIEW_SCHEMA_BASE,
   properties: {
     ...REVIEW_SCHEMA_BASE.properties,
+    status: { type: 'string', enum: ['reviewed', REDIRECT_STATUS] },
     reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
     humanDecisionKind: { type: 'string', enum: ['history-rewrite'] },
-    findings: REVIEW_FINDING_SCHEMA,
+    findings: {
+      ...REVIEW_FINDING_SCHEMA,
+      items: { ...REVIEW_FINDING_SCHEMA.items, properties: { ...(REVIEW_FINDING_SCHEMA.items?.properties ?? {}), ...FINDING_ORCHESTRATION } },
+    },
+    custody: { type: 'object', properties: { verified: { type: 'boolean' }, contractBreach: { type: 'boolean' }, breaches: { type: 'array', items: { type: 'object' } } }, required: ['verified', 'contractBreach'] },
+    readiness: { type: 'object', properties: { ready: { type: 'boolean' }, remoteHead: { type: 'string' } }, required: ['ready'] },
+    published: { type: 'object', properties: { firstReview: { type: 'boolean' }, synthesis: { type: 'boolean' }, flush: { type: 'boolean' } } },
+    tier: { type: 'string' },
+    passes: { type: 'array', items: { type: 'string' } },
+    partial: { type: 'boolean' },
+    reviewer: { type: 'integer' },
+    next: NEXT_SCHEMA,
   },
-  required: [...new Set([...(REVIEW_SCHEMA_BASE.required ?? []), 'verdict', 'reviewedHead'])],
+  required: [...new Set([...(REVIEW_SCHEMA_BASE.required ?? []), 'status', 'verdict', 'reviewedHead', 'findings', 'custody', 'readiness'])],
 }
-// The preflight does not make a PR verdict or publish a review. Its return is intentionally
-// smaller than REVIEW_SCHEMA, but reuses the template-derived finding shape so a verifier
-// cannot invent a second severity vocabulary for an inner fix.
-const PREFLIGHT_SCHEMA = {
-  type: 'object',
-  properties: {
-    verified: { type: 'boolean' },
-    // A broken RED chain is not ordinary fix work: no agent that can change source may
-    // repair the evidence that disqualifies it.
-    contractBreach: { type: 'boolean' },
-    reviewedHead: { type: 'string', pattern: '^[0-9a-f]{40}$' },
-    findings: REVIEW_FINDING_SCHEMA,
-  },
-  required: ['verified', 'reviewedHead', 'findings'],
-}
-// A RED contract is usable for sealing only when the skill said `red` (not `stale`, not
-// `split-required`) and persisted the file the sealer will read.
-// The persisted contract lives in the MAIN checkout's run directory while the sealer runs inside
-// the story worktree, so the path the author returns is ABSOLUTE by design; a repository-relative
-// one is accepted too (it is resolved against the main checkout). Canary run 3 on #482: three of
-// four groups had their first `red` rejected here for being absolute, and the relative retry then
-// did not resolve from the worktree — the seal failed once for exactly that reason.
-const isContractPath = p =>
-  typeof p === 'string' &&
-  !p.includes('..') &&
-  !/[\s`$;|&<>]/.test(p) &&
-  (isRelPath(p) || (p.startsWith('/') && /\/\.pair\/working\/runs\//.test(p)))
-const hasRedContractReady = r => hasRedTestEvidence(r) && (r.status === undefined || r.status === 'red') && (r.contractPath === undefined || isContractPath(r.contractPath))
-// A typed refusal (`stale`, `split-required`) is the skill's ANSWER, not a dead agent: it is never
-// retried with the identical prompt (the canary on #321 spent a second opus author on the same
-// `split-required`), and the engine routes it by status.
-const RED_REFUSALS = new Set(['stale', 'split-required'])
-const isRedRefusal = r => !!r && RED_REFUSALS.has(r.status)
-const isRedAnswer = r => hasRedContractReady(r) || isRedRefusal(r)
-const isPlanAnswer = count => plan => hasPlanEvidence(count)(plan) || plan?.status === 'stale'
-// This verifier runs while RED is still unsealed and test-only. It must independently prove
-// the test contract covers the stated behavior before an implementation agent can see it.
-const RED_CONTRACT_VERIFIER_SCHEMA = {
-  type: 'object',
-  properties: {
-    verified: { type: 'boolean' },
-    findings: REVIEW_FINDING_SCHEMA,
-  },
-  required: ['verified', 'findings'],
-}
-const hasRedContractVerification = r =>
-  !!r &&
-  typeof r.verified === 'boolean' &&
-  Array.isArray(r.findings)
-// Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,
-// required contract keys (ensure-contract.mjs's validateContract rejects any
-// contract missing either) — so whenever a contract IS present, both are
-// guaranteed populated and the schema (enum-locked from these same keys) and
-// the prompt text can never diverge. The hardcoded arrays below are the
-// single fallback, used ONLY in the true fallback-loose case (no usable
-// contract at all, `crContract?.contract` is null) — never a second,
-// independently-drifting vocabulary source.
+const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
+const hasReviewEvidence = r => hasVerdict(r) && SHA40.test(String(r.reviewedHead ?? '')) && Array.isArray(r.findings) && !!r.custody && typeof r.custody.contractBreach === 'boolean' && !!r.readiness && typeof r.readiness.ready === 'boolean'
+
+// Reviewer prompt vocabulary — from the contract when present, pair's own only as the fallback.
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
 const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
 const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
-
-// The severity scale is resolved from the SAME array `SEVERITIES` above threads into the
-// reviewer prompt, so what the engine ranks and what the reviewer answers can never be two
-// different vocabularies — and its RANKING comes from the contract's explicit `severityRanks`
-// ordinals, never from that array's order. It can only be known after the contract is ensured,
-// which is why the floor is validated HERE rather than at arg-parse time: the cost is that a
-// bad floor throws one contract dispatch late, still before any card is driven.
+// The severity scale is resolved from the SAME array `SEVERITIES` threads into the verifier
+// prompt; its RANKING comes from the contract's explicit `severityRanks`, never array order.
 const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract?.contract?.severityRanks)
-// Said out loud even when no floor is configured: the contract is hash-cached, so an
-// unranked one stays unranked until the template changes, and the next caller who does pass
-// a floor gets a hard stop. Better the operator sees it on the run that generated it.
 if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
-// The floor DEFAULTS to `Minor`, so Major and Minor block and drive fix rounds while everything
-// below them is carried to the merge gate. Questions are, by the review template's own
-// definition, questions FOR THE HUMAN; putting them in the fix set contradicts what they are
-// and makes convergence a moving target. An explicit `severityFloor` still wins, including a
-// lower one that restores the old block-everything behaviour. The default is applied SOFTLY,
-// unlike a caller-passed floor: a template whose vocabulary does not declare `Minor`, or whose
-// contract carries no ranking, falls back to no floor rather than throwing. A default must
-// never break a run that never asked for it; a floor the CALLER spelled wrong still throws,
-// because that is a configuration error they made.
+// The floor DEFAULTS to `Minor`: Major and Minor block and drive fix rounds, Questions are carried
+// to the merge gate. An explicit `severityFloor` wins. The default is applied SOFTLY (a vocabulary
+// without `Minor`, or an unranked contract, falls back to no floor); a caller-spelled floor that
+// cannot be applied throws.
 const DEFAULT_SEVERITY_FLOOR = 'Minor'
 function defaultFloor() {
   if (!SEVERITY_SCALE.ranks) return null
@@ -1276,407 +1323,237 @@ function defaultFloor() {
   return { name: DEFAULT_SEVERITY_FLOOR, rank: SEVERITY_SCALE.ranks[key] }
 }
 const SEVERITY_FLOOR = String(PARSED.severityFloor ?? '').trim() ? parseFloor(PARSED.severityFloor) : defaultFloor()
+// The ranks handed to the verifier so its script can compute `blocking` under the SAME policy this
+// file re-checks — one policy, two readers, and a disagreement fails closed.
+const RANKS_ARG = SEVERITY_SCALE.ranks ? JSON.stringify(Object.fromEntries(SEVERITY_SCALE.names.map(n => [n, SEVERITY_SCALE.ranks[normSeverity(n)]]))) : '{}'
 
 // ── Isolation convention ───────────────────────────────────────────────────
-// The AUTHORING chain (implement -> PR -> fix) runs inside a dedicated, PERSISTENT
-// per-story git worktree OUTSIDE the repo, so the main working tree is never
-// touched and parallel stories never collide. The worktree persists across the
-// whole chain (implement/PR/fix share it) so the untracked checkpoint under
-// .pair/working/ survives context resets. The reviewer stays read-only (gh-based,
-// no branch switch) so it needs no worktree. Worktrees are cleaned up after merge.
-// `story.base` (optional, default `origin/main`) is the branch this story STACKS on.
-// It exists to dissolve a purely TEXTUAL mutex — two stories editing different lines
-// of the same file (`ci.yml`, root `package.json` scripts, a shared SKILL.md). Branching
-// the second story off the FIRST story's branch instead of main means the conflict is
-// resolved once, at authoring time, instead of becoming a merge conflict the human hits
-// at the gate. It does NOT let the two run concurrently: a stacked story must start from
-// a COMPLETE base, so the base story has to be PR-ready first. What it buys is that the
-// base does not have to be MERGED — the whole stack is merged in order, in one human
-// gate, instead of one gate per link in the chain.
-// Use it only for textual mutexes on small, low-risk bases: if review forces a change in
-// the base, every stacked child rebases.
-// The base a story branches off: its own `base` when it is STACKED, else the configured
-// default. One helper, because three prompts ask the question and a diff computed against
-// a different base than the branch was cut from silently reviews the wrong range.
+// The AUTHORING chain (prepare -> validate -> implement/green) runs inside a dedicated, PERSISTENT
+// per-story git worktree OUTSIDE the repo, so the main working tree is never touched and parallel
+// stories never collide. The final verifier inspects from a DETACHED throwaway worktree. Handoffs
+// and the cycle log live in the MAIN checkout (`.pair/working/runs/<runId>/<story>/`,
+// `<auditLogDir>/<story>.md`), never in a worktree that may be pruned.
+// `story.base` (optional, default `origin/main`) is the branch this story STACKS on: a stacked
+// story must start from a COMPLETE base (PR-ready), and the whole stack merges in order.
 function baseOf(story) {
   return String(story.base ?? '').trim() || PIPELINE.baseBranch
 }
+// A deterministic digest of the effective inputs the coordinator knows: the cycle state compares
+// it with the one persisted in the last handoff, and a change re-validates the review evidence
+// (findings + delta) instead of trusting it. No crypto in this sandbox — FNV-1a over the canonical
+// string is an identity for CHANGE DETECTION, not a security primitive.
+function fnv1a(str) {
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0
+    h2 = Math.imul(h2 ^ c, 0x811c9dc5) >>> 0
+  }
+  return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')
+}
+const canonical = v => (Array.isArray(v) ? `[${v.map(canonical).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}` : JSON.stringify(v))
+const effectiveInputs = story =>
+  fnv1a(canonical({ workflowVersion: WORKFLOW_VERSION, story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, maxFixRounds: MAX_FIX_ROUNDS, reviewers: PIPELINE.reviewers }))
+// The compact finding a stage receives: identity, severity, location, the failure case and the
+// recommendation — never raw logs, never the whole review history (the run directory holds it).
+const compactFinding = f => ({ id: f.id, severity: f.severity, location: f.location, description: f.description, recommendation: f.recommendation, ...(f.kind ? { kind: f.kind } : {}), ...(f.groupId ? { groupId: f.groupId } : {}), ...(f.rowId ? { rowId: f.rowId } : {}), ...(f.external ? { external: true } : {}), ...(f.missedUpstream ? { missedUpstream: true } : {}) })
 
 // ── Per-story lifecycle ──────────────────────────────────────────────────
 async function driveStory(story) {
   const tag = `#${story.id}`
-  // ── Every phase is a SKILL invoked by name with typed arguments. ─────────────────────────
-  // The workflow names the skill, passes the run's values and validates the typed result; the
-  // method, the rules and every shell command live in the skill.
   const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
   const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
   const storyBase = baseOf(story)
   const stacked = storyBase !== PIPELINE.baseBranch
-  // One run directory per story for every phase: `args.runId` when the caller names the run,
-  // else `story-<id>` — the same value before and after the PR exists.
-  const runId = RUN_ID ?? `story-${story.id}`
-  const storyArgs = () =>
-    `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}`
-  const notesArg = () => (story.notes ? ` $notes=${JSON.stringify(story.notes)}` : '')
-  const invoke = (skill, args) =>
-    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.`
+  // One run directory per story for every phase: `args.runId` when the caller names the run, else
+  // `story-<id>`. When the directory is empty but the PR already has a cycle under another run id,
+  // the cycle state names it (`other-run`) and the story continues THERE — a new invocation id never
+  // opens a second cycle for one PR.
+  let runId = RUN_ID ?? `story-${story.id}`
+  const runDir = () => `.pair/working/runs/${runId}/${story.id}`
   const resuming = Number.isInteger(story.prNumber)
-  let pr = resuming ? { prNumber: story.prNumber } : null
-
-  if (!resuming) {
-    // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
-    const impl = await agentRetry(
-      invoke(
-        SK.implementPhase,
-        `${storyArgs()} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint}${notesArg()}`,
-      ),
-      withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
-    )
-    if (!impl) return { story, status: 'failed-implement' }
-
-    // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
-    pr = await agentRetry(
-      invoke(SK.prPhase, `${storyArgs()} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
-      withModel('pr', { agentType: 'pair-implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA }),
-    )
-    if (!pr?.prNumber) return { story, status: 'failed-pr' }
-  }
-
-  // 3. REVIEW <-> FIX loop — the reviewer is independent and BLIND to the author's handoff.
-  //    Converges when every ACTIONABLE finding is resolved; findings the reviewer marks
-  //    nonActionable (by-design, justified) or below the severity floor do not block and are
-  //    carried to the merge gate as `acceptedFindings`, accumulated over every round.
-  //    PR-COMMENT POLICY (owned by the cycle-comments skill): the whole cycle of a PR — every
-  //    run, escalation and manual round it takes to converge — shows AT MOST one first-review
-  //    comment and one final remediation. Fix rounds are appended to the working log
-  //    `<auditLogDir>/<id>.md` — in the MAIN checkout, like the run handoffs — whose existence
-  //    marks an in-flight cycle to CONTINUE across runs (resume with the same `runId` so the
-  //    run directory's prior review and verifier handoffs are visible to the next attempt);
-  //    a first review is detected on the PR by an exact marker match, never by judgment. On
-  //    escalation the log is kept and flushed to the PR as the continuation anchor; at
-  //    convergence ONE synthesis is posted, intermediates are minimized and the log is deleted.
-  //    The probe runs at sonnet/low: a mis-report fails OPEN toward a visible duplicate first
-  //    review, never toward suppressing one.
+  let pr = resuming ? story.prNumber : null
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
-  // The continuation probe detects a prior first review by an EXACT substring match on this
-  // marker, NOT by a semantic reading of the comment's structure — so the cheap sonnet/low
-  // probe makes no classification judgment and can't false-positive a non-review comment into
-  // silencing a real first review (the story's High-impact over-silencing risk).
-  // Minimized/outdated comments still match: gh returns their raw body, which still contains
-  // the marker.
-  const firstReviewMarker = `<!-- pair:first-review #${story.id} PR#${pr.prNumber} -->`
-  // ── Phases C + D: the review ↔ fix loop dispatches SKILLS, not prompts. ──────────────────
-  // Each phase skill owns its method, its mutation boundary and its handoff JSON under
-  // `.pair/working/runs/<run>/<story>/`; this file names the skill, passes typed arguments and
-  // validates the typed result. Nothing below tells an agent HOW to write a test, seal a
-  // snapshot or verify a delta — a change to that behaviour is a skill version, never a patch
-  // to a running workflow.
-  const phaseArgs = (phase, baseHead) =>
-    `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $phase=${phase} $base=${baseHead} $branch=${story.branch}`
-  const cycleArgs = () =>
-    `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $worktree=${worktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)}`
-  const planRemediation = (findings, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.remediationPlan, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(findings)}`),
-      withModel('planner', { agentType: 'pair-remediation-planner', phase: 'Review', label: `plan:${tag} ${phase}`, effort: 'medium', schema: PLAN_SCHEMA }),
-      isPlanAnswer(findings.length),
-    )
-  const redSpec = (targets, scope, phase, baseHead, repairFindings = []) =>
-    agentRetry(
-      invoke(SK.redSpec, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $scope=${JSON.stringify(scope)}${repairFindings.length ? ` $repair=${JSON.stringify(repairFindings)}` : ''}`),
-      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Review', label: `red-spec:${tag} ${phase}${repairFindings.length ? ' repair' : ''}`, effort: 'high', schema: RED_TEST_SCHEMA }),
-      isRedAnswer,
-    )
-  // Concatenated, not a template literal in backticks: the shipped-artifact guard reads a
-  // backticked `.pair/…json` as a dataset document that must exist; this is a runtime path.
-  const contractPathOf = (redContract, phase) => redContract.contractPath ?? '.pair/working/runs/' + runId + '/' + story.id + '/' + phase + '-red-contract.json'
-  const redVerify = (redContract, targets, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.redVerify, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)} $findings=${JSON.stringify(targets)}`),
-      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Review', label: `red-verify:${tag} ${phase}`, effort: 'high', schema: RED_CONTRACT_VERIFIER_SCHEMA }),
-      hasRedContractVerification,
-    )
-  const redSeal = (redContract, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.redSeal, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $contract=${contractPathOf(redContract, phase)}`),
-      withModel('seal', { agentType: 'pair-red-sealer', phase: 'Review', label: `red-seal:${tag} ${phase}`, effort: 'low', schema: RED_SNAPSHOT_SCHEMA }),
-      hasSealedRedSnapshot,
-    )
-  const greenFix = (targets, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.greenFix, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(targets)} $reviewLog=${reviewLog} $writeIssue=${SK.writeIssue}${story.notes ? ` $notes=${JSON.stringify(story.notes)}` : ''}`),
-      withModel('green', { agentType: 'pair-implementer', phase: 'Review', label: `fix:${tag} ${phase}`, effort: 'high', schema: FIX_SCHEMA }),
-    )
-  const p3Verify = (targets, ledger, phase, baseHead) =>
-    agentRetry(
-      invoke(SK.p3Verify, `${phaseArgs(phase, baseHead)} $worktree=${reviewWorktreePath} $findings=${JSON.stringify(targets)} $ledger=${JSON.stringify(ledger)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''}`),
-      withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} ${phase}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
-      hasPreflightEvidence,
-    )
-  let isContinuation = false
-  let firstReviewPosted = false
-  // The gate is now the PR's existence — a fact the script knows — instead of an argument the
-  // caller must remember.
-  if (pr?.prNumber) {
-    const probe = await agent(
-      invoke(SK.cycleComments, `${cycleArgs()} $mode=probe`),
-      { agentType: 'pair-implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
-    )
-    // This fail-open direction is deliberate: degrade toward VISIBILITY (post a review a human
-    // can see) rather than fail-silent (suppress it). The dangerous case — a genuine
-    // continuation where a total probe failure re-posts a first review — is low-probability
-    // (requires an agent/schema failure on a resume of an in-flight cycle) and self-announcing
-    // (a visible duplicate is noticed and pruned), whereas silent over-suppression of a real
-    // review is not. The deterministic marker above removes the misclassification failure mode;
-    // only a hard probe failure reaches this fallback.
-    isContinuation = probe?.logExists === true
-    firstReviewPosted = probe?.firstReviewPosted === true
-  }
-  let round = 0
-  // Remembers a reviewer's human-decision request across the one fix round we now spend
-  // before honouring it, so the escalation is deferred by a round rather than dropped.
-  let humanDecisionPending = false
-  let prevFindings = []
-  let prevReviewedHead = null
-  // A P3 result is evidence, not reviewer context. It is injected exactly once, after the
-  // fresh reviewer has remained blind, and then survives as an ordinary prior finding for the
-  // re-review. Re-injecting it after GREEN would force a second fix even when its RED test
-  // proved the defect closed.
-  let pendingRequiredFindings = [...(story.requiredFindings ?? [])]
-  // ACCUMULATES across rounds — never reassigned. So a per-round reassignment loses it: the
-  // card converges `ready-for-merge` with an EMPTY accepted table, the convergence prompt
-  // renders that empty table, and the merge gate is told nothing was carried. Sub-floor
-  // findings are not recoverable elsewhere either — `prevFindings = actionable` excludes them,
-  // so they never reach the fixer's working log.
+  const firstReviewMarker = () => `<!-- pair:first-review #${story.id} PR#${pr} -->`
+  const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} -->`
+  const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers }
+  const inputs = effectiveInputs(story)
+  const storyMetrics = { dispatches: 0, retries: 0, redirects: 0, startedAt: Date.now() }
+  const common = () =>
+    `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
+  const invoke = (skill, args) =>
+    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines — its Step 0 resolves the durable cycle state and returns \`{ status: "redirect", next }\` when another step is due, spending no judgment. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`${runDir()}/\` the skill names; that directory lives in the MAIN checkout — the working directory you were started in, before any cd — never inside a story or review worktree. Do NOT merge.`
+  const notesArg = () => (story.notes ? ` $notes=${JSON.stringify(story.notes)}` : '')
+  const findingsArg = list => (list && list.length ? ` $findings=${JSON.stringify(list.map(compactFinding))}` : '')
+
+  // Findings carried to the merge gate unfixed — by-design, human-dispositioned or below the floor —
+  // accumulate across rounds and runs; never reassigned.
   const accepted = []
   const acceptedKeys = new Set()
-  const accept = (findings) => {
+  const accept = findings => {
     for (const f of findings) {
-      // Keep a collision-free delimiter without embedding an invisible raw NUL in the shipped
-      // JavaScript source. A readable space collapses `(location, description)` pairs such as
-      // (`"a b"`, `"c"`) and (`"a"`, `"b c"`), silently dropping one accepted finding.
-      const key = `${f.location ?? ''}\u0000${f.description ?? ''}`
+      const key = `${f.id ?? ''} ${f.location ?? ''} ${f.description ?? ''}`
       if (acceptedKeys.has(key)) continue
       acceptedKeys.add(key)
       accepted.push(f)
     }
   }
-  // Keep the outer review and the inner preflight on the SAME severity policy. An explicit
-  // floor is a human-selected merge rule, not something a preflight may silently override;
-  // conversely an unknown severity remains blocking in both paths (rank = Infinity).
-  const partitionFindings = (findings) => {
-    const allActionable = findings.filter((f) => !f.nonActionable)
-    const belowFloor = []
-    const actionable = []
-    for (const f of allActionable)
-      (SEVERITY_FLOOR && rankOf(f.severity) < SEVERITY_FLOOR.rank ? belowFloor : actionable).push(f)
-    return {
-      belowFloor,
-      actionable,
-      carried: [
-        ...findings.filter((f) => f.nonActionable),
-        ...belowFloor.map((f) => ({ ...f, disposition: f.disposition || `Below severity floor (${SEVERITY_FLOOR.name}) — carried to the merge gate unfixed` })),
-      ],
-    }
+  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: Date.now() - storyMetrics.startedAt, tokens: 'unknown' }, ...extra })
+  const blockedResult = n => {
+    const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', escalate: 'escalate', 'failed-resume': 'failed-resume' }
+    return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
   }
-  // On a continuation (log present) it is seeded true so an immediate round-0 convergence still
-  // posts the ONE final synthesis + deletes the log (never leaves an escalate-flush as the last
-  // word). A converged-but-unmerged re-run has NO log (firstReviewPosted true, isContinuation
-  // false) → stays false, so a clean round-0 adds nothing and never tries to synth a deleted
-  // log.
-  let cycleHasRemediation = isContinuation
-  while (true) {
-    // Either signal makes round-0 a SILENT re-review, so a PR never accrues a second
-    // first-review.
-    const first = round === 0 && !isContinuation && !firstReviewPosted
-    // An initial/resumed-without-history review establishes the whole-PR baseline.
-    // Once a fix is in flight, even the file inventory must start at that baseline;
-    // otherwise the pacing loop invites a second full audit before its delta rule.
-    const reviewBase = prevFindings.length ? prevReviewedHead : baseOf(story)
-    const mode = first ? 'first' : prevFindings.length ? 're-review' : 'fresh'
-    const review = await agentRetry(
+
+  // ── The four stages, each a SKILL invoked by name with typed arguments ─────────────────────
+  const prepare = n =>
+    agentRetry(
+      invoke(SK.redSpec, `${common()} $mode=${n.mode} $phase=${n.phase}${n.base ? ` $head=${n.base}` : ''}${n.mode === 'initial' ? ` $title=${JSON.stringify(story.title)}` : ''}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths, oracle: n.group.oracle })}` : ''}${n.rejection?.length ? ` $rejection=${JSON.stringify(n.rejection)}` : ''}${n.contract ? ` $contract=${n.contract.path} $contractHash=${n.contract.hash}` : ''}${n.revision ? ` $revision=${n.revision}` : ''}${notesArg()}`),
+      withModel('red', { agentType: 'pair-fix-test-author', phase: 'Prepare', label: `prepare:${tag} ${n.phase}${n.mode === 'repair' ? ' repair' : n.mode === 'revision' ? ' revision' : ''}`, effort: 'high', schema: PREPARE_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || isPrepareRefusal(r) || hasPreparedContract(r, { needPlan: n.mode === 'remediation' && /-g1$/.test(n.phase), ids: (n.findings ?? []).map(f => f.id) }),
+    )
+  const validate = n =>
+    agentRetry(
+      invoke(SK.redVerify, `${common()} $phase=${n.phase} $head=${n.base} $contract=${n.contract.path} $contractHash=${n.contract.hash}${findingsArg(n.findings)}${n.group ? ` $scope=${JSON.stringify({ groupId: n.group.groupId, owner: n.group.owner, mode: n.group.mode, allowedPaths: n.group.allowedPaths })}` : ''}`),
+      withModel('redVerifier', { agentType: 'pair-red-contract-verifier', phase: 'Validate', label: `validate:${tag} ${n.phase}`, effort: 'high', schema: VALIDATE_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || hasValidation(r),
+    )
+  const implement = n =>
+    agentRetry(
+      invoke(SK.implementPhase, `${common()} $phase=${n.phase} $head=${n.base} $snapshot=${n.contract.snapshot} $contract=${n.contract.path} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
+      withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean'),
+    )
+  const green = n =>
+    agentRetry(
+      invoke(SK.greenFix, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt} $snapshot=${n.contract.snapshot} $contract=${n.contract.path}${findingsArg(n.findings)} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $writeIssue=${SK.writeIssue}${notesArg()}`),
+      withModel('green', { agentType: 'pair-implementer', phase: 'Implement', label: `green:${tag} ${n.phase}${n.attempt > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: GREEN_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || hasGreen(r),
+    )
+  const verify = (n, required) =>
+    agentRetry(
       invoke(
         SK.reviewPhase,
-        `${phaseArgs(`r${round}`, reviewBase)} $worktree=${reviewWorktreePath} $mode=${mode} $marker=${JSON.stringify(firstReviewMarker)} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${mode === 're-review' ? ` $priorFindings=${JSON.stringify(prevFindings)} $priorHead=${prevReviewedHead}` : ''}`,
+        `${common()} $phase=${n.phase} $mode=${n.mode} $head=${n.base ?? ''} $worktree=${reviewWorktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker())} $synthesisMarker=${JSON.stringify(synthesisMarker())} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''} $ranks=${RANKS_ARG} $reviewer=${n.reviewer ?? 1} $reviewers=${PIPELINE.reviewers} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${n.prior ? ` $prior=${n.prior}` : ''}${n.openIds?.length ? ` $openIds=${JSON.stringify(n.openIds)}` : ''}${n.headMoved ? ' $headMoved=true' : ''}${n.inputsChanged ? ' $inputsChanged=true' : ''}${required.length ? ` $required=${JSON.stringify(required)}` : ''}`,
       ),
-      // Restoring 'xhigh' is legitimate once narration is reliable — it buys review depth,
-      // which is the point of this gate.
-      withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
-      hasReviewEvidence,
+      withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Verify', label: `verify:${tag} ${n.phase}${n.reviewer > 1 ? ` reviewer ${n.reviewer}` : ''}`, effort: 'high', schema: VERIFY_SCHEMA }),
+      r => isRedirect(r) || isOtherRun(r) || hasReviewEvidence(r),
     )
-    // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent dies, and
-    // `review?.findings ?? []` then yields zero findings — which the convergence test below
-    // reads as "nothing actionable remains" and returns `ready-for-merge`. That is the worst
-    // possible failure direction: a PR that was never actually reviewed is handed to the human
-    // labelled as review-approved, and on a FIRST round it is also missing the first-review
-    // comment that would make the absence visible. Distinguish "reviewed, found nothing" from
-    // "did not review": only the former may converge. A truthy-but-contentless return (`{}`, a truncated structured
-    // output) yields `findings ?? []` = no findings, which reads as "nothing actionable
-    // remains". So the test is inverted: a VERDICT must be present. Absence of findings is not
-    // evidence that a review happened; presence of a verdict is. `hasReviewEvidence` is the
-    // SAME function `agentRetry` was given above: a contentless or unanchored return is retried
-    // once like any other dead step, then lands here.
-    if (!hasReviewEvidence(review))
-      // `acceptedFindings` travels on EVERY terminal arm, this one included.
-      return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
-    const reviewedHead = String(review.reviewedHead).toLowerCase()
-    const staleRequired = pendingRequiredFindings.filter((finding) => finding.observedHead !== reviewedHead)
-    if (staleRequired.length)
-      return {
-        story,
-        prNumber: pr.prNumber,
-        status: 'failed-required-findings',
-        findings: staleRequired,
-        acceptedFindings: accepted,
-        reviewLog: cycleHasRemediation ? reviewLog : undefined,
-      }
-    const findings = [...(review.findings ?? []), ...pendingRequiredFindings]
-    pendingRequiredFindings = []
-    // Below the floor: still reported, still shown to the human, just not blocking. One
-    // partition predicate makes the complement total: an unknown/non-numeric rank blocks
-    // rather than disappearing from both the fix set and the merge-gate record.
-    const { belowFloor, actionable, carried } = partitionFindings(findings)
-    accept(carried)
-    if (belowFloor.length)
-      log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
-    // Converge once nothing actionable remains (by-design findings don't block).
-    if (actionable.length === 0) break
-    // The orchestrator was writing detailed fix instructions for an agent that was never
-    // invoked. A reviewer raising it is saying "one of these needs a human", not "none of these
-    // can be fixed". So spend ONE fix round on the findings first, then escalate if the
-    // reviewer still says so. On the second occurrence we stop: a flag raised again after a fix
-    // round is a genuine disagreement.
-    const wantsHuman = review?.needsHumanDecision === true
-    // A sealed snapshot deliberately freezes its base. If the reviewer identifies a finding
-    // whose ONLY remediation is rewriting that base's history, spending the normal one fix
-    // round first makes the human's legitimate options narrower.
-    const historyRewriteDecision = wantsHuman && review?.humanDecisionKind === 'history-rewrite'
-    let mustEscalate = false
-    if (historyRewriteDecision) {
-      mustEscalate = true
-      log(`${tag} r${round}: reviewer identified a history-rewrite decision — escalating before RED sealing or GREEN`)
-    } else if (wantsHuman && !humanDecisionPending && round < MAX_FIX_ROUNDS) {
-      humanDecisionPending = true
-      log(`${tag} r${round}: reviewer asked for a human decision — spending one fix round on the ${actionable.length} finding(s) first, then escalating if it still stands`)
-    } else if (round >= MAX_FIX_ROUNDS || wantsHuman) {
-      mustEscalate = true
-    }
-    if (mustEscalate) {
-      // The gap this closes: a SILENT re-review that escalates with no log — a resumed PR whose
-      // prior first review exists but whose untracked working log was never written / was
-      // pruned (firstReviewPosted true, isContinuation false → cycleHasRemediation false, first
-      // false). Without the `!first` arm the new blocking concern surfaced ONLY in the batch
-      // return value and a later resume repeated the silent escalation. The log read is
-      // BEST-EFFORT: only a continuing cycle (cycleHasRemediation) has a log to anchor to; the
-      // no-log arm escalates from inline findings.
-      if (cycleHasRemediation || !first) {
-        await agent(
-          invoke(SK.cycleComments, `${cycleArgs()} $mode=flush $hasLog=${cycleHasRemediation} $findings=${JSON.stringify(actionable)}`),
-          { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
-        )
-      }
-      return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
-    }
 
-    round++
-    prevFindings = actionable
-    prevReviewedHead = reviewedHead
-    cycleHasRemediation = true
-    // D0 — one frozen plan per round. Every actionable finding lands in exactly one group.
-    const plan = await planRemediation(prevFindings, `r${round}`, reviewedHead)
-    if (!hasPlanEvidence(prevFindings.length)(plan))
-      return { story, prNumber: pr.prNumber, status: plan?.status === 'stale' ? 'failed-fix' : 'failed-plan', findings: prevFindings, acceptedFindings: accepted, reviewLog }
-    // Out-of-repository findings are accepted with the planner's disposition and shown to the human.
-    const carriedByPlan = (plan.carried ?? []).map(c => ({ ...prevFindings[c.finding], nonActionable: true, disposition: `Outside the repository — ${c.disposition}` }))
-    accept(carriedByPlan)
-    const groups = orderGroups(plan.groups)
-    log(`${tag} r${round}: ${groups.length} remediation group(s) planned for ${prevFindings.length} finding(s)${carriedByPlan.length ? `, ${carriedByPlan.length} carried to the merge gate` : ''}`)
-    // Nothing left to fix in the repository: converge with the carried findings on the record.
-    if (groups.length === 0) break
-    // Each group is one bounded attempt on top of the previous group's GREEN head.
-    let groupBase = reviewedHead
-    for (const [k, group] of groups.entries()) {
-      const phase = `r${round}-g${k + 1}`
-      const targets = group.findings.map(idx => prevFindings[idx])
-      const scope = { owner: group.owner, mode: group.mode, allowedPaths: group.allowedPaths, oracle: group.oracle }
-      // D1 — RED contract, test-only, from an author who is not the fixer.
-      let redTargets = targets
-      let redTest = await redSpec(redTargets, scope, phase, groupBase)
-      if (!hasRedContractReady(redTest))
-        return { story, prNumber: pr.prNumber, status: redTest?.status === 'split-required' ? 'failed-red-contract' : 'failed-fix', findings: targets, acceptedFindings: accepted, reviewLog, redRefusal: redTest?.status, splitReason: redTest?.splitReason }
-      // D2 — independent reproduction; ONE bounded repair, then terminal.
-      let redVerification = await redVerify(redTest, redTargets, phase, groupBase)
-      for (let repair = 0; repair < MAX_RED_CONTRACT_REPAIRS && (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0); repair++) {
-        const repairFindings = redVerification?.findings?.length ? redVerification.findings : []
-        if (!repairFindings.length) break
-        log(`${tag} ${phase}: RED verifier rejected the unsealed contract; one bounded test-only repair`)
-        redTargets = [...redTargets, ...repairFindings]
-        redTest = await redSpec(redTargets, scope, phase, groupBase, repairFindings)
-        if (!hasRedContractReady(redTest))
-          return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: redTargets, acceptedFindings: accepted, reviewLog }
-        redVerification = await redVerify(redTest, redTargets, phase, groupBase)
-      }
-      if (!hasRedContractVerification(redVerification) || redVerification.verified !== true || redVerification.findings.length > 0)
-        return {
-          story,
-          prNumber: pr.prNumber,
-          status: 'failed-red-contract',
-          findings: redVerification?.findings?.length ? redVerification.findings : redTargets,
-          acceptedFindings: accepted,
-          reviewLog,
-        }
-      // D3 — the script seals; the agent only runs it.
-      const redSnapshot = await redSeal(redTest, phase, groupBase)
-      if (!hasSealedRedSnapshot(redSnapshot))
-        return { story, prNumber: pr.prNumber, status: 'failed-fix', findings: targets, acceptedFindings: accepted, reviewLog }
-      log(`${tag} ${phase}: sealed RED snapshot ${redSnapshot.snapshot}`)
-      // D4 — GREEN inside fixScope, above the seal; the round is logged, never commented.
-      // A `test` group has no GREEN: the guard IS the fix, production stays untouched, and P3
-      // proves the sealed blobs are unchanged and the suite is green on the same head.
-      const fix = group.mode === 'test'
-        ? { fixed: true, evidenceLedger: (redTest.matrix ?? []).map(row => ({ claim: row.condition, oracle: row.oracle, probe: row.oracle, observed: row.expected })) }
-        : await greenFix(redTargets, phase, groupBase)
-      if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
-      if (fix.needsHumanDecision) {
-        // The fix round ran and appended to the working log, so the log-backed flush always applies.
-        await agent(
-          invoke(SK.cycleComments, `${cycleArgs()} $mode=flush $hasLog=true $findings=${JSON.stringify(prevFindings)}`),
-          { agentType: 'pair-implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
-        )
-        return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
-      }
-      // D5 — custody (script) then evidence (read-only). Terminal on breach or defect: a P3
-      // finding proves GREEN escaped its contract, and a hidden second GREEN under the same
-      // contract is exactly the fix-on-fix drift this gate exists to stop.
-      const preflight = await p3Verify(redTargets, fix.evidenceLedger ?? [], phase, groupBase)
-      if (!hasPreflightEvidence(preflight))
-        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: targets, acceptedFindings: accepted, reviewLog }
-      if (preflight.contractBreach === true)
-        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
-      const p3 = partitionFindings(preflight.findings)
-      accept(p3.carried)
-      if (preflight.verified !== (p3.actionable.length === 0))
-        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: preflight.findings, acceptedFindings: accepted, reviewLog }
-      if (p3.belowFloor.length)
-        log(`${tag} ${phase} preflight: ${p3.belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${p3.actionable.length} blocking`)
-      if (p3.actionable.length)
-        return { story, prNumber: pr.prNumber, status: 'failed-preflight', findings: p3.actionable, acceptedFindings: accepted, reviewLog }
-      groupBase = String(preflight.reviewedHead).toLowerCase()
+  // Verified P3 evidence a card carries in: the verifier must re-prove it on its exact head and it
+  // stays out of the verifier's independent sample otherwise. Injected once.
+  let pendingRequiredFindings = [...(story.requiredFindings ?? [])]
+  // Prior findings by id, for the identity/severity checks the coordinator makes on a re-review.
+  const known = new Map()
+
+  // The verifier applied the SAME severity policy this file holds: re-derive `blocking` from the
+  // floor and refuse a result that disagrees — a policy applied twice must agree, or fail closed.
+  const expectedBlocking = f => !f.nonActionable && f.transition !== 'resolved' && f.transition !== 'human' && f.kind !== 'question' && (!SEVERITY_FLOOR || rankOf(f.severity) >= SEVERITY_FLOOR.rank)
+  const findingErrors = (review, openIds) => {
+    const errs = []
+    const ids = new Set()
+    for (const f of review.findings) {
+      if (!f || typeof f !== 'object') return ['a finding is not an object']
+      if (!FINDING_ID_RE.test(String(f.id ?? ''))) errs.push(`finding id ${JSON.stringify(f.id)} is not r<round>[-<reviewer>]-<n>`)
+      if (ids.has(f.id)) errs.push(`finding id ${f.id} is duplicated`)
+      ids.add(f.id)
+      if (!TRANSITIONS.has(f.transition)) errs.push(`finding ${f.id}: transition ${JSON.stringify(f.transition)} is not open | resolved | superseded | human`)
+      if (!KINDS.has(f.kind)) errs.push(`finding ${f.id}: kind ${JSON.stringify(f.kind)} is unknown`)
+      if (typeof f.blocking !== 'boolean') errs.push(`finding ${f.id}: blocking is not a boolean`)
+      else if (f.blocking !== expectedBlocking(f)) errs.push(`finding ${f.id}: blocking=${f.blocking} disagrees with the severity policy (floor ${SEVERITY_FLOOR?.name ?? 'none'}, severity ${f.severity}, transition ${f.transition})`)
+      if (f.external === true && f.transition === 'resolved' && !String(f.evidence ?? '').trim()) errs.push(`finding ${f.id}: an external finding is resolved only with read-back evidence`)
+      const prior = known.get(f.id)
+      if (prior && normSeverity(prior.severity) !== normSeverity(f.severity) && !String(f.severityEvidence ?? '').trim()) errs.push(`finding ${f.id}: severity changed ${prior.severity} -> ${f.severity} without severityEvidence`)
+      if (!prior && f.transition !== 'open') errs.push(`finding ${f.id}: a new finding cannot arrive as ${f.transition}`)
     }
+    for (const id of openIds ?? []) if (!ids.has(id)) errs.push(`prior open finding ${id} was dropped — every open finding needs a transition`)
+    return errs
   }
 
-  // Converged. If any remediation happened (this run OR a prior run this cycle continues),
-  // post ONE synthesized remediation comment (contextual to the first review), minimize any
-  // prior intermediate comments, and delete the working log. If the first review was already
-  // clean (fresh cycle, no remediation), the first-review comment stands alone — nothing to do.
-  if (cycleHasRemediation)
-    await agent(
-      invoke(SK.cycleComments, `${cycleArgs()} $mode=synthesize $accepted=${JSON.stringify(accepted)}`),
-      { agentType: 'pair-implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
-    )
-
-  // STOP at the merge boundary — human decides the merge.
-  return { story, prNumber: pr.prNumber, status: 'ready-for-merge', acceptedFindings: accepted }
+  let next = resuming ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1 } : { step: 'prepare', mode: 'initial', phase: 'a0', round: 0, attempt: 1 }
+  const seen = new Set()
+  let redirectsInARow = 0
+  while (true) {
+    if (next.step === 'done') return result('ready-for-merge', { reviewedHead: next.reviewedHead, verdict: next.verdict, round: next.round })
+    if (next.step === 'blocked') return blockedResult(next)
+    if (storyMetrics.dispatches >= MAX_DISPATCHES_PER_STORY) return result('failed-resume', { reason: `the cycle asked for more than ${MAX_DISPATCHES_PER_STORY} dispatches in one run — looping, not converging` })
+    const key = `${next.step}:${next.phase}:${next.mode ?? ''}:${next.attempt ?? 1}:${next.reviewer ?? 1}`
+    if (seen.has(key)) return result('failed-resume', { reason: `the cycle state asked for ${key} twice in one run` })
+    seen.add(key)
+    let res
+    let stage = next.step
+    if (stage === 'prepare') res = await prepare(next)
+    else if (stage === 'validate') res = await validate(next)
+    else if (stage === 'implement') res = await implement(next)
+    else if (stage === 'green') res = await green(next)
+    else {
+      const required = pendingRequiredFindings
+      res = await verify(next, required)
+    }
+    storyMetrics.dispatches = METRICS.dispatches.filter(d => d.label.includes(tag)).length
+    storyMetrics.retries = METRICS.dispatches.filter(d => d.label.includes(tag) && d.retry).length
+    // Twice dead (null, or a shape no stage can use) is the STAGE's failure — never a clean result.
+    if (!res || typeof res !== 'object')
+      return result({ prepare: 'failed-preparation', validate: 'failed-contract', implement: 'failed-implement', green: 'failed-fix', verify: 'failed-verify' }[stage], { reason: `${stage} returned nothing usable twice (agent died or returned an invalid shape)`, phase: next.phase })
+    if (isOtherRun(res)) {
+      // The PR already has a cycle under another run id: continue THERE. Re-dispatch the same step
+      // once with the adopted run id; a second `other-run` is an ambiguity the caller resolves.
+      if (runId === res.runId) return result('failed-resume', { reason: `the cycle state named the current run ${runId} as another run` })
+      log(`${tag}: cycle already lives under run ${res.runId} — continuing there`)
+      runId = res.runId
+      seen.delete(key)
+      continue
+    }
+    if (isRedirect(res)) {
+      storyMetrics.redirects++
+      METRICS.redirects++
+      if (++redirectsInARow > 2) return result('failed-resume', { reason: 'three consecutive redirects — the durable state and the dispatched step disagree' })
+      next = res.next
+      continue
+    }
+    redirectsInARow = 0
+    // ── Stage-specific validation of the typed evidence ─────────────────────────────────────
+    if (stage === 'prepare') {
+      if (isPrepareRefusal(res)) return result('failed-preparation', { reason: res.reason ?? res.splitReason ?? res.status, refusal: res.status, phase: next.phase, findings: next.findings })
+      if (!hasPreparedContract(res, { needPlan: next.mode === 'remediation' && /-g1$/.test(next.phase), ids: (next.findings ?? []).map(f => f.id) })) return result('failed-preparation', { reason: 'the preparation stage returned no usable contract', phase: next.phase })
+      if (next.mode === 'remediation' && res.plan) {
+        const carried = (res.plan.carried ?? []).map(c => ({ ...(next.findings ?? []).find(f => f.id === c.finding), external: true, disposition: `Outside the repository — ${c.disposition}` }))
+        // Carried is a LOCATION, not acceptance: the finding stays blocking for the verifier; here it
+        // is only recorded so the merge-gate reader sees where it lives.
+        if (carried.length) log(`${tag} ${next.phase}: ${carried.length} finding(s) located outside the repository — they stay blocking until dispositioned by a human`)
+      }
+    } else if (stage === 'validate') {
+      if (!hasValidation(res)) return result('failed-contract', { reason: 'the validation stage returned no usable verdict', phase: next.phase })
+      if (res.verified === true && !hasSeal(res)) return result('failed-seal', { reason: res.reason ?? 'the contract was verified but not sealed', phase: next.phase })
+      if (res.verified === true && res.contractHash && res.contractHash !== next.contract.hash) return result('failed-seal', { reason: `the sealed contract hash ${res.contractHash} is not the prepared ${next.contract.hash}`, phase: next.phase })
+    } else if (stage === 'implement') {
+      if (res.status !== 'ok') return result('failed-implement', { reason: res.reason ?? 'implementation reported failure', phase: next.phase })
+      if (!hasImplementation(res)) return result('failed-implement', { reason: 'implementation returned no PR number, head or green gate', phase: next.phase })
+      pr = res.prNumber
+    } else if (stage === 'green') {
+      if (res.needsHumanDecision === true) return result('escalate', { reason: res.reason ?? 'the fixer asked for a human decision', phase: next.phase, findings: next.findings })
+      if (res.fixed !== true) return result('failed-fix', { reason: res.reason ?? 'the fix did not make the contract pass', phase: next.phase, findings: next.findings })
+    } else {
+      // verify
+      if (!hasReviewEvidence(res)) return result('failed-verify', { reason: 'the final verifier returned no verdict, head, custody or readiness', phase: next.phase })
+      const reviewedHead = String(res.reviewedHead).toLowerCase()
+      const staleRequired = pendingRequiredFindings.filter(f => f.observedHead !== reviewedHead)
+      if (staleRequired.length) return result('failed-verify', { reason: 'required findings were measured on a different head', findings: staleRequired })
+      pendingRequiredFindings = []
+      const errs = findingErrors(res, next.openIds)
+      if (errs.length) return result('failed-verify', { reason: errs.join('; '), phase: next.phase })
+      for (const f of res.findings) known.set(f.id, f)
+      accept(res.findings.filter(f => !f.blocking && f.transition !== 'resolved').map(f => ({ ...compactFinding(f), disposition: f.disposition || (f.nonActionable ? 'By design (see description)' : f.transition === 'human' ? 'Human disposition' : f.kind === 'question' ? 'Question for the human' : `Below severity floor (${SEVERITY_FLOOR?.name}) — carried to the merge gate unfixed`) })))
+      if (res.custody.contractBreach === true) return result('failed-custody', { reason: 'GREEN escaped its sealed contract', findings: res.custody.breaches ?? [], phase: next.phase })
+      const blocking = res.findings.filter(f => f.blocking)
+      if (res.partial !== true) log(`${tag} ${next.phase}: ${res.findings.length} finding(s), ${blocking.length} blocking${res.published?.firstReview ? ', first review posted' : ''}${res.published?.synthesis ? ', synthesis published' : ''}`)
+    }
+    if (!usableNext(res.next)) return result('failed-resume', { reason: `${stage} returned no usable next step`, phase: next.phase })
+    // A `done` may only follow a verification whose own evidence says ready on the head it reviewed.
+    if (res.next.step === 'done' && (stage !== 'verify' || res.readiness.ready !== true || res.findings.some(f => f.blocking) || res.next.reviewedHead !== String(res.reviewedHead).toLowerCase() || (res.readiness.remoteHead && String(res.readiness.remoteHead).toLowerCase() !== res.next.reviewedHead)))
+      return result('failed-verify', { reason: 'the cycle state declared done without matching verification evidence', phase: next.phase })
+    next = res.next
+  }
 }
 
 // ── Fan-out over the mutex-safe batch ────────────────────────────────────
@@ -1685,19 +1562,14 @@ const results = await boundedParallel(
   MAX_PARALLELISM,
 )
 const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
-// The note describes what ACTUALLY happened: counting rows is not counting progress. A row
-// with a failure status is not a PR, and `batch.length` only drops when the thunk itself
-// returned null. So the sentence is derived from the STATUSES: a card ADVANCED only if it
-// reached a PR the human can act on (`ready-for-merge` or `escalate`); everything else is named
-// by the status it carries.
+// The note describes what ACTUALLY happened: a card ADVANCED only if it reached a PR the human can
+// act on (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
 const died = STORIES.length - batch.length
 const ADVANCED = new Set(['ready-for-merge', 'escalate'])
 const advanced = batch.filter((r) => ADVANCED.has(r.status))
 const failedRows = batch.filter((r) => !ADVANCED.has(r.status))
 const tally = (rows) =>
   [...new Set(rows.map((r) => r.status ?? 'unknown'))].sort().map((s) => `${rows.filter((r) => r.status === s).length} ${s}`).join(', ')
-// What did NOT advance, in the two ways it can fail — a row carrying a failure status, and a
-// card that never returned one at all. Both are named, because they are recovered differently.
 const shortfall = [
   failedRows.length ? `${failedRows.length} returned a failure status (${tally(failedRows)})` : '',
   died ? `${died} never returned a result at all (agents stalled or errored)` : '',
@@ -1707,14 +1579,13 @@ const shortfall = [
 const note = !STORIES.length
   ? 'Empty batch — nothing was requested, nothing was run.'
   : !advanced.length
-    ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced to a PR — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees is intact — re-run to resume; check the machine's load first, since a stall means agents could not show progress within the supervisor's window.`
+    ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced to a PR — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees and the handoffs under .pair/working/runs/ are intact — re-run with the same runId to resume from the first incomplete step.`
     : `${advanced.length}/${STORIES.length} cards advanced to a PR (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Those PRs are ready-for-merge or escalated; check each status. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.`
 return {
   workflowVersion: WORKFLOW_VERSION,
   contracts: contracts.map(({ name, status }) => ({ name, status })),
   batch,
-  // Stories that never returned anything, named so a failed run is actionable
-  // rather than merely empty.
   died: STORIES.filter((s) => !batch.some((b) => b.story?.id === s.id)).map((s) => s.id),
+  metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: Date.now() - METRICS.startedAt, tokens: 'unknown', perDispatch: METRICS.dispatches },
   note,
 }

@@ -643,6 +643,20 @@ while (true) {
       runLog.push({ iteration, id: outcome.id, excluded: true, reason: `halted — engine reported ${outcome.status}, never retried silently` })
       continue
     }
+    // US-479 AC-11: `ready-for-merge` is a claim; the evidence is the 40-hex head the independent
+    // verifier inspected, its verdict and the PR the readiness binds to. A row missing any of them is
+    // an incomplete or malformed handoff (a dead verifier, a truncated return, an older engine) and
+    // halts exactly like a failure status — an empty result is never read as approved.
+    const incomplete = [
+      !/^[0-9a-f]{40}$/.test(String(outcome.reviewedHead ?? '')) && 'reviewedHead',
+      !String(outcome.verdict ?? '').trim() && 'verdict',
+      !(Number.isInteger(outcome.prNumber) && outcome.prNumber >= 1) && 'prNumber',
+    ].filter(Boolean)
+    if (incomplete.length) {
+      haltedCardIds.add(outcome.id)
+      runLog.push({ iteration, id: outcome.id, excluded: true, reason: `halted — engine reported ready-for-merge without ${incomplete.join(', ')}: an incomplete handoff is never a clean review` })
+      continue
+    }
 
     const reviewApproved = outcome.status === 'ready-for-merge'
     if (reviewApproved) {

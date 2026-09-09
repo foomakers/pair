@@ -52,7 +52,8 @@
         "pair-refine-batch.test.mjs",
         "pair-loop.test.mjs",
         "pair-contracts/ensure-contract.test.mjs",
-        "pair-contracts/red-snapshot.test.mjs"
+        "pair-contracts/red-snapshot.test.mjs",
+        "pair-contracts/cycle-state.test.mjs"
       ],
       "targets": [{ "path": ".claude/workflows/", "mode": "canonical" }],
       "description": "Batch orchestration workflows (Claude Code only; inert elsewhere)"
