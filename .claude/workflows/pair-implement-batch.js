@@ -21,7 +21,7 @@ export const meta = {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// THE CONTRACT (#219 AC7) — what `pair-loop` (#250) codes against.
+// THE CONTRACT — what `pair-loop` codes against.
 // Stable. A rename here breaks a caller this repo cannot see, so treat every name
 // below as public API.
 //
@@ -34,8 +34,8 @@ export const meta = {
 //                                 // A POSITIVE integer (>= 1): `0`/negative do not name a PR,
 //                                 // and `0` would skip implement AND the probe and report an
 //                                 // unbuilt story as review-approved.
-    //     requiredFindings?,         // verified P3 evidence that RED must re-prove on its exact
-    //                                 // observedHead; it stays outside reviewer context.
+//     requiredFindings?,         // verified P3 evidence that RED must re-prove on its exact
+//                                 // observedHead; it stays outside reviewer context.
 //   }],                           // every card VALUE is validated, not just its key set: id is one
 //                                 // path segment, branch/base are git refs, title/notes are plain
 //                                 // text. They reach shell command text an agent runs, so a value
@@ -76,8 +76,7 @@ export const meta = {
 // to `undefined` or `null`. All three mean ABSENT, on every optional key, at every level —
 // card fields, run options and `pipeline` overrides alike. A caller composing cards in code
 // (`{ id, title, branch, prNumber: state.prNumber }`) must not have to branch on whether a
-// field happens to be set: an explicit `undefined` on a field nobody set used to abort the
-// WHOLE batch at parse time while the sibling field beside it accepted the same spelling.
+// field happens to be set.
 // Anything ELSE that is present and wrong-typed still THROWS — the rule loosens the spelling
 // of "absent", never the type check on a value that is actually there.
 //
@@ -97,10 +96,9 @@ export const meta = {
 //          | failed-implement | failed-pr | failed-review | failed-fix
 //          | failed-plan | failed-red-contract | failed-preflight | failed-required-findings
 //   ONLY `ready-for-merge` may advance. A caller MUST treat every other status — including one
-//   this list does not name yet — as halted (US-479 c0: `pair-loop` matched on `failed*` and
-//   re-drove every card whose status started otherwise).
+//   this list does not name yet — as halted.
 //
-// REBASE IS NOT REPAIRED (US-479 c1). There is no custody probe, no card-level reset and no
+// REBASE IS NOT REPAIRED. There is no custody probe, no card-level reset and no
 // SHA-scoped history waiver. An in-flight attempt whose base moved fails closed where it is
 // measured — the sealer refuses a HEAD that is not its base, the preflight refuses a snapshot
 // that is not an ancestor — and a resumed run starts a fresh review on the current head; older
@@ -108,7 +106,7 @@ export const meta = {
 // rewrite is a HUMAN decision: the reviewer types it `humanDecisionKind: 'history-rewrite'` and the
 // engine escalates before any RED/seal/GREEN, with nothing in the engine able to accept or waive it.
 //
-// NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is #250's
+// NEVER `merged`. Merge is the human/policy gate on every path; auto-advance is the loop's
 // concern, never this engine's.
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -124,42 +122,25 @@ export const meta = {
 // prettier gate — keep the one-line opts style already used in this file.
 
 // ── Input ────────────────────────────────────────────────────────────────
-// args.stories = the batch of STORIES (never tasks) to drive THIS run. A batch
-// ITEM IS A STORY, not a task: each story is delivered on ONE branch with ONE
-// PR — opened the first time and UPDATED for all subsequent work on that story
-// (further tasks/features included). NEVER one-PR-per-task, and NEVER a second
-// PR for the same story: continuing a story that already has a PR reuses its
-// existing branch/{prNumber} and updates that PR (create-or-update). A second
-// PR for the same story is forbidden unless a human explicitly instructs it.
-// MUST be pre-filtered to be mutex-safe: no two stories here may touch the same
-// shared skill/file (pair-next, pair-process-review, record-decision,
-// apps/pair-cli, templates).
-// Chains advance ACROSS runs: after you merge these PRs, re-run with the next
-// batch (the now-unblocked heads). A story's dependency must be MERGED, not
-// just PR-ready, before its dependent enters a batch.
-// Each story: { id, title, branch }. Add { prNumber } to RESUME an existing PR
-// mid-review — implement+PR are skipped and the story re-enters the review<->fix
-// loop directly (drives remaining findings, incl. minor, to zero).
-// Optional { notes } = a scope directive threaded into the implement+PR prompts
-// (overrides the issue body on conflict), e.g. "resolve all findings in ONE PR,
-// do not split".
-// Optional { requiredFindings } = verified P3 observations: the engine gives them to RED once
-// on their exact measured head after the independent reviewer has stayed blind. A stale head
-// fails closed rather than treating prior evidence as a current defect.
-//
-// #401: the input is validated LOUDLY. The previous version coerced an unparseable
-// string to `undefined` and fell through to `STORIES = []`, so a caller who
-// passed a bare list of refs (`args: "#234 #236"`) got a run that spawned ZERO
-// agents, exited in ~30ms and returned the SUCCESS-shaped
-// `{ batch: [], note: 'PRs are ready-for-merge or escalated…' }` — a silent
-// no-op reported as a completed batch, indistinguishable from a real run whose
-// stories all failed. An orchestrator asked to drive stories and driving none
-// must fail, not report success. An EXPLICIT empty list stays a legal no-op:
-// a caller that computed "nothing to do" is not making a mistake.
+// args.stories = the batch of STORIES (never tasks) to drive THIS run. A batch ITEM IS A STORY,
+// not a task: each story is delivered on ONE branch with ONE PR — opened the first time and
+// UPDATED for all subsequent work on that story (further tasks/features included). NEVER
+// one-PR-per-task, and NEVER a second PR for the same story: continuing a story that already
+// has a PR reuses its existing branch/{prNumber} and updates that PR (create-or-update). A
+// second PR for the same story is forbidden unless a human explicitly instructs it. MUST be
+// pre-filtered to be mutex-safe: no two stories here may touch the same shared skill/file
+// (pair-next, pair-process-review, record-decision, apps/pair-cli, templates). Chains advance
+// ACROSS runs: after you merge these PRs, re-run with the next batch (the now-unblocked heads).
+// A story's dependency must be MERGED, not just PR-ready, before its dependent enters a batch.
+// Each story: { id, title, branch }. Add { prNumber } to RESUME an existing PR mid-review —
+// implement+PR are skipped and the story re-enters the review<->fix loop directly (drives
+// remaining findings, incl. minor, to zero). Optional { notes } = a scope directive threaded
+// into the implement+PR prompts (overrides the issue body on conflict), e.g. "resolve all
+// findings in ONE PR, do not split". An orchestrator asked to drive stories and driving none
+// must fail, not report success. An EXPLICIT empty list stays a legal no-op: a caller that
+// computed "nothing to do" is not making a mistake.
 
-// Every caller-facing object validates its key SET, not just the keys it recognises. A
-// misspelled key that is merely ignored runs the batch on values nobody chose and reports
-// success — the #401 direction — and the shipped docs promise the opposite in as many words.
+// Every caller-facing object validates its key SET, not just the keys it recognises.
 function rejectUnknownKeys(obj, allowed, where) {
   for (const k of Object.keys(obj ?? {}))
     if (!allowed.includes(k))
@@ -187,10 +168,9 @@ const isRef = v => /^[A-Za-z0-9._][A-Za-z0-9._/#-]*$/.test(v) && !v.includes('..
 // command line: backtick and `$(`. Punctuation, spaces and non-ASCII stay legal — a real
 // card title ("PR state flow (gate≠review) + …") must keep working.
 const isProse = v => !/[`\r\n\x00-\x1f]/.test(v) && !v.includes('$(')
-// Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the
-// shell as a FLAG rather than as the path argument it sits in, and `.` resolves to the
-// worktree ROOT — `git worktree remove --force <root>/<id>-review` on either is not
-// recoverable. Both passed the earlier charset test, which only forbade `..`. Same rule,
+// Must START alphanumeric, not merely be built from safe characters. `-rf` is read by the shell
+// as a FLAG rather than as the path argument it sits in, and `.` resolves to the worktree ROOT
+// — `git worktree remove --force <root>/<id>-review` on either is not recoverable. Same rule,
 // same spelling, in the sibling engine — held by the differential in the test file.
 const isSegment = v => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(v) && !v.includes('..')
 // A RELATIVE directory/file path the agents `cd` into, create worktrees under and aim
@@ -238,31 +218,24 @@ function parseBatchArgs(raw) {
   }
   // A bare array is unambiguous — read it as the card list.
   if (Array.isArray(a)) a = { cards: a }
-  // `cards` is the generalized contract name (#219 AC7); `stories` is the pair-era alias,
-  // kept working so no existing caller breaks. Both present is an ERROR rather than a
-  // preference: silently picking one would drive a batch the caller did not describe.
+  // Both present is an ERROR rather than a preference: silently picking one would drive a batch
+  // the caller did not describe.
   if (a && typeof a === 'object' && Array.isArray(a.cards) && Array.isArray(a.stories))
     throw new Error(
       `implement-batch: \`args\` carries both \`cards\` and \`stories\`. They are the same field — ` +
         `\`cards\` is the current name, \`stories\` the accepted alias. Pass exactly one.`,
     )
   // `Object.hasOwn` + the undefined/null test, not a bare `in`: the unset-optional rule of this
-  // contract holds HERE too. `in` counted an explicitly-undefined alias key as PRESENT, so
-  // `{ cards: [...], stories: undefined }` skipped the mapping and threw "`args` must be
-  // { stories: [...] }" — telling a caller who passed a list that no list was there, and naming
+  // contract holds HERE too. `in` counted an explicitly-undefined alias key as PRESENT, so `{
+  // cards: [...], stories: undefined }` skipped the mapping and threw "`args` must be {
+  // stories: [...] }" — telling a caller who passed a list that no list was there, and naming
   // the ALIAS rather than the key they used. Its mirror image (`{ stories, cards: undefined }`)
-  // worked, which is the asymmetry the rule exists to remove. (The naming half of that same
-  // defect is closed by `listKey` just below — it survived this fix by one round.)
+  // worked, which is the asymmetry the rule exists to remove.
   const hasStories = a && typeof a === 'object' && Object.hasOwn(a, 'stories') && a.stories !== undefined && a.stories !== null
   const hasCards = a && typeof a === 'object' && Array.isArray(a.cards)
   // EVERY error below names the spelling the CALLER actually used, and indexes cards with it.
-  // The guards used to disagree: three said `stories[i]` unconditionally while the four beside
-  // them said `cards[i]`, so ONE malformed input produced two different index labels depending
-  // on which guard happened to fire — and the message a caller got for the most common mistake
-  // (`{cards: [{id, branch}]}` → "stories[0] … is missing title") named a key they had not
-  // passed and steered them to the deprecated spelling. `cards` is the default because it is
-  // the contract key; the alias is named only when the alias is what arrived. `#250` is the
-  // caller this contract is frozen for, and this text is the only guidance it ever reads.
+  // `cards` is the default because it is the contract key; the alias is named only when the
+  // alias is what arrived.
   const listKey = hasStories && !hasCards ? 'stories' : 'cards'
   if (hasCards && !hasStories) a = { ...a, stories: a.cards }
   if (!a || typeof a !== 'object' || !Array.isArray(a.stories))
@@ -276,16 +249,9 @@ function parseBatchArgs(raw) {
   const stories = a.stories.map((s, i) => {
     if (!s || typeof s !== 'object' || Array.isArray(s))
       throw new Error(`implement-batch: ${listKey}[${i}] is not an object: ${JSON.stringify(s)}.`)
-    // The CARD's key set is validated like every other caller-facing object. Without this,
-    // `prNumbr: 432` (typo) or a card carrying an invented key was dropped in silence:
-    // `resuming` stayed false, the engine ran IMPLEMENT then publishPr, and opened a SECOND
-    // PR for a story that already had one — the very thing this file forbids in as many words.
+    // The CARD's key set is validated like every other caller-facing object.
     rejectUnknownKeys(s, ['id', 'title', 'branch', 'base', 'notes', 'requiredFindings', 'prNumber'], `${listKey}[${i}]`)
-    // `#234` and `234` name the same story; normalize once so no prompt, worktree
-    // path or marker ever carries a stray `#`. A number is lossless and unambiguous for an
-    // issue ref and is coerced deliberately; anything else is not — `id: ['234']` and
-    // `id: true` both survived `String()` and then PASSED the safe-path-segment test as
-    // "234"/"true", naming a worktree the caller never wrote. Same rule as the sibling engine.
+    // Same rule as the sibling engine.
     if (s.id !== undefined && s.id !== null && typeof s.id !== 'string' && typeof s.id !== 'number')
       throw new Error(
         `implement-batch: ${listKey}[${i}] has id of type ${Array.isArray(s.id) ? 'array' : typeof s.id}, which is not a string or a number. ` +
@@ -304,19 +270,11 @@ function parseBatchArgs(raw) {
           `an absent one would reach a shell command as \`undefined\`.`,
       )
     // Presence is not validity. Every field below is interpolated VERBATIM into command text a
-    // Bash-capable agent then runs — `git worktree add <root>/<id> -B <branch> <base>` and
-    // `git worktree remove --force <root>/<id>-review` — so a card value carries the authority
-    // of the command line it lands on. Two escapes reachable through the DOCUMENTED contract:
-    // `branch: 'x origin/main; gh pr merge 432 --squash'` renders a merge instruction into the
-    // implement prompt, defeating AC5's hardest guarantee; `id: '../../scratch'` aims a
-    // `--force` remove outside the worktree root, which is not recoverable. Rejected rather
-    // than quoted: an escaped value still RUNS, and the caller who typed something that was
-    // never a branch never learns it — the #401 direction, on the one input that can merge.
+    // Bash-capable agent then runs — `git worktree add <root>/<id> -B <branch> <base>` and `git
+    // worktree remove --force <root>/<id>-review` — so a card value carries the authority of
+    // the command line it lands on.
     const constrain = (value, key, ok, what) => {
-      // Reject a present-but-non-string value BEFORE coercing it. `String(value ?? '')` first
-      // meant `notes: {a:1}` reached the prompt as `[object Object]` and `branch: ['a','b']` as
-      // `a,b` — the coerce-instead-of-reject direction this file rejects everywhere else, and
-      // it defeats the type check a reader assumes is there.
+      // Reject a present-but-non-string value BEFORE coercing it. `String(value ??
       if (value !== undefined && value !== null && typeof value !== 'string')
         throw new Error(
           `implement-batch: ${listKey}[${i}] (#${id}) has ${key} of type ${Array.isArray(value) ? 'array' : typeof value}, which is not a string. ` +
@@ -324,14 +282,12 @@ function parseBatchArgs(raw) {
             `an array joins on commas) as if the caller had typed it. Pass a string, or omit the key.`,
         )
       const v = String(value ?? '').trim()
-      // PRESENT-BUT-EMPTY IS AN ERROR, at every level — the rule the contract block states and
-      // the one this early return used to break. `''` was read as ABSENT here while
-      // `args.severityFloor: ''` and `args.pipeline.<key>: ''` both threw for the stated reason.
-      // `base` is what it cost: a card composing `base: cfg.base ?? ''` was branched off
-      // `pipeline.baseBranch` and the whole `This story is STACKED on …` clause vanished from the
-      // implement prompt — a PR built on `origin/main` without its dependency's commits, and a
-      // review diffed against the wrong range, with nothing reported. `undefined`/`null` remain
-      // the spellings of "unset"; an empty string is a value the caller wrote.
+      // `''` was read as ABSENT here while `args.severityFloor: ''` and `args.pipeline.<key>:
+      // ''` both threw for the stated reason. ''` was branched off `pipeline.baseBranch` and
+      // the whole `This story is STACKED on …` clause vanished from the implement prompt — a PR
+      // built on `origin/main` without its dependency's commits, and a review diffed against
+      // the wrong range, with nothing reported. `undefined`/`null` remain the spellings of
+      // "unset"; an empty string is a value the caller wrote.
       if (value !== undefined && value !== null && !v)
         throw new Error(
           `implement-batch: ${listKey}[${i}]${id ? ` (#${id})` : ''} has ${key} empty — omit the key entirely (or pass \`null\`/\`undefined\`) to mean "not set". ` +
@@ -354,10 +310,9 @@ function parseBatchArgs(raw) {
     constrain(s.title, 'title', isProse, 'plain text (no backtick, no `$(`, no newline)')
     constrain(s.notes, 'notes', isProse, 'plain text (no backtick, no `$(`, no newline)')
     // A verified P3 result must not disappear merely because a later independent reviewer
-    // sampled a different portion of the same head. Keep it outside reviewer context (the
-    // review remains blind), but make the RED owner re-prove it on the exact head where it was
-    // measured. A different head is not "probably close enough": that would turn old evidence
-    // into a new specification without rerunning its oracle.
+    // sampled a different portion of the same head. A different head is not "probably close
+    // enough": that would turn old evidence into a new specification without rerunning its
+    // oracle.
     let requiredFindings = []
     if (s.requiredFindings !== undefined && s.requiredFindings !== null) {
       if (!Array.isArray(s.requiredFindings) || s.requiredFindings.length === 0)
@@ -394,23 +349,17 @@ function parseBatchArgs(raw) {
       })
     }
     // `prNumber` decides the ENTIRE lifecycle: an integer re-enters the review loop on the
-    // existing PR, anything else falls through to implement+publishPr. A JSON-stringified
-    // `"432"` therefore opened a second PR while the caller believed it was resuming, so a
-    // present-but-unusable value is an error rather than a silently ignored one.
-    // An UNSET optional key has ONE spelling across the whole card: `undefined`/`null` mean
-    // ABSENT here exactly as they already do in `constrain`. A bare `'prNumber' in s` made
-    // `notes: undefined` legal and `prNumber: undefined` fatal inside the SAME object, so a
-    // caller composing cards in JS (`{ id, title, branch, prNumber: state.prNumber }`, #250)
-    // lost a 20-card batch at parse time on a field nobody set. `Object.hasOwn`, not `in`:
-    // `in` walks the prototype chain.
-    // POSITIVE, not merely integral (`isPosInt`, the same predicate `posInt`/`maxParallelism`
-    // ask). `Number.isInteger(0)` is true, so `prNumber: 0` passed and then decided the
-    // lifecycle wrongly TWICE: `resuming` became true (implement + open-PR skipped) while
-    // `if (pr?.prNumber)` read the same `0` as falsy (continuation probe skipped), and the batch
-    // returned `ready-for-merge` for a card that was never implemented and has no PR. `0` is
-    // what a caller composing cards in code produces from `Number(row.pr ?? '')`, an
-    // uninitialized counter or a tracker field defaulting to 0 — the same shape as the
-    // `prNumber: undefined` defect, one value along.
+    // existing PR, anything else falls through to implement+publishPr. An UNSET optional key
+    // has ONE spelling across the whole card: `undefined`/`null` mean ABSENT here exactly as
+    // they already do in `constrain`. `Object.hasOwn`, not `in`: `in` walks the prototype
+    // chain. POSITIVE, not merely integral (`isPosInt`, the same predicate
+    // `posInt`/`maxParallelism` ask). `Number.isInteger(0)` is true, so `prNumber: 0` passed
+    // and then decided the lifecycle wrongly TWICE: `resuming` became true (implement + open-PR
+    // skipped) while `if (pr?.prNumber)` read the same `0` as falsy (continuation probe
+    // skipped), and the batch returned `ready-for-merge` for a card that was never implemented
+    // and has no PR. `0` is what a caller composing cards in code produces from `Number(row.pr
+    // ?? '')`, an uninitialized counter or a tracker field defaulting to 0 — the same shape as
+    // the `prNumber: undefined` defect, one value along.
     if (Object.hasOwn(s, 'prNumber') && s.prNumber !== undefined && s.prNumber !== null && !isPosInt(s.prNumber))
       throw new Error(
         `implement-batch: ${listKey}[${i}] (#${id}) has prNumber ${JSON.stringify(s.prNumber)}, which is not a positive integer (>= 1). ` +
@@ -431,20 +380,13 @@ function parseBatchArgs(raw) {
     seenIds.set(id, i)
     return { ...s, id, requiredFindings }
   })
-  // Return the NORMALIZED container, not just the list. Reading a second option off the
-  // raw `args` was a real bug: the runtime can hand this script a JSON STRING, and
-  // `typeof args === 'object'` is false for it — so `args.severityFloor` came back
-  // undefined and the floor was silently ignored while the caller believed it was set.
-  // A batch ran with Minors still blocking and reported escalation as if the floor had
-  // been honoured. Every option must be read from the parsed object, once.
+  // Return the NORMALIZED container, not just the list. Every option must be read from the
+  // parsed object, once.
   rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism', 'runId'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
-  // fields. A whitelist bounds each of these two downstream, so the behavioural cost today is
-  // nil (`severityFloor: ['Major']` joined to "Major" and was accepted) — the cost is the
-  // invariant: "every caller value is type-checked" has to be true for a reader auditing it,
-  // and the next option added beside these inherits the pattern with no whitelist to save it.
-  // Checked HERE, at parse time, not where each is consumed: `severityFloor` is only rankable
-  // after the contract dispatch, and a wrong TYPE should not wait on an agent to be reported.
+  // fields. Checked HERE, at parse time, not where each is consumed: `severityFloor` is only
+  // rankable after the contract dispatch, and a wrong TYPE should not wait on an agent to be
+  // reported.
   for (const key of ['severityFloor', 'model', 'runId']) {
     if (a[key] !== undefined && a[key] !== null && typeof a[key] !== 'string')
       throw new Error(
@@ -484,17 +426,18 @@ function parseBatchArgs(raw) {
 }
 const PARSED = parseBatchArgs(args)
 const RUN_ID = PARSED.runId
+// The coordinator's own version, returned with every result and handed to every phase skill so
+// each handoff records which coordinator produced it. Bump on any change to the dispatch
+// contract (skill names, argument names, statuses).
+const WORKFLOW_VERSION = '2.0.0'
 
-// ── Pipeline configuration: what makes this engine reusable (#219 AC1) ─────
-// Every value here was a literal spelled `pair` somewhere in a prompt. They are now
-// resolved ONCE, with pair's own values as the defaults, so two things hold at the same
-// time: an adopter whose skills are named differently drives the same engine by passing
-// `args.pipeline`, and pair's own dogfood invocation keeps working with no configuration
-// at all — the defaults ARE what the script said before.
-//
-// Resolution is per-key, not all-or-nothing: a caller overriding one skill name keeps the
-// defaults for the rest. An all-or-nothing merge would make a partial config silently
-// blank the keys it did not mention, which is the shape of failure #401 was about.
+// ── Pipeline configuration: what makes this engine reusable ─────────────────
+// Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
+// ONCE, with pair's own values as the defaults, so two things hold at the same time: an adopter
+// whose skills are named differently drives the same engine by passing `args.pipeline`, and
+// pair's own dogfood invocation keeps working with no configuration at all — the defaults ARE
+// what the script said before. Resolution is per-key, not all-or-nothing: a caller overriding
+// one skill name keeps the defaults for the rest.
 const PIPELINE_DEFAULTS = {
   skills: {
     implement: '/pair-process-implement',
@@ -504,19 +447,17 @@ const PIPELINE_DEFAULTS = {
     checkpoint: '/pair-capability-checkpoint',
     recordDecision: '/pair-capability-record-decision',
     writeIssue: '/pair-capability-write-issue',
-    // Delivery-phase skills (US-479 c2). The engine dispatches them BY NAME with typed
-    // arguments; every step, rule and command of the review ↔ fix loop lives in the skill,
-    // not here. An adopter who renames them overrides the key, exactly like the six above.
+    // The engine dispatches them BY NAME with typed arguments; every step, rule and command of
+    // the review ↔ fix loop lives in the skill, not here. An adopter who renames them overrides
+    // the key, exactly like the six above.
     remediationPlan: '/pair-workflow-remediation-plan',
     redSpec: '/pair-workflow-red-spec',
     redVerify: '/pair-workflow-red-verify',
     redSeal: '/pair-workflow-red-seal',
     greenFix: '/pair-workflow-green-fix',
     p3Verify: '/pair-workflow-p3-verify',
-    // Fase C (US-479 c3): the independent review and the cycle's PR-comment policy.
     reviewPhase: '/pair-workflow-review-phase',
     cycleComments: '/pair-workflow-cycle-comments',
-    // Fases 0, A, B (US-479 c4): the contract, implement and PR phases.
     contractPhase: '/pair-workflow-contract-phase',
     implementPhase: '/pair-workflow-implement-phase',
     prPhase: '/pair-workflow-pr-phase',
@@ -524,20 +465,12 @@ const PIPELINE_DEFAULTS = {
   worktreeRoot: '../pair-worktrees',
   auditLogDir: '.pair/working/reviews',
   baseBranch: 'origin/main',
-  // A FULL path, not a basename. AC1 names "the code-review-template.md contract path" as
-  // configuration, and an adopter whose KB root is not `.pair/knowledge/` (the CLI supports
-  // layout modes) could otherwise not name their template at all — and the basename then also
-  // rendered as the vocabulary label in the reviewer prompt. Path and label are now
-  // independent: the label is derived with `templateLabel()` below. The path is repo-relative
-  // (one leading `..` at most, like every other path here): a template reachable only through a
-  // deep traversal is outside the repository, and the agent handed it has `Read`/`Write`.
+  // A FULL path, not a basename. Path and label are now independent: the label is derived with
+  // `templateLabel()` below. The path is repo-relative (one leading `..` at most, like every
+  // other path here): a template reachable only through a deep traversal is outside the
+  // repository, and the agent handed it has `Read`/`Write`.
   reviewTemplate: '.pair/knowledge/guidelines/collaboration/templates/code-review-template.md',
-  // Rounds of autonomous fix<->re-review before escalating to a human. Pair's 3 is measured
-  // (see the rationale at MAX_FIX_ROUNDS below) and is the DEFAULT, not the rule: story
-  // assumption A1 lists the fix-round cap among the limits a caller configures, and once the
-  // engine ships this number is an adopter-visible contract — a review loop that converges in
-  // one round should not pay for three, and a caller who wants a longer leash should not have
-  // to fork the file to get it.
+  // Rounds of autonomous fix<->re-review before escalating to a human.
   maxFixRounds: 3,
 }
 
@@ -583,11 +516,7 @@ function resolvePipeline(raw) {
       )
     return t
   }
-  // `args.pipeline` is type-checked; its nested object was not. `Object.keys(5)` is `[]`, so
-  // `rejectUnknownKeys` passed and `Object.entries(raw.skills ?? {})` yielded nothing: a
-  // `skills: 5` (or `true`, or `[]`) was ACCEPTED and pair's own skill names ran while the
-  // caller believed they had configured theirs — the discarded-setting failure (#401) on the
-  // one key whose entire purpose is that the adopter's skills are named differently.
+  // `args.pipeline` is type-checked; its nested object was not.
   if (raw.skills !== undefined && raw.skills !== null && (typeof raw.skills !== 'object' || Array.isArray(raw.skills)))
     throw new Error(
       `implement-batch: \`args.pipeline.skills\` must be an object; received ${Array.isArray(raw.skills) ? 'array' : typeof raw.skills}. ` +
@@ -621,18 +550,15 @@ function posInt(v, key, fallback) {
   return v
 }
 
-// ── Bounded fan-out (#219 AC6) ─────────────────────────────────────────────
-// `pair-loop` derives a ceiling from `tech/automation.md` (ADR-017 §6) and passes it here.
-// The bound has to live in THIS file: the sandbox `parallel` primitive is an unbounded
+// ── Bounded fan-out ────────────────────────────────────────────────────────
+// `pair-loop` derives a ceiling from `tech/automation.md` (ADR-017 §6) and passes it here. The
+// bound has to live in THIS file: the sandbox `parallel` primitive is an unbounded
 // `Promise.all`, so handing it N thunks starts N agents no matter what the caller asked for.
-//
-// Absent cap = today's behaviour, unbounded. That default is deliberate: every existing
-// caller keeps the fan-out it already has, so landing this option changes nobody's run.
+// Absent cap = today's behaviour, unbounded. That default is deliberate: every existing caller
+// keeps the fan-out it already has, so landing this option changes nobody's run.
 function parseMaxParallelism(raw) {
   if (raw === undefined || raw === null) return undefined
-  // Rejected rather than coerced. A cap that cannot be honoured must not silently become
-  // "no cap": the discarded setting is the one holding back load, so the failure would be a
-  // batch running at full width while the caller believes it is throttled (#401's shape).
+  // Rejected rather than coerced.
   if (!isPosInt(raw))
     throw new Error(
       `implement-batch: \`args.maxParallelism\` must be an integer >= 1; received ${JSON.stringify(raw)}. ` +
@@ -674,85 +600,55 @@ const REVIEW_TEMPLATE_LABEL = templateLabel(PIPELINE.reviewTemplate)
 // prior round's findings unnamed, and "the review is independent and blind" would go unguarded.
 const BLIND_PATHS = [...new Set(['.pair/working/', PIPELINE.auditLogDir])].map((p) => `\`${p}\``).join(' or ')
 
-
 const STORIES = PARSED.stories
 
 // ── Severity floor: what BLOCKS convergence, versus what is carried to the human ──
-// Measured failure. Three PRs went through three autonomous fix rounds each and their
-// findings GREW: #425 4→5, #423 4→7 (with a new Critical), #420 4→3. Convergence requires
-// ZERO actionable findings, so a single Minor keeps the loop open — and on markdown skill
-// files the supply of Minors is effectively inexhaustible (duplicated rationale between a
-// skill and its ADL, a wording ambiguity, an assertion that cannot fail independently).
-// Each round also enlarges the diff, creating fresh surface for the next round to read.
-// The loop therefore cannot terminate by fixing, only by exhausting MAX_FIX_ROUNDS.
-//
-// `severityFloor` names the lowest severity that BLOCKS. Findings below it are NOT
-// discarded and NOT silently accepted: they are carried to the merge gate in
-// `acceptedFindings` with `disposition: 'Below severity floor'`, accumulated across every
-// round of the cycle, so the human sees every one and decides. Absent → every actionable finding blocks (the previous behaviour), so
-// nothing changes for a caller that does not ask for a floor.
-//
-// The floor speaks the REVIEW's OWN vocabulary, not a table private to this file.
-// AC1 makes `pipeline.reviewTemplate` configurable and the contract generator derives
-// `vocabulary.severities` from THAT template — the same array the reviewer prompt is told to
-// answer in (`SEVERITIES`, below). Ranking against a hardcoded table instead made the engine
-// speak one language and the reviewer another, and the mismatch failed OPEN: with an adopter
-// vocabulary `Blocker|High|Medium|Low`, a `Critical` floor converged `ready-for-merge` with an
-// unfixed "auth bypass" filed as below the floor, a `Major` floor was a no-op (every adopter
-// severity hit the same fallback rank), and the adopter's own `High` was rejected as an unknown
-// floor. So: rank against the resolved vocabulary, validate the floor against that SAME set,
-// and treat a severity in neither as ABOVE every floor.
-// Prototype-free, like every rank map below it: a severity is arbitrary text from a review
-// template, so `ranks['constructor']` on a plain object returns an INHERITED function — not a
-// number, not undefined, so `?? Infinity` never fires and every `<`/`>=` comparison against it
-// is false. Measured (#432 review round 7): a `{severity: 'constructor'}` finding fell out of
-// BOTH the below-floor and the actionable set and was recorded nowhere. `Object.create(null)`
-// removes the inherited keys; `Object.hasOwn` at every read is the belt to that braces.
+// Convergence requires ZERO actionable findings, so a single Minor keeps the loop open — and on
+// markdown skill files the supply of Minors is effectively inexhaustible (duplicated rationale
+// between a skill and its ADL, a wording ambiguity, an assertion that cannot fail
+// independently). Each round also enlarges the diff, creating fresh surface for the next round
+// to read. The loop therefore cannot terminate by fixing, only by exhausting MAX_FIX_ROUNDS.
+// `severityFloor` names the lowest severity that BLOCKS. Absent → every actionable finding
+// blocks (the previous behaviour), so nothing changes for a caller that does not ask for a
+// floor. The floor speaks the REVIEW's OWN vocabulary, not a table private to this file: the
+// contract derived from the configured template supplies the severities and their explicit
+// ranks, and a floor outside that set throws rather than rank against a foreign scale. A
+// severity in neither the configured vocabulary nor pair's table blocks (rank Infinity), so an
+// unknown severity can never fall below a floor. Prototype-free, like every
+// rank map below it: a severity is arbitrary text from a review template, so
+// `ranks['constructor']` on a plain object returns an INHERITED function — not a number, not
+// undefined, so `?? Infinity` never fires and every `<`/`>=` comparison against it is false.
 const SEVERITY_RANK = Object.assign(Object.create(null), { critical: 4, blocker: 4, major: 3, minor: 2, questions: 1, question: 1, nit: 1, info: 1 })
 const normSeverity = (s) => String(s ?? '').trim().toLowerCase()
 // The rank of a CONFIGURED severity is the EXPLICIT ordinal the contract states for it
 // (`severityRanks`, higher = more severe), never the position of its name in
-// `vocabulary.severities`. Position was the round-5 fix and it reproduced the same bug one
-// carrier along: that array is whatever an LLM extracted from an arbitrary adopter template,
-// and NOTHING said it must be most-severe-first — not the generator prompt, not `mirrors`,
-// not `validateContract`. Measured at floor `High` with the (equally legitimate) ascending
-// vocabulary `Low|Medium|High|Blocker`: a `Blocker` "auth bypass" ranked BELOW the floor and
-// converged `ready-for-merge` with zero fix rounds. And the contract is hash-cached, so one
-// bad extraction persists across every later batch. Hence: ordinals are stated and validated
-// (`ensure-contract.mjs`), and when they are missing or ambiguous this engine REFUSES to rank
-// rather than guessing an order — see `parseFloor`.
-// With no contract at all there is no configured vocabulary, and pair's own table is the
-// fallback. It carries aliases (`blocker`, `nit`, `info`) that no template lists, which is why
-// it is not itself derived from DEFAULT_SEVERITIES. Where they are actually reachable, stated
-// precisely rather than as a vague "callers use them": (a) as a caller-passed `severityFloor`,
-// because `parseFloor` validates against `Object.keys(SEVERITY_RANK)` on the unconfigured path,
-// so `severityFloor: 'blocker'` is accepted and ranks with `critical`; (b) as the severity of a
-// FINDING whose reviewer answered off-vocabulary — the prompt names DEFAULT_SEVERITIES
-// (Critical|Major|Minor|Questions), so a `Blocker` coming back is a reviewer deviating from it,
-// and the alias is what keeps that finding ranked instead of falling to `Infinity`. Neither is
-// the normal path. They are kept because removing them is a BREAKING change for a floor an
-// adopter may already pass, not because the normal path needs them — and (b) is fail-safe
-// either way, since `Infinity` blocks.
-//
-// `severityRankErrors` duplicates ensure-contract.mjs's canonical check, and the duplication
-// is FORCED, not lazy: this sandbox has no filesystem and no imports, so the only contract
-// bytes that ever reach it are an agent's RETURN VALUE. The copy `ensure-contract.mjs write`
-// validated on disk is unreadable from here, and dispatching a second agent to read it back
-// would yield another unvalidated agent return value — the same trust boundary, one dispatch
-// more expensive. So this function is NOT a redundant second line: it is THE validation on
-// the path that decides the severity floor, and it may never be weaker than the canonical one.
-//
-// It WAS weaker, in exactly one way, and that cost a third occurrence of the same bug class
-// (#432 review round 7): it matched keys case-INSENSITIVELY and never rejected keys absent
-// from the vocabulary, so `{Low:0, Medium:1, Blocker:2, High:3, high:5}` collapsed the two
-// case-variants LAST-WINS — `High` became 5, `Blocker` 2 — and a `Blocker` "auth bypass"
-// converged `ready-for-merge` with zero fix rounds at a `High` floor, while the canonical
-// validator rejected the very same map. Keys are therefore matched EXACTLY, as canonical
-// does, plus one rule canonical does not need: two VOCABULARY names that normalize to the
-// same string (`High` and `high` both listed) would collapse this consumer's normalized
-// lookup map, so that vocabulary is refused too. Strictly stronger than canonical, never
-// looser — asserted by the canonical/consumer differential in the test file, which CAN
-// import the real module.
+// `vocabulary.severities`. And the contract is hash-cached, so one bad extraction persists
+// across every later batch. Hence: ordinals are stated and validated (`ensure-contract.mjs`),
+// and when they are missing or ambiguous this engine REFUSES to rank rather than guessing an
+// order — see `parseFloor`. With no contract at all there is no configured vocabulary, and
+// pair's own table is the fallback. It carries aliases (`blocker`, `nit`, `info`) that no
+// template lists, which is why it is not itself derived from DEFAULT_SEVERITIES. Where they are
+// actually reachable, stated precisely rather than as a vague "callers use them": (a) as a
+// caller-passed `severityFloor`, because `parseFloor` validates against
+// `Object.keys(SEVERITY_RANK)` on the unconfigured path, so `severityFloor: 'blocker'` is
+// accepted and ranks with `critical`; (b) as the severity of a FINDING whose reviewer answered
+// off-vocabulary — the prompt names DEFAULT_SEVERITIES (Critical|Major|Minor|Questions), so a
+// `Blocker` coming back is a reviewer deviating from it, and the alias is what keeps that
+// finding ranked instead of falling to `Infinity`. Neither is the normal path. They are kept
+// because removing them is a BREAKING change for a floor an adopter may already pass, not
+// because the normal path needs them — and (b) is fail-safe either way, since `Infinity`
+// blocks. `severityRankErrors` duplicates ensure-contract.mjs's canonical check, and the
+// duplication is FORCED, not lazy: this sandbox has no filesystem and no imports, so the only
+// contract bytes that ever reach it are an agent's RETURN VALUE. The copy `ensure-contract.mjs
+// write` validated on disk is unreadable from here, and dispatching a second agent to read it
+// back would yield another unvalidated agent return value — the same trust boundary, one
+// dispatch more expensive. So this function is NOT a redundant second line: it is THE
+// validation on the path that decides the severity floor, and it may never be weaker than the
+// canonical one. Keys are therefore matched EXACTLY, as canonical does, plus one rule canonical
+// does not need: two VOCABULARY names that normalize to the same string (`High` and `high` both
+// listed) would collapse this consumer's normalized lookup map, so that vocabulary is refused
+// too. Strictly stronger than canonical, never looser — asserted by the canonical/consumer
+// differential in the test file, which CAN import the real module.
 function severityRankErrors(names, severityRanks) {
   if (!severityRanks || typeof severityRanks !== 'object' || Array.isArray(severityRanks))
     return ['severityRanks is missing: the contract states no explicit rank per severity, and the order of `vocabulary.severities` is not a ranking']
@@ -798,15 +694,12 @@ function resolveSeverityScale(severities, severityRanks) {
   for (const n of names) ranks[normSeverity(n)] = severityRanks[n]
   return { ranks, names: [...new Set(names)], configured: true, rankError: null }
 }
-// Resolved once the contract is known — see SEVERITY_SCALE, after REVIEW_VOCAB.
-// Infinity, not a mid-tier default: a severity in NEITHER the configured vocabulary nor pair's
-// own table outranks every possible floor, so it always blocks. The previous `?? 3` claimed to
-// be fail-safe and was not — any floor of rank >= 4 sat above it. Unreachable with an unranked
-// scale (no floor can exist then), and Infinity there too for the same reason.
-// `Object.hasOwn`, not `??`: an inherited `Object.prototype` key (`constructor`, `toString`)
-// is neither null nor undefined, so `??` would hand a FUNCTION to a `<` comparison and the
-// finding would fall out of every partition. Own-key membership answers it once, for both
-// the prototype-free maps and any future one that is not.
+// Resolved once the contract is known — see SEVERITY_SCALE, after REVIEW_VOCAB. Infinity, not a
+// mid-tier default: a severity in NEITHER the configured vocabulary nor pair's own table
+// outranks every possible floor, so it always blocks. The previous `?? 3` claimed to be
+// fail-safe and was not — any floor of rank >= 4 sat above it. Unreachable with an unranked
+// scale (no floor can exist then), and Infinity there too for the same reason. Own-key
+// membership answers it once, for both the prototype-free maps and any future one that is not.
 const rankOf = (s) => {
   const map = SEVERITY_SCALE.ranks
   if (!map) return Infinity
@@ -828,18 +721,13 @@ function parseFloor(raw) {
   const key = normSeverity(v)
   // Membership, not truthiness: an explicit ordinal may legitimately be `0` (a template's
   // lowest level), and `!r` would have rejected exactly that floor as a typo.
-  // OWN-key membership: `in` walks the prototype chain, so `severityFloor: 'constructor'`
-  // passed this test and then ranked against an inherited function.
   const r = Object.hasOwn(SEVERITY_SCALE.ranks, key) ? SEVERITY_SCALE.ranks[key] : undefined
   // A floor the reviewer cannot express is a configuration error, never a silent
   // reclassification: rejecting it is what stops `Critical` from out-ranking an adopter's whole
-  // scale. A typo still throws, in either vocabulary.
-  // TWO different failures wear the same shape here, and the message decides which one an
-  // operator goes looking for. When a contract WAS derived, an unmatched floor is a caller
-  // typo. When it was NOT (the generator died, or returned nothing usable, so the run is on the
-  // loose fallback), the floor is measured against pair's own table instead of the adopter's —
-  // a correctly-spelled `High` then throws, and the old message told them to check their
-  // spelling. Naming the transient cause is what makes a re-run the obvious next step.
+  // scale. A typo still throws, in either vocabulary. TWO different failures wear the same
+  // shape here, and the message decides which one an operator goes looking for. When a contract
+  // WAS derived, an unmatched floor is a caller typo. Naming the transient cause is what makes
+  // a re-run the obvious next step.
   if (r === undefined)
     throw new Error(
       SEVERITY_SCALE.configured
@@ -867,48 +755,27 @@ const BATCH_MODEL = validateModel(PARSED.model, 'args.model')
 const ROLE_MODELS = Object.fromEntries(
   Object.entries(PARSED.models ?? {}).map(([role, value]) => [role, validateModel(value, `args.models.${role}`)]),
 )
-// Role choice wins over legacy global override. Deliberate fixed-model utility steps do not
-// call this helper: they are not part of a model comparison and remain deterministic.
+// Deliberate fixed-model utility steps do not call this helper: they are not part of a model
+// comparison and remain deterministic.
 const withModel = (role, opts) => {
   const model = ROLE_MODELS[role] ?? BATCH_MODEL
   return model ? { ...opts, model } : opts
 }
-// Rounds of autonomous fix<->re-review before escalating to a human. Caller-configurable
-// (`args.pipeline.maxFixRounds`); pair's own 3 is the default and the measured one. Raised
-// from 2: an escalation costs a human round-trip (read the flush, decide, re-run the batch),
-// which is strictly more expensive than one more opus fix round — and the observed
-// escalations were dominated by long tails of minor findings that a third round
-// clears. Beyond 3 the loop is usually not converging for a reason a fourth round
-// won't fix either (a design disagreement), and `needsHumanDecision` already exits
-// early for that case.
+// Rounds of autonomous fix<->re-review before escalating to a human. Beyond 3 the loop is
+// usually not converging for a reason a fourth round won't fix either (a design disagreement),
+// and `needsHumanDecision` already exits early for that case.
 const MAX_FIX_ROUNDS = PIPELINE.maxFixRounds
 // A rejected RED contract is still test-only and has not contaminated source or Git history.
-// Let its independent verifier name the omitted boundary once, then require a fresh author to
-// rebuild the contract from those measured facts. More attempts turn a specification defect into
-// an unattended loop, so the second rejection is terminal before sealing or GREEN.
+// More attempts turn a specification defect into an unattended loop, so the second rejection is
+// terminal before sealing or GREEN.
 const MAX_RED_CONTRACT_REPAIRS = 1
 
 // ── Step retry ─────────────────────────────────────────────────────────────
-// `agent()` returns null when the subagent dies on a terminal error or is killed
-// by the supervisor (180s without visible progress — a cold `pnpm install` or an
-// unscoped `pnpm quality-gate` in a fresh worktree qualifies). Without a retry a
-// single such death takes the whole story out of the run: driveStory returns
-// `failed-*` and the card ends the batch with no PR at all, even though the
-// worktree still holds every committed task. Each authoring step is re-entrant by
-// construction (persistent worktree + checkpoint + committed work), so a second
-// attempt RESUMES rather than restarts. One retry only: a step that dies twice is
-// a real failure, not a timeout, and further opus rounds only delay the rest of
-// the batch.
-//
-// WHAT COUNTS AS A DEAD STEP IS THE CALLER'S CALL (`isUsable`). A bare truthiness
-// test retried the NULL return and not the truthy-but-CONTENTLESS one (`{}`, a
-// truncated structured output) — and the contentless shape is the one this repo
-// actually measured on #432 (the machine slept mid-response), i.e. the retry
-// missed the exact incident it was written for while covering its rarer sibling.
-// The review step therefore passes `hasReviewEvidence`, the SAME predicate its
-// convergence guard uses, so "did not review" means one thing at both sites: the
-// transient gets its second chance, and a step that comes back contentless twice
-// still fails closed.
+// Without a retry a single such death takes the whole story out of the run: driveStory returns
+// `failed-*` and the card ends the batch with no PR at all, even though the worktree still
+// holds every committed task. Each authoring step is re-entrant by construction (persistent
+// worktree + checkpoint + committed work), so a second attempt RESUMES rather than restarts.
+// WHAT COUNTS AS A DEAD STEP IS THE CALLER'S CALL (`isUsable`).
 async function agentRetry(prompt, opts, isUsable = r => !!r) {
   const first = await agent(prompt, opts)
   if (isUsable(first)) return first
@@ -1081,8 +948,6 @@ const RED_TEST_SCHEMA = {
     },
     testExempt: { type: 'boolean' },
     exemptionRationale: { type: 'string' },
-    // US-479 c2: the skill's own outcome and the path of the contract it persisted (the sealer
-    // reads the FILE, never a value relayed through this orchestrator).
     status: { type: 'string', enum: ['red', 'stale', 'split-required'] },
     contractPath: { type: 'string' },
     domains: { type: 'array', items: { type: 'object' } },
@@ -1202,17 +1067,7 @@ const RED_SNAPSHOT_SCHEMA = {
   required: ['sealed', 'snapshot'],
 }
 const hasSealedRedSnapshot = r => r?.sealed === true && RED_SNAPSHOT_SHA.test(String(r.snapshot ?? ''))
-// #373: sandbox-safe continuation probe. The orchestrator has no FS/gh, so a cheap
-// agent in the worktree reports two signals used to decide whether round-0 must post
-// a fresh first review:
-//   - logExists: the persisted working log is present → an in-flight cycle to CONTINUE
-//     (silent round-0 + seeds `cycleHasRemediation` so convergence still synthesizes+cleans).
-//   - firstReviewPosted: a first-review comment already exists on the PR (PR-side
-//     corroboration). Guards the double-first-review the log-only signal can miss when
-//     the log is GONE but a first review was already posted — e.g. a converged-but-not-
-//     yet-merged PR re-entering a batch (log deleted at convergence, #373 finding 1), or
-//     a pruned/recreated worktree / out-of-band clone that lost the untracked log
-//     (#373 finding 3). Either signal suppresses a second first-review.
+// Either signal suppresses a second first-review.
 const PROBE_SCHEMA = {
   type: 'object',
   properties: { logExists: { type: 'boolean' }, firstReviewPosted: { type: 'boolean' } },
@@ -1276,7 +1131,7 @@ function usableSchema(contract) {
 
 async function ensureContract(spec) {
   const res = await agent(
-    `Invoke **${SK.contractPhase}** with $name=${spec.name} $template=${spec.template} $contract=${spec.contract} $skeleton=${JSON.stringify(spec.skeleton)} $mirrors=${JSON.stringify(spec.mirrors)}. The skill is the process of record: execute its steps exactly and return exactly the structured result it defines.`,
+    `Invoke **${SK.contractPhase}** with $name=${spec.name} $template=${spec.template} $contract=${spec.contract} $skeleton=${JSON.stringify(spec.skeleton)} $mirrors=${JSON.stringify(spec.mirrors)} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly and return exactly the structured result it defines.`,
     { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
@@ -1366,20 +1221,15 @@ const SEVERITY_SCALE = resolveSeverityScale(REVIEW_VOCAB?.severities, crContract
 // unranked one stays unranked until the template changes, and the next caller who does pass
 // a floor gets a hard stop. Better the operator sees it on the run that generated it.
 if (SEVERITY_SCALE.rankError) log(`contract:code-review: severities are NOT ranked (${SEVERITY_SCALE.rankError}) — \`severityFloor\` is unavailable until the contract is regenerated`)
-// The floor DEFAULTS to `Minor`, so Major and Minor block and drive fix rounds while
-// everything below them is carried to the merge gate. Measured on PR #477 across three
-// cycles: the PR reached a zero-actionable APPROVED, the next round implemented review
-// Questions the reviewer had marked "No change requested", and the re-review found new
-// Minors inside the code that round had just added — three the first time, two the second.
-// Questions are, by the review template's own definition, questions FOR THE HUMAN; putting
-// them in the fix set contradicts what they are and makes convergence a moving target.
-// An explicit `severityFloor` still wins, including a lower one that restores the old
-// block-everything behaviour.
-//
-// The default is applied SOFTLY, unlike a caller-passed floor: a template whose vocabulary
-// does not declare `Minor`, or whose contract carries no ranking, falls back to no floor
-// rather than throwing. A default must never break a run that never asked for it; a floor
-// the CALLER spelled wrong still throws, because that is a configuration error they made.
+// The floor DEFAULTS to `Minor`, so Major and Minor block and drive fix rounds while everything
+// below them is carried to the merge gate. Questions are, by the review template's own
+// definition, questions FOR THE HUMAN; putting them in the fix set contradicts what they are
+// and makes convergence a moving target. An explicit `severityFloor` still wins, including a
+// lower one that restores the old block-everything behaviour. The default is applied SOFTLY,
+// unlike a caller-passed floor: a template whose vocabulary does not declare `Minor`, or whose
+// contract carries no ranking, falls back to no floor rather than throwing. A default must
+// never break a run that never asked for it; a floor the CALLER spelled wrong still throws,
+// because that is a configuration error they made.
 const DEFAULT_SEVERITY_FLOOR = 'Minor'
 function defaultFloor() {
   if (!SEVERITY_SCALE.ranks) return null
@@ -1414,11 +1264,10 @@ function baseOf(story) {
   return String(story.base ?? '').trim() || PIPELINE.baseBranch
 }
 
-
 // ── Per-story lifecycle ──────────────────────────────────────────────────
 async function driveStory(story) {
   const tag = `#${story.id}`
-  // ── Every phase is a SKILL invoked by name with typed arguments (US-479). ─────────────────
+  // ── Every phase is a SKILL invoked by name with typed arguments. ─────────────────────────
   // The workflow names the skill, passes the run's values and validates the typed result; the
   // method, the rules and every shell command live in the skill.
   const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
@@ -1432,7 +1281,7 @@ async function driveStory(story) {
     `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}`
   const notesArg = () => (story.notes ? ` $notes=${JSON.stringify(story.notes)}` : '')
   const invoke = (skill, args) =>
-    `Invoke **${skill}** for story ${tag} with ${args}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
+    `Invoke **${skill}** for story ${tag} with ${args} $workflowVersion=${WORKFLOW_VERSION}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
   const resuming = Number.isInteger(story.prNumber)
   let pr = resuming ? { prNumber: story.prNumber } : null
 
@@ -1455,72 +1304,28 @@ async function driveStory(story) {
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
   }
 
-  // 3. REVIEW <-> FIX loop — reviewer is independent & BLIND to the handoff.
-  //    Converges when every ACTIONABLE finding is resolved. Findings the reviewer
-  //    marks nonActionable (by-design / won't-fix, justified) don't block: they're
-  //    carried to the merge gate as `acceptedFindings` for the human to see —
-  //    ACCUMULATED over every round, not just the last one (a round-1 reviewer never
-  //    re-raises what round 0 already had accepted).
-  //    nonActionable is NOT a scope filter — "not this story's original scope" alone
-  //    never qualifies; only "fixing it would be genuinely wrong" does.
-  //
-  //    PR-COMMENT POLICY (noise reduction — the WHOLE cycle of a PR is ONE logical cycle,
-  //    #367 in-loop + #373 across-runs): regardless of how many runs / escalations /
-  //    manual out-of-band rounds it takes to converge, a PR shows AT MOST one first-review
-  //    comment + AT MOST one final remediation comment.
-  //    - The FIRST review IS posted on the PR (the independent review artifact).
-  //    - The fix<->re-review rounds are NOT commented per round; each round is appended
-  //      to a working log `.pair/working/reviews/<id>.md` (orchestrator-side audit; the
-  //      re-reviewer stays BLIND to it — it receives prior findings via the prompt). The
-  //      log is the SINGLE SOURCE OF TRUTH for cycle state ACROSS runs: its existence ==
-  //      an in-flight cycle to CONTINUE, not restart.
-  //    - CONTINUATION (#373): on a resume run a SILENT round-0 (no second first-review) is
-  //      triggered by EITHER signal — the working log still exists (an in-flight cycle) OR a
-  //      first-review comment already exists on the PR (PR-side corroboration, so a converged-
-  //      but-unmerged re-run or a lost/pruned untracked log can't produce a duplicate first
-  //      review). The PR-side signal is DETERMINISTIC: the first review emits a fixed hidden
-  //      HTML-comment marker and the probe does an EXACT substring match on it — NOT a semantic
-  //      reading of the comment's structure — so the probe can't misclassify a
-  //      non-review comment into silencing a real first review (finding 1). The probe runs
-  //      at sonnet/low (not haiku): its job orchestrates a worktree + a `gh` fetch + a
-  //      substring match, and a mis-report fails OPEN toward a duplicate first review (the
-  //      very noise this story removes), so the reliability of those tool steps is worth the
-  //      small tier bump over the cheapest model. Log existence
-  //      additionally seeds `cycleHasRemediation` so convergence still
-  //      synthesizes+cleans even if round-0 converges immediately; a first-review-only signal
-  //      (no log) does NOT seed it, so a clean round-0 adds nothing and never synths a gone log.
-  //    - At convergence ONE synthesized remediation comment is posted, written
-  //      CONTEXTUALLY to the first review (maps EVERY finding across ALL runs in the log
-  //      -> resolution + accepted dispositions + final verdict), AND any prior intermediate
-  //      comments (escalate-flush, manual out-of-band rounds, OR a prior convergence's own
-  //      final-remediation comment on a re-run→re-converge cycle) are minimized / marked
-  //      outdated so only first-review + this one remediation remain visible; the log is
-  //      then deleted.
-  //    - On escalation the log is KEPT and flushed to the PR as the continuation anchor. A
-  //      new escalate-flush SUPERSEDES the prior one (minimized/marked-outdated in place), so
-  //      repeated escalations across runs leave only the newest flush visible, not a pile. It
-  //      ALSO minimizes any prior convergence's own final-remediation comment (a converged-but-
-  //      unmerged PR re-run that now escalates) — a stale "ready for merge" verdict must not
-  //      stay visible next to an active escalation (never the first-review comment), mirroring
-  //      the convergence-synthesis minimize set.
-  //    - MANUAL OUT-OF-BAND CONVENTION (#373): if a human/orchestrator takes over rework or
-  //      re-review after an escalate, they funnel their notes into THIS same working log
-  //      (append) rather than posting standalone PR comments; the next orchestrated run
-  //      continues the cycle and its convergence synthesizes one final remediation +
-  //      minimizes the intermediates. (This is a documented CONVENTION only — standalone
-  //      reviewer/fix agents are NOT edited by #373.)
-  //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
-  //    posting, and comment minimizing are all delegated to agents running in the worktree.
+  // 3. REVIEW <-> FIX loop — the reviewer is independent and BLIND to the author's handoff.
+  //    Converges when every ACTIONABLE finding is resolved; findings the reviewer marks
+  //    nonActionable (by-design, justified) or below the severity floor do not block and are
+  //    carried to the merge gate as `acceptedFindings`, accumulated over every round.
+  //    PR-COMMENT POLICY (owned by the cycle-comments skill): the whole cycle of a PR — every
+  //    run, escalation and manual round it takes to converge — shows AT MOST one first-review
+  //    comment and one final remediation. Fix rounds are appended to the working log
+  //    `<auditLogDir>/<id>.md`, whose existence marks an in-flight cycle to CONTINUE across runs;
+  //    a first review is detected on the PR by an exact marker match, never by judgment. On
+  //    escalation the log is kept and flushed to the PR as the continuation anchor; at
+  //    convergence ONE synthesis is posted, intermediates are minimized and the log is deleted.
+  //    The probe runs at sonnet/low: a mis-report fails OPEN toward a visible duplicate first
+  //    review, never toward suppressing one.
   const reviewLog = `${PIPELINE.auditLogDir}/${story.id}.md`
-  // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
-  // (invisible in rendered markdown → no visible noise). The continuation probe detects a
-  // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
-  // of the comment's structure — so the cheap sonnet/low probe makes no classification
-  // judgment and can't false-positive a non-review comment into silencing a real first
-  // review (the story's High-impact over-silencing risk). Minimized/outdated comments still
-  // match: gh returns their raw body, which still contains the marker.
+  // The continuation probe detects a prior first review by an EXACT substring match on this
+  // marker, NOT by a semantic reading of the comment's structure — so the cheap sonnet/low
+  // probe makes no classification judgment and can't false-positive a non-review comment into
+  // silencing a real first review (the story's High-impact over-silencing risk).
+  // Minimized/outdated comments still match: gh returns their raw body, which still contains
+  // the marker.
   const firstReviewMarker = `<!-- pair:first-review #${story.id} PR#${pr.prNumber} -->`
-  // ── Phases C + D (US-479 c2/c3): the review ↔ fix loop dispatches SKILLS, not prompts. ────
+  // ── Phases C + D: the review ↔ fix loop dispatches SKILLS, not prompts. ──────────────────
   // Each phase skill owns its method, its mutation boundary and its handoff JSON under
   // `.pair/working/runs/<run>/<story>/`; this file names the skill, passes typed arguments and
   // validates the typed result. Nothing below tells an agent HOW to write a test, seal a
@@ -1568,41 +1373,22 @@ async function driveStory(story) {
       withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} ${phase}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
       hasPreflightEvidence,
     )
-  // #373: continuation detection. Two signals, only meaningful on a resume run (a fresh
-  // story branches from origin/main, so neither a prior cycle log nor a prior first-review
-  // comment exists): `logExists` = an in-flight cycle to continue; `firstReviewPosted` =
-  // PR-side corroboration (deterministic marker match) that a first review already went out
-  // (so we never post a second one even if the untracked log is gone — findings 1 & 3).
   let isContinuation = false
   let firstReviewPosted = false
-  // #401: the probe used to be gated on `resuming`, i.e. on the CALLER having passed
-  // `prNumber` in the story object. That made the duplicate-first-review guard
-  // depend on the caller's bookkeeping, and a `Workflow({resumeFromRunId})` resume
-  // replays the implement/PR agents from cache with the SAME args — so
-  // `story.prNumber` is absent, `resuming` is false, the probe never runs,
-  // `firstReviewPosted` stays false, and round-0 posts ANOTHER first review on a PR
-  // that already carries one. Observed three times on a single story across three
-  // pause/resume cycles: that story was re-reviewed from scratch each time instead of
-  // advancing through its fix rounds, and ended up the least-progressed of its batch.
-  // The gate is now the PR's existence — a fact the script knows — instead of an
-  // argument the caller must remember. One cheap sonnet/low probe per story per run
-  // costs far less than one duplicated opus/xhigh review round, and on a genuinely
-  // fresh story both signals come back false, leaving the fresh path's behaviour
-  // identical (the first review still posts).
+  // The gate is now the PR's existence — a fact the script knows — instead of an argument the
+  // caller must remember.
   if (pr?.prNumber) {
     const probe = await agent(
       invoke(SK.cycleComments, `${cycleArgs()} $mode=probe`),
       { agentType: 'pair-implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
     )
-    // #373 finding 4: a failed / malformed / schema-invalid probe return yields BOTH signals
-    // false (via `?.x === true`), so round-0 falls through to a POSTED first review. This
-    // fail-open direction is deliberate: degrade toward VISIBILITY (post a review a human can
-    // see) rather than fail-silent (suppress it). The dangerous case — a genuine continuation
-    // where a total probe failure re-posts a first review — is low-probability (requires an
-    // agent/schema failure on a resume of an in-flight cycle) and self-announcing (a visible
-    // duplicate is noticed and pruned), whereas silent over-suppression of a real review is
-    // not. The deterministic marker above removes the misclassification failure mode; only a
-    // hard probe failure reaches this fallback.
+    // This fail-open direction is deliberate: degrade toward VISIBILITY (post a review a human
+    // can see) rather than fail-silent (suppress it). The dangerous case — a genuine
+    // continuation where a total probe failure re-posts a first review — is low-probability
+    // (requires an agent/schema failure on a resume of an in-flight cycle) and self-announcing
+    // (a visible duplicate is noticed and pruned), whereas silent over-suppression of a real
+    // review is not. The deterministic marker above removes the misclassification failure mode;
+    // only a hard probe failure reaches this fallback.
     isContinuation = probe?.logExists === true
     firstReviewPosted = probe?.firstReviewPosted === true
   }
@@ -1617,17 +1403,12 @@ async function driveStory(story) {
   // re-review. Re-injecting it after GREEN would force a second fix even when its RED test
   // proved the defect closed.
   let pendingRequiredFindings = [...(story.requiredFindings ?? [])]
-  // ACCUMULATES across rounds — never reassigned. A finding accepted in round 0 (by-design, or
-  // below the floor) is not re-raised by the round-1 reviewer, because round 1 only sees the
-  // fixed code and has no memory of what the human was already told would be carried. So a
-  // per-round reassignment loses it: the card converges `ready-for-merge` with an EMPTY accepted
-  // table, the convergence prompt renders that empty table, and the merge gate is told nothing was
-  // carried. Sub-floor findings are not recoverable elsewhere either — `prevFindings = actionable`
-  // excludes them, so they never reach the fixer's working log. AC4 requires them carried, so the
-  // accumulator is the carrier of record.
+  // ACCUMULATES across rounds — never reassigned. So a per-round reassignment loses it: the
+  // card converges `ready-for-merge` with an EMPTY accepted table, the convergence prompt
+  // renders that empty table, and the merge gate is told nothing was carried. Sub-floor
+  // findings are not recoverable elsewhere either — `prevFindings = actionable` excludes them,
+  // so they never reach the fixer's working log.
   const accepted = []
-  // De-dup key: a re-review repeating a sub-floor finding nobody was asked to fix is the norm, and
-  // one finding must occupy one row of the accepted table, not one row per round it survived.
   const acceptedKeys = new Set()
   const accept = (findings) => {
     for (const f of findings) {
@@ -1658,18 +1439,15 @@ async function driveStory(story) {
       ],
     }
   }
-  // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
-  // any remediation state to synthesize — not merely whether a fix happened this run. On a
-  // continuation (log present) it is seeded true so an immediate round-0 convergence still
-  // posts the ONE final synthesis + deletes the log (never leaves an escalate-flush as the
-  // last word). A converged-but-unmerged re-run has NO log (firstReviewPosted true,
-  // isContinuation false) → stays false, so a clean round-0 adds nothing and never tries to
-  // synth a deleted log. A fresh cycle starts false, so a clean first review stands alone (AC6).
+  // On a continuation (log present) it is seeded true so an immediate round-0 convergence still
+  // posts the ONE final synthesis + deletes the log (never leaves an escalate-flush as the last
+  // word). A converged-but-unmerged re-run has NO log (firstReviewPosted true, isContinuation
+  // false) → stays false, so a clean round-0 adds nothing and never tries to synth a deleted
+  // log.
   let cycleHasRemediation = isContinuation
   while (true) {
-    // #373: round-0 is the FIRST (posted) review ONLY on a genuinely fresh cycle — no
-    // in-flight log AND no first-review comment already on the PR. Either signal makes
-    // round-0 a SILENT re-review, so a PR never accrues a second first-review.
+    // Either signal makes round-0 a SILENT re-review, so a PR never accrues a second
+    // first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
     // An initial/resumed-without-history review establishes the whole-PR baseline.
     // Once a fix is in flight, even the file inventory must start at that baseline;
@@ -1681,38 +1459,25 @@ async function driveStory(story) {
         SK.reviewPhase,
         `${phaseArgs(`r${round}`, reviewBase)} $worktree=${reviewWorktreePath} $mode=${mode} $marker=${JSON.stringify(firstReviewMarker)} $template=${REVIEW_TEMPLATE_LABEL} $severities=${JSON.stringify(SEVERITIES)} $verdicts=${JSON.stringify(VERDICTS)} $reviewSkill=${SK.review} $writeIssue=${SK.writeIssue}${mode === 're-review' ? ` $priorFindings=${JSON.stringify(prevFindings)} $priorHead=${prevReviewedHead}` : ''}`,
       ),
-      // 'high', not 'xhigh': the measured stalls were silence between utterances, not depth, and
-      // the pacing rule now lives in the skill. Restoring 'xhigh' is legitimate once narration is
-      // reliable — it buys review depth, which is the point of this gate.
+      // Restoring 'xhigh' is legitimate once narration is reliable — it buys review depth,
+      // which is the point of this gate.
       withModel('reviewer', { agentType: 'pair-reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'high', schema: REVIEW_SCHEMA }),
       hasReviewEvidence,
     )
-    // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent
-    // dies, and `review?.findings ?? []` then yields zero findings — which the
-    // convergence test below reads as "nothing actionable remains" and returns
-    // `ready-for-merge`. That is the worst possible failure direction: a PR that was
-    // never actually reviewed is handed to the human labelled as review-approved, and
-    // on a FIRST round it is also missing the first-review comment that would make the
-    // absence visible. Distinguish "reviewed, found nothing" from "did not review":
-    // only the former may converge.
-    //
-    // MEASURED (#432): checking only for `null` was not enough. Every reviewer agent died —
-    // the machine slept mid-response — the PR carried zero comments and zero reviews, and the
-    // batch still returned `ready-for-merge`. A truthy-but-contentless return (`{}`, a
-    // truncated structured output) yields `findings ?? []` = no findings, which reads as
-    // "nothing actionable remains".
-    //
-    // So the test is inverted: a VERDICT must be present. Absence of findings is not evidence
-    // that a review happened; presence of a verdict is. Every real review emits one — it is a
-    // required field of the contract schema — so this costs a genuine clean review nothing.
-    // `hasReviewEvidence` is the SAME function `agentRetry` was given above: a contentless or
-    // unanchored return is retried once like any other dead step, then lands here.
+    // A DEAD reviewer is not a clean review. `agent()` returns null when the subagent dies, and
+    // `review?.findings ?? []` then yields zero findings — which the convergence test below
+    // reads as "nothing actionable remains" and returns `ready-for-merge`. That is the worst
+    // possible failure direction: a PR that was never actually reviewed is handed to the human
+    // labelled as review-approved, and on a FIRST round it is also missing the first-review
+    // comment that would make the absence visible. Distinguish "reviewed, found nothing" from
+    // "did not review": only the former may converge. A truthy-but-contentless return (`{}`, a truncated structured
+    // output) yields `findings ?? []` = no findings, which reads as "nothing actionable
+    // remains". So the test is inverted: a VERDICT must be present. Absence of findings is not
+    // evidence that a review happened; presence of a verdict is. `hasReviewEvidence` is the
+    // SAME function `agentRetry` was given above: a contentless or unanchored return is retried
+    // once like any other dead step, then lands here.
     if (!hasReviewEvidence(review))
-      // `acceptedFindings` travels on EVERY terminal arm, this one included. A card whose
-      // reviewer dies mid-cycle otherwise reports the by-design and below-floor findings of
-      // every earlier round as if none had been raised — and those are precisely the findings
-      // the fixer never receives, so they are recoverable from nowhere else. AC4 says an
-      // accepted finding always reaches the human; a failure is not an exception to that.
+      // `acceptedFindings` travels on EVERY terminal arm, this one included.
       return { story, prNumber: pr.prNumber, status: 'failed-review', round, acceptedFindings: accepted, reviewLog: cycleHasRemediation ? reviewLog : undefined }
     const reviewedHead = String(review.reviewedHead).toLowerCase()
     const staleRequired = pendingRequiredFindings.filter((finding) => finding.observedHead !== reviewedHead)
@@ -1736,23 +1501,15 @@ async function driveStory(story) {
       log(`${tag} r${round}: ${belowFloor.length} finding(s) below the ${SEVERITY_FLOOR.name} floor carried to the gate, ${actionable.length} blocking`)
     // Converge once nothing actionable remains (by-design findings don't block).
     if (actionable.length === 0) break
-    // `needsHumanDecision` used to escalate IMMEDIATELY, skipping the fixer entirely — even
-    // when the findings were ordinary and already decided. Measured cost: four consecutive
-    // rounds on one story and two on another produced review after review and ZERO commits,
-    // because the reviewer raised the flag and the loop went straight to the flush. The
-    // orchestrator was writing detailed fix instructions for an agent that was never invoked.
-    //
-    // A reviewer raising it is saying "one of these needs a human", not "none of these can be
-    // fixed". So spend ONE fix round on the findings first, then escalate if the reviewer
-    // still says so. `humanDecisionPending` remembers the request across that round, so the
-    // escalation still happens — it is deferred by one round, not dropped. On the second
-    // occurrence we stop: a flag raised again after a fix round is a genuine disagreement.
+    // The orchestrator was writing detailed fix instructions for an agent that was never
+    // invoked. A reviewer raising it is saying "one of these needs a human", not "none of these
+    // can be fixed". So spend ONE fix round on the findings first, then escalate if the
+    // reviewer still says so. On the second occurrence we stop: a flag raised again after a fix
+    // round is a genuine disagreement.
     const wantsHuman = review?.needsHumanDecision === true
     // A sealed snapshot deliberately freezes its base. If the reviewer identifies a finding
     // whose ONLY remediation is rewriting that base's history, spending the normal one fix
-    // round first makes the human's legitimate options narrower. Stop before RED/seal/GREEN;
-    // this exceptional route is typed, while all other human decisions retain the measured
-    // one-round behavior below.
+    // round first makes the human's legitimate options narrower.
     const historyRewriteDecision = wantsHuman && review?.humanDecisionKind === 'history-rewrite'
     let mustEscalate = false
     if (historyRewriteDecision) {
@@ -1765,14 +1522,13 @@ async function driveStory(story) {
       mustEscalate = true
     }
     if (mustEscalate) {
-      // #373 finding 1: emit a PR-visible escalation UNLESS this run's round-0 ALREADY posted
-      // the first review (`first === true`) carrying these same findings. The gap this closes:
-      // a SILENT re-review that escalates with no log — a resumed PR whose prior first review
-      // exists but whose untracked working log was never written / was pruned (firstReviewPosted
-      // true, isContinuation false → cycleHasRemediation false, first false). Without the `!first`
-      // arm the new blocking concern surfaced ONLY in the batch return value and a later resume
-      // repeated the silent escalation. The log read is BEST-EFFORT: only a continuing cycle
-      // (cycleHasRemediation) has a log to anchor to; the no-log arm escalates from inline findings.
+      // The gap this closes: a SILENT re-review that escalates with no log — a resumed PR whose
+      // prior first review exists but whose untracked working log was never written / was
+      // pruned (firstReviewPosted true, isContinuation false → cycleHasRemediation false, first
+      // false). Without the `!first` arm the new blocking concern surfaced ONLY in the batch
+      // return value and a later resume repeated the silent escalation. The log read is
+      // BEST-EFFORT: only a continuing cycle (cycleHasRemediation) has a log to anchor to; the
+      // no-log arm escalates from inline findings.
       if (cycleHasRemediation || !first) {
         await agent(
           invoke(SK.cycleComments, `${cycleArgs()} $mode=flush $hasLog=${cycleHasRemediation} $findings=${JSON.stringify(actionable)}`),
@@ -1879,25 +1635,12 @@ const results = await boundedParallel(
   STORIES.map((s) => () => driveStory(s)),
   MAX_PARALLELISM,
 )
-// `id` is lifted to the top of each row: #250 reads it positionally-independently, and
-// reaching into `row.story.id` would couple the caller to this engine's internal shape.
 const batch = results.filter(Boolean).map((r) => ({ id: r.story?.id, ...r }))
-// The note must describe what ACTUALLY happened. The previous version stated
-// "PRs are ready-for-merge or escalated" unconditionally — so a run whose stories
-// ALL died (every agent stalled out, `parallel` returning six nulls) reported an
-// empty batch under a success-shaped sentence, indistinguishable from a completed
-// one. That is the same failure class #401 fixed for empty INPUT, reached instead
-// through total execution failure: a batch that drove nothing must say so.
-//
-// COUNTING ROWS IS NOT COUNTING PROGRESS. Branching on `batch.length` alone left the
-// failure arm unreachable for the shape that actually happens: `driveStory` returns an
-// HONEST `{status: 'failed-implement'}` row when its agents die, so `batch.length ===
-// STORIES.length` and a batch where EVERY card failed was reported as "2/2 stories
-// returned a result. PRs are ready-for-merge or escalated" — no PR existed and nothing
-// was mergeable. `batch.length` only drops when the THUNK itself returns null (a stall
-// before `driveStory` could return), which is the rarer half. So the sentence is derived
-// from the STATUSES: a card ADVANCED only if it reached a PR the human can act on
-// (`ready-for-merge` or `escalate`); everything else is named by the status it carries.
+// The note describes what ACTUALLY happened: counting rows is not counting progress. A row
+// with a failure status is not a PR, and `batch.length` only drops when the thunk itself
+// returned null. So the sentence is derived from the STATUSES: a card ADVANCED only if it
+// reached a PR the human can act on (`ready-for-merge` or `escalate`); everything else is named
+// by the status it carries.
 const died = STORIES.length - batch.length
 const ADVANCED = new Set(['ready-for-merge', 'escalate'])
 const advanced = batch.filter((r) => ADVANCED.has(r.status))
@@ -1918,8 +1661,7 @@ const note = !STORIES.length
     ? `NOTHING COMPLETED: 0/${STORIES.length} cards advanced to a PR — ${shortfall}. No PR is ready to merge and nothing was escalated. Committed work in the per-story worktrees is intact — re-run to resume; check the machine's load first, since a stall means agents could not show progress within the supervisor's window.`
     : `${advanced.length}/${STORIES.length} cards advanced to a PR (${tally(advanced)})${shortfall ? `; ${shortfall}` : ''}. Those PRs are ready-for-merge or escalated; check each status. Merge is the human gate — review the list, merge, then re-run with the next mutex-safe batch.`
 return {
-  // Contract provenance per template — `fallback-loose` is the logged signal
-  // that a contract could not be derived and the loose skeleton was used (AC4).
+  workflowVersion: WORKFLOW_VERSION,
   contracts: contracts.map(({ name, status }) => ({ name, status })),
   batch,
   // Stories that never returned anything, named so a failed run is actionable

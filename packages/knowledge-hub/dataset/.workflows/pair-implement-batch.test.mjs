@@ -63,8 +63,8 @@ async function runWorkflow({ args, dispatch }) {
     if (opts.agentType === 'pair-remediation-planner') {
       if (result === null) return null
       if (result && typeof result === 'object' && Array.isArray(result.groups)) return result
-      const m = /\$findings=(\[.*?\]) \$scope=|\$findings=(\[.*\])\. The skill/.exec(prompt)
-      const count = JSON.parse((m?.[1] ?? m?.[2]) ?? '[]').length
+      const m = /\$findings=(\[.*?\]) \$(?:scope|workflowVersion)=/.exec(prompt)
+      const count = JSON.parse(m?.[1] ?? '[]').length
       return {
         status: 'planned',
         inputHead: REVIEWED_HEAD,
@@ -2441,7 +2441,7 @@ test('every phase skill is dispatched by its configured name with the typed run 
   assert.match(calls.find(c => c.opts.label?.startsWith('fix:')).prompt, /^Invoke \*\*\/pair-workflow-green-fix\*\* for story #292 with .*\$reviewLog=\.pair\/working\/reviews\/292\.md/)
   assert.match(byType('pair-fix-verifier').prompt, /^Invoke \*\*\/pair-workflow-p3-verify\*\* for story #292 with .*\$worktree=\.\.\/pair-worktrees\/292-review .*\$ledger=\[\]/)
   // every dispatched prompt names the run directory as the ONLY readable working location
-  for (const c of calls.filter(c => /^Invoke \*\*\/pair-workflow-[a-z-]+\*\* for story #292 with/.test(c.prompt)))
+  for (const c of calls.filter(c => /^Invoke \*\*\/pair-workflow-[a-z0-9-]+\*\* for story #292 with/.test(c.prompt)))
     assert.match(c.prompt, /the run directory `\.pair\/working\/runs\/run-42\/292\/`/)
 })
 
@@ -2450,6 +2450,42 @@ test('args.runId is validated as one safe path segment; absent it defaults to st
   await assert.rejects(runWorkflow({ args: { stories: [STORY], runId: '' }, dispatch: () => ({}) }), /runId/)
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch() })
   assert.match(calls.find(c => c.opts.agentType === 'pair-remediation-planner').prompt, /\$run=story-292 /)
+})
+
+// US-479 c5 — the coordinator carries no phase policy: every agent is dispatched through
+// `invoke(<configured skill>, <typed args>)`, no shell or git command is spelled in a prompt, and
+// the rules that used to live in prompt constants are gone from the file.
+test('US-479 AC: the workflow dispatches ONLY skill invocations — zero free-form prompt, zero shell command', () => {
+  const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+  // every agent()/agentRetry() prompt is an invoke(...) call
+  // `agent(prompt, opts)` inside agentRetry itself forwards a prompt it was given, not a dispatch
+  const dispatches = [...code.matchAll(/\bagent(?:Retry)?\(\s*\n?\s*([^\n,]+)/g)].map(m => m[1].trim()).filter(d => d !== 'prompt')
+  assert.ok(dispatches.length >= 12, `expected the phase dispatches, found ${dispatches.length}`)
+  for (const d of dispatches) assert.match(d, /^(invoke\(|`Invoke \*\*\$\{SK\.[a-zA-Z]+\}\*\*)/, `a dispatch is not a skill invocation: ${d}`)
+  // none of the retired prompt rules survive outside comments
+  for (const gone of ['PACING', 'TEXT SHAPE', 'CONTRACT INVENTORY', 'FINITE-STATE', 'SEALED RED SNAPSHOT', 'CONVERGENCE SWEEP', 'DO NOT FILE NEW ISSUES', 'ISOLATION (mandatory'])
+    assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
+})
+
+test('US-479 AC: no dispatched prompt carries a shell or git command — every command lives in a skill', async () => {
+  const { calls } = await runWorkflow({ args: { stories: [STORY], severityFloor: 'Minor' }, dispatch: planDispatch() })
+  assert.ok(calls.length >= 12)
+  for (const c of calls) {
+    assert.doesNotMatch(c.prompt, /\bgit (worktree|diff|rev-parse|fetch|commit|push|log|show|add|reset|rebase)\b/, `${c.opts.label}: a git command reached the prompt`)
+    assert.doesNotMatch(c.prompt, /\bgh (pr|issue|api)\b/, `${c.opts.label}: a gh command reached the prompt`)
+    assert.doesNotMatch(c.prompt, /\bnode \.claude\//, `${c.opts.label}: a script invocation reached the prompt`)
+    assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-[a-z0-9-]+\*\* /, `${c.opts.label}: not a skill invocation`)
+  }
+})
+
+test('US-479 AC: the coordinator states its workflowVersion in every result and hands it to every phase skill', async () => {
+  const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch() })
+  assert.match(result.workflowVersion, /^\d+\.\d+\.\d+$/)
+  const skillCalls = calls.filter(c => /^Invoke \*\*\/pair-workflow-/.test(c.prompt))
+  assert.ok(skillCalls.length >= 8)
+  for (const c of skillCalls) assert.ok(c.prompt.includes(`$workflowVersion=${result.workflowVersion}`), `${c.opts.label} was not told the workflow version`)
+  const { result: empty } = await runWorkflow({ args: { stories: [] }, dispatch: () => ({}) })
+  assert.equal(empty.workflowVersion, result.workflowVersion)
 })
 
 test('the phase skills are real installed skills, and the engine names them by their configured default', () => {

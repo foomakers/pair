@@ -54,10 +54,31 @@ Accepted
 ### Trade-offs
 
 - `models.redMapper` no longer exists (`models.planner` replaces it); `historyDecision` and `custodyReset` are unknown card keys.
-- The workflow file still carries the history of its own defects as comments; US-479 c5 moves that record into this ADR and leaves the file as a coordinator.
+- The defect history that used to live as comments in the workflow file is recorded once, in the appendix below; the file describes behaviour only.
 
 ## References
 
 - Story #479, PR #480 — one branch, one squash-merge together with the 2026-09-08 hardening (`7b559003`).
 - `.pair/working/reports/delivery-workflow-as-is.md`, `delivery-workflow-to-be.md` (2026-09-08).
 - ADR-017 (automation loop), ADR-021 (fan-out realizations).
+
+## Appendix — defects the coordinator's contract closes
+
+Recorded here so the workflow file can describe behaviour instead of narrating its history. Each
+line names the failure the corresponding rule prevents; the rule itself lives in the code or the
+skill it belongs to.
+
+| Rule | Failure it closed |
+| --- | --- |
+| Loud input validation (`args` must be a card list; unknown keys throw) | A bare list of refs coerced to an empty batch, ran zero agents and reported success; a misspelled key (`prNumbr`) opened a second PR for a story that had one. |
+| Present-but-empty is an error; `undefined`/`null` are the only spellings of absent | `base: cfg.base ?? ''` dropped the stacked-story clause; `prNumber: undefined` aborted a 20-card batch. |
+| Card and pipeline values validated by CONTENT with one predicate set | `branch: 'main; gh pr merge 432 --admin'` rendered a merge command into an implement prompt; `id: '../..'` aimed a `--force` worktree remove outside the root. |
+| `prNumber` must be a positive integer | `0` switched the card to resume mode, skipped implement and the probe, and reported an unbuilt story as review-approved. |
+| A review needs a verdict and a `reviewedHead` | Every reviewer died mid-response; `findings ?? []` read as "nothing actionable" and the batch returned `ready-for-merge`. |
+| Severity floor ranks by the contract's explicit `severityRanks`, never array order; prototype-free rank maps | An ascending vocabulary ranked a `Blocker` below a `High` floor; `{severity: 'constructor'}` fell out of both partitions. |
+| Accepted findings accumulate across rounds | Round-0 by-design and sub-floor findings vanished from the merge-gate table after a clean round 1. |
+| Continuation probe keyed on the PR's existence and an exact marker, fail-open | Three pause/resume cycles posted three first reviews on one PR; a semantic reading of comment structure could silence a real one. |
+| The note counts ADVANCED cards, not returned rows | A batch whose every card failed reported "PRs are ready-for-merge or escalated". |
+| Only `ready-for-merge` advances in `pair-loop` | `seal-invalidated` and `stale-history-decision` cards were re-driven every iteration. |
+| Rebase never repaired; custody by script | The custody/history-decision layer had become a second engine that repaired in place what the design can refuse. |
+| One frozen plan per round, indices into the received set | A finding could be left out of remediation without anyone noticing. |

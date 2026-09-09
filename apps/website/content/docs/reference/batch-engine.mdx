@@ -152,6 +152,9 @@ Every phase writes one handoff JSON under `.pair/working/runs/<run>/<story>/`; t
 RED and P3 on their declared models. Roles: `implementation`, `pr`, `reviewer`, `planner`, `red`,
 `redVerifier`, `seal`, `green`, `preflight`.
 
+Every result carries `workflowVersion`, and every phase skill receives it as `$workflowVersion` so
+each handoff records which coordinator produced it.
+
 `runId` (optional, one safe path segment) names the handoff directory `.pair/working/runs/<runId>/`;
 absent, each card uses `story-<id>`. The six phase skills are pipeline configuration like the others —
 `pipeline.skills.remediationPlan`, `redSpec`, `redVerify`, `redSeal`, `greenFix`, `p3Verify`, `reviewPhase`, `cycleComments`, `contractPhase`, `implementPhase`, `prPhase` —
