@@ -275,7 +275,7 @@ describe('analyze-delivery-metrics — catalog registration (#222)', () => {
     it(`${label} next catalog lists it and states 32 capability / 55 total`, () => {
       expect(next).toMatch(/analyze-delivery-metrics/)
       expect(next).toContain('32 capability')
-      expect(next).toContain('55 skills')
+      expect(next).toContain('50 skills')
     })
 
     // Review of #461, Minor 6: next's "Full catalog coverage" note enumerates the skills
@@ -289,7 +289,7 @@ describe('analyze-delivery-metrics — catalog registration (#222)', () => {
     it(`${label} skills-guide lists it under Analysis (3) and states 55 total`, () => {
       expect(guide).toMatch(/analyze-delivery-metrics/)
       expect(guide).toContain('Analysis Skills (3)')
-      expect(guide).toMatch(/Total: 55/)
+      expect(guide).toMatch(/Total: 50/)
     })
 
     it(`${label} skills-guide states it writes its own panel — the D14 exception`, () => {

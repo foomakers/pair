@@ -7,7 +7,7 @@ author: Foomakers
 
 # /next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 55-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 50-skill catalog across all lifecycle phases.
 
 ## Arguments (optional)
 
@@ -37,9 +37,9 @@ Keep only candidate issues that carry the given label. `--filter` takes a **sing
 
 The scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/next` never reuses a selection computed in a previous step.
 
-## Skill Catalog (55 skills)
+## Skill Catalog (50 skills)
 
-The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 10 process + 32 capability + 11 workflow + `/next` and `/loop` (the two bare, uncategorized navigator skills) = 55. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 10 process + 32 capability + 6 workflow + `/next` and `/loop` (the two bare, uncategorized navigator skills) = 50. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (10)
 
@@ -93,22 +93,17 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/design-manual-tests`   | Testing         | Generate manual test suite from project analysis                             |
 | `/execute-manual-tests`  | Testing         | Execute manual test suite + generate report                                  |
 
-### Workflow Skills (11)
+### Workflow Skills (6)
 
-Delivery-phase skills under `workflow/`, dispatched by the `pair-implement-batch` engine during a review ↔ remediation cycle. They are catalogued for completeness and never cascade-suggested: a human does not invoke a remediation phase from a board state.
+Delivery-stage skills under `workflow/`, dispatched by the `pair-implement-batch` engine — the four judgment stages of a delivery cycle plus the batch-level template contract. They are catalogued for completeness and never cascade-suggested: a human does not invoke a remediation phase from a board state.
 
-| Skill | Phase | Description |
+| Skill | Stage | Description |
 | ----- | ----- | ----------- |
-| `/remediation-plan` | D0 | Group actionable findings into a frozen, owner-aligned plan |
-| `/red-spec` | D1 | Author the test-only RED contract for one group |
-| `/red-verify` | D2 | Independently reproduce the RED contract before sealing |
-| `/red-seal` | D3 | Freeze the contract into one local Git snapshot (script) |
-| `/green-fix` | D4 | Make the sealed contract pass inside fixScope; update the PR |
-| `/p3-verify` | D5 | Custody check (script) + read-only evidence re-run over the delta |
-| `/review-phase` | C | Independent blind review of one PR head; review set by risk tier |
-| `/cycle-comments` | C/D | PR-comment policy of the cycle: probe / flush / synthesize |
-| `/implement-phase` | A | Build one story in its worktree, test-first, gate verified, checkpoint written; never opens the PR |
-| `/pr-phase` | B | Publish exactly one review-ready PR through the project publish-pr skill; never reviews |
+| `/red-spec` | 1 | Preparation: inventory, grouping, executable acceptance contract (witnesses + controls), test-only |
+| `/red-verify` | 2 | Independent validation of the contract, all gaps in one answer, then the deterministic seal |
+| `/implement-phase` | 3 | Initial implementation above the sealed contract, test-first; publishes the story's one PR |
+| `/green-fix` | 3 | Remediation implementation inside fixScope above the seal; updates the PR |
+| `/review-phase` | 4 | Independent final verification: custody, evidence, tier passes, stable findings, idempotent publication |
 | `/contract-phase` | 0 | Ensure the template-derived machine contract (cache-by-hash via ensure-contract.mjs) |
 
 ### Navigator Skills (2)
@@ -252,4 +247,4 @@ See [graceful degradation](../../.pair/knowledge/guidelines/technical-standards/
 - This skill is read-only: it inspects state but never modifies files, PM tool data, or code-host data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: nearly all of the 55 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition. `/publish-pr` will be reachable via `/implement` once wired (not yet composed), so `/next` cannot surface it today. `/brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade. `/analyze-delivery-metrics` is the same shape for the same reason: a retro/period report is wanted on a cadence the board does not express, so it is catalogued and reachable on demand, never cascade-suggested.
+- **Full catalog coverage**: nearly all of the 50 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition. `/publish-pr` will be reachable via `/implement` once wired (not yet composed), so `/next` cannot surface it today. `/brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade. `/analyze-delivery-metrics` is the same shape for the same reason: a retro/period report is wanted on a cadence the board does not express, so it is catalogued and reachable on demand, never cascade-suggested.

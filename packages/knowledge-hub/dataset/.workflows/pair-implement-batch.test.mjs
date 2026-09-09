@@ -294,9 +294,17 @@ test('TC-11 / TC-14: the six phase skills are real installed skills named by the
   }
   for (const name of ['red-spec', 'red-verify', 'implement-phase', 'green-fix', 'review-phase'])
     assert.ok(existsSync(new URL(`../skills/pair-workflow-${name}/scripts/cycle-state.mjs`, import.meta.url)), `${name} ships without cycle-state.mjs`)
-  // the seal runs inside the validation stage, with the custody script shipped beside that skill
+  // the seal runs inside the validation stage, the custody check inside the final verification, the
+  // idempotent publication inside the stages that publish — each with its script shipped beside it
   assert.match(SKILL('red-verify'), /red-snapshot\.mjs seal/)
   assert.ok(existsSync(new URL('../skills/pair-workflow-red-verify/scripts/red-snapshot.mjs', import.meta.url)))
+  assert.match(SKILL('review-phase'), /red-snapshot\.mjs"? verify-chain/)
+  assert.match(SKILL('review-phase'), /pr-comment\.mjs.*upsert/)
+  assert.match(SKILL('green-fix'), /pr-comment\.mjs.*upsert/)
+  for (const f of ['pair-workflow-review-phase/scripts/red-snapshot.mjs', 'pair-workflow-review-phase/scripts/pr-comment.mjs', 'pair-workflow-green-fix/scripts/pr-comment.mjs'])
+    assert.ok(existsSync(new URL(`../skills/${f}`, import.meta.url)), `${f} missing`)
+  for (const gone of ['remediation-plan', 'red-seal', 'p3-verify', 'cycle-comments', 'pr-phase']) assert.equal(SKILL_EXISTS(gone), false, `retired skill ${gone} is still installed`)
+  for (const gone of ['pair-remediation-planner', 'pair-red-sealer', 'pair-fix-verifier']) assert.equal(existsSync(new URL(`../agents/${gone}.md`, import.meta.url)), false, `retired agent ${gone} is still installed`)
 })
 
 test('TC-11: the author cannot approve its own work — the final verifier and the contract validator are distinct read-only roles from the author and the fixer', async () => {

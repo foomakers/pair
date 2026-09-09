@@ -16,9 +16,9 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 |------|-------|---------|
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 32 | Atomic units — perform a single focused operation |
-| **Workflow** | 11 | Delivery phases — dispatched by the batch engine, one mutation boundary each |
+| **Workflow** | 6 | Delivery stages — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 55 (10 process + 32 capability + 11 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 50 (10 process + 32 capability + 6 workflow + 2 navigator).
 
 ## Full Catalog
 
@@ -131,22 +131,17 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 |-------|-------|
 | `/pair-capability-grill` | Reusable interview engine (interview / sync modes), write-free |
 
-### Workflow Skills (11)
+### Workflow Skills (6)
 
-Delivery-phase skills the batch engine (`pair-implement-batch`) dispatches to during the review ↔ remediation loop (US-479). Each owns one mutation boundary and writes one handoff under `.pair/working/runs/<run>/<story>/`.
+Delivery-stage skills the batch engine (`pair-implement-batch`) dispatches to — the four judgment stages of a delivery cycle (US-479, ADR-024 amendment b) plus the batch-level template contract. Each resolves the durable cycle state first (`cycle-state.mjs`), owns one mutation boundary and publishes one handoff under `.pair/working/runs/<run>/<story>/`; probe, seal, hash, state and comment publication run as scripts inside them, never as their own dispatch.
 
-| Skill | Phase | Description |
+| Skill | Stage | Description |
 |-------|-------|-------------|
-| `/pair-workflow-remediation-plan` | D0 | Group actionable findings by owner, mode and allowed paths into a frozen plan |
-| `/pair-workflow-red-spec` | D1 | Author the test-only RED contract for one group (domain map, fixScope, hashed artifacts) |
-| `/pair-workflow-red-verify` | D2 | Independently reproduce the RED contract before it is sealed |
-| `/pair-workflow-red-seal` | D3 | Freeze the contract into one local Git snapshot via `red-snapshot.mjs seal` |
-| `/pair-workflow-green-fix` | D4 | Make the sealed contract pass inside fixScope; commit GREEN above the seal; update the PR |
-| `/pair-workflow-p3-verify` | D5 | Custody check via `red-snapshot.mjs verify`, then read-only evidence re-run over the delta |
-| `/pair-workflow-review-phase` | C | Independent blind review of one PR head: review set by risk tier, union of passes, first / re-review / fresh modes |
-| `/pair-workflow-cycle-comments` | C/D | The cycle's PR-comment policy: probe (marker + log), flush (escalation), synthesize (one final remediation table) |
-| `/pair-workflow-implement-phase` | A | Build one story in its worktree, test-first, gate verified, checkpoint written; never opens the PR |
-| `/pair-workflow-pr-phase` | B | Publish exactly one review-ready PR through the project publish-pr skill; never reviews |
+| `/pair-workflow-red-spec` | 1 preparation | Inventory (AC/finding → producer → classes/interactions), grouping of a round, executable acceptance contract: red witnesses + pass controls, stable row ids, test-only |
+| `/pair-workflow-red-verify` | 2 validation + seal | Reproduce every row and artifact, re-derive the inventory, emit all gaps in one rejection; on approval run `red-snapshot.mjs seal` in the same execution |
+| `/pair-workflow-implement-phase` | 3 implementation (initial) | Build the story test-first above the sealed contract, gate verified, checkpoint written, one PR published through publish-pr |
+| `/pair-workflow-green-fix` | 3 implementation (remediation) | Make the sealed contract pass inside fixScope; GREEN above the seal; PR updated; one retry on the same seal |
+| `/pair-workflow-review-phase` | 4 final verification | `red-snapshot.mjs verify-chain`, evidence re-run, tier passes, stable finding ids and transitions, readiness bound to the remote head, marker-keyed idempotent publication |
 | `/pair-workflow-contract-phase` | 0 | Ensure the template-derived machine contract (cache-by-hash via ensure-contract.mjs) |
 
 ## Directory Structure
