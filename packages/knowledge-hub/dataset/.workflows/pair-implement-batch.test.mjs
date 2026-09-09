@@ -713,6 +713,28 @@ test('TC-16: fixed traces — cold path 5 dispatches (was 5 + probe on 2.0.0), o
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TC-15 — bounded context: references and identities travel, raw evidence stays in the run directory
+// ═══════════════════════════════════════════════════════════════════════════
+test('TC-15: every dispatched payload carries identities, references and compact findings — never a ledger, a raw log, a whole review history or a re-serialized contract', async () => {
+  const bigLedger = Array.from({ length: 40 }, (_, i) => ({ claim: `claim ${i}`, oracle: 'o', probe: 'p', observed: 'x'.repeat(200) }))
+  const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding({ evidence: 'y'.repeat(2000), description: 'wrong output on the empty form' })] } : { verdict: 'Approved', findings: [] })
+  const { calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-reviewer' ? review(o.label === 'verify:#292 r0' ? 0 : 1) : o.label?.startsWith('green:') ? { evidenceLedger: bigLedger } : {}) })
+  for (const c of calls.slice(1)) {
+    assert.ok(c.prompt.length < 3500, `${c.opts.label}: ${c.prompt.length} chars — a payload this size is carrying evidence, not references`)
+    assert.doesNotMatch(c.prompt, /evidenceLedger|\$ledger=|"observed":|"evidence":/, `${c.opts.label}: raw evidence reached a prompt`)
+    assert.doesNotMatch(c.prompt, /"inventory":|"matrix":|"redTests":/, `${c.opts.label}: a contract was re-serialized into a prompt instead of referenced by path + hash`)
+  }
+  const green = calls.find(c => c.opts.label === 'green:#292 r1-g1').prompt
+  assert.match(green, /\$snapshot=c{40} \$contract=\/main\/\S+r1-g1-red-contract\.json/, 'GREEN receives the seal and the contract by reference')
+  const verify = calls.find(c => c.opts.label === 'verify:#292 r1').prompt
+  assert.match(verify, /\$prior=r0-review-phase \$openIds=\["r0-1"\]/, 'the verifier receives the prior review by name and the open ids, not the findings')
+  assert.doesNotMatch(verify, /wrong output on the empty form/, 'the prior finding text is not repeated into the verifier prompt')
+  const prep = calls.find(c => c.opts.label === 'prepare:#292 r1-g1').prompt
+  const payload = jsonArg(prep, 'findings')
+  assert.deepEqual(Object.keys(payload[0]).sort(), ['description', 'id', 'kind', 'location', 'recommendation', 'severity'], 'the preparation stage receives exactly the compact finding')
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Severity floor — the same policy, re-checked on every verification
 // ═══════════════════════════════════════════════════════════════════════════
 test('floor: with a Major floor, a Minor-only review converges and the Minor is carried to the gate with a disposition, not fixed', async () => {
