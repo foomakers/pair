@@ -44,7 +44,9 @@ function provision() {
   if (INSTALLED) return INSTALLED
   assert.ok(existsSync(CLI), `the CLI is not built at ${CLI} — run pnpm --filter @pair/pair-cli build`)
   const project = mkdtempSync(join(tmpdir(), 'pair install target '))
-  const r = spawnSync(process.execPath, [CLI, 'install', '--source', DATASET, '--offline', project], { encoding: 'utf8', cwd: project })
+  // The CLI resolves a bare target from INIT_CWD when pnpm sets it (pre-push runs under pnpm):
+  // pin the target through the environment too, or the install lands in the monorepo itself.
+  const r = spawnSync(process.execPath, [CLI, 'install', '--source', DATASET, '--offline', project], { encoding: 'utf8', cwd: project, env: { ...process.env, INIT_CWD: project } })
   assert.equal(r.status, 0, r.stdout + r.stderr)
   INSTALLED = project
   return project
