@@ -58,10 +58,16 @@
  *      flatten cannot represent are refused HERE too, not only by `pair update`.
  *      `copyDirectoryWithTransforms` validates the layout before writing a single
  *      file, so an unrepresentable corpus does not install partially: it installs
- *      as NOTHING. A directory shallower than the entry depth that holds files
- *      directly AND owns a sub-directory is that shape (a bare skill with a
- *      `scripts/` folder, a category with a `README.md` beside its skills) — the
- *      gate must not PASS a corpus the installer refuses (#483 review).
+ *      as NOTHING. Two shapes, both refused marker-BLIND, mirroring the two
+ *      validators the copy runs: a directory SHALLOWER than the entry depth that
+ *      holds files directly AND owns a sub-directory (a bare skill with a
+ *      `scripts/` folder, a category with a `README.md` beside its skills), and a
+ *      directory DEEPER than it that holds files directly while its ancestor at
+ *      the entry depth holds none — nothing owns it as content, so it is an entry
+ *      too deep (`workflow/shared/lib/util.mjs` with an empty `workflow/shared`).
+ *      Check 5 above overlaps the deep shape on `SKILL.md` offenders only and
+ *      cannot see the marker-less ones — the gate must not PASS a corpus the
+ *      installer refuses (#483 review, rounds 1-2).
  *
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
@@ -906,46 +912,20 @@ export function collectInstallableDatasetFiles(skillsDir: string): string[] {
 }
 
 /**
- * Refuses the source layouts the bounded flatten cannot represent on the SHALLOW
- * side — the gate's half of a parity the installer already enforces.
+ * Two facts about the tree's shape, read off the flat installable file list
+ * exactly as the producer's `collectDirShapes` does: which directories hold
+ * files DIRECTLY, and for each directory one example sub-directory (ancestors
+ * included, since a file list only ever names leaf directories). The registry
+ * ROOT is exempt, as it is there (`dir === '.'`).
  *
- * `pair update` installs this corpus through `copyDirectoryWithTransforms` under
- * the registry's `flatten: true, flattenDepth: 2, prefix: 'pair'`, and that copy
- * VALIDATES the source layout before writing a single file
- * (`content-ops/src/ops/copy/layout-validation.ts`,
- * `validateNoShallowEntryWithSubdir`). So a layout it cannot represent is not
- * partially installed: it throws, and the WHOLE corpus — every skill — installs
- * as nothing. A gate that PASSes such a corpus is a green light on an install
- * that yields nothing for anyone, which is why this check exists rather than
- * being left to the installer: the gate is what a maintainer runs before the
- * corpus ever reaches a user.
- *
- * The rule, re-derived here: a directory SHALLOWER than the entry depth that
- * holds files DIRECTLY and also owns a sub-directory is ambiguous, because that
- * sub-directory sits at exactly the entry depth and would install as a sibling
- * entry instead of as content. It is marker-blind by construction — a category
- * directory holding a `README.md` beside its skills is refused too, and a bare
- * skill (`loop/SKILL.md`) may therefore own no sub-directory at all, `scripts/`
- * included. The registry ROOT is exempt: its files are copied straight to the
- * destination root and are never entries (`collectDirShapes`' `dir === '.'`).
- *
- * Re-implemented rather than imported, for the same reason as `ENTRY_DEPTH` and
- * `INSTALLED_PREFIX`: this gate runs via ts-node before any build, so it stays
- * dependency-free. What is pinned by test is therefore the VERDICT, not the
- * wording — the suite drives the real `copyDirectoryWithTransforms` over the
- * same fixtures and asserts `runChecks(...).errors.length > 0` IFF that pipeline
- * throws, in both directions, so neither an under- nor an over-correction here
- * can pass.
- *
- * ADDITIVE on purpose: the layout is reported, never un-collected. Dropping the
- * offending entrypoints from the corpus walk instead would reinstate the silent
- * drop #482 set out to close — the same skills unchecked, with no error at all.
+ * Its own function only to keep each rule below under the 50-line / complexity
+ * ceilings the lint gate enforces — both rules read the SAME shape, so
+ * collecting it twice would be the real duplication.
  */
-export function checkInstallableLayout(skillsDir: string): string[] {
-  // Two facts about the tree's shape, read off the flat file list exactly as
-  // `collectDirShapes` does: which directories hold files directly, and for each
-  // directory one example sub-directory (ancestors included, since a file list
-  // only ever names leaf directories).
+function collectLayoutShapes(skillsDir: string): {
+  dirsWithOwnFiles: Set<string>
+  firstChildDirOf: Map<string, string>
+} {
   const dirsWithOwnFiles = new Set<string>()
   const firstChildDirOf = new Map<string, string>()
   for (const file of collectInstallableDatasetFiles(skillsDir)) {
@@ -961,7 +941,14 @@ export function checkInstallableLayout(skillsDir: string): string[] {
       }
     }
   }
+  return { dirsWithOwnFiles, firstChildDirOf }
+}
 
+/** The SHALLOW rule — the gate's half of `validateNoShallowEntryWithSubdir`. */
+function shallowEntryWithSubdirErrors(
+  dirsWithOwnFiles: Set<string>,
+  firstChildDirOf: Map<string, string>,
+): string[] {
   const errors: string[] = []
   for (const dir of dirsWithOwnFiles) {
     const depth = dir.split('/').length
@@ -981,6 +968,98 @@ export function checkInstallableLayout(skillsDir: string): string[] {
     )
   }
   return errors
+}
+
+/**
+ * The DEEP rule — the gate's half of `validateNoDeepEntry`: a directory below
+ * the entry depth holding files directly is CONTENT iff its ancestor at exactly
+ * the entry depth holds files of its own. Marker-BLIND on both the offender and
+ * the ancestor, so it catches the ones `checkEntrypointDepth` cannot see.
+ */
+function deepEntryErrors(dirsWithOwnFiles: Set<string>): string[] {
+  const errors: string[] = []
+  for (const dir of dirsWithOwnFiles) {
+    const segments = dir.split('/')
+    if (segments.length <= ENTRY_DEPTH) continue
+    const ancestor = segments.slice(0, ENTRY_DEPTH).join('/')
+    if (dirsWithOwnFiles.has(ancestor)) continue // content of a real entry
+    errors.push(
+      `${dir}: Ambiguous layout for a bounded flatten (flattenDepth=${ENTRY_DEPTH}): ` +
+        `'${dir}' is ${segments.length} segment(s) deep and holds files directly, but its ` +
+        `ancestor at depth ${ENTRY_DEPTH} ('${ancestor}') holds none — so nothing owns it as ` +
+        `content and it is an entry too deep. It would install at a path with no entry root, ` +
+        `invisible to the skill loader, with an unsynced frontmatter name and no skill-name ` +
+        `mapping. Move it to depth ${ENTRY_DEPTH}, or give '${ancestor}' files of its own IF ` +
+        `'${dir}' is meant to be CONTENT of it — note that an entrypoint file inside content ` +
+        `installs as content, not as an entry, i.e. with exactly the symptoms above. ` +
+        `\`pair update\` refuses this layout before copying anything, so the corpus installs as ` +
+        `NOTHING — not even the skills that are shaped correctly.`,
+    )
+  }
+  return errors
+}
+
+/**
+ * Refuses the source layouts the bounded flatten cannot represent — the gate's
+ * half of a parity the installer already enforces, on BOTH sides of the entry
+ * depth.
+ *
+ * `pair update` installs this corpus through `copyDirectoryWithTransforms` under
+ * the registry's `flatten: true, flattenDepth: 2, prefix: 'pair'`, and that copy
+ * VALIDATES the source layout before writing a single file
+ * (`content-ops/src/ops/copy/layout-validation.ts`,
+ * `validateNoShallowEntryWithSubdir` and `validateNoDeepEntry`). So a layout it
+ * cannot represent is not partially installed: it throws, and the WHOLE corpus —
+ * every skill — installs as nothing. A gate that PASSes such a corpus is a green
+ * light on an install that yields nothing for anyone, which is why this check
+ * exists rather than being left to the installer: the gate is what a maintainer
+ * runs before the corpus ever reaches a user.
+ *
+ * The two rules, re-derived here, both marker-BLIND by construction (ADR-020
+ * keeps `SKILL.md` knowledge out of a transform four non-skill registries share):
+ *
+ *   SHALLOW — a directory shallower than the entry depth that holds files
+ *   DIRECTLY and also owns a sub-directory is ambiguous, because that
+ *   sub-directory sits at exactly the entry depth and would install as a sibling
+ *   entry instead of as content. A category directory holding a `README.md`
+ *   beside its skills is refused too, and a bare skill (`loop/SKILL.md`) may
+ *   therefore own no sub-directory at all, `scripts/` included.
+ *
+ *   DEEP — a directory DEEPER than the entry depth that holds files DIRECTLY is
+ *   legitimate CONTENT of an entry iff its ancestor at EXACTLY the entry depth
+ *   holds files of its own; that ancestor is the entry the content belongs to.
+ *   With no such owner, nothing installs it as content and it is an entry too
+ *   deep. Neither side of that test may consult a marker: `capability/x/sub`
+ *   under an entry holding only a `notes.md` is legal content, and
+ *   `capability/sub/foo/notes.md` with an empty `capability/sub` is refused even
+ *   though no `SKILL.md` is anywhere near it. Nor may it test the immediate
+ *   PARENT instead of the ancestor at the entry depth —
+ *   `capability/loop/references/deep` is fine while `capability/loop/references`
+ *   itself holds no file. `checkEntrypointDepth` above overlaps this rule on
+ *   marker-BEARING offenders only (`if (basename(file) !== 'SKILL.md') continue`)
+ *   and is not its owner: it cannot see the marker-less ones at all.
+ *
+ * The registry ROOT is exempt from both: its files are copied straight to the
+ * destination root and are never entries (`collectDirShapes`' `dir === '.'`).
+ *
+ * Re-implemented rather than imported, for the same reason as `ENTRY_DEPTH` and
+ * `INSTALLED_PREFIX`: this gate runs via ts-node before any build, so it stays
+ * dependency-free. What is pinned by test is therefore the VERDICT, not the
+ * wording — the suite drives the real `copyDirectoryWithTransforms` over the
+ * same fixtures and asserts `runChecks(...).errors.length > 0` IFF that pipeline
+ * throws, in both directions, so neither an under- nor an over-correction here
+ * can pass.
+ *
+ * ADDITIVE on purpose: the layout is reported, never un-collected. Dropping the
+ * offending entrypoints from the corpus walk instead would reinstate the silent
+ * drop #482 set out to close — the same skills unchecked, with no error at all.
+ */
+export function checkInstallableLayout(skillsDir: string): string[] {
+  const { dirsWithOwnFiles, firstChildDirOf } = collectLayoutShapes(skillsDir)
+  return [
+    ...shallowEntryWithSubdirErrors(dirsWithOwnFiles, firstChildDirOf),
+    ...deepEntryErrors(dirsWithOwnFiles),
+  ]
 }
 
 // --- Skill-local scripts ---
