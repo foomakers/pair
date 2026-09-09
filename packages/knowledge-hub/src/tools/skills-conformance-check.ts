@@ -921,6 +921,27 @@ function checkLinkedScriptsShip(skillFile: string, skillDir: string, skillRel: s
   return errors
 }
 
+/**
+ * One side of the pair: its bytes, or the reason THIS side could not be read.
+ * Kept per-side because the errno cannot identify the side on its own — `EISDIR`
+ * ("illegal operation on a directory, read") carries no path at all, and `EACCES`
+ * carries an absolute one, not the skill-relative path a maintainer greps for.
+ */
+type SideRead = { readonly bytes: Buffer } | { readonly failure: string }
+
+function readSide(file: string): SideRead {
+  try {
+    return { bytes: readFileSync(file) }
+  } catch (e) {
+    return { failure: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/** The failing side leads the row; the other is still named, so the pair stays legible. */
+function unreadableRow(failedRel: string, otherRel: string, reason: string): string {
+  return `${failedRel}: unreadable — cannot compare with ${otherRel}: ${reason}`
+}
+
 /** The one comparison, kept apart so the walk above stays a walk. */
 function compareTwin(
   datasetFile: string,
@@ -934,14 +955,19 @@ function compareTwin(
         `The dataset copy is canonical; re-run the skills sync to derive it.`,
     ]
   }
-  try {
-    if (readFileSync(datasetFile).equals(readFileSync(installedFile))) return []
-  } catch (e) {
-    return [
-      `${datasetRel}: unreadable — cannot compare with ${installedRel}: ` +
-        `${e instanceof Error ? e.message : String(e)}`,
-    ]
+  // Each side is read in its own try so the row names the copy that ACTUALLY
+  // threw: sending a maintainer to the readable canonical script while the
+  // broken derived twin goes unnamed is worse than no message at all. Both
+  // unreadable ⇒ ONE row for the pair, led by the first side that threw.
+  const datasetRead = readSide(datasetFile)
+  if ('failure' in datasetRead) {
+    return [unreadableRow(datasetRel, installedRel, datasetRead.failure)]
   }
+  const installedRead = readSide(installedFile)
+  if ('failure' in installedRead) {
+    return [unreadableRow(installedRel, datasetRel, installedRead.failure)]
+  }
+  if (datasetRead.bytes.equals(installedRead.bytes)) return []
   return [
     `${datasetRel}: installed twin drifted — ${installedRel} differs byte-for-byte. ` +
       `The dataset copy is canonical; re-run the skills sync to derive it.`,
