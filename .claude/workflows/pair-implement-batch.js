@@ -1078,7 +1078,8 @@ const PROBE_SCHEMA = {
 // The KB markdown template is the single source of truth; the machine contract
 // is DERIVED from it by an AI generator agent (this sandbox has no filesystem
 // access, so all file work — hashing, cache check, generation, validation —
-// happens in the agent via `.claude/workflows/pair-contracts/ensure-contract.mjs`).
+// happens in the agent via `.pair/knowledge/assets/ensure-contract.mjs`, a KB asset every
+// harness installs).
 // Cache-by-hash: the contract stores the template's sha256; unchanged hash →
 // reuse (no regeneration), changed hash → regenerate. Malformed/failed contract
 // → the loose skeleton above is used as-is (the run never breaks) and the

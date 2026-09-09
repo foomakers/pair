@@ -24,12 +24,12 @@
 // invalid and gets regenerated, rather than silently ranked by guess.
 //
 // CLI (used by the agent — never hand-roll hash/cache/validation):
-//   node ensure-contract.mjs check <template.md> <contract.json>
+//   node .pair/knowledge/assets/ensure-contract.mjs check <template.md> <contract.json>
 //     → {"status":"fresh|stale|missing|invalid","templateHash":"sha256:..."}
-//   node ensure-contract.mjs write <template.md> <contract.json> <draft.json>
+//   node .pair/knowledge/assets/ensure-contract.mjs write <template.md> <contract.json> <draft.json>
 //     → validates the draft, stamps $meta with the template hash, persists.
 //
-// NOTE: the workflow sandbox (implement-batch.js) cannot import this module (no filesystem,
+// NOTE: the workflow sandbox (pair-implement-batch.js) cannot import this module (no filesystem,
 // no imports), and it never sees the contract this module PERSISTED — only the one its
 // generator agent RETURNED. So its duplicates of these checks (`usableSchema` and its own
 // `severityRankErrors`) are not a redundant second line: they are the only validation on the

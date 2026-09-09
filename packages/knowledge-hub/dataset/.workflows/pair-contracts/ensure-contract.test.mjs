@@ -21,9 +21,9 @@ import {
   validateContract,
   schemaErrors,
   stampContract,
-} from './ensure-contract.mjs'
+} from '../../../.pair/knowledge/assets/ensure-contract.mjs'
 
-const CLI = fileURLToPath(new URL('./ensure-contract.mjs', import.meta.url))
+const CLI = fileURLToPath(new URL('../../../.pair/knowledge/assets/ensure-contract.mjs', import.meta.url))
 
 // ── fixtures ───────────────────────────────────────────────────────────────
 const TEMPLATE_V1 = '# Code Review Template\n\n- [ ] **Approved**\n'

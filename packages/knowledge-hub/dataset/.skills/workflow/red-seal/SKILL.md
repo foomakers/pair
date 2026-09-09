@@ -26,7 +26,7 @@ Sealing is Git custody, not reasoning. This skill runs the sealer script and ret
 ### Step 1: Run the sealer
 
 ```bash
-cd $worktree && node .claude/workflows/pair-contracts/red-snapshot.mjs seal \
+cd $worktree && node .pair/knowledge/assets/red-snapshot.mjs seal \
   --pr $pr --phase $phase --base $base --contract $contract
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: remediation-plan
-description: "Phase D0 of the delivery workflow: turns one immutable set of actionable review findings into a frozen remediation plan — owner-aligned groups, one mode each (behavioral or structural), exact allowed paths, one authoritative oracle, dependency order — so every finding is remediated exactly once by a bounded RED → seal → GREEN → P3 attempt. Read-only; writes only its handoff. Dispatched by the batch engine (pair-implement-batch); invoke directly to plan a fix cycle by hand ('plan the remediation for PR #480')."
+description: "Phase D0 of the delivery workflow: turns one immutable set of actionable review findings into a frozen remediation plan — owner-aligned groups, one mode each (behavioral or structural), exact allowed paths, one authoritative oracle, dependency order — so every finding is remediated exactly once by a bounded RED → seal → GREEN → P3 attempt. Read-only; writes only its handoff. Dispatched by the batch engine (pair-implement-batch); invoke directly to plan a fix cycle by hand ('plan the remediation for PR #42')."
 version: 0.1.0
 author: Foomakers
 ---

@@ -3,13 +3,13 @@
 // story worktree by the phase skill that owns them, never by the workflow sandbox (which has no
 // filesystem) and never re-implemented by an LLM agent:
 //
-//   node red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <draft.json>
+//   node .pair/knowledge/assets/red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <draft.json>
 //     Verifies HEAD is exactly <base>, every listed artifact hashes to its stated sha256, and the
 //     working tree is dirty ONLY at those artifacts; writes the manifest, creates ONE local
 //     `--no-verify` commit carrying the `Pair-RED-Snapshot` trailer, prints {sealed, snapshot}.
 //     Idempotent: an existing snapshot with the same trailer, parent and blobs is returned as-is.
 //
-//   node red-snapshot.mjs verify --pr <n> --phase <p> --base <sha>
+//   node .pair/knowledge/assets/red-snapshot.mjs verify --pr <n> --phase <p> --base <sha>
 //     Finds the ONE snapshot in <base>..HEAD by trailer, proves parent == base, tree == manifest +
 //     listed artifacts, every listed blob byte-identical at HEAD, no unlisted test artifact changed
 //     after the seal, and every production change inside the manifest's fixScope.allowedPaths

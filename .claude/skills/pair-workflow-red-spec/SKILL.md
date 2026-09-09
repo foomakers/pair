@@ -1,6 +1,6 @@
 ---
 name: pair-workflow-red-spec
-description: "Phase D1 of the delivery workflow: authors the RED contract for one remediation group — maps the finite domain of the owner state, writes or changes ONLY tests and consumed fixtures, proves each is RED against unfixed source, and returns the typed contract (fixScope, matrix, hashed artifacts) a separate sealer commits. Never touches production source. Dispatched by the batch engine (pair-implement-batch); invoke directly to write the failing tests for a finding ('write the RED contract for finding 2 of PR #480')."
+description: "Phase D1 of the delivery workflow: authors the RED contract for one remediation group — maps the finite domain of the owner state, writes or changes ONLY tests and consumed fixtures, proves each is RED against unfixed source, and returns the typed contract (fixScope, matrix, hashed artifacts) a separate sealer commits. Never touches production source. Dispatched by the batch engine (pair-implement-batch); invoke directly to write the failing tests for a finding ('write the RED contract for finding 2 of PR #42')."
 version: 0.1.0
 author: Foomakers
 ---

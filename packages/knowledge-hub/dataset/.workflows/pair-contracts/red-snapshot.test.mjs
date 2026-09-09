@@ -17,9 +17,9 @@ import {
   seal,
   trailerFor,
   verify,
-} from './red-snapshot.mjs'
+} from '../../../.pair/knowledge/assets/red-snapshot.mjs'
 
-const CLI = fileURLToPath(new URL('./red-snapshot.mjs', import.meta.url))
+const CLI = fileURLToPath(new URL('../../../.pair/knowledge/assets/red-snapshot.mjs', import.meta.url))
 
 function sh(cwd, ...args) {
   const r = spawnSync(args[0], args.slice(1), { cwd, encoding: 'utf8' })

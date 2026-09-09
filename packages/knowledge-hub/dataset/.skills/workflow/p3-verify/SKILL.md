@@ -33,7 +33,7 @@ Never switch the main checkout's branch. Inspect from a DETACHED throwaway workt
 ### Step 1: Custody (deterministic)
 
 ```bash
-cd $worktree && node .claude/workflows/pair-contracts/red-snapshot.mjs verify --pr $pr --phase $phase --base $base
+cd $worktree && node .pair/knowledge/assets/red-snapshot.mjs verify --pr $pr --phase $phase --base $base
 ```
 
 `contractBreach: true` (snapshot missing/ambiguous, parent ≠ base, unlisted file in the snapshot, a sealed blob changed or removed, an unlisted test artifact changed, a production path outside `allowedPaths`, a module added/moved under a `behavioral` scope) ⇒ return `{ verified: false, contractBreach: true, findings: <one per breach>, reviewedHead }` **immediately**. A breach is not repairable inside the attempt.

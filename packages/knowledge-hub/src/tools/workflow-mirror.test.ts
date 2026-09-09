@@ -33,7 +33,7 @@ const PAIRS = [
 ] as const
 
 /**
- * Every shipped file, RECURSIVELY — `pair-contracts/ensure-contract.mjs` is a real dependency
+ * Every shipped file, RECURSIVELY — `pair-contracts/` still carries the dry-run tests and the contract cache's `.gitignore`; the scripts themselves ship as KB assets since US-479 (`.pair/knowledge/assets/*.mjs`). A dependency
  * the agents invoke, so a flat listing would let the engine ship without the helper it
  * calls and still pass this guard.
  *
