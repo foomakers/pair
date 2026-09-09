@@ -56,6 +56,12 @@ Resolution order, the split-tool routing and why the fallback is never the authe
 
 ## Review Convergence
 
+- **Delivery-workflow canary:** prove a fresh workflow with a small code story
+  whose tests are deterministic oracles; a prose-only regex-guard story is not a
+  substitute. Keep the RED repair budget unchanged: a typed D2 refusal is valid
+  evidence, not a reason to weaken it. Record the run/phase handoffs, first
+  review and final synthesis on the reviewed PR. See ADL
+  [2026-09-09-deterministic-code-canary-for-delivery-workflow.md](../decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md).
 - **Baseline then delta:** the first review is complete and returns the immutable 40-character
   head it inspected. A re-review verifies prior findings plus only the diff from that head and
   directly changed producer/consumer boundaries; an unchanged PR surface does not create another
