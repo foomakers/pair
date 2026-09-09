@@ -1,7 +1,16 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readdirSync,
+  existsSync,
+  copyFileSync,
+} from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, basename } from 'node:path'
 import {
   parseFrontmatter,
   checkFrontmatterFields,
@@ -24,6 +33,7 @@ import {
   ROUND_KINDS,
   AUTO_RESOLUTIONS,
 } from './skills-conformance-check'
+import * as conformanceModule from './skills-conformance-check'
 import { SKILL_COPY_OPTS } from './skill-md-mirror'
 import { join as pathJoin } from 'node:path'
 
@@ -901,5 +911,406 @@ describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', ()
     )
     const { errors } = runChecks(root)
     expect(errors.some(e => e.includes('process/other') && e.includes('$approval'))).toBe(false)
+  })
+})
+
+/**
+ * The #482 producer, resolved through the module NAMESPACE rather than as a named
+ * import on purpose: until it exists, a named import is a link-time error that
+ * fails every test in this file — including the controls that must stay green and
+ * the per-row failures the contract records. Through the namespace each row fails
+ * on its own assertion, for its own reason.
+ */
+type CheckSkillLocalScripts = (skillsDir: string, installedSkillsDir: string) => string[]
+const checkSkillLocalScripts: CheckSkillLocalScripts = (skillsDir, installedSkillsDir) =>
+  (
+    conformanceModule as unknown as { checkSkillLocalScripts: CheckSkillLocalScripts }
+  ).checkSkillLocalScripts(skillsDir, installedSkillsDir)
+
+// --- #482 fixtures: the real corpus anchors for the wiring and CLI rows -------
+
+const KNOWLEDGE_HUB_ROOT = join(__dirname, '..', '..')
+const REPO_ROOT = join(KNOWLEDGE_HUB_ROOT, '..', '..')
+const REAL_SKILLS_DIR = join(KNOWLEDGE_HUB_ROOT, 'dataset', '.skills')
+const INSTALLED_SKILLS_DIR = join(REPO_ROOT, '.claude', 'skills')
+
+/**
+ * The first dataset skill-local script that already has an installed twin,
+ * derived from the corpus rather than hard-coded: the wiring row needs a
+ * `<category>/<name>/scripts/<file>` whose twin really exists under
+ * `.claude/skills/`, and which skills own scripts is not this test's subject.
+ */
+const firstMirroredScript = (): { category: string; name: string; file: string } => {
+  for (const category of readdirSync(REAL_SKILLS_DIR, { withFileTypes: true })
+    .filter(d => d.isDirectory())
+    .map(d => d.name)
+    .sort()) {
+    for (const name of readdirSync(join(REAL_SKILLS_DIR, category), { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name)
+      .sort()) {
+      const scriptsDir = join(REAL_SKILLS_DIR, category, name, 'scripts')
+      if (!existsSync(scriptsDir)) continue
+      for (const file of readdirSync(scriptsDir).sort()) {
+        if (existsSync(join(INSTALLED_SKILLS_DIR, `pair-${category}-${name}`, 'scripts', file))) {
+          return { category, name, file }
+        }
+      }
+    }
+  }
+  throw new Error(
+    'no dataset skill-local script has an installed twin — the corpus this check exists for is gone',
+  )
+}
+// ---------------------------------------------------------------------------
+// Skill-local scripts (#482) — a skill is portable as ONE folder.
+//
+// Two obligations, one producer (`checkSkillLocalScripts(skillsDir, installedSkillsDir)`,
+// wired into `runChecks` and named in the CLI summary):
+//
+//   1. every script a dataset SKILL.md links as `[…](./scripts/x)` / `[…](scripts/x)`
+//      exists beside it in that skill's own `scripts/` directory;
+//   2. every dataset skill-local script has a byte-identical installed twin under
+//      `.claude/skills/pair-<category>-<name>/scripts/`.
+//
+// The dataset copy is canonical, the installed copy derived: the check REPORTS
+// drift, it never repairs it. Every fixture below is hermetic (two temp trees,
+// dataset + installed) except the three rows that are deliberately about the real
+// corpus — the wiring row, the corpus-clean control and the CLI summary row.
+// ---------------------------------------------------------------------------
+describe('checkSkillLocalScripts — linked scripts exist, installed twins are byte-identical (#482)', () => {
+  const roots: string[] = []
+  afterAll(() => {
+    for (const r of roots) rmSync(r, { recursive: true, force: true })
+  })
+
+  const tree = () => {
+    const dataset = mkdtempSync(join(tmpdir(), 'skills-local-dataset-'))
+    const installed = mkdtempSync(join(tmpdir(), 'skills-local-installed-'))
+    roots.push(dataset, installed)
+    const api = {
+      dataset,
+      installed,
+      /** A dataset skill entrypoint at `<rel>/SKILL.md`. */
+      skill(rel: string, body = 'body\n') {
+        mkdirSync(join(dataset, rel), { recursive: true })
+        writeFileSync(
+          join(dataset, rel, 'SKILL.md'),
+          `---\nname: ${basename(rel)}\ndescription: "Fixture."\n---\n${body}`,
+        )
+        return api
+      },
+      /** A dataset skill-local script at `<rel>/scripts/<file>`. */
+      script(rel: string, file: string, content: string) {
+        mkdirSync(join(dataset, rel, 'scripts'), { recursive: true })
+        writeFileSync(join(dataset, rel, 'scripts', file), content)
+        return api
+      },
+      /**
+       * A dataset skill-local script NESTED in a sub-directory of `scripts/`
+       * (`<rel>/scripts/<sub>/<file>`). The `pair update` transform installs it
+       * inside the skill — `installedArtifactPath` over the registry's bounded
+       * flatten maps `workflow/alpha/scripts/lib/util.mjs` to
+       * `pair-workflow-alpha/scripts/lib/util.mjs` (verified against the real
+       * derivation, `skill-md-mirror.ts`) — so it ships and must be guarded.
+       */
+      nestedScript(rel: string, sub: string, file: string, content: string) {
+        mkdirSync(join(dataset, rel, 'scripts', sub), { recursive: true })
+        writeFileSync(join(dataset, rel, 'scripts', sub, file), content)
+        return api
+      },
+      /** The installed twin of a nested script, at `<installedDir>/scripts/<sub>/<file>`. */
+      nestedTwin(installedDir: string, sub: string, file: string, content: string) {
+        mkdirSync(join(installed, installedDir, 'scripts', sub), { recursive: true })
+        writeFileSync(join(installed, installedDir, 'scripts', sub, file), content)
+        return api
+      },
+      /** An empty `<rel>/scripts/` directory. */
+      emptyScripts(rel: string) {
+        mkdirSync(join(dataset, rel, 'scripts'), { recursive: true })
+        return api
+      },
+      /** The installed twin at `.claude/skills/<installedDir>/scripts/<file>`. */
+      twin(installedDir: string, file: string, content: string) {
+        mkdirSync(join(installed, installedDir, 'scripts'), { recursive: true })
+        writeFileSync(join(installed, installedDir, 'scripts', file), content)
+        return api
+      },
+      /** An installed path occupied by a DIRECTORY where a script file is expected. */
+      twinAsDirectory(installedDir: string, file: string) {
+        mkdirSync(join(installed, installedDir, 'scripts', file), { recursive: true })
+        return api
+      },
+    }
+    return api
+  }
+
+  it('R1 — a linked ./scripts/ file that does not exist beside the SKILL.md is an error naming the skill and the script', () => {
+    const t = tree()
+    t.skill('workflow/alpha', 'Run [the helper](./scripts/absent.mjs) first.\n')
+    t.twin('pair-workflow-alpha', 'keep.mjs', 'x\n')
+    t.script('workflow/alpha', 'keep.mjs', 'x\n')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes('scripts/absent.mjs'))
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toContain('workflow/alpha')
+  })
+
+  it('R2 — the bare `scripts/<file>` link form is the same obligation as `./scripts/<file>`', () => {
+    const t = tree()
+    t.skill('workflow/alpha', 'See [helper](scripts/absent.mjs).\n')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    expect(errors.some(e => e.includes('workflow/alpha') && e.includes('scripts/absent.mjs'))).toBe(
+      true,
+    )
+  })
+
+  it('R3 — a linked script that DOES exist beside the SKILL.md raises nothing', () => {
+    const t = tree()
+    t.skill('workflow/alpha', 'Run [the helper](./scripts/present.mjs).\n')
+    t.script('workflow/alpha', 'present.mjs', 'console.log(1)\n')
+    t.twin('pair-workflow-alpha', 'present.mjs', 'console.log(1)\n')
+
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R4 — a link OUTSIDE scripts/ is out of scope here (checkLinks owns it)', () => {
+    const t = tree()
+    t.skill('workflow/alpha', 'See [elsewhere](../other/x.mjs) and [up](../../root.md).\n')
+
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R5 — a missing installed twin is an error naming BOTH paths as missing', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.script('workflow/alpha', 'ghost.mjs', 'canonical\n')
+    t.twin('pair-workflow-alpha', 'other.mjs', 'unrelated\n')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes('ghost.mjs'))
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toContain(join('workflow', 'alpha', 'scripts', 'ghost.mjs'))
+    expect(hit[0]).toContain(join('pair-workflow-alpha', 'scripts', 'ghost.mjs'))
+    expect(hit[0]).toMatch(/missing/i)
+  })
+
+  it('R6 — an installed twin differing by ONE byte is an error naming BOTH paths as drifted', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.script('workflow/alpha', 'edited.mjs', 'export const n = 1\n')
+    t.twin('pair-workflow-alpha', 'edited.mjs', 'export const n = 2\n')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes('edited.mjs'))
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toContain(join('workflow', 'alpha', 'scripts', 'edited.mjs'))
+    expect(hit[0]).toContain(join('pair-workflow-alpha', 'scripts', 'edited.mjs'))
+    expect(hit[0]).toMatch(/drift/i)
+  })
+
+  it('R7 — a byte-identical twin raises nothing, and equality is by BYTES, not by size', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.script('workflow/alpha', 'same.mjs', 'const a = 1\n')
+    t.twin('pair-workflow-alpha', 'same.mjs', 'const a = 1\n')
+    t.skill('workflow/beta')
+    t.script('workflow/beta', 'swap.mjs', 'ab\n')
+    t.twin('pair-workflow-beta', 'swap.mjs', 'ba\n')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    expect(errors.some(e => e.includes('same.mjs'))).toBe(false)
+    expect(errors.some(e => e.includes('swap.mjs'))).toBe(true)
+  })
+
+  it('R8 — an installed twin with no dataset source is ignored (directional, like the SKILL.md mirror guard)', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.script('workflow/alpha', 'kept.mjs', 'k\n')
+    t.twin('pair-workflow-alpha', 'kept.mjs', 'k\n')
+    t.twin('pair-workflow-alpha', 'orphan.mjs', 'left behind\n')
+    t.twin('pair-workflow-nobody', 'stranger.mjs', 'no dataset source\n')
+
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R9 — an empty scripts/ directory is not an error', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.emptyScripts('workflow/alpha')
+
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R10 — an absent installed skills root skips the twin check instead of reporting every script missing (dataset-only checkout)', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.script('workflow/alpha', 'a.mjs', 'a\n')
+    t.script('workflow/alpha', 'b.mjs', 'b\n')
+
+    expect(checkSkillLocalScripts(t.dataset, join(t.installed, 'does-not-exist'))).toEqual([])
+  })
+
+  it('R11 — an unreadable installed twin is an error naming the path, never a silent "identical"', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.script('workflow/alpha', 'blocked.mjs', 'canonical\n')
+    t.twinAsDirectory('pair-workflow-alpha', 'blocked.mjs')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    expect(errors.some(e => e.includes('blocked.mjs'))).toBe(true)
+  })
+
+  it('R12 — a bare/meta skill owning a scripts/ sub-directory is refused: the bounded flatten cannot install it', () => {
+    const t = tree()
+    t.skill('next')
+    t.script('next', 'router.mjs', 'r\n')
+    t.twin('pair-next', 'router.mjs', 'r\n')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    expect(errors.some(e => e.includes('next') && e.includes('scripts'))).toBe(true)
+  })
+
+  it('R13 — runChecks wires the check to the REAL installed tree: a drifted dataset script fails the gate', () => {
+    const real = firstMirroredScript()
+    const t = tree()
+    t.skill(`${real.category}/${real.name}`)
+    t.script(`${real.category}/${real.name}`, real.file, '// drifted by the #482 fixture\n')
+
+    const { errors } = runChecks(t.dataset)
+    expect(errors.some(e => e.includes(real.file) && /drift/i.test(e))).toBe(true)
+  })
+
+  it('R14 — the real corpus is clean under the check (control: it passes today and must keep passing)', () => {
+    const { errors } = runChecks(REAL_SKILLS_DIR)
+    expect(errors).toEqual([])
+  })
+
+  it('R16 — control: pointer resolution keeps owning both link forms, in and out of scripts/ (must not regress)', () => {
+    const t = tree()
+    t.skill(
+      'workflow/alpha',
+      'See [a](./scripts/absent.mjs), [b](scripts/gone.mjs), [c](../other/x.mjs).\n',
+    )
+
+    const { errors } = runChecks(t.dataset)
+    for (const target of ['./scripts/absent.mjs', 'scripts/gone.mjs', '../other/x.mjs']) {
+      expect(
+        errors.some(
+          e => e.includes('workflow/alpha') && e.includes(`broken relative reference "${target}"`),
+        ),
+      ).toBe(true)
+    }
+  })
+
+  it('R15 — `pnpm skills:conformance` PASSes on the real corpus and its summary names the new check', () => {
+    const out = execFileSync('pnpm', ['skills:conformance'], {
+      cwd: KNOWLEDGE_HUB_ROOT,
+      encoding: 'utf-8',
+    })
+    expect(out).toMatch(/^PASS —/m)
+    expect(out).toMatch(/skill-local scripts/i)
+  }, 180_000)
+
+  it('R18 — control: a corpus WITH violations exits non-zero and prints FAIL (the exit branch the summary edit sits next to)', () => {
+    // `SKILLS_DIR` is frozen at module load (`join(__dirname,'..','..','dataset','.skills')`),
+    // so the only way to spawn the REAL CLI over a fixture corpus is to run a copy of
+    // the module from a temp ROOT — the module imports nothing but `fs`/`path`, so the
+    // copy is the production file itself, not a re-implementation. Whatever the fixer
+    // writes into `require.main` is what this row executes.
+    const cliRoot = mkdtempSync(join(tmpdir(), 'skills-local-cli-'))
+    roots.push(cliRoot)
+    mkdirSync(join(cliRoot, 'src', 'tools'), { recursive: true })
+    copyFileSync(
+      join(__dirname, 'skills-conformance-check.ts'),
+      join(cliRoot, 'src', 'tools', 'skills-conformance-check.ts'),
+    )
+    mkdirSync(join(cliRoot, 'dataset', '.skills', 'workflow', 'alpha'), { recursive: true })
+    writeFileSync(
+      join(cliRoot, 'dataset', '.skills', 'workflow', 'alpha', 'SKILL.md'),
+      '---\nname: alpha\ndescription: "Fixture."\n---\nRun [the helper](./scripts/absent.mjs) first.\n',
+    )
+
+    let status = 0
+    let stdout = ''
+    try {
+      stdout = execFileSync(
+        'pnpm',
+        ['exec', 'ts-node', join(cliRoot, 'src', 'tools', 'skills-conformance-check.ts')],
+        { cwd: KNOWLEDGE_HUB_ROOT, encoding: 'utf-8' },
+      )
+    } catch (err) {
+      const e = err as { status?: number; stdout?: string }
+      status = e.status ?? -1
+      stdout = e.stdout ?? ''
+    }
+
+    expect(status).not.toBe(0)
+    // Distinguishes a reported FAIL from a crash: a throw inside runChecks exits
+    // non-zero too, but prints no summary at all.
+    expect(stdout).toMatch(/^FAIL — \d+ violation/m)
+    expect(stdout).toContain('scripts/absent.mjs')
+  }, 180_000)
+
+  it('R19 — a non-checkable target under scripts/ (placeholder, fragment, pattern) is not a missing script', () => {
+    const t = tree()
+    t.skill(
+      'workflow/alpha',
+      [
+        'Placeholder: [helper](./scripts/<file>.mjs).',
+        'Fragment: [usage](./scripts/tool.mjs#usage).',
+        'Pattern: [adr](./scripts/adr-NNN-note.mjs).',
+        '',
+      ].join('\n'),
+    )
+    t.script('workflow/alpha', 'tool.mjs', 'export const t = 1\n')
+    t.twin('pair-workflow-alpha', 'tool.mjs', 'export const t = 1\n')
+
+    // `<file>.mjs` and `adr-NNN-…` are filtered by isCheckableTarget; `tool.mjs#usage`
+    // resolves to the real `tool.mjs` once the fragment is stripped. A producer that
+    // pattern-matches the raw target reports up to three phantom missing scripts.
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R20 — a scripts/ link that exists ONLY inside a fenced code block is an example, not a reference', () => {
+    const t = tree()
+    t.skill(
+      'workflow/alpha',
+      ['Authoring example:', '', '```markdown', 'See [x](./scripts/absent.mjs).', '```', ''].join(
+        '\n',
+      ),
+    )
+
+    // extractLinkTargets strips fenced blocks precisely so a documented template
+    // path is not a broken pointer; a raw-body scan turns every such SKILL.md red.
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
+  })
+
+  it('R21 — a script nested in a scripts/ sub-directory is guarded too: its twin is the mirrored nested path', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.nestedScript('workflow/alpha', 'lib', 'util.mjs', 'export const u = 1\n')
+
+    const errors = checkSkillLocalScripts(t.dataset, t.installed)
+    const hit = errors.filter(e => e.includes('util.mjs'))
+    expect(hit).toHaveLength(1)
+    expect(hit[0]).toContain(join('workflow', 'alpha', 'scripts', 'lib', 'util.mjs'))
+    expect(hit[0]).toContain(join('pair-workflow-alpha', 'scripts', 'lib', 'util.mjs'))
+    expect(hit[0]).toMatch(/missing/i)
+  })
+
+  it('R22 — a nested script whose mirrored twin is identical raises nothing (and the sub-directory entry is never read as a file)', () => {
+    const t = tree()
+    t.skill('workflow/alpha')
+    t.nestedScript('workflow/alpha', 'lib', 'util.mjs', 'export const u = 1\n')
+    t.nestedTwin('pair-workflow-alpha', 'lib', 'util.mjs', 'export const u = 1\n')
+    t.script('workflow/alpha', 'flat.mjs', 'export const f = 1\n')
+    t.twin('pair-workflow-alpha', 'flat.mjs', 'export const f = 1\n')
+
+    // A flat `readdirSync` + `readFileSync(join(scriptsDir, name))` throws EISDIR on
+    // the `lib` entry and takes the whole gate down; this row is the no-throw guard.
+    expect(checkSkillLocalScripts(t.dataset, t.installed)).toEqual([])
   })
 })
