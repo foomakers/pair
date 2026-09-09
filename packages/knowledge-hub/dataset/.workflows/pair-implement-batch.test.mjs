@@ -312,12 +312,9 @@ test('story.notes: scope directive threaded into implement and PR prompts', asyn
   })
   const impl = calls.find(c => c.opts.phase === 'Implement')
   const pr = calls.find(c => c.opts.phase === 'PR')
-  assert.ok(
-    impl.prompt.includes(
-      'SCOPE DIRECTIVE (overrides the issue body where they conflict): resolve all findings in ONE PR, do not split',
-    ),
-  )
-  assert.ok(pr.prompt.includes('SCOPE DIRECTIVE: resolve all findings in ONE PR, do not split'))
+  assert.ok(impl.prompt.includes('$notes="resolve all findings in ONE PR, do not split"'))
+  assert.ok(pr.prompt.includes('$notes="resolve all findings in ONE PR, do not split"'))
+  assert.match(SKILL('implement-phase'), /SCOPE DIRECTIVE that overrides the issue body/)
 })
 
 test('story without notes: no scope directive in prompts', async () => {
@@ -631,7 +628,7 @@ test('#373 finding 4: probe queries BOTH signals and runs at sonnet/low — reli
   assert.ok(probe, 'probe runs on resume')
   assert.equal(probe.opts.model, 'sonnet', 'probe runs at sonnet (reliable worktree+gh substring match, fails open toward duplicate first review)')
   assert.equal(probe.opts.effort, 'low', 'probe uses low effort')
-  assert.match(probe.prompt, /\/pair-workflow-cycle-comments\*\* with .*\$mode=probe/)
+  assert.match(probe.prompt, /\/pair-workflow-cycle-comments\*\* for story #292 with .*\$mode=probe/)
   assert.ok(SKILL('cycle-comments').includes('logExists') && SKILL('cycle-comments').includes('firstReviewPosted'), 'probe reports both the log-existence and the PR-side first-review signal')
 })
 
@@ -913,18 +910,18 @@ test('a story with `base` stacks on that branch: worktree forks from it and the 
 
   const impl = calls.find(c => c.opts.phase === 'Implement')
   assert.ok(
-    impl.prompt.includes('-B feat/#396-x feature/US-395-cache-keying'),
+    impl.prompt.includes('$base=feature/US-395-cache-keying $stacked=true'),
     'the worktree forks from the base branch, not origin/main',
   )
-  assert.ok(!impl.prompt.includes('-B feat/#396-x origin/main'), 'origin/main is not used as the fork point')
-  assert.ok(/STACKED on/.test(impl.prompt), 'the implementer is told it is stacked')
+  assert.ok(!impl.prompt.includes('$base=origin/main'), 'origin/main is not used as the fork point')
+  assert.ok(/\$stacked=true/.test(impl.prompt) && /STACKED/.test(SKILL('implement-phase')), 'the implementer is told it is stacked')
   assert.ok(
-    /must NOT be reverted, duplicated or re-implemented/.test(impl.prompt),
+    /must NOT be reverted, duplicated or re-implemented/.test(SKILL('implement-phase')),
     'the implementer is warned not to re-do the base story work already in its history',
   )
   const pr = calls.find(c => c.opts.phase === 'PR')
   assert.ok(
-    /target `feature\/US-395-cache-keying` as the PR base branch/.test(pr.prompt),
+    /\$base=feature\/US-395-cache-keying \$stacked=true/.test(pr.prompt) && /target `\$base`, not `main`/.test(SKILL('pr-phase')),
     'the PR targets the base branch so the diff shows only this story',
   )
 })
@@ -935,8 +932,8 @@ test('no `base` keeps the existing behaviour byte-for-byte (origin/main, no stac
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
   const impl = calls.find(c => c.opts.phase === 'Implement')
-  assert.ok(impl.prompt.includes('-B feat/#292-x origin/main'), 'unstacked stories still fork from origin/main')
-  assert.ok(!/STACKED on/.test(impl.prompt), 'no stacking language leaks into an unstacked story')
+  assert.ok(impl.prompt.includes('$base=origin/main $stacked=false'), 'unstacked stories still fork from origin/main')
+  assert.ok(!/\$stacked=true/.test(impl.prompt), 'no stacking language leaks into an unstacked story')
 })
 
 test('MAX_FIX_ROUNDS allows three autonomous fix rounds before escalating', async () => {
@@ -972,15 +969,17 @@ test('the open-PR step composes /pair-capability-publish-pr instead of hand-roll
   })
   const pr = calls.find(c => c.opts.phase === 'PR')
   assert.ok(pr.prompt.includes('/pair-capability-publish-pr'), 'the PR step invokes the publish-pr skill')
-  assert.ok(/Do NOT hand-roll the PR/.test(pr.prompt), 'hand-rolling is explicitly forbidden')
+  assert.ok(pr.prompt.includes('/pair-workflow-pr-phase'), 'the PR step is the PR phase skill')
+  const prSkill = SKILL('pr-phase')
+  assert.ok(/Do NOT hand-roll the PR/.test(prSkill), 'hand-rolling is explicitly forbidden')
   for (const owned of ['pr-state:', 'classification tags', 'back-link', 'board state'])
-    assert.ok(pr.prompt.includes(owned), `the prompt names "${owned}" as owned by the skill, so a reader cannot mistake it for optional`)
+    assert.ok(prSkill.includes(owned), `the skill names "${owned}" as owned by publish-pr, so a reader cannot mistake it for optional`)
   // The one place where composing publish-pr could collide with this orchestrator:
   // publish-pr normally dispatches the review itself. Running inside a subagent it
   // emits `review-dispatch-required` instead — the prompt must say so, or the
   // implementer treats the signal as a failure and improvises a nested review.
-  assert.ok(/review-dispatch-required/.test(pr.prompt), 'the expected non-nesting signal is named')
-  assert.ok(/Do NOT dispatch or run a review yourself/.test(pr.prompt), 'the implementer is barred from reviewing its own work')
+  assert.ok(/review-dispatch-required/.test(prSkill), 'the expected non-nesting signal is named')
+  assert.ok(/Do NOT dispatch or run a review yourself/.test(prSkill), 'the implementer is barred from reviewing its own work')
 })
 
 test('the implement and fix steps name the skills that own gating and decisions', async () => {
@@ -999,7 +998,7 @@ test('the implement and fix steps name the skills that own gating and decisions'
   assert.ok(impl.prompt.includes('/pair-process-implement'), 'implement follows the process skill')
   assert.ok(impl.prompt.includes('/pair-capability-verify-quality'), 'the gate is the skill, not an improvised command')
   assert.ok(impl.prompt.includes('/pair-capability-record-decision'), 'decisions are recorded via the skill, not left in commit messages')
-  assert.ok(impl.prompt.includes('/pair-capability-checkpoint $mode=write'), 'the handoff is written via the checkpoint skill')
+  assert.ok(impl.prompt.includes('$checkpoint=/pair-capability-checkpoint') && SKILL('implement-phase').includes('$checkpoint $mode=write'), 'the handoff is written via the checkpoint skill')
 
   const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
   assert.ok(fix, 'a fix round ran')
@@ -2433,24 +2432,24 @@ test('every phase skill is dispatched by its configured name with the typed run 
   const { calls } = await runWorkflow({ args: { stories: [STORY], runId: 'run-42' }, dispatch: planDispatch() })
   const byType = t => calls.find(c => c.opts.agentType === t)
   const planner = byType('pair-remediation-planner')
-  assert.match(planner.prompt, /^Invoke \*\*\/pair-workflow-remediation-plan\*\* with \$run=run-42 \$story=292 \$pr=7 \$phase=r1 \$base=[0-9a-f]{40} \$branch=/)
+  assert.match(planner.prompt, /^Invoke \*\*\/pair-workflow-remediation-plan\*\* for story #292 with \$run=run-42 \$story=292 \$pr=7 \$phase=r1 \$base=[0-9a-f]{40} \$branch=/)
   assert.match(planner.prompt, /\$findings=\[/)
   assert.deepEqual(planner.opts.schema.required, ['status', 'groups'])
-  assert.match(byType('pair-fix-test-author').prompt, /^Invoke \*\*\/pair-workflow-red-spec\*\* with \$run=run-42 .*\$scope=\{/)
-  assert.match(byType('pair-red-contract-verifier').prompt, /^Invoke \*\*\/pair-workflow-red-verify\*\* with .*\$contract=\.pair\/working\/runs\/run-42\/292\/r1-g1-red-contract\.json/)
-  assert.match(byType('pair-red-sealer').prompt, /^Invoke \*\*\/pair-workflow-red-seal\*\* with .*\$contract=\.pair\/working\/runs\/run-42\/292\/r1-g1-red-contract\.json/)
-  assert.match(calls.find(c => c.opts.label?.startsWith('fix:')).prompt, /^Invoke \*\*\/pair-workflow-green-fix\*\* with .*\$reviewLog=\.pair\/working\/reviews\/292\.md/)
-  assert.match(byType('pair-fix-verifier').prompt, /^Invoke \*\*\/pair-workflow-p3-verify\*\* with .*\$worktree=\.\.\/pair-worktrees\/292-review .*\$ledger=\[\]/)
+  assert.match(byType('pair-fix-test-author').prompt, /^Invoke \*\*\/pair-workflow-red-spec\*\* for story #292 with \$run=run-42 .*\$scope=\{/)
+  assert.match(byType('pair-red-contract-verifier').prompt, /^Invoke \*\*\/pair-workflow-red-verify\*\* for story #292 with .*\$contract=\.pair\/working\/runs\/run-42\/292\/r1-g1-red-contract\.json/)
+  assert.match(byType('pair-red-sealer').prompt, /^Invoke \*\*\/pair-workflow-red-seal\*\* for story #292 with .*\$contract=\.pair\/working\/runs\/run-42\/292\/r1-g1-red-contract\.json/)
+  assert.match(calls.find(c => c.opts.label?.startsWith('fix:')).prompt, /^Invoke \*\*\/pair-workflow-green-fix\*\* for story #292 with .*\$reviewLog=\.pair\/working\/reviews\/292\.md/)
+  assert.match(byType('pair-fix-verifier').prompt, /^Invoke \*\*\/pair-workflow-p3-verify\*\* for story #292 with .*\$worktree=\.\.\/pair-worktrees\/292-review .*\$ledger=\[\]/)
   // every dispatched prompt names the run directory as the ONLY readable working location
-  for (const c of calls.filter(c => /^Invoke \*\*\/pair-workflow-/.test(c.prompt)))
-    assert.match(c.prompt, /except the run directory `\.pair\/working\/runs\/run-42\/292\/`/)
+  for (const c of calls.filter(c => /^Invoke \*\*\/pair-workflow-[a-z-]+\*\* for story #292 with/.test(c.prompt)))
+    assert.match(c.prompt, /the run directory `\.pair\/working\/runs\/run-42\/292\/`/)
 })
 
-test('args.runId is validated as one safe path segment; absent it defaults to pr-<n>', async () => {
+test('args.runId is validated as one safe path segment; absent it defaults to story-<id>', async () => {
   await assert.rejects(runWorkflow({ args: { stories: [STORY], runId: '../x' }, dispatch: () => ({}) }), /runId/)
   await assert.rejects(runWorkflow({ args: { stories: [STORY], runId: '' }, dispatch: () => ({}) }), /runId/)
   const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch: planDispatch() })
-  assert.match(calls.find(c => c.opts.agentType === 'pair-remediation-planner').prompt, /\$run=pr-7 /)
+  assert.match(calls.find(c => c.opts.agentType === 'pair-remediation-planner').prompt, /\$run=story-292 /)
 })
 
 test('the phase skills are real installed skills, and the engine names them by their configured default', () => {
@@ -2621,9 +2620,10 @@ test('the text-shape rule reaches the prompts whose output gets re-read', async 
   assert.ok(rev && synth, 'review and synthesis calls exist')
   assert.ok(SKILL('review-phase').includes('TEXT SHAPE (mandatory)'), 'review skill lost the shape rule')
   assert.ok(/Schematic, no narration/.test(SKILL('cycle-comments')), 'synthesis skill lost the shape rule')
-  for (const [name, c] of [['PR', pr]]) {
+  assert.ok(pr && pr.prompt.includes('/pair-workflow-pr-phase'), 'no PR call')
+  assert.ok(SKILL('pr-phase').includes('TEXT SHAPE (mandatory)'), 'PR skill lost the shape rule')
+  for (const [name, c] of []) {
     assert.ok(c, `no ${name} call`)
-    assert.ok(c.prompt.includes('TEXT SHAPE (mandatory)'), `${name} prompt lost the shape rule`)
   }
 })
 
@@ -3906,7 +3906,7 @@ test('a RED fixture inherits its proof from the declared RED test that consumes 
 
   const sealer = calls.find(c => c.opts.agentType === 'pair-red-sealer')
   assert.ok(sealer, 'the fixture contract reaches the sealer')
-  assert.match(sealer.prompt, /\$contract=\.pair\/working\/runs\/pr-7\/292\/r1-g1-red-contract\.json/, 'the sealer reads the persisted contract FILE, never a relayed value')
+  assert.match(sealer.prompt, /\$contract=\.pair\/working\/runs\/story-292\/292\/r1-g1-red-contract\.json/, 'the sealer reads the persisted contract FILE, never a relayed value')
   assert.match(RED_SNAPSHOT_SCRIPT, /consumedBy does not name a listed RED test/, 'the script refuses an unconsumed fixture')
   const verifier = calls.find(c => c.opts.agentType === 'pair-fix-verifier')
   assert.ok(verifier, 'the frozen fixture reaches P3')

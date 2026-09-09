@@ -117,6 +117,16 @@ An unknown key, an empty override, or a `maxParallelism` below 1 is rejected lou
 ignored — a discarded setting would run the batch on values you did not choose while reporting
 success.
 
+### Every phase is a skill
+
+From US-479 c4 the workflow file dispatches no free-form prompt at all. `/pair-workflow-contract-phase`
+ensures the template-derived contract (phase 0); `/pair-workflow-implement-phase` builds the story in
+its worktree and writes the checkpoint (A); `/pair-workflow-pr-phase` publishes exactly one PR through
+the configured publish-pr skill (B). The engine passes each skill the run's values — `$run`, `$story`,
+`$branch`, `$worktree`, `$base`, `$stacked`, the configured skill names, `$notes` — and validates the
+typed result; the isolation rules, the stacked-story rules, the finite-state and evidence disciplines
+and every shell command live in the skill.
+
 ### The review and the cycle's comments are skills
 
 From US-479 c3 the independent review is `/pair-workflow-review-phase`: it reads the PR's `risk:*`
@@ -143,8 +153,8 @@ RED and P3 on their declared models. Roles: `implementation`, `pr`, `reviewer`, 
 `redVerifier`, `seal`, `green`, `preflight`.
 
 `runId` (optional, one safe path segment) names the handoff directory `.pair/working/runs/<runId>/`;
-absent, each card uses `pr-<n>`. The six phase skills are pipeline configuration like the others —
-`pipeline.skills.remediationPlan`, `redSpec`, `redVerify`, `redSeal`, `greenFix`, `p3Verify`, `reviewPhase`, `cycleComments` —
+absent, each card uses `story-<id>`. The six phase skills are pipeline configuration like the others —
+`pipeline.skills.remediationPlan`, `redSpec`, `redVerify`, `redSeal`, `greenFix`, `p3Verify`, `reviewPhase`, `cycleComments`, `contractPhase`, `implementPhase`, `prPhase` —
 so an adopter who names them differently overrides the key rather than the engine.
 
 ### Carrying verified P3 evidence

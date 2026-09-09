@@ -26,6 +26,10 @@ Two questions, in order: did the fix respect the sealed contract (a script answe
 
 ## Algorithm
 
+### Step 0: Isolation
+
+Never switch the main checkout's branch. Inspect from a DETACHED throwaway worktree pinned to the PR's current pushed head: `git worktree remove --force $worktree 2>/dev/null; git fetch origin -q; git worktree add --detach $worktree origin/$branch; cd $worktree`. The untracked checkpoint and review log are absent there — good, stay blind to them. Remove the worktree when finished.
+
 ### Step 1: Custody (deterministic)
 
 ```bash

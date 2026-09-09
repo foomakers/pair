@@ -16,9 +16,9 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 |------|-------|---------|
 | **Process** | 10 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 32 | Atomic units — perform a single focused operation |
-| **Workflow** | 8 | Delivery phases — dispatched by the batch engine, one mutation boundary each |
+| **Workflow** | 11 | Delivery phases — dispatched by the batch engine, one mutation boundary each |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 52 (10 process + 32 capability + 8 workflow + 2 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 55 (10 process + 32 capability + 11 workflow + 2 navigator).
 
 ## Full Catalog
 
@@ -131,7 +131,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 |-------|-------|
 | `/pair-capability-grill` | Reusable interview engine (interview / sync modes), write-free |
 
-### Workflow Skills (8)
+### Workflow Skills (11)
 
 Delivery-phase skills the batch engine (`pair-implement-batch`) dispatches to during the review ↔ remediation loop (US-479). Each owns one mutation boundary and writes one handoff under `.pair/working/runs/<run>/<story>/`.
 
@@ -145,6 +145,9 @@ Delivery-phase skills the batch engine (`pair-implement-batch`) dispatches to du
 | `/pair-workflow-p3-verify` | D5 | Custody check via `red-snapshot.mjs verify`, then read-only evidence re-run over the delta |
 | `/pair-workflow-review-phase` | C | Independent blind review of one PR head: review set by risk tier, union of passes, first / re-review / fresh modes |
 | `/pair-workflow-cycle-comments` | C/D | The cycle's PR-comment policy: probe (marker + log), flush (escalation), synthesize (one final remediation table) |
+| `/pair-workflow-implement-phase` | A | Build one story in its worktree, test-first, gate verified, checkpoint written; never opens the PR |
+| `/pair-workflow-pr-phase` | B | Publish exactly one review-ready PR through the project publish-pr skill; never reviews |
+| `/pair-workflow-contract-phase` | 0 | Ensure the template-derived machine contract (cache-by-hash via ensure-contract.mjs) |
 
 ## Directory Structure
 

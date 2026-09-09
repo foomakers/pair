@@ -43,7 +43,7 @@ export const meta = {
 //   maxParallelism?,              // integer >= 1; absent = unbounded fan-out
 //   runId?,                       // one safe path segment; names the handoff directory
 //                                 // `.pair/working/runs/<runId>/<story>/` every phase skill writes to.
-//                                 // Absent → `pr-<prNumber>` per card.
+//                                 // Absent → `story-<id>` per card.
 //   severityFloor?,               // findings below it are carried, not fixed. It is spelled in
 //                                 // the REVIEW TEMPLATE's severity vocabulary (pipeline.reviewTemplate
 //                                 // -> contract `vocabulary.severities`), pair's own when none is
@@ -516,6 +516,10 @@ const PIPELINE_DEFAULTS = {
     // Fase C (US-479 c3): the independent review and the cycle's PR-comment policy.
     reviewPhase: '/pair-workflow-review-phase',
     cycleComments: '/pair-workflow-cycle-comments',
+    // Fases 0, A, B (US-479 c4): the contract, implement and PR phases.
+    contractPhase: '/pair-workflow-contract-phase',
+    implementPhase: '/pair-workflow-implement-phase',
+    prPhase: '/pair-workflow-pr-phase',
   },
   worktreeRoot: '../pair-worktrees',
   auditLogDir: '.pair/working/reviews',
@@ -1272,7 +1276,7 @@ function usableSchema(contract) {
 
 async function ensureContract(spec) {
   const res = await agent(
-    `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/pair-contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template, AND the top-level \`severityRanks\` object: every name in \`vocabulary.severities\`, spelled identically, mapped to an explicit unique integer, HIGHER = MORE SEVERE (e.g. {"Critical": 4, "Major": 3, "Minor": 2, "Questions": 1}). Derive each rank from what the template SAYS the level means — a level it describes as must-fix/merge-blocking outranks one it describes as advisory or a question — and NEVER from the order the levels happen to appear in: the consumer ignores array order, and a wrong rank silently converts a merge-blocking finding into an accepted one. If the template's levels carry no discernible relative severity, return status \`failed\` rather than inventing an order. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
+    `Invoke **${SK.contractPhase}** with $name=${spec.name} $template=${spec.template} $contract=${spec.contract} $skeleton=${JSON.stringify(spec.skeleton)} $mirrors=${JSON.stringify(spec.mirrors)}. The skill is the process of record: execute its steps exactly and return exactly the structured result it defines.`,
     { agentType: 'pair-contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
@@ -1348,45 +1352,6 @@ const hasRedContractVerification = r =>
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
 const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
 const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
-// ── Text shape (token cost) ────────────────────────────────────────────
-// Every artifact this loop produces is READ AGAIN: the PR body by each reviewer, each
-// fixer and the analysis agent; the log by the escalate-flush and the final synthesis.
-// Prose that restates the diff is paid on every one of those reads and carries nothing the
-// reader cannot get from the diff itself. What DOES earn its tokens is the part a reader
-// cannot reconstruct: the concrete failure case, and the evidence it is real. So the rule is
-// schematic-but-complete, never merely "shorter" — drop the narration, keep inputs -> wrong
-// output, keep the proof. Compressing evidence costs an extra review round (~250k tokens),
-// which dwarfs every word saved.
-const TEXT_SHAPE =
-  'TEXT SHAPE (mandatory): write schematically, not in prose. Tables and one-line bullets over paragraphs. ' +
-  'NEVER restate what the diff already shows (no file-by-file narration, no "I then changed X to Y"), ' +
-  'never re-explain context the reader already has, no preamble, no summary of the summary, no praise. ' +
-  'KEEP AT FULL LENGTH the two things a reader cannot reconstruct: the CONCRETE FAILURE CASE ' +
-  '(specific inputs/state -> the wrong output or the loss that follows) and the EVIDENCE it is real ' +
-  '(what you ran, what it printed). Cut narration, never evidence.'
-
-const AUTHORITATIVE_BOUNDARY_PROOF =
-  'AUTHORITATIVE BOUNDARY PROOF (mandatory): when a table row, equivalence, normalization or remediation depends on an external command, service, file format or runtime, name the exact real producer/consumer that defines it and run a minimal isolated end-to-end probe for every such claim. Keep rows distinct until that boundary proves them equivalent. A unit test of the function being changed cannot establish external semantics or prove that user-facing repair advice works: apply the advice in a clean temporary environment and verify the promised postcondition.'
-
-const EMPIRICAL_EVIDENCE_LEDGER =
-  'EMPIRICAL EVIDENCE LEDGER (mandatory): before asserting or propagating a measured or factual claim in source comments, test names/comments, ADR/ADL, PR body, or a user-facing diagnostic, record Claim | authoritative oracle | exact command/fixture/revision | observed output. Counts, Unicode/category classifications, version facts and external behavior all need that proof. If evidence is absent, remove or qualify the claim. One measured output feeds every distributed restatement: never independently re-count, paraphrase, or invent a plausible explanation.'
-
-const INTERACTION_COLLISION_COMPLETENESS =
-  'INTERACTION/COLLISION COMPLETENESS (mandatory): after individual decision-table rows, add the minimal cross-product rows wherever one rule output can also be a valid input, name, state, or reservation of another. Test the actual collision resolver, including duplicate input alongside a pre-existing generated/suffixed outcome; independent happy-path rows do not prove that interaction.'
-
-const LOSSLESS_DIAGNOSTIC_CONTRACT =
-  'LOSSLESS DIAGNOSTIC CONTRACT (mandatory when reporting user input or derived identifiers): test lossless distinguishability between actual, expected and candidate values. Escape or name code points for invisible, whitespace-normalized, or confusable characters so an error cannot collapse the wrong spelling into the expected one.'
-
-const FINITE_STATE_COMPLETENESS =
-  'FINITE-STATE COMPLETENESS (mandatory when a change parses, selects, snapshots, or branches on a finite protocol/state domain): identify the authoritative grammar or producer, make the complete decision table of supported states and invalid/boundary cases, then write and run a real test for every row before editing the canonical source. Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant. ' +
-  EMPIRICAL_EVIDENCE_LEDGER +
-  ' ' +
-  INTERACTION_COLLISION_COMPLETENESS +
-  ' ' +
-  LOSSLESS_DIAGNOSTIC_CONTRACT +
-  ' ' +
-  AUTHORITATIVE_BOUNDARY_PROOF
-
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 
@@ -1449,41 +1414,42 @@ function baseOf(story) {
   return String(story.base ?? '').trim() || PIPELINE.baseBranch
 }
 
-function wtClauseBase(story) {
-  const base = baseOf(story)
-  return `ISOLATION (mandatory): do ALL git/file work inside a dedicated worktree at \`${PIPELINE.worktreeRoot}/${story.id}\` — create-or-reuse it: \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} -B ${story.branch} ${base}\` on first setup, or \`git worktree add ${PIPELINE.worktreeRoot}/${story.id} ${story.branch}\` if the branch already has commits; if the path already exists, just \`cd\` into it. NEVER modify the repo's main working tree and NEVER switch its branch.${base === PIPELINE.baseBranch ? '' : ` This story is STACKED on \`${base}\`: that branch is its base, so its commits are already in your history and must NOT be reverted, duplicated or re-implemented — only ADD your own work on top. When you open the PR, target \`${base}\` as the PR base branch, not \`main\`, so the diff shows only this story's change.`}`
-}
-
-function wtClause(story) {
-  return `${wtClauseBase(story)} ${FINITE_STATE_COMPLETENESS}`
-}
-
-// Reviewer isolation: read-only inspection in a DETACHED throwaway worktree pinned
-// to the PR's pushed head. Detached HEAD never occupies the branch, so it can't
-// collide with the authoring worktree (which holds it) or with other stories'
-// reviewers in a parallel batch — and it never touches the main checkout's branch.
-function revWtClauseBase(story) {
-  const p = `${PIPELINE.worktreeRoot}/${story.id}-review`
-  return `ISOLATION (mandatory, read-only): NEVER switch the main checkout's branch. Inspect the code in a DETACHED throwaway worktree pinned to the PR's current pushed head: \`git worktree remove --force ${p} 2>/dev/null; git fetch origin -q; git worktree add --detach ${p} origin/${story.branch}\`, then \`cd ${p}\`. Read the code there (the untracked checkpoint is absent here — good, stay blind to it). When finished, remove it: \`git worktree remove --force ${p}\`.`
-}
 
 // ── Per-story lifecycle ──────────────────────────────────────────────────
 async function driveStory(story) {
   const tag = `#${story.id}`
+  // ── Every phase is a SKILL invoked by name with typed arguments (US-479). ─────────────────
+  // The workflow names the skill, passes the run's values and validates the typed result; the
+  // method, the rules and every shell command live in the skill.
+  const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
+  const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
+  const storyBase = baseOf(story)
+  const stacked = storyBase !== PIPELINE.baseBranch
+  // One run directory per story for every phase: `args.runId` when the caller names the run,
+  // else `story-<id>` — the same value before and after the PR exists.
+  const runId = RUN_ID ?? `story-${story.id}`
+  const storyArgs = () =>
+    `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}`
+  const notesArg = () => (story.notes ? ` $notes=${JSON.stringify(story.notes)}` : '')
+  const invoke = (skill, args) =>
+    `Invoke **${skill}** for story ${tag} with ${args}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the checkpoint and the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
   const resuming = Number.isInteger(story.prNumber)
   let pr = resuming ? { prNumber: story.prNumber } : null
 
   if (!resuming) {
     // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
     const impl = await agentRetry(
-      `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following ${SK.implement}, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Verify the gates with ${SK.verifyQuality} (it resolves the story's \`risk:*\` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command, and do not run the whole monorepo). Record any architectural or project decision you take with ${SK.recordDecision} rather than leaving it in a commit message. On completion write the story checkpoint via ${SK.checkpoint} $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
+      invoke(
+        SK.implementPhase,
+        `${storyArgs()} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint}${notesArg()}`,
+      ),
       withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA }),
     )
     if (!impl) return { story, status: 'failed-implement' }
 
     // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
     pr = await agentRetry(
-      `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (${SK.checkpoint} $mode=resume) — do not re-derive. Push the branch, then publish the PR by invoking **${SK.publishPr}**. Do NOT hand-roll the PR: that skill owns the whole sequence and a hand-rolled PR silently skips most of it — the tier-resolved quality gate, the PR body composed from \`pr-template.md\` with only the pertinent conditional sections, the story's classification tags copied onto the PR, ready-for-review, the \`pr-state:*\` label and the PR state flow, the PR-URL back-link on the story, and the story's board state moved to Review. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. ${TEXT_SHAPE} A PR body is re-read by every reviewer and every fix round of this cycle, so its length is paid many times over: state each decision once, in a line. ONE EXPECTED SIGNAL: you are running INSIDE a subagent, so when the skill reaches its review-dispatch step it will emit \`Review: review-dispatch-required\` instead of nesting a second subagent. That is CORRECT — this orchestrator dispatches the independent review itself the moment you return. Do NOT dispatch or run a review yourself, and do NOT merge. Return the PR number.`,
+      invoke(SK.prPhase, `${storyArgs()} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
       withModel('pr', { agentType: 'pair-implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA }),
     )
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
@@ -1560,15 +1526,10 @@ async function driveStory(story) {
   // validates the typed result. Nothing below tells an agent HOW to write a test, seal a
   // snapshot or verify a delta — a change to that behaviour is a skill version, never a patch
   // to a running workflow.
-  const runId = RUN_ID ?? `pr-${pr.prNumber}`
-  const worktreePath = `${PIPELINE.worktreeRoot}/${story.id}`
-  const reviewWorktreePath = `${PIPELINE.worktreeRoot}/${story.id}-review`
   const phaseArgs = (phase, baseHead) =>
     `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $phase=${phase} $base=${baseHead} $branch=${story.branch}`
   const cycleArgs = () =>
     `$run=${runId} $story=${story.id} $pr=${pr.prNumber} $worktree=${worktreePath} $reviewLog=${reviewLog} $marker=${JSON.stringify(firstReviewMarker)}`
-  const invoke = (skill, args) =>
-    `Invoke **${skill}** with ${args}. The skill is the process of record: execute its steps exactly, do not improvise or skip one, and return exactly the structured result it defines. Do NOT read ${BLIND_PATHS} except the run directory \`.pair/working/runs/${runId}/${story.id}/\` the skill names. Do NOT merge.`
   const planRemediation = (findings, phase, baseHead) =>
     agentRetry(
       invoke(SK.remediationPlan, `${phaseArgs(phase, baseHead)} $worktree=${worktreePath} $findings=${JSON.stringify(findings)}`),
@@ -1603,7 +1564,7 @@ async function driveStory(story) {
     )
   const p3Verify = (targets, ledger, phase, baseHead) =>
     agentRetry(
-      invoke(SK.p3Verify, `${phaseArgs(phase, baseHead)} $worktree=${reviewWorktreePath} $findings=${JSON.stringify(targets)} $ledger=${JSON.stringify(ledger)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''}. ${revWtClauseBase(story)}`),
+      invoke(SK.p3Verify, `${phaseArgs(phase, baseHead)} $worktree=${reviewWorktreePath} $findings=${JSON.stringify(targets)} $ledger=${JSON.stringify(ledger)}${SEVERITY_FLOOR ? ` $floor=${SEVERITY_FLOOR.name}` : ''}`),
       withModel('preflight', { agentType: 'pair-fix-verifier', phase: 'Preflight', label: `preflight:${tag} ${phase}`, effort: 'medium', schema: PREFLIGHT_SCHEMA }),
       hasPreflightEvidence,
     )

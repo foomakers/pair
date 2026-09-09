@@ -1,9 +1,9 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 52 pair skills organized by type — process, capability, workflow, and meta.
+description: Complete catalog of all 55 pair skills organized by type — process, capability, workflow, and meta.
 ---
 
-pair ships with 52 skills organized into four types: **process** (lifecycle orchestration), **capability** (atomic operations), **workflow** (delivery phases dispatched by the batch engine), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 55 skills organized into four types: **process** (lifecycle orchestration), **capability** (atomic operations), **workflow** (delivery phases dispatched by the batch engine), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
 > **Last updated:** 2026-09-08. Source: `packages/knowledge-hub/dataset/.skills/`
 
@@ -141,6 +141,9 @@ Workflow skills are the delivery phases of the [batch engine](/docs/reference/ba
 | **p3-verify** | `/pair-workflow-p3-verify` | Phase D5 of the delivery workflow: read-only verification of a just-fixed delta — runs the deterministic custody check (red-snapshot.mjs verify: snapshot ancestry, tree, sealed blobs byte-identical, no unlisted test change, fixScope respected), then re-runs the fixer's evidence and inspects the delta and its directly changed boundaries for regressions. |
 | **review-phase** | `/pair-workflow-review-phase` | Phase C of the delivery workflow: one independent, blind review of one exact PR head — a declared set of passes chosen by the PR's risk tier (general via `/pair-process-review`, plus security / boundary / architecture lenses as the tier rises), unioned and deduplicated to one finding set with the template's vocabulary and a verdict. |
 | **cycle-comments** | `/pair-workflow-cycle-comments` | The PR-comment policy of one review ↔ fix cycle, in three modes: probe (read-only: is the working log present, does the PR already carry the first-review marker), flush (escalation: one comment summarizing the rounds and the still-open findings, superseding any prior flush, log kept), synthesize (convergence: ONE remediation table across every run of the cycle, intermediate comments minimized, log deleted). |
+| **implement-phase** | `/pair-workflow-implement-phase` | Phase A of the delivery workflow: implements one refined story inside its own persistent worktree — creates or reuses the worktree on the declared base (stacked stories included), follows the project's implement process test-first, verifies the tier-resolved quality gate, records decisions, and writes the story checkpoint so a fresh instance can open the PR with zero prior context. |
+| **pr-phase** | `/pair-workflow-pr-phase` | Phase B of the delivery workflow: turns an implemented story into exactly one review-ready pull request — resumes from the checkpoint, pushes the branch, and publishes through the project's publish-pr skill (gate, PR body from the template, classification tags, ready-for-review, pr-state label, story back-link, board state). |
+| **contract-phase** | `/pair-workflow-contract-phase` | Phase 0 of the delivery workflow: ensures the machine contract derived from a KB markdown template (verdict options, severities with explicit ranks, finding fields) is fresh — cache-by-hash via ensure-contract.mjs, regenerated only when the template changed — and returns it as the enum-locked return-value schema the reviewer is held to. |
 
 ## Skill Properties
 
