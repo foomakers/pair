@@ -889,22 +889,6 @@ function skillLocalScriptTarget(target: string): string | null {
   return withoutAnchor.startsWith(`${SCRIPTS_DIR}/`) ? withoutAnchor : null
 }
 
-/**
- * A skill must be portable as ONE folder, in both directions:
- *
- *   1. every script a `SKILL.md` links under `scripts/` EXISTS beside it in the
- *      dataset — a skill whose runbook points at a script it does not ship is a
- *      runtime failure at the worst moment, not an authoring typo;
- *   2. every script the dataset ships has a BYTE-IDENTICAL twin under
- *      `.claude/skills/<prefixed-skill>/scripts/` — the dataset copy is
- *      canonical, the installed one derived, and a script edited in one copy
- *      only is silent drift the markdown mirror guards cannot see (they are
- *      markdown-only by construction — `skill-md-mirror.ts`'s ACCEPTED RESIDUAL).
- *
- * Reports drift, never repairs it. Scope is a skill's OWN `scripts/` dir: a
- * `references/scripts/` folder, a link outside `scripts/` (left to `checkLinks`)
- * and an installed script with no dataset source are all out of it.
- */
 /** 1. Every `scripts/…` target a SKILL.md links must EXIST beside it in the dataset. */
 function checkLinkedScriptsShip(skillFile: string, skillDir: string, skillRel: string): string[] {
   const errors: string[] = []
