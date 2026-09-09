@@ -294,6 +294,23 @@ test('resolve: a genuine gap in the INITIAL acceptance contract revises a0 as a0
   assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, base: r.next.base, openIds: r.next.openIds }, { step: 'verify', mode: 're-review', phase: 'r1', base: SHA('c'), openIds: ['r0-1'] })
 })
 
+test('resolve: every `next` carries the PR the cycle is bound to once a handoff names it — including the inputs-changed and moved-head re-verifications', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0', { inputsDigest: 'd1' })
+  redVerify(dir, 'a0', { inputsDigest: 'd1' })
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true, inputsDigest: 'd1' })
+  review(dir, 'r0', { inputsDigest: 'd1', readiness: { ready: false }, findings: [finding('r0-1')] })
+  for (const opts of [{ entry: 'fresh' }, { entry: 'fresh', inputs: 'd2' }, { entry: 'pr', pr: 7, head: SHA('9') }]) {
+    const r = resolve({ dir, workflowVersion: V, policy: POLICY, ...opts })
+    assert.equal(r.next.pr, 7, JSON.stringify(opts))
+    assert.equal(r.pr, 7)
+  }
+  // nothing names a PR yet: no pr on next, and a fresh cycle stays fresh
+  const { dir: d2 } = runDir()
+  redSpec(d2, 'a0', {}, { pr: null })
+  assert.equal(resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'fresh' }).next.pr, undefined)
+})
+
 test('resolve: budgets, escalations and breaches are blocked outcomes — never a clean review', () => {
   const { dir } = runDir()
   review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')], custody: { verified: false, contractBreach: true } })

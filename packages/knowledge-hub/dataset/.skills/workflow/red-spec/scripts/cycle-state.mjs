@@ -321,9 +321,14 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
     const round = phaseParts(last.phase)?.round ?? 0
     next = { step: 'verify', mode: 're-review', phase: `r${round + 1}`, round: round + 1, attempt: 1, base: last.data.reviewedHead, prior: last.name, openIds: (last.data.findings ?? []).filter(isBlocking).map(f => f.id), inputsChanged: true, invalidated: handoffs.filter(h => h.skill === 'review-phase').map(h => h.name) }
   }
+  // The PR the cycle is bound to travels with EVERY next: a coordinator resuming a fresh-path card
+  // (no prNumber in its args) learns it from here — a verification dispatched without it would
+  // key its markers on `PR#null` (canary run 11, finding r1-5).
+  const knownPr = handoffs.map(h => h.data.pr ?? h.data.prNumber).find(x => Number.isInteger(x) && x > 0) ?? (Number.isInteger(Number(pr)) && Number(pr) > 0 ? Number(pr) : undefined)
+  if (knownPr !== undefined && next && typeof next === 'object' && next.pr === undefined) next = { ...next, pr: knownPr }
   const status = next.step === 'done' ? 'completed' : next.step === 'blocked' ? 'blocked' : 'in-progress'
   const nextFindingSeq = handoffs.filter(h => h.skill === 'review-phase').reduce((m, h) => Math.max(m, ...(h.data.findings ?? []).map(f => Number(/-(\d+)$/.exec(String(f.id ?? ''))?.[1] ?? 0))), 0) + 1
-  return { status, next, handoffs: names, last: last.name, pr: handoffs.map(h => h.data.pr).find(p => p !== undefined) ?? pr, nextFindingSeq, workflowVersion }
+  return { status, next, handoffs: names, last: last.name, pr: knownPr ?? pr, nextFindingSeq, workflowVersion }
 }
 
 // ── test identity ──────────────────────────────────────────────────────────────────────────

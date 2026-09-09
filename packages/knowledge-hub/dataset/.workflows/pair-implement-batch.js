@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.2'
+const WORKFLOW_VERSION = '3.0.3'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -1488,6 +1488,11 @@ async function driveStory(story) {
     seen.add(key)
     let res
     let stage = next.step
+    // The PR binds the markers, the run-directory identity and the publication. A cycle state that
+    // names it (any `next.pr`) binds it here; a verification or a fix dispatched without it would key
+    // its comments on `PR#null` — refused, never dispatched (canary run 11, finding r1-5).
+    if (isPosInt(next.pr)) pr = next.pr
+    if ((stage === 'verify' || stage === 'green') && !isPosInt(pr)) return result('failed-resume', { reason: `${stage} needs the PR number and neither the card nor the cycle state named it`, phase: next.phase })
     if (stage === 'prepare') res = await prepare(next)
     else if (stage === 'validate') res = await validate(next)
     else if (stage === 'implement') res = await implement(next)
