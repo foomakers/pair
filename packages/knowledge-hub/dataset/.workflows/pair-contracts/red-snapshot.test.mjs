@@ -1,6 +1,11 @@
 // Tests for red-snapshot.mjs — deterministic Git custody of a RED contract (US-479 c2).
 // Every scenario runs against a throwaway git repository: this is the only place the
 // seal/verify contract is proven, since the workflow sandbox cannot run git at all.
+// The pre-push hook exports GIT_DIR (and friends) to everything it runs; a test that spawns git in a
+// temp directory under that environment acts on the REAL repository (2026-09-09: core.bare flipped,
+// fixture commits on a story branch). Scrubbed here at import, and asserted by the decoy test in
+// engine-boundaries.test.mjs.
+for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs'

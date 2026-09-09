@@ -5,6 +5,11 @@
 // the main checkout's run directory, validated by the coordinator's predicate, sealed from inside the
 // worktree); the interruption matrix at every persisted or side-effect boundary. LLM judgment is not
 // exercised here — nothing below stubs the filesystem, Git or the installer being asserted.
+// The pre-push hook exports GIT_DIR (and friends) to everything it runs; a test that spawns git in a
+// temp directory under that environment acts on the REAL repository (2026-09-09: core.bare flipped,
+// fixture commits on a story branch). Scrubbed here at import, and asserted by the decoy test in
+// engine-boundaries.test.mjs.
+for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync, rmSync, readdirSync, symlinkSync } from 'node:fs'
@@ -241,5 +246,33 @@ test('TC-08 / TC-14: the installed scripts run outside the monorepo cwd — no r
   assert.ok(existsSync(join(worktree, 'notes.txt')) && readFileSync(join(worktree, 'src/a.js'), 'utf8') === 'dirty production\n', 'the refusal deleted or reset nothing')
   assert.deepEqual({ bare: cfg(main, 'core.bare'), hooks: cfg(worktree, 'core.hooksPath') }, before, 'repository configuration untouched')
   assert.equal(git(worktree, 'rev-parse', 'HEAD'), base)
+  rmSync(root, { recursive: true, force: true })
+})
+
+// ── 4. An inherited GIT_DIR never reaches the real repository ──────────────────────────────────
+test('TC-08: with GIT_DIR / GIT_WORK_TREE inherited from a hook and pointing at a DECOY repository, the shipped scripts and the dry-run suites act only on their own cwd — the decoy keeps its head, its config and its branch', () => {
+  const decoy = mkdtempSync(join(tmpdir(), 'decoy repo '))
+  git(decoy, 'init', '-q', '-b', 'main')
+  git(decoy, 'config', 'user.email', 't@e.com')
+  git(decoy, 'config', 'user.name', 'T')
+  git(decoy, 'config', 'commit.gpgsign', 'false')
+  write(decoy, 'keep.txt', 'do not touch\n')
+  git(decoy, 'add', '-A')
+  git(decoy, 'commit', '-q', '--no-verify', '-m', 'decoy')
+  const before = { head: git(decoy, 'rev-parse', 'HEAD'), bare: git(decoy, 'config', 'core.bare'), branches: git(decoy, 'branch', '--list'), worktrees: git(decoy, 'worktree', 'list') }
+  const hostile = { ...process.env, GIT_DIR: join(decoy, '.git'), GIT_WORK_TREE: decoy, GIT_INDEX_FILE: join(decoy, '.git', 'index') }
+  // the seal CLI, in an unrelated fixture repo, under the hostile environment
+  const { worktree, base, runDir, root, main } = mainAndWorktree()
+  write(worktree, 'test/a.test.js', 'changed\n')
+  const contractPath = join(runDir, 'c.json')
+  writeFileSync(contractPath, JSON.stringify({ sourceOfTruth: 's', fixScope: { owner: 'a()', mode: 'behavioral', allowedPaths: ['src/a.js'] }, redTests: [{ file: 'test/a.test.js', sha256: `sha256:${sh(worktree, 'shasum', '-a', '256', 'test/a.test.js').split(' ')[0]}`, command: 'x', observed: 'FAIL' }], testExempt: false }))
+  const r = spawnSync(process.execPath, [installed('pair-workflow-red-verify/scripts/red-snapshot.mjs'), 'seal', '--pr', '7', '--phase', 'r1-g1', '--base', base, '--contract', contractPath, '--root', main], { cwd: worktree, encoding: 'utf8', env: hostile })
+  assert.equal(JSON.parse(r.stdout).sealed, true, r.stdout + r.stderr)
+  assert.equal(git(worktree, 'rev-list', '--count', `${base}..HEAD`), '1', 'the seal landed in the fixture worktree')
+  // the custody dry-run suite itself, as the pre-push hook runs it
+  const suite = spawnSync(process.execPath, ['--test', fileURLToPath(new URL('./red-snapshot.test.mjs', import.meta.url))], { cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8', env: hostile })
+  assert.equal(suite.status, 0, suite.stdout.split('\n').filter(l => /^✖|not ok/.test(l)).join('\n'))
+  assert.deepEqual({ head: git(decoy, 'rev-parse', 'HEAD'), bare: git(decoy, 'config', 'core.bare'), branches: git(decoy, 'branch', '--list'), worktrees: git(decoy, 'worktree', 'list') }, before, 'the decoy repository was touched through the inherited environment')
+  rmSync(decoy, { recursive: true, force: true })
   rmSync(root, { recursive: true, force: true })
 })

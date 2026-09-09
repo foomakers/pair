@@ -315,9 +315,17 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
 }
 
 // ── test identity ──────────────────────────────────────────────────────────────────────────
+// A git process must act on the repository named by `cwd`, never on one named by an INHERITED
+// environment: a pre-push hook exports GIT_DIR (and friends) to everything it runs, and a script
+// that spawned `git init` / `git commit` in a temp directory under that environment re-initialised
+// and committed into the REAL repository (core.bare flipped to true, fixture commits on the branch —
+// the 2026-09-09 canary incident). Scrub the whole family before every spawn.
+const GIT_ENV_RE = /^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/
+export const cleanGitEnv = (env = process.env) => Object.fromEntries(Object.entries(env).filter(([k]) => !GIT_ENV_RE.test(k)))
+
 export function testIdentity({ cwd, command, env = {}, toolchain }) {
   const git = args => {
-    const r = spawnSync('git', args, { cwd, encoding: 'utf8' })
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8', env: cleanGitEnv() })
     return r.status === 0 ? r.stdout.replace(/\n$/, '') : null
   }
   const tree = git(['rev-parse', 'HEAD^{tree}'])

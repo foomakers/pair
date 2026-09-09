@@ -2,6 +2,11 @@
 // `gh` is the transport; a recorder stands in for it on PATH so the read-back-before-write and the
 // edit-in-place are proven against the exact API calls the script makes. The network boundary itself
 // (GitHub) is exercised by the live canary, never stubbed here as if it were proof of it.
+// The pre-push hook exports GIT_DIR (and friends) to everything it runs; a test that spawns git in a
+// temp directory under that environment acts on the REAL repository (2026-09-09: core.bare flipped,
+// fixture commits on a story branch). Scrubbed here at import, and asserted by the decoy test in
+// engine-boundaries.test.mjs.
+for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs'
