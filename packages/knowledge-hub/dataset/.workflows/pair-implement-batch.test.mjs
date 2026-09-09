@@ -1,4 +1,4 @@
-// Dry-run harness for pair-implement-batch.js (engine 3.0.0, US-479): executes the workflow
+// Dry-run harness for pair-implement-batch.js (engine 3.0.1, US-479): executes the workflow
 // source with stubbed `agent`/`parallel` (the sandbox primitives) and asserts the coordinator's
 // contract — four judgment stages dispatched by skill name with typed arguments, a `next`-driven
 // state machine that never derives a transition of its own, fail-closed validation of every typed
@@ -116,7 +116,8 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('implement:')) {
       const full = { status: 'ok', gatesPassed: true, branch: 'b', prNumber: 7, url: 'https://x/pr/7', outputHead: HEAD, checkpointPath: '.pair/working/checkpoints/x.md', ...res }
-      full.next = res.next ?? (full.status === 'ok' ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: full.outputHead, pr: full.prNumber } : { step: 'blocked', reason: 'failed-implement', detail: full.reason })
+      s.implements = (s.implements ?? 0) + 1
+      full.next = res.next ?? (full.status === 'ok' && full.gatesPassed === true ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: full.outputHead, pr: full.prNumber } : s.implements <= 1 ? { step: 'implement', mode: 'retry', phase: 'a0', round: 0, attempt: 2, base: HEAD, contract: { path: contractPath.replace(phase, 'a0'), hash: SHA256('1'), snapshot: SNAP }, pr: full.prNumber } : { step: 'blocked', reason: 'failed-implement', budget: 'greenRetries' })
       return full
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('green:')) {
@@ -257,10 +258,10 @@ test('TC-11: a resumed PR with a clean verification is ONE dispatch — the fina
 test('TC-11: every dispatch is a configured skill + typed arguments + the engine version, run directory and policy', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY], runId: 'run-42' }, dispatch: stdDispatch({ review }) })
-  assert.equal(result.workflowVersion, '3.0.0')
+  assert.equal(result.workflowVersion, '3.0.1')
   for (const c of calls.slice(1)) {
     assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-(red-spec|red-verify|implement-phase|green-fix|review-phase)\*\* for story #292 with \$run=run-42 \$story=292 \$branch=feat\/#292-x \$worktree=\.\.\/pair-worktrees\/292 \$base=origin\/main \$stacked=false/, c.opts.label)
-    assert.ok(c.prompt.includes('$workflowVersion=3.0.0'), `${c.opts.label} was not told the workflow version`)
+    assert.ok(c.prompt.includes('$workflowVersion=3.0.1'), `${c.opts.label} was not told the workflow version`)
     assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
     assert.match(c.prompt, /\$inputs=[0-9a-f]{16}/, `${c.opts.label} was not told the effective-inputs digest`)
     assert.match(c.prompt, /\$entry=(fresh|pr)/)
@@ -350,6 +351,17 @@ test('TC-01: no implementation or fix is dispatched before an independently vali
   assert.equal(gap.result.batch[0].status, 'failed-preparation')
   assert.match(gap.result.batch[0].reason, /AC-3 names no producer/)
   assert.equal(gap.calls.filter(c => c.opts.agentType === 'pair-implementer').length, 0)
+})
+
+test('TC-09 / TC-12: an implementation published with a RED gate never reaches the verifier — it returns to implement on the same seal once (canary run 11: the sealed manifest failed the prettier gate), then failed-implement', async () => {
+  let n = 0
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.label?.startsWith('implement:') ? { gatesPassed: n++ === 0 ? false : true } : o.agentType === 'pair-reviewer' ? { verdict: 'Approved', findings: [] } : {}) })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.deepEqual(stageLabels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'implement:#292 attempt 2', 'verify:#292 r0'])
+  assert.match(calls.find(c => c.opts.label === 'implement:#292 attempt 2').prompt, /\$pr=7 .*\$attempt=2 \$snapshot=c{40}/)
+  const twice = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.label?.startsWith('implement:') ? { gatesPassed: false } : {}) })
+  assert.equal(twice.result.batch[0].status, 'failed-implement')
+  assert.equal(twice.calls.filter(c => c.opts.agentType === 'pair-reviewer').length, 0, 'no verifier on a red gate')
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -665,12 +677,12 @@ test('TC-10: a remediation plan that drops, duplicates or invents a finding id, 
 test('TC-14: retired pipeline.skills keys and models roles are REJECTED with a migration message — never mapped, never dropped', async () => {
   for (const [key, absorbed] of [['remediationPlan', /redSpec/], ['redSeal', /redVerify/], ['p3Verify', /reviewPhase/], ['cycleComments', /reviewPhase/], ['prPhase', /implementPhase/]]) {
     const msg = await expectThrow({ args: { cards: [STORY], pipeline: { skills: { [key]: '/x' } } } })
-    assert.match(msg, new RegExp(`skills\\.${key}.*retired by engine 3\\.0\\.0`), key)
+    assert.match(msg, new RegExp(`skills\\.${key}.*retired by engine 3\\.0\\.`), key)
     assert.match(msg, absorbed, `${key}: the message names what absorbed it`)
   }
   for (const [role, absorbed] of [['planner', /red/], ['seal', /redVerifier/], ['preflight', /reviewer/], ['pr', /implementation/]]) {
     const msg = await expectThrow({ args: { cards: [STORY], models: { [role]: 'sonnet' } } })
-    assert.match(msg, new RegExp(`models\\.${role}.*retired by engine 3\\.0\\.0`), role)
+    assert.match(msg, new RegExp(`models\\.${role}.*retired by engine 3\\.0\\.`), role)
     assert.match(msg, absorbed)
   }
 })
@@ -693,10 +705,10 @@ test('TC-14: pipeline.reviewers is a positive integer threaded to the verifier a
   assert.match(await expectThrow({ args: { cards: [STORY], pipeline: { reviewers: 0 } } }), /reviewers/)
 })
 
-test('TC-14: the result carries workflowVersion 3.0.0 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
+test('TC-14: the result carries workflowVersion 3.0.1 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
   const STATUSES = new Set(['ready-for-merge', 'escalate', 'failed-preparation', 'failed-contract', 'failed-seal', 'failed-implement', 'failed-fix', 'failed-verify', 'failed-custody', 'failed-resume', 'incompatible'])
   const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(result.workflowVersion, '3.0.0')
+  assert.equal(result.workflowVersion, '3.0.1')
   for (const row of result.batch) {
     assert.equal(row.id, STORY.id)
     assert.ok(STATUSES.has(row.status), row.status)
@@ -843,7 +855,7 @@ test('an EXPLICIT empty list stays a legal no-op — no agent, no contract', asy
   assert.equal(calls.length, 0)
   assert.deepEqual(result.batch, [])
   assert.match(result.note, /Empty batch/)
-  assert.equal(result.workflowVersion, '3.0.0')
+  assert.equal(result.workflowVersion, '3.0.1')
 })
 test('a bare array, a JSON string, `cards` and the `stories` alias all drive the batch; both lists together throw', async () => {
   for (const args of [[STORY], JSON.stringify({ stories: [STORY] }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {

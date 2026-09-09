@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.0'
+const WORKFLOW_VERSION = '3.0.1'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -1426,8 +1426,8 @@ async function driveStory(story) {
     )
   const implement = n =>
     agentRetry(
-      invoke(SK.implementPhase, `${common()} $phase=${n.phase} $head=${n.base} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
-      withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
+      invoke(SK.implementPhase, `${common()} $phase=${n.phase} $head=${n.base} $attempt=${n.attempt ?? 1} $snapshot=${n.contract.snapshot} $contract=${JSON.stringify(n.contract.path)} $title=${JSON.stringify(story.title)} $implementSkill=${SK.implement} $verifyQuality=${SK.verifyQuality} $recordDecision=${SK.recordDecision} $checkpoint=${SK.checkpoint} $publishPr=${SK.publishPr}${notesArg()}`),
+      withModel('implementation', { agentType: 'pair-implementer', phase: 'Implement', label: `implement:${tag}${(n.attempt ?? 1) > 1 ? ` attempt ${n.attempt}` : ''}`, effort: 'high', schema: IMPLEMENT_SCHEMA }),
       r => isRedirect(r) || isOtherRun(r) || (!!r && (r.status === 'ok' || r.status === 'failed') && typeof r.gatesPassed === 'boolean'),
     )
   const green = n =>
@@ -1511,6 +1511,7 @@ async function driveStory(story) {
       continue
     }
     if (isRedirect(res)) {
+      if (isPosInt(res.next?.pr)) pr = res.next.pr
       storyMetrics.redirects++
       METRICS.redirects++
       if (++redirectsInARow > 2) return result('failed-resume', { reason: 'three consecutive redirects — the durable state and the dispatched step disagree' })
@@ -1534,8 +1535,14 @@ async function driveStory(story) {
       if (res.verified === true && res.contractHash && res.contractHash !== next.contract.hash) return result('failed-seal', { reason: `the sealed contract hash ${res.contractHash} is not the prepared ${next.contract.hash}`, phase: next.phase })
     } else if (stage === 'implement') {
       if (res.status !== 'ok') return result('failed-implement', { reason: res.reason ?? 'implementation reported failure', phase: next.phase })
-      if (!hasImplementation(res)) return result('failed-implement', { reason: 'implementation returned no PR number, head or green gate', phase: next.phase })
+      if (!isPosInt(res.prNumber) || !SHA40.test(String(res.outputHead ?? ''))) return result('failed-implement', { reason: 'implementation returned no PR number or head', phase: next.phase })
       pr = res.prNumber
+      // A red gate is not a green implementation: the durable state routes it back to implement
+      // on the same seal (once) or blocks it — it never reaches the verifier as `ok`.
+      if (res.gatesPassed !== true) {
+        log(`${tag} ${next.phase}: implementation published ${res.outputHead} but the gate is RED — the cycle state decides the retry`)
+        if (!usableNext(res.next) || res.next.step === 'verify') return result('failed-implement', { reason: 'the gate is red and the cycle state offered no retry', phase: next.phase })
+      }
     } else if (stage === 'green') {
       if (res.needsHumanDecision === true) return result('escalate', { reason: res.reason ?? 'the fixer asked for a human decision', phase: next.phase, findings: next.findings })
       if (res.fixed !== true) return result('failed-fix', { reason: res.reason ?? 'the fix did not make the contract pass', phase: next.phase, findings: next.findings })

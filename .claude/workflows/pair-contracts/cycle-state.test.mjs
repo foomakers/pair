@@ -158,6 +158,18 @@ test('resolve: initial chain — prepare → validate → implement → verify(f
   assert.equal(r.next.reviewedHead, SHA('c'))
 })
 
+test('resolve: an implementation whose gate is red (or that failed) returns to implement on the SAME seal once, then is failed-implement — never `verify` on a red gate', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  redVerify(dir, 'a0', {}, { predecessor: 'a0-red-spec' })
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: false }, { predecessor: 'a0-red-verify' })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, attempt: r.next.attempt, snapshot: r.next.contract.snapshot, pr: r.next.pr }, { step: 'implement', mode: 'retry', attempt: 2, snapshot: SHA('b'), pr: 7 })
+  publish({ dir, file: writeDraft(dir, { run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'implement-phase', inputHead: SHA('a'), status: 'ok', prNumber: 7, outputHead: SHA('d'), gatesPassed: false }), phase: 'a0', skill: 'implement-phase', workflowVersion: V, attempt: 2 })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'fresh' })
+  assert.deepEqual([r.next.step, r.next.reason, r.next.budget], ['blocked', 'failed-implement', 'greenRetries'])
+})
+
 test('resolve: same-input resume executes the first incomplete step only — a repeated resolve is idempotent and never asks for a fresh review', () => {
   const { dir } = runDir()
   redSpec(dir, 'a0')

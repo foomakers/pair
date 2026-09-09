@@ -221,8 +221,12 @@ export function deriveNext(handoffs, policy, ctx = {}) {
     return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings) }
   }
   if (last.skill === 'implement-phase') {
-    if (d.status === 'ok' && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) return { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: d.outputHead, pr: d.prNumber }
-    return blocked('failed-implement', { detail: d.reason })
+    if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) return { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: d.outputHead, pr: d.prNumber }
+    // A red gate or a failed build is the implementer's to fix on the SAME seal — once. The
+    // contract was approved; the implementation was not.
+    const attempts = byPhase('implement-phase', 'a0').length
+    if (attempts <= (policy.greenRetries ?? 1)) return { step: 'implement', mode: 'retry', phase: 'a0', round: 0, attempt: attempts + 1, base: d.inputHead, contract: contractOf('a0'), pr: Number.isInteger(d.prNumber) ? d.prNumber : undefined, detail: d.gatesPassed === false ? 'gate red' : d.reason }
+    return blocked('failed-implement', { budget: 'greenRetries', detail: d.gatesPassed === false ? 'gate red twice' : d.reason })
   }
   if (last.skill === 'green-fix') {
     if (d.needsHumanDecision === true) return blocked('escalate', { detail: 'green-fix asked for a human decision', phase: last.phase })

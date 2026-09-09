@@ -78,7 +78,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 
 ### Step 4: Write and prove the artifacts
 
-1. Declare `fixScope` before editing: one `owner`, one `mode`, exact `allowedPaths`. A behavior repair and a refactor never share a contract — `status: split-required` with `splitReason` says what a re-plan must change.
+1. Declare `fixScope` before editing: one `owner`, one `mode`, exact `allowedPaths`. In `initial` mode `allowedPaths` is the story's whole implementation surface — every production path its AC require (from the card's files / integration surface), the docs and catalogs those paths are mirrored into, and `.pair/adoption/decision-log/` because the implement process records decisions there; a single-file scope on a fresh story forces the implementer to smuggle decisions into the PR body (canary run 11). In `remediation` mode it is the group's exact paths. A behavior repair and a refactor never share a contract — `status: split-required` with `splitReason` says what a re-plan must change.
 2. Modify ONLY test source, fixtures and committed oracle rows. Never production source, docs, adoption, configuration, generated assets. Never commit, push, post, label, create a card or merge.
 3. Run every changed test at the base: a `baseline: red` artifact records its exact failing `command` and `observed` failure; a `baseline: pass` control records its passing command and output. A `kind: fixture` artifact names the RED test that `consumedBy` it.
 4. Hash every artifact: `sha256sum <file>` ⇒ `sha256:<digest>`.
