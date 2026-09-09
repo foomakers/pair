@@ -13,6 +13,7 @@ import {
   checkProseCounts,
   checkCategoryLabelCounts,
   checkEntrypointDepth,
+  collectSkillMarkdownFiles,
   ENTRY_DEPTH,
   runChecks,
   APPROVAL_SIGNAL_FAMILIES,
@@ -1265,5 +1266,148 @@ describe('collectSkillFiles — a bare skill stays visible once it ships a subdi
     const files = collectSkillFiles(root).map(f => relative(root, f).split(sep).join('/'))
 
     expect(files).toContain('loop/SKILL.md')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The corpus walk vs. the copy pipeline (PR #483, r1-g1).
+//
+// `collectSkillFiles` decides which SKILL.md every check in this gate ever
+// reads. The copy pipeline (`datasetSkillDirs` over the on-disk dataset tree)
+// decides which SKILL.md ships as an INSTALLED, invocable skill. Any file the
+// second sees and the first does not is a skill that installs wholly unchecked
+// — no frontmatter portability, no size, no link, no approval-signal check —
+// and a `skillCount` short by one that then fails the catalog/KB prose counts
+// somewhere unrelated. `checkEntrypointDepth` cannot be the backstop: a
+// `<name>/<sub>/SKILL.md` sits at exactly ENTRY_DEPTH, so it is legal by depth.
+//
+// The domain below is the marker decision's finite domain, per top-level dir D:
+// (D/SKILL.md present?) x (D/<sub>/SKILL.md present?), complement included.
+// ---------------------------------------------------------------------------
+
+describe('collectSkillFiles — the walk and the copy pipeline see the same SKILL.md set', () => {
+  const roots: string[] = []
+  afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
+
+  const fm = (name: string, extra = '', body = 'body\n'): string =>
+    `---\nname: ${name}\ndescription: "Fixture."\n${extra}---\n${body}`
+
+  const corpus = (prefix: string, tree: Record<string, string>): string => {
+    const root = mkdtempSync(join(tmpdir(), prefix))
+    roots.push(root)
+    for (const [rel, content] of Object.entries(tree)) put(root, rel, content)
+    return root
+  }
+
+  const walked = (root: string): string[] =>
+    collectSkillFiles(root)
+      .map(f => relative(root, f).split(sep).join('/'))
+      .sort()
+
+  const walkedDirs = (root: string): string[] =>
+    collectSkillFiles(root)
+      .map(f => relative(root, pathDirname(f)).split(sep).join('/'))
+      .sort()
+
+  const pipelineDirs = (root: string): string[] =>
+    datasetSkillDirs(readSkillsDatasetFromDisk(root)).sort()
+
+  // [label, tree, expected walked SKILL.md files]
+  const rows: Array<[string, Record<string, string>, string[]]> = [
+    [
+      'R1 no marker + SKILL.md-bearing subdirs (category)',
+      { 'capability/a/SKILL.md': fm('a'), 'capability/b/SKILL.md': fm('b') },
+      ['capability/a/SKILL.md', 'capability/b/SKILL.md'],
+    ],
+    [
+      'R2 marker + no subdirs (bare meta skill)',
+      { 'loop/SKILL.md': fm('loop') },
+      ['loop/SKILL.md'],
+    ],
+    [
+      'R3 marker + a subdir holding no SKILL.md (#482 scripts/)',
+      { 'loop/SKILL.md': fm('loop'), 'loop/scripts/go.mjs': 'x\n' },
+      ['loop/SKILL.md'],
+    ],
+    [
+      'R4 marker + a SKILL.md-bearing subdir (both markers)',
+      { 'loop/SKILL.md': fm('loop'), 'loop/nested/SKILL.md': fm('nested') },
+      ['loop/SKILL.md', 'loop/nested/SKILL.md'],
+    ],
+    ['R5 no marker + subdirs holding no SKILL.md', { 'capability/a/notes.md': 'x\n' }, []],
+    ['R6 no marker + no subdirs', { 'capability/notes.md': 'x\n' }, []],
+  ]
+
+  it.each(rows)('%s — collects exactly its entrypoints', (label, tree, expected) => {
+    const root = corpus(`skills-walk-${label.slice(0, 2).toLowerCase()}-`, tree)
+    expect(walked(root)).toEqual(expected)
+  })
+
+  it.each(rows)('%s — the walk agrees with the copy pipeline', (label, tree) => {
+    const root = corpus(`skills-parity-${label.slice(0, 2).toLowerCase()}-`, tree)
+    expect(walkedDirs(root)).toEqual(pipelineDirs(root))
+  })
+
+  it('the two walks agree on the real corpus', () => {
+    const walk = collectSkillFiles(SKILLS_DIR)
+      .map(f => relative(SKILLS_DIR, pathDirname(f)).split(sep).join('/'))
+      .sort()
+    const pipeline = datasetSkillDirs(readSkillsDatasetFromDisk(SKILLS_DIR)).sort()
+
+    expect(walk.length).toBeGreaterThan(0)
+    expect(walk).toEqual(pipeline)
+  })
+})
+
+describe('runChecks — a nested skill beside a bare one is checked, not silently dropped', () => {
+  const roots: string[] = []
+  afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
+
+  const twoMarker = (prefix: string): { root: string; installed: string } => {
+    const root = mkdtempSync(join(tmpdir(), prefix))
+    roots.push(root)
+    put(root, 'loop/SKILL.md', '---\nname: loop\ndescription: "Loops."\n---\nbody\n')
+    put(
+      root,
+      'loop/nested/SKILL.md',
+      '---\nname: nested\ndescription: "Nested."\ndisable-model-invocation: true\n---\n' +
+        'See [x](./missing.md).\n',
+    )
+    // Explicit non-existent installed root: the twin check is out of scope here.
+    return { root, installed: join(root, '__no-installed') }
+  }
+
+  it('counts both skills', () => {
+    const { root, installed } = twoMarker('skills-two-marker-count-')
+    expect(runChecks(root, installed).skillCount).toBe(2)
+  })
+
+  it("surfaces the nested skill's frontmatter portability violation", () => {
+    const { root, installed } = twoMarker('skills-two-marker-portability-')
+    const { errors } = runChecks(root, installed)
+    expect(errors.some(e => e.includes('nested') && e.includes('disable-model-invocation'))).toBe(
+      true,
+    )
+  })
+
+  it("surfaces the nested skill's broken relative reference", () => {
+    const { root, installed } = twoMarker('skills-two-marker-link-')
+    const { errors } = runChecks(root, installed)
+    expect(errors.some(e => e.includes('nested') && e.includes('./missing.md'))).toBe(true)
+  })
+
+  it('cannot be caught by the depth check — the nested entrypoint sits at ENTRY_DEPTH', () => {
+    // Pinned so the fix is made in the walk and not mistaken for depth work:
+    // `loop/nested/SKILL.md` is depth 2 == ENTRY_DEPTH, hence legal by depth.
+    const { root } = twoMarker('skills-two-marker-depth-')
+    expect(checkEntrypointDepth(root, collectSkillMarkdownFiles(root))).toEqual([])
+  })
+
+  it('the copy pipeline installs the nested skill as invocable, prefixed and flattened', () => {
+    // Why the drop matters: the pipeline DOES ship it, under the bounded flatten.
+    const { root } = twoMarker('skills-two-marker-install-')
+    const dirs = datasetSkillDirs(readSkillsDatasetFromDisk(root)).sort()
+    expect(dirs).toEqual(['loop', 'loop/nested'])
+    expect(dirs.map(installedSkillDir)).toEqual(['pair-loop', 'pair-loop-nested'])
   })
 })

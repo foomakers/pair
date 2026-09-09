@@ -1,0 +1,187 @@
+{
+  "$meta": {
+    "pr": "483",
+    "phase": "r1-g1",
+    "base": "1db51a4d4c02c653b66424a2708069291aa5b150",
+    "trailer": "Pair-RED-Snapshot: pr=483; phase=r1-g1; base=1db51a4d4c02c653b66424a2708069291aa5b150; manifest=.pair/red-snapshots/pr-483-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts"
+    ]
+  },
+  "status": "red",
+  "sourceOfTruth": "collectSkillFiles must yield the same SKILL.md set the copy pipeline installs: set parity of collectSkillFiles(SKILLS_DIR) skill dirs vs datasetSkillDirs(readSkillsDatasetFromDisk(SKILLS_DIR)) from tools/skill-md-mirror.ts (both 55 at base 1db51a4d, difference empty both ways), plus a two-marker fixture loop/SKILL.md + loop/nested/SKILL.md driving collectSkillFiles and runChecks.",
+  "fixScope": {
+    "owner": "collectSkillFiles (packages/knowledge-hub/src/tools/skills-conformance-check.ts:1036-1062) — the corpus walk that decides which SKILL.md files every check sees; the `continue` after the bare-skill marker is what drops a nested skill.",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/src/tools/skills-conformance-check.ts"
+    ]
+  },
+  "domains": [
+    {
+      "owner": "collectSkillFiles(skillsDir)",
+      "discriminator": "per top-level dir D under skillsDir: (D/SKILL.md marker present?) x (D/<sub>/SKILL.md present?)",
+      "rows": [
+        {
+          "id": "R1",
+          "condition": "marker absent, >=1 SKILL.md-bearing subdir (ordinary category, e.g. capability/*)",
+          "expected": "every D/<sub>/SKILL.md",
+          "atBase": "green"
+        },
+        {
+          "id": "R2",
+          "condition": "marker present, no subdirs (bare meta skill, e.g. next)",
+          "expected": "[D/SKILL.md]",
+          "atBase": "green"
+        },
+        {
+          "id": "R3",
+          "condition": "marker present, subdir holding no SKILL.md (the #482 scripts/ layout)",
+          "expected": "[D/SKILL.md]",
+          "atBase": "green"
+        },
+        {
+          "id": "R4",
+          "condition": "marker present AND >=1 SKILL.md-bearing subdir (both markers)",
+          "expected": "[D/SKILL.md, D/<sub>/SKILL.md]",
+          "atBase": "RED — yields only D/SKILL.md; base-of-PR shape yielded only D/<sub>/SKILL.md, so the drop moved rather than closed"
+        },
+        {
+          "id": "R5",
+          "condition": "marker absent, subdirs present, none holding SKILL.md",
+          "expected": "[]",
+          "atBase": "green"
+        },
+        {
+          "id": "R6",
+          "condition": "marker absent, no subdirs",
+          "expected": "[]",
+          "atBase": "green"
+        }
+      ],
+      "crossProduct": "R4's dropped file is the input of every per-file check in runChecks: frontmatter portability, size, links, approval signal, skillCount. Rows X1-X3 below apply those checks to the dropped nested skill; X4/X5 pin why no other check is the backstop.",
+      "interactionRows": [
+        {
+          "id": "X1",
+          "condition": "R4 layout, nested SKILL.md carries disable-model-invocation: true",
+          "expected": "runChecks errors name nested + disable-model-invocation",
+          "atBase": "RED — errors: []"
+        },
+        {
+          "id": "X2",
+          "condition": "R4 layout, nested SKILL.md carries a broken relative link ./missing.md",
+          "expected": "runChecks errors name nested + ./missing.md",
+          "atBase": "RED — errors: []"
+        },
+        {
+          "id": "X3",
+          "condition": "R4 layout",
+          "expected": "runChecks skillCount === 2",
+          "atBase": "RED — skillCount: 1 (feeds the catalog/KB prose counts)"
+        },
+        {
+          "id": "X4",
+          "condition": "R4 layout, depth check applied",
+          "expected": "checkEntrypointDepth returns [] — loop/nested/SKILL.md sits at exactly ENTRY_DEPTH (2)",
+          "atBase": "green pin: proves the depth check cannot catch this and the fix belongs in the walk"
+        },
+        {
+          "id": "X5",
+          "condition": "R4 layout, copy pipeline applied",
+          "expected": "datasetSkillDirs = ['loop','loop/nested'] -> installs as pair-loop and pair-loop-nested",
+          "atBase": "green pin: the dropped skill IS installed invocable, so the drop ships an unchecked skill"
+        }
+      ]
+    },
+    {
+      "owner": "real-corpus parity oracle",
+      "discriminator": "set difference between the walk's skill dirs and the pipeline's skill dirs on SKILLS_DIR",
+      "rows": [
+        {
+          "id": "P1",
+          "condition": "real dataset corpus at base 1db51a4d",
+          "expected": "walk dirs === pipeline dirs (measured 55 === 55, difference empty both ways)",
+          "atBase": "green pin — must survive the fix; data-driven, no hardcoded 55"
+        }
+      ]
+    }
+  ],
+  "matrix": [
+    {
+      "condition": "R1 marker absent + SKILL.md-bearing subdirs (category)",
+      "oracle": "collectSkillFiles(fixture) rels",
+      "expected": "['capability/a/SKILL.md','capability/b/SKILL.md'] — PASSes at base"
+    },
+    {
+      "condition": "R2 marker present + no subdirs (bare meta skill)",
+      "oracle": "collectSkillFiles(fixture) rels",
+      "expected": "['loop/SKILL.md'] — PASSes at base"
+    },
+    {
+      "condition": "R3 marker present + subdir holding no SKILL.md (#482 scripts/)",
+      "oracle": "collectSkillFiles(fixture) rels",
+      "expected": "['loop/SKILL.md'] — PASSes at base"
+    },
+    {
+      "condition": "R4 marker present + SKILL.md-bearing subdir (both markers)",
+      "oracle": "collectSkillFiles(fixture) rels",
+      "expected": "['loop/SKILL.md','loop/nested/SKILL.md'] — RED at base: ['loop/SKILL.md']"
+    },
+    {
+      "condition": "R5 marker absent + subdirs holding no SKILL.md",
+      "oracle": "collectSkillFiles(fixture) rels",
+      "expected": "[] — PASSes at base"
+    },
+    {
+      "condition": "R6 marker absent + no subdirs",
+      "oracle": "collectSkillFiles(fixture) rels",
+      "expected": "[] — PASSes at base"
+    },
+    {
+      "condition": "R1..R6, walk vs pipeline on the same fixture",
+      "oracle": "dirname(collectSkillFiles(fixture)) vs datasetSkillDirs(readSkillsDatasetFromDisk(fixture))",
+      "expected": "equal on every row — RED at base on R4 only: ['loop'] vs ['loop','loop/nested']"
+    },
+    {
+      "condition": "P1 real corpus",
+      "oracle": "dirname(collectSkillFiles(SKILLS_DIR)) vs datasetSkillDirs(readSkillsDatasetFromDisk(SKILLS_DIR))",
+      "expected": "non-empty and equal (55 === 55 at base) — green pin, must survive the fix"
+    },
+    {
+      "condition": "X1 nested skill carries disable-model-invocation: true",
+      "oracle": "runChecks(fixture, absent-installed-root).errors",
+      "expected": "an error naming nested + disable-model-invocation — RED at base: errors []"
+    },
+    {
+      "condition": "X2 nested skill carries a broken link ./missing.md",
+      "oracle": "runChecks(fixture, absent-installed-root).errors",
+      "expected": "an error naming nested + ./missing.md — RED at base: errors []"
+    },
+    {
+      "condition": "X3 two-marker corpus counted",
+      "oracle": "runChecks(fixture, absent-installed-root).skillCount",
+      "expected": "2 — RED at base: 1"
+    },
+    {
+      "condition": "X4 depth check on the two-marker corpus",
+      "oracle": "checkEntrypointDepth(fixture, collectSkillMarkdownFiles(fixture))",
+      "expected": "[] — green pin: nested sits at ENTRY_DEPTH, the depth check is not the backstop"
+    },
+    {
+      "condition": "X5 copy pipeline on the two-marker corpus",
+      "oracle": "datasetSkillDirs(readSkillsDatasetFromDisk(fixture)).map(installedSkillDir)",
+      "expected": "['pair-loop','pair-loop-nested'] — green pin: the dropped skill installs invocable"
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
+      "kind": "test",
+      "sha256": "sha256:a96b95478b4d9ff61f23c6e36b08f0386a102c1c102b47a15faa9147e6f63c44",
+      "command": "cd packages/knowledge-hub && npx vitest run src/tools/skills-conformance-check.test.ts",
+      "observed": "Tests 5 failed | 132 passed (137). FAIL 'collectSkillFiles — the walk and the copy pipeline see the same SKILL.md set > R4 marker + a SKILL.md-bearing subdir (both markers) — collects exactly its entrypoints': expected [ 'loop/SKILL.md' ] to deeply equal [ 'loop/SKILL.md', 'loop/nested/SKILL.md' ]. FAIL '… R4 … — the walk agrees with the copy pipeline': expected [ 'loop' ] to deeply equal [ 'loop', 'loop/nested' ]. FAIL 'runChecks — a nested skill beside a bare one is checked, not silently dropped > counts both skills': expected 1 to be 2. FAIL '… > surfaces the nested skill's frontmatter portability violation': expected false to be true. FAIL '… > surfaces the nested skill's broken relative reference': expected false to be true. The 132 passes include the R1/R2/R3/R5/R6 complement rows, the real-corpus parity pin (55 === 55) and the X4/X5 pins."
+    }
+  ],
+  "testExempt": false,
+  "contractPath": ".pair/working/runs/canary-479-run3/482/r1-g1-red-contract.json"
+}
