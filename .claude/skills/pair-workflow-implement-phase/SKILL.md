@@ -14,7 +14,7 @@ Turn one refined story into verified commits above its sealed acceptance contrac
 | Argument           | Required | Description                                                                                                                              |
 | ------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `$run`, `$story`, `$branch`, `$worktree`, `$base`, `$stacked`, `$entry`, `$policy`, `$inputs`, `$workflowVersion` | Yes | The cycle arguments, as every stage receives them. Handoffs live under `.pair/working/runs/$run/$story/` in the MAIN checkout. |
-| `$phase`           | Yes      | `a0`.                                                                                                                                    |
+| `$phase`           | Yes      | `a0`, or `a0-rev<m>` when the final verifier found a genuine gap in the initial acceptance contract and the revised contract was sealed as a successor snapshot — implement again on the same branch, above that seal. |
 | `$attempt`         | Yes      | `1` on the first implementation; `2` when the previous attempt published with a RED gate — same seal, fix the gate, never bypass it.       |
 | `$head`            | Yes      | 40-hex head the contract was prepared on; the snapshot sits directly on it.                                                              |
 | `$snapshot`        | Yes      | 40-hex sha of the sealed RED snapshot commit — you re-discover it from Git, you never trust the prompt for its content.                   |
@@ -47,7 +47,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 ### Step 1: Isolation and the contract (mandatory)
 
 1. Do ALL git and file work inside `$worktree`; never modify the main checkout's tree or switch its branch. `git -C $worktree rev-parse HEAD` must be `$snapshot` (or a descendant of it on this branch); otherwise return `status: failed` with `reason: head-not-snapshot` — never reset, stash or rebase.
-2. Discover the contract from Git: the commit `$snapshot` carries `Pair-RED-Snapshot: pr=…; phase=a0; base=$head; manifest=<path>`; read the manifest and the sealed test blobs with `git show` / `git ls-tree`. Accept no digest or test path from the prompt. Missing, ambiguous or contradictory discovery ⇒ `status: failed`, `reason: snapshot-not-found`.
+2. Discover the contract from Git: the commit `$snapshot` carries `Pair-RED-Snapshot: pr=0; phase=$phase; base=$head; manifest=<path>` (`pr=0`: the initial chain is sealed before the PR exists and keeps that identity for its revisions); read the manifest and the sealed test blobs with `git show` / `git ls-tree`. Accept no digest or test path from the prompt. Missing, ambiguous or contradictory discovery ⇒ `status: failed`, `reason: snapshot-not-found`.
 3. With `$stacked=true`: `$base` is another story's branch — its commits are already in your history and must NOT be reverted, duplicated or re-implemented.
 
 ### Step 2: Implement, test-first, inside the contract
@@ -61,7 +61,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 
 ### Step 3: Verify and record
 
-1. Remove the transient seal manifest (`.pair/red-snapshots/pr-*-a0.json`) in your first commit above the snapshot: it is the seal's record and lives in Git history; the custody check expects it gone, and a manifest left in the tree fails the repository's format gate (canary run 11).
+1. Remove the transient seal manifest (`.pair/red-snapshots/pr-*-a0*.json` — the initial chain is sealed under `pr=0`, it predates the PR) in your first commit above the snapshot: it is the seal's record and lives in Git history; the custody check expects it gone, and a manifest left in the tree fails the repository's format gate (canary run 11).
 2. Verify the gates with `$verifyQuality`: it resolves the story's `risk:*` tier and runs exactly the checks CI would run for that tier, plus the repository's own pre-push gate when one exists. Re-run every sealed witness command from the manifest: all green. A red gate is `gatesPassed: false` and `status: ok` only if the PR was still published; never bypass a hook (`--no-verify` on a push is forbidden — it hides exactly the gate this stage must prove) and never report green what you did not run.
 3. Record any architectural or project decision with `$recordDecision`, never only in a commit message; the acceptance contract's `fixScope.allowedPaths` covers the story's implementation surface and `.pair/adoption/decision-log/` for that reason — a decision that does not fit is reported under `contractGaps`, never smuggled into the PR body.
 

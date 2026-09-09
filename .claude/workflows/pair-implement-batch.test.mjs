@@ -1,4 +1,4 @@
-// Dry-run harness for pair-implement-batch.js (engine 3.0.1, US-479): executes the workflow
+// Dry-run harness for pair-implement-batch.js (engine 3.0.2, US-479): executes the workflow
 // source with stubbed `agent`/`parallel` (the sandbox primitives) and asserts the coordinator's
 // contract — four judgment stages dispatched by skill name with typed arguments, a `next`-driven
 // state machine that never derives a transition of its own, fail-closed validation of every typed
@@ -111,13 +111,13 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
       }
       const full = { status: 'verified', verified: true, findings: [], sealed: true, snapshot: SNAP, manifest: `.pair/red-snapshots/pr-7-${phase}.json`, contractHash: arg(prompt, 'contractHash'), ...res }
       const contract = { path: arg(prompt, 'contract'), hash: full.contractHash, snapshot: full.snapshot, revision: 1 }
-      full.next = res.next ?? (full.sealed !== true ? { step: 'blocked', reason: 'failed-seal', phase, detail: full.reason } : phase === 'a0' ? { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, base, contract } : { step: 'green', mode: 'remediation', phase, round, attempt: 1, base, contract, ...(scope ? { group: scope } : {}), findings })
+      full.next = res.next ?? (full.sealed !== true ? { step: 'blocked', reason: 'failed-seal', phase, detail: full.reason } : /^a0/.test(phase) ? { step: 'implement', mode: phase === 'a0' ? 'initial' : 'revision', phase, round: 0, attempt: 1, base, contract, ...(phase !== 'a0' ? { pr: 7 } : {}) } : { step: 'green', mode: 'remediation', phase, round, attempt: 1, base, contract, ...(scope ? { group: scope } : {}), findings })
       return full
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('implement:')) {
       const full = { status: 'ok', gatesPassed: true, branch: 'b', prNumber: 7, url: 'https://x/pr/7', outputHead: HEAD, checkpointPath: '.pair/working/checkpoints/x.md', ...res }
       s.implements = (s.implements ?? 0) + 1
-      full.next = res.next ?? (full.status === 'ok' && full.gatesPassed === true ? { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: full.outputHead, pr: full.prNumber } : s.implements <= 1 ? { step: 'implement', mode: 'retry', phase: 'a0', round: 0, attempt: 2, base: HEAD, contract: { path: contractPath.replace(phase, 'a0'), hash: SHA256('1'), snapshot: SNAP }, pr: full.prNumber } : { step: 'blocked', reason: 'failed-implement', budget: 'greenRetries' })
+      full.next = res.next ?? (full.status === 'ok' && full.gatesPassed === true ? (s.lastReviewRound !== undefined ? { step: 'verify', mode: 're-review', phase: `r${s.lastReviewRound + 1}`, round: s.lastReviewRound + 1, attempt: 1, base: s.lastReviewHead, prior: `r${s.lastReviewRound}-review-phase`, openIds: [...s.prior.values()].filter(f => f.blocking).map(f => f.id), pr: full.prNumber } : { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: full.outputHead, pr: full.prNumber }) : s.implements <= 1 ? { step: 'implement', mode: 'retry', phase: 'a0', round: 0, attempt: 2, base: HEAD, contract: { path: contractPath.replace(phase, 'a0'), hash: SHA256('1'), snapshot: SNAP }, pr: full.prNumber } : { step: 'blocked', reason: 'failed-implement', budget: 'greenRetries' })
       return full
     }
     if (opts.agentType === 'pair-implementer' && opts.label?.startsWith('green:')) {
@@ -163,6 +163,7 @@ function makeSimulator({ floor = 'Minor', maxFixRounds = 3 } = {}) {
         full.next = (s.greens[g] ?? 0) <= 1 ? { step: 'green', mode: 'retry', phase: g, round, attempt: (s.greens[g] ?? 0) + 1, base: HEAD, contract: { path: `/main/.pair/working/runs/${run}/${id}/${g}-red-contract.json`, hash: SHA256('1'), snapshot: SNAP }, findings: blocking } : { step: 'blocked', reason: 'failed-fix', budget: 'greenRetries', findings: blocking }
       } else if (blocking.some(f => f.kind === 'contract-gap' && f.groupId)) {
         const g = blocking.find(f => f.kind === 'contract-gap').groupId
+        s.lastReviewRound = round
         full.next = { step: 'prepare', mode: 'revision', phase: `${g}-rev2`, revision: 2, round, attempt: 1, base: reviewedHead, findings: blocking.filter(f => f.groupId === g), contract: { path: `/main/.pair/working/runs/${run}/${id}/${g}-red-contract.json`, hash: SHA256('1'), snapshot: SNAP } }
       } else full.next = { step: 'prepare', mode: 'remediation', phase: `r${round + 1}-g1`, round: round + 1, attempt: 1, base: reviewedHead, findings: blocking }
       return full
@@ -258,10 +259,10 @@ test('TC-11: a resumed PR with a clean verification is ONE dispatch — the fina
 test('TC-11: every dispatch is a configured skill + typed arguments + the engine version, run directory and policy', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY], runId: 'run-42' }, dispatch: stdDispatch({ review }) })
-  assert.equal(result.workflowVersion, '3.0.1')
+  assert.equal(result.workflowVersion, '3.0.2')
   for (const c of calls.slice(1)) {
     assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-(red-spec|red-verify|implement-phase|green-fix|review-phase)\*\* for story #292 with \$run=run-42 \$story=292 \$branch=feat\/#292-x \$worktree=\.\.\/pair-worktrees\/292 \$base=origin\/main \$stacked=false/, c.opts.label)
-    assert.ok(c.prompt.includes('$workflowVersion=3.0.1'), `${c.opts.label} was not told the workflow version`)
+    assert.ok(c.prompt.includes('$workflowVersion=3.0.2'), `${c.opts.label} was not told the workflow version`)
     assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
     assert.match(c.prompt, /\$inputs=[0-9a-f]{16}/, `${c.opts.label} was not told the effective-inputs digest`)
     assert.match(c.prompt, /\$entry=(fresh|pr)/)
@@ -549,6 +550,16 @@ test('TC-09: a genuine contract gap revises ONLY the affected group — prepare(
   assert.match(rev, /\$mode=revision \$phase=r1-g1-rev2 .*\$findings=\[\{"id":"r1-1".*"kind":"contract-gap","groupId":"r1-g1"\}\] \$contract=\"\/main\/\.pair\/working\/runs\/story-292\/292\/r1-g1-red-contract\.json\" \$contractHash=sha256:1{64} \$revision=2/)
 })
 
+test('TC-09: a contract gap in the INITIAL acceptance contract revises a0 (a0-rev2): prepare(revision) → validate + successor seal → implement again → re-review — never a remediation group, never a second first review (canary run 11)', async () => {
+  const review = pass => (pass === 0 ? { verdict: 'CHANGES-REQUESTED', findings: [finding({ severity: 'Minor', kind: 'contract-gap', groupId: 'a0', description: 'a symlinked script is silently dropped' })] } : { verdict: 'APPROVED', findings: [] })
+  const { result, calls } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ contractResult: { status: 'failed' }, review }) })
+  assert.equal(result.batch[0].status, 'ready-for-merge', JSON.stringify(result.batch[0]))
+  assert.deepEqual(stageLabels(calls), ['prepare:#292 a0', 'validate:#292 a0', 'implement:#292', 'verify:#292 r0', 'prepare:#292 a0-rev2 revision', 'validate:#292 a0-rev2', 'implement:#292', 'verify:#292 r1'])
+  assert.match(calls.find(c => c.opts.label === 'prepare:#292 a0-rev2 revision').prompt, /\$mode=revision \$phase=a0-rev2 .*\$revision=2/)
+  assert.match(calls[calls.length - 1].prompt, /\$mode=re-review .*\$openIds=\["r0-1"\]/)
+  assert.equal(calls.filter(c => c.opts.label.startsWith('green:')).length, 0)
+})
+
 test('TC-10: a rejected contract goes back to preparation ONCE carrying the rejection; a second rejection is failed-contract with no seal and no GREEN', async () => {
   const rejection = { location: 'fixture.test.ts:3', severity: 'Major', description: 'the ordinary complement has no row', recommendation: 'add it' }
   const once = await runWorkflow({
@@ -705,10 +716,10 @@ test('TC-14: pipeline.reviewers is a positive integer threaded to the verifier a
   assert.match(await expectThrow({ args: { cards: [STORY], pipeline: { reviewers: 0 } } }), /reviewers/)
 })
 
-test('TC-14: the result carries workflowVersion 3.0.1 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
+test('TC-14: the result carries workflowVersion 3.0.2 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
   const STATUSES = new Set(['ready-for-merge', 'escalate', 'failed-preparation', 'failed-contract', 'failed-seal', 'failed-implement', 'failed-fix', 'failed-verify', 'failed-custody', 'failed-resume', 'incompatible'])
   const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(result.workflowVersion, '3.0.1')
+  assert.equal(result.workflowVersion, '3.0.2')
   for (const row of result.batch) {
     assert.equal(row.id, STORY.id)
     assert.ok(STATUSES.has(row.status), row.status)
@@ -855,7 +866,7 @@ test('an EXPLICIT empty list stays a legal no-op — no agent, no contract', asy
   assert.equal(calls.length, 0)
   assert.deepEqual(result.batch, [])
   assert.match(result.note, /Empty batch/)
-  assert.equal(result.workflowVersion, '3.0.1')
+  assert.equal(result.workflowVersion, '3.0.2')
 })
 test('a bare array, a JSON string, `cards` and the `stories` alias all drive the batch; both lists together throw', async () => {
   for (const args of [[STORY], JSON.stringify({ stories: [STORY] }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {

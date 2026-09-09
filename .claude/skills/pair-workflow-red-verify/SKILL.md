@@ -14,7 +14,7 @@ A contract is evidence only once someone who did not write it reproduces it. You
 | Argument           | Required | Description                                                                                                                              |
 | ------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `$run`, `$story`, `$branch`, `$worktree`, `$base`, `$stacked`, `$entry`, `$policy`, `$inputs`, `$workflowVersion` | Yes | The cycle arguments, as every stage receives them. Handoffs live under `.pair/working/runs/$run/$story/` in the MAIN checkout. |
-| `$phase`           | Yes      | `a0` · `r<n>-g<k>` · `r<n>-g<k>-rev<m>`.                                                                                                 |
+| `$phase`           | Yes      | `a0` · `a0-rev<m>` · `r<n>-g<k>` · `r<n>-g<k>-rev<m>`.                                                                                     |
 | `$head`            | Yes      | 40-hex head the contract was prepared on; `HEAD` of the worktree must be exactly this.                                                    |
 | `$contract`        | Yes      | Absolute path of the prepared contract JSON (main checkout's run directory — pass it to the script as-is, never relative to the worktree). |
 | `$contractHash`    | Yes      | The hash the preparation stage recorded; `node "$SKILL_DIR/scripts/cycle-state.mjs" hash --file $contract` must reproduce it.             |
@@ -62,7 +62,7 @@ Return `verified: false` with **every** concrete gap found in this pass as findi
 ### Step 5: Seal (only when verified) — the script decides
 
 ```bash
-cd $worktree && node "$SKILL_DIR/scripts/red-snapshot.mjs" seal --pr ${pr:-0} --phase $phase --base $head --contract "$contract" --root "$MAIN"
+cd $worktree && node "$SKILL_DIR/scripts/red-snapshot.mjs" seal --pr $SEAL_PR --phase $phase --base $head --contract "$contract" --root "$MAIN"   # SEAL_PR: 0 for the initial chain (a0, a0-rev<m> — it predates the PR and keeps that identity), $pr for a remediation group
 ```
 
 The script (shipped beside this file, [scripts/red-snapshot.mjs](./scripts/red-snapshot.mjs)) validates the contract path ONCE against the declared main checkout (`--root`: no `..`, under `<root>/.pair/working/runs/`, real path inside it — a symlink pointing elsewhere is an escape; a relative path resolves against the root, never the worktree), then verifies `HEAD == $head`, every artifact's `sha256`, that the tree is dirty only at those artifacts (a `pass` control may be unchanged), writes `.pair/red-snapshots/pr-$pr-$phase.json`, and creates exactly one local `--no-verify` commit carrying `Pair-RED-Snapshot: pr=…; phase=…; base=…; manifest=…`. It is idempotent: re-running after a lost response returns the existing snapshot. A revision (`-rev<m>`) seals as a SUCCESSOR snapshot on `$head`; the earlier seal stays history. Do not retry with a different contract, edit any file, amend, rebase, reset, push or post to make it seal: `{ sealed: false, reason }` is the answer, returned as `sealed: false` with `reason`.

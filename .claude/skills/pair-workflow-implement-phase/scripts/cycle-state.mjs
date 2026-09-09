@@ -35,8 +35,8 @@ export const SKILLS = ['red-spec', 'red-verify', 'implement-phase', 'green-fix',
 export const STEPS = ['prepare', 'validate', 'implement', 'green', 'verify', 'done', 'blocked']
 export const PREPARE_REFUSALS = ['stale', 'split-required', 'unprovable', 'dirty']
 const SHA_RE = /^[0-9a-f]{40}$/
-const PHASE_RE = /^(a0|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
-const NAME_RE = /^(a0|r\d+(?:-g\d+(?:-rev\d+)?)?)-(red-spec|red-verify|implement-phase|green-fix|review-phase)(?:\.attempt-(\d+))?\.json$/
+const PHASE_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
+const NAME_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)-(red-spec|red-verify|implement-phase|green-fix|review-phase)(?:\.attempt-(\d+))?\.json$/
 
 const sha256 = s => `sha256:${createHash('sha256').update(s).digest('hex')}`
 // Canonical JSON: sorted keys at every level, so two spellings of one object hash alike.
@@ -55,7 +55,10 @@ export const compatible = (mine, theirs) => {
   return major(mine) !== null && major(mine) === major(theirs)
 }
 export function phaseParts(phase) {
-  if (phase === 'a0') return { kind: 'initial', round: 0 }
+  // The initial acceptance contract is group `a0`; a genuine gap in it is revised as `a0-rev<m>`,
+  // sealed as a successor snapshot, and implemented again on the same story branch.
+  const a = /^a0(?:-rev(\d+))?$/.exec(phase)
+  if (a) return { kind: 'initial', round: 0, groupId: 'a0', revision: a[1] ? Number(a[1]) : 1 }
   const m = /^r(\d+)(?:-g(\d+)(?:-rev(\d+))?)?$/.exec(phase)
   if (!m) return null
   return { kind: m[2] ? 'group' : 'review', round: Number(m[1]), group: m[2] ? Number(m[2]) : undefined, revision: m[3] ? Number(m[3]) : 1, groupId: m[2] ? `r${m[1]}-g${m[2]}` : undefined }
@@ -217,15 +220,20 @@ export function deriveNext(handoffs, policy, ctx = {}) {
       return blocked('failed-contract', { budget: 'redRepairs', phase: last.phase, findings: d.findings ?? [] })
     }
     if (d.sealed !== true) return blocked('failed-seal', { phase: last.phase, detail: d.reason })
-    if (last.phase === 'a0') return { step: 'implement', mode: 'initial', phase: 'a0', round: 0, attempt: 1, base: d.inputHead, contract: contractOf('a0') }
+    if (parts.kind === 'initial') return { step: 'implement', mode: parts.revision > 1 ? 'revision' : 'initial', phase: last.phase, round: 0, attempt: byPhase('implement-phase', last.phase).length + 1, base: d.inputHead, contract: contractOf(last.phase), pr: list.map(h => h.data.pr).find(x => Number.isInteger(x)) }
     return { step: 'green', mode: parts.revision > 1 ? 'revision' : 'remediation', phase: last.phase, round: parts.round, attempt: 1, base: d.inputHead, contract: contractOf(last.phase), group: groupOf(last.phase), findings: findingsByIds(groupOf(last.phase)?.findings) }
   }
   if (last.skill === 'implement-phase') {
-    if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) return { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: d.outputHead, pr: d.prNumber }
+    if (d.status === 'ok' && d.gatesPassed === true && Number.isInteger(d.prNumber) && SHA_RE.test(String(d.outputHead ?? ''))) {
+      // A revised acceptance contract (a0-rev<m>) was implemented after a review: the next
+      // verification is a re-review of the prior findings + the delta, never a second first review.
+      if (lastReview) return { step: 'verify', mode: 're-review', phase: `r${(phaseParts(lastReview.phase)?.round ?? 0) + 1}`, round: (phaseParts(lastReview.phase)?.round ?? 0) + 1, attempt: 1, base: lastReview.data.reviewedHead, prior: lastReview.name, openIds: (lastReview.data.findings ?? []).filter(isBlocking).map(f => f.id), pr: d.prNumber }
+      return { step: 'verify', mode: 'first', phase: 'r0', round: 0, attempt: 1, base: d.outputHead, pr: d.prNumber }
+    }
     // A red gate or a failed build is the implementer's to fix on the SAME seal — once. The
     // contract was approved; the implementation was not.
-    const attempts = byPhase('implement-phase', 'a0').length
-    if (attempts <= (policy.greenRetries ?? 1)) return { step: 'implement', mode: 'retry', phase: 'a0', round: 0, attempt: attempts + 1, base: d.inputHead, contract: contractOf('a0'), pr: Number.isInteger(d.prNumber) ? d.prNumber : undefined, detail: d.gatesPassed === false ? 'gate red' : d.reason }
+    const attempts = byPhase('implement-phase', last.phase).length
+    if (attempts <= (policy.greenRetries ?? 1)) return { step: 'implement', mode: 'retry', phase: last.phase, round: 0, attempt: attempts + 1, base: d.inputHead, contract: contractOf(last.phase), pr: Number.isInteger(d.prNumber) ? d.prNumber : undefined, detail: d.gatesPassed === false ? 'gate red' : d.reason }
     return blocked('failed-implement', { budget: 'greenRetries', detail: d.gatesPassed === false ? 'gate red twice' : d.reason })
   }
   if (last.skill === 'green-fix') {

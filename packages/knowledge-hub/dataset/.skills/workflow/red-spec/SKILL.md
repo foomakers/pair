@@ -23,7 +23,7 @@ Prepare the executable acceptance contract a change must satisfy, before any age
 | `$policy`          | Yes      | JSON: `{ maxFixRounds, redRepairs, greenRetries, reviewers }` — handed to the cycle-state script, never re-interpreted.                        |
 | `$inputs`          | Yes      | The coordinator's effective-inputs digest; recorded in the handoff so a resume can tell an unchanged cycle from a changed one.                 |
 | `$mode`            | Yes      | `initial` (acceptance contract from the story's AC, before implementation) · `remediation` (from a round's findings) · `repair` (the validator rejected the contract) · `revision` (the final verifier found a genuine contract gap). |
-| `$phase`           | Yes      | `a0` (initial) · `r<n>-g<k>` (group k of round n) · `r<n>-g<k>-rev<m>` (revision m of that group).                                             |
+| `$phase`           | Yes      | `a0` (initial) · `a0-rev<m>` (revision m of the initial acceptance contract) · `r<n>-g<k>` (group k of round n) · `r<n>-g<k>-rev<m>` (revision m of that group). |
 | `$head`            | No       | 40-hex head the attempt starts from. Absent only in `initial` mode, where you resolve it from `$base`.                                        |
 | `$pr`              | No       | PR number, when one exists.                                                                                                                   |
 | `$title`           | initial  | Story title.                                                                                                                                  |

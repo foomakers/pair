@@ -274,6 +274,26 @@ test('resolve: a genuine contract gap revises ONLY the affected group as a new r
   assert.deepEqual(r.next.findings.map(f => f.id), ['r1-1'])
 })
 
+test('resolve: a genuine gap in the INITIAL acceptance contract revises a0 as a0-rev2 — validate + successor seal, implement again on the same branch, then a re-review of the prior findings + delta (canary run 11)', () => {
+  const { dir } = runDir()
+  redSpec(dir, 'a0')
+  redVerify(dir, 'a0', {}, { predecessor: 'a0-red-spec' })
+  handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true }, { predecessor: 'a0-red-verify' })
+  review(dir, 'r0', { readiness: { ready: false }, verdict: 'CHANGES-REQUESTED', findings: [finding('r0-1', { kind: 'contract-gap', groupId: 'a0', severity: 'Minor' })] })
+  let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, revision: r.next.revision, base: r.next.base }, { step: 'prepare', mode: 'revision', phase: 'a0-rev2', revision: 2, base: SHA('c') })
+  assert.equal(r.next.contract.path, '/abs/a0-red-contract.json')
+  redSpec(dir, 'a0-rev2', { mode: 'revision', revision: 2 }, { predecessor: 'r0-review-phase' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.equal(r.next.step, 'validate')
+  redVerify(dir, 'a0-rev2', { snapshot: SHA('e') }, { predecessor: 'a0-rev2-red-spec' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, attempt: r.next.attempt, snapshot: r.next.contract.snapshot, pr: r.next.pr }, { step: 'implement', mode: 'revision', phase: 'a0-rev2', attempt: 1, snapshot: SHA('e'), pr: 7 })
+  handoff(dir, 'a0-rev2', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('f'), gatesPassed: true }, { predecessor: 'a0-rev2-red-verify' })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, base: r.next.base, openIds: r.next.openIds }, { step: 'verify', mode: 're-review', phase: 'r1', base: SHA('c'), openIds: ['r0-1'] })
+})
+
 test('resolve: budgets, escalations and breaches are blocked outcomes — never a clean review', () => {
   const { dir } = runDir()
   review(dir, 'r0', { readiness: { ready: false }, findings: [finding('r0-1')], custody: { verified: false, contractBreach: true } })
