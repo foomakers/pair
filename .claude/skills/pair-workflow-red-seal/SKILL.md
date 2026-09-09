@@ -19,7 +19,7 @@ Sealing is Git custody, not reasoning. This skill runs the sealer script and ret
 | `$phase`    | Yes      | Attempt id, `r<n>-g<k>`.                                          |
 | `$base`     | Yes      | 40-hex head the snapshot must sit directly on.                    |
 | `$worktree` | Yes      | Story worktree.                                                   |
-| `$contract` | Yes      | Path of the verified RED contract JSON.                           |
+| `$contract` | Yes      | Absolute path of the verified RED contract JSON (main checkout's run directory); pass it to the script as-is, never relative to the worktree. |
 
 ## Algorithm
 

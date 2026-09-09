@@ -63,6 +63,12 @@ rules are added:
     checkout the coordinator was started in (its working directory before any `cd`),
     never from a story or review worktree — the review's detached worktree is removed at the end
     and took its handoff with it.
+4. **The RED contract path is absolute.** The persisted contract lives in the main checkout's
+    run directory while the sealer and the verifier `cd` into the story worktree, so the author
+    returns an absolute `contractPath` (validated: under `/.pair/working/runs/`, no `..`, no shell
+    syntax) and the coordinator hands it on verbatim. Canary run 3 (#482, PR #483) had three of four
+    groups' first `red` rejected for being absolute; the relative retry did not resolve from the
+    worktree and cost one failed seal.
 
 ## Consequences
 

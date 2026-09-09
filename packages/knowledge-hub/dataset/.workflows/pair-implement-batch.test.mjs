@@ -2414,6 +2414,28 @@ test('a RED refusal (split-required / stale) is an ANSWER: routed by status, nev
   }
 })
 
+// Canary run 3 on #482: the author's ABSOLUTE contractPath was rejected and the relative retry did
+// not resolve from the worktree. The persisted contract is in the main checkout; absolute is right.
+test('an absolute contractPath under .pair/working/runs/ is accepted and handed to the verifier and sealer verbatim', async () => {
+  const abs = '/Users/dev/pair/.pair/working/runs/run-42/292/r1-g1-red-contract.json'
+  const base = planDispatch()
+  const { result, calls } = await runWorkflow({
+    args: { stories: [STORY], runId: 'run-42' },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'pair-fix-test-author')
+        return { status: 'red', contractPath: abs, sourceOfTruth: 'x', fixScope: { owner: 'x', mode: 'behavioral', allowedPaths: ['src/x.ts'] }, matrix: [{ condition: 'c', oracle: 'o', expected: 'e' }], redTests: [{ file: 'test/x.test.ts', sha256: `sha256:${'a'.repeat(64)}`, command: 'vitest', observed: 'FAIL' }], testExempt: false }
+      return base(prompt, opts)
+    },
+  })
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+  assert.equal(calls.filter(c => c.opts.agentType === 'pair-fix-test-author').length, 1, 'a valid absolute path is not a reason to retry')
+  assert.ok(calls.find(c => c.opts.agentType === 'pair-red-contract-verifier').prompt.includes(`$contract=${abs}`))
+  assert.ok(calls.find(c => c.opts.agentType === 'pair-red-sealer').prompt.includes(`$contract=${abs}`))
+  // an absolute path OUTSIDE the run directory, or one carrying shell syntax / `..`, is still rejected
+  for (const bad of ['/etc/passwd', '/Users/dev/pair/.pair/working/runs/../x.json', '/Users/dev/pair/.pair/working/runs/r/1/a.json; rm -rf /'])
+    assert.equal(new Function(SRC.slice(SRC.indexOf('const isRelPath = v =>'), SRC.indexOf('\n}\n', SRC.indexOf('const isRelPath = v =>')) + 3) + SRC.slice(SRC.indexOf('const isContractPath = p =>'), SRC.indexOf('const hasRedContractReady')) + 'return isContractPath(' + JSON.stringify(bad) + ')')(), false, bad)
+})
+
 test('a `test` group (guard-strength repair) seals with no production paths, skips GREEN, and P3 verifies the sealed head', async () => {
   const plan = { status: 'planned', groups: [{ groupId: 'g1', findings: [0, 1], owner: 'the AC-1 guard', mode: 'test', allowedPaths: [], oracle: 'vitest', dependsOn: [] }] }
   const base = planDispatch({ plan })

@@ -20,7 +20,7 @@ A RED contract is evidence only once someone who did not write it reproduces it.
 | `$base`     | Yes      | 40-hex head the attempt starts from; `HEAD` must be exactly this.                            |
 | `$worktree` | Yes      | Story worktree.                                                                              |
 | `$branch`   | Yes      | Story branch.                                                                                |
-| `$contract` | Yes      | Path of the RED contract JSON written by `/red-spec`.                                        |
+| `$contract` | Yes      | Absolute path of the RED contract JSON written by `/red-spec` (it lives in the main checkout's run directory, not in the worktree). |
 | `$findings` | Yes      | JSON array: the group's findings the contract must cover.                                    |
 
 ## Algorithm

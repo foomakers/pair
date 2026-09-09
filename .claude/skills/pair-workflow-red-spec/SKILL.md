@@ -49,7 +49,7 @@ For every behavioral target: identify the **owner** (the function/event that mut
 
 ### Step 4: Persist
 
-Write the contract verbatim to `.pair/working/runs/$run/$story/$phase-red-contract.json` and the handoff to `.pair/working/runs/$run/$story/$phase-red-spec.json` (`status`, `inputHead`, `findings.received`, `findings.covered`, `artifacts`).
+Write the contract verbatim to `.pair/working/runs/$run/$story/$phase-red-contract.json` (in the MAIN checkout) and the handoff to `.pair/working/runs/$run/$story/$phase-red-spec.json`. Return `contractPath` as the **absolute** path of the persisted contract: the sealer and the verifier `cd` into the story worktree, where a repository-relative path would not resolve (`status`, `inputHead`, `findings.received`, `findings.covered`, `artifacts`).
 
 ## Output Format
 

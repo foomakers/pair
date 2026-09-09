@@ -1184,7 +1184,17 @@ const PREFLIGHT_SCHEMA = {
 }
 // A RED contract is usable for sealing only when the skill said `red` (not `stale`, not
 // `split-required`) and persisted the file the sealer will read.
-const hasRedContractReady = r => hasRedTestEvidence(r) && (r.status === undefined || r.status === 'red') && (r.contractPath === undefined || isRelPath(r.contractPath))
+// The persisted contract lives in the MAIN checkout's run directory while the sealer runs inside
+// the story worktree, so the path the author returns is ABSOLUTE by design; a repository-relative
+// one is accepted too (it is resolved against the main checkout). Canary run 3 on #482: three of
+// four groups had their first `red` rejected here for being absolute, and the relative retry then
+// did not resolve from the worktree — the seal failed once for exactly that reason.
+const isContractPath = p =>
+  typeof p === 'string' &&
+  !p.includes('..') &&
+  !/[\s`$;|&<>]/.test(p) &&
+  (isRelPath(p) || (p.startsWith('/') && /\/\.pair\/working\/runs\//.test(p)))
+const hasRedContractReady = r => hasRedTestEvidence(r) && (r.status === undefined || r.status === 'red') && (r.contractPath === undefined || isContractPath(r.contractPath))
 // A typed refusal (`stale`, `split-required`) is the skill's ANSWER, not a dead agent: it is never
 // retried with the identical prompt (the canary on #321 spent a second opus author on the same
 // `split-required`), and the engine routes it by status.
