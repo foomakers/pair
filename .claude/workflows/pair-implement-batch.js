@@ -1331,7 +1331,9 @@ async function driveStory(story) {
   //    PR-COMMENT POLICY (owned by the cycle-comments skill): the whole cycle of a PR — every
   //    run, escalation and manual round it takes to converge — shows AT MOST one first-review
   //    comment and one final remediation. Fix rounds are appended to the working log
-  //    `<auditLogDir>/<id>.md`, whose existence marks an in-flight cycle to CONTINUE across runs;
+  //    `<auditLogDir>/<id>.md` — in the MAIN checkout, like the run handoffs — whose existence
+  //    marks an in-flight cycle to CONTINUE across runs (resume with the same `runId` so the
+  //    run directory's prior review and verifier handoffs are visible to the next attempt);
   //    a first review is detected on the PR by an exact marker match, never by judgment. On
   //    escalation the log is kept and flushed to the PR as the continuation anchor; at
   //    convergence ONE synthesis is posted, intermediates are minimized and the log is deleted.

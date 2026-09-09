@@ -75,6 +75,13 @@ rules are added:
     PR, records those paths and hashes as `discarded` in its handoff and restores the tree before
     authoring. A dirty production path or a moved head stays `stale`. Canary run 4 (#482) refused
     `stale` on exactly such a leftover from run 3.
+6. **The working log lives with the handoffs, and a resumed run keeps its `runId`.** GREEN appends
+    the cycle log under the main checkout's `.pair/working/reviews/`; the probe, the flush and the
+    synthesis read it there (canary run 5 found the log in the main checkout while the probe looked
+    in the worktree, so no resume was ever a continuation). A resume passes the same `runId`, and
+    the RED author treats the verifier's earlier rejection for its phase as mandatory rows while a
+    `fresh` review re-validates the previous review's findings before hunting for new ones — the two
+    attempts of one cycle build on each other instead of re-sampling.
 
 ## Consequences
 

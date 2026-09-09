@@ -32,6 +32,10 @@ Author the test-only contract a fix must satisfy, before any agent that can edit
 2. **Leftovers of an abandoned attempt**: when HEAD equals `$base` but the tree is dirty ONLY at test artifacts (test source, fixtures — never a production path), no `$repair` was passed, and no commit in `$base..HEAD` carries a `Pair-RED-Snapshot` trailer for this PR, those edits are the unsealed remains of an earlier attempt that never reached the seal (a coordinator-side rejection, a killed agent). They are not evidence and must not leak into this contract: record each path with its working-tree `sha256` under `discarded` in your handoff, then restore the tree (`git checkout -- <path>` for tracked files, `git clean -f -- <path>` for untracked test files) and proceed. Never discard a production change, and never touch a sealed snapshot's blobs.
 3. **Act**: a moved head, or a dirty production path, is `status: stale` — return it and stop. Never reset, stash or rebase to make it so.
 
+### Step 1b: Prior attempts in this run directory
+
+A resumed run reuses its `$run`, so the run directory may already hold `$phase-red-verify.json` (the verifier's rejection of an earlier contract for this very group) and `$phase-red-contract.json` (that contract). When present: every finding the verifier raised is a **mandatory row** of your matrix — it names a form the domain omitted — and the prior contract's rows are a starting point to re-derive from, never evidence to copy (re-run every oracle). Say in your handoff which prior findings you absorbed.
+
 ### Step 2: Map the finite domain
 
 For every behavioral target: identify the **owner** (the function/event that mutates the state — not a nearby eligibility, laziness or convenience predicate), one **discriminator**, and the mutually exclusive rows covering every lexical/state form the owner recognises, **including the ordinary complement**. Where one row's output can be another rule's input, add the smallest interaction cross-product. Each row carries its authoritative oracle and measured expected result. A non-behavioral target still maps its factual alternatives and exact probe. Return this as `domains`.

@@ -16,8 +16,8 @@ The whole cycle of a PR — every run, escalation and manual round it takes to c
 | `$run`                | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
 | `$story`              | Yes      | Story id.                                                                                                               |
 | `$pr`                 | Yes      | PR number.                                                                                                              |
-| `$worktree`           | Yes      | The persistent authoring worktree (the working log is an UNTRACKED file living only there).                            |
-| `$reviewLog`          | Yes      | Path of the cycle's working log, e.g. `.pair/working/reviews/<story>.md`.                                                |
+| `$worktree`           | Yes      | The persistent authoring worktree of the story (for context only — the working log does NOT live there).               |
+| `$reviewLog`          | Yes      | Path of the cycle's working log, e.g. `.pair/working/reviews/<story>.md`, resolved against the MAIN checkout (the working directory the coordinator was started in, before any `cd`) — the same place the run handoffs live, never the story or review worktree. |
 | `$marker`             | Yes      | The hidden first-review marker (`<!-- pair:first-review #<story> PR#<n> -->`).                                            |
 | `$mode`               | Yes      | `probe` \| `flush` \| `synthesize`.                                                                                     |
 | `$findings`           | flush    | JSON array: the still-open actionable findings.                                                                         |
@@ -28,14 +28,14 @@ The whole cycle of a PR — every run, escalation and manual round it takes to c
 
 ### `probe` (read-only)
 
-1. `logExists`: is `$reviewLog` present in `$worktree`?
+1. `logExists`: is `$reviewLog` present in the MAIN checkout (never look in `$worktree`)?
 2. `firstReviewPosted`: fetch the PR comments via `gh`; report whether ANY comment's raw body contains the EXACT substring `$marker`. A minimized/outdated comment still counts — its raw body still carries the marker. This is a plain substring match, DETERMINISTICALLY — never infer from a comment's structure, tone or template headings.
 3. Do NOT create, modify or delete the log; do NOT post or minimize any comment; do NOT review. Return `{ logExists, firstReviewPosted }`.
 
 ### `flush` (escalation to a human)
 
 1. **Supersede**: minimize / mark-outdated any prior escalate-flush comment on `#$pr` — each flush summarizes the rounds so far, so a new one supersedes the last; only the newest stays visible. ALSO minimize any final-remediation/synthesis comment left by an EARLIER convergence of this same cycle (a converged-but-unmerged PR re-run into new findings): a "review clean" verdict must not stay visible beside an active escalation. NEVER minimize the first-review comment.
-2. If `$hasLog`: read `$reviewLog`. Post ONE fresh comment on `#$pr`, written as a response to the first code-review comment, summarizing the rounds so far (per finding: what was attempted, current state) and the still-open findings `$findings`. State the CONVENTION: any further rework or re-review — manual out-of-band rounds included — is funneled into THIS same working log (append), not posted as standalone PR comments; the next orchestrated run continues the cycle and its convergence synthesizes ONE final remediation and minimizes these intermediates. Note that the log is an UNTRACKED file living only in `$worktree`, which must be PRESERVED until merge — if it is pruned or recreated the audit log is lost (this flush and the first review still remain on the PR, and the first-review marker still prevents a duplicate first review).
+2. If `$hasLog`: read `$reviewLog`. Post ONE fresh comment on `#$pr`, written as a response to the first code-review comment, summarizing the rounds so far (per finding: what was attempted, current state) and the still-open findings `$findings`. State the CONVENTION: any further rework or re-review — manual out-of-band rounds included — is funneled into THIS same working log (append), not posted as standalone PR comments; the next orchestrated run continues the cycle and its convergence synthesizes ONE final remediation and minimizes these intermediates. Note that the log is an UNTRACKED file under `.pair/working/` of the main checkout — it must be PRESERVED until merge; if it is deleted the audit trail is lost (this flush and the first review still remain on the PR, and the first-review marker still prevents a duplicate first review).
 3. If not `$hasLog`: escalate from `$findings` directly in ONE fresh comment.
 4. Do NOT delete the log. Do NOT merge. Return `{ posted: true }`.
 
@@ -53,4 +53,4 @@ The whole cycle of a PR — every run, escalation and manual round it takes to c
 ## Notes
 
 - Comments are projections of the cycle, never its state: the log (while the cycle is open) and the handoffs under `.pair/working/runs/$run/$story/` are.
-- Read nothing under `.pair/working/` except `$reviewLog` and the run directory.
+- Read nothing under `.pair/working/` except `$reviewLog` and the run directory, both in the main checkout.

@@ -64,7 +64,7 @@ Union the findings; deduplicate by (owner, location, observable defect) keeping 
 
 - `first`: POST the full report as a PR comment on `#$pr` in the `$template` structure, with `$marker` VERBATIM as the first line of the comment body — an HTML comment, invisible in rendered markdown, that lets a later resume detect this review by an exact substring match. Then return.
 - `re-review`: do NOT post any PR comment. Verify each of `$priorFindings` is genuinely resolved, not merely acknowledged. Inspect ONLY the fix delta `git diff $priorHead...origin/$branch --name-status` and its directly changed producer/consumer boundaries; do NOT re-audit the unchanged surface. A new finding is actionable only if it is in this delta or a boundary changed by it; otherwise report it as a Question.
-- `fresh`: a resumed in-flight cycle with no prior findings in this run — a full independent pass, and do NOT post any PR comment.
+- `fresh`: a resumed in-flight cycle with no prior findings in this run — a full independent pass, and do NOT post any PR comment. Before the pass, read the most recent `r*-review-phase.json` already in the run directory (a resumed run reuses its `$run`): re-validate each of its findings first — resolved, still open, or superseded — and only then look for new ones, so two resumes do not produce two unrelated finding sets for one head. Those prior findings are review artifacts, not author context.
 
 ### Step 4: Return and persist
 

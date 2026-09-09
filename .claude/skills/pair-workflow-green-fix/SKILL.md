@@ -21,7 +21,7 @@ The RED snapshot is the specification. You may change implementation inside its 
 | `$worktree`  | Yes      | Story worktree.                                                                                      |
 | `$branch`    | Yes      | Story branch.                                                                                        |
 | `$findings`  | Yes      | JSON array: the group's findings to resolve, every one, including minor.                             |
-| `$reviewLog` | Yes      | Path of the cycle's working log (e.g. `.pair/working/reviews/<story>.md`) to append this round to. |
+| `$reviewLog` | Yes      | Path of the cycle's working log (e.g. `.pair/working/reviews/<story>.md`) to append this round to — resolved against the MAIN checkout (the working directory the coordinator was started in), never the worktree you `cd` into. |
 | `$notes`     | No       | Scope directive from the card.                                                                       |
 | `$writeIssue` | No      | The project's issue-filing skill (default `/pair-capability-write-issue`) — named only to forbid it.                 |
 
