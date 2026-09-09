@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -1073,7 +1073,10 @@ describe('checkSkillLocalScripts — the installed twin is byte-identical (AC2)'
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toContain('missing')
-    expect(errors[0]).toContain('workflow/phase/scripts/go.mjs')
+    // Anchored: `pair-workflow-phase/scripts/go.mjs` CONTAINS the dataset path as a
+    // substring, so a bare toContain cannot tell the two sides apart. The row is
+    // prefixed by the side it is about — here the dataset script whose twin is gone.
+    expect(errors[0]).toMatch(/^workflow\/phase\/scripts\/go\.mjs: /)
     expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
   })
 
@@ -1087,7 +1090,7 @@ describe('checkSkillLocalScripts — the installed twin is byte-identical (AC2)'
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toContain('drifted')
-    expect(errors[0]).toContain('workflow/phase/scripts/go.mjs')
+    expect(errors[0]).toMatch(/^workflow\/phase\/scripts\/go\.mjs: /)
     expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
   })
 
@@ -1152,6 +1155,9 @@ describe('checkSkillLocalScripts — the installed twin is byte-identical (AC2)'
     expect(errors).toHaveLength(1)
     expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
     expect(errors[0]).not.toContain('identical')
+    // The INSTALLED twin is the side that threw and the dataset file is readable:
+    // the row is prefixed by the broken side, not by the canonical one.
+    expect(errors[0]).toMatch(/^pair-workflow-phase\/scripts\/go\.mjs: unreadable/)
   })
 
   it('skips the twin check with ONE informational note when the installed root is absent', () => {
@@ -1164,6 +1170,93 @@ describe('checkSkillLocalScripts — the installed twin is byte-identical (AC2)'
     expect(result.errors).toEqual([])
     expect(result.notes).toHaveLength(1)
     expect(result.notes[0]).toContain('does-not-exist')
+  })
+})
+
+// An unreadable pair has TWO sides and the errno does not reliably name either:
+// `EISDIR: illegal operation on a directory, read` carries no path at all. The
+// message is therefore the only thing that tells a maintainer WHICH copy to go
+// and look at — the canonical dataset script, or the derived installed twin.
+describe('checkSkillLocalScripts — the unreadable side is the side that is named', () => {
+  const roots: string[] = []
+  const locked: string[] = []
+  afterAll(() => {
+    locked.forEach(f => {
+      try {
+        chmodSync(f, 0o600)
+      } catch {
+        /* already gone */
+      }
+    })
+    roots.forEach(r => rmSync(r, { recursive: true, force: true }))
+  })
+
+  const fixture = (prefix: string) => {
+    const f = scriptsFixture(prefix)
+    roots.push(f.root)
+    return f
+  }
+
+  /** Make a dataset script exist but throw on read, for real, without root. */
+  const lock = (base: string, rel: string): void => {
+    const file = join(base, rel)
+    chmodSync(file, 0o000)
+    locked.push(file)
+  }
+
+  it('names the DATASET path when the dataset script is the unreadable side', () => {
+    const { dataset, installed } = fixture('skills-unreadable-dataset-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+    put(installed, 'pair-workflow-phase/scripts/go.mjs', 'x\n')
+    lock(dataset, 'workflow/phase/scripts/go.mjs')
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatch(/^workflow\/phase\/scripts\/go\.mjs: unreadable/)
+    expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
+  })
+
+  it('names the INSTALLED path when the installed twin is the unreadable side', () => {
+    const { dataset, installed } = fixture('skills-unreadable-installed-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+    mkdirSync(join(installed, 'pair-workflow-phase/scripts/go.mjs'), { recursive: true })
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatch(/^pair-workflow-phase\/scripts\/go\.mjs: unreadable/)
+    // The other side is still named, so the pair stays legible — but `pair-…`
+    // contains the dataset path as a substring, so the token boundary matters.
+    expect(errors[0]).toMatch(/(?:^|\s)workflow\/phase\/scripts\/go\.mjs\b/)
+  })
+
+  it('emits ONE row naming a side that actually threw when BOTH sides are unreadable', () => {
+    const { dataset, installed } = fixture('skills-unreadable-both-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+    lock(dataset, 'workflow/phase/scripts/go.mjs')
+    mkdirSync(join(installed, 'pair-workflow-phase/scripts/go.mjs'), { recursive: true })
+
+    const { errors } = checkSkillLocalScripts(dataset, installed)
+
+    // Either side is a truthful label here; a THIRD path, or two rows for one
+    // pair, is not.
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatch(/^(?:pair-)?workflow\/phase\/scripts\/go\.mjs: unreadable/)
+    expect(errors[0]).toContain('pair-workflow-phase/scripts/go.mjs')
+    expect(errors[0]).toMatch(/(?:^|\s)workflow\/phase\/scripts\/go\.mjs\b/)
+  })
+
+  it('keeps a readable, identical pair silent — unreadability is not the default', () => {
+    const { dataset, installed } = fixture('skills-unreadable-none-')
+    putSkill(dataset, 'workflow/phase', 'body')
+    put(dataset, 'workflow/phase/scripts/go.mjs', 'x\n')
+    put(installed, 'pair-workflow-phase/scripts/go.mjs', 'x\n')
+
+    expect(checkSkillLocalScripts(dataset, installed).errors).toEqual([])
   })
 })
 
