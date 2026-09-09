@@ -88,6 +88,57 @@ rules are added:
     carried converges with them on the record. Canary run 7 (#482) put such a finding in a
     `structural` group with no paths and the plan was rejected.
 
+## Amendment 2026-09-09 (b) — Revision: four judgment stages, incremental resume, upstream contract
+
+Recorded for T-10 of #479 (delta refinement of the same day). Live canaries 1–10 on #482 / PR #483
+(81 agents, 5.24M tokens, 446 min over runs 1–8; run 9 `failed-preflight` on a real gate red; run 10
+stopped by the maintainer after contract + probe) showed duplicate discovery on unchanged heads, RED
+contracts rebuilt from scratch on every resume, and invalid automatic dispositions. This revision
+**replaces** Decision §1, §3, §4, §6, §7 and amendments (a) §3–§7 above; §2 (custody in a script),
+§5 (handoffs are the storage authority, no register/projector) and the two unchanged limits — RED
+repair budget 1, rebase never repaired — stay in force. The previous text is kept above as history.
+
+### Replaced rules
+
+| Superseded rule | Rule in force | Owner |
+| --- | --- | --- |
+| Resume starts a `fresh` full review; findings are unioned with a new sample | A compatible same-input resume (same repository/PR, unchanged head, unchanged effective AC/policy/consumer inputs) executes only the **first incomplete or invalidated step**. Changed inputs re-validate the prior findings plus the delta and its directly affected boundaries; an unrelated card edit invalidates nothing. | coordinator + `cycle-state.mjs resolve` |
+| Planner after review; domain map re-derived on every RED retry | **One preparation stage** owns inventory (AC/finding → producer/grammar → inputs/representations → consumers → equivalence classes/interactions → executable evidence), grouping by owner/dependency and the executable contract, in `initial` (fresh story, before any production edit) and `remediation` (from findings) modes. Every repair sees the verifier's prior rejection. | `red-spec` |
+| Every row must be RED against current production | Defect **witnesses** must discriminate (fail for the intended defect); positive / already-correct **controls** may pass and are recorded with `baseline: pass`; a `test`-mode row proves sensitivity on an isolated injected regression. Prose-regex presence alone proves nothing. | `red-spec`, `red-verify`, `red-snapshot.mjs` |
+| P3 defect terminal; next invocation rebuilds RED | An approved test failing on production returns to **implementation on the same sealed contract**; a genuine contract gap revises **only the affected obligations** (stable row IDs kept, changed rows re-approved and sealed as a successor snapshot); a custody breach stops the attempt and preserves the trusted snapshot. Budgets exhausted are an unresolved failure. | coordinator, `green-fix`, `red-verify`, `review-phase` |
+| Unsealed leftovers discarded wholesale by path shape | Attempt-owned artifacts (listed in the attempt's own handoff/contract) are reconciled; **unknown edits are preserved and reported** (`status: dirty`), never destroyed to recover. | `red-spec`, `cycle-state.mjs` |
+| An out-of-repository finding is `carried` and accepted | Location and disposition are explicit (`external`); correction needs read-back evidence or an explicit human decision passed as input; an unresolved external blocker keeps the PR **not ready** (`escalate`). | `review-phase`, coordinator |
+| Separate planner / probe / seal / P3 / re-review / publication dispatches; fixed 11 skills / 13 agents | **Four logical judgment stages**: preparation → independent contract validation (+ deterministic seal in the same execution) → implementation → independent final verification (custody + evidence + review + tier passes + idempotent publication). Probe, seal, hash, state and comment publication run as **scripts inside those stages**; no dedicated LLM dispatch. The tier's required reviewer count is honoured by dispatching that many independent final verifiers (`pipeline.reviewers`, KB default 1) and its cost is reported. | coordinator |
+| A fresh invocation discards previous runtime assumptions | Every handoff pins `workflowVersion`, `schemaVersion`, repository/PR identity, exact 40-hex heads and the effective-inputs digest; an incompatible version or a moved history is `incompatible` / `failed-resume` and requires explicit revalidation — never silent reuse or overwrite of prior approval. | `cycle-state.mjs`, coordinator |
+
+### Stage owners and retired dispatches
+
+| Stage | Skill (installed as `pair-workflow-*`) | Agent | Folded in |
+| --- | --- | --- | --- |
+| 0 template contract (per batch, cache-by-hash) | `contract-phase` | `pair-contract-generator` | — |
+| 1 preparation | `red-spec` | `pair-fix-test-author` | `remediation-plan` (grouping), domain map |
+| 2 independent validation + seal | `red-verify` | `pair-red-contract-verifier` | `red-seal` (script `red-snapshot.mjs seal`) |
+| 3 implementation | `implement-phase` (initial GREEN + PR publish) · `green-fix` (remediation GREEN) | `pair-implementer` | `pr-phase`; escalation flush as a script |
+| 4 final verification | `review-phase` | `pair-reviewer` | `p3-verify` (script `red-snapshot.mjs verify`), re-review, `cycle-comments` probe / synthesize (script `pr-comment.mjs upsert`) |
+
+Retired and **rejected at parse time** with a migration message: `pipeline.skills.remediationPlan | redSeal | p3Verify | cycleComments | prPhase`, `models.planner | seal | preflight | pr`. No compatibility shim dispatches anything. Consumers inventoried on 2026-09-09: `pair-loop.js` passes cards only; the `#451` pair-cli execution adapter on `main` reads no engine key; `#441` (Codex orchestration) is an unmerged worktree and validates against this contract when it lands.
+
+### Contract modes and typed reasons
+
+- **Template contract** (`contract-phase`, `*.contract.json`) fixes the review vocabulary. **Acceptance contract** (`<phase>-red-contract.json`, sealed) fixes the executable obligations. A template-contract cache hit never skips acceptance validation.
+- Statuses a caller may see: `ready-for-merge` | `escalate` | `failed-preparation` | `failed-contract` | `failed-seal` | `failed-implement` | `failed-fix` | `failed-verify` | `failed-custody` | `failed-resume` | `incompatible`. Only `ready-for-merge` advances, and only with a 40-hex `reviewedHead` equal to the remote head at publication.
+- Finding IDs are assigned once by the emitting verifier (`r<round>[-<reviewer>]-<n>`), persist across rounds and runs with an explicit transition (`open | resolved | superseded | human`); a severity change needs `severityEvidence` (a new failure case or changed impact). A newly evidenced defect on old code blocks under the unchanged policy, is marked `missedUpstream` and gets a regression row.
+
+### Baseline frozen before optimizing
+
+| Item | Value |
+| --- | --- |
+| Baseline coordinator | `pair-implement-batch.js` `WORKFLOW_VERSION 2.0.0` at `8b8b2607` |
+| Baseline model policy | implementer/reviewer/RED/verifier opus; PR sonnet; seal sonnet; contract haiku; floor default `Minor` (canary runs 7–10 used `Major`) |
+| Canary identities | story #482, PR #483, worktree `../pair-worktrees/482` at `c2e55274` (GREEN of run 9), `runId canary-479-run5`; #321 / PR #481 = refusal history only |
+| Measured cost, runs 1–8 | 81 agents, 5.24M subagent tokens, 446 min — diagnostic context, not a like-for-like baseline |
+| Requirement map | AC-01..16 → TC-01..17 as tabled on #479; every replaced rule above is a TC-05/06/09/10/11/12/13/14 case |
+
 ## Consequences
 
 ### Benefits

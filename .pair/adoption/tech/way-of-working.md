@@ -62,6 +62,16 @@ Resolution order, the split-tool routing and why the fallback is never the authe
   evidence, not a reason to weaken it. Record the run/phase handoffs, first
   review and final synthesis on the reviewed PR. See ADL
   [2026-09-09-deterministic-code-canary-for-delivery-workflow.md](../decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md).
+- **Delivery workflow — four judgment stages, incremental resume (ADR-024, amendment 2026-09-09 b):**
+  the batch engine judges in four stages — preparation (inventory + executable acceptance contract,
+  before any production edit), independent contract validation with the deterministic seal in the
+  same execution, implementation, independent final verification (custody, evidence, review, tier
+  passes, one idempotent publication). Mechanical probe/seal/hash/state/comment work runs as scripts
+  inside those stages, never as its own dispatch. A same-input resume continues from the first
+  incomplete step and never re-samples a full review; an approved test failing on production returns
+  to implementation on the same seal; a real contract gap revises only the affected obligations.
+  External (card / PR-body) findings stay blocking until corrected with read-back evidence or
+  dispositioned by a human. See [adr-024](adr/adr-024-delivery-phases-are-skills.md).
 - **Baseline then delta:** the first review is complete and returns the immutable 40-character
   head it inspected. A re-review verifies prior findings plus only the diff from that head and
   directly changed producer/consumer boundaries; an unchanged PR surface does not create another
