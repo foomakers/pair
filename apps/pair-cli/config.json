@@ -64,7 +64,7 @@
       "source": ".agents",
       "behavior": "overwrite",
       "targets": [{ "path": ".claude/agents/", "mode": "canonical" }],
-      "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-remediation-planner, pair-fix-test-author, pair-red-contract-verifier, pair-red-sealer, pair-fix-verifier, pair-contract-generator)"
+      "description": "Agent execution layer the workflows dispatch to (pair-implementer, pair-reviewer, pair-fix-test-author, pair-red-contract-verifier, pair-contract-generator) — five subagents, one per judgment role of the delivery workflow"
     }
   }
 }

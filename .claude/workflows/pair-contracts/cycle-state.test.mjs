@@ -348,6 +348,17 @@ test('resolve: with an empty run directory and a PR, other run directories of th
   assert.equal(amb.status, 'incompatible')
   assert.equal(amb.reason, 'ambiguous-runs')
   assert.deepEqual(amb.candidates.sort(), ['run-0', 'run-9'])
+  // a run directory written by another engine major (or a pre-envelope schema) is LEGACY: it is never
+  // adopted nor overwritten — a fresh cycle starts in the named run dir and the legacy one is reported
+  const { root: r2, dir: d2 } = runDir()
+  const runs2 = join(r2, '.pair', 'working', 'runs')
+  const legacy = join(runs2, 'canary-5', '42')
+  mkdirSync(legacy, { recursive: true })
+  writeFileSync(join(legacy, 'r0-review-phase.json'), JSON.stringify({ run: 'canary-5', story: '42', pr: 7, phase: 'r0', skill: 'review-phase', reviewedHead: SHA('c'), verdict: 'x', findings: [], schemaVersion: 1, workflowVersion: '2.0.0' }))
+  const fresh = resolve({ dir: d2, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, runsRoot: runs2, story: '42' })
+  assert.equal(fresh.status, 'empty')
+  assert.deepEqual(fresh.legacyRuns, ['canary-5'])
+  assert.equal(fresh.next.step, 'verify')
 })
 
 // ── identities ────────────────────────────────────────────────────────────────────────────

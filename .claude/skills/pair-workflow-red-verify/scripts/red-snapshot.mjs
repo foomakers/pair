@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Deterministic Git custody for a RED contract. Ships inside the `red-seal` skill (seal) and,
-// byte-identical, inside the `p3-verify` skill (verify) — a test keeps the two copies equal. Both
-// commands run INSIDE the story worktree by the phase skill that owns them, never by the workflow sandbox (which has no
-// filesystem) and never re-implemented by an LLM agent:
+// Deterministic Git custody for a RED contract. Ships inside the `red-verify` skill (seal, after
+// the independent validation) and, byte-identical, inside the `review-phase` skill (verify /
+// verify-chain, the final verifier's first step) — a test keeps the copies equal. Every command runs
+// INSIDE the story or review worktree by the phase skill that owns it, never by the workflow sandbox
+// (which has no filesystem) and never re-implemented by an LLM agent:
 //
 //   node <skill dir>/scripts/red-snapshot.mjs seal   --pr <n> --phase <p> --base <sha> --contract <contract.json> [--root <main checkout>]
 //     Verifies HEAD is exactly <base>, every listed artifact hashes to its stated sha256, and the

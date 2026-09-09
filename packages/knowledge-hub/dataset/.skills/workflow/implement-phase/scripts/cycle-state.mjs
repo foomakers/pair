@@ -274,16 +274,25 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const bad = handoffs.find(h => h.invalid)
   if (bad) return { status: 'invalid', reason: bad.invalid, workflowVersion }
   if (!handoffs.length) {
+    // Another run directory of the same story/PR may hold the cycle: ONE compatible candidate is
+    // adopted (`other-run`), several are ambiguous. Run directories written by another engine major
+    // or schema are LEGACY evidence: never adopted, never overwritten, listed so the caller knows a
+    // fresh cycle is starting beside them (an explicit runId is how a maintainer starts it).
+    const legacyRuns = []
     if (pr !== undefined && runsRoot && story && existsSync(runsRoot)) {
       const candidates = readdirSync(runsRoot).filter(r => {
         const other = join(runsRoot, r, String(story))
         if (other === dir || !existsSync(other)) return false
-        return readHandoffs(other).some(h => h.data && (h.data.pr === undefined || String(h.data.pr) === String(pr)))
+        const hs = readHandoffs(other).filter(h => h.data && (h.data.pr === undefined || String(h.data.pr) === String(pr)))
+        if (!hs.length) return false
+        const compatibleRun = hs.every(h => h.data.schemaVersion === SCHEMA_VERSION && compatible(workflowVersion, h.data.workflowVersion))
+        if (!compatibleRun) legacyRuns.push(r)
+        return compatibleRun
       })
-      if (candidates.length === 1) return { status: 'other-run', runId: candidates[0], workflowVersion }
-      if (candidates.length > 1) return { status: 'incompatible', reason: 'ambiguous-runs', candidates, workflowVersion }
+      if (candidates.length === 1) return { status: 'other-run', runId: candidates[0], legacyRuns, workflowVersion }
+      if (candidates.length > 1) return { status: 'incompatible', reason: 'ambiguous-runs', candidates, legacyRuns, workflowVersion }
     }
-    return { status: 'empty', next: deriveNext([], policy, { entry }), handoffs: [], workflowVersion }
+    return { status: 'empty', next: deriveNext([], policy, { entry }), handoffs: [], legacyRuns, workflowVersion }
   }
   for (const h of handoffs) {
     if (h.data.schemaVersion !== SCHEMA_VERSION) return { status: 'incompatible', reason: `schemaVersion ${JSON.stringify(h.data.schemaVersion)} != ${SCHEMA_VERSION} in ${h.name}`, workflowVersion }
