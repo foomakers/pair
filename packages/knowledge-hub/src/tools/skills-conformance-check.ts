@@ -54,12 +54,20 @@
  *      when the prose changes shape instead of failing. Data-driven per skill
  *      present — a new family member is covered the day it lands, with no edit here
  *      and no count anywhere.
+ *   9. Installer-representable layout — the source shapes the registry's bounded
+ *      flatten cannot represent are refused HERE too, not only by `pair update`.
+ *      `copyDirectoryWithTransforms` validates the layout before writing a single
+ *      file, so an unrepresentable corpus does not install partially: it installs
+ *      as NOTHING. A directory shallower than the entry depth that holds files
+ *      directly AND owns a sub-directory is that shape (a bare skill with a
+ *      `scripts/` folder, a category with a `README.md` beside its skills) — the
+ *      gate must not PASS a corpus the installer refuses (#483 review).
  *
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
  */
-import { existsSync, readFileSync, readdirSync } from 'fs'
-import { basename, dirname, join, relative, resolve, sep } from 'path'
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'fs'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 
 const ROOT = join(__dirname, '..', '..')
 export const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
@@ -843,6 +851,138 @@ export function checkEntrypointDepth(skillsDir: string, markdownFiles: string[])
   return errors
 }
 
+// --- Installer-representable layout (bounded-flatten parity) ---
+
+/**
+ * Whether a symlinked entry is one the installer would copy — the local
+ * reduction of content-ops' `entryIsCopyable` + `resolvesWithin`, whose four
+ * outcomes this reproduces: a link escaping the corpus, a link to a directory
+ * and a link that cannot be dereferenced are all SKIPPED; a contained link to a
+ * file is copied, and (because `readdir` never follows a link to classify it)
+ * counts as a FILE, never as a directory to descend into.
+ *
+ * Order differs from the producer's — stat first, containment second — because
+ * `statSync` throwing already covers the broken/ELOOP case the producer reaches
+ * via `statOrNull`; the verdict is identical on every one of the four.
+ */
+function symlinkIsInstallable(path: string, root: string): boolean {
+  try {
+    if (statSync(path).isDirectory()) return false
+  } catch {
+    return false // broken link, or an ELOOP cycle: never copied
+  }
+  let physicalRoot = root
+  try {
+    physicalRoot = realpathSync(root)
+  } catch {
+    /* an unreadable root is compared unresolved, as the producer does */
+  }
+  const rel = relative(physicalRoot, realpathSync(path))
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/**
+ * Every file `pair update` would copy out of `skillsDir`, as POSIX paths
+ * relative to it, collected in the producer's own traversal order.
+ *
+ * Deliberately NOT the `SKILL.md` walk (`collectSkillFiles`) and not the
+ * markdown walk: the layout rule below is marker-BLIND and extension-blind, so
+ * it has to see the same flat file list `copyDirectoryWithTransforms` validates
+ * — a `scripts/go.mjs` is what makes `loop/` ambiguous, and a walk that only
+ * knows about `SKILL.md` cannot see it.
+ */
+export function collectInstallableDatasetFiles(skillsDir: string): string[] {
+  const files: string[] = []
+  const walk = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name)
+      if (e.isSymbolicLink() && !symlinkIsInstallable(p, skillsDir)) continue
+      if (e.isDirectory()) walk(p)
+      else files.push(relative(skillsDir, p).split(sep).join('/'))
+    }
+  }
+  walk(skillsDir)
+  return files
+}
+
+/**
+ * Refuses the source layouts the bounded flatten cannot represent on the SHALLOW
+ * side — the gate's half of a parity the installer already enforces.
+ *
+ * `pair update` installs this corpus through `copyDirectoryWithTransforms` under
+ * the registry's `flatten: true, flattenDepth: 2, prefix: 'pair'`, and that copy
+ * VALIDATES the source layout before writing a single file
+ * (`content-ops/src/ops/copy/layout-validation.ts`,
+ * `validateNoShallowEntryWithSubdir`). So a layout it cannot represent is not
+ * partially installed: it throws, and the WHOLE corpus — every skill — installs
+ * as nothing. A gate that PASSes such a corpus is a green light on an install
+ * that yields nothing for anyone, which is why this check exists rather than
+ * being left to the installer: the gate is what a maintainer runs before the
+ * corpus ever reaches a user.
+ *
+ * The rule, re-derived here: a directory SHALLOWER than the entry depth that
+ * holds files DIRECTLY and also owns a sub-directory is ambiguous, because that
+ * sub-directory sits at exactly the entry depth and would install as a sibling
+ * entry instead of as content. It is marker-blind by construction — a category
+ * directory holding a `README.md` beside its skills is refused too, and a bare
+ * skill (`loop/SKILL.md`) may therefore own no sub-directory at all, `scripts/`
+ * included. The registry ROOT is exempt: its files are copied straight to the
+ * destination root and are never entries (`collectDirShapes`' `dir === '.'`).
+ *
+ * Re-implemented rather than imported, for the same reason as `ENTRY_DEPTH` and
+ * `INSTALLED_PREFIX`: this gate runs via ts-node before any build, so it stays
+ * dependency-free. What is pinned by test is therefore the VERDICT, not the
+ * wording — the suite drives the real `copyDirectoryWithTransforms` over the
+ * same fixtures and asserts `runChecks(...).errors.length > 0` IFF that pipeline
+ * throws, in both directions, so neither an under- nor an over-correction here
+ * can pass.
+ *
+ * ADDITIVE on purpose: the layout is reported, never un-collected. Dropping the
+ * offending entrypoints from the corpus walk instead would reinstate the silent
+ * drop #482 set out to close — the same skills unchecked, with no error at all.
+ */
+export function checkInstallableLayout(skillsDir: string): string[] {
+  // Two facts about the tree's shape, read off the flat file list exactly as
+  // `collectDirShapes` does: which directories hold files directly, and for each
+  // directory one example sub-directory (ancestors included, since a file list
+  // only ever names leaf directories).
+  const dirsWithOwnFiles = new Set<string>()
+  const firstChildDirOf = new Map<string, string>()
+  for (const file of collectInstallableDatasetFiles(skillsDir)) {
+    const cut = file.lastIndexOf('/')
+    if (cut === -1) continue // a ROOT file: never an entry, hence exempt
+    const dir = file.slice(0, cut)
+    dirsWithOwnFiles.add(dir)
+    const segments = dir.split('/')
+    for (let i = 1; i < segments.length; i++) {
+      const parent = segments.slice(0, i).join('/')
+      if (!firstChildDirOf.has(parent)) {
+        firstChildDirOf.set(parent, segments.slice(0, i + 1).join('/'))
+      }
+    }
+  }
+
+  const errors: string[] = []
+  for (const dir of dirsWithOwnFiles) {
+    const depth = dir.split('/').length
+    if (depth >= ENTRY_DEPTH) continue
+    const child = firstChildDirOf.get(dir)
+    if (child === undefined) continue
+    errors.push(
+      `${dir}: Ambiguous layout for a bounded flatten (flattenDepth=${ENTRY_DEPTH}): ` +
+        `'${dir}' is ${depth} segment(s) deep, holds files directly AND owns the sub-directory ` +
+        `'${child}'. '${child}' is ${child.split('/').length} segment(s) deep, so it cannot be ` +
+        `told apart from a real entry and would install as a sibling entry instead of inside ` +
+        `'${dir}'. Move '${dir}' ${ENTRY_DEPTH - depth} level(s) deeper (e.g. under a category ` +
+        `directory), or move/remove the file(s) held directly by '${dir}' (a category directory ` +
+        `must hold sub-directories only), or drop the sub-directory. ` +
+        `\`pair update\` refuses this layout before copying anything, so the corpus installs as ` +
+        `NOTHING — not even the skills that are shaped correctly.`,
+    )
+  }
+  return errors
+}
+
 // --- Skill-local scripts ---
 
 export interface SkillLocalScriptsResult {
@@ -1052,19 +1192,28 @@ export function collectSkillFiles(skillsDir: string): string[] {
     // A dir that holds its OWN SKILL.md is a bare/meta skill (`next`, `loop`),
     // never a category — decided by that marker file and NOT by "has no
     // subdirectories". The old shape asked the second question, so the day a
-    // bare skill shipped a `scripts/` folder it dropped out of the corpus
-    // entirely: no frontmatter/size/link/approval check, and a skillCount short
-    // by one that fails the catalog counts somewhere unrelated. #482 makes
-    // exactly that layout legal, so the marker has to be what decides.
+    // bare skill grew ANY sub-directory it dropped out of the corpus entirely:
+    // no frontmatter/size/link/approval check, and a skillCount short by one
+    // that fails the catalog counts somewhere unrelated. That drop was silent,
+    // and silence is the defect: the layout is not one this registry can
+    // install either (see `checkInstallableLayout` — a bare skill that needs a
+    // `scripts/` folder must move one level deeper, under a category directory),
+    // and a corpus the installer refuses must be REPORTED, not made invisible.
+    // So the marker is what decides membership, and the layout check is what
+    // decides acceptance.
     //
     // The two markers are INDEPENDENT, so neither shadows the other: a dir may
-    // be a bare skill AND hold nested skill dirs, and both install (the copy
-    // pipeline collects every `*/SKILL.md`, so `loop/nested/SKILL.md` ships as
-    // an invocable `pair-loop-nested`). Returning early on the bare marker only
-    // MOVED the silent drop — the nested entrypoint would install wholly
-    // unchecked, at exactly ENTRY_DEPTH so the depth check can't catch it.
-    // Hence: collect the marker, then keep walking. Set parity with
-    // `datasetSkillDirs` is pinned on the real corpus and per domain row.
+    // hold its own SKILL.md AND nested skill dirs. That layout does not install
+    // — measured at the producer, `pair update` REFUSES a depth-1 directory that
+    // holds files and owns a sub-directory, and refuses it before writing
+    // anything, so the whole corpus installs as nothing (`checkInstallableLayout`
+    // above is what reports it). But refusing is a job for a check that can
+    // SPEAK; returning early on the bare marker here would instead make the
+    // nested entrypoint invisible to every check in this gate, with no error
+    // anywhere — the silent drop #482 set out to close, merely moved. Hence:
+    // collect the marker, then keep walking, and let the layout check report the
+    // corpus as unrepresentable. Walk/install parity is pinned on the real corpus
+    // and, per layout, against the real copy pipeline.
     if (existsSync(join(catDir, 'SKILL.md'))) files.push(join(catDir, 'SKILL.md'))
     const subdirs = readdirSync(catDir, { withFileTypes: true })
       .filter(d => d.isDirectory())
@@ -1075,6 +1224,26 @@ export function collectSkillFiles(skillsDir: string): string[] {
     }
   }
   return files
+}
+
+/**
+ * The skill-count figures restated in the onboarding KB prose, checked against
+ * the real corpus. Its own function only to keep `runChecks` under the 50-line
+ * ceiling the lint gate enforces — the KB prose files are a self-contained
+ * input, unlike every other block there, which reads the corpus itself.
+ */
+function checkKbProseCounts(skillsDir: string, files: string[]): string[] {
+  const errors: string[] = []
+  const counts = countByCategory(files, skillsDir)
+  const proseRoot = resolve(skillsDir, '..', '..')
+  for (const rel of KB_PROSE_FILES) {
+    const abs = join(proseRoot, rel)
+    if (!existsSync(abs)) continue
+    const proseContent = readFileSync(abs, 'utf-8')
+    errors.push(...checkProseCounts(rel, proseContent, counts))
+    errors.push(...checkCategoryLabelCounts(rel, proseContent, counts))
+  }
+  return errors
 }
 
 export function runChecks(
@@ -1103,6 +1272,7 @@ export function runChecks(
   }
 
   errors.push(...checkEntrypointDepth(skillsDir, collectSkillMarkdownFiles(skillsDir)))
+  errors.push(...checkInstallableLayout(skillsDir))
 
   const scripts = checkSkillLocalScripts(skillsDir, installedSkillsDir)
   errors.push(...scripts.errors)
@@ -1114,16 +1284,7 @@ export function runChecks(
     errors.push(...checkCatalogCounts(readFileSync(nextFile, 'utf-8'), files.length))
   }
 
-  const counts = countByCategory(files, skillsDir)
-  const proseRoot = resolve(skillsDir, '..', '..')
-  for (const rel of KB_PROSE_FILES) {
-    const abs = join(proseRoot, rel)
-    if (existsSync(abs)) {
-      const proseContent = readFileSync(abs, 'utf-8')
-      errors.push(...checkProseCounts(rel, proseContent, counts))
-      errors.push(...checkCategoryLabelCounts(rel, proseContent, counts))
-    }
-  }
+  errors.push(...checkKbProseCounts(skillsDir, files))
 
   return { errors, skillCount: files.length, notes }
 }
@@ -1138,7 +1299,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, skill-local scripts shipped and mirrored, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, installer-representable layout, skill-local scripts shipped and mirrored, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal)`,
     )
     process.exit(0)
   } else {
