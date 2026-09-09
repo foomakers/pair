@@ -1046,10 +1046,16 @@ export function collectSkillFiles(skillsDir: string): string[] {
     // entirely: no frontmatter/size/link/approval check, and a skillCount short
     // by one that fails the catalog counts somewhere unrelated. #482 makes
     // exactly that layout legal, so the marker has to be what decides.
-    if (existsSync(join(catDir, 'SKILL.md'))) {
-      files.push(join(catDir, 'SKILL.md'))
-      continue
-    }
+    //
+    // The two markers are INDEPENDENT, so neither shadows the other: a dir may
+    // be a bare skill AND hold nested skill dirs, and both install (the copy
+    // pipeline collects every `*/SKILL.md`, so `loop/nested/SKILL.md` ships as
+    // an invocable `pair-loop-nested`). Returning early on the bare marker only
+    // MOVED the silent drop — the nested entrypoint would install wholly
+    // unchecked, at exactly ENTRY_DEPTH so the depth check can't catch it.
+    // Hence: collect the marker, then keep walking. Set parity with
+    // `datasetSkillDirs` is pinned on the real corpus and per domain row.
+    if (existsSync(join(catDir, 'SKILL.md'))) files.push(join(catDir, 'SKILL.md'))
     const subdirs = readdirSync(catDir, { withFileTypes: true })
       .filter(d => d.isDirectory())
       .map(d => d.name)
