@@ -309,6 +309,26 @@ test('TC-11: the author cannot approve its own work — the final verifier and t
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
+// TC-01 — the acceptance contract is prepared and independently validated BEFORE production edits
+// ═══════════════════════════════════════════════════════════════════════════
+test('TC-01: no implementation or fix is dispatched before an independently validated contract — on a fresh story AND on an existing PR without a baseline; a template-contract cache hit never stands in for it', async () => {
+  const fresh = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() }, review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
+  const order = stageLabels(fresh.calls)
+  const firstWrite = order.findIndex(l => l.startsWith('implement:') || l.startsWith('green:'))
+  assert.ok(order.slice(0, firstWrite).some(l => l.startsWith('validate:')), 'a validate ran before the first production edit')
+  for (const [i, l] of order.entries()) if (l.startsWith('implement:') || l.startsWith('green:')) assert.ok(order[i - 1].startsWith('validate:'), `${l} was not preceded by its validation`)
+  assert.deepEqual(fresh.result.contracts, [{ name: 'code-review', status: 'cache-hit' }], 'the template contract was a cache hit…')
+  assert.equal(fresh.calls.filter(c => c.opts.agentType === 'pair-red-contract-verifier').length, 2, '…and the acceptance contract was still validated, once per prepared contract')
+  const existing = await runWorkflow({ args: { cards: [{ ...STORY, prNumber: 7 }] }, dispatch: stdDispatch({ review: pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] }) }) })
+  assert.deepEqual(stageLabels(existing.calls), ['verify:#292 r0', 'prepare:#292 r1-g1', 'validate:#292 r1-g1', 'green:#292 r1-g1', 'verify:#292 r1'])
+  // a missing authoritative producer is a typed refusal with the exact gap, not a weaker contract
+  const gap = await runWorkflow({ args: { cards: [STORY] }, dispatch: (p, o) => (o.agentType === 'pair-contract-generator' ? { status: 'cache-hit', contract: validContract() } : o.agentType === 'pair-fix-test-author' ? { status: 'unprovable', reason: 'AC-3 names no producer: "the docs are clear" has no grammar, format or command to probe' } : {}) })
+  assert.equal(gap.result.batch[0].status, 'failed-preparation')
+  assert.match(gap.result.batch[0].reason, /AC-3 names no producer/)
+  assert.equal(gap.calls.filter(c => c.opts.agentType === 'pair-implementer').length, 0)
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
 // TC-05 — same-head resume: redirect, other-run, loop guards
 // ═══════════════════════════════════════════════════════════════════════════
 test('TC-05: a resumed PR whose durable state is mid-remediation redirects the entry verifier to GREEN on the same seal — no fresh review, no new RED', async () => {
