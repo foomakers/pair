@@ -35,7 +35,9 @@ import {
   readSkillsDatasetFromDisk,
   datasetSkillDirs,
   installedSkillDir,
+  skillCopySyncOptions,
 } from './skill-md-mirror'
+import { InMemoryFileSystemService, copyDirectoryWithTransforms } from '@pair/content-ops'
 import { join as pathJoin, dirname as pathDirname, relative, sep } from 'node:path'
 
 describe('parseFrontmatter', () => {
@@ -1363,22 +1365,103 @@ describe('collectSkillFiles — a bare skill stays visible once it ships a subdi
 })
 
 // ---------------------------------------------------------------------------
-// The corpus walk vs. the copy pipeline (PR #483, r1-g1).
+// The gate's layout acceptance vs. the REAL copy pipeline (PR #483, r1-g1).
 //
 // `collectSkillFiles` decides which SKILL.md every check in this gate ever
-// reads. The copy pipeline (`datasetSkillDirs` over the on-disk dataset tree)
-// decides which SKILL.md ships as an INSTALLED, invocable skill. Any file the
-// second sees and the first does not is a skill that installs wholly unchecked
-// — no frontmatter portability, no size, no link, no approval-signal check —
-// and a `skillCount` short by one that then fails the catalog/KB prose counts
-// somewhere unrelated. `checkEntrypointDepth` cannot be the backstop: a
-// `<name>/<sub>/SKILL.md` sits at exactly ENTRY_DEPTH, so it is legal by depth.
+// reads, and therefore whether `runChecks` PASSes a corpus. What that corpus
+// does in production is decided by `copyDirectoryWithTransforms` under the
+// registry's `skillCopySyncOptions()` — the code `pair update` actually runs.
+// It VALIDATES the source layout before copying a single file, so a layout it
+// cannot represent is not partially installed: it throws and installs NOTHING.
 //
-// The domain below is the marker decision's finite domain, per top-level dir D:
-// (D/SKILL.md present?) x (D/<sub>/SKILL.md present?), complement included.
+// The oracle here is that function, driven over an in-memory clone of the same
+// fixture `runChecks` judges — the harness `skill-md-mirror.ts`'s
+// `runCopyPipeline` already uses. It is NOT `datasetSkillDirs`: that is a pure
+// `*/SKILL.md` key enumeration over an in-memory tree, it never runs the copy
+// pipeline or its layout validators, and above all it cannot express REFUSAL —
+// so a table built on it can only ever describe corpora as installable and can
+// never fail on a corpus the installer rejects.
+//
+// FROZEN DECISION RULE, one line, asserted per row:
+//     runChecks(dataset, installed).errors.length > 0  IFF  the pipeline throws.
+// A gate that PASSes a corpus `pair update` refuses is a green light on an
+// install that yields nothing for anyone; a gate that fails one the installer
+// accepts blocks legal work. Both directions are asserted, so neither an
+// under- nor an over-correction can pass.
+//
+// The domain below is the finite shape domain of the rule that owns this
+// decision — `validateNoShallowEntryWithSubdir`
+// (content-ops/src/ops/copy/layout-validation.ts:101-129): for each directory
+// SHALLOWER than `flattenDepth` (= 2), the cross-product of
+//   (holds files DIRECTLY: no | a SKILL.md marker | a non-marker file)
+//   x (owns a SUB-DIRECTORY: no | one with a SKILL.md | one without)
+// plus the producer's own depth-0 exemption branch (`collectDirShapes`'
+// `if (dir === '.') continue` — "files at the source ROOT are copied straight
+// to the destination root and are never entries"), plus the legal depth-2
+// entries the repair must NOT start rejecting. The rule is marker-BLIND, which
+// is why the non-marker rows matter: a fix that keys off `SKILL.md` disagrees
+// with the producer on D7, and a fix that forgets the root exemption disagrees
+// on D9-D11.
+//
+// KNOWN UNCLAIMED PARITY GAPS — deliberately outside this group's oracle, named
+// so the narrowing is explicit and re-plannable, never silently implied:
+//   * `validateNoCollisions`: `a/b-c/SKILL.md` + `a-b/c/SKILL.md` both flatten
+//     to `pair-a-b-c`. Measured at this base: the pipeline REFUSES, the gate
+//     reports no error. A real parity gap, a DIFFERENT rule, not repaired here.
+//   * `validateNoDeepEntry` is in the table (D14) only because parity already
+//     holds there through `checkEntrypointDepth`; it is pinned as a complement,
+//     not claimed as this group's repair.
 // ---------------------------------------------------------------------------
 
-describe('collectSkillFiles — the walk and the copy pipeline see the same SKILL.md set', () => {
+// Deep source + repo-root dataset root, exactly as the real `pair update`
+// resolves them (same rationale as skill-md-mirror.ts's VIRTUAL_* constants).
+const PIPELINE_SRC = '/ds/packages/knowledge-hub/dataset/.skills'
+const PIPELINE_DEST = '/ds/.claude/skills'
+
+/**
+ * The REAL producer over an in-memory clone of `tree`: the refusal message if
+ * `pair update` would refuse this layout, and the destination files it actually
+ * wrote. No parallel re-implementation — a change in the installer's layout
+ * rules surfaces here rather than being masked. This is the harness
+ * `skill-md-mirror.ts`'s `runCopyPipeline` already uses, with the refusal kept
+ * instead of thrown so a REJECTED layout is expressible as a result.
+ */
+const runSkillCopyPipeline = async (
+  tree: Record<string, string>,
+): Promise<{ refusal: string | null; produced: string[] }> => {
+  const initial: Record<string, string> = {}
+  for (const [rel, content] of Object.entries(tree)) initial[`${PIPELINE_SRC}/${rel}`] = content
+  const fileService = new InMemoryFileSystemService(initial, '/', '/')
+
+  let refusal: string | null = null
+  try {
+    await copyDirectoryWithTransforms({
+      fileService,
+      srcPath: PIPELINE_SRC,
+      destPath: PIPELINE_DEST,
+      source: 'packages/knowledge-hub/dataset/.skills',
+      target: '.claude/skills',
+      datasetRoot: '/ds',
+      options: skillCopySyncOptions(),
+    })
+  } catch (e) {
+    refusal = (e as Error).message
+  }
+
+  const produced: string[] = []
+  const walk = async (dir: string): Promise<void> => {
+    if (!fileService.existsSync(dir)) return
+    for (const entry of await fileService.readdir(dir)) {
+      const full = `${dir}/${entry.name}`
+      if (entry.isDirectory()) await walk(full)
+      else produced.push(full.slice(PIPELINE_DEST.length + 1))
+    }
+  }
+  await walk(PIPELINE_DEST)
+  return { refusal, produced: produced.sort() }
+}
+
+describe('runChecks and the copy pipeline accept the same corpora — the shallow-entry rule', () => {
   const roots: string[] = []
   afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
 
@@ -1392,54 +1475,151 @@ describe('collectSkillFiles — the walk and the copy pipeline see the same SKIL
     return root
   }
 
-  const walked = (root: string): string[] =>
-    collectSkillFiles(root)
-      .map(f => relative(root, f).split(sep).join('/'))
-      .sort()
-
   const walkedDirs = (root: string): string[] =>
     collectSkillFiles(root)
       .map(f => relative(root, pathDirname(f)).split(sep).join('/'))
       .sort()
 
-  const pipelineDirs = (root: string): string[] =>
-    datasetSkillDirs(readSkillsDatasetFromDisk(root)).sort()
+  const SHALLOW = /Ambiguous layout for a bounded flatten/
+  const TOO_DEEP = /is an entry too deep|entry too deep/
 
-  // [label, tree, expected walked SKILL.md files]
-  const rows: Array<[string, Record<string, string>, string[]]> = [
+  // [label, tree, refusal the pipeline raises (null = installs), files it writes]
+  type Row = [string, Record<string, string>, RegExp | null, string[]]
+
+  const rows: Row[] = [
+    // --- holds NO file directly ---
     [
-      'R1 no marker + SKILL.md-bearing subdirs (category)',
+      'D1 no direct file + SKILL.md-bearing subdirs (a category)',
       { 'capability/a/SKILL.md': fm('a'), 'capability/b/SKILL.md': fm('b') },
-      ['capability/a/SKILL.md', 'capability/b/SKILL.md'],
+      null,
+      ['pair-capability-a/SKILL.md', 'pair-capability-b/SKILL.md'],
     ],
     [
-      'R2 marker + no subdirs (bare meta skill)',
+      'D2 no direct file + a subdir holding no SKILL.md',
+      { 'capability/a/notes.md': 'x\n' },
+      null,
+      ['pair-capability-a/notes.md'],
+    ],
+    // --- holds its own SKILL.md directly (a bare/meta skill) ---
+    [
+      'D3 marker + no subdir (a bare meta skill)',
       { 'loop/SKILL.md': fm('loop') },
-      ['loop/SKILL.md'],
+      null,
+      ['pair-loop/SKILL.md'],
     ],
     [
-      'R3 marker + a subdir holding no SKILL.md (#482 scripts/)',
+      'D4 marker + a subdir holding no SKILL.md (#482 bare-skill scripts/)',
       { 'loop/SKILL.md': fm('loop'), 'loop/scripts/go.mjs': 'x\n' },
-      ['loop/SKILL.md'],
+      SHALLOW,
+      [],
     ],
     [
-      'R4 marker + a SKILL.md-bearing subdir (both markers)',
+      'D5 marker + a SKILL.md-bearing subdir (both markers)',
       { 'loop/SKILL.md': fm('loop'), 'loop/nested/SKILL.md': fm('nested') },
-      ['loop/SKILL.md', 'loop/nested/SKILL.md'],
+      SHALLOW,
+      [],
     ],
-    ['R5 no marker + subdirs holding no SKILL.md', { 'capability/a/notes.md': 'x\n' }, []],
-    ['R6 no marker + no subdirs', { 'capability/notes.md': 'x\n' }, []],
+    // --- holds a NON-marker file directly (the rule is marker-blind) ---
+    [
+      'D6 non-marker file + no subdir',
+      { 'capability/notes.md': 'x\n' },
+      null,
+      ['pair-capability/notes.md'],
+    ],
+    [
+      'D7 non-marker file + a subdir holding no SKILL.md',
+      { 'capability/README.md': '# r\n', 'capability/a/notes.md': 'x\n' },
+      SHALLOW,
+      [],
+    ],
+    [
+      'D8 non-marker file + a SKILL.md-bearing subdir',
+      { 'capability/README.md': '# r\n', 'capability/a/SKILL.md': fm('a') },
+      SHALLOW,
+      [],
+    ],
+    // --- the producer's depth-0 exemption: the registry ROOT is never an entry ---
+    [
+      'D9 ROOT file + a category (root is exempt, depth 0)',
+      { 'README.md': '# r\n', 'capability/a/SKILL.md': fm('a') },
+      null,
+      ['README.md', 'pair-capability-a/SKILL.md'],
+    ],
+    [
+      'D10 ROOT file + a bare skill (root exemption beside a marker)',
+      { 'README.md': '# r\n', 'loop/SKILL.md': fm('loop') },
+      null,
+      ['README.md', 'pair-loop/SKILL.md'],
+    ],
+    ['D11 ROOT file alone', { 'README.md': '# r\n' }, null, ['README.md']],
+    // --- legal depth-2 entries: the repair must not start rejecting these ---
+    [
+      'D12 depth-2 entry + its own scripts/ (the layout #482 must keep legal)',
+      { 'capability/loop/SKILL.md': fm('loop'), 'capability/loop/scripts/go.mjs': 'x\n' },
+      null,
+      ['pair-capability-loop/SKILL.md', 'pair-capability-loop/scripts/go.mjs'],
+    ],
+    [
+      'D13 depth-2 entry + a sub-document dir',
+      { 'capability/loop/SKILL.md': fm('loop'), 'capability/loop/references/r.md': '# r\n' },
+      null,
+      ['pair-capability-loop/SKILL.md', 'pair-capability-loop/references/r.md'],
+    ],
+    // --- complement, a DIFFERENT rule: parity already holds via the depth check ---
+    [
+      'D14 entry deeper than the entry depth',
+      { 'capability/sub/foo/SKILL.md': fm('foo') },
+      TOO_DEEP,
+      [],
+    ],
   ]
 
-  it.each(rows)('%s — collects exactly its entrypoints', (label, tree, expected) => {
-    const root = corpus(`skills-walk-${label.slice(0, 2).toLowerCase()}-`, tree)
-    expect(walked(root)).toEqual(expected)
-  })
+  // Anti-vacuity: pins the ORACLE itself. If this row's outcome ever stops
+  // matching what `pair update` does, the parity assertion below is measuring
+  // nothing and says so here first, in the producer's own terms.
+  it.each(rows)(
+    '%s — the pipeline outcome recorded by this table is the one `pair update` produces',
+    async (_label, tree, refusal, produced) => {
+      const actual = await runSkillCopyPipeline(tree)
+      if (refusal === null) expect(actual.refusal).toBeNull()
+      else expect(actual.refusal).toMatch(refusal)
+      expect(actual.produced).toEqual(produced)
+    },
+  )
 
-  it.each(rows)('%s — the walk agrees with the copy pipeline', (label, tree) => {
-    const root = corpus(`skills-parity-${label.slice(0, 2).toLowerCase()}-`, tree)
-    expect(walkedDirs(root)).toEqual(pipelineDirs(root))
-  })
+  it.each(rows)(
+    '%s — the gate errors IFF the installer refuses the corpus',
+    async (label, tree, refusal) => {
+      const root = corpus(`skills-parity-${label.slice(0, 3).toLowerCase()}-`, tree)
+      const { errors } = runChecks(root, join(root, '__no-installed'))
+      const { refusal: actualRefusal } = await runSkillCopyPipeline(tree)
+
+      expect(actualRefusal === null).toBe(refusal === null)
+      expect(
+        errors.length > 0,
+        actualRefusal === null
+          ? `installer INSTALLS this corpus, gate reported: ${JSON.stringify(errors)}`
+          : `installer REFUSES this corpus (${actualRefusal}), gate reported no error`,
+      ).toBe(actualRefusal !== null)
+    },
+  )
+
+  // The accept side, at full strength: for a corpus the installer DOES install,
+  // every entrypoint it installs must be one the walk sees, and vice versa —
+  // an unchecked installed skill and a phantom checked one are both defects.
+  it.each(rows.filter(([, , refusal]) => refusal === null))(
+    '%s — the walk sees exactly the entrypoints the installer installs',
+    async (label, tree) => {
+      const root = corpus(`skills-accept-${label.slice(0, 3).toLowerCase()}-`, tree)
+      const { produced } = await runSkillCopyPipeline(tree)
+      const installedEntries = produced
+        .filter(p => p.endsWith('/SKILL.md'))
+        .map(p => p.slice(0, -'/SKILL.md'.length))
+        .sort()
+
+      expect(walkedDirs(root).map(installedSkillDir).sort()).toEqual(installedEntries)
+    },
+  )
 
   it('the two walks agree on the real corpus', () => {
     const walk = collectSkillFiles(SKILLS_DIR)
@@ -1496,11 +1676,47 @@ describe('runChecks — a nested skill beside a bare one is checked, not silentl
     expect(checkEntrypointDepth(root, collectSkillMarkdownFiles(root))).toEqual([])
   })
 
-  it('the copy pipeline installs the nested skill as invocable, prefixed and flattened', () => {
-    // Why the drop matters: the pipeline DOES ship it, under the bounded flatten.
-    const { root } = twoMarker('skills-two-marker-install-')
-    const dirs = datasetSkillDirs(readSkillsDatasetFromDisk(root)).sort()
-    expect(dirs).toEqual(['loop', 'loop/nested'])
-    expect(dirs.map(installedSkillDir)).toEqual(['pair-loop', 'pair-loop-nested'])
+  // Retired: this slot asserted that the pipeline "installs the nested skill as
+  // invocable, prefixed and flattened", measured with `datasetSkillDirs` — a
+  // `*/SKILL.md` key enumeration that never runs the pipeline and cannot express
+  // refusal. Driven through the real producer the claim is false, so the two
+  // rows below replace it with what `pair update` actually does.
+
+  it('the installer REFUSES this corpus and installs nothing', async () => {
+    // The premise the whole block rests on, measured at the producer rather than
+    // assumed: `loop` is 1 segment deep, holds `SKILL.md` directly AND owns
+    // `loop/nested`, so the bounded flatten cannot represent it. The validators
+    // run before the first write, so the refusal is total — not a partial
+    // install of `pair-loop` with `pair-loop-nested` missing.
+    const { refusal, produced } = await runSkillCopyPipeline({
+      'loop/SKILL.md': '---\nname: loop\ndescription: "Loops."\n---\nbody\n',
+      'loop/nested/SKILL.md': '---\nname: nested\ndescription: "Nested."\n---\nbody\n',
+    })
+
+    expect(refusal).toMatch(/Ambiguous layout for a bounded flatten/)
+    expect(produced).toEqual([])
+  })
+
+  it('so the gate must refuse it too, instead of PASSing a corpus that installs nothing', async () => {
+    const { root, installed } = twoMarker('skills-two-marker-refused-')
+    const { errors } = runChecks(root, installed)
+
+    expect(
+      errors.some(e => /Ambiguous layout for a bounded flatten/.test(e)),
+      `gate reported: ${JSON.stringify(errors)}`,
+    ).toBe(true)
+  })
+
+  it('and refusing it never means silently shrinking the corpus — both markers stay walked', () => {
+    // The repair is ADDITIVE: report the unrepresentable layout. Dropping the
+    // entrypoints from the walk instead would reinstate, with no error at all,
+    // exactly the silent-drop defect this story set out to close.
+    const { root, installed } = twoMarker('skills-two-marker-still-walked-')
+    const walked = collectSkillFiles(root)
+      .map(f => relative(root, f).split(sep).join('/'))
+      .sort()
+
+    expect(walked).toEqual(['loop/SKILL.md', 'loop/nested/SKILL.md'].sort())
+    expect(runChecks(root, installed).skillCount).toBe(2)
   })
 })
