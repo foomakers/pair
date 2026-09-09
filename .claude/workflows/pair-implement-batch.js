@@ -91,7 +91,7 @@ export const meta = {
 //   batch:     [{ id, status, prNumber?, reviewedHead?, verdict?, findings?, acceptedFindings?,
 //                 reason?, metrics, story }],
 //   died:      [id],              // cards that never returned anything
-//   metrics:   { dispatches, retries, redirects, wallMs, tokens: 'unknown' },
+//   metrics:   { dispatches, retries, redirects, wallMs: 'unknown', tokens: 'unknown' }, // no clock, no usage counters in the sandbox — read both from the harness run summary
 //   note,                         // derived from the STATUSES: how many cards ADVANCED to a
 //                                 // PR (ready-for-merge/escalate) and what the rest did —
 //                                 // a batch where every card failed says so, never "ready"
@@ -1243,14 +1243,14 @@ function usableSchema(contract) {
   }
 }
 // ── Dispatch accounting ───────────────────────────────────────────────────────
-// Every agent call is recorded with its label, role, model/effort, wall time and whether it was a
-// retry or a redirect. Token counters are NOT exposed to a workflow script by the harness, so they
-// are reported as 'unknown' — never as zero.
-const METRICS = { dispatches: [], retries: 0, redirects: 0, startedAt: Date.now() }
+// Every agent call is recorded with its label, role, model/effort and whether it was a retry or a
+// redirect. Token counters and wall time are NOT available to a workflow script — the sandbox has
+// no clock (a clock call is forbidden there: it would break resume) and exposes no usage — so both
+// are reported as 'unknown' here and read from the harness's own run summary; never as zero.
+const METRICS = { dispatches: [], retries: 0, redirects: 0 }
 async function dispatch(prompt, opts, { retry = false } = {}) {
-  const t0 = Date.now()
   const result = await agent(prompt, opts)
-  METRICS.dispatches.push({ label: opts.label, agentType: opts.agentType, phase: opts.phase, model: opts.model ?? 'frontmatter', effort: opts.effort, ms: Date.now() - t0, retry, usable: result !== null && result !== undefined })
+  METRICS.dispatches.push({ label: opts.label, agentType: opts.agentType, phase: opts.phase, model: opts.model ?? 'frontmatter', effort: opts.effort, retry, usable: result !== null && result !== undefined })
   if (retry) METRICS.retries++
   return result
 }
@@ -1382,7 +1382,7 @@ async function driveStory(story) {
   const synthesisMarker = () => `<!-- pair:synthesis #${story.id} PR#${pr} -->`
   const policy = { maxFixRounds: MAX_FIX_ROUNDS, redRepairs: MAX_RED_CONTRACT_REPAIRS, greenRetries: MAX_GREEN_RETRIES, reviewers: PIPELINE.reviewers }
   const inputs = effectiveInputs(story)
-  const storyMetrics = { dispatches: 0, retries: 0, redirects: 0, startedAt: Date.now() }
+  const storyMetrics = { dispatches: 0, retries: 0, redirects: 0 }
   const common = () =>
     `$run=${runId} $story=${story.id} $branch=${story.branch} $worktree=${worktreePath} $base=${storyBase} $stacked=${stacked}${pr ? ` $pr=${pr}` : ''} $entry=${pr ? 'pr' : 'fresh'} $policy=${JSON.stringify(policy)} $inputs=${inputs}`
   const invoke = (skill, args) =>
@@ -1405,7 +1405,7 @@ async function driveStory(story) {
       accepted.push(f)
     }
   }
-  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: Date.now() - storyMetrics.startedAt, tokens: 'unknown' }, ...extra })
+  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, ...extra })
   const blockedResult = n => {
     const map = { 'failed-preparation': 'failed-preparation', 'failed-contract': 'failed-contract', 'failed-seal': 'failed-seal', 'failed-implement': 'failed-implement', 'failed-fix': 'failed-fix', 'failed-custody': 'failed-custody', escalate: 'escalate', 'failed-resume': 'failed-resume' }
     return result(map[n.reason] ?? 'failed-resume', { reason: n.detail ?? n.reason, budget: n.budget, refusal: n.refusal, findings: n.findings ?? n.rejection, phase: n.phase })
@@ -1592,6 +1592,6 @@ return {
   contracts: contracts.map(({ name, status }) => ({ name, status })),
   batch,
   died: STORIES.filter((s) => !batch.some((b) => b.story?.id === s.id)).map((s) => s.id),
-  metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: Date.now() - METRICS.startedAt, tokens: 'unknown', perDispatch: METRICS.dispatches },
+  metrics: { dispatches: METRICS.dispatches.length, retries: METRICS.retries, redirects: METRICS.redirects, wallMs: 'unknown', tokens: 'unknown', perDispatch: METRICS.dispatches },
   note,
 }

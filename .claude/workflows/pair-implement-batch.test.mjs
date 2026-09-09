@@ -288,6 +288,11 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
 })
 
+test('the workflow source uses no clock — Date.now() / new Date() are unavailable in the Workflow sandbox and abort the run at the first dispatch (canary run 11)', () => {
+  const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+  assert.doesNotMatch(code, /\bDate\.now\(|\bnew Date\(/)
+})
+
 test('the workflow source carries no control character — the Workflow harness refuses a script that does (it would hide in the approval dialog), which makes the engine undispatchable', () => {
   const bad = [...SRC.matchAll(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g)]
   assert.deepEqual(bad.map(m => `0x${m[0].charCodeAt(0).toString(16)} at ${m.index}`), [])
@@ -699,7 +704,7 @@ test('TC-14: the result carries workflowVersion 3.0.0 and every status row is on
     assert.equal(row.reviewedHead, HEAD)
     assert.equal(row.verdict, 'Approved')
     assert.equal(row.prNumber, 7)
-    assert.equal(typeof row.metrics.wallMs, 'number')
+    assert.equal(row.metrics.wallMs, 'unknown', 'the sandbox has no clock — never a fabricated duration')
   }
   for (const k of ['contracts', 'batch', 'died', 'note', 'metrics', 'workflowVersion']) assert.ok(k in result, k)
   // the contract block enumerates the same set
@@ -721,7 +726,8 @@ test('TC-16: fixed traces — cold path 5 dispatches (was 5 + probe on 2.0.0), o
   assert.equal(resume.result.batch[0].status, 'ready-for-merge')
   for (const r of [cold, oneFix, resume]) {
     assert.equal(r.result.metrics.tokens, 'unknown')
-    assert.ok(Array.isArray(r.result.metrics.perDispatch) && r.result.metrics.perDispatch.every(d => typeof d.ms === 'number' && typeof d.label === 'string'))
+    assert.ok(Array.isArray(r.result.metrics.perDispatch) && r.result.metrics.perDispatch.every(d => typeof d.label === 'string' && typeof d.retry === 'boolean'))
+    assert.equal(r.result.metrics.wallMs, 'unknown')
   }
 })
 
