@@ -1,60 +1,69 @@
 ---
 name: pair-workflow-implement-phase
-description: "Phase A of the delivery workflow: implements one refined story inside its own persistent worktree — creates or reuses the worktree on the declared base (stacked stories included), follows the project's implement process test-first, verifies the tier-resolved quality gate, records decisions, and writes the story checkpoint so a fresh instance can open the PR with zero prior context. Never opens the PR, never reviews, never merges. Dispatched by the batch engine (pair-implement-batch)."
-version: 0.1.0
+description: "Stage 3 (initial) of the delivery workflow — implementation against the sealed acceptance contract: builds one refined story inside its persistent worktree strictly above the RED snapshot, following the project's implement process test-first, never touching a sealed test byte, verifying the tier-resolved quality gate, recording decisions, writing the checkpoint, and then publishing exactly one review-ready PR through the project's publish-pr skill in the same execution. Resolves the durable cycle state first and redirects when another step is due. Never reviews, never merges. Dispatched by the batch engine (pair-implement-batch)."
+version: 0.2.0
 author: Foomakers
 ---
 
-# /pair-workflow-implement-phase — Build the Story, Stop Before the PR
+# /pair-workflow-implement-phase — Build the Story Inside Its Contract, Publish Its One PR
 
-Turn one refined story into verified commits plus a checkpoint. The PR, the review and the fixes are other phases with other actors; this phase only builds.
+Turn one refined story into verified commits above its sealed acceptance contract, then project them onto exactly one pull request. The contract is the specification: you may change implementation inside its scope; you may not change what it asserts. The review and the fixes are other stages with other actors.
 
 ## Arguments
 
-| Argument          | Required | Description                                                                                                            |
-| ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `$run`            | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
-| `$story`          | Yes      | Story id (issue ref).                                                                                                  |
-| `$title`          | Yes      | Story title.                                                                                                           |
-| `$branch`         | Yes      | Story branch. ONE branch, ONE PR per story.                                                                            |
-| `$worktree`       | Yes      | The persistent authoring worktree path (`<worktreeRoot>/<story>`).                                                     |
-| `$base`           | Yes      | The ref the branch is cut from: the configured base (`origin/main`) or, for a STACKED story, another story's branch.    |
-| `$stacked`        | Yes      | `true` when `$base` is another story's branch.                                                                         |
-| `$implementSkill` | Yes      | The project's implement process skill (default `/pair-process-implement`).                                                          |
-| `$verifyQuality`  | Yes      | The tier-resolved quality-gate skill (default `/pair-capability-verify-quality`).                                                       |
-| `$recordDecision` | Yes      | The decision-recording skill (default `/pair-capability-record-decision`).                                                             |
-| `$checkpoint`     | Yes      | The checkpoint skill (default `/pair-capability-checkpoint`).                                                                          |
-| `$notes`          | No       | Scope directive from the card; it overrides the issue body where they conflict.                                        |
+| Argument           | Required | Description                                                                                                                              |
+| ------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `$run`, `$story`, `$branch`, `$worktree`, `$base`, `$stacked`, `$entry`, `$policy`, `$inputs`, `$workflowVersion` | Yes | The cycle arguments, as every stage receives them. Handoffs live under `.pair/working/runs/$run/$story/` in the MAIN checkout. |
+| `$phase`           | Yes      | `a0`.                                                                                                                                    |
+| `$head`            | Yes      | 40-hex head the contract was prepared on; the snapshot sits directly on it.                                                              |
+| `$snapshot`        | Yes      | 40-hex sha of the sealed RED snapshot commit — you re-discover it from Git, you never trust the prompt for its content.                   |
+| `$contract`        | Yes      | Absolute path of the sealed acceptance contract (main checkout's run directory).                                                         |
+| `$title`           | Yes      | Story title.                                                                                                                             |
+| `$implementSkill`  | Yes      | The project's implement process skill (default `/pair-process-implement`).                                                                            |
+| `$verifyQuality`   | Yes      | The tier-resolved quality-gate skill (default `/pair-capability-verify-quality`).                                                                        |
+| `$recordDecision`  | Yes      | The decision-recording skill (default `/pair-capability-record-decision`).                                                                               |
+| `$checkpoint`      | Yes      | The checkpoint skill (default `/pair-capability-checkpoint`).                                                                                            |
+| `$publishPr`       | Yes      | The project's PR-publishing skill (default `/pair-capability-publish-pr`).                                                                               |
+| `$notes`           | No       | Scope directive from the card; it overrides the issue body where they conflict.                                                          |
 
 ## Algorithm
 
-### Step 1: Isolation (mandatory)
+### Step 0: Resolve the durable state (mandatory)
 
-Do ALL git and file work inside `$worktree` — create or reuse it: `git worktree add $worktree -B $branch $base` on first setup, or `git worktree add $worktree $branch` if the branch already has commits; if the path already exists, just `cd` into it. NEVER modify the repository's main working tree and NEVER switch its branch. With `$stacked=true`: `$base` is another story's branch — its commits are already in your history and must NOT be reverted, duplicated or re-implemented; only ADD your own work on top.
+Run `cycle-state.mjs resolve` exactly as `/pair-workflow-red-spec` does (`SKILL_DIR`, `MAIN`, `RUN_DIR`; `--entry $entry --policy '$policy' --inputs $inputs --story $story`). `other-run` ⇒ return it. `incompatible | invalid` ⇒ redirect to `blocked / failed-resume`. `next.step ≠ implement` ⇒ return `{ status: "redirect", next }`. A prior attempt may already have published a PR: `next` then says `verify`, and you return that — never a second PR.
 
-### Step 2: Implement, test-first
+### Step 1: Isolation and the contract (mandatory)
 
-1. Follow `$implementSkill` as the process of record — its task cycle, its TDD discipline, the task/commit templates. `$notes`, when present, is a SCOPE DIRECTIVE that overrides the issue body where they conflict.
-2. **Finite-state completeness** (mandatory when the change parses, selects, snapshots or branches on a finite protocol/state domain): identify the authoritative grammar or producer, make the complete decision table of supported states and invalid/boundary cases, then write and run a real test for every row before editing the canonical source. Do not implement one newly discovered row at a time and wait for review to name the next ordinary variant.
-3. **Empirical evidence**: before asserting a measured or factual claim in source comments, test names, ADR/ADL, PR body or a diagnostic, record claim | authoritative oracle | exact command/fixture/revision | observed output; absent evidence, remove or qualify the claim. **Interaction/collision completeness**: after individual decision-table rows, add the minimal cross-product rows wherever one rule's output can be another's input, and test the actual collision resolver. **Lossless diagnostics**: an error that reports user input keeps actual, expected and candidate values distinguishable. **Authoritative boundary proof**: an external command, format or runtime claim is proven at its real producer/consumer in an isolated probe — a unit test of the changed function cannot establish external semantics.
-4. Commit only the files you changed — stage explicit paths, never `git add -A`. Commit after every task: an uncommitted worktree loses everything if the supervisor kills the agent.
-5. Never run a single command that can stay silent for more than ~2 minutes (a cold full-repo gate qualifies): scope it, and narrate between steps.
+1. Do ALL git and file work inside `$worktree`; never modify the main checkout's tree or switch its branch. `git -C $worktree rev-parse HEAD` must be `$snapshot` (or a descendant of it on this branch); otherwise return `status: failed` with `reason: head-not-snapshot` — never reset, stash or rebase.
+2. Discover the contract from Git: the commit `$snapshot` carries `Pair-RED-Snapshot: pr=…; phase=a0; base=$head; manifest=<path>`; read the manifest and the sealed test blobs with `git show` / `git ls-tree`. Accept no digest or test path from the prompt. Missing, ambiguous or contradictory discovery ⇒ `status: failed`, `reason: snapshot-not-found`.
+3. With `$stacked=true`: `$base` is another story's branch — its commits are already in your history and must NOT be reverted, duplicated or re-implemented.
+
+### Step 2: Implement, test-first, inside the contract
+
+1. Follow `$implementSkill` as the process of record — its task cycle, its TDD discipline, the task/commit templates. `$notes`, when present, is a SCOPE DIRECTIVE that overrides the issue body where they conflict. The sealed acceptance tests are the story's RED: make every `baseline: red` witness pass and keep every `baseline: pass` control passing.
+2. Do NOT modify, format, rename, regenerate, delete or weaken any artifact the snapshot records; do NOT amend, rebase, reset or rewrite the snapshot commit. A test the contract does not cover that you need for your own task cycle may be added (it is listed in your handoff); a sealed one is untouchable — a gap in the contract is reported as `contractGaps` for the final verifier, never patched around.
+3. **Finite-state completeness** (mandatory when the change parses, selects, snapshots or branches on a finite protocol/state domain): make the whole decision table pass — every supported state and its invalid/boundary pair, including the smallest interaction cross-product. Do not implement one newly discovered row at a time and wait for review to name the next ordinary variant.
+4. **Empirical evidence**: before asserting a measured or factual claim in source comments, test names, ADR/ADL, PR body or a diagnostic, record claim | authoritative oracle | exact command/fixture/revision | observed output; absent evidence, remove or qualify the claim. **Authoritative boundary proof**: an external command, format or runtime claim is proven at its real producer/consumer in an isolated probe. **Lossless diagnostics**: an error that reports user input keeps actual, expected and candidate values distinguishable.
+5. Commit only the files you changed — stage explicit paths, never `git add -A`. Commit after every task: an uncommitted worktree loses everything if the supervisor kills the agent. Never run a single command that can stay silent for more than ~2 minutes (a cold full-repo gate qualifies): scope it, narrate between steps.
+6. Run the tests you select by the changed producers and their consumers during iterations; record for each run `command`, `identity` (`node "$SKILL_DIR/scripts/cycle-state.mjs" test-identity --cwd $worktree --command "<cmd>"`) and `exitCode` — a result is reusable in a later step ONLY under the same identity.
 
 ### Step 3: Verify and record
 
-1. Verify the gates with `$verifyQuality`: it resolves the story's `risk:*` tier and runs exactly the checks CI would run for that tier — do not improvise a gate command and do not run the whole monorepo.
+1. Verify the gates with `$verifyQuality`: it resolves the story's `risk:*` tier and runs exactly the checks CI would run for that tier. Re-run every sealed witness command from the manifest: all green.
 2. Record any architectural or project decision with `$recordDecision`, never only in a commit message.
 
-### Step 4: Checkpoint and persist
+### Step 4: Checkpoint, publish the PR, persist
 
-1. Write the story checkpoint via `$checkpoint $mode=write` (it lives in the worktree) so a fresh instance can open the PR with zero prior context.
-2. Write `.pair/working/runs/$run/$story/implement-phase.json` (`status`, `branch`, `outputHead`, `tasks`, `gatesPassed`, `checkpointPath`).
+1. Write the story checkpoint via `$checkpoint $mode=write`, then push the branch.
+2. Publish the PR by invoking `$publishPr`. Do NOT hand-roll the PR: that skill owns the whole sequence — the tier-resolved gate, the PR body composed from `pr-template.md` with only the pertinent conditional sections, the story's classification tags, ready-for-review, the `pr-state:*` label, the PR-URL back-link on the story, the board state. If a PR already exists for the branch it is UPDATED, never duplicated. **One expected signal**: it emits `Review: review-dispatch-required` instead of nesting a review — correct; the coordinator dispatches the final verifier. Never dispatch or run a review yourself.
+3. **Text shape** of the PR body: schematic, one decision per line, no narration of the diff; everything a blind reviewer needs (rationale, decisions, ADR links) goes there — the reviewer cannot see the checkpoint.
+4. Read back `prNumber`, `url` and the pushed head (`git rev-parse origin/$branch`, 40-hex). Publish the handoff (`skill: "implement-phase"`, `inputHead: $head`, `snapshot`, `status: ok`, `gatesPassed`, `prNumber`, `url`, `outputHead`, `checkpointPath`, `tasks`, `testRuns: [{ command, identity, exitCode }]`, `addedTests`, `contractGaps`, `elapsedMs`) with `cycle-state.mjs publish … --predecessor a0-red-verify`, run `resolve` again and return its `next`.
 
 ## Output Format
 
-`{ gatesPassed, branch, checkpointPath, summary }`.
+`{ status: ok | failed, gatesPassed, branch, checkpointPath, prNumber, url, outputHead, summary, reason?, next }`.
 
 ## Notes
 
-- Do NOT open the PR. Do NOT review. Do NOT merge.
-- Read nothing under `.pair/working/` except the checkpoint and the run directory.
+- Do NOT review. Do NOT merge. Never open a second PR for the same story.
+- Read nothing under `.pair/working/` except the checkpoint and `$RUN_DIR`.

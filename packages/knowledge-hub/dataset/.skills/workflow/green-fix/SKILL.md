@@ -1,37 +1,40 @@
 ---
 name: green-fix
-description: "Phase D4 of the delivery workflow: makes the sealed RED contract pass — discovers the snapshot from Git (never from the prompt), changes production only inside fixScope, never touches a sealed test byte, re-runs the RED commands and the tier gate, commits GREEN above the seal, updates the PR, and returns an evidence ledger. Dispatched by the batch engine (pair-implement-batch); invoke directly to fix findings against an existing RED snapshot."
-version: 0.1.0
+description: "Stage 3 (remediation) of the delivery workflow — implementation against a sealed remediation contract: discovers the RED snapshot from Git (never from the prompt), changes production only inside fixScope, never touches a sealed test byte, re-runs the witnesses and the tier gate, commits GREEN above the seal, updates the PR, appends the cycle log and returns an evidence ledger. An approved test that still fails returns here on the SAME seal (one retry); a fixer that needs a human decision publishes the escalation itself with the idempotent comment script. Resolves the durable cycle state first and redirects when another step is due. Dispatched by the batch engine (pair-implement-batch)."
+version: 0.2.0
 author: Foomakers
 ---
 
 # /green-fix — Make It Pass Without Moving the Goalposts
 
-The RED snapshot is the specification. You may change implementation inside its scope; you may not change what it asserts, where it lives, or how it is discovered.
+The RED snapshot is the specification. You may change implementation inside its scope; you may not change what it asserts, where it lives, or how it is discovered. A second attempt on the same seal is still this stage: the contract was right, the fix was not.
 
 ## Arguments
 
-| Argument     | Required | Description                                                                                          |
-| ------------ | -------- | ---------------------------------------------------------------------------------------------------- |
-| `$run`       | Yes      | Run id. Handoffs go under `.pair/working/runs/$run/$story/` in the MAIN checkout the coordinator was started in (the working directory the coordinator was started in, before any `cd`) — never inside a story or review worktree, which may be pruned. |
-| `$story`     | Yes      | Story id.                                                                                            |
-| `$pr`        | Yes      | PR number.                                                                                           |
-| `$phase`     | Yes      | Attempt id, `r<n>-g<k>`.                                                                             |
-| `$base`      | Yes      | 40-hex head the snapshot sits on.                                                                    |
-| `$worktree`  | Yes      | Story worktree.                                                                                      |
-| `$branch`    | Yes      | Story branch.                                                                                        |
-| `$findings`  | Yes      | JSON array: the group's findings to resolve, every one, including minor.                             |
-| `$reviewLog` | Yes      | Path of the cycle's working log (e.g. `.pair/working/reviews/<story>.md`) to append this round to — resolved against the MAIN checkout (the working directory the coordinator was started in), never the worktree you `cd` into. |
-| `$notes`     | No       | Scope directive from the card.                                                                       |
-| `$writeIssue` | No      | The project's issue-filing skill (default `/write-issue`) — named only to forbid it.                 |
+| Argument           | Required | Description                                                                                                                              |
+| ------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `$run`, `$story`, `$pr`, `$branch`, `$worktree`, `$base`, `$stacked`, `$entry`, `$policy`, `$inputs`, `$workflowVersion` | Yes | The cycle arguments, as every stage receives them. Handoffs live under `.pair/working/runs/$run/$story/` in the MAIN checkout. |
+| `$phase`           | Yes      | `r<n>-g<k>` or `r<n>-g<k>-rev<m>`.                                                                                                       |
+| `$head`            | Yes      | 40-hex head the snapshot sits on.                                                                                                        |
+| `$attempt`         | Yes      | `1` for the first GREEN on this seal, `2` when an approved test failed on production and the coordinator sent the group back here.        |
+| `$snapshot`        | Yes      | 40-hex sha of the sealed snapshot — re-discovered from Git; the prompt never carries its content.                                        |
+| `$contract`        | Yes      | Absolute path of the sealed contract (main checkout's run directory) — evidence to read, never to edit.                                  |
+| `$findings`        | Yes      | JSON array: the group's findings to resolve, every one, with their stable ids.                                                            |
+| `$reviewLog`       | Yes      | Path of the cycle's working log (e.g. `.pair/working/reviews/<story>.md`), resolved against the MAIN checkout, never the worktree.        |
+| `$marker`          | Yes      | The PR's first-review marker `<!-- pair:first-review #<story> PR#<n> -->` — the anchor an escalation comment responds to.                 |
+| `$writeIssue`      | No       | The project's issue-filing skill (default `/write-issue`) — named only to forbid it.                                                     |
+| `$notes`           | No       | Scope directive from the card.                                                                                                           |
 
 ## Algorithm
 
+### Step 0: Resolve the durable state (mandatory)
+
+Run `cycle-state.mjs resolve` exactly as `/red-spec` does (`--entry pr --pr $pr …`). `other-run` ⇒ return it. `incompatible | invalid` ⇒ redirect to `blocked / failed-resume`. `next.step ≠ green` or `next.phase ≠ $phase` ⇒ return `{ status: "redirect", next }` (a GREEN already published for this attempt makes `next` the verification — return it, never a second GREEN).
+
 ### Step 1: Discover the snapshot
 
-1. Find the ONE commit in `$base..HEAD` whose message carries `Pair-RED-Snapshot: pr=$pr; phase=$phase; base=$base; manifest=<path>`.
-2. Read its manifest and test blobs with `git show` / `git ls-tree`. Accept no manifest, digest, test path or snapshot id from the dispatch prompt.
-3. Read `fixScope`: one owner, one mode, `allowedPaths`. Missing, ambiguous or contradictory discovery ⇒ return `needsHumanDecision: true`; never repair the evidence.
+1. `cd $worktree`. Find the ONE commit in `$head..HEAD` whose message carries `Pair-RED-Snapshot: pr=$pr; phase=$phase; base=$head; manifest=<path>`; it must be `$snapshot`. Read its manifest and test blobs with `git show` / `git ls-tree`. Accept no manifest, digest, test path or snapshot id from the dispatch prompt.
+2. Read `fixScope`: one owner, one mode, `allowedPaths`. Missing, ambiguous or contradictory discovery ⇒ `needsHumanDecision: true`; never repair the evidence. `HEAD` must be `$snapshot` or a descendant on this branch (attempt 2 starts on the previous GREEN); a moved or dirty tree is `status: failed`, `reason` — never reset, stash, rebase or clean.
 
 ### Step 2: Fix, bounded
 
@@ -39,31 +42,31 @@ The RED snapshot is the specification. You may change implementation inside its 
 2. **Convergence sweep**: before editing, map the observable contract the findings touch — the reported case and its paired success/failure path, every state transition or resume path the contract owns, the canonical source and every distributed representation (generated asset, dataset copy, installed copy, documented command). Change every cell that contract needs, then stop: no unrelated cleanup, new behavior or speculative hardening.
 3. Change implementation/adoption only inside `allowedPaths`. `behavioral` may not create, move or split production modules. For a generated artifact, edit only its canonical source and run the declared generator.
 4. **Provisioned artifact contract**: when a change installs, builds, publishes, names or invokes an executable/package, prove `producer -> published identity -> consumer` in a clean temporary environment with the real artifact. Never stub the boundary.
-5. Do NOT modify, format, rename, regenerate, delete or weaken any test artifact the snapshot records; do NOT amend, rebase, reset or rewrite the snapshot commit.
-6. **Finite-state completeness**: when the change parses, selects or branches on a finite protocol/state domain, make the whole decision table pass — every supported state and its invalid/boundary pair, including the smallest interaction cross-product where one rule's output can be another's input (test the actual collision resolver, including duplicate input alongside a pre-existing generated/suffixed outcome). Do not implement one newly discovered row at a time and wait for re-review to name the next ordinary variant. A unit test of the function being changed cannot establish external semantics: prove an external command, format or runtime claim at its real producer/consumer boundary.
-7. **Lossless diagnostics**: when an error reports user input or a derived identifier, keep lossless distinguishability between actual, expected and candidate values — escape or name code points for invisible, whitespace-normalized or confusable characters.
-8. Resolve **every** finding in place. Never file a follow-up issue, never invoke `$writeIssue` (default `/write-issue`), never leave a "tracked separately" note. If a finding is genuinely larger than the story, fix what belongs here and say plainly in the log what remains — the human decides at the merge gate.
+5. Do NOT modify, format, rename, regenerate, delete or weaken any test artifact the snapshot records; do NOT amend, rebase, reset or rewrite the snapshot commit. A gap in the contract (a class the witnesses do not cover) is reported as `contractGaps`, never patched around.
+6. **Finite-state completeness**: make the whole decision table pass — every supported state and its invalid/boundary pair, the smallest interaction cross-product (test the actual collision resolver). A unit test of the function being changed cannot establish external semantics: prove an external command, format or runtime claim at its real producer/consumer.
+7. **Lossless diagnostics**: an error that reports user input keeps actual, expected and candidate values distinguishable.
+8. Resolve **every** finding in place. Never file a follow-up issue, never invoke `$writeIssue`, never leave a "tracked separately" note. If a finding is genuinely larger than the story, fix what belongs here and say plainly in the log what remains — the human decides at the merge gate.
+9. `$attempt=2`: the verifier proved an approved witness still fails on your GREEN. Start from its exact failing command; do not re-plan, do not touch the contract, do not widen the scope.
 
 ### Step 3: Prove and commit
 
-1. Re-run every RED command from the manifest, the findings' evidence commands and the mapped boundary cases: all green.
+1. Re-run every witness command from the manifest (all green), every control (still green), the findings' evidence commands and the mapped boundary cases. Record each run's `command`, `identity` (`cycle-state.mjs test-identity --cwd $worktree --command "<cmd>"`) and `exitCode`.
 2. Run `/verify-quality` for the story's tier. Record any forced decision with `/record-decision`.
-3. Commit GREEN strictly on top of the snapshot; remove only the transient manifest path in that commit. Push.
-4. Re-invoke `/publish-pr` (create-or-update): it rewrites the PR body to describe the CURRENT head — never append a round-by-round history — and keeps tags and `pr-state:*` in sync. It will emit `Review: review-dispatch-required`; that is expected, the coordinator drives the re-review.
+3. Commit GREEN strictly on top of the snapshot (or the previous GREEN on attempt 2); remove only the transient manifest path in that commit. Push.
+4. Re-invoke `/publish-pr` (create-or-update): it rewrites the PR body to describe the CURRENT head and keeps tags and `pr-state:*` in sync. It emits `Review: review-dispatch-required`; expected — the coordinator drives the final verification.
 
-### Step 4: Log and persist
+### Step 4: Log, escalate if you must, persist
 
-1. Append to `$reviewLog` a compact `## Round <n>` table: `severity | location | what changed | commit`, then `## Evidence ledger, round <n>`: `claim | authoritative oracle | exact command/fixture/revision | observed output` — one row per measured or factual claim the fix asserts or propagates (counts, classifications, version facts, external behavior); a claim without a row is removed or qualified. One row per line; prose only where a fix diverged from the recommendation.
-2. Write `.pair/working/runs/$run/$story/$phase-green-fix.json` (`status`, `snapshot`, `outputHead`, `findings.resolved`, `evidenceLedger`).
+1. Append to `$reviewLog` a compact `## Round <n> — <phase> attempt <a>` table: `finding id | severity | location | what changed | commit`, then `## Evidence ledger`: `claim | authoritative oracle | exact command/fixture/revision | observed output` — one row per measured or factual claim the fix asserts or propagates. One row per line.
+2. If you must return `needsHumanDecision: true`, publish the escalation comment yourself — schematic: the rounds so far, the still-open findings by id, what the human must decide — with the idempotent script shipped beside this file: `node "$SKILL_DIR/scripts/pr-comment.mjs" upsert --pr $pr --marker "<!-- pair:escalation #$story PR#$pr -->" --body-file <draft.md>` (it reads back the PR's comments first and edits the existing escalation in place; the first-review comment is never touched).
+3. Publish the handoff (`skill: "green-fix"`, `inputHead: $head`, `snapshot`, `attempt`, `fixed`, `needsHumanDecision`, `outputHead`, `findings: { received, resolved }`, `evidenceLedger`, `testRuns`, `contractGaps`, `published: { escalation }`, `elapsedMs`) with `cycle-state.mjs publish … --attempt $attempt --predecessor $phase-red-verify` (attempt 2: predecessor `r<n>-review-phase`), run `resolve` again and return its `next`.
 
 ## Output Format
 
-`{ fixed, needsHumanDecision, outputHead, evidenceLedger: [{ claim, oracle, probe, observed }] }`. `evidenceLedger` is `[]` only when the fix made no empirical or boundary claim.
+`{ status: fixed | failed | human, fixed, needsHumanDecision, outputHead, evidenceLedger: [{ claim, oracle, probe, observed }], contractGaps?, reason?, next }`. `evidenceLedger` is `[]` only when the fix made no empirical or boundary claim.
 
 ## Notes
 
-- A `mode: test` group never reaches this skill: the guard is the fix, and P3 verifies it directly on the sealed head.
-
-- Do NOT post any PR comment; the coordinator synthesizes the cycle at the end.
-- Never merge.
-- Blind: read nothing under `.pair/working/` except the checkpoint, `$reviewLog` and the run directory.
+- A `mode: test` group never reaches this skill: the guard is the fix, and the final verifier checks it directly on the sealed head.
+- Do NOT post any other PR comment; the final verifier publishes the synthesis. Never merge.
+- Blind: read nothing under `.pair/working/` except the checkpoint, `$reviewLog` and `$RUN_DIR`.
