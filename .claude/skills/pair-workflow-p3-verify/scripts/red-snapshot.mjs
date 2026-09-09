@@ -22,7 +22,7 @@
 // `snapshot-missing`, and the attempt fails closed.
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
@@ -126,7 +126,9 @@ export function findSnapshot({ pr, phase, base, cwd }) {
 
 export function seal({ pr, phase, base, contractPath, cwd }) {
   if (!SHA_RE.test(String(base))) return { sealed: false, reason: 'base-not-a-sha' }
-  const raw = readFileSync(join(cwd, contractPath), 'utf8')
+  // The contract lives in the main checkout's run directory while cwd is the story worktree, so
+  // the path is normally ABSOLUTE: resolve() keeps it; a relative one resolves against cwd.
+  const raw = readFileSync(resolve(cwd, contractPath), 'utf8')
   let contract
   try {
     contract = JSON.parse(raw)
@@ -164,7 +166,7 @@ export function seal({ pr, phase, base, contractPath, cwd }) {
     .split('\n')
     .filter(Boolean)
     .map(l => l.slice(3).replace(/^"|"$/g, ''))
-    .filter(p => p !== contractPath && p !== manifest)
+    .filter(p => p !== contractPath && resolve(cwd, p) !== resolve(cwd, contractPath) && p !== manifest)
   const outside = dirty.filter(p => !files.includes(p))
   if (outside.length) return { sealed: false, reason: 'dirty-outside-contract', paths: outside }
   const notDirty = files.filter(f => !dirty.includes(f))

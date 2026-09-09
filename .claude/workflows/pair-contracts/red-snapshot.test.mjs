@@ -129,6 +129,23 @@ test('seal: one local commit above base with exactly manifest + artifacts, trail
   rmSync(cwd, { recursive: true, force: true })
 })
 
+// Canary run 8 on #482: the contract lives in the main checkout's run directory, so the sealer
+// receives an ABSOLUTE path while its cwd is the story worktree. join(cwd, abs) produced
+// "<worktree>/Users/.../red-contract.json" → ENOENT, twice, and the card ended failed-fix.
+test('seal reads an absolute contract path as-is (the contract lives outside the worktree)', () => {
+  const { cwd, base } = repo()
+  const { contract } = redContract(cwd)
+  const outside = mkdtempSync(join(tmpdir(), 'red-run-dir-'))
+  const abs = join(outside, 'r1-g1-red-contract.json')
+  writeFileSync(abs, JSON.stringify(contract))
+  rmSync(join(cwd, '.pair/working/red-draft.json'))
+  const s = seal({ pr: PR, phase: PHASE, base, contractPath: abs, cwd })
+  assert.equal(s.sealed, true, JSON.stringify(s))
+  assert.equal(git(cwd, 'rev-parse', `${s.snapshot}^`), base)
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(outside, { recursive: true, force: true })
+})
+
 test('seal refuses: HEAD not at base, artifact hash mismatch, dirty production path', () => {
   const { cwd, base } = repo()
   const { contractPath, contract } = redContract(cwd)
