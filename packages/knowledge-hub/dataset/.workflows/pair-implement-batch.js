@@ -1396,7 +1396,10 @@ async function driveStory(story) {
   const acceptedKeys = new Set()
   const accept = findings => {
     for (const f of findings) {
-      const key = `${f.id ?? ''} ${f.location ?? ''} ${f.description ?? ''}`
+      // The delimiter is spelled as an ESCAPE, never a raw byte: the Workflow harness refuses a script
+      // carrying control characters (they would be hidden in its approval dialog), so a raw NUL makes
+      // the whole workflow undispatchable — measured on canary run 11.
+      const key = `${f.id ?? ''}\u0000${f.location ?? ''}\u0000${f.description ?? ''}`
       if (acceptedKeys.has(key)) continue
       acceptedKeys.add(key)
       accepted.push(f)

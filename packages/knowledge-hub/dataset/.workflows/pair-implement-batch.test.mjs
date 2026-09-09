@@ -288,6 +288,12 @@ test('TC-11: the workflow source dispatches ONLY skill invocations — no free-f
     assert.equal(code.includes(gone), false, `${gone} is still spelled in the workflow code`)
 })
 
+test('the workflow source carries no control character — the Workflow harness refuses a script that does (it would hide in the approval dialog), which makes the engine undispatchable', () => {
+  const bad = [...SRC.matchAll(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g)]
+  assert.deepEqual(bad.map(m => `0x${m[0].charCodeAt(0).toString(16)} at ${m.index}`), [])
+  assert.equal(SRC.includes('\t'), false, 'no tabs either')
+})
+
 test('TC-11 / TC-14: the six phase skills are real installed skills named by their configured default; the five retired ones are gone', () => {
   for (const [key, name] of [['contractPhase', 'contract-phase'], ['redSpec', 'red-spec'], ['redVerify', 'red-verify'], ['implementPhase', 'implement-phase'], ['greenFix', 'green-fix'], ['reviewPhase', 'review-phase']]) {
     assert.ok(SRC.includes(`${key}: '/pair-workflow-${name}'`), `${key} default`)
