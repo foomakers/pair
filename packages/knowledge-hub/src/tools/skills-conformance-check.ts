@@ -922,7 +922,11 @@ function checkLinkedScriptsShip(skillFile: string, skillDir: string, skillRel: s
 }
 
 /** The one comparison, kept apart so the walk above stays a walk. */
-function compareTwin(datasetFile: string, installedFile: string, names: [string, string]): string[] {
+function compareTwin(
+  datasetFile: string,
+  installedFile: string,
+  names: [string, string],
+): string[] {
   const [datasetRel, installedRel] = names
   if (!existsSync(installedFile)) {
     return [
@@ -945,7 +949,11 @@ function compareTwin(datasetFile: string, installedFile: string, names: [string,
 }
 
 /** 2. Every script the dataset ships must have a byte-identical installed twin. */
-function checkScriptTwins(skillDir: string, skillRel: string, installedSkillsDir: string): string[] {
+function checkScriptTwins(
+  skillDir: string,
+  skillRel: string,
+  installedSkillsDir: string,
+): string[] {
   const scriptsDir = join(skillDir, SCRIPTS_DIR)
   if (!existsSync(scriptsDir)) return []
 

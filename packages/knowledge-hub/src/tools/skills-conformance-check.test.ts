@@ -924,9 +924,7 @@ describe('runChecks — a family sub-doc is in scope too (round 1, Minor 5)', ()
  * A two-tree fixture: a dataset `.skills` root and an installed `.claude/skills`
  * root, so the twin check is exercised against real files rather than a stub.
  */
-const scriptsFixture = (
-  prefix: string,
-): { root: string; dataset: string; installed: string } => {
+const scriptsFixture = (prefix: string): { root: string; dataset: string; installed: string } => {
   const root = mkdtempSync(join(tmpdir(), prefix))
   const dataset = join(root, 'dataset')
   const installed = join(root, 'installed')
