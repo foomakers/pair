@@ -1,0 +1,126 @@
+{
+  "$meta": {
+    "pr": "483",
+    "phase": "r1-g1",
+    "base": "c20653ce3bc63ccf74ae4cf0b2a76b7c6d6cc90b",
+    "trailer": "Pair-RED-Snapshot: pr=483; phase=r1-g1; base=c20653ce3bc63ccf74ae4cf0b2a76b7c6d6cc90b; manifest=.pair/red-snapshots/pr-483-r1-g1.json",
+    "artifacts": [
+      "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts"
+    ]
+  },
+  "schemaVersion": 1,
+  "run": "canary-479-run5",
+  "story": "482",
+  "pr": 483,
+  "phase": "r1-g1",
+  "skill": "red-spec",
+  "workflowVersion": "2.0.0",
+  "status": "red",
+  "inputHead": "c20653ce3bc63ccf74ae4cf0b2a76b7c6d6cc90b",
+  "sourceOfTruth": "validateNoDeepEntry (packages/content-ops/src/ops/copy/layout-validation.ts:170-200), one of the three source-layout validators copyDirectoryWithTransforms runs BEFORE its first mkdir. Driven as the REAL producer through the suite harness runSkillCopyPipeline (skills-conformance-check.test.ts) — copyDirectoryWithTransforms({ fileService: new InMemoryFileSystemService(...), srcPath: '/ds/packages/knowledge-hub/dataset/.skills', options: skillCopySyncOptions() }) — over an in-memory clone of the same fixture runChecks(root, join(root,'__no-installed')) judges on disk. Its refusal string is the authority. Frozen decision rule, asserted in BOTH directions per row: (runChecks(root, noInstalled).errors.length > 0) === (refusal !== null), plus ATTRIBUTION on every refuse row: the gate must name the very source directory the producer's refusal blames, extracted from the refusal string itself. Anti-vacuity: every row's recorded (refusal, produced) pair is re-measured from the producer in a separate it.each, so a mis-transcribed expectation fails there first.",
+  "fixScope": {
+    "owner": "checkInstallableLayout (packages/knowledge-hub/src/tools/skills-conformance-check.ts:944) — the gate's sole installer-layout verdict for the bounded flatten. At $base it implements only the SHALLOW half (validateNoShallowEntryWithSubdir); the DEEP half (validateNoDeepEntry) has no owner in the gate. collectInstallableDatasetFiles (:894) supplies its marker-blind file list and lives in the same module. checkEntrypointDepth (:835) is a marker-BOUND complement (`if (basename(file) !== 'SKILL.md') continue`), not a co-owner of the marker-blind deep rule, and is not modified.",
+    "mode": "behavioral",
+    "allowedPaths": [
+      "packages/knowledge-hub/src/tools/skills-conformance-check.ts"
+    ]
+  },
+  "domains": [
+    {
+      "owner": "checkInstallableLayout — the DEEP half (validateNoDeepEntry) it does not implement at $base",
+      "discriminator": "For each directory that holds files DIRECTLY (the producer's collectDirShapes view of the flat installable file list, root `.` exempt): (a) its depth vs flattenDepth (= ENTRY_DEPTH = 2) — <=2 never checked, 3, 4+; (b) whether its ancestor at EXACTLY depth 2 also holds files directly (present => the dir is CONTENT of that entry; absent => nothing owns it, entry too deep). Marker-BLIND in every branch: no SKILL.md knowledge on either the offender or the ancestor.",
+      "rows": [
+        "D14 depth-3 dir holding a SKILL.md, ancestor@2 holds none -> REFUSE. Gate errors 1 at $base, from the marker-BOUND checkEntrypointDepth only. GREEN — pins the repair as ADDITIVE.",
+        "D15 depth-3 dir holding a NON-marker file, ancestor@2 holds none -> REFUSE. Gate 0 at $base. RED — the Critical finding.",
+        "D16 the same shape at depth 4 -> REFUSE naming the depth-4 dir. Gate 0 at $base. RED — forbids pinning the rule to depth 3.",
+        "D17 depth-4 content whose immediate PARENT holds no files but whose ancestor@2 does -> ACCEPT. GREEN — forbids testing the immediate parent instead of the ancestor at the entry depth.",
+        "D18 depth-3 content whose ancestor@2 holds only a NON-marker file -> ACCEPT. GREEN — forbids requiring a SKILL.md on the ancestor.",
+        "D19 a marker-less depth-3 offender BESIDE legal depth-3 content of a real entry -> REFUSE naming only the offender. Gate 0 at $base. RED — forbids a blanket 'any dir deeper than 2 that holds files' rule (which would break D17/D18) and forbids legal content masking an offender.",
+        "Live corpus (55 skills / 66 files) -> ACCEPT, checkInstallableLayout(SKILLS_DIR) === []. GREEN — whole-corpus over-correction anchor on real data."
+      ],
+      "interactions": "D19 is the cross-product of the refuse row (D15) with the accept row (D13/D17-shaped content) in ONE dataset: measured refusal blames 'capability/sub/foo' only, produced []. Order matters inside the producer — validateNoCollisions, then validateNoShallowEntryWithSubdir, then validateNoDeepEntry — so every added dataset was measured to trip the DEEP rule and no other (each refusal message is the validateNoDeepEntry wording, verified by the anti-vacuity it.each). A candidate row {'capability/notes.md','capability/sub/foo/notes.md'} was measured and DISCARDED: it trips the SHALLOW rule first ('capability' is 1 segment deep, holds files AND owns a subdir), so it proves nothing about the deep half.",
+      "outOfScope": "checkEntrypointDepth is untouched (D14 must stay green through it). validateNoCollisions parity remains a KNOWN UNCLAIMED GAP, re-measured at this base and disclosed as such in the test header; it is finding 1 of the review and is NOT in this group's dispatch, so no row here asserts it."
+    }
+  ],
+  "matrix": [
+    {
+      "condition": "D15 — dataset {'capability/a/SKILL.md','capability/sub/foo/notes.md'}: a marker-less directory at depth 3 whose ancestor at the entry depth ('capability/sub') holds no files",
+      "oracle": "runSkillCopyPipeline(tree).refusal vs runChecks(root, join(root,'__no-installed')).errors",
+      "expected": "producer REFUSES (\"Ambiguous layout for a bounded flatten (flattenDepth=2): 'capability/sub/foo' is 3 segment(s) deep and holds files directly, but its ancestor at depth 2 ('capability/sub') holds none — so nothing owns it as content and it is an entry too deep. ...\"), produced []; gate errors.length > 0 AND >= 1 error names 'capability/sub/foo'. At $base: 0 errors — RED on both assertions."
+    },
+    {
+      "condition": "D16 — dataset {'capability/a/SKILL.md','capability/sub/foo/bar/notes.md'}: the same shape one level deeper",
+      "oracle": "same",
+      "expected": "producer REFUSES naming 'capability/sub/foo/bar' as 4 segment(s) deep, produced []; gate errors.length > 0 AND >= 1 error names 'capability/sub/foo/bar'. At $base: 0 errors — RED on both assertions."
+    },
+    {
+      "condition": "D19 — dataset {'capability/loop/SKILL.md','capability/loop/references/r.md','capability/sub/foo/notes.md'}: a marker-less too-deep entry beside legal depth-3 content of a real entry",
+      "oracle": "same",
+      "expected": "producer REFUSES naming 'capability/sub/foo' ONLY, produced []; gate errors.length > 0 AND >= 1 error names 'capability/sub/foo'. At $base: 0 errors — RED on both assertions."
+    },
+    {
+      "condition": "D17 — dataset {'capability/loop/SKILL.md','capability/loop/references/deep/r.md'}: depth-4 content whose PARENT ('capability/loop/references') holds no files but whose ancestor at the entry depth ('capability/loop') does",
+      "oracle": "same",
+      "expected": "producer ACCEPTS, produced ['pair-capability-loop/SKILL.md','pair-capability-loop/references/deep/r.md']; gate errors.length === 0, and the walk sees exactly the installed entrypoints. GREEN at $base — anti-over-correction."
+    },
+    {
+      "condition": "D18 — dataset {'capability/x/notes.md','capability/x/sub/deep.md'}: depth-3 content owned by an entry holding only a NON-marker file",
+      "oracle": "same",
+      "expected": "producer ACCEPTS, produced ['pair-capability-x/notes.md','pair-capability-x/sub/deep.md']; gate errors.length === 0, and the walk sees exactly the installed entrypoints (none). GREEN at $base — anti-over-correction."
+    },
+    {
+      "condition": "D14 (pre-existing, relabelled) — dataset {'capability/sub/foo/SKILL.md'}: the marker-BEARING too-deep entry",
+      "oracle": "same",
+      "expected": "producer REFUSES (entry too deep); gate errors.length > 0 AND the single error names 'capability/sub/foo' — supplied today by the marker-BOUND checkEntrypointDepth. GREEN at $base — pins the repair as ADDITIVE, not a re-routing of the depth check."
+    },
+    {
+      "condition": "Attribution, all pre-existing refuse rows D4, D5, D7, D8 (shallow rule)",
+      "oracle": "blamedDir(producer refusal) vs runChecks errors",
+      "expected": "gate error names 'loop' (D4, D5) / 'capability' (D7, D8). GREEN at $base — the new attribution assertion does not disturb the existing shallow parity."
+    },
+    {
+      "condition": "Live corpus — readSkillsDatasetFromDisk(SKILLS_DIR), the 55 shipped skills / 66 files",
+      "oracle": "runSkillCopyPipeline(tree).refusal and checkInstallableLayout(SKILLS_DIR)",
+      "expected": "refusal === null and checkInstallableLayout(SKILLS_DIR) === []. GREEN at $base — whole-corpus over-correction anchor on real data."
+    },
+    {
+      "condition": "False header claim — the test file asserted \"`validateNoDeepEntry` is in the table (D14) only because parity already holds there through `checkEntrypointDepth`; it is pinned as a complement, not claimed as this group's repair\"",
+      "oracle": "the file text itself, contradicted by the D15/D16/D19 measurements above",
+      "expected": "claim deleted. The header now states validateNoDeepEntry's own finite domain, names checkEntrypointDepth as a marker-BOUND complement that covers D14 alone, and states which naive repair each row forbids. The separate `validateNoCollisions` bullet is RE-MEASURED at this base (pipeline REFUSES 'Flatten naming collision detected: pair-a-b-c', gate reports no error) and kept as an explicitly unclaimed gap — it is finding 1, outside this group's dispatch."
+    },
+    {
+      "condition": "PR #483 body — carries the same false claim ('Known unclaimed parity gap' / 'needs no repair - parity already holds there' for validateNoDeepEntry)",
+      "oracle": "the D15/D16/D19 measurements",
+      "expected": "the claim must be removed when the PR body is next written. NOT actionable in this phase: the PR body is neither test source nor a fixScope path, and this role never posts. Carried to the fixer's PR update."
+    }
+  ],
+  "redTests": [
+    {
+      "file": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
+      "kind": "test",
+      "sha256": "sha256:663481d7598666df77e020553efce5a8b5e0036815c857a78288c0f91285b135",
+      "command": "pnpm --filter @pair/knowledge-hub exec vitest run src/tools/skills-conformance-check.test.ts",
+      "observed": "Tests 6 failed | 183 passed (189). Failing set, all in describe 'runChecks and the copy pipeline accept the same corpora — the bounded-flatten layout rules': (a) the IFF rows D15, D16, D19 — each 'installer REFUSES this corpus (<producer validateNoDeepEntry message>), gate reported no error: expected false to be true'; (b) the ATTRIBUTION rows D15, D16, D19 — \"no gate error names 'capability/sub/foo' (resp. 'capability/sub/foo/bar') — the source directory the installer's refusal blames; gate reported []: expected false to be true\". All 19 anti-vacuity producer rows PASS, so every recorded refusal/produced pair is the producer's own output. D14 (both assertions), D17, D18, the pre-existing D1-D13 rows, the walk-parity rows and the live-corpus anchor all PASS at $base. Whole package: 'pnpm --filter @pair/knowledge-hub test skills-conformance-check' -> Tests 6 failed | 4997 passed (5003) — no collateral failure. tsc --noEmit exit 0; repo prettier:check reports nothing on this file."
+    }
+  ],
+  "testExempt": false,
+  "artifacts": [
+    "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts"
+  ],
+  "discarded": [
+    {
+      "path": "packages/knowledge-hub/src/tools/skills-conformance-check.test.ts",
+      "sha256": "sha256:aba2ba7ad94818e3887ac4831fe78c2f382c45ea9fcf080e31bdf360fee5dda7",
+      "reason": "Unsealed leftovers of the PREVIOUS r1-g1 attempt found at dispatch: HEAD == $base, tree dirty only at this test path, no $repair passed, and no commit in $base..HEAD carries a Pair-RED-Snapshot trailer (the range is empty — r1-g1-red-seal.json records the sealer erroring with ENOENT on a mis-joined contract path, so the seal never happened). That contract covered review findings 0 AND 1 (deep entry + collision); the r1 remediation plan in force now scopes this group to finding 0 alone, so it could not be reused without widening fixScope. Restored with `git checkout --` before authoring; not used as evidence — every oracle in this contract was re-measured from the producer at $base."
+    }
+  ],
+  "findings": {
+    "received": [
+      0
+    ],
+    "covered": [
+      0
+    ]
+  },
+  "createdAt": "2026-09-09T18:10:00Z"
+}

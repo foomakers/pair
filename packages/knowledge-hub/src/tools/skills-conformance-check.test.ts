@@ -13,6 +13,7 @@ import {
   checkProseCounts,
   checkCategoryLabelCounts,
   checkEntrypointDepth,
+  checkInstallableLayout,
   collectSkillMarkdownFiles,
   ENTRY_DEPTH,
   runChecks,
@@ -1389,28 +1390,51 @@ describe('collectSkillFiles — a bare skill stays visible once it ships a subdi
 // accepts blocks legal work. Both directions are asserted, so neither an
 // under- nor an over-correction can pass.
 //
-// The domain below is the finite shape domain of the rule that owns this
-// decision — `validateNoShallowEntryWithSubdir`
-// (content-ops/src/ops/copy/layout-validation.ts:101-129): for each directory
-// SHALLOWER than `flattenDepth` (= 2), the cross-product of
-//   (holds files DIRECTLY: no | a SKILL.md marker | a non-marker file)
-//   x (owns a SUB-DIRECTORY: no | one with a SKILL.md | one without)
-// plus the producer's own depth-0 exemption branch (`collectDirShapes`'
-// `if (dir === '.') continue` — "files at the source ROOT are copied straight
-// to the destination root and are never entries"), plus the legal depth-2
-// entries the repair must NOT start rejecting. The rule is marker-BLIND, which
-// is why the non-marker rows matter: a fix that keys off `SKILL.md` disagrees
-// with the producer on D7, and a fix that forgets the root exemption disagrees
-// on D9-D11.
+// The domain below is the finite shape domain of the TWO source-layout rules
+// this table owns. Both are marker-BLIND by construction (ADR-020: no `SKILL.md`
+// knowledge in a transform four non-skill registries share):
 //
-// KNOWN UNCLAIMED PARITY GAPS — deliberately outside this group's oracle, named
+//   * `validateNoShallowEntryWithSubdir`
+//     (content-ops/src/ops/copy/layout-validation.ts:101-129) — for each
+//     directory SHALLOWER than `flattenDepth` (= 2), the cross-product of
+//       (holds files DIRECTLY: no | a SKILL.md marker | a non-marker file)
+//       x (owns a SUB-DIRECTORY: no | one with a SKILL.md | one without)
+//     plus the producer's own depth-0 exemption branch (`collectDirShapes`'
+//     `if (dir === '.') continue` — "files at the source ROOT are copied
+//     straight to the destination root and are never entries"), plus the legal
+//     depth-2 entries the repair must NOT start rejecting. Rows D1-D13.
+//
+//   * `validateNoDeepEntry` (same file, :170-200) — for each directory DEEPER
+//     than `flattenDepth`, whether its ancestor at EXACTLY `flattenDepth` also
+//     holds files directly: if it does, the directory is CONTENT of that entry
+//     and installs fine; if it does not, nothing owns it and it is an entry too
+//     deep, so `pair update` refuses the whole corpus. Rows D14-D19: the
+//     marker-BEARING offender (D14), the marker-LESS one at depth 3 (D15) and
+//     at depth 4 (D16), the marker-less offender beside legal content of a real
+//     entry (D19), and the two ordinary complements a naive repair breaks —
+//     content whose immediate PARENT holds no files but whose ancestor at the
+//     entry depth does (D17), and content whose owning entry holds only a
+//     NON-marker file (D18).
+//
+// Marker-blindness is why the non-marker rows matter: a fix that keys off
+// `SKILL.md` disagrees with the producer on D7, D15, D16, D18 and D19, and a
+// fix that forgets the root exemption disagrees on D9-D11. `checkEntrypointDepth`
+// is a marker-BOUND complement which happens to be the only reason D14 is caught
+// today; it is NOT the owner of `validateNoDeepEntry`'s marker-blind rule and is
+// not modified here, so the repair must be ADDITIVE — D14 staying green pins it.
+//
+// Every REFUSE row also asserts ATTRIBUTION: the gate must name the very source
+// directory the producer's refusal blames, extracted from the refusal string
+// itself so the expectation cannot drift from the oracle. Without it a row is
+// satisfied by any unrelated error the gate happens to raise on that fixture.
+//
+// KNOWN UNCLAIMED PARITY GAP — deliberately outside this group's oracle, named
 // so the narrowing is explicit and re-plannable, never silently implied:
 //   * `validateNoCollisions`: `a/b-c/SKILL.md` + `a-b/c/SKILL.md` both flatten
-//     to `pair-a-b-c`. Measured at this base: the pipeline REFUSES, the gate
-//     reports no error. A real parity gap, a DIFFERENT rule, not repaired here.
-//   * `validateNoDeepEntry` is in the table (D14) only because parity already
-//     holds there through `checkEntrypointDepth`; it is pinned as a complement,
-//     not claimed as this group's repair.
+//     to `pair-a-b-c`. Measured at this base: the pipeline REFUSES with
+//     "Flatten naming collision detected: pair-a-b-c. Different source paths
+//     resolve to the same target name.", the gate reports no error. A real
+//     parity gap, a DIFFERENT rule, not repaired here.
 // ---------------------------------------------------------------------------
 
 // Deep source + repo-root dataset root, exactly as the real `pair update`
@@ -1461,7 +1485,7 @@ const runSkillCopyPipeline = async (
   return { refusal, produced: produced.sort() }
 }
 
-describe('runChecks and the copy pipeline accept the same corpora — the shallow-entry rule', () => {
+describe('runChecks and the copy pipeline accept the same corpora — the bounded-flatten layout rules', () => {
   const roots: string[] = []
   afterAll(() => roots.forEach(r => rmSync(r, { recursive: true, force: true })))
 
@@ -1565,14 +1589,69 @@ describe('runChecks and the copy pipeline accept the same corpora — the shallo
       null,
       ['pair-capability-loop/SKILL.md', 'pair-capability-loop/references/r.md'],
     ],
-    // --- complement, a DIFFERENT rule: parity already holds via the depth check ---
+    // --- `validateNoDeepEntry`: an entry DEEPER than the entry depth. The rule
+    // is marker-BLIND — it asks only whether the ancestor at EXACTLY the entry
+    // depth holds files of its own — so D14 (marker-bearing, caught today only
+    // by the marker-BOUND `checkEntrypointDepth`) is the complement, not the
+    // rule, and D15/D16/D19 are the rule itself. ---
     [
-      'D14 entry deeper than the entry depth',
+      'D14 entry deeper than the entry depth, marker-BEARING',
       { 'capability/sub/foo/SKILL.md': fm('foo') },
       TOO_DEEP,
       [],
     ],
+    [
+      'D15 entry deeper than the entry depth, marker-LESS (ancestor@2 holds no file)',
+      { 'capability/a/SKILL.md': fm('a'), 'capability/sub/foo/notes.md': 'x\n' },
+      TOO_DEEP,
+      [],
+    ],
+    [
+      'D16 the same, one level deeper still (the rule is not pinned to depth 3)',
+      { 'capability/a/SKILL.md': fm('a'), 'capability/sub/foo/bar/notes.md': 'x\n' },
+      TOO_DEEP,
+      [],
+    ],
+    [
+      'D17 depth-4 content whose PARENT holds no file but whose ancestor@2 does',
+      {
+        'capability/loop/SKILL.md': fm('loop'),
+        'capability/loop/references/deep/r.md': '# r\n',
+      },
+      null,
+      ['pair-capability-loop/SKILL.md', 'pair-capability-loop/references/deep/r.md'],
+    ],
+    [
+      'D18 depth-3 content owned by an entry holding only a NON-marker file',
+      { 'capability/x/notes.md': 'x\n', 'capability/x/sub/deep.md': 'y\n' },
+      null,
+      ['pair-capability-x/notes.md', 'pair-capability-x/sub/deep.md'],
+    ],
+    [
+      'D19 a marker-less too-deep entry beside legal content of a real entry',
+      {
+        'capability/loop/SKILL.md': fm('loop'),
+        'capability/loop/references/r.md': '# r\n',
+        'capability/sub/foo/notes.md': 'x\n',
+      },
+      TOO_DEEP,
+      [],
+    ],
   ]
+
+  /**
+   * The source directory the producer's own refusal BLAMES, read out of the
+   * refusal string rather than hand-copied: the attribution assertion cannot
+   * drift from the oracle, and cannot be satisfied by an unrelated gate error
+   * about a different directory of the same fixture. Both layout rules phrase
+   * it identically (`flattenDepth=N): '<dir>' is ...`); a refusal that names no
+   * directory throws here rather than silently weakening the assertion.
+   */
+  const blamedDir = (refusal: string): string => {
+    const m = /flattenDepth=\d+\): '([^']+)' is /.exec(refusal)
+    if (m === null) throw new Error(`refusal names no source directory: ${refusal}`)
+    return m[1]
+  }
 
   // Anti-vacuity: pins the ORACLE itself. If this row's outcome ever stops
   // matching what `pair update` does, the parity assertion below is measuring
@@ -1604,6 +1683,25 @@ describe('runChecks and the copy pipeline accept the same corpora — the shallo
     },
   )
 
+  // Attribution, the refuse side: `errors.length > 0` alone is satisfied by ANY
+  // error the gate raises on the fixture — a frontmatter complaint, a size
+  // complaint, a marker-bound depth error about a different path. A row only
+  // proves parity if the gate blames the same directory the installer blames.
+  it.each(rows.filter(([, , refusal]) => refusal !== null))(
+    '%s — the gate names the very directory the installer refuses over',
+    async (label, tree) => {
+      const root = corpus(`skills-blame-${label.slice(0, 3).toLowerCase()}-`, tree)
+      const { errors } = runChecks(root, join(root, '__no-installed'))
+      const { refusal: actualRefusal } = await runSkillCopyPipeline(tree)
+      const dir = blamedDir(actualRefusal as string)
+
+      expect(
+        errors.some(e => e.includes(dir)),
+        `no gate error names '${dir}' — the source directory the installer's refusal blames; gate reported ${JSON.stringify(errors)}`,
+      ).toBe(true)
+    },
+  )
+
   // The accept side, at full strength: for a corpus the installer DOES install,
   // every entrypoint it installs must be one the walk sees, and vice versa —
   // an unchecked installed skill and a phantom checked one are both defects.
@@ -1620,6 +1718,18 @@ describe('runChecks and the copy pipeline accept the same corpora — the shallo
       expect(walkedDirs(root).map(installedSkillDir).sort()).toEqual(installedEntries)
     },
   )
+
+  // Whole-corpus over-correction anchor: the 55 shipped skills are a layout
+  // `pair update` installs today, and every one of the rules above must keep
+  // accepting it. A repair that widens the deep rule (joining every segment,
+  // testing the immediate parent, demanding a marker on the ancestor) fails
+  // here on real data, not only on the synthetic rows.
+  it('the real corpus installs, and the gate raises no layout error on it', async () => {
+    const { refusal } = await runSkillCopyPipeline(readSkillsDatasetFromDisk(SKILLS_DIR))
+
+    expect(refusal).toBeNull()
+    expect(checkInstallableLayout(SKILLS_DIR)).toEqual([])
+  })
 
   it('the two walks agree on the real corpus', () => {
     const walk = collectSkillFiles(SKILLS_DIR)
