@@ -21,10 +21,10 @@ Derive the machine contract from the human template so the reviewer's structured
 
 ## Algorithm
 
-1. Run `node .pair/knowledge/assets/ensure-contract.mjs check $template $contract` for ALL hash/cache/validation work — never hand-roll hashing or freshness logic.
+1. Run `node "$SKILL_DIR/scripts/ensure-contract.mjs" check $template $contract` — where `$SKILL_DIR` is the directory this SKILL.md was loaded from; the script ships beside it ([scripts/ensure-contract.mjs](./scripts/ensure-contract.mjs)) — for ALL hash/cache/validation work; never hand-roll hashing or freshness logic.
 2. `fresh` ⇒ return the cached contract file content unchanged with `status: cache-hit`.
 3. Otherwise READ the template and generate the contract: take `$skeleton` and tighten ONLY the fields `$mirrors` names into `enum`s, leaving every other field untouched. Fill `vocabulary` (`verdictOptions`, `severities`, `findingFields`, …) from the template, AND the top-level `severityRanks`: every name in `vocabulary.severities`, spelled identically, mapped to an explicit unique integer, HIGHER = MORE SEVERE. Derive each rank from what the template SAYS the level means — a must-fix/merge-blocking level outranks an advisory one or a question — NEVER from the order the levels appear in: the consumer ignores array order, and a wrong rank silently converts a merge-blocking finding into an accepted one. If the levels carry no discernible relative severity, return `status: failed` rather than inventing an order.
-4. Persist via `node … ensure-contract.mjs write $template $contract <draft.json>` (it validates the draft and stamps the template hash); return `status: regenerated` plus the final contract content.
+4. Persist via `node "$SKILL_DIR/scripts/ensure-contract.mjs" write $template $contract <draft.json>` (it validates the draft and stamps the template hash); return `status: regenerated` plus the final contract content.
 5. Never modify the template. If generation or validation fails after one retry, return `status: failed` with no contract.
 
 ## Output Format

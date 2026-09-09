@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs'
 // The CANONICAL rank-map rule, imported from the module that owns it. The engine cannot
 // import it (no filesystem in the sandbox) and keeps a duplicate; this test is what keeps
 // the duplicate from drifting looser than the original — see the differential below.
-import { severityRankErrors as canonicalSeverityRankErrors } from '../../.pair/knowledge/assets/ensure-contract.mjs'
+import { severityRankErrors as canonicalSeverityRankErrors } from '../skills/pair-workflow-contract-phase/scripts/ensure-contract.mjs'
 
 // The workflow file is a sandbox script (top-level await + return, ambient
 // `args`/`agent`/`parallel`), not importable ESM. Evaluate it as an async
@@ -30,7 +30,7 @@ const REVIEWED_HEAD = 'a'.repeat(40)
 // asserted on the skill file (the process of record), a rule about WHAT the engine passes and
 // in which order is asserted on the dispatched prompt.
 const SKILL = name => readFileSync(new URL(`../skills/pair-workflow-${name}/SKILL.md`, import.meta.url), 'utf8')
-const RED_SNAPSHOT_SCRIPT = readFileSync(new URL('../../.pair/knowledge/assets/red-snapshot.mjs', import.meta.url), 'utf8')
+const RED_SNAPSHOT_SCRIPT = readFileSync(new URL('../skills/pair-workflow-red-seal/scripts/red-snapshot.mjs', import.meta.url), 'utf8')
 
 async function runWorkflow({ args, dispatch }) {
   const calls = []

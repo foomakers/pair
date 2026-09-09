@@ -26,9 +26,12 @@ Sealing is Git custody, not reasoning. This skill runs the sealer script and ret
 ### Step 1: Run the sealer
 
 ```bash
-cd $worktree && node .pair/knowledge/assets/red-snapshot.mjs seal \
+SKILL_DIR="$(dirname "<absolute path of this SKILL.md>")"   # the directory this skill was loaded from
+cd $worktree && node "$SKILL_DIR/scripts/red-snapshot.mjs" seal \
   --pr $pr --phase $phase --base $base --contract $contract
 ```
+
+The script ships beside this file ([scripts/red-snapshot.mjs](./scripts/red-snapshot.mjs)); resolve it from the skill's own directory, never from a repository path.
 
 The script verifies `HEAD == $base`, every listed artifact's `sha256`, that the working tree is dirty only at those artifacts, writes `.pair/red-snapshots/pr-$pr-$phase.json`, and creates exactly one local `--no-verify` commit whose message carries `Pair-RED-Snapshot: pr=$pr; phase=$phase; base=$base; manifest=<path>`. It is idempotent: re-running after a lost response returns the existing snapshot.
 

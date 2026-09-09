@@ -17,9 +17,23 @@ import {
   seal,
   trailerFor,
   verify,
-} from '../../../.pair/knowledge/assets/red-snapshot.mjs'
+} from '../../skills/pair-workflow-red-seal/scripts/red-snapshot.mjs'
 
-const CLI = fileURLToPath(new URL('../../../.pair/knowledge/assets/red-snapshot.mjs', import.meta.url))
+const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-seal/scripts/red-snapshot.mjs', import.meta.url))
+
+// The module ships inside TWO skills — `red-seal` (seal) and `p3-verify` (verify) — because a
+// skill must be able to run its script from its own directory on any harness. One source, two
+// installed copies: this is the guard that keeps them one artifact.
+test('red-snapshot.mjs ships byte-identical inside red-seal and p3-verify (installed and dataset)', () => {
+  const read = rel => readFileSync(new URL(rel, import.meta.url), 'utf8')
+  const canonical = read('../../skills/pair-workflow-red-seal/scripts/red-snapshot.mjs')
+  for (const rel of [
+    '../../skills/pair-workflow-p3-verify/scripts/red-snapshot.mjs',
+    '../../../packages/knowledge-hub/dataset/.skills/workflow/red-seal/scripts/red-snapshot.mjs',
+    '../../../packages/knowledge-hub/dataset/.skills/workflow/p3-verify/scripts/red-snapshot.mjs',
+  ])
+    assert.equal(read(rel), canonical, `${rel} drifted from the red-seal copy`)
+})
 
 function sh(cwd, ...args) {
   const r = spawnSync(args[0], args.slice(1), { cwd, encoding: 'utf8' })
