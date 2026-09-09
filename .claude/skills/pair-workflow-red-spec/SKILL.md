@@ -29,7 +29,8 @@ Author the test-only contract a fix must satisfy, before any agent that can edit
 ### Step 1: Verify the start state
 
 1. **Check**: `git -C $worktree rev-parse HEAD` equals `$base`; `git status --porcelain` is empty (or, with `$repair`, dirty only at test artifacts).
-2. **Act**: otherwise return `status: stale` and stop. Never reset, stash or rebase to make it so.
+2. **Leftovers of an abandoned attempt**: when HEAD equals `$base` but the tree is dirty ONLY at test artifacts (test source, fixtures — never a production path), no `$repair` was passed, and no commit in `$base..HEAD` carries a `Pair-RED-Snapshot` trailer for this PR, those edits are the unsealed remains of an earlier attempt that never reached the seal (a coordinator-side rejection, a killed agent). They are not evidence and must not leak into this contract: record each path with its working-tree `sha256` under `discarded` in your handoff, then restore the tree (`git checkout -- <path>` for tracked files, `git clean -f -- <path>` for untracked test files) and proceed. Never discard a production change, and never touch a sealed snapshot's blobs.
+3. **Act**: a moved head, or a dirty production path, is `status: stale` — return it and stop. Never reset, stash or rebase to make it so.
 
 ### Step 2: Map the finite domain
 
@@ -49,7 +50,7 @@ For every behavioral target: identify the **owner** (the function/event that mut
 
 ### Step 4: Persist
 
-Write the contract verbatim to `.pair/working/runs/$run/$story/$phase-red-contract.json` (in the MAIN checkout) and the handoff to `.pair/working/runs/$run/$story/$phase-red-spec.json`. Return `contractPath` as the **absolute** path of the persisted contract: the sealer and the verifier `cd` into the story worktree, where a repository-relative path would not resolve (`status`, `inputHead`, `findings.received`, `findings.covered`, `artifacts`).
+Write the contract verbatim to `.pair/working/runs/$run/$story/$phase-red-contract.json` (in the MAIN checkout) and the handoff to `.pair/working/runs/$run/$story/$phase-red-spec.json`. Return `contractPath` as the **absolute** path of the persisted contract: the sealer and the verifier `cd` into the story worktree, where a repository-relative path would not resolve (`status`, `inputHead`, `findings.received`, `findings.covered`, `artifacts`, `discarded`).
 
 ## Output Format
 

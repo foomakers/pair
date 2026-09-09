@@ -69,6 +69,12 @@ rules are added:
     syntax) and the coordinator hands it on verbatim. Canary run 3 (#482, PR #483) had three of four
     groups' first `red` rejected for being absolute; the relative retry did not resolve from the
     worktree and cost one failed seal.
+5. **Unsealed leftovers are discarded, not inherited.** A RED attempt that ends before the seal
+    (coordinator-side rejection, killed agent) can leave test edits in the worktree; the next RED
+    author, finding HEAD at base and the tree dirty only at test artifacts with no snapshot for the
+    PR, records those paths and hashes as `discarded` in its handoff and restores the tree before
+    authoring. A dirty production path or a moved head stays `stale`. Canary run 4 (#482) refused
+    `stale` on exactly such a leftover from run 3.
 
 ## Consequences
 
