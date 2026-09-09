@@ -27,7 +27,14 @@
  *      the mirror-equality guard derives the installed path from the same
  *      transform, so it agrees with itself). The convention it enforces:
  *      `skill-conventions/nested-sub-documents.md`, authoring rule 1.
- *   6. KB prose counts — the skill-count figures restated in the onboarding KB
+ *   6. Skill-local scripts — a skill is portable as ONE folder: every script a
+ *      SKILL.md links under `scripts/` ships beside it in the dataset, and every
+ *      shipped script has a byte-identical twin under
+ *      `.claude/skills/<prefixed-skill>/scripts/`. The markdown mirror guards
+ *      (`skill-md-mirror.ts`) are markdown-only by explicit decision, so a script
+ *      edited in one copy and not the other was, until this check, a runtime
+ *      surprise rather than a red gate (#482).
+ *   7. KB prose counts — the skill-count figures restated in the onboarding KB
  *      prose (way-of-working.md, getting-started.md, skills-guide.md) match the
  *      real corpus, across every restated form: the number-before-noun
  *      "N skills"/"N Agent Skills" total, the "(P process + C capability + N
@@ -37,7 +44,7 @@
  *      from story #233: a skill-count sweep that misses these prose files leaves
  *      factually-wrong onboarding docs the docs-staleness gate can't catch (it
  *      scans apps/website only).
- *   7. Approval-round signal — every skill of an obliged family (`assess-*`,
+ *   8. Approval-round signal — every skill of an obliged family (`assess-*`,
  *      `map-*`) that declares an approval round exposes the `$approval` argument
  *      and declares, ON EACH ASKING LINE, an `<!-- approval-round: kind=…; auto=… -->`
  *      marker whose values come from closed enums and whose prose says the same
@@ -55,7 +62,25 @@ import { existsSync, readFileSync, readdirSync } from 'fs'
 import { basename, dirname, join, relative, resolve, sep } from 'path'
 
 const ROOT = join(__dirname, '..', '..')
-const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
+export const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
+
+/**
+ * The installed skill corpus (`<repo>/.claude/skills`) — the DERIVED copy the
+ * skill-local script check compares against. Exported so the gate and its tests
+ * resolve the same tree instead of each re-deriving the hop out of the package.
+ */
+export const INSTALLED_SKILLS_DIR = resolve(ROOT, '..', '..', '.claude', 'skills')
+
+/** A skill's own script folder — the only directory this check's scope covers. */
+export const SCRIPTS_DIR = 'scripts'
+
+/**
+ * The skills registry's `prefix` from `apps/pair-cli/config.json`. Pinned to
+ * `SKILL_COPY_OPTS.prefix` by test rather than imported, for the same reason as
+ * `ENTRY_DEPTH`: this gate runs via ts-node before any build, so it stays
+ * dependency-free.
+ */
+export const INSTALLED_PREFIX = 'pair'
 
 // KB onboarding prose that restates skill counts (relative to ROOT). Kept in
 // lockstep with the real .skills corpus so a count sweep can't leave stale prose.
@@ -90,6 +115,8 @@ export interface Frontmatter {
 export interface RunResult {
   errors: string[]
   skillCount: number
+  /** Non-blocking observations surfaced by the checks (see `SkillLocalScriptsResult`). */
+  notes: string[]
 }
 
 // --- Frontmatter ---
@@ -816,6 +843,168 @@ export function checkEntrypointDepth(skillsDir: string, markdownFiles: string[])
   return errors
 }
 
+// --- Skill-local scripts ---
+
+export interface SkillLocalScriptsResult {
+  /** Conformance violations. Non-empty ⇒ the gate exits 1. */
+  errors: string[]
+  /** Non-blocking observations (today: a checkout with no installed corpus). */
+  notes: string[]
+}
+
+/**
+ * Installed directory name for a dataset skill dir
+ * (`workflow/red-seal` → `pair-workflow-red-seal`, `next` → `pair-next`).
+ *
+ * The registry flattens with `flattenDepth: 2` and prefixes with `pair`, and
+ * `checkEntrypointDepth` already guarantees no skill dir is deeper than
+ * `ENTRY_DEPTH` — so joining every segment with `-` IS the bounded flatten here,
+ * not an approximation of it. A test pins this against the real
+ * `transformPath`-backed `installedSkillDir` for every dir in the live corpus,
+ * so a change to the copy pipeline's naming fails loudly instead of drifting.
+ */
+export function installedSkillDirName(datasetSkillDir: string): string {
+  return `${INSTALLED_PREFIX}-${datasetSkillDir.split('/').join('-')}`
+}
+
+/** Every file under a skill's `scripts/`, recursively, as posix paths relative to it. */
+function collectScriptFiles(scriptsRoot: string): string[] {
+  const found: string[] = []
+  const walk = (dir: string, prefix: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${e.name}` : e.name
+      if (e.isDirectory()) walk(join(dir, e.name), rel)
+      else found.push(rel)
+    }
+  }
+  walk(scriptsRoot, '')
+  return found.sort()
+}
+
+/** The skill-relative target of a `scripts/…` link, or null when out of scope. */
+function skillLocalScriptTarget(target: string): string | null {
+  if (!isCheckableTarget(target)) return null
+  const withoutAnchor = (target.split('#')[0] as string).replace(/^\.\//, '')
+  if (withoutAnchor === SCRIPTS_DIR || withoutAnchor === `${SCRIPTS_DIR}/`) return null
+  return withoutAnchor.startsWith(`${SCRIPTS_DIR}/`) ? withoutAnchor : null
+}
+
+/**
+ * A skill must be portable as ONE folder, in both directions:
+ *
+ *   1. every script a `SKILL.md` links under `scripts/` EXISTS beside it in the
+ *      dataset — a skill whose runbook points at a script it does not ship is a
+ *      runtime failure at the worst moment, not an authoring typo;
+ *   2. every script the dataset ships has a BYTE-IDENTICAL twin under
+ *      `.claude/skills/<prefixed-skill>/scripts/` — the dataset copy is
+ *      canonical, the installed one derived, and a script edited in one copy
+ *      only is silent drift the markdown mirror guards cannot see (they are
+ *      markdown-only by construction — `skill-md-mirror.ts`'s ACCEPTED RESIDUAL).
+ *
+ * Reports drift, never repairs it. Scope is a skill's OWN `scripts/` dir: a
+ * `references/scripts/` folder, a link outside `scripts/` (left to `checkLinks`)
+ * and an installed script with no dataset source are all out of it.
+ */
+/** 1. Every `scripts/…` target a SKILL.md links must EXIST beside it in the dataset. */
+function checkLinkedScriptsShip(skillFile: string, skillDir: string, skillRel: string): string[] {
+  const errors: string[] = []
+  const fm = parseFrontmatter(readFileSync(skillFile, 'utf-8'))
+  for (const target of fm ? extractLinkTargets(fm.body) : []) {
+    const scriptRel = skillLocalScriptTarget(target)
+    if (scriptRel === null) continue
+    if (existsSync(resolve(skillDir, scriptRel))) continue
+    errors.push(
+      `${skillRel}/SKILL.md: links skill-local script "${target}" but ` +
+        `${skillRel}/${scriptRel} does not exist — a skill must ship every script it links.`,
+    )
+  }
+  return errors
+}
+
+/** The one comparison, kept apart so the walk above stays a walk. */
+function compareTwin(datasetFile: string, installedFile: string, names: [string, string]): string[] {
+  const [datasetRel, installedRel] = names
+  if (!existsSync(installedFile)) {
+    return [
+      `${datasetRel}: installed twin missing — ${installedRel} is not installed. ` +
+        `The dataset copy is canonical; re-run the skills sync to derive it.`,
+    ]
+  }
+  try {
+    if (readFileSync(datasetFile).equals(readFileSync(installedFile))) return []
+  } catch (e) {
+    return [
+      `${datasetRel}: unreadable — cannot compare with ${installedRel}: ` +
+        `${e instanceof Error ? e.message : String(e)}`,
+    ]
+  }
+  return [
+    `${datasetRel}: installed twin drifted — ${installedRel} differs byte-for-byte. ` +
+      `The dataset copy is canonical; re-run the skills sync to derive it.`,
+  ]
+}
+
+/** 2. Every script the dataset ships must have a byte-identical installed twin. */
+function checkScriptTwins(skillDir: string, skillRel: string, installedSkillsDir: string): string[] {
+  const scriptsDir = join(skillDir, SCRIPTS_DIR)
+  if (!existsSync(scriptsDir)) return []
+
+  const errors: string[] = []
+  for (const rel of collectScriptFiles(scriptsDir)) {
+    const installedRel = `${installedSkillDirName(skillRel)}/${SCRIPTS_DIR}/${rel}`
+    errors.push(
+      ...compareTwin(
+        resolve(scriptsDir, rel),
+        join(installedSkillsDir, ...installedRel.split('/')),
+        [`${skillRel}/${SCRIPTS_DIR}/${rel}`, installedRel],
+      ),
+    )
+  }
+  return errors
+}
+
+/**
+ * A skill must be portable as ONE folder, in both directions:
+ *
+ *   1. every script a `SKILL.md` links under `scripts/` EXISTS beside it in the
+ *      dataset — a skill whose runbook points at a script it does not ship is a
+ *      runtime failure at the worst moment, not an authoring typo;
+ *   2. every script the dataset ships has a BYTE-IDENTICAL twin under
+ *      `.claude/skills/<prefixed-skill>/scripts/` — the dataset copy is
+ *      canonical, the installed one derived, and a script edited in one copy
+ *      only is silent drift the markdown mirror guards cannot see (they are
+ *      markdown-only by construction — `skill-md-mirror.ts`'s ACCEPTED RESIDUAL).
+ *
+ * Reports drift, never repairs it. Scope is a skill's OWN `scripts/` dir: a
+ * `references/scripts/` folder, a link outside `scripts/` (left to `checkLinks`)
+ * and an installed script with no dataset source are all out of it.
+ */
+export function checkSkillLocalScripts(
+  skillsDir: string,
+  installedSkillsDir: string,
+): SkillLocalScriptsResult {
+  const errors: string[] = []
+  const installedRootExists = existsSync(installedSkillsDir)
+
+  for (const skillFile of collectSkillFiles(skillsDir)) {
+    const skillDir = dirname(skillFile)
+    const skillRel = relative(skillsDir, skillDir).split(sep).join('/')
+    errors.push(...checkLinkedScriptsShip(skillFile, skillDir, skillRel))
+    if (installedRootExists) {
+      errors.push(...checkScriptTwins(skillDir, skillRel, installedSkillsDir))
+    }
+  }
+
+  const notes = installedRootExists
+    ? []
+    : [
+        `installed skills dir not found (${installedSkillsDir}) — skill-local script ` +
+          `mirroring not checked (dataset-only checkout).`,
+      ]
+
+  return { errors, notes }
+}
+
 // --- Corpus walk ---
 
 /**
@@ -842,24 +1031,34 @@ export function collectSkillFiles(skillsDir: string): string[] {
   const categories = readdirSync(skillsDir, { withFileTypes: true }).filter(d => d.isDirectory())
   for (const cat of categories) {
     const catDir = join(skillsDir, cat.name)
+    // A dir that holds its OWN SKILL.md is a bare/meta skill (`next`, `loop`),
+    // never a category — decided by that marker file and NOT by "has no
+    // subdirectories". The old shape asked the second question, so the day a
+    // bare skill shipped a `scripts/` folder it dropped out of the corpus
+    // entirely: no frontmatter/size/link/approval check, and a skillCount short
+    // by one that fails the catalog counts somewhere unrelated. #482 makes
+    // exactly that layout legal, so the marker has to be what decides.
+    if (existsSync(join(catDir, 'SKILL.md'))) {
+      files.push(join(catDir, 'SKILL.md'))
+      continue
+    }
     const subdirs = readdirSync(catDir, { withFileTypes: true })
       .filter(d => d.isDirectory())
       .map(d => d.name)
-    if (subdirs.length > 0) {
-      for (const sub of subdirs) {
-        const f = join(catDir, sub, 'SKILL.md')
-        if (existsSync(f)) files.push(f)
-      }
-    } else if (existsSync(join(catDir, 'SKILL.md'))) {
-      // Meta skill: category dir itself contains SKILL.md (e.g. next)
-      files.push(join(catDir, 'SKILL.md'))
+    for (const sub of subdirs) {
+      const f = join(catDir, sub, 'SKILL.md')
+      if (existsSync(f)) files.push(f)
     }
   }
   return files
 }
 
-export function runChecks(skillsDir: string): RunResult {
+export function runChecks(
+  skillsDir: string,
+  installedSkillsDir: string = INSTALLED_SKILLS_DIR,
+): RunResult {
   const errors: string[] = []
+  const notes: string[] = []
   const files = collectSkillFiles(skillsDir)
 
   for (const file of files) {
@@ -880,6 +1079,10 @@ export function runChecks(skillsDir: string): RunResult {
   }
 
   errors.push(...checkEntrypointDepth(skillsDir, collectSkillMarkdownFiles(skillsDir)))
+
+  const scripts = checkSkillLocalScripts(skillsDir, installedSkillsDir)
+  errors.push(...scripts.errors)
+  notes.push(...scripts.notes)
   errors.push(...checkApprovalSignalInSubDocs(skillsDir, collectSkillMarkdownFiles(skillsDir)))
 
   const nextFile = files.find(f => basename(dirname(f)) === 'next')
@@ -898,18 +1101,20 @@ export function runChecks(skillsDir: string): RunResult {
     }
   }
 
-  return { errors, skillCount: files.length }
+  return { errors, skillCount: files.length, notes }
 }
 
 if (require.main === module) {
-  const { errors, skillCount } = runChecks(SKILLS_DIR)
+  const { errors, skillCount, notes } = runChecks(SKILLS_DIR, INSTALLED_SKILLS_DIR)
 
   console.log('Skills Conformance Check')
   console.log('========================')
 
+  for (const n of notes) console.log(`  ℹ ${n}`)
+
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, skill-local scripts shipped and mirrored, catalog counts, KB prose counts incl. category headings/table cells, approval-round signal)`,
     )
     process.exit(0)
   } else {
