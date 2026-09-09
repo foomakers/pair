@@ -137,6 +137,7 @@
 - [Decision: Repo citation anchors are checked against github.com's own slugs, offline](.pair/adoption/decision-log/2026-09-08-repo-citation-anchors-are-githubs-own-slugs.md)
 - [Decision: Repo citations in the docs are gated through the site's own MDX compiler](.pair/adoption/decision-log/2026-09-08-repo-citations-are-gated-through-the-site-compiler.md)
 - [Decision: Use a deterministic code canary for delivery workflow validation](.pair/adoption/decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md)
+- [Decision: A skill-local script's mirror is compared byte-for-byte, because the pipeline's content rewrites are markdown-gated](.pair/adoption/decision-log/2026-09-09-skill-local-scripts-compare-byte-for-byte.md)
 
 ## How-To Guides
 
