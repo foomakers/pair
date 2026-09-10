@@ -30,6 +30,83 @@ process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
 _ch(_join(FAKE_GH_DIR, 'gh'), 0o755)
 process.env.PAIR_GH_BIN = _join(FAKE_GH_DIR, 'gh')
 const CARD_HASH = n => 'sha256:' + _hash('sha256').update('card body of #' + n).digest('hex')
+
+// A SECOND, stateful fake `gh` for Finding 6 (US-479 T-28, S5 real effects): unlike the fixed-string
+// fake above, this one actually persists issue bodies/creations across calls (via a JSON state file),
+// so a test can prove a real update+readback happened — not merely that a label was set. It also
+// answers the same `api .../comments/<id>` shape the fixed fake does, reading the same env var, so a
+// single ghBin serves the whole applyScopeDecisions call (comment read + card write/create).
+const newFakeGh2 = () => {
+  const dir = _mk(_join(_tmp(), 'fake-gh2-'))
+  const ghBin = _join(dir, 'gh')
+  const stateFile = _join(dir, 'state.json')
+  const logFile = _join(dir, 'calls.log')
+  _wf(stateFile, JSON.stringify({ issues: {}, next: 9000 }))
+  _wf(logFile, '')
+  _wf(ghBin, `#!/usr/bin/env node
+const fs = require('fs')
+const a = process.argv.slice(2)
+fs.appendFileSync(${JSON.stringify(logFile)}, JSON.stringify(a) + '\\n')
+const stateFile = ${JSON.stringify(stateFile)}
+const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+const save = () => fs.writeFileSync(stateFile, JSON.stringify(state))
+const idOf = ref => { const m = /\\/issues\\/(\\d+)$/.exec(String(ref)); return m ? m[1] : String(ref) }
+const repoIdx = a.indexOf('--repo')
+const repo = repoIdx !== -1 ? a[repoIdx + 1] : (process.env.FAKE_GH2_REPO || 'foomakers/pair')
+if (a[0] === 'api') {
+  const m = /issues\\/comments\\/(\\d+)$/.exec(a[1] || '')
+  if (m) {
+    const comments = JSON.parse(process.env.FAKE_GH_COMMENTS_JSON || '{}')
+    const c = comments[m[1]]
+    if (!c) { process.stderr.write('HTTP 404'); process.exit(1) }
+    process.stdout.write(JSON.stringify(c)); process.exit(0)
+  }
+  process.stderr.write('unexpected api call'); process.exit(1)
+}
+if (a[0] === 'issue' && a[1] === 'view') {
+  const id = idOf(a[2])
+  const issue = state.issues[id]
+  if (!issue) { process.stderr.write('HTTP 404 issue not found: ' + id); process.exit(1) }
+  const qIdx = a.indexOf('-q')
+  if (qIdx !== -1 && a[qIdx + 1] === '.body') { process.stdout.write(issue.body); process.exit(0) }
+  const jsonIdx = a.indexOf('--json')
+  const fields = jsonIdx !== -1 ? a[jsonIdx + 1].split(',') : ['number', 'url', 'title', 'body']
+  const out = {}
+  for (const f of fields) out[f] = f === 'number' ? Number(id) : f === 'url' ? \`https://github.com/\${repo}/issues/\${id}\` : issue[f]
+  process.stdout.write(JSON.stringify(out)); process.exit(0)
+}
+if (a[0] === 'issue' && a[1] === 'edit') {
+  const id = idOf(a[2])
+  if (!state.issues[id]) { process.stderr.write('HTTP 404 issue not found: ' + id); process.exit(1) }
+  const bodyIdx = a.indexOf('--body')
+  if (bodyIdx !== -1) state.issues[id].body = a[bodyIdx + 1]
+  save()
+  process.stdout.write(\`https://github.com/\${repo}/issues/\${id}\`); process.exit(0)
+}
+if (a[0] === 'issue' && a[1] === 'create') {
+  const titleIdx = a.indexOf('--title')
+  const bodyIdx = a.indexOf('--body')
+  const id = state.next++
+  state.issues[id] = { title: titleIdx !== -1 ? a[titleIdx + 1] : '', body: bodyIdx !== -1 ? a[bodyIdx + 1] : '' }
+  save()
+  process.stdout.write(\`https://github.com/\${repo}/issues/\${id}\\n\`); process.exit(0)
+}
+process.stderr.write('unexpected gh call: ' + a.join(' ')); process.exit(1)
+`)
+  _ch(ghBin, 0o755)
+  return {
+    ghBin,
+    seed: (number, body, title = '') => {
+      const s = JSON.parse(readFileSync(stateFile, 'utf8'))
+      s.issues[number] = { body, title }
+      writeFileSync(stateFile, JSON.stringify(s))
+    },
+    body: number => JSON.parse(readFileSync(stateFile, 'utf8')).issues[number]?.body,
+    issue: number => JSON.parse(readFileSync(stateFile, 'utf8')).issues[number],
+    allIssues: () => JSON.parse(readFileSync(stateFile, 'utf8')).issues,
+    calls: () => readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)),
+  }
+}
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
@@ -792,14 +869,26 @@ test('T-22 (DT-14): an authenticated ignore decision preserves quality evidence,
   assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-3.json')), false)
 })
 
-test('T-22 (DT-16): extend-current-card names exact new AC, bumps scopeEpoch exactly once and opens a targeted remediation round on the SAME cycle — resolved AC are not re-litigated', () => {
+test('T-22 (DT-16 / Finding 6 fix): extend-current-card names exact new AC, bumps scopeEpoch exactly once and opens a targeted remediation round on the SAME cycle — resolved AC are not re-litigated', () => {
   const { dir } = runDir()
   review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
   const hash = scopeBaselineHashOf([scopeChange('sc-1')])
   const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-502'
   setComments({ 502: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-99', description: 'the new requirement' }] } }], hash)) })
-  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'original card body for #42')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
   assert.equal(out.applied, true, JSON.stringify(out))
+  // Finding 6 (reported reproduction): the prior implementation marked 'extended' and bumped
+  // scopeEpoch WITHOUT ever touching the real card. Here the card body is a real, separately
+  // seeded artifact behind a stateful fake `gh` — proving the AC was actually written, read back,
+  // and confirmed, not merely labeled.
+  const updatedBody = gh2.body('42')
+  assert.match(updatedBody, /AC-99/)
+  assert.match(updatedBody, /the new requirement/)
+  assert.match(updatedBody, /original card body for #42/, 'the update extends the card, it does not replace it')
+  const editCalls = gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit')
+  assert.equal(editCalls.length, 1, 'exactly one real gh issue edit call, not a simulated one')
   let r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, round: r.next.round }, { step: 'prepare', mode: 'remediation', phase: 'r1-g1', round: 1 })
   assert.deepEqual(r.next.findings.map(f => f.id), ['AC-99'])
@@ -844,6 +933,72 @@ test('T-22 (DT-17): bot comments, an unauthorized login, a stale baseline, a dup
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.equal(r.next.reason, 'awaiting-scope-decision')
   assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-2'])
+})
+
+test('Finding 6 RED->GREEN (reported reproduction): new-card must NOT defer from approvedDelta alone — an approvedDelta with no title is not an explicit authorization to create, and stays pending', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-701'
+  // No targetIssueUrl, no title — exactly the previously-accepted shape that used to mark 'deferred'.
+  setComments({ 701: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'x' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.equal(out.reason, 'no-decision-applied')
+  assert.equal(out.results[0].reason, 'payload-insufficient')
+  assert.deepEqual(gh2.allIssues(), {}, 'no card was created or verified for an insufficient payload')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1'], 'sc-1 stays pending — never silently deferred')
+})
+
+test('Finding 6: new-card with an existing targetIssueUrl is VERIFIED through a real gh issue view before deferring — an unverifiable or cross-repo url is refused, a verified one is trusted', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1'), scopeChange('sc-2')] })
+  const gh2 = newFakeGh2()
+  gh2.seed('480', 'a pre-existing follow-up card')
+  // sc-1: points at a real, verified issue in the same repo → deferred with the read-back url
+  {
+    const hash = scopeBaselineHashOf([scopeChange('sc-1'), scopeChange('sc-2')])
+    setComments({ 702: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', targetIssueUrl: 'https://github.com/foomakers/pair/issues/480' }], hash)) })
+    const out = applyScopeDecisions({ dir, decisionRef: 'https://github.com/foomakers/pair/pull/7#issuecomment-702', repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+    assert.equal(out.applied, true, JSON.stringify(out))
+    assert.equal(out.results[0].status, 'deferred')
+    assert.equal(out.results[0].targetIssueUrl, 'https://github.com/foomakers/pair/issues/480')
+    const viewCalls = gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'view' && c[2] === 'https://github.com/foomakers/pair/issues/480')
+    assert.equal(viewCalls.length, 1, 'a real gh issue view verified the target, it was not merely copied from the comment')
+  }
+  // sc-2: points at an issue that does not exist → refused, sc-2 stays pending
+  {
+    const stillPending = [scopeChange('sc-2')]
+    const hash2 = scopeBaselineHashOf(stillPending)
+    setComments({ 703: comment('rucka', decisionBody([{ id: 'sc-2', action: 'new-card', targetIssueUrl: 'https://github.com/foomakers/pair/issues/999999' }], hash2)) })
+    const out2 = applyScopeDecisions({ dir, decisionRef: 'https://github.com/foomakers/pair/pull/7#issuecomment-703', repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+    assert.equal(out2.applied, false, JSON.stringify(out2))
+    assert.match(out2.results[0].reason, /gh-issue-view-failed/)
+    const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+    assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-2'])
+  }
+})
+
+test('Finding 6: new-card with explicit authorization (an approved title + AC, no existing targetIssueUrl) creates the destination card for real and reads it back before deferring', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-704'
+  const approvedDelta = { title: 'Follow-up: sc-1 out-of-scope requirement', ac: [{ id: 'AC-1', description: 'the deferred requirement' }] }
+  setComments({ 704: comment('rucka', decisionBody([{ id: 'sc-1', action: 'new-card', approvedDelta }], hash)) })
+  const gh2 = newFakeGh2()
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  assert.equal(out.results[0].status, 'deferred')
+  assert.match(out.results[0].targetIssueUrl, /^https:\/\/github\.com\/foomakers\/pair\/issues\/\d+$/)
+  const created = Object.values(gh2.allIssues())[0]
+  assert.equal(created.title, approvedDelta.title, 'the real created issue carries the approved title, not an agent-chosen one')
+  assert.match(created.body, /AC-1/)
+  assert.match(created.body, /the deferred requirement/)
+  const createCalls = gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'create')
+  assert.equal(createCalls.length, 1, 'exactly one real gh issue create call')
 })
 
 test('parseScopeDecisionComment / scopeBaselineHashOf: canonical, order-independent, and every malformed shape is a typed rejection', () => {

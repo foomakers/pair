@@ -280,6 +280,68 @@ export function parseScopeDecisionComment(body) {
 }
 
 const COMMENT_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)$/
+const ISSUE_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)$/
+
+// S5: an existing targetIssueUrl is VERIFIED through `gh` — it must resolve, in the same repo — never
+// trusted as text. Returns the read-back canonical url/number, or a typed error; never guesses.
+function verifyExistingIssue({ ghBin, repo, targetIssueUrl }) {
+  const m = ISSUE_URL_RE.exec(String(targetIssueUrl ?? ''))
+  if (!m) return { error: 'targetIssueUrl-invalid' }
+  if (`${m[1]}/${m[2]}` !== repo) return { error: 'targetIssueUrl-repo-mismatch' }
+  const r = spawnSync(ghBin, ['issue', 'view', targetIssueUrl, '--json', 'number,url'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (r.error || r.status !== 0) return { error: `gh-issue-view-failed:${(r.stderr || r.error?.message || '').trim()}` }
+  let data
+  try {
+    data = JSON.parse(r.stdout)
+  } catch {
+    return { error: 'gh-issue-view-invalid-json' }
+  }
+  if (!data?.url || !data?.number) return { error: 'gh-issue-view-incomplete' }
+  return { url: data.url, number: data.number }
+}
+
+// S5 new-card, no existing targetIssueUrl: explicit authorization to create means an approved
+// TITLE (never inferred), plus the AC payload. Creates via `gh issue create`, then reads the
+// created issue back and confirms the title stuck before trusting the returned backlink.
+function createTargetIssue({ ghBin, repo, title, ac }) {
+  const body = ac.map(a => `- **${a.id}**: ${a.description}`).join('\n')
+  const r = spawnSync(ghBin, ['issue', 'create', '--repo', repo, '--title', title, '--body', body], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (r.error || r.status !== 0) return { error: `gh-issue-create-failed:${(r.stderr || r.error?.message || '').trim()}` }
+  const url = r.stdout.trim().split('\n').pop()
+  if (!ISSUE_URL_RE.test(url)) return { error: 'gh-issue-create-no-url' }
+  const v = spawnSync(ghBin, ['issue', 'view', url, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (v.error || v.status !== 0) return { error: 'gh-issue-create-readback-failed' }
+  let data
+  try {
+    data = JSON.parse(v.stdout)
+  } catch {
+    return { error: 'gh-issue-create-readback-invalid-json' }
+  }
+  if (data.title !== title || !data.url) return { error: 'gh-issue-create-readback-mismatch' }
+  return { url: data.url, number: data.number }
+}
+
+// S5 extend-current-card: the approved AC are written into the CURRENT card and read back before
+// the decision is trusted as applied — a card can go from "extended" (label) to actually extended
+// only through this round trip. Idempotent within a call: content already present is not re-appended.
+function extendCard({ ghBin, repo, story, ac }) {
+  const read = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (read.error || read.status !== 0) return { error: `gh-issue-view-failed:${(read.stderr || read.error?.message || '').trim()}` }
+  const currentBody = read.stdout
+  const already = ac.every(a => currentBody.includes(a.id) && currentBody.includes(a.description))
+  if (!already) {
+    const marker = '## Scope extension (US-479 S5)'
+    const lines = ac.map(a => `- **${a.id}**: ${a.description}`).join('\n')
+    const nextBody = currentBody.includes(marker) ? currentBody.replace(marker, `${marker}\n${lines}`) : `${currentBody}\n\n${marker}\n${lines}\n`
+    const edit = spawnSync(ghBin, ['issue', 'edit', String(story), '--repo', repo, '--body', nextBody], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+    if (edit.error || edit.status !== 0) return { error: `gh-issue-edit-failed:${(edit.stderr || edit.error?.message || '').trim()}` }
+  }
+  const readback = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (readback.error || readback.status !== 0) return { error: `gh-issue-view-readback-failed:${(readback.stderr || readback.error?.message || '').trim()}` }
+  const written = readback.stdout
+  if (!ac.every(a => written.includes(a.id) && written.includes(a.description))) return { error: 'gh-issue-edit-readback-mismatch' }
+  return { body: written }
+}
 
 // Reads the ACTUAL PR comment through `gh` (never a caller-supplied author string), verifies it is
 // a `User` in the authorized maintainer set, applies exact approved payloads mechanically — no
@@ -315,6 +377,7 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
   const currentHash = scopeBaselineHashOf(pending)
   if (parsed.scopeBaselineHash !== currentHash) return { applied: false, reason: 'stale-baseline' }
   const byId = new Map(pending.map(c => [c.id, c]))
+  const lastReview = reviews[reviews.length - 1]
   const results = []
   for (const dec of parsed.decisions) {
     const target = byId.get(dec.id)
@@ -329,14 +392,31 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
       }
       results.push({ id: dec.id, applied: true, status: 'ignored', rationale: dec.rationale })
     } else if (dec.action === 'new-card') {
-      if (!dec.targetIssueUrl && !dec.approvedDelta) {
+      if (dec.targetIssueUrl) {
+        const v = verifyExistingIssue({ ghBin, repo, targetIssueUrl: dec.targetIssueUrl })
+        if (v.error) {
+          results.push({ id: dec.id, applied: false, reason: v.error })
+          continue
+        }
+        results.push({ id: dec.id, applied: true, status: 'deferred', targetIssueUrl: v.url, approvedDelta: dec.approvedDelta })
+      } else if (dec.approvedDelta?.title && Array.isArray(dec.approvedDelta.ac) && dec.approvedDelta.ac.length) {
+        const created = createTargetIssue({ ghBin, repo, title: dec.approvedDelta.title, ac: dec.approvedDelta.ac })
+        if (created.error) {
+          results.push({ id: dec.id, applied: false, reason: created.error })
+          continue
+        }
+        results.push({ id: dec.id, applied: true, status: 'deferred', targetIssueUrl: created.url, approvedDelta: dec.approvedDelta })
+      } else {
         results.push({ id: dec.id, applied: false, reason: 'payload-insufficient' })
-        continue
       }
-      results.push({ id: dec.id, applied: true, status: 'deferred', targetIssueUrl: dec.targetIssueUrl, approvedDelta: dec.approvedDelta })
     } else if (dec.action === 'extend-current-card') {
       if (!dec.approvedDelta || !Array.isArray(dec.approvedDelta.ac) || !dec.approvedDelta.ac.length) {
         results.push({ id: dec.id, applied: false, reason: 'approvedDelta-missing' })
+        continue
+      }
+      const ext = extendCard({ ghBin, repo, story: lastReview.data.story, ac: dec.approvedDelta.ac })
+      if (ext.error) {
+        results.push({ id: dec.id, applied: false, reason: ext.error })
         continue
       }
       results.push({ id: dec.id, applied: true, status: 'extended', approvedDelta: dec.approvedDelta })
@@ -348,7 +428,6 @@ export function applyScopeDecisions({ dir, decisionRef, repo, pr, maintainer = '
     return res ? { ...c, status: res.status, decisionRef, ...(res.rationale ? { decisionRationale: res.rationale } : {}), ...(res.targetIssueUrl ? { targetIssueUrl: res.targetIssueUrl } : {}), ...(res.approvedDelta ? { approvedDelta: res.approvedDelta } : {}) } : c
   })
   const extension = results.find(x => x.applied && x.status === 'extended')
-  const lastReview = reviews[reviews.length - 1]
   const draft = {
     run: lastReview.data.run,
     story: lastReview.data.story,

@@ -21,7 +21,27 @@ if (!fs.existsSync(store)) fs.writeFileSync(store, '[]')
 const list = () => JSON.parse(fs.readFileSync(store, 'utf8'))
 const save = l => fs.writeFileSync(store, JSON.stringify(l))
 const body = () => { const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
-if (args[0] === 'issue' && args[1] === 'view') { process.stdout.write('card body of #' + args[2]); process.exit(0) }
+const issuesStore = ${JSON.stringify(_join(FAKE_GH_DIR, 'issues.json'))}
+const issueId = ref => { const m = /\\/issues\\/(\\d+)$/.exec(String(ref)); return m ? m[1] : String(ref) }
+const issues = () => fs.existsSync(issuesStore) ? JSON.parse(fs.readFileSync(issuesStore, 'utf8')) : {}
+const saveIssues = m => fs.writeFileSync(issuesStore, JSON.stringify(m))
+// S5 real effects (Finding 6): a card's body is a real, per-story artifact here — a fixed edit
+// persists and is read back by a later view, exactly like the actual gh CLI.
+if (args[0] === 'issue' && args[1] === 'view') {
+  const id = issueId(args[2])
+  const m = issues()
+  process.stdout.write(id in m ? m[id] : 'card body of #' + id)
+  process.exit(0)
+}
+if (args[0] === 'issue' && args[1] === 'edit') {
+  const id = issueId(args[2])
+  const bodyIdx = args.indexOf('--body')
+  const m = issues()
+  if (bodyIdx !== -1) m[id] = args[bodyIdx + 1]
+  saveIssues(m)
+  process.stdout.write('https://github.com/foomakers/pair/issues/' + id)
+  process.exit(0)
+}
 if (args[0] === 'api' && args.includes('--paginate')) { process.stdout.write(JSON.stringify(list())); process.exit(0) }
 if (args[0] === 'api' && args.includes('POST') && args.some(a => /issues\\/\\d+\\/comments$/.test(a))) {
   const l = list(); const c = { id: l.reduce((m, x) => Math.max(m, x.id), 0) + 1, body: body(), html_url: 'https://x/c/' + (l.length + 1) }
@@ -77,8 +97,6 @@ async function runWF({ cards, entryCapsules, dispatch }) {
 const SHA = c => c.repeat(40)
 const V = '4.0.0'
 const POLICY = { maxFixRounds: 3, redRepairs: 1, greenRetries: 1, reviewers: 1 }
-const CARD_HASH = n => 'sha256:' + createHash('sha256').update('card body of #' + n).digest('hex')
-
 function runDir() {
   const root = mkdtempSync(join(tmpdir(), 'e2e-'))
   const dir = join(root, '.pair', 'working', 'runs', 'canary-479-replay', '479')
@@ -169,6 +187,13 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
   )
   const decisionOut = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 480, maintainer: 'rucka', workflowVersion: V })
   assert.equal(decisionOut.applied, true, JSON.stringify(decisionOut))
+  // Finding 6: extend-current-card must leave a REAL trace on the card — read it back through the
+  // same fake gh the script itself used, proving the AC actually landed (never just a status label).
+  const extendedCardBody = JSON.parse(readFileSync(join(FAKE_GH_DIR, 'issues.json'), 'utf8'))['479']
+  assert.match(extendedCardBody, /AC-99/)
+  assert.match(extendedCardBody, /the approved new requirement/)
+  assert.match(extendedCardBody, /^card body of #479/, 'extends the existing card, does not replace it')
+  const CARD_HASH_479_EXTENDED = 'sha256:' + createHash('sha256').update(extendedCardBody).digest('hex')
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 480 })
   assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, scopeEpoch: r.next.scopeEpoch }, { step: 'prepare', mode: 'remediation', phase: 'r2-g1', scopeEpoch: 2 })
   assert.deepEqual(r.next.findings.map(f => f.id), ['AC-99'])
@@ -197,7 +222,7 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
     },
     { predecessor: 'r2-g1-green-fix' },
   )
-  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 480, acHash: CARD_HASH(479) })
+  r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 480, acHash: CARD_HASH_479_EXTENDED })
   assert.equal(r.status, 'completed')
   assert.equal(r.next.step, 'done')
   assert.equal(r.next.reviewedHead, SHA('9'))

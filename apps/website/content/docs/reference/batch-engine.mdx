@@ -229,16 +229,20 @@ read back and confirmed — until then delivery is `failed-publication` even whe
 converged. A confirmation-only republish is not a new semantic revision; human text written after
 the comment's owned section survives every republish.
 
-**Known limitation at `4.0.0`:** `usage.byRole`/`sharedOverhead` and `execution.redirects` /
-`engineRecoveries` / `startedWithoutResult` / `administrativeDispatches` / `nestedDispatches` are
-placeholders (empty/zero) until a live host wiring supplies them — never claimed as measured.
-Every other quantity's known/partial coverage is exact.
+**Residual limit at `4.0.0`:** `execution.redirects` / `engineRecoveries` / `startedWithoutResult` /
+`administrativeDispatches` / `nestedDispatches` are derived from an optional `dispatchStats` input
+to `reduceCycleMetrics` — real counts when the host supplies it, explicit `null` (never a claimed
+zero) when it does not. `usage.byRole` and `sharedOverhead` are real once usage observations carry
+a `role`/`parentExecutionId`; `dispatches` and `startedWithoutResult` are derived from observed
+executions themselves and need no external input. Every quantity's known/partial coverage is exact;
+none of these are placeholders presented as measurements.
 
-A supplied `entryCapsules` map (per story id) lets a caller whose prior run already reached
-`done` skip every dispatch for that story on the next invocation — including the batch-wide
-template-contract call — once its identity (workflow major, schema version, story, PR, the 40-hex
-reviewed head) is re-verified; it is a cache hint, never approval, and any mismatch falls through
-to the ordinary dispatch pipeline unchanged.
+A supplied `entryCapsules` map (per story id) is accepted and schema-validated (workflow major,
+schema version, story, PR, the 40-hex reviewed head) — but it is a cache hint, NEVER approval: the
+sandbox has no filesystem/network access to confirm a capsule's claim itself, so it can never skip
+a dispatch. Readiness always comes from the dispatched phase's own `cycle-state.mjs` `resolve()`
+call against the real durable state; a mismatched OR a fully matching capsule changes nothing about
+what gets dispatched (US-479 remediation, Finding 1).
 
 `model` remains a legacy global override. For a measured trial use `models`, for example
 `{ models: { green: "fable" } }`: that changes only GREEN, leaving the independent verifier,
