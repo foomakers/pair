@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.4'
+const WORKFLOW_VERSION = '3.0.5'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -843,6 +843,10 @@ const NEXT_SCHEMA = {
     findings: { type: 'array', items: { type: 'object' } },
     rejection: { type: 'array', items: { type: 'object' } },
     refusal: { type: 'string' },
+    // The PR the cycle is bound to. A structured-output schema is STRICT: a field the schema does
+    // not declare is dropped by the harness before the coordinator sees it — `pr` was, and a
+    // fresh-path resume then had no PR to verify against (canary run 11, 3.0.4).
+    pr: { type: 'integer' },
   },
   required: ['step'],
 }

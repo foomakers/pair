@@ -1,4 +1,4 @@
-// Dry-run harness for pair-implement-batch.js (engine 3.0.4, US-479): executes the workflow
+// Dry-run harness for pair-implement-batch.js (engine 3.0.5, US-479): executes the workflow
 // source with stubbed `agent`/`parallel` (the sandbox primitives) and asserts the coordinator's
 // contract — four judgment stages dispatched by skill name with typed arguments, a `next`-driven
 // state machine that never derives a transition of its own, fail-closed validation of every typed
@@ -259,10 +259,10 @@ test('TC-11: a resumed PR with a clean verification is ONE dispatch — the fina
 test('TC-11: every dispatch is a configured skill + typed arguments + the engine version, run directory and policy', async () => {
   const review = pass => (pass === 0 ? { verdict: 'Rework', findings: [finding()] } : { verdict: 'Approved', findings: [] })
   const { result, calls } = await runWorkflow({ args: { cards: [STORY], runId: 'run-42' }, dispatch: stdDispatch({ review }) })
-  assert.equal(result.workflowVersion, '3.0.4')
+  assert.equal(result.workflowVersion, '3.0.5')
   for (const c of calls.slice(1)) {
     assert.match(c.prompt, /^Invoke \*\*\/pair-workflow-(red-spec|red-verify|implement-phase|green-fix|review-phase)\*\* for story #292 with \$run=run-42 \$story=292 \$branch=feat\/#292-x \$worktree=\.\.\/pair-worktrees\/292 \$base=origin\/main \$stacked=false/, c.opts.label)
-    assert.ok(c.prompt.includes('$workflowVersion=3.0.4'), `${c.opts.label} was not told the workflow version`)
+    assert.ok(c.prompt.includes('$workflowVersion=3.0.5'), `${c.opts.label} was not told the workflow version`)
     assert.ok(c.prompt.includes('$policy={"maxFixRounds":3,"redRepairs":1,"greenRetries":1,"reviewers":1}'), `${c.opts.label} was not told the policy`)
     assert.match(c.prompt, /\$inputs=[0-9a-f]{16}/, `${c.opts.label} was not told the effective-inputs digest`)
     assert.match(c.prompt, /\$entry=(fresh|pr)/)
@@ -427,6 +427,16 @@ test('TC-14: the effective-inputs digest is keyed by the engine MAJOR — a patc
   }
   assert.equal(await digestOf(SRC), await digestOf(src), 'same major, same digest')
   assert.notEqual(await digestOf(SRC), await digestOf(SRC.replace(/const WORKFLOW_VERSION = '3\.0\.\d+'/, "const WORKFLOW_VERSION = '4.0.0'")), 'another major, another digest')
+})
+
+test('TC-14: every `next.<field>` the coordinator reads is declared in NEXT_SCHEMA — a structured-output schema is strict and the harness drops undeclared fields (canary run 11: `pr` vanished from a redirect)', () => {
+  const schemaSrc = SRC.slice(SRC.indexOf('const NEXT_SCHEMA = {'), SRC.indexOf('const REDIRECT_STATUS'))
+  const declared = new Set([...schemaSrc.matchAll(/^\s{4}([a-zA-Z]+): \{/gm)].map(m => m[1]))
+  const code = SRC.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
+  const read = new Set([...code.matchAll(/\b(?:next|n|res\.next)\??\.([a-zA-Z]+)\b/g)].map(m => m[1]).filter(k => !['step'].includes(k)))
+  const missing = [...read].filter(k => !declared.has(k) && !['length', 'map', 'filter', 'some', 'every', 'find', 'findIndex', 'entries', 'push', 'includes', 'slice', 'join', 'test', 'toLowerCase', 'trim', 'sort', 'reduce', 'values', 'keys', 'has', 'get', 'set', 'add', 'delete', 'exec', 'replace', 'split', 'startsWith', 'match'].includes(k))
+  assert.deepEqual(missing, [], `next fields read but undeclared in NEXT_SCHEMA: ${missing.join(', ')}`)
+  assert.ok(declared.has('pr') && declared.has('contract') && declared.has('openIds'))
 })
 
 test('TC-05: a completed cycle resumed with the same inputs performs no new judgment — the verifier redirects straight to done', async () => {
@@ -756,10 +766,10 @@ test('TC-14: pipeline.reviewers is a positive integer threaded to the verifier a
   assert.match(await expectThrow({ args: { cards: [STORY], pipeline: { reviewers: 0 } } }), /reviewers/)
 })
 
-test('TC-14: the result carries workflowVersion 3.0.4 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
+test('TC-14: the result carries workflowVersion 3.0.5 and every status row is one of the documented set; ready rows carry reviewedHead + verdict', async () => {
   const STATUSES = new Set(['ready-for-merge', 'escalate', 'failed-preparation', 'failed-contract', 'failed-seal', 'failed-implement', 'failed-fix', 'failed-verify', 'failed-custody', 'failed-resume', 'incompatible'])
   const { result } = await runWorkflow({ args: { cards: [STORY] }, dispatch: stdDispatch() })
-  assert.equal(result.workflowVersion, '3.0.4')
+  assert.equal(result.workflowVersion, '3.0.5')
   for (const row of result.batch) {
     assert.equal(row.id, STORY.id)
     assert.ok(STATUSES.has(row.status), row.status)
@@ -906,7 +916,7 @@ test('an EXPLICIT empty list stays a legal no-op — no agent, no contract', asy
   assert.equal(calls.length, 0)
   assert.deepEqual(result.batch, [])
   assert.match(result.note, /Empty batch/)
-  assert.equal(result.workflowVersion, '3.0.4')
+  assert.equal(result.workflowVersion, '3.0.5')
 })
 test('a bare array, a JSON string, `cards` and the `stories` alias all drive the batch; both lists together throw', async () => {
   for (const args of [[STORY], JSON.stringify({ stories: [STORY] }), { cards: [STORY] }, { stories: [STORY] }, { cards: [STORY], stories: undefined }, { stories: [STORY], cards: null }]) {
