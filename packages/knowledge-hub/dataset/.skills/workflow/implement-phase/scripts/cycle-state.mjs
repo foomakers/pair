@@ -300,30 +300,32 @@ function verifyExistingIssue({ ghBin, repo, targetIssueUrl }) {
   return { url: data.url, number: data.number }
 }
 
-// US-479 remediation (Finding 6, residual): an AC line is `<id>: <description>` on its own line,
-// optionally bulleted/bolded (both a human-authored `AC-1: old` and our own `- **AC-1**: new` match).
-// The id token is captured to its FULL word boundary — `AC-10` is never mistaken for a prefix match
-// against `AC-1` — and every match keeps its exact position, so a targeted line can be replaced
-// in place without disturbing any other AC or human prose around it.
-//
 // US-479 remediation (Finding 6, residual — Caso A): the ADOPTED card formats are recognized
-// explicitly, never guessed by a generic parser. Two dialects are real: #479's own checkbox
-// convention `- [ ] **AC-01 — Title.** Description.` (one line per AC), and the delivery template's
-// numbered Given/When/Then blocks (`N. **Given** … / **When** … / **Then** …`, three lines,
-// user-story-template.md). A card recognized as neither dialect never has a "genuinely new" AC
-// guessed into it via the GWT convention — a parser miss is NOT proof an id is new; it is proof
-// this id could not be resolved, and resolution failing is refused, never silently treated as an
-// insertion instruction.
-const CHECKBOX_AC_RE = /^(-\s*\[[ xX]\]\s*)?\*\*(AC-[\w.-]*\w)(?:\s+—\s+([^*\n]*?))?\.\*\*(?:[ \t]+(.*))?$/gm
+// explicitly and CUMULATIVELY, never guessed by a generic Markdown parser. Three dialects are real:
+//   1. the colon convention — `AC-1: description`, `- **AC-1**: description` — what a human writes
+//      on a card and what this script itself emitted before 4.0.0;
+//   2. #479's own checkbox convention `- [ ] **AC-01 — Title.** Description.`, together with the
+//      title-less shape this script emits itself, `- [ ] **AC-01.** Description.`;
+//   3. the delivery template's (and #482's) numbered Given/When/Then blocks
+//      (`N. **Given** … / **When** … / **Then** …`, three lines, user-story-template.md).
+// The id token is captured to its FULL word boundary — `AC-10` is never mistaken for a prefix match
+// against `AC-1` — and every match keeps its exact PREFIX and position, so a targeted obligation is
+// rewritten in place: its bullet, its checkbox state and its human title survive, and no other AC or
+// prose around it is disturbed. An id defined more than once is ambiguous whether the duplicates
+// share a dialect or straddle two of them: `acById` merges the AC-id dialects deliberately.
+const COLON_AC_RE = /^([ \t]*(?:[-*][ \t]*)?(?:\*\*)?(AC-[\w.-]*\w)(?:\*\*)?[ \t]*:[ \t]*)(.*)$/gm
+const CHECKBOX_AC_RE = /^((?:-[ \t]*\[[ xX]\][ \t]*)?\*\*(AC-[\w.-]*\w)(?:[ \t]+—[ \t]+[^*\n]*?)?\.\*\*[ \t]*)(.*)$/gm
 const GWT_AC_RE = /^(\d+)\.[ \t]+\*\*Given\*\*[ \t]+(.*)\n[ \t]+\*\*When\*\*[ \t]+(.*)\n[ \t]+\*\*Then\*\*[ \t]+(.*)$/gm
 function parseAcCard(body) {
   const text = String(body ?? '')
-  const checkboxById = new Map()
+  const acById = new Map()
   let m
-  CHECKBOX_AC_RE.lastIndex = 0
-  while ((m = CHECKBOX_AC_RE.exec(text))) {
-    const entry = { id: m[2], checkbox: m[1] ?? '', title: m[3], description: (m[4] ?? '').trim(), start: m.index, end: m.index + m[0].length }
-    checkboxById.set(m[2], [...(checkboxById.get(m[2]) ?? []), entry])
+  for (const [re, format] of [[COLON_AC_RE, 'colon'], [CHECKBOX_AC_RE, 'checkbox']]) {
+    re.lastIndex = 0
+    while ((m = re.exec(text))) {
+      const entry = { id: m[2], format, prefix: m[1], description: (m[3] ?? '').trim(), start: m.index, end: m.index + m[0].length }
+      acById.set(m[2], [...(acById.get(m[2]) ?? []), entry])
+    }
   }
   const gwtById = new Map()
   GWT_AC_RE.lastIndex = 0
@@ -331,9 +333,19 @@ function parseAcCard(body) {
     const entry = { number: m[1], given: m[2].trim(), when: m[3].trim(), then: m[4].trim(), start: m.index, end: m.index + m[0].length }
     gwtById.set(m[1], [...(gwtById.get(m[1]) ?? []), entry])
   }
-  return { dialect: checkboxById.size ? 'checkbox' : gwtById.size ? 'gwt' : 'unknown', checkboxById, gwtById }
+  // A genuinely new AC is appended in the shape the card already speaks — checkbox when the card
+  // uses it (and for a card with no AC at all, since that is what this script itself emits).
+  const entries = [...acById.values()].flat()
+  const appendFormat = entries.length && entries.every(e => e.format === 'colon') ? 'colon' : 'checkbox'
+  return { dialect: acById.size ? 'ac' : gwtById.size ? 'gwt' : 'unknown', acById, gwtById, appendFormat }
 }
-const renderCheckboxLine = (id, description) => `- [ ] **${id}.** ${description}`
+const renderAcLine = (id, description, format) => (format === 'colon' ? `- **${id}**: ${description}` : `- [ ] **${id}.** ${description}`)
+const renderCheckboxLine = (id, description) => renderAcLine(id, description, 'checkbox')
+// Whether the card mentions this exact id token at all — matched to its FULL word boundary, so
+// `AC-1` is not found inside `AC-10`. Consulted only when NO recognized entry carries the id: a
+// mention the adopted dialects could not account for means the obligation is on the card in a shape
+// this parser does not support, which is a failed resolution — never proof the AC is new.
+const mentionsAcId = (text, id) => new RegExp(`(?<![\\w.-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w.-])`).test(String(text ?? ''))
 // The approved content for a GWT-identified obligation must ITSELF be in the adopted contract's
 // shape (S1's "modifica dell'obbligo identificato secondo il contratto adottato") — never a bare
 // string coerced into one of the three fields by guesswork.
@@ -405,7 +417,7 @@ function verifyCreatedIssueContent({ ghBin, ref, marker, title, ac }) {
   if (typeof data.body !== 'string' || !data.body.includes(marker)) return { error: 'gh-issue-create-readback-mismatch' }
   const card = parseAcCard(data.body)
   for (const a of ac) {
-    const entries = card.checkboxById.get(a.id) ?? []
+    const entries = card.acById.get(a.id) ?? []
     if (entries.length !== 1 || entries[0].description !== a.description) return { error: `gh-issue-create-content-mismatch:${a.id}` }
   }
   return { url: data.url, number: data.number }
@@ -475,15 +487,18 @@ function extendCard({ ghBin, repo, story, ac }) {
   if (read.error || read.status !== 0) return { error: `gh-issue-view-failed:${(read.stderr || read.error?.message || '').trim()}` }
   const currentBody = read.stdout
   const card = parseAcCard(currentBody)
-  // Resolve every targeted id BEFORE any edit: existing (either dialect), genuinely new (checkbox
-  // dialect only — a card with no recognized structure at all is treated the same way, since there
-  // is no competing convention to violate), or unresolvable — refused, never guessed.
+  // Resolve every targeted id BEFORE any edit into exactly one of three outcomes: an EXISTING
+  // obligation identified exactly (any adopted dialect), a LEGITIMATE addition under the contract
+  // the card already speaks, or an UNRESOLVABLE reference — refused before anything is written,
+  // never guessed. A parser miss is not proof the AC is new: it is proof this id could not be
+  // resolved, so an id the card mentions in a shape none of the adopted dialects covers is refused
+  // too, exactly like an id that belongs to a competing convention (the GWT dialect).
   const resolved = []
   for (const a of ac) {
-    const cb = card.checkboxById.get(a.id) ?? []
-    if (cb.length > 1) return { error: `ambiguous-ac-id:${a.id}` }
-    if (cb.length === 1) {
-      resolved.push({ a, kind: 'checkbox-existing', entry: cb[0] })
+    const hits = card.acById.get(a.id) ?? []
+    if (hits.length > 1) return { error: `ambiguous-ac-id:${a.id}` }
+    if (hits.length === 1) {
+      resolved.push({ a, kind: 'ac-existing', entry: hits[0] })
       continue
     }
     const gwtKey = gwtKeyOf(a.id)
@@ -499,10 +514,11 @@ function extendCard({ ghBin, repo, story, ac }) {
       return { error: `ac-id-unresolvable:${a.id}` }
     }
     if (card.dialect === 'gwt') return { error: `ac-id-unresolvable:${a.id}` }
-    resolved.push({ a, kind: 'checkbox-new' })
+    if (mentionsAcId(currentBody, a.id)) return { error: `ac-id-unresolvable:${a.id}` }
+    resolved.push({ a, kind: 'ac-new' })
   }
   const isSatisfied = r => {
-    if (r.kind === 'checkbox-existing') return r.entry.description === r.a.description
+    if (r.kind === 'ac-existing') return r.entry.description === r.a.description
     if (r.kind === 'gwt-existing') return r.entry.given === r.parsed.given && r.entry.when === r.parsed.when && r.entry.then === r.parsed.then
     return false
   }
@@ -511,7 +527,7 @@ function extendCard({ ghBin, repo, story, ac }) {
     const replacements = []
     const toAppend = []
     for (const r of needsWork) {
-      if (r.kind === 'checkbox-existing') replacements.push({ start: r.entry.start, end: r.entry.end, text: renderCheckboxLine(r.a.id, r.a.description) })
+      if (r.kind === 'ac-existing') replacements.push({ start: r.entry.start, end: r.entry.end, text: r.entry.prefix + r.a.description })
       else if (r.kind === 'gwt-existing') replacements.push({ start: r.entry.start, end: r.entry.end, text: renderGwtBlock(r.entry.number, r.parsed) })
       else toAppend.push(r.a)
     }
@@ -520,7 +536,7 @@ function extendCard({ ghBin, repo, story, ac }) {
     for (const rep of replacements) nextBody = nextBody.slice(0, rep.start) + rep.text + nextBody.slice(rep.end)
     if (toAppend.length) {
       const marker = '## Scope extension (US-479 S5)'
-      const lines = toAppend.map(a => renderCheckboxLine(a.id, a.description)).join('\n')
+      const lines = toAppend.map(a => renderAcLine(a.id, a.description, card.appendFormat)).join('\n')
       nextBody = nextBody.includes(marker) ? nextBody.replace(marker, `${marker}\n${lines}`) : `${nextBody}\n\n${marker}\n${lines}\n`
     }
     const edit = spawnSync(ghBin, ['issue', 'edit', String(story), '--repo', repo, '--body', nextBody], { encoding: 'utf8', env: cleanGitEnv(process.env) })
@@ -535,8 +551,8 @@ function extendCard({ ghBin, repo, story, ac }) {
       const gw = writtenCard.gwtById.get(gwtKeyOf(r.a.id)) ?? []
       if (gw.length !== 1 || gw[0].given !== r.parsed.given || gw[0].when !== r.parsed.when || gw[0].then !== r.parsed.then) return { error: `gh-issue-edit-readback-mismatch:${r.a.id}` }
     } else {
-      const cb = writtenCard.checkboxById.get(r.a.id) ?? []
-      if (cb.length !== 1 || cb[0].description !== r.a.description) return { error: `gh-issue-edit-readback-mismatch:${r.a.id}` }
+      const hits = writtenCard.acById.get(r.a.id) ?? []
+      if (hits.length !== 1 || hits[0].description !== r.a.description) return { error: `gh-issue-edit-readback-mismatch:${r.a.id}` }
     }
   }
   return { body: written }

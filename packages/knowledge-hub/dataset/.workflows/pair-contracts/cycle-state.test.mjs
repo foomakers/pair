@@ -1240,6 +1240,227 @@ test('Finding 6 residual (Caso A, Given/When/Then dialect): an approved descript
   assert.equal(gh2.body('42'), CARD_482_EXCERPT)
 })
 
+// ── Finding 6 residual (Caso A): the PREVIOUSLY SUPPORTED colon dialect, alongside the new ones ──
+// `AC-1: text` and `- **AC-1**: text` are the shape a human writes on a card and the shape this
+// script itself emitted before 4.0.0 — the reported reproduction in #479's own verification comment
+// is written in it. Support is CUMULATIVE with the checkbox and Given/When/Then dialects: a card in
+// any adopted shape resolves, and a card in none of them is refused rather than appended to.
+const CARD_COLON_EXCERPT =
+  '## Acceptance Criteria\n\n' +
+  '- **AC-1**: old requirement\n'
+
+test('Finding 6 residual RED->GREEN (Caso A, colon dialect — reported regression): `- **AC-1**: old requirement` is REPLACED in place — the old requirement is gone and no second definition is appended', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-840'
+  setComments({ 840: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'new requirement' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', CARD_COLON_EXCERPT)
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.doesNotMatch(body, /old requirement/, 'the old requirement is REPLACED, not left standing')
+  const ac1Lines = body.split('\n').filter(l => /AC-1(?![\w.-])/.test(l))
+  assert.equal(ac1Lines.length, 1, 'exactly one AC-1 definition — no second one appended alongside the old')
+  assert.match(ac1Lines[0], /new requirement/)
+  assert.doesNotMatch(body, /Scope extension/, 'an existing obligation is edited, never appended as if new')
+  assert.ok(body.startsWith('## Acceptance Criteria\n\n'), 'the human heading survives untouched')
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1)
+})
+
+test('Finding 6 residual (Caso A, colon dialect — issue-comment reproduction): a description already sitting under AC-2 never satisfies AC-1 — AC-1 is replaced, AC-2 untouched', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-841'
+  setComments({ 841: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'comportamento nuovo' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: comportamento vecchio\nAC-2: comportamento nuovo')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.doesNotMatch(body, /vecchio/, 'the old AC-1 definition is REPLACED, not left dangling alongside the new one')
+  const ac1Lines = body.split('\n').filter(l => /AC-1(?![\w.-])/.test(l))
+  assert.equal(ac1Lines.length, 1)
+  assert.match(ac1Lines[0], /comportamento nuovo/, 'AC-1 now carries the approved description')
+  const ac2Lines = body.split('\n').filter(l => l.includes('AC-2'))
+  assert.equal(ac2Lines.length, 1)
+  assert.equal(ac2Lines[0], 'AC-2: comportamento nuovo', 'AC-2 is untouched — it always said this')
+})
+
+test('Finding 6 residual (Caso A, colon dialect): an id sharing a common prefix (AC-1 vs AC-10) is never conflated — only the exact targeted id is replaced', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-842'
+  setComments({ 842: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'updated' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: old\nAC-10: something else entirely')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.ok(body.includes('AC-10: something else entirely'), 'AC-10 must survive completely byte-identical')
+  const ac1Line = body.split('\n').find(l => /AC-1(?![\w.-])/.test(l))
+  assert.equal(ac1Line, 'AC-1: updated')
+  assert.doesNotMatch(body, /AC-1: old/)
+})
+
+test('Finding 6 residual (Caso A, colon dialect): one decision that both REPLACES an existing AC and ADDS a genuinely new one applies both in one real edit, leaving an unrelated third AC byte-identical', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-843'
+  setComments({ 843: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'replaced text' }, { id: 'AC-99', description: 'brand new requirement' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: original text\nAC-5: never touched by this decision')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.doesNotMatch(body, /original text/)
+  assert.match(body, /replaced text/)
+  assert.match(body, /AC-99.*brand new requirement/)
+  assert.equal(body.split('\n').filter(l => l.includes('AC-99')).length, 1, 'the genuinely new AC is added exactly once')
+  assert.ok(body.includes('AC-5: never touched by this decision'), 'a THIRD, uninvolved AC survives byte-identical')
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1, 'one real edit, not two')
+})
+
+test('Finding 6 residual (Caso A, colon dialect): retry — the SAME decisionRef replayed is a no-op: no second edit, no duplicate definition, no second handoff and no further scopeEpoch bump', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-844'
+  setComments({ 844: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'new text' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: old')
+  const out1 = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out1.applied, true, JSON.stringify(out1))
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1)
+  assert.equal(gh2.body('42'), 'AC-1: new text', 'the colon-format AC really was rewritten in place')
+  const first = JSON.parse(readFileSync(join(dir, 'r0-review-phase.attempt-2.json'), 'utf8'))
+  assert.equal(first.scopeEpoch, 2)
+  assert.equal(first.scopeChanges[0].status, 'extended')
+  const out2 = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.deepEqual(out2, { applied: true, reason: 'already-applied' })
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1, 'no second real edit on the replay')
+  assert.equal(gh2.body('42'), 'AC-1: new text', 'no duplicate definition appended on the replay')
+  assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-3.json')), false, 'no second handoff, no further scopeEpoch bump')
+})
+
+test('Finding 6 residual (Caso A, colon dialect): an id the card carries MORE THAN ONCE in the same format is ambiguous — refused outright, never guessed, never marked extended', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-846'
+  setComments({ 846: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'resolved' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  const seeded = 'AC-1: first definition\nAC-1: second, conflicting definition'
+  gh2.seed('42', seeded)
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.match(out.results[0].reason, /ambiguous-ac-id:AC-1/)
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 0, 'an ambiguous card is never edited')
+  assert.equal(gh2.body('42'), seeded, 'the card is byte-identical to before the attempt')
+  assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-2.json')), false, 'no decision handoff written — no extended status, no scopeEpoch bump')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1'], 'stays pending — never silently marked extended')
+})
+
+test('Finding 6 residual (Caso A): the SAME id defined in TWO different adopted formats is ambiguous — refused, no edit, card byte-identical', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-847'
+  setComments({ 847: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'resolved' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  const seeded = 'AC-1: the colon-format definition\n\n- [ ] **AC-1 — Checkbox.** the checkbox-format definition'
+  gh2.seed('42', seeded)
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.match(out.results[0].reason, /ambiguous-ac-id:AC-1/)
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 0)
+  assert.equal(gh2.body('42'), seeded)
+  assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-2.json')), false, 'no decision handoff written — no extended status, no scopeEpoch bump')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1'])
+})
+
+test('Finding 6 residual (Caso A): a card whose AC live in an UNRECOGNIZED shape is refused — a parser miss is never turned into an append: no edit, no extended, no scopeEpoch bump', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-848'
+  setComments({ 848: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'new requirement' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  // The obligation IS on the card — in a shape none of the adopted dialects covers (no colon, no
+  // checkbox, no Given/When/Then). Resolution fails; a failed resolution is refused, never used as
+  // evidence that AC-1 is genuinely new.
+  const seeded = '## Acceptance Criteria\n\n| AC-1 | old requirement |\n'
+  gh2.seed('42', seeded)
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.match(out.results[0].reason, /ac-id-unresolvable:AC-1/)
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 0, 'nothing is written')
+  assert.equal(gh2.body('42'), seeded, 'the card is byte-identical to before the attempt')
+  assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-2.json')), false, 'no decision handoff written — no extended status, no scopeEpoch bump')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1'], 'never marked extended')
+})
+
+test('Finding 6 residual (Caso A, colon dialect): a readback that does not confirm the approved id/description is refused — the edit really happened, only its confirmation failed', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-849'
+  setComments({ 849: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-1', description: 'the approved text' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', 'AC-1: old text')
+  process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX = '2'
+  let out
+  try {
+    out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  } finally {
+    delete process.env.FAKE_GH2_FAIL_VIEW_CALL_INDEX
+  }
+  assert.equal(out.applied, false, JSON.stringify(out))
+  assert.match(out.results[0].reason, /gh-issue-view-readback-failed/)
+  assert.equal(gh2.calls().filter(c => c[0] === 'issue' && c[1] === 'edit').length, 1, 'the edit itself DID happen — only its confirmation failed')
+  assert.equal(gh2.body('42'), 'AC-1: the approved text', 'the colon-format line was rewritten in place, not appended to')
+  assert.equal(existsSync(join(dir, 'r0-review-phase.attempt-2.json')), false, 'no decision handoff written — scopeEpoch never bumped on an unconfirmed extension')
+  const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
+  assert.deepEqual(r.next.scopeChanges.map(c => c.id), ['sc-1'])
+})
+
+test('Finding 6 residual (Caso A, the checkbox shape this script emits itself): `- [ ] **AC-01.** description` with no title is replaced in place', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-850'
+  setComments({ 850: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-01', description: 'the approved requirement' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', '## Scope extension (US-479 S5)\n- [ ] **AC-01.** an earlier requirement\n- [ ] **AC-02.** untouched\n')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  const body = gh2.body('42')
+  assert.doesNotMatch(body, /an earlier requirement/)
+  assert.equal(body.split('\n').filter(l => l.includes('**AC-01')).length, 1)
+  assert.ok(body.includes('- [ ] **AC-01.** the approved requirement'))
+  assert.ok(body.includes('- [ ] **AC-02.** untouched'), 'the sibling AC survives byte-identical')
+})
+
+test('Finding 6 residual (Caso A, real #479 checkbox): the rewritten line keeps its checkbox state and its title — only the description changes', () => {
+  const { dir } = runDir()
+  review(dir, 'r0', { findings: [], scopeChanges: [scopeChange('sc-1')] })
+  const hash = scopeBaselineHashOf([scopeChange('sc-1')])
+  const decisionRef = 'https://github.com/foomakers/pair/pull/7#issuecomment-851'
+  setComments({ 851: comment('rucka', decisionBody([{ id: 'sc-1', action: 'extend-current-card', approvedDelta: { ac: [{ id: 'AC-01', description: 'the approved requirement.' }] } }], hash)) })
+  const gh2 = newFakeGh2()
+  gh2.seed('42', '- [x] **AC-01 — Independent contract before code.** the old requirement.\n')
+  const out = applyScopeDecisions({ dir, decisionRef, repo: 'foomakers/pair', pr: 7, workflowVersion: V, ghBin: gh2.ghBin })
+  assert.equal(out.applied, true, JSON.stringify(out))
+  assert.equal(gh2.body('42'), '- [x] **AC-01 — Independent contract before code.** the approved requirement.\n', 'the checked box and the human title are preserved verbatim')
+})
+
 // ── Finding 6 residual: new-card creation is idempotent across a lost response / failed publish ──
 test('Finding 6 residual RED->GREEN (reported reproduction): a create whose LOCAL response is lost (the issue really was created remotely) reconciles onto that SAME issue — never a second card', () => {
   const { dir } = runDir()
