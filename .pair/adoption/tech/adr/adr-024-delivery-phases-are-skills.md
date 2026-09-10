@@ -344,6 +344,40 @@ real but incomplete — not new requirements, the same three findings' original 
 
 Tested against a fake `gh` boundary only; no real card was touched or created by this remediation.
 
+## Amendment 2026-09-10 (e) — Finding 6 completed: real AC formats, and content over title alone
+
+An independent verification of `ce0cf067` found amendment (d)'s Finding 6 fixes real but still
+incomplete against the ACTUAL adopted card formats and against content (not just title) matching —
+not new requirements, the same finding's original AC.
+
+**Caso A — the AC parser only recognized a format no real card uses.** The prior parser matched
+`**AC-01**: text` (a colon), never card #479's real `- [ ] **AC-01 — Title.** Description.` or the
+delivery template's (and card #482's) numbered `N. **Given** … / **When** … / **Then** …` blocks.
+Fed card #479's real body, a requested AC-01 replacement matched nothing, was misclassified
+"genuinely new", and got appended as a second, contradictory definition. Fixed: two ADOPTED dialects are recognized
+explicitly — the checkbox convention (id matched to its full token, `AC-1` never conflated with
+`AC-10`; a targeted id is replaced in place; a duplicated id is refused, never guessed) and the
+Given/When/Then convention (identified by its own ordinal; a replacement must itself be in
+Given/When/Then shape — "modifica … secondo il contratto adottato" — or it is refused as a shape
+mismatch). A card matching neither dialect, or a GWT-dialect card where the id has no matching
+block, refuses instead of appending: a parser miss is never treated as proof an AC is new. No
+universal Markdown parser was built; unsupported structures are a safe refusal, not a guess.
+
+**Caso B — new-card idempotence checked the wrong thing.** The prior ledger/reconciliation fix
+(amendment d) verified only the destination's TITLE and hidden marker — a created (or reconciled)
+issue with the right title but missing, wrong, or duplicated AC content still returned success. The
+report explicitly named this gap: "confermare titolo e AC approvati, non soltanto il titolo." Fixed:
+one shared `verifyCreatedIssueContent` — identity (url/number), marker, title, AND every approved AC
+id→description association (via the SAME exact-id parser Caso A fixed) — is now the SOLE
+verification path for a fresh create+readback, a `created`-ledger reuse, a `creating`-ledger
+reconciliation, and an immediate post-failure reconciliation alike. Missing/wrong/ambiguous content
+is an explicit error with the proposal left unapplied; the ledger is untouched by a failed
+verification, so a later retry reconciles onto the SAME issue rather than creating a second one —
+never an automatic edit of a divergent card to paper over a failed readback.
+
+Tested against a fake `gh` boundary only, with fixtures taken verbatim from #479's real body and the
+delivery template's Given/When/Then format; no real card was touched or created by this remediation.
+
 ## Consequences
 
 ### Benefits

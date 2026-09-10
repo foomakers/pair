@@ -305,18 +305,46 @@ function verifyExistingIssue({ ghBin, repo, targetIssueUrl }) {
 // The id token is captured to its FULL word boundary — `AC-10` is never mistaken for a prefix match
 // against `AC-1` — and every match keeps its exact position, so a targeted line can be replaced
 // in place without disturbing any other AC or human prose around it.
-const AC_LINE_RE = /^[ \t]*(?:[-*][ \t]*)?(?:\*\*)?(AC-[\w.-]*\w)(?:\*\*)?[ \t]*:[ \t]*(.*)$/gm
-function parseAcEntries(body) {
-  const byId = new Map()
+//
+// US-479 remediation (Finding 6, residual — Caso A): the ADOPTED card formats are recognized
+// explicitly, never guessed by a generic parser. Two dialects are real: #479's own checkbox
+// convention `- [ ] **AC-01 — Title.** Description.` (one line per AC), and the delivery template's
+// numbered Given/When/Then blocks (`N. **Given** … / **When** … / **Then** …`, three lines,
+// user-story-template.md). A card recognized as neither dialect never has a "genuinely new" AC
+// guessed into it via the GWT convention — a parser miss is NOT proof an id is new; it is proof
+// this id could not be resolved, and resolution failing is refused, never silently treated as an
+// insertion instruction.
+const CHECKBOX_AC_RE = /^(-\s*\[[ xX]\]\s*)?\*\*(AC-[\w.-]*\w)(?:\s+—\s+([^*\n]*?))?\.\*\*(?:[ \t]+(.*))?$/gm
+const GWT_AC_RE = /^(\d+)\.[ \t]+\*\*Given\*\*[ \t]+(.*)\n[ \t]+\*\*When\*\*[ \t]+(.*)\n[ \t]+\*\*Then\*\*[ \t]+(.*)$/gm
+function parseAcCard(body) {
+  const text = String(body ?? '')
+  const checkboxById = new Map()
   let m
-  AC_LINE_RE.lastIndex = 0
-  while ((m = AC_LINE_RE.exec(String(body ?? '')))) {
-    const entry = { id: m[1], description: m[2].trim(), start: m.index, end: m.index + m[0].length }
-    byId.set(m[1], [...(byId.get(m[1]) ?? []), entry])
+  CHECKBOX_AC_RE.lastIndex = 0
+  while ((m = CHECKBOX_AC_RE.exec(text))) {
+    const entry = { id: m[2], checkbox: m[1] ?? '', title: m[3], description: (m[4] ?? '').trim(), start: m.index, end: m.index + m[0].length }
+    checkboxById.set(m[2], [...(checkboxById.get(m[2]) ?? []), entry])
   }
-  return byId
+  const gwtById = new Map()
+  GWT_AC_RE.lastIndex = 0
+  while ((m = GWT_AC_RE.exec(text))) {
+    const entry = { number: m[1], given: m[2].trim(), when: m[3].trim(), then: m[4].trim(), start: m.index, end: m.index + m[0].length }
+    gwtById.set(m[1], [...(gwtById.get(m[1]) ?? []), entry])
+  }
+  return { dialect: checkboxById.size ? 'checkbox' : gwtById.size ? 'gwt' : 'unknown', checkboxById, gwtById }
 }
-const renderAcLine = (id, description) => `- **${id}**: ${description}`
+const renderCheckboxLine = (id, description) => `- [ ] **${id}.** ${description}`
+// The approved content for a GWT-identified obligation must ITSELF be in the adopted contract's
+// shape (S1's "modifica dell'obbligo identificato secondo il contratto adottato") — never a bare
+// string coerced into one of the three fields by guesswork.
+function parseGwtText(s) {
+  const m = /^\*\*Given\*\*[ \t]+([\s\S]*?)[ \t]*\n?[ \t]*\*\*When\*\*[ \t]+([\s\S]*?)[ \t]*\n?[ \t]*\*\*Then\*\*[ \t]+([\s\S]*)$/.exec(String(s ?? '').trim())
+  return m ? { given: m[1].trim(), when: m[2].trim(), then: m[3].trim() } : null
+}
+const renderGwtBlock = (number, parsed) => `${number}. **Given** ${parsed.given}\n   **When** ${parsed.when}\n   **Then** ${parsed.then}`
+// A GWT block has no `AC-` prefix at all (S1) — its only identity is the block's own ordinal. A
+// bare digit or an explicit `GWT-<n>` reference both resolve to it; anything else never does.
+const gwtKeyOf = id => /^(?:GWT-)?(\d+)$/i.exec(String(id ?? ''))?.[1]
 
 // A single stable id for "the effect new-card authorizes" — the same (decisionRef, scope proposal
 // id) pair always maps to the same key, recoverable after a restart with nothing but the run dir.
@@ -357,39 +385,58 @@ function reconcileCreatedIssue({ ghBin, repo, key }) {
   return { url: matches[0].url, number: matches[0].number, title: matches[0].title }
 }
 
+// US-479 remediation (Finding 6, residual — Caso B): the ONE semantic verification every path below
+// shares — a fresh create, a ledger `created` reuse, a `creating` reconciliation, or an immediate
+// post-failure reconciliation. Confirms destination identity (url/number), the hidden decision
+// marker, the exact title, AND the approved AC content itself (id -> description, via the SAME
+// exact-id parser `extendCard` uses) — never title alone. Missing/wrong/ambiguous content is an
+// explicit error; the caller's ledger is left untouched by this function, so it always stays
+// available for a later reconciliation rather than forcing a second create.
+function verifyCreatedIssueContent({ ghBin, ref, marker, title, ac }) {
+  const v = spawnSync(ghBin, ['issue', 'view', ref, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (v.error || v.status !== 0) return { error: `gh-issue-create-readback-failed:${(v.stderr || v.error?.message || '').trim()}` }
+  let data
+  try {
+    data = JSON.parse(v.stdout)
+  } catch {
+    return { error: 'gh-issue-create-readback-invalid-json' }
+  }
+  if (!data?.url || !data?.number || data.title !== title) return { error: 'gh-issue-create-readback-mismatch' }
+  if (typeof data.body !== 'string' || !data.body.includes(marker)) return { error: 'gh-issue-create-readback-mismatch' }
+  const card = parseAcCard(data.body)
+  for (const a of ac) {
+    const entries = card.checkboxById.get(a.id) ?? []
+    if (entries.length !== 1 || entries[0].description !== a.description) return { error: `gh-issue-create-content-mismatch:${a.id}` }
+  }
+  return { url: data.url, number: data.number }
+}
+
 // S5 new-card, no existing targetIssueUrl: explicit authorization to create means an approved
 // TITLE (never inferred), plus the AC payload. Creates via `gh issue create` — embedding a hidden,
 // decision-specific marker in the body — then reads the created issue back and confirms the title
-// stuck before trusting the returned backlink. US-479 remediation (Finding 6, residual): the create
-// is bound to a durable ledger keyed by (decisionRef, scope id) BEFORE the remote call, so a retry
-// after a successful create but a lost/failed response (or a failed downstream publish) reconciles
-// onto the SAME issue instead of creating a second one; a genuinely uncertain outcome (no local
-// record of success, nothing found on reconciliation) is refused explicitly, never guessed.
+// AND the approved AC content stuck before trusting the returned backlink. US-479 remediation
+// (Finding 6, residual): the create is bound to a durable ledger keyed by (decisionRef, scope id)
+// BEFORE the remote call, so a retry after a successful create but a lost/failed response (or a
+// failed downstream publish) reconciles onto the SAME issue instead of creating a second one; a
+// genuinely uncertain outcome (no local record of success, nothing found on reconciliation) is
+// refused explicitly, never guessed.
 function createTargetIssue({ ghBin, repo, dir, decisionRef, scopeId, title, ac }) {
   const key = newCardKey(decisionRef, scopeId)
+  const marker = newCardMarker(key)
   const existing = readLedger(dir, key)
   if (existing?.status === 'created' && existing.url) {
-    const v = spawnSync(ghBin, ['issue', 'view', existing.url, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-    if (v.error || v.status !== 0) return { error: `gh-issue-create-readback-failed:${(v.stderr || v.error?.message || '').trim()}` }
-    let data
-    try {
-      data = JSON.parse(v.stdout)
-    } catch {
-      return { error: 'gh-issue-create-readback-invalid-json' }
-    }
-    if (data.title !== title || typeof data.body !== 'string' || !data.body.includes(newCardMarker(key))) return { error: 'gh-issue-create-readback-mismatch' }
-    return { url: data.url, number: data.number }
+    return verifyCreatedIssueContent({ ghBin, ref: existing.url, marker, title, ac })
   }
   if (existing?.status === 'creating') {
     const rec = reconcileCreatedIssue({ ghBin, repo, key })
     if (rec.error) return { error: rec.error }
-    if (rec.title !== title) return { error: 'gh-issue-create-readback-mismatch' }
-    writeLedger(dir, key, { status: 'created', url: rec.url, decisionRef, scopeId, title })
-    return { url: rec.url, number: rec.number }
+    const v = verifyCreatedIssueContent({ ghBin, ref: rec.url, marker, title, ac })
+    if (v.error) return v
+    writeLedger(dir, key, { status: 'created', url: v.url, decisionRef, scopeId, title })
+    return v
   }
   writeLedger(dir, key, { status: 'creating', decisionRef, scopeId, title })
-  const marker = newCardMarker(key)
-  const body = `${marker}\n${ac.map(a => `- **${a.id}**: ${a.description}`).join('\n')}`
+  const body = `${marker}\n${ac.map(a => renderCheckboxLine(a.id, a.description)).join('\n')}`
   const r = spawnSync(ghBin, ['issue', 'create', '--repo', repo, '--title', title, '--body', body], { encoding: 'utf8', env: cleanGitEnv(process.env) })
   if (r.error || r.status !== 0) {
     // A local failure here does NOT prove the remote call never landed — a lost response looks
@@ -399,27 +446,20 @@ function createTargetIssue({ ghBin, repo, dir, decisionRef, scopeId, title, ac }
     // never by blindly calling create a second time.
     const rec = reconcileCreatedIssue({ ghBin, repo, key })
     if (!rec.error) {
-      if (rec.title !== title) return { error: 'gh-issue-create-readback-mismatch' }
-      writeLedger(dir, key, { status: 'created', url: rec.url, decisionRef, scopeId, title })
-      return { url: rec.url, number: rec.number }
+      const v = verifyCreatedIssueContent({ ghBin, ref: rec.url, marker, title, ac })
+      if (v.error) return v
+      writeLedger(dir, key, { status: 'created', url: v.url, decisionRef, scopeId, title })
+      return v
     }
     return { error: `gh-issue-create-uncertain:${rec.error}` }
   }
   const url = r.stdout.trim().split('\n').pop()
   if (!ISSUE_URL_RE.test(url)) return { error: 'gh-issue-create-no-url' }
-  // The remote effect is now KNOWN to exist — recorded before the local confirming view, so a lost
-  // or failed readback never leaves this decision's own retry uncertain about its own creation.
+  // The remote effect is now KNOWN to exist — recorded before the local confirming verification, so
+  // a lost/failed/mismatched readback never leaves this decision's own retry uncertain about its
+  // own creation, and never forces a second create to "fix" a divergent body.
   writeLedger(dir, key, { status: 'created', url, decisionRef, scopeId, title })
-  const v = spawnSync(ghBin, ['issue', 'view', url, '--json', 'number,url,title,body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
-  if (v.error || v.status !== 0) return { error: 'gh-issue-create-readback-failed' }
-  let data
-  try {
-    data = JSON.parse(v.stdout)
-  } catch {
-    return { error: 'gh-issue-create-readback-invalid-json' }
-  }
-  if (data.title !== title || !data.url) return { error: 'gh-issue-create-readback-mismatch' }
-  return { url: data.url, number: data.number }
+  return verifyCreatedIssueContent({ ghBin, ref: url, marker, title, ac })
 }
 
 // S5 extend-current-card: the approved AC are written into the CURRENT card and read back before
@@ -434,27 +474,53 @@ function extendCard({ ghBin, repo, story, ac }) {
   const read = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
   if (read.error || read.status !== 0) return { error: `gh-issue-view-failed:${(read.stderr || read.error?.message || '').trim()}` }
   const currentBody = read.stdout
-  const byId = parseAcEntries(currentBody)
-  for (const a of ac) if ((byId.get(a.id) ?? []).length > 1) return { error: `ambiguous-ac-id:${a.id}` }
-  const isSatisfied = a => {
-    const existing = byId.get(a.id) ?? []
-    return existing.length === 1 && existing[0].description === a.description
+  const card = parseAcCard(currentBody)
+  // Resolve every targeted id BEFORE any edit: existing (either dialect), genuinely new (checkbox
+  // dialect only — a card with no recognized structure at all is treated the same way, since there
+  // is no competing convention to violate), or unresolvable — refused, never guessed.
+  const resolved = []
+  for (const a of ac) {
+    const cb = card.checkboxById.get(a.id) ?? []
+    if (cb.length > 1) return { error: `ambiguous-ac-id:${a.id}` }
+    if (cb.length === 1) {
+      resolved.push({ a, kind: 'checkbox-existing', entry: cb[0] })
+      continue
+    }
+    const gwtKey = gwtKeyOf(a.id)
+    if (gwtKey) {
+      const gw = card.gwtById.get(gwtKey) ?? []
+      if (gw.length > 1) return { error: `ambiguous-ac-id:${a.id}` }
+      if (gw.length === 1) {
+        const parsed = parseGwtText(a.description)
+        if (!parsed) return { error: `approvedDelta-shape-mismatch:${a.id}` }
+        resolved.push({ a, kind: 'gwt-existing', entry: gw[0], parsed })
+        continue
+      }
+      return { error: `ac-id-unresolvable:${a.id}` }
+    }
+    if (card.dialect === 'gwt') return { error: `ac-id-unresolvable:${a.id}` }
+    resolved.push({ a, kind: 'checkbox-new' })
   }
-  const needsWork = ac.filter(a => !isSatisfied(a))
+  const isSatisfied = r => {
+    if (r.kind === 'checkbox-existing') return r.entry.description === r.a.description
+    if (r.kind === 'gwt-existing') return r.entry.given === r.parsed.given && r.entry.when === r.parsed.when && r.entry.then === r.parsed.then
+    return false
+  }
+  const needsWork = resolved.filter(r => !isSatisfied(r))
   if (needsWork.length) {
     const replacements = []
     const toAppend = []
-    for (const a of needsWork) {
-      const existing = byId.get(a.id) ?? []
-      if (existing.length === 1) replacements.push({ start: existing[0].start, end: existing[0].end, text: renderAcLine(a.id, a.description) })
-      else toAppend.push(a)
+    for (const r of needsWork) {
+      if (r.kind === 'checkbox-existing') replacements.push({ start: r.entry.start, end: r.entry.end, text: renderCheckboxLine(r.a.id, r.a.description) })
+      else if (r.kind === 'gwt-existing') replacements.push({ start: r.entry.start, end: r.entry.end, text: renderGwtBlock(r.entry.number, r.parsed) })
+      else toAppend.push(r.a)
     }
     replacements.sort((x, y) => y.start - x.start)
     let nextBody = currentBody
     for (const rep of replacements) nextBody = nextBody.slice(0, rep.start) + rep.text + nextBody.slice(rep.end)
     if (toAppend.length) {
       const marker = '## Scope extension (US-479 S5)'
-      const lines = toAppend.map(a => renderAcLine(a.id, a.description)).join('\n')
+      const lines = toAppend.map(a => renderCheckboxLine(a.id, a.description)).join('\n')
       nextBody = nextBody.includes(marker) ? nextBody.replace(marker, `${marker}\n${lines}`) : `${nextBody}\n\n${marker}\n${lines}\n`
     }
     const edit = spawnSync(ghBin, ['issue', 'edit', String(story), '--repo', repo, '--body', nextBody], { encoding: 'utf8', env: cleanGitEnv(process.env) })
@@ -463,10 +529,15 @@ function extendCard({ ghBin, repo, story, ac }) {
   const readback = spawnSync(ghBin, ['issue', 'view', String(story), '--repo', repo, '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
   if (readback.error || readback.status !== 0) return { error: `gh-issue-view-readback-failed:${(readback.stderr || readback.error?.message || '').trim()}` }
   const written = readback.stdout
-  const writtenById = parseAcEntries(written)
-  for (const a of ac) {
-    const existing = writtenById.get(a.id) ?? []
-    if (existing.length !== 1 || existing[0].description !== a.description) return { error: `gh-issue-edit-readback-mismatch:${a.id}` }
+  const writtenCard = parseAcCard(written)
+  for (const r of resolved) {
+    if (r.kind === 'gwt-existing') {
+      const gw = writtenCard.gwtById.get(gwtKeyOf(r.a.id)) ?? []
+      if (gw.length !== 1 || gw[0].given !== r.parsed.given || gw[0].when !== r.parsed.when || gw[0].then !== r.parsed.then) return { error: `gh-issue-edit-readback-mismatch:${r.a.id}` }
+    } else {
+      const cb = writtenCard.checkboxById.get(r.a.id) ?? []
+      if (cb.length !== 1 || cb[0].description !== r.a.description) return { error: `gh-issue-edit-readback-mismatch:${r.a.id}` }
+    }
   }
   return { body: written }
 }
