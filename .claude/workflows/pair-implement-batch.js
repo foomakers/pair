@@ -11,7 +11,7 @@ export const meta = {
   // reports why. Keep every value here a single literal, however long the line gets
   // (.claude/workflows/ is outside the prettier gate, so no formatter will re-wrap it).
   whenToUse:
-    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), runId (resume a cycle by naming its run directory), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
+    'REQUIRED args shape: {"cards":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} (`stories` is the accepted alias; never pass both) — a bare space-separated list of issue refs is NOT accepted and the run throws: title feeds the prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to derive them. Optional per card: base (the branch it stacks on), notes (scope directive), prNumber (re-enter the review loop on an existing PR). Optional per run: maxParallelism, severityFloor, model, models (roles implementation | reviewer | red | redVerifier | green), runId (resume a cycle by naming its run directory), entryCapsules (map of admitted story id -> a proven-done cache hint; US-479 T-23 — a story whose capsule still agrees with its identity spends zero dispatches), pipeline (skill names, worktree root, audit-log dir, base branch, review-template path, maxFixRounds, reviewers). Engine 3.0.0 retired the planner, sealer, P3, cycle-comments and pr-phase dispatches: the keys `pipeline.skills.remediationPlan|redSeal|p3Verify|cycleComments|prPhase` and `models.planner|seal|preflight|pr` are REJECTED with a migration message, never silently mapped. Every value is validated by TYPE at parse time and a wrong one throws before any agent runs; card fields AND pipeline values are also validated by CONTENT (git refs, safe path segments, skill names) because they reach the shell commands the agents run — a value carrying shell syntax or `..` is rejected, never quoted. An unset optional key may be omitted or spelled `undefined`/`null` — all three mean absent; an EMPTY string is not one of them and throws. Pre-filter for mutex safety — no two cards may touch the same shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and loses the in-worktree review log. Tell each implementer NOT to run a single command that can be silent for over ~2 minutes (a cold full-repo quality gate qualifies) and to COMMIT AFTER EVERY TASK: the supervisor kills an agent after 180s without visible progress, and an uncommitted worktree loses everything.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
     { title: 'Prepare', model: 'opus' },
@@ -400,7 +400,7 @@ function parseBatchArgs(raw) {
   })
   // Return the NORMALIZED container, not just the list. Every option must be read from the
   // parsed object, once.
-  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism', 'runId'], 'args')
+  rejectUnknownKeys(a, ['cards', 'stories', 'severityFloor', 'model', 'models', 'pipeline', 'maxParallelism', 'runId', 'entryCapsules'], 'args')
   // Reject the TYPE before anything coerces it, the same rule `constrain` applies to card
   // fields. Checked HERE, at parse time, not where each is consumed: `severityFloor` is only
   // rankable after the contract dispatch, and a wrong TYPE should not wait on an agent to be
@@ -446,7 +446,26 @@ function parseBatchArgs(raw) {
     throw new Error(
       `implement-batch: \`args.runId\` ${JSON.stringify(runId)} is not a single safe path segment — it names the handoff directory under .pair/working/runs/.`,
     )
-  return { stories, severityFloor: a.severityFloor, model: a.model, models, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId }
+  // US-479 T-23 (S1): a STRICT optional map of admitted story id -> entry capsule — a cache hint
+  // the caller (LOOP, a resumed run) may supply so a known-done story spends zero dispatches. Never
+  // approval: `isValidDoneCapsule` below re-checks every identity field before trusting it.
+  let entryCapsules
+  if (a.entryCapsules !== undefined && a.entryCapsules !== null) {
+    if (typeof a.entryCapsules !== 'object' || Array.isArray(a.entryCapsules))
+      throw new Error('implement-batch: `args.entryCapsules` must be an object keyed by admitted story id, or be omitted.')
+    entryCapsules = {}
+    const CAPSULE_KEYS = ['workflowVersion', 'schemaVersion', 'run', 'story', 'pr', 'branch', 'expectedHead', 'scopeBaselineHash', 'lastHandoff', 'next']
+    for (const [id, capsule] of Object.entries(a.entryCapsules)) {
+      if (!capsule || typeof capsule !== 'object' || Array.isArray(capsule))
+        throw new Error(`implement-batch: \`args.entryCapsules.${id}\` must be an object.`)
+      rejectUnknownKeys(capsule, CAPSULE_KEYS, `args.entryCapsules.${id}`)
+      for (const req of ['workflowVersion', 'schemaVersion', 'run', 'story', 'next'])
+        if (capsule[req] === undefined || capsule[req] === null || capsule[req] === '')
+          throw new Error(`implement-batch: \`args.entryCapsules.${id}.${req}\` is required — a capsule is never partial.`)
+      entryCapsules[id] = capsule
+    }
+  }
+  return { stories, severityFloor: a.severityFloor, model: a.model, models, pipeline: a.pipeline, maxParallelism: a.maxParallelism, runId, entryCapsules }
 }
 const PARSED = parseBatchArgs(args)
 const RUN_ID = PARSED.runId
@@ -635,6 +654,7 @@ const REVIEW_TEMPLATE_LABEL = templateLabel(PIPELINE.reviewTemplate)
 const BLIND_PATHS = [...new Set(['.pair/working/', PIPELINE.auditLogDir])].map((p) => `\`${p}\``).join(' or ')
 
 const STORIES = PARSED.stories
+const ENTRY_CAPSULES = PARSED.entryCapsules ?? {}
 
 // ── Severity floor: what BLOCKS convergence, versus what is carried to the human ──
 // Convergence requires ZERO actionable findings, so a single Minor keeps the loop open — and on
@@ -862,6 +882,27 @@ const REDIRECT_STATUS = 'redirect'
 const PHASE_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
 const SHA40 = /^[0-9a-f]{40}$/
 const SHA256_RE = /^sha256:[0-9a-f]{64}$/
+// Must equal cycle-state.mjs SCHEMA_VERSION (US-479 T-19/T-23) — asserted by a differential test,
+// since this sandbox cannot import that module.
+const HANDOFF_SCHEMA_VERSION = 3
+// US-479 T-23 (S1/S7): a supplied entry capsule is a CACHE HINT, never approval. Trusted here ONLY
+// for the narrowest, safest case — a PROVEN prior `done` whose identity fields all still agree —
+// so a fully-resumed batch spends zero dispatches, including the batch-wide contract-phase call.
+// Anything else falls through to the normal dispatch, which validates against actual STATE itself.
+function isValidDoneCapsule(capsule, story) {
+  if (!capsule || typeof capsule !== 'object') return false
+  const major = v => (typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v.split('.')[0] : null)
+  if (major(capsule.workflowVersion) === null || major(capsule.workflowVersion) !== major(WORKFLOW_VERSION)) return false
+  if (capsule.schemaVersion !== HANDOFF_SCHEMA_VERSION) return false
+  if (String(capsule.story) !== String(story.id)) return false
+  if (capsule.pr !== undefined && story.prNumber !== undefined && Number(capsule.pr) !== Number(story.prNumber)) return false
+  const next = capsule.next
+  if (!next || typeof next !== 'object' || next.step !== 'done') return false
+  if (!SHA40.test(String(next.reviewedHead ?? ''))) return false
+  if (typeof next.verdict !== 'string' || !next.verdict) return false
+  if (capsule.expectedHead !== undefined && String(capsule.expectedHead).toLowerCase() !== String(next.reviewedHead).toLowerCase()) return false
+  return true
+}
 const hasNext = n => !!n && typeof n === 'object' && STEPS.includes(n.step)
 // A `next` the coordinator will act on: the step is known and, for a dispatchable step, the phase
 // id has the shape the run directory expects. Anything else is `failed-resume`.
@@ -1301,8 +1342,11 @@ async function ensureContract(spec) {
   const schema = usableSchema(res?.contract)
   return { name: spec.name, status: schema ? (res?.status ?? 'regenerated') : 'fallback-loose', contract: schema ? res.contract : null, schema: schema ?? spec.skeleton }
 }
-// Contracts are ensured up-front (skipped for an empty batch — nothing to drive).
-const contracts = STORIES.length ? await parallel(CONTRACT_SPECS.map((s) => () => ensureContract(s))) : []
+// Contracts are ensured up-front (skipped for an empty batch — nothing to drive) — and ALSO
+// skipped when every story in the batch already carries a proven-done entry capsule (US-479 T-23,
+// DT-10): no story will dispatch a review, so nothing needs the template's vocabulary this run.
+const ALL_CAPSULE_SHORTCUT = STORIES.length > 0 && STORIES.every((s) => isValidDoneCapsule(ENTRY_CAPSULES[s.id], s))
+const contracts = STORIES.length && !ALL_CAPSULE_SHORTCUT ? await parallel(CONTRACT_SPECS.map((s) => () => ensureContract(s))) : []
 const crContract = contracts.find((c) => c.name === 'code-review')
 const REVIEW_SCHEMA_BASE = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
 const REVIEW_FINDING_SCHEMA = REVIEW_SCHEMA_BASE.properties.findings
@@ -1447,6 +1491,15 @@ async function driveStory(story) {
     }
   }
   const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, ...extra })
+  // US-479 T-23 (S1/S7, DT-10): a proven-done entry capsule short-circuits BEFORE any dispatch —
+  // zero contract-generator, zero redirect-only agent, zero fresh review. `isValidDoneCapsule`
+  // already re-checked every identity field; this is reuse of evidence a real review already
+  // produced, never a new judgment.
+  const capsule = ENTRY_CAPSULES[story.id]
+  if (isValidDoneCapsule(capsule, story)) {
+    if (Number.isInteger(capsule.pr)) pr = capsule.pr
+    return result('ready-for-merge', { reviewedHead: capsule.next.reviewedHead, verdict: capsule.next.verdict, round: capsule.next.round, fromCapsule: true })
+  }
   const blockedResult = n => {
     // US-479 T-22 (S5) / ADR-024 amendment 2026-09-10: the four new non-ready statuses pass
     // through unmapped — never silently coerced to failed-resume, which would make a clean
