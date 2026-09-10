@@ -74,7 +74,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 - `kind`: `witness` (fails for the intended defect — RED against the unfixed base), `control` (a positive or already-correct case — may PASS, recorded with `baseline: pass`, never forced red), `boundary`, `interaction`, `not-applicable` (a class that provably cannot occur — `rationale` is mandatory and the validator re-derives it).
 - Every inventory `id` is `covers`-ed by at least one row; at least one `witness` with `baseline: red` exists unless `fixScope.mode` is `test`. Do not collapse rows because their outputs agree today; justify any equivalence in `rationale`.
 - `mode: test` (guard-strength — production is already correct): the witness FAILS against an injected regression in an isolated copy and PASSES against the current source; `observed` records both. Never edit production to make a guard red.
-- Row ids are stable: a `repair` or `revision` keeps every existing id and changed row unchanged; it adds rows or edits only the rows the rejection / gap names, and lists them under `changedRows`.
+- Row ids are stable: a `repair` or `revision` keeps every existing id and changed row unchanged; it adds rows or edits only the rows the rejection / gap names, and lists them under `changedRows`. **A repair's `changedRows` must name every `rowId`/`mechanismId` the rejection you are answering carried** (US-479 T-20, S3) — `publish` refuses the handoff before the write when one is missing (`repair-incomplete:<id>`), so a genuinely new counterexample never displaces verifying a prior gap first.
 - Scope is inherited: a `repair` or `revision` keeps the `fixScope` of the contract it repairs or revises — the same `mode`, every `allowedPaths` entry — and may only ADD paths. The sealer refuses a narrowed scope (`fixScope-narrowed`); a0-rev2 in canary run 11 shrank a0 to one production file and left the implementer no home for its decision log or convention page.
 
 ### Step 4: Write and prove the artifacts
@@ -83,7 +83,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 2. Modify ONLY test source, fixtures and committed oracle rows. Never production source, docs, adoption, configuration, generated assets. Never commit, push, post, label, create a card or merge.
 3. Run every changed test at the base: a `baseline: red` artifact records its exact failing `command` and `observed` failure; a `baseline: pass` control records its passing command and output. A `kind: fixture` artifact names the RED test that `consumedBy` it.
 4. Hash every artifact: `sha256sum <file>` ⇒ `sha256:<digest>`.
-5. Select the tests you run by the changed producers and their consumers; never claim a result you did not run at this head.
+5. Select the tests you run by the changed producers and their consumers; never claim a result you did not run at this head. A fixture that stands in for the real producer (a hand-built "twin" reasoned about instead of exercised) is not evidence — if the producer takes real inputs (a directory tree, an installed copy, a real CLI invocation), build those and run the actual function/command; a row whose `expected` was derived by inspection alone is refused at `red-verify` (US-479 T-20).
 
 ### Step 5: Persist and hand off
 

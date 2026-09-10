@@ -54,6 +54,9 @@ export const SCOPE_CHANGE_STATUSES = ['pending', 'ignored', 'extended', 'deferre
 // recognise, so this list is documentation the conformance tests pin, not a new caller branch.
 export const NEW_PUBLIC_STATUSES = ['awaiting-scope-decision', 'failed-publication', 'interrupted', 'abandoned']
 const SHA_RE = /^[0-9a-f]{40}$/
+// A gap's reproducer command is an executable reference, never shell code pasted into an unsafe
+// eval (S3) — the same hostile-value shape the coordinator already refuses in card/pipeline fields.
+const SHELL_METACHAR_RE = /[;&|`]|\$\(|\.\.\//
 const PHASE_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)$/
 const NAME_RE = /^(a0(?:-rev\d+)?|r\d+(?:-g\d+(?:-rev\d+)?)?)-(red-spec|red-verify|implement-phase|green-fix|review-phase)(?:\.attempt-(\d+))?\.json$/
 
@@ -129,9 +132,42 @@ export function envelopeErrors(data, { phase, skill }) {
   if (data.recordType !== undefined && !RECORD_TYPES.includes(data.recordType)) errs.push(`recordType-invalid:${data.recordType}`)
   if (data.findings !== undefined) {
     if (!Array.isArray(data.findings)) errs.push('findings-not-an-array')
-    else
-      for (const f of data.findings)
-        if (f && typeof f === 'object' && f.transition !== undefined && !FINDING_TRANSITIONS.includes(f.transition)) errs.push(`finding-transition-invalid:${f.id ?? '?'}`)
+    else {
+      for (const f of data.findings) {
+        if (!f || typeof f !== 'object') continue
+        if (f.transition !== undefined && !FINDING_TRANSITIONS.includes(f.transition)) errs.push(`finding-transition-invalid:${f.id ?? '?'}`)
+        // US-479 T-20 (S3): a red-verify GAP that names a mechanism is closed only by an executable
+        // closure assertion or an explicitly approved non-applicability — never a prose claim, and
+        // never silently left for a later, separate rejection to (maybe) mention.
+        if (f.mechanismId !== undefined) {
+          const tag = f.mechanismId || f.rowId || '?'
+          if (f.applicability === 'not-applicable') {
+            if (!f.applicabilityRationale) errs.push(`mechanism-not-applicable-without-rationale:${tag}`)
+          } else if (!Array.isArray(f.closureAssertions) || !f.closureAssertions.length) errs.push(`mechanism-incompletely-closed:${tag}`)
+          else
+            for (const ca of f.closureAssertions)
+              if (!ca || typeof ca !== 'object' || !ca.id || !ca.expected || (!ca.command && !ca.testRef)) errs.push(`closureAssertion-invalid:${tag}`)
+        }
+        if (f.reproducer !== undefined) {
+          if (!f.reproducer || typeof f.reproducer !== 'object' || typeof f.reproducer.command !== 'string' || !f.reproducer.command.trim()) errs.push(`reproducer-invalid:${f.mechanismId ?? f.rowId ?? '?'}`)
+          else if (SHELL_METACHAR_RE.test(f.reproducer.command)) errs.push(`reproducer-command-unsafe:${f.mechanismId ?? f.rowId ?? '?'}`)
+        }
+      }
+      // The verifier's OWN declared set of mechanisms it identified this pass must be closed
+      // together — never one gap this round and the sibling mechanism in a later rejection
+      // (canary run 3: two independent Markdown rewriters split across successive rejections).
+      // This cannot know what the verifier MISSED (no omniscience claim) — only that what it
+      // itself named is not silently under-reported.
+      if (data.mechanismsIdentified !== undefined) {
+        if (!Array.isArray(data.mechanismsIdentified)) errs.push('mechanismsIdentified-not-an-array')
+        else {
+          const declared = new Set(data.mechanismsIdentified)
+          const named = new Set(data.findings.filter(f => f && typeof f === 'object' && f.mechanismId).map(f => f.mechanismId))
+          for (const id of declared) if (!named.has(id)) errs.push(`mechanism-not-enumerated:${id}`)
+          for (const id of named) if (!declared.has(id)) errs.push(`mechanism-undeclared:${id}`)
+        }
+      }
+    }
   }
   if (data.scopeChanges !== undefined) {
     if (!Array.isArray(data.scopeChanges)) errs.push('scopeChanges-not-an-array')
@@ -198,6 +234,27 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
   const errs = envelopeErrors(data, { phase, skill })
   if (errs.length) return { published: false, reason: errs[0], errors: errs }
   if (!compatible(workflowVersion, workflowVersion)) return { published: false, reason: 'workflowVersion-invalid' }
+  // US-479 T-20 (S3 step 4): a repair verifies every prior gap FIRST — a red-spec handoff that
+  // follows a red-verify rejection naming rowId/mechanismId gaps must list every one of them under
+  // `changedRows`, or it is refused BEFORE the write (never accepted and reconciled later, canary
+  // run 3: two named rewriters, one repaired, the other silently dropped to the next rejection).
+  if (skill === 'red-spec' && predecessor && /-red-verify$/.test(predecessor)) {
+    const predFile = join(dir, `${predecessor}.json`)
+    if (existsSync(predFile)) {
+      let predData
+      try {
+        predData = JSON.parse(readFileSync(predFile, 'utf8'))
+      } catch {
+        predData = null
+      }
+      if (predData && predData.verified === false) {
+        const priorIds = (predData.findings ?? []).map(f => f?.rowId ?? f?.mechanismId).filter(Boolean)
+        const covered = new Set(data.changedRows ?? [])
+        const missing = priorIds.filter(id => !covered.has(id))
+        if (missing.length) return { published: false, reason: `repair-incomplete:${missing.join(',')}` }
+      }
+    }
+  }
   if (pr !== undefined) {
     if (!Number.isInteger(pr) || pr <= 0) return { published: false, reason: 'pr-invalid', pr }
     if (data.pr !== undefined && data.pr !== null && Number(data.pr) !== pr) return { published: false, reason: 'pr-mismatch', stated: data.pr, pr }

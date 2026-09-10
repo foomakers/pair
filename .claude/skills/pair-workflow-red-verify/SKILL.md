@@ -57,7 +57,14 @@ Independently derive, from the authoritative producer named by each `inventory` 
 
 ### Step 4: Decide — ALL gaps in one answer
 
-Return `verified: false` with **every** concrete gap found in this pass as findings `{ rowId?, location, severity, description (the failing example / the violated rule), recommendation (the evidence required) }` — stable `rowId`s so the repair can be traced. Never return the first gap and stop; a second pass on the repaired contract may only add gaps that the repair introduced or that need new evidence. `verified: true` only with zero findings and every command reproduced.
+Return `verified: false` with **every** concrete gap found in this pass as findings `{ rowId?, mechanismId?, location, severity, description (the failing example / the violated rule), recommendation (the evidence required), obligationIds?, sourceRef?, observedHead?, closureAssertions?, reproducer?, applicability?, counterexampleToCurrentContract?, changedRows? }` — stable `rowId`s so the repair can be traced. Never return the first gap and stop; a second pass on the repaired contract may only add gaps that the repair introduced or that need new evidence. `verified: true` only with zero findings and every command reproduced.
+
+**Naming a mechanism makes it a debt you must close in THIS answer (US-479 T-20, S3):** when a gap concerns a distinct mechanism (e.g. one of several independent producers/rewriters this contract touches), give it `mechanismId` and either:
+
+- `closureAssertions: [{ id, command | testRef, expected }]` — at least one executable reference, never a prose description standing in for behavior (a hand-built stand-in that was never actually run through the real producer proves nothing — Step 3 already requires independent re-derivation from the authoritative producer; a `reproducer.command` you cite must be the command you actually ran, never shell syntax pasted for later execution), or
+- `applicability: 'not-applicable'` with a non-empty `applicabilityRationale` — an independently approved reason the class cannot occur, never a shortcut to skip evidence.
+
+When you declare `mechanismsIdentified: [ids]` (the complete set of mechanisms you found broken THIS pass), `publish` refuses the handoff unless every declared id is closed by a finding and no finding names an undeclared one — this is what stops one rejection naming rewriter A while rewriter B, already known broken in the same pass, waits for a second round (canary run 3: two independent Markdown rewriters split across successive rejections). Declaring the set is optional per rejection, but once you do, it is checked exactly.
 
 ### Step 5: Seal (only when verified) — the script decides
 
@@ -73,10 +80,11 @@ Publish the handoff (`skill: "red-verify"`, `inputHead: $head`, `inputsDigest`, 
 
 ## Output Format
 
-`{ status: verified | rejected, verified, findings: [{ rowId?, location, severity, description, recommendation }], sealed, snapshot?, manifest?, contractHash, reason?, next }`.
+`{ status: verified | rejected, verified, findings: [{ rowId?, mechanismId?, location, severity, description, recommendation, closureAssertions?, reproducer?, applicability? }], mechanismsIdentified?, sealed, snapshot?, manifest?, contractHash, reason?, next }`.
 
 ## Notes
 
 - Read-only on the repository except the seal commit the script makes. Never edit, format, push, publish, comment, create a card or merge; never rehash a changed artifact into approval.
 - Blind: read nothing under `.pair/working/` except `$RUN_DIR`.
 - A typed rejection is the cycle's answer: the coordinator routes it to ONE repair; a second rejection exhausts the unchanged budget. Never soften a gap to let the contract through.
+- A repair naming `changedRows` that drops one of this rejection's `rowId`s (when this rejection's findings carried one) is refused by `publish` before it is written — verify every prior closure assertion holds before treating anything as newly closed.
