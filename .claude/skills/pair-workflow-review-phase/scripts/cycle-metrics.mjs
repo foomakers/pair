@@ -241,6 +241,79 @@ export function writeMetrics({ dir, view }) {
   return { written: true, jsonPath, mdPath }
 }
 
+// A confirmation-only update (e.g. `publication.state` after a successful/failed post) is NOT a
+// new semantic revision (S8) — patch metrics.json's `publication` field alone, same revision, so a
+// later reconcile's real revision bump is never mistaken for stale.
+export function updatePublicationState({ dir, publication }) {
+  const jsonPath = join(dir, 'metrics.json')
+  if (!existsSync(jsonPath)) return { written: false, reason: 'no-metrics-yet' }
+  let view
+  try {
+    view = JSON.parse(readFileSync(jsonPath, 'utf8'))
+  } catch {
+    return { written: false, reason: 'metrics-unreadable' }
+  }
+  view.publication = { ...view.publication, ...publication }
+  const tmp = join(dir, `.tmp-metrics-${process.pid}-${Date.now()}.json`)
+  writeFileSync(tmp, JSON.stringify(view, null, 2) + '\n')
+  renameSync(tmp, jsonPath)
+  return { written: true }
+}
+
+// ── PR summary (S8): required order, compact machine-readable tail ─────────────────────────
+export function renderPrSummary(view) {
+  const lines = []
+  lines.push('## Delivery workflow summary')
+  lines.push('')
+  lines.push(`**1. Identity** — ${view.workflow.name} ${view.workflow.versions.join(', ') || 'unknown'}${view.workflow.mixedVersions ? ' (mixed versions)' : ''} | run \`${view.identity.canonicalRunId ?? 'unknown'}\`${(view.identity.runIds ?? []).length > 1 ? ` (+${view.identity.runIds.length - 1} other run(s))` : ''} | models: ${view.workflow.models.join(', ') || 'unknown'} | reviewed head: \`${view.outcome.reviewedHead ?? 'none yet'}\``)
+  lines.push('')
+  lines.push(`**2. Status** — quality: **${view.outcome.quality}** · delivery: **${view.outcome.delivery}**${view.outcome.reason ? ` (${view.outcome.reason})` : ''} · gate/custody: ${view.outcome.quality === 'converged' ? 'passed' : 'pending'}`)
+  lines.push('')
+  lines.push(`**3. Cycles** — completed ${view.cycles.completed} / attempted ${view.cycles.attempted} · review batches ${view.execution.reviewBatches} · review executions ${view.execution.reviewExecutions} · retries ${view.execution.retries} · redirects ${view.execution.redirects} · contract revisions ${view.execution.contractRevisions} · preparation repairs ${view.execution.preparationRepairs} · admin/engine recoveries ${view.execution.engineRecoveries}`)
+  lines.push('')
+  const cov = view.usage.coverage
+  lines.push(`**4. Cost / time** — tokens ${view.usage.observedTotalTokens ?? 'unknown'} (known ${cov.known}/${cov.total}${view.usage.missingExecutionIds.length ? `; missing: ${view.usage.missingExecutionIds.join(', ')}` : ''}) · elapsed ${view.time.elapsedMs ?? 'unknown'}ms · active ${view.time.activeWallMs ?? 'unknown'}ms · agent ${view.time.agentMs ?? 'unknown'}ms · wait ${view.time.waitMs ?? 'unknown'}ms`)
+  lines.push('')
+  const late = view.defects.late
+  lines.push(`**5. Late defects** (by origin) — preexisting-missed ${late.preexistingMissed} · introduced-by-remediation ${late.introducedByRemediation} · unknown ${late.unknown}`)
+  lines.push('')
+  if (view.scopeChanges.entries.length) {
+    lines.push('| Scope proposal | Type | Status | Link |')
+    lines.push('| --- | --- | --- | --- |')
+    for (const c of view.scopeChanges.entries) lines.push(`| ${c.id} | ${c.type} | ${c.status ?? 'pending'} | ${c.targetIssueUrl ?? '—'} |`)
+  } else lines.push('No scope proposals.')
+  lines.push('')
+  lines.push('**6. Machine-readable summary**')
+  lines.push('```json')
+  lines.push(JSON.stringify({ schemaVersion: view.schemaVersion, sourceDigest: view.snapshot.sourceDigest, asOf: view.snapshot.asOf, metricsRevision: view.snapshot.revision, completeness: view.snapshot.completeness, missingSources: view.snapshot.missingSources }, null, 2))
+  lines.push('```')
+  return lines.join('\n') + '\n'
+}
+
+// A hidden boundary marks where the machine-generated section ends — anything a human wrote AFTER
+// it in a prior comment is preserved verbatim across a republish, never silently overwritten (S8).
+export const HUMAN_BOUNDARY = '<!-- pair:metrics:end -->'
+
+// `listComments`/`findByMarker`/`upsert` are INJECTED (from pr-comment.mjs) so this module stays
+// dependency-light and testable without a `gh` transport; cycle-runtime.mjs wires the real ones.
+export function publishSummary({ view, marker, pr, repo, listComments, findByMarker, upsert }) {
+  const before = listComments({ pr, repo })
+  const priorHit = findByMarker(before, marker).hits[0]
+  let humanSuffix = ''
+  if (priorHit) {
+    const idx = priorHit.body.indexOf(HUMAN_BOUNDARY)
+    if (idx !== -1) humanSuffix = priorHit.body.slice(idx + HUMAN_BOUNDARY.length)
+  }
+  const generated = renderPrSummary(view) + HUMAN_BOUNDARY + humanSuffix
+  const result = upsert({ pr, marker, body: generated, repo })
+  const base = { marker, metricsRevision: view.snapshot.revision, sourceDigest: view.snapshot.sourceDigest }
+  if (result.error) return { published: false, publication: { ...base, commentId: null, url: null, state: 'failed', lastError: result.error } }
+  const after = listComments({ pr, repo })
+  const readback = findByMarker(after, marker).hits.find(h => h.id === result.id)
+  if (!readback || !readback.body.startsWith(marker)) return { published: false, publication: { ...base, commentId: result.id ?? null, url: result.url ?? null, state: 'failed', lastError: 'readback-mismatch' } }
+  return { published: true, publication: { ...base, commentId: result.id, url: result.url, state: 'confirmed', lastError: null } }
+}
+
 // ── aggregate (S9) ───────────────────────────────────────────────────────────────────────────
 // Percentile (nearest-rank) over a SORTED numeric array.
 function nearestRank(sorted, pct) {

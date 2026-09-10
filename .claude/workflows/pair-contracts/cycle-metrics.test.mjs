@@ -16,10 +16,15 @@ import {
   reduceUsage,
   reduceCycleMetrics,
   renderMarkdown,
+  renderPrSummary,
+  publishSummary,
+  updatePublicationState,
+  HUMAN_BOUNDARY,
   writeMetrics,
   aggregateCohort,
 } from '../../skills/pair-workflow-review-phase/scripts/cycle-metrics.mjs'
 import { publish } from '../../skills/pair-workflow-review-phase/scripts/cycle-state.mjs'
+import { findByMarker, withMarker } from '../../skills/pair-workflow-review-phase/scripts/pr-comment.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-review-phase/scripts/cycle-metrics.mjs', import.meta.url))
 const SHA = c => c.repeat(40)
@@ -184,6 +189,124 @@ test('aggregateCohort: N=0 returns null rates, never 0% success; a mix of known/
   ])
   assert.equal(withTokens.allWorkTokens, 100)
   assert.equal(withTokens.costPerCompletedDelivery.lowerBound, true)
+})
+
+// ── US-479 T-26: PR summary persistence (DT-25/26/28/29/30) ─────────────────────────────────
+// An in-memory comment store standing in for `gh`, using pr-comment.mjs's OWN pure withMarker/
+// findByMarker so the merge/ambiguity semantics tested here are the real ones, never a re-implementation.
+function fakeStore(initial = []) {
+  const comments = [...initial]
+  let nextId = comments.reduce((m, c) => Math.max(m, c.id), 0) + 1
+  return {
+    listComments: () => comments,
+    upsert: ({ marker, body }) => {
+      const { hits } = findByMarker(comments, marker)
+      if (hits.length > 1) return { error: 'marker-ambiguous', ids: hits.map(h => h.id), marker }
+      const full = withMarker(body, marker)
+      if (hits.length === 1) {
+        if (hits[0].body === full) return { action: 'unchanged', id: hits[0].id, url: hits[0].url, marker }
+        hits[0].body = full
+        return { action: 'updated', id: hits[0].id, url: hits[0].url, marker }
+      }
+      const c = { id: nextId++, body: full, url: `https://x/c/${nextId}` }
+      comments.push(c)
+      return { action: 'created', id: c.id, url: c.url, marker }
+    },
+  }
+}
+function sampleView(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    identity: { canonicalRunId: 'run-1', runIds: ['run-1'] },
+    workflow: { name: 'pair-implement-batch', versions: ['4.0.0'], mixedVersions: false, models: ['sonnet'] },
+    snapshot: { revision: 1, asOf: '2026-09-10T00:00:00.000Z', sourceDigest: 'sha256:' + 'a'.repeat(64), completeness: 'complete', missingSources: [] },
+    outcome: { quality: 'converged', delivery: 'ready-for-merge', reason: null, reviewedHead: SHA('c') },
+    cycles: { attempted: 1, completed: 1 },
+    execution: { reviewBatches: 1, reviewExecutions: 1, retries: 0, redirects: 0, contractRevisions: 0, preparationRepairs: 0, engineRecoveries: 0 },
+    usage: { observedTotalTokens: 500, coverage: { known: 2, total: 2 }, missingExecutionIds: [] },
+    time: { elapsedMs: 1000, activeWallMs: 900, agentMs: 1200, waitMs: 100 },
+    defects: { late: { preexistingMissed: 0, introducedByRemediation: 0, unknown: 0 } },
+    scopeChanges: { entries: [] },
+    publication: { marker: null, commentId: null, url: null, metricsRevision: null, sourceDigest: null, state: 'pending', lastError: null },
+    ...overrides,
+  }
+}
+
+test('DT-28: renderPrSummary contains all six required sections in order, a separate scope table, and the compact schema-1 JSON with the same digest/revision as the view', () => {
+  const view = sampleView({ scopeChanges: { entries: [{ id: 'sc-1', type: 'new-requirement', status: 'pending', targetIssueUrl: null }] } })
+  const md = renderPrSummary(view)
+  const order = ['**1. Identity**', '**2. Status**', '**3. Cycles**', '**4. Cost / time**', '**5. Late defects**', '**6. Machine-readable summary**']
+  let lastIdx = -1
+  for (const marker of order) {
+    const idx = md.indexOf(marker)
+    assert.ok(idx > lastIdx, `${marker} missing or out of order`)
+    lastIdx = idx
+  }
+  assert.match(md, /\| sc-1 \| new-requirement \| pending \| — \|/)
+  const jsonMatch = /```json\n([\s\S]*?)\n```/.exec(md)
+  const embedded = JSON.parse(jsonMatch[1])
+  assert.equal(embedded.sourceDigest, view.snapshot.sourceDigest)
+  assert.equal(embedded.metricsRevision, view.snapshot.revision)
+})
+
+test('DT-25/28: publishSummary creates the ONE synthesis comment (distinct from a first-review marker), then read-back confirms marker/head/digest before reporting confirmed', () => {
+  const firstReviewMarker = '<!-- pair:first-review #42 PR#7 -->'
+  const store = fakeStore([{ id: 1, body: `${firstReviewMarker}\nfirst review body` }])
+  const view = sampleView()
+  const marker = '<!-- pair:synthesis #42 PR#7 -->'
+  const out = publishSummary({ view, marker, pr: 7, repo: 'foomakers/pair', findByMarker, ...store })
+  assert.equal(out.published, true, JSON.stringify(out))
+  assert.deepEqual({ state: out.publication.state, sourceDigest: out.publication.sourceDigest, metricsRevision: out.publication.metricsRevision }, { state: 'confirmed', sourceDigest: view.snapshot.sourceDigest, metricsRevision: view.snapshot.revision })
+  // the first-review comment is untouched — a distinct comment
+  const first = store.listComments().find(c => c.body.startsWith(firstReviewMarker))
+  assert.equal(first.body, `${firstReviewMarker}\nfirst review body`)
+  assert.equal(store.listComments().length, 2)
+})
+
+test('DT-29: a lost response is safe to retry — the SAME comment id is reused, never a duplicate; an ambiguous marker (two comments) is reported, never silently picked', () => {
+  const marker = '<!-- pair:synthesis #42 PR#7 -->'
+  const store = fakeStore()
+  const view = sampleView()
+  const first = publishSummary({ view, marker, pr: 7, repo: 'x', findByMarker, ...store })
+  const retry = publishSummary({ view, marker, pr: 7, repo: 'x', findByMarker, ...store })
+  assert.equal(retry.publication.commentId, first.publication.commentId)
+  assert.equal(store.listComments().length, 1, 'a retried publish never posts a second comment')
+  // ambiguity: two comments carrying the marker
+  const dup = fakeStore([{ id: 1, body: `${marker}\nA` }, { id: 2, body: `${marker}\nB` }])
+  const ambiguous = publishSummary({ view, marker, pr: 7, repo: 'x', findByMarker, ...dup })
+  assert.equal(ambiguous.published, false)
+  assert.equal(ambiguous.publication.state, 'failed')
+  assert.match(ambiguous.publication.lastError, /marker-ambiguous/)
+})
+
+test('DT-28: a republish preserves human material written after the owned boundary; a publish failure leaves local evidence intact and reports failed-publication only for the delivery reason', () => {
+  const marker = '<!-- pair:synthesis #42 PR#7 -->'
+  const view = sampleView()
+  const withHuman = [{ id: 1, body: `${marker}\nold summary${HUMAN_BOUNDARY}\n\n> maintainer note: looks good` }]
+  const store = fakeStore(withHuman)
+  const out = publishSummary({ view, marker, pr: 7, repo: 'x', findByMarker, ...store })
+  assert.equal(out.published, true)
+  assert.match(store.listComments()[0].body, /maintainer note: looks good/)
+  // a hard publish failure (the injected upsert always errors) reports failed, never confirmed
+  const brokenUpsert = { listComments: () => [], upsert: () => ({ error: 'gh-down' }) }
+  const failed = publishSummary({ view, marker, pr: 7, repo: 'x', findByMarker, ...brokenUpsert })
+  assert.equal(failed.published, false)
+  assert.equal(failed.publication.state, 'failed')
+  assert.equal(failed.publication.lastError, 'gh-down')
+})
+
+test('DT-30: updatePublicationState patches ONLY the publication field of a persisted metrics.json — same revision, no fabricated re-derivation, no stray temp files', () => {
+  const { dir } = runDir()
+  const view = sampleView()
+  writeMetrics({ dir, view })
+  const before = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
+  const out = updatePublicationState({ dir, publication: { state: 'confirmed', commentId: 99, url: 'https://x/c/99' } })
+  assert.equal(out.written, true)
+  const after = JSON.parse(readFileSync(join(dir, 'metrics.json'), 'utf8'))
+  assert.equal(after.snapshot.revision, before.snapshot.revision, 'a confirmation-only update is not a new semantic revision')
+  assert.deepEqual({ state: after.publication.state, commentId: after.publication.commentId }, { state: 'confirmed', commentId: 99 })
+  assert.deepEqual(readdirSync(dir).filter(f => f.startsWith('.tmp-')), [])
+  assert.equal(updatePublicationState({ dir: join(dir, 'missing'), publication: {} }).written, false)
 })
 
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────

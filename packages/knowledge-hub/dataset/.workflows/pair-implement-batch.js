@@ -1490,7 +1490,10 @@ async function driveStory(story) {
       accepted.push(f)
     }
   }
-  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, ...extra })
+  // US-479 T-26: a bare path reference, not a claim of durable evidence (an untracked local path
+  // alone is not proof, S8) — the actual metrics.json/metrics.md are written by cycle-runtime.mjs
+  // (RUNTIME) on the host; this sandbox has no filesystem to confirm they exist.
+  const result = (status, extra = {}) => ({ story, prNumber: pr ?? undefined, status, acceptedFindings: accepted, metrics: { ...storyMetrics, wallMs: 'unknown', tokens: 'unknown' }, metricsRef: `${runDir()}/metrics.json`, ...extra })
   // US-479 T-23 (S1/S7, DT-10): a proven-done entry capsule short-circuits BEFORE any dispatch —
   // zero contract-generator, zero redirect-only agent, zero fresh review. `isValidDoneCapsule`
   // already re-checked every identity field; this is reuse of evidence a real review already

@@ -25,7 +25,8 @@
 import { existsSync, statSync, openSync, readSync, closeSync, readFileSync, writeFileSync, renameSync, realpathSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { reduceCycleMetrics, writeMetrics, mergeObservations } from './cycle-metrics.mjs'
+import { reduceCycleMetrics, writeMetrics, mergeObservations, publishSummary } from './cycle-metrics.mjs'
+import { listComments, findByMarker, upsert } from './pr-comment.mjs'
 
 // ── journal tailing (S7): explicit sources only, complete JSONL records, tolerant of a partial
 // last line, rotation/truncation detected by a shrunk size, replay is idempotent via the offset ──
@@ -147,11 +148,25 @@ export function buildEntryCapsule({ dir, repo, story, pr, workflowVersion }) {
   return { capsule: { workflowVersion, schemaVersion: null, run: null, story: String(story), pr: pr ? Number(pr) : undefined, note: 'unresolved — the dispatched phase runs cycle-state.mjs resolve for the authoritative next step; this capsule is informational only' }, telemetry }
 }
 
-// ── finalize: last reduce+write, completeness reported honestly ────────────────────────────
-export function finalizeMetrics({ dir, repository, story, branch, pr, runId }) {
+// ── finalize (S8): last reduce+write, then the PR summary — deterministic, zero model tokens ──
+// Readiness is claimed only AFTER the candidate summary is read back (S8): a ready view whose
+// publish fails or cannot be confirmed is reported as `failed-publication` (reason
+// `publication-pending`), never a fabricated `ready-for-merge` with no durable evidence.
+export function finalizeMetrics({ dir, repository, story, branch, pr, runId, publish }) {
   const checkpoint = readCheckpoint(dir)
   const view = reduceCycleMetrics({ dir, repository, story, branch, pr, runId, observations: checkpoint.observations ?? [], revision: (checkpoint.revision ?? 0) + 1, asOf: new Date().toISOString() })
   view.snapshot.completeness = checkpoint.observations?.length ? 'complete' : 'partial'
+  if (Number.isInteger(pr) && publish) {
+    const marker = `<!-- pair:synthesis #${story} PR#${pr} -->`
+    const outcome = publishSummary({ view, marker, pr, repo: repository, ...publish })
+    view.publication = outcome.publication
+    if (!outcome.published && view.outcome.delivery === 'ready-for-merge') {
+      view.outcome.delivery = 'failed-publication'
+      view.outcome.reason = 'publication-pending'
+    }
+  } else {
+    view.publication = { ...view.publication, state: Number.isInteger(pr) ? view.publication.state : 'not-applicable' }
+  }
   const writeResult = writeMetrics({ dir, view })
   return { view, writeResult }
 }
@@ -221,8 +236,8 @@ async function main(argv) {
   }
   if (cmd === 'finalize') {
     need('dir', 'repo', 'pr')
-    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId })
-    return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written }, code: out.writeResult.written ? 0 : 1 }
+    const out = finalizeMetrics({ dir: opts.dir, repository: opts.repo, story: opts.story, branch: opts.branch, pr: Number(opts.pr), runId: opts.runId, publish: { listComments, findByMarker, upsert } })
+    return { out: { completeness: out.view.snapshot.completeness, written: out.writeResult.written, publication: out.view.publication }, code: out.writeResult.written ? 0 : 1 }
   }
   throw new Error(`unknown command: ${cmd} (expected entry | observe | reconcile | finalize)`)
 }

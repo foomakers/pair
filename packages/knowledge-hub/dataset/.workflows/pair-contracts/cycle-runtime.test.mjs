@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { chmodSync } from 'node:fs'
 
 import {
   tailJournalFile,
@@ -33,6 +34,35 @@ function journalFile(root, lines) {
   const p = join(root, 'journal.jsonl')
   writeFileSync(p, lines.map(l => JSON.stringify(l)).join('\n') + (lines.length ? '\n' : ''))
   return p
+}
+// A minimal STATEFUL `gh` recorder for the CLI-level finalize test: the readback after publish
+// must see the same comment the create/update just wrote, exactly like the real API would.
+function fakeGhDir() {
+  const dir = mkdtempSync(join(tmpdir(), 'gh-fake-'))
+  const state = join(dir, 'state.json')
+  writeFileSync(state, '[]')
+  writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node
+const fs = require('fs')
+const args = process.argv.slice(2)
+const statePath = ${JSON.stringify(state)}
+const list = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+const body = () => { const i = args.indexOf('-f'); return args[i + 1].replace(/^body=/, '') }
+if (args[0] === 'api' && args.includes('--paginate')) process.stdout.write(JSON.stringify(list))
+else if (args[0] === 'api' && args.includes('POST')) {
+  const c = { id: list.reduce((m, x) => Math.max(m, x.id), 0) + 1, body: body(), html_url: 'https://x/c/1' }
+  list.push(c)
+  fs.writeFileSync(statePath, JSON.stringify(list))
+  process.stdout.write(JSON.stringify({ id: c.id, html_url: c.html_url }))
+} else if (args[0] === 'api' && args.includes('PATCH')) {
+  const id = Number(args.find(a => /comments\\/\\d+$/.test(a)).split('/').pop())
+  const c = list.find(x => x.id === id)
+  c.body = body()
+  fs.writeFileSync(statePath, JSON.stringify(list))
+  process.stdout.write(JSON.stringify({ id, html_url: c.html_url }))
+} else { process.stderr.write('unexpected gh call'); process.exit(1) }
+`)
+  chmodSync(join(dir, 'gh'), 0o755)
+  return dir
 }
 
 test('cycle-runtime.mjs ships byte-identical inside review-phase (installed and dataset)', () => {
@@ -215,8 +245,10 @@ test('CLI: entry/reconcile/finalize print JSON; observe runs a bounded real loop
   assert.equal(r.status, 0, r.stdout + r.stderr)
   const lastLine = r.stdout.trim().split('\n').pop()
   assert.equal(JSON.parse(lastLine).stopReason, 'terminal-reconciled')
-  r = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7'], { encoding: 'utf8' })
+  const ghDir = fakeGhDir()
+  r = spawnSync('node', [CLI, 'finalize', '--dir', dir, '--repo', 'foomakers/pair', '--story', '42', '--branch', 'b', '--pr', '7'], { encoding: 'utf8', env: { ...process.env, PATH: `${ghDir}:${process.env.PATH}` } })
   assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.equal(JSON.parse(r.stdout).publication.state, 'confirmed')
   r = spawnSync('node', [CLI, 'bogus'], { encoding: 'utf8' })
   assert.equal(r.status, 2)
 })
