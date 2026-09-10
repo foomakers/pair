@@ -393,6 +393,15 @@ test('resolve: changed effective inputs invalidate the review evidence only — 
   review(dir, 'r0', { inputsDigest: 'd1', acHash: 'ac1' })
   // unrelated card prose: acHash unchanged, digest unchanged → completed
   assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: 'ac1' }).status, 'completed')
+  // a card hash that is not canonical on either side is IGNORED, never read as a change (two producers
+  // spelling it differently forced a re-verification on every resume of canary run 11)
+  const { dir: d3 } = runDir()
+  review(d3, 'r0', { inputsDigest: 'd1', acHash: 'story #42 AC-1..AC-3 summary' })
+  assert.equal(resolve({ dir: d3, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: `sha256:${'a'.repeat(64)}` }).status, 'completed')
+  const { dir: d4 } = runDir()
+  review(d4, 'r0', { inputsDigest: 'd1', acHash: `sha256:${'a'.repeat(64)}` })
+  assert.equal(resolve({ dir: d4, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: `sha256:${'a'.repeat(64)}` }).status, 'completed')
+  assert.equal(resolve({ dir: d4, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: `sha256:${'b'.repeat(64)}` }).next.inputsChanged, true, 'two canonical hashes that differ ARE a change')
   // a relevant input changed (policy/AC): prior findings + delta must be re-validated, the seal stays trusted
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd2', acHash: 'ac1' })
   assert.equal(r.status, 'in-progress')

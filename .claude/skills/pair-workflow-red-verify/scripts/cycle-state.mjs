@@ -22,6 +22,7 @@
 //
 //   node … hash --file <contract.json>            → { contractHash }   (canonical, volatile fields excluded)
 //   node … inputs --json '<effective inputs>'      → { inputsDigest }
+//   node … ac-hash --story <id>                    → { acHash }        canonical sha256 of the card body (gh issue view)
 //   node … test-identity --cwd <worktree> --command <cmd> [--env-keys K1,K2] [--toolchain <s>]
 //     → { identity, parts, reusable, missing }     a cached test result is valid ONLY for this identity
 import { createHash } from 'node:crypto'
@@ -324,7 +325,13 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   const names = handoffs.map(h => h.name)
   // Changed effective inputs invalidate REVIEW evidence: prior findings + the delta are re-validated
   // from the last reviewed head. Sealed contracts and GREEN commits stay trusted.
-  if (last.skill === 'review-phase' && ((inputs && last.data.inputsDigest && last.data.inputsDigest !== inputs) || (acHash && last.data.acHash && last.data.acHash !== acHash)) && next.step !== 'blocked') {
+  // The card hash is compared only when BOTH sides are canonical (`sha256:<64 hex>` from `ac-hash`):
+  // two producers spelling it differently (a free-text summary vs a digest) would otherwise flag a
+  // change on every resume and force a re-verification each time (canary run 11).
+  const canonicalHash = v => (typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v) ? v : undefined)
+  const acNow = canonicalHash(acHash)
+  const acThen = canonicalHash(last.data.acHash)
+  if (last.skill === 'review-phase' && ((inputs && last.data.inputsDigest && last.data.inputsDigest !== inputs) || (acNow && acThen && acThen !== acNow)) && next.step !== 'blocked') {
     const round = phaseParts(last.phase)?.round ?? 0
     const seen = new Map()
     for (const r of handoffs.filter(h => h.skill === 'review-phase')) for (const f of r.data.findings ?? []) if (f?.id) seen.set(f.id, { id: f.id, severity: f.severity })
@@ -412,6 +419,13 @@ if (isMain()) {
       need('file')
       out = { contractHash: contractHash(JSON.parse(readFileSync(opts.file, 'utf8'))) }
       process.stdout.write(JSON.stringify(out) + '\n')
+      process.exit(0)
+    } else if (cmd === 'ac-hash') {
+      // The canonical hash of the story card's body, the ONE spelling every stage records as acHash.
+      need('story')
+      const body = spawnSync('gh', ['issue', 'view', String(opts.story), '--json', 'body', '-q', '.body'], { encoding: 'utf8' })
+      if (body.status !== 0) throw new Error(`gh issue view ${opts.story} failed: ${(body.stderr || '').trim()}`)
+      process.stdout.write(JSON.stringify({ acHash: sha256(body.stdout) }) + '\n')
       process.exit(0)
     } else if (cmd === 'inputs') {
       need('json')

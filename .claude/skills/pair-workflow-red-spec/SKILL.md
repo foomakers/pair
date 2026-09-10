@@ -43,9 +43,9 @@ Prepare the executable acceptance contract a change must satisfy, before any age
 SKILL_DIR="$(dirname "<absolute path of this SKILL.md>")"
 MAIN="$(pwd)"                                   # the main checkout — you have not cd'd yet
 RUN_DIR="$MAIN/.pair/working/runs/$run/$story"
-AC_HASH="$(gh issue view $story --json body -q .body | shasum -a 256 | cut -c1-64)"   # omit when no card is reachable
+AC_HASH="$(node "$SKILL_DIR/scripts/cycle-state.mjs" ac-hash --story $story | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).acHash')"   # canonical card hash; omit when no card is reachable
 node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVersion $workflowVersion \
-  --policy '$policy' --entry $entry --story $story --inputs $inputs --acHash "sha256:$AC_HASH" \
+  --policy '$policy' --entry $entry --story $story --inputs $inputs --acHash "$AC_HASH" \
   --runsRoot "$MAIN/.pair/working/runs" ${pr:+--pr $pr}
 ```
 
