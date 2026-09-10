@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.10'
+const WORKFLOW_VERSION = '3.0.11'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -1492,7 +1492,10 @@ async function driveStory(story) {
   // The verifier applied the SAME severity policy this file holds: re-derive `blocking` from the
   // floor and refuse a result that disagrees — a policy applied twice must agree, or fail closed.
   const expectedBlocking = f => !f.nonActionable && f.transition !== 'resolved' && f.transition !== 'human' && f.kind !== 'question' && (!SEVERITY_FLOOR || rankOf(f.severity) >= SEVERITY_FLOOR.rank)
-  const findingErrors = (review, openIds) => {
+  // The FIRST review of a PR-entry cycle reads the PR's earlier reviews (ids are stable across
+  // rounds AND cycles): a finding this run has never seen may arrive resolved/superseded as HISTORY,
+  // non-blocking and with read-back evidence — never as an invented closure (canary v4, run 14).
+  const findingErrors = (review, openIds, { history = false } = {}) => {
     const errs = []
     const ids = new Set()
     for (const f of review.findings) {
@@ -1507,7 +1510,8 @@ async function driveStory(story) {
       if (f.external === true && f.transition === 'resolved' && !String(f.evidence ?? '').trim()) errs.push(`finding ${f.id}: an external finding is resolved only with read-back evidence`)
       const prior = known.get(f.id)
       if (prior && normSeverity(prior.severity) !== normSeverity(f.severity) && !String(f.severityEvidence ?? '').trim()) errs.push(`finding ${f.id}: severity changed ${prior.severity} -> ${f.severity} without severityEvidence`)
-      if (!prior && f.transition !== 'open') errs.push(`finding ${f.id}: a new finding cannot arrive as ${f.transition}`)
+      const carriedHistory = history && (f.transition === 'resolved' || f.transition === 'superseded') && f.blocking === false && !!String(f.evidence ?? '').trim()
+      if (!prior && f.transition !== 'open' && !carriedHistory) errs.push(`finding ${f.id}: a new finding cannot arrive as ${f.transition}${history && f.transition !== 'open' ? ' (history needs read-back evidence and blocking=false)' : ''}`)
     }
     for (const id of openIds ?? []) if (!ids.has(id)) errs.push(`prior open finding ${id} was dropped — every open finding needs a transition`)
     return errs
@@ -1602,7 +1606,7 @@ async function driveStory(story) {
       const staleRequired = pendingRequiredFindings.filter(f => f.observedHead !== reviewedHead)
       if (staleRequired.length) return result('failed-verify', { reason: 'required findings were measured on a different head', findings: staleRequired })
       pendingRequiredFindings = []
-      const errs = findingErrors(res, next.openIds)
+      const errs = findingErrors(res, next.openIds, { history: resuming && next.mode === 'first' })
       if (errs.length) return result('failed-verify', { reason: errs.join('; '), phase: next.phase })
       for (const f of res.findings) known.set(f.id, f)
       accept(res.findings.filter(f => !f.blocking && f.transition !== 'resolved').map(f => ({ ...compactFinding(f), disposition: f.disposition || (f.nonActionable ? 'By design (see description)' : f.transition === 'human' ? 'Human disposition' : f.kind === 'question' ? 'Question for the human' : `Below severity floor (${SEVERITY_FLOOR?.name}) — carried to the merge gate unfixed`) })))
