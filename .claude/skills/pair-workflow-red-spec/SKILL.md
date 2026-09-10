@@ -88,7 +88,7 @@ One row per class and interaction of every inventory item: `{ id, kind, baseline
 ### Step 5: Persist and hand off
 
 1. Write the contract to `$RUN_DIR/$phase-red-contract.json`; `contractHash` = `node "$SKILL_DIR/scripts/cycle-state.mjs" hash --file <that path>`.
-2. Write a complete draft handoff (envelope: `run`, `story`, `pr?`, `branch`, `phase`, `skill: "red-spec"`, `inputHead`, `inputsDigest: $inputs`, `acHash`, `attempt`, `mode`, `status`, `contractPath` (absolute), `contractHash`, `plan?`, `groupId?`, `revision?`, `changedRows?`, `reconciled`, `preserved`, `findings: { received, covered }`, `elapsedMs`) and publish it:
+2. Write a complete draft handoff (envelope: `run`, `story`, `pr?`, `branch`, `phase`, `skill: "red-spec"`, `inputHead`, `inputsDigest: $inputs`, `acHash` (any value — `publish` replaces it with the canonical card hash it computes itself), `attempt`, `mode`, `status`, `contractPath` (absolute), `contractHash`, `plan?`, `groupId?`, `revision?`, `changedRows?`, `reconciled`, `preserved`, `findings: { received, covered }`, `elapsedMs`) and publish it:
 
    ```bash
    node "$SKILL_DIR/scripts/cycle-state.mjs" publish --dir "$RUN_DIR" --file <draft> --phase $phase --skill red-spec \

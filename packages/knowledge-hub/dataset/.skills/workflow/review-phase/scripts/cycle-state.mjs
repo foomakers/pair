@@ -132,7 +132,18 @@ function withLock(dir, waitMs, fn) {
   }
 }
 
-export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000 }) {
+// The canonical hash of a story card's body — the ONE spelling every handoff records. Computed by
+// the script (never by an agent) so two stages can never disagree on it: canary v4 (run 15) ping-ponged
+// prepare ↔ verify because two agents hashed the card two ways. `gh` is the transport; PAIR_GH_BIN
+// overrides the binary (tests); a failure is reported, never mistaken for a change.
+export function cardHash({ story, ghBin = process.env.PAIR_GH_BIN || 'gh' }) {
+  if (story === undefined || story === null || String(story).trim() === '') return { error: 'story-missing' }
+  const r = spawnSync(ghBin, ['issue', 'view', String(story), '--json', 'body', '-q', '.body'], { encoding: 'utf8', env: cleanGitEnv(process.env) })
+  if (r.error || r.status !== 0) return { error: `gh issue view ${story} failed: ${(r.stderr || r.error?.message || '').trim()}` }
+  return { acHash: sha256(r.stdout) }
+}
+
+export function publish({ dir, file, phase, skill, workflowVersion, predecessor, attempt, pr, lockWaitMs = 5000, ghBin }) {
   let data
   try {
     data = JSON.parse(readFileSync(file, 'utf8'))
@@ -148,6 +159,17 @@ export function publish({ dir, file, phase, skill, workflowVersion, predecessor,
     const prior = existsSync(dir) ? readHandoffs(dir).map(h => h.data?.pr).find(x => Number.isInteger(x) && x > 0) : undefined
     if (prior !== undefined && prior !== pr) return { published: false, reason: 'pr-mismatch', stated: prior, pr, source: 'earlier-handoff' }
     data = { ...data, pr }
+  }
+  // An agent that recorded an acHash meant the card: the script stamps the canonical value in its
+  // place and marks the source, so `resolve` compares only script-stamped hashes.
+  if (data.acHash !== undefined && data.acHash !== null) {
+    const h = cardHash({ story: data.story, ghBin })
+    if (h.acHash) data = { ...data, acHash: h.acHash, acHashSource: 'publish' }
+    else {
+      const { acHashSource, ...rest } = data
+      data = { ...rest, acHashUnverified: String(data.acHash) }
+      delete data.acHash
+    }
   }
   mkdirSync(dir, { recursive: true })
   if (predecessor && !existsSync(join(dir, `${predecessor}.json`))) return { published: false, reason: 'predecessor-missing', predecessor }
@@ -378,7 +400,9 @@ export function resolve({ dir, workflowVersion, policy = {}, entry = 'fresh', pr
   // change on every resume and force a re-verification each time (canary run 11).
   const canonicalHash = v => (typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v) ? v : undefined)
   const acNow = canonicalHash(acHash)
-  const acThen = canonicalHash(last.data.acHash)
+  // Only a hash the SCRIPT stamped at publish time is comparable; an agent-spelled value (pre-3.0.12
+  // handoffs) is history, never evidence of a change.
+  const acThen = last.data.acHashSource === 'publish' ? canonicalHash(last.data.acHash) : undefined
   if (last.skill === 'review-phase' && ((inputs && last.data.inputsDigest && last.data.inputsDigest !== inputs) || (acNow && acThen && acThen !== acNow)) && next.step !== 'blocked') {
     const round = phaseParts(last.phase)?.round ?? 0
     const seen = new Map()
@@ -471,9 +495,9 @@ if (isMain()) {
     } else if (cmd === 'ac-hash') {
       // The canonical hash of the story card's body, the ONE spelling every stage records as acHash.
       need('story')
-      const body = spawnSync('gh', ['issue', 'view', String(opts.story), '--json', 'body', '-q', '.body'], { encoding: 'utf8' })
-      if (body.status !== 0) throw new Error(`gh issue view ${opts.story} failed: ${(body.stderr || '').trim()}`)
-      process.stdout.write(JSON.stringify({ acHash: sha256(body.stdout) }) + '\n')
+      const h = cardHash({ story: opts.story })
+      if (h.error) throw new Error(h.error)
+      process.stdout.write(JSON.stringify({ acHash: h.acHash }) + '\n')
       process.exit(0)
     } else if (cmd === 'inputs') {
       need('json')

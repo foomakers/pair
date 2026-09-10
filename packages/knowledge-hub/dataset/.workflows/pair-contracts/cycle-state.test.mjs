@@ -6,6 +6,21 @@
 // fixture commits on a story branch). Scrubbed here at import, and asserted by the decoy test in
 // engine-boundaries.test.mjs.
 for (const k of Object.keys(process.env)) if (/^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|PREFIX|NAMESPACE|CEILING_DIRECTORIES|IMPLICIT_WORK_TREE|DISCOVERY_ACROSS_FILESYSTEM)$/.test(k)) delete process.env[k]
+// A fake `gh` for the card hash: `issue view <n> --json body -q .body` prints a fixed body per story so
+// publish stamps a deterministic canonical acHash; PAIR_GH_BIN points the scripts at it.
+import { mkdtempSync as _mk, writeFileSync as _wf, chmodSync as _ch } from 'node:fs'
+import { tmpdir as _tmp } from 'node:os'
+import { join as _join } from 'node:path'
+import { createHash as _hash } from 'node:crypto'
+const FAKE_GH_DIR = _mk(_join(_tmp(), 'fake-gh-'))
+_wf(_join(FAKE_GH_DIR, 'gh'), `#!/usr/bin/env node
+const a = process.argv.slice(2)
+if (a[0] === 'issue' && a[1] === 'view') { if (process.env.FAKE_GH_FAIL) { process.stderr.write('HTTP 502'); process.exit(1) } process.stdout.write('card body of #' + a[2] + (process.env.FAKE_GH_BODY_SUFFIX || '')); process.exit(0) }
+process.stderr.write('unexpected gh call'); process.exit(1)
+`)
+_ch(_join(FAKE_GH_DIR, 'gh'), 0o755)
+process.env.PAIR_GH_BIN = _join(FAKE_GH_DIR, 'gh')
+const CARD_HASH = n => 'sha256:' + _hash('sha256').update('card body of #' + n).digest('hex')
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs'
@@ -14,17 +29,7 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import {
-  SCHEMA_VERSION,
-  deriveNext,
-  publish,
-  resolve,
-  readHandoffs,
-  contractHash,
-  inputsDigest,
-  testIdentity,
-  compatible,
-} from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
+import { SCHEMA_VERSION, deriveNext, publish, resolve, readHandoffs, contractHash, inputsDigest, testIdentity, compatible, cardHash } from '../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs'
 
 const CLI = fileURLToPath(new URL('../../skills/pair-workflow-red-spec/scripts/cycle-state.mjs', import.meta.url))
 const V = '3.0.0'
@@ -392,16 +397,21 @@ test('resolve: changed effective inputs invalidate the review evidence only — 
   handoff(dir, 'a0', 'implement-phase', { status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true, inputsDigest: 'd1' })
   review(dir, 'r0', { inputsDigest: 'd1', acHash: 'ac1' })
   // unrelated card prose: acHash unchanged, digest unchanged → completed
-  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: 'ac1' }).status, 'completed')
-  // a card hash that is not canonical on either side is IGNORED, never read as a change (two producers
-  // spelling it differently forced a re-verification on every resume of canary run 11)
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: CARD_HASH(42) }).status, 'completed')
+  // the agent's spelling never matters: publish REPLACED 'ac1' with the canonical card hash and marked its source
+  const stamped = JSON.parse(readFileSync(join(dir, 'r0-review-phase.json'), 'utf8'))
+  assert.deepEqual({ acHash: stamped.acHash, source: stamped.acHashSource }, { acHash: CARD_HASH(42), source: 'publish' })
+  // a non-canonical value on the CALLER side is ignored, never read as a change
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: 'story #42 AC-1..AC-3 summary' }).status, 'completed')
+  // a different canonical card hash IS a change (the card was edited)
+  assert.equal(resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: `sha256:${'b'.repeat(64)}` }).next.inputsChanged, true, 'two script-stamped canonical hashes that differ ARE a change')
+  // a handoff whose acHash was NOT stamped by the script (an agent-spelled canonical-looking value, pre-3.0.12)
+  // is history, never evidence of a change — canary v4 run 15 ping-ponged prepare ↔ verify on exactly this
   const { dir: d3 } = runDir()
-  review(d3, 'r0', { inputsDigest: 'd1', acHash: 'story #42 AC-1..AC-3 summary' })
-  assert.equal(resolve({ dir: d3, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: `sha256:${'a'.repeat(64)}` }).status, 'completed')
-  const { dir: d4 } = runDir()
-  review(d4, 'r0', { inputsDigest: 'd1', acHash: `sha256:${'a'.repeat(64)}` })
-  assert.equal(resolve({ dir: d4, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: `sha256:${'a'.repeat(64)}` }).status, 'completed')
-  assert.equal(resolve({ dir: d4, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: `sha256:${'b'.repeat(64)}` }).next.inputsChanged, true, 'two canonical hashes that differ ARE a change')
+  const legacy = join(d3, 'r0-review-phase.json')
+  writeFileSync(legacy, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'r0', skill: 'review-phase', inputHead: SHA('a'), schemaVersion: SCHEMA_VERSION, workflowVersion: V, seq: 1, attempt: 1, createdAt: 'x', reviewedHead: SHA('c'), verdict: 'CHANGES-REQUESTED', mode: 'first', custody: { verified: true, contractBreach: false }, readiness: { ready: false, remoteHead: SHA('c') }, findings: [finding('r0-1')], inputsDigest: 'd1', acHash: `sha256:${'a'.repeat(64)}` }))
+  const r3 = resolve({ dir: d3, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd1', acHash: CARD_HASH(42) })
+  assert.deepEqual({ step: r3.next.step, phase: r3.next.phase, inputsChanged: r3.next.inputsChanged }, { step: 'prepare', phase: 'r1-g1', inputsChanged: undefined })
   // a relevant input changed (policy/AC): prior findings + delta must be re-validated, the seal stays trusted
   const r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7, inputs: 'd2', acHash: 'ac1' })
   assert.equal(r.status, 'in-progress')
@@ -599,6 +609,30 @@ test('resolve (t9-4): two groups each with an approved test failing return to GR
   handoff(dir, 'r1-g2', 'green-fix', { attempt: 2, fixed: true, needsHumanDecision: false, outputHead: SHA('9'), evidenceLedger: [] })
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 7 })
   assert.deepEqual({ step: r.next.step, phase: r.next.phase, attempt: r.next.attempt, openIds: r.next.openIds }, { step: 'verify', phase: 'r1', attempt: 2, openIds: ['r0-1', 'r0-2'] })
+})
+
+test('publish stamps the canonical card hash itself (cardHash via gh): the agent value is replaced and the source marked; when gh fails the agent value is kept aside as unverified and nothing is comparable', () => {
+  assert.deepEqual(cardHash({ story: '42' }), { acHash: CARD_HASH(42) })
+  assert.match(cardHash({ story: '' }).error, /story-missing/)
+  const { dir } = runDir()
+  const file = join(dir, 'd.json')
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-spec', inputHead: SHA('a'), status: 'red', contractPath: '/x', contractHash: `sha256:${'1'.repeat(64)}`, acHash: 'whatever the agent typed' }))
+  assert.equal(publish({ dir, file, phase: 'a0', skill: 'red-spec', workflowVersion: V }).published, true)
+  const w = JSON.parse(readFileSync(join(dir, 'a0-red-spec.json'), 'utf8'))
+  assert.deepEqual({ acHash: w.acHash, source: w.acHashSource }, { acHash: CARD_HASH(42), source: 'publish' })
+  // gh down: the value is not comparable evidence
+  process.env.FAKE_GH_FAIL = '1'
+  try {
+    writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'red-verify', inputHead: SHA('a'), verified: true, findings: [], sealed: true, snapshot: SHA('b'), contractHash: `sha256:${'1'.repeat(64)}`, acHash: `sha256:${'a'.repeat(64)}` }))
+    assert.equal(publish({ dir, file, phase: 'a0', skill: 'red-verify', workflowVersion: V, predecessor: 'a0-red-spec' }).published, true)
+    const v = JSON.parse(readFileSync(join(dir, 'a0-red-verify.json'), 'utf8'))
+    assert.deepEqual({ acHash: v.acHash, source: v.acHashSource, unverified: v.acHashUnverified }, { acHash: undefined, source: undefined, unverified: `sha256:${'a'.repeat(64)}` })
+  } finally {
+    delete process.env.FAKE_GH_FAIL
+  }
+  // a handoff without any acHash never calls gh
+  writeFileSync(file, JSON.stringify({ run: 'run-1', story: '42', pr: 7, branch: 'b', phase: 'a0', skill: 'implement-phase', inputHead: SHA('a'), status: 'ok', prNumber: 7, outputHead: SHA('c'), gatesPassed: true }))
+  assert.equal(publish({ dir, file, phase: 'a0', skill: 'implement-phase', workflowVersion: V, ghBin: '/nonexistent/gh' }).published, true)
 })
 
 test('readHandoffs ignores contracts, drafts, locks and the attempt suffix is parsed back', () => {
