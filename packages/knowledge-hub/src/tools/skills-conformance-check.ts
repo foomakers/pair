@@ -993,28 +993,43 @@ interface LocalScriptEntry {
  * A linked file or sub-directory really ships with the skill, so it is walked like any
  * other; an entry that resolves to nothing is returned as `unresolvable` rather than
  * dropped, because silence over a shipped artifact is the one answer the mirror guard
- * may not give. Directories are visited once by resolved path, so a symlink cycle
- * cannot spin the walk.
+ * may not give.
+ *
+ * The descent is bounded by its own ANCESTOR CHAIN, not by a walk-global visited set,
+ * and the difference is the whole guarantee. A directory reachable under two names —
+ * `scripts/lib/` and a sibling symlink `scripts/alias -> scripts/lib` — really ships
+ * under BOTH: the registry's flatten installs a twin at each mirrored path, so each is
+ * independently guardable. A global set keyed on the resolved path silently drops
+ * whichever name `readdirSync` yields SECOND, leaving a drifted twin of a shipped path
+ * unreported and making the corpus's answer depend on directory order. Recording only
+ * the paths currently being descended keeps both names emitted (an ALIAS to a sibling is
+ * walked twice, once per relative path) while still refusing to re-enter a directory that
+ * is its own ancestor (a true CYCLE, `scripts/lib/loop -> scripts`), which is the only
+ * shape that can spin the walk.
  */
 function collectLocalScriptEntries(scriptsDir: string): LocalScriptEntry[] {
   const entries: LocalScriptEntry[] = []
-  const visited = new Set<string>()
+  const ancestors = new Set<string>()
   const walk = (dir: string, prefix: string): void => {
     const key = resolvedRealPath(dir)
-    if (visited.has(key)) return
-    visited.add(key)
+    // Already open further up THIS descent: following it would re-enter the same
+    // directory forever. Anything else — including a second name for a directory
+    // already closed — is a distinct shipped path and is walked.
+    if (ancestors.has(key)) return
+    ancestors.add(key)
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const rel = prefix === '' ? e.name : join(prefix, e.name)
       const kind = resolvedKind(join(dir, e.name))
       if (kind === 'directory') walk(join(dir, e.name), rel)
       else entries.push({ rel, kind })
     }
+    ancestors.delete(key)
   }
   walk(scriptsDir, '')
   return entries.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))
 }
 
-/** The cycle key of a directory: its real path, or its own path when that cannot be read. */
+/** The identity of a directory: its real path, or its own path when that cannot be read. */
 function resolvedRealPath(dir: string): string {
   try {
     return realpathSync(dir)
