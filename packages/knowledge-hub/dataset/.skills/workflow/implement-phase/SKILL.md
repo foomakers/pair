@@ -40,7 +40,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 ```
 
 - `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
-- `next.step` is not `implement` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment.
+- `next.step` is not `implement` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment. When `next` names THIS dispatch (`implement`, `$phase`) you ARE the step: continue, never return a redirect to yourself.
 - Otherwise continue; `next.attempt` is your attempt number.
 - A prior attempt may already have published a PR: `next` then says `verify`, and you return that — never a second PR.
 

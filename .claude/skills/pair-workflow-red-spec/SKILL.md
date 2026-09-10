@@ -51,7 +51,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 
 - `status: other-run` ⇒ return `{ status: "other-run", runId }` — the cycle already lives under another run id.
 - `status: incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
-- `next.step` is not `prepare`, or `next.phase` is not `$phase` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment.
+- `next.step` is not `prepare`, or `next.phase` is not `$phase` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment. When `next` names THIS dispatch (`prepare`, `$phase`) you ARE the step: continue, never return a redirect to yourself.
 - Otherwise continue; `next.attempt` is your attempt number.
 
 ### Step 1: Start state (mandatory)

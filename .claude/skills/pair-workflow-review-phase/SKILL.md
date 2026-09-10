@@ -43,7 +43,7 @@ node "$SKILL_DIR/scripts/cycle-state.mjs" resolve --dir "$RUN_DIR" --workflowVer
 ```
 
 - `status: other-run` ⇒ return `{ status: "other-run", runId }`. `incompatible | invalid` ⇒ return `{ status: "redirect", next: { step: "blocked", reason: "failed-resume", detail: <reason> } }`.
-- `next.step` is not `verify`, or `next.phase` is not `$phase` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment.
+- `next.step` is not `verify`, or `next.phase` is not `$phase` ⇒ return `{ status: "redirect", next }` verbatim. Spend no judgment. When `next` names THIS dispatch (`verify`, `$phase`) — `inputsChanged` or `headMoved` included — you ARE the step: continue, never return a redirect to yourself.
 - Otherwise continue; `next.attempt` is your attempt number.
 - `next.step: done` on a completed cycle whose remote head still equals its `reviewedHead` is returned as a redirect too: a cheap identity check, no judgment, no publication.
 

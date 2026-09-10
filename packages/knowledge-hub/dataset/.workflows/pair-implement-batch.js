@@ -449,7 +449,7 @@ const RUN_ID = PARSED.runId
 // The coordinator's own version, returned with every result and handed to every phase skill so
 // each handoff records which coordinator produced it. Bump on any change to the dispatch
 // contract (skill names, argument names, statuses).
-const WORKFLOW_VERSION = '3.0.3'
+const WORKFLOW_VERSION = '3.0.4'
 
 // ── Pipeline configuration: what makes this engine reusable ─────────────────
 // Every value here was a literal spelled `pair` somewhere in a prompt. They are now resolved
@@ -1299,7 +1299,12 @@ const VERIFY_SCHEMA = {
     reviewer: { type: 'integer' },
     next: NEXT_SCHEMA,
   },
-  required: [...new Set([...(REVIEW_SCHEMA_BASE.required ?? []), 'status', 'verdict', 'reviewedHead', 'findings', 'custody', 'readiness'])],
+  // ONLY `status` is required by the schema: a stage that finds another step due returns
+  // `{ status: 'redirect', next }` and nothing else, and a schema demanding the verdict fields
+  // makes the harness reject that return and re-prompt an agent that has already finished — it
+  // stalls until the supervisor kills it, six times (canary run 11, verify r2). The EVIDENCE a
+  // real verification must carry is checked here, by `hasReviewEvidence`, never by the schema.
+  required: ['status'],
 }
 const hasVerdict = r => !!r && !!String(r.verdict ?? '').trim()
 const hasReviewEvidence = r => hasVerdict(r) && SHA40.test(String(r.reviewedHead ?? '')) && Array.isArray(r.findings) && !!r.custody && typeof r.custody.contractBreach === 'boolean' && !!r.readiness && typeof r.readiness.ready === 'boolean'
@@ -1356,8 +1361,11 @@ function fnv1a(str) {
   return h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')
 }
 const canonical = v => (Array.isArray(v) ? `[${v.map(canonical).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}` : JSON.stringify(v))
+// The engine is keyed by MAJOR: compatibility is by major (cycle-state refuses another major), and a
+// patch/minor successor must not invalidate review evidence — each bump cost one extra
+// verification dispatch on canary run 11.
 const effectiveInputs = story =>
-  fnv1a(canonical({ workflowVersion: WORKFLOW_VERSION, story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, maxFixRounds: MAX_FIX_ROUNDS, reviewers: PIPELINE.reviewers }))
+  fnv1a(canonical({ workflowMajor: WORKFLOW_VERSION.split('.')[0], story: story.id, branch: story.branch, base: baseOf(story), title: story.title, notes: story.notes ?? null, severityFloor: SEVERITY_FLOOR?.name ?? null, skills: SK, reviewTemplate: PIPELINE.reviewTemplate, maxFixRounds: MAX_FIX_ROUNDS, reviewers: PIPELINE.reviewers }))
 // The compact finding a stage receives: identity, severity, location, the failure case and the
 // recommendation — never raw logs, never the whole review history (the run directory holds it).
 const compactFinding = f => ({ id: f.id, severity: f.severity, location: f.location, description: f.description, recommendation: f.recommendation, ...(f.kind ? { kind: f.kind } : {}), ...(f.groupId ? { groupId: f.groupId } : {}), ...(f.rowId ? { rowId: f.rowId } : {}), ...(f.external ? { external: true } : {}), ...(f.missedUpstream ? { missedUpstream: true } : {}) })
@@ -1517,6 +1525,9 @@ async function driveStory(story) {
     }
     if (isRedirect(res)) {
       if (isPosInt(res.next?.pr)) pr = res.next.pr
+      // A stage that redirects to the very step it was dispatched for did not do its work: refuse
+      // to loop on it, and say so.
+      if (res.next.step === next.step && res.next.phase === next.phase) return result('failed-resume', { reason: `${stage} redirected to itself (${next.step}/${next.phase}) instead of running`, phase: next.phase })
       storyMetrics.redirects++
       METRICS.redirects++
       if (++redirectsInARow > 2) return result('failed-resume', { reason: 'three consecutive redirects — the durable state and the dispatched step disagree' })
