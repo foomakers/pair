@@ -202,6 +202,17 @@ exact new/changed AC, bumps `scopeEpoch` exactly once, and opens a targeted reme
 that delta through the ordinary pipeline — no parallel path. The whole exchange is idempotent: a
 replayed `decisionRef` is a no-op, never a duplicate epoch.
 
+`extend-current-card` resolves each approved AC against the card's ACTUAL body, in the adopted
+formats only: the colon convention (`AC-1: text`, `- **AC-1**: text`), the checkbox convention
+(`- [ ] **AC-01 — Title.** Description.`, and the title-less shape the script emits itself) and the
+delivery template's numbered `**Given** / **When** / **Then**` blocks. An id matched exactly is
+rewritten in place — its bullet, checkbox state and title preserved, the rest of the card
+byte-identical; an id defined twice, whether inside one format or across two, is `ambiguous-ac-id`
+and refused. A parser miss is never taken as proof the AC is new: an id a recognized card cannot
+match is `ac-id-unresolvable`, and a card speaking **none** of these formats is refused outright as
+`unsupported-card-format` — no edit, no `extended`, no `scopeEpoch` bump — whether or not the id
+appears in its text. Restate the AC section in an adopted format, or use `new-card`.
+
 ### Metrics, host runtime and the final PR summary (`4.0.0`)
 
 Two scripts new in `4.0.0`, shipped beside `cycle-state.mjs` in `review-phase`'s (and, where

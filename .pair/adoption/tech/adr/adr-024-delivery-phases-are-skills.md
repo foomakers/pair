@@ -378,6 +378,42 @@ never an automatic edit of a divergent card to paper over a failed readback.
 Tested against a fake `gh` boundary only, with fixtures taken verbatim from #479's real body and the
 delivery template's Given/When/Then format; no real card was touched or created by this remediation.
 
+## Amendment 2026-09-10 (f) — Finding 6 Caso A completed: cumulative AC dialects, and a fail-closed unrecognized card
+
+An independent verification of `09df6963` found amendment (e)'s Caso A fix had **replaced** the AC
+line matcher rather than extended it, and had described a refusal the code did not implement.
+
+**The previously supported dialect was dropped.** Amendment (e) characterized `AC-1: text` /
+`- **AC-1**: text` as "a format no real card uses". It is in fact what a human writes on a card, what
+this script itself emitted before `4.0.0`, and the shape the verification report's own Finding 6
+reproduction is written in. Replacing the matcher with a checkbox-only one meant a requested
+replacement on such a card matched nothing, was misclassified "genuinely new", and was appended as a
+second definition beside the untouched old one — the very failure amendment (e) closed for the
+checkbox dialect, reopened for the colon one. Six tests that had covered the colon fixtures were
+rewritten onto checkbox fixtures in the same change, so nothing went red. Fixed: `parseAcCard` now
+recognizes the adopted dialects **cumulatively** — colon, #479's checkbox (with and without a title)
+and the template's Given/When/Then — merging the AC-id dialects into one map, so a duplicated id is
+ambiguous whether it repeats inside one format or straddles two. Each entry keeps its exact prefix,
+so a rewrite preserves the bullet, the checkbox state and the human title and changes only the
+description. The colon fixtures were restored verbatim beside the checkbox and GWT ones.
+
+**A card in no recognized dialect now really is refused.** Amendment (e) stated that "a card matching
+neither dialect … refuses instead of appending". The code did not do that: `dialect: 'unknown'`
+still reached the append branch. An interim fix made the refusal depend on the requested id
+appearing somewhere in the body — a textual coincidence. On the developer's explicit decision
+(ADL [2026-09-10-unknown-ac-card-format-fails-closed.md](../../decision-log/2026-09-10-unknown-ac-card-format-fails-closed.md))
+the rule is now **fail-closed and unconditional**: `dialect: 'unknown'` returns the typed
+`unsupported-card-format` before any write — no `gh issue edit`, no `extended`, no `scopeEpoch`
+increment — whether or not the id appears in the card. The absence of an id token is not evidence
+that a card carries no obligations. A card that *does* speak a recognized dialect is unaffected: an
+unmatchable id there is still `ac-id-unresolvable:<id>`, and a genuinely new id is still added.
+The DT-16 fixture, which had relied on the accepted-unstructured-card case, now seeds a card with an
+existing AC in a supported dialect and keeps every assertion it made; the unstructured body it used
+is retained as a negative test.
+
+Tested against a fake `gh` boundary only, through `applyScopeDecisions` with a stateful fake and a
+persisted body; no real card was touched or created by this remediation.
+
 ## Consequences
 
 ### Benefits

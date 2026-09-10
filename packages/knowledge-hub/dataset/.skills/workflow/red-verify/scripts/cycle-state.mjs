@@ -333,8 +333,10 @@ function parseAcCard(body) {
     const entry = { number: m[1], given: m[2].trim(), when: m[3].trim(), then: m[4].trim(), start: m.index, end: m.index + m[0].length }
     gwtById.set(m[1], [...(gwtById.get(m[1]) ?? []), entry])
   }
-  // A genuinely new AC is appended in the shape the card already speaks — checkbox when the card
-  // uses it (and for a card with no AC at all, since that is what this script itself emits).
+  // A genuinely new AC is appended in the shape the card already speaks — checkbox unless every
+  // recognized entry is colon. A card with no recognized entry at all never reaches an append
+  // (`extendCard` fails closed on `dialect: 'unknown'`); the checkbox default stands for the shape
+  // this script emits itself.
   const entries = [...acById.values()].flat()
   const appendFormat = entries.length && entries.every(e => e.format === 'colon') ? 'colon' : 'checkbox'
   return { dialect: acById.size ? 'ac' : gwtById.size ? 'gwt' : 'unknown', acById, gwtById, appendFormat }
@@ -487,6 +489,13 @@ function extendCard({ ghBin, repo, story, ac }) {
   if (read.error || read.status !== 0) return { error: `gh-issue-view-failed:${(read.stderr || read.error?.message || '').trim()}` }
   const currentBody = read.stdout
   const card = parseAcCard(currentBody)
+  // FAIL-CLOSED on an unrecognized card (ADL 2026-09-10, developer decision): a card speaking NONE
+  // of the adopted dialects is refused outright, before any write — the absence of the requested id
+  // from its text is NOT evidence that the card carries no obligations, only that this parser
+  // cannot read the ones it has. Refusing costs a maintainer one explicit retry; appending into an
+  // unreadable card writes a second, potentially contradictory definition of an obligation that may
+  // already be there.
+  if (card.dialect === 'unknown') return { error: 'unsupported-card-format' }
   // Resolve every targeted id BEFORE any edit into exactly one of three outcomes: an EXISTING
   // obligation identified exactly (any adopted dialect), a LEGITIMATE addition under the contract
   // the card already speaks, or an UNRESOLVABLE reference — refused before anything is written,

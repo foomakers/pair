@@ -138,6 +138,7 @@
 - [Decision: Repo citations in the docs are gated through the site's own MDX compiler](.pair/adoption/decision-log/2026-09-08-repo-citations-are-gated-through-the-site-compiler.md)
 - [Decision: Use a deterministic code canary for delivery workflow validation](.pair/adoption/decision-log/2026-09-09-deterministic-code-canary-for-delivery-workflow.md)
 - [Decision: A demonstrably new scope proposal is queued and never absorbed or carded automatically — the maintainer alone chooses ignore, extend-current-card or new-card](.pair/adoption/decision-log/2026-09-10-scope-proposals-are-a-human-decision.md)
+- [Decision: An approved `extend-current-card` delta is refused outright when the card speaks none of the recognized AC formats — fail-closed, never appended](.pair/adoption/decision-log/2026-09-10-unknown-ac-card-format-fails-closed.md)
 
 ## How-To Guides
 

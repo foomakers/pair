@@ -180,6 +180,11 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
   // ── the maintainer's authenticated extend-current-card decision, applied mechanically ──────
   const pendingScope = [{ id: 'sc-1', proposal: 'add a related capability', status: 'pending' }]
   const decisionRef = 'https://github.com/foomakers/pair/pull/480#issuecomment-9001'
+  // The card carries its acceptance criteria in an ADOPTED dialect: `extend-current-card` fails
+  // closed on a card whose AC it cannot read (ADL 2026-09-10), so a lifecycle that really applies
+  // an approved delta starts from a readable card, exactly as a real one would.
+  const CARD_479_BEFORE = 'card body of #479\n\n## Acceptance Criteria\n\n- **AC-1**: the original requirement\n'
+  writeFileSync(join(FAKE_GH_DIR, 'issues.json'), JSON.stringify({ 479: CARD_479_BEFORE }))
   const hash = scopeBaselineHashOf(pendingScope)
   writeFileSync(
     join(FAKE_GH_DIR, 'comments.json'),
@@ -193,6 +198,8 @@ test('T-27: one composed lifecycle — initial build, a real defect + a scope pr
   assert.match(extendedCardBody, /AC-99/)
   assert.match(extendedCardBody, /the approved new requirement/)
   assert.match(extendedCardBody, /^card body of #479/, 'extends the existing card, does not replace it')
+  assert.ok(extendedCardBody.includes('- **AC-1**: the original requirement'), 'the pre-existing AC is untouched')
+  assert.equal(extendedCardBody.split('\n').filter(l => l.includes('AC-99')).length, 1, 'the approved AC is added exactly once')
   const CARD_HASH_479_EXTENDED = 'sha256:' + createHash('sha256').update(extendedCardBody).digest('hex')
   r = resolve({ dir, workflowVersion: V, policy: POLICY, entry: 'pr', pr: 480 })
   assert.deepEqual({ step: r.next.step, mode: r.next.mode, phase: r.next.phase, scopeEpoch: r.next.scopeEpoch }, { step: 'prepare', mode: 'remediation', phase: 'r2-g1', scopeEpoch: 2 })
